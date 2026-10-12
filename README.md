@@ -1,4 +1,4 @@
-# ReactFlux
+# NewsFlux
 
 Read in other languages: [Deutsch](docs/README.de-DE.md), [Español](docs/README.es-ES.md), [Français](docs/README.fr-FR.md), [日本語](docs/README.ja-JP.md), [简体中文](docs/README.zh-CN.md)
 
