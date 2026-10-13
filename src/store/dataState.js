@@ -112,6 +112,8 @@ const globallyHiddenFeedIdSetState = computed(
   },
 )
 
+export const globallyHiddenFeedIdsState = globallyHiddenFeedIdSetState
+
 export const visibleFeedsState = computed(
   [feedsState, globallyHiddenFeedIdSetState, showHiddenFeedsState],
   (feeds, hiddenFeedIds, showHiddenFeeds) =>
