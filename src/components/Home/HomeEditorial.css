@@ -53,12 +53,54 @@
 }
 
 .home-section-heading {
-  grid-column: 1 / -1;
   margin: 0;
   color: var(--nf-text-primary, var(--color-text-1));
   font-size: 1.125rem;
   font-weight: 600;
   line-height: 1.35;
+}
+
+.home-highlights-heading-row {
+  position: relative;
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.home-personalization-info-button {
+  position: absolute;
+  inset-inline-end: 0;
+  top: 50%;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  transform: translateY(-50%);
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--nf-text-secondary, var(--color-text-2));
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.home-personalization-info-button:hover {
+  background-color: var(--nf-surface-raised, var(--color-bg-3));
+}
+
+.home-personalization-info-button:focus-visible {
+  outline: 2px solid var(--nf-text-secondary, var(--color-text-2));
+  outline-offset: 2px;
+}
+
+.home-personalization-explanation {
+  grid-column: 1 / -1;
+  padding: 10px 12px;
+  border: 1px solid var(--nf-separator-subtle, var(--color-border-2));
+  border-radius: 8px;
+  background-color: var(--nf-surface-elevated, var(--color-bg-2));
+  color: var(--nf-text-secondary, var(--color-text-2));
+  font-size: 0.875rem;
+  line-height: 1.45;
 }
 
 .home-highlight-slot,
