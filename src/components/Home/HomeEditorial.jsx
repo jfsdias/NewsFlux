@@ -1,19 +1,21 @@
 import { useStore } from "@nanostores/react"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import HomeHighlights from "./HomeHighlights"
 import HomeRecent from "./HomeRecent"
 import HomeStates from "./HomeStates"
 
+import { getStarredEntries } from "@/apis"
 import LoadMoreSentinel from "@/components/Article/LoadMoreSentinel"
 import SearchAndSortBar from "@/components/Article/SearchAndSortBar"
 import AdaptiveScrollArea from "@/components/ui/AdaptiveScrollArea"
 import useArticleCardActivation from "@/hooks/useArticleCardActivation"
 import useReadOnScroll from "@/hooks/useReadOnScroll"
 import { contentState } from "@/store/contentState"
-import { dataState, getDataSessionRevision } from "@/store/dataState"
+import { dataState, getDataSessionRevision, globallyHiddenFeedIdsState } from "@/store/dataState"
 import { homeIdentityState } from "@/store/homePageState"
 import { settingsState } from "@/store/settingsState"
+import createArticleListRequestKey from "@/utils/article-list-request-key"
 import { subscribeEntryStatusMutationEvents } from "@/utils/entry-status-mutation-events"
 import {
   createHomeEditorialSession,
@@ -22,6 +24,20 @@ import {
   transitionHomeSession,
 } from "@/utils/home-editorial-session"
 import { getHomeIdentityKey } from "@/utils/home-page"
+import {
+  HOME_PERSONALIZATION_FRESHNESS_WINDOW,
+  HOME_STARRED_PROFILE_LIMIT,
+} from "@/utils/home-personalization-constants"
+import {
+  commitHomePersonalizationSnapshot,
+  createHomePersonalizationGeneration,
+  failHomePersonalizationProfile,
+  failHomePersonalizationSnapshot,
+  invalidateHomePersonalizationGeneration,
+  resolveHomePersonalizationProfile,
+} from "@/utils/home-personalization-generation"
+import { createHomePersonalizationProfile } from "@/utils/home-personalization-profile"
+import { projectHomePersonalization } from "@/utils/home-personalization-projection"
 
 import "./HomeEditorial.css"
 
@@ -60,45 +76,193 @@ const HomeEditorial = ({
     sessionRevision,
   })
   const [session, setSession] = useState(null)
+  const generationRef = useRef(null)
+  const generationIdRef = useRef(0)
+  const committedProjectionRef = useRef(null)
 
   useEffect(() => {
     let disposed = false
+    const getCanonicalRequestKey = () =>
+      createArticleListRequestKey({
+        content: contentState.get(),
+        settings: settingsState.get(),
+        info: { from: "home", id: "" },
+        sessionRevision: getDataSessionRevision(),
+      })
+    const currentContext = (generation) => ({
+      generationId: generation.generationId,
+      requestKey: generation.requestKey,
+      canonicalRequestKey: generation.canonicalRequestKey,
+      identityKey: generation.identityKey,
+      sessionRevision: generation.sessionRevision,
+    })
+    const isCurrentGeneration = (generation) =>
+      !disposed &&
+      generationRef.current?.generationId === generation.generationId &&
+      generation.requestKey === currentHomeSessionKey() &&
+      generation.canonicalRequestKey === getCanonicalRequestKey() &&
+      generation.identityKey === getHomeIdentityKey(homeIdentityState.get()) &&
+      generation.sessionRevision === getDataSessionRevision()
+
+    const startGeneration = (content, canonicalRequestKey) => {
+      const identityKey = getHomeIdentityKey(homeIdentityState.get())
+      const sessionRevision = getDataSessionRevision()
+      const generation = createHomePersonalizationGeneration({
+        generationId: ++generationIdRef.current,
+        requestKey,
+        canonicalRequestKey,
+        identityKey,
+        sessionRevision,
+        targetSnapshotRevision: content.isArticleListReady
+          ? content.articleListSnapshotRevision
+          : content.articleListSnapshotRevision + 1,
+        previousProjection: committedProjectionRef.current,
+      })
+      generationRef.current = generation
+
+      getStarredEntries(null, {
+        limit: HOME_STARRED_PROFILE_LIMIT,
+        direction: "desc",
+        filterDate: null,
+      })
+        .then((response) => {
+          if (!isCurrentGeneration(generation) || !Array.isArray(response?.entries)) {
+            return null
+          }
+          const { current } = generationRef
+          const { entries: starredEntries } = response
+          const nextGeneration = resolveHomePersonalizationProfile(current, {
+            ...currentContext(current),
+            profile: createHomePersonalizationProfile({
+              entries: starredEntries,
+              hiddenFeedIds: globallyHiddenFeedIdsState.get(),
+            }),
+          })
+          generationRef.current = nextGeneration
+          return nextGeneration
+        })
+        .catch(() => {
+          if (!isCurrentGeneration(generation)) {
+            return null
+          }
+          const { current } = generationRef
+          const failedGeneration = failHomePersonalizationProfile(current, currentContext(current))
+          generationRef.current = failedGeneration
+          return failedGeneration
+        })
+
+      return generation
+    }
+
+    const commitSnapshot = (generation, content) => {
+      if (
+        !isCurrentGeneration(generation) ||
+        content.articleListSnapshotRevision !== generation.targetSnapshotRevision
+      ) {
+        return
+      }
+
+      const baselineSession = createHomeEditorialSession({
+        requestKey,
+        sessionRevision: generation.sessionRevision,
+        entries: content.entries,
+        scrollRoot: entryListRef.current?.contentWrapperEl ?? entryListRef.current?.el ?? null,
+      })
+      const baselineProjection = projectHomeSession(baselineSession, content.entries)
+      const personalizedProjection =
+        generationRef.current.profileStatus === "ready"
+          ? projectHomePersonalization({
+              entries: content.entries,
+              baselineHighlightIds: baselineProjection.highlightIds,
+              baselineRecentIds: baselineProjection.recentIds,
+              profile: generationRef.current.profile,
+              freshnessWindow: HOME_PERSONALIZATION_FRESHNESS_WINDOW,
+            })
+          : baselineProjection
+      const committed = commitHomePersonalizationSnapshot(generationRef.current, {
+        ...currentContext(generation),
+        baselineProjection,
+        personalizedProjection,
+      })
+      if (!committed.committed) {
+        return
+      }
+
+      generationRef.current = committed.generation
+      committedProjectionRef.current = committed.projection
+      setSession({
+        ...createHomeEditorialSession({
+          requestKey,
+          sessionRevision: generation.sessionRevision,
+          entries: content.entries,
+          initialProjection: committed.generation.personalizationApplied
+            ? committed.projection
+            : undefined,
+          scrollRoot: entryListRef.current?.contentWrapperEl ?? entryListRef.current?.el ?? null,
+        }),
+        snapshotRevision: content.articleListSnapshotRevision,
+        personalizationApplied: committed.generation.personalizationApplied,
+      })
+    }
+
     const refreshSession = () => {
       if (disposed || requestKey !== currentHomeSessionKey()) {
         return
       }
       const content = contentState.get()
-      if (
-        content.infoFrom !== "home" ||
-        !content.isArticleListReady ||
-        content.articleListError ||
-        !content.articleListSnapshotRevision
-      ) {
+      if (content.infoFrom !== "home") {
         return
       }
-      setSession((previous) => {
-        if (
-          previous?.requestKey === requestKey &&
-          previous.snapshotRevision === content.articleListSnapshotRevision
-        ) {
-          return previous
-        }
-        return {
-          ...createHomeEditorialSession({
-            requestKey,
-            sessionRevision: getDataSessionRevision(),
-            entries: content.entries,
-            scrollRoot: entryListRef.current?.contentWrapperEl ?? entryListRef.current?.el ?? null,
-          }),
-          snapshotRevision: content.articleListSnapshotRevision,
-        }
-      })
+
+      const canonicalRequestKey = getCanonicalRequestKey()
+      let generation = generationRef.current
+      const requestChanged =
+        generation?.status === "pending" && generation.canonicalRequestKey !== canonicalRequestKey
+
+      if (requestChanged) {
+        generationRef.current = invalidateHomePersonalizationGeneration(generation)
+        generation = generationRef.current
+      }
+
+      if (
+        !content.isArticleListReady &&
+        (!generation || generation.status !== "pending" || requestChanged)
+      ) {
+        generation = startGeneration(content, canonicalRequestKey)
+      } else if (
+        content.isArticleListReady &&
+        !content.articleListError &&
+        content.articleListSnapshotRevision > 0 &&
+        (!generation ||
+          (generation.status !== "pending" &&
+            (generation.canonicalRequestKey !== canonicalRequestKey ||
+              generation.targetSnapshotRevision !== content.articleListSnapshotRevision)))
+      ) {
+        generation = startGeneration(content, canonicalRequestKey)
+      }
+
+      if (!generation || generation.status !== "pending") {
+        return
+      }
+      if (content.isArticleListReady && content.articleListError) {
+        generationRef.current = failHomePersonalizationSnapshot(
+          generation,
+          currentContext(generation),
+        )
+        return
+      }
+      if (content.isArticleListReady) {
+        commitSnapshot(generation, content)
+      }
     }
     const unsubscribe = contentState.listen(refreshSession)
     queueMicrotask(refreshSession)
     return () => {
       disposed = true
       unsubscribe()
+      if (generationRef.current?.status === "pending") {
+        generationRef.current = invalidateHomePersonalizationGeneration(generationRef.current)
+      }
     }
   }, [entryListRef, requestKey])
 
@@ -144,6 +308,7 @@ const HomeEditorial = ({
                 entries={entries}
                 highlightIds={projection.highlightIds}
                 observeRead={observeRead}
+                personalizationApplied={Boolean(activeSession.personalizationApplied)}
               />
               <HomeRecent
                 articleActivation={articleActivation}
