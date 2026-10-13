@@ -190,6 +190,8 @@ The request is bounded by the named sample limit from §23 and queries only curr
 
 Tag the request with the normalized server/user identity, current session revision, and Home session/projection identity. Discard responses that no longer match. Do not inherit transient search or date filters from other Home-independent list state; when reusing a helper whose default reads a date filter, explicitly disable that filter. Apply the profile-specific hidden-feed rule and sample policy.
 
+PROFILE_WAIT_POLICY = NO_ADDITIONAL_WAIT; PROFILE_DEADLINE_EVENT = CANONICAL_HOME_SNAPSHOT_READY. At that event, include the profile in the single projection only if it has already resolved successfully, is usable, and still matches the active identity, session revision, and Home generation. If it is pending, failed, stale, or invalid, immediately use the exact Phase 2C projection. A profile resolved before the canonical snapshot may remain in memory for that generation and participate in its projection. A profile resolved after the deadline is discarded for that generation and cannot recompose visible content. V1 adds no wall-clock timeout, timer, or AbortController requirement solely for this feature.
+
 ## 18. Allowed recomposition events
 
 A new personalized projection may be created only for:
@@ -199,13 +201,13 @@ A new personalized projection may be created only for:
 
 Do not recompose because of a late auxiliary response, star/unstar action, status settlement, background mutation, load-more, reader open/close, or unrelated render.
 
-When the initial profile result arrives within the approved bounded loading budget, it may be included in the initial projection. Once visible, that projection remains stable for the session.
+For an initial Home generation, create exactly one projection when its canonical snapshot becomes ready, using a valid profile only if it is already ready at that event; otherwise use the exact Phase 2C projection. A later profile response cannot reorder Highlights or Recent, show the explainer, start another profile request, or recompose that generation. Once visible, the projection remains stable for the session.
 
 ## 19. Explicit refresh behavior
 
-During explicit Home refresh, preserve the current valid Home content while requests are in flight. Fetch the new canonical candidate snapshot and auxiliary profile according to the approved lifecycle, then apply one coherent replacement projection.
+During explicit Home refresh, preserve the current valid Home content while requests are in flight. Start one new canonical candidate request and one auxiliary profile request for the refresh generation. When the new canonical snapshot becomes ready, apply exactly one coherent replacement projection: use the new profile only if it is already valid and ready at that event; otherwise use the exact Phase 2C baseline immediately, with no additional wait.
 
-Never progressively reshuffle visible Highlights or Recent as the two responses arrive. If the auxiliary query fails or exceeds its approved bounded wait budget, build the replacement projection using the exact Phase 2C baseline. A failed canonical refresh follows the existing Phase 2C behavior and preserves valid content and its current projection.
+Never progressively reshuffle visible Highlights or Recent as the two responses arrive. A profile response after the canonical deadline is discarded and cannot cause another replacement. A failed canonical refresh follows the existing Phase 2C behavior and preserves valid content and its current projection.
 
 No automatic retry loop is allowed. A user-initiated refresh may start a new attempt.
 
@@ -217,13 +219,13 @@ The exact Phase 2C deterministic projection is required for:
 - no matching affinity;
 - profile containing only hidden-feed entries;
 - profile fetch failure;
-- profile timeout;
+- profile not ready at the canonical snapshot deadline (`PROFILE_TIMEOUT_FALLS_BACK`; this is an event-deadline miss, not a wall-clock timeout);
 - stale account response;
 - stale session response.
 
 A weak or concentrated profile may have bounded influence only inside freshness and diversity constraints. If it cannot change a permitted ordering decision, baseline ordering remains.
 
-Preference-query failure must not cause a global Home error, blank content, candidate clearing, count changes, pagination changes, retries, or late recomposition. Stale responses are discarded and cannot mutate a newer Home session.
+`PROFILE_TIMEOUT_FALLS_BACK` means the auxiliary profile is not ready when the canonical snapshot becomes ready, so the exact Phase 2C projection is used immediately. At this deadline miss, PERSONALIZATION_APPLIED=false and the information affordance MUST remain hidden; a later response cannot change that truth value for the generation. Preference-query failure or a deadline miss must not cause a global Home error, blank content, candidate clearing, count changes, pagination changes, retries, or late recomposition. Stale responses are discarded and cannot mutate a newer Home session.
 
 ## 21. Explainability and UI affordance
 
@@ -306,7 +308,7 @@ The Phase 2D test/harness work must cover at least:
 - `STALE_SESSION_PROFILE_DISCARDED`
 - `STALE_ACCOUNT_PROFILE_DISCARDED`
 - `PROFILE_FAILURE_FALLS_BACK`
-- `PROFILE_TIMEOUT_FALLS_BACK`
+- `PROFILE_TIMEOUT_FALLS_BACK`: hold the auxiliary profile request pending until the canonical snapshot is ready; assert immediate exact Phase 2C fallback and one projection, then resolve the profile and assert no reordering, explainer, or recomposition
 - `NO_PROFILE_RETRY_LOOP`
 - `EXPLICIT_REFRESH_SINGLE_RECOMPOSITION`
 - `PERSONALIZATION_EXPLAINER_TRUTHFUL`: changed visible order MUST show the affordance; unchanged order MUST hide it; profile availability alone MUST NOT show it
@@ -351,7 +353,7 @@ Report incidental findings separately; do not fix them as part of Phase 2D.
 - A bounded corpus can omit older currently-starred entries when the account exceeds the chosen limit.
 - Feed/category metadata can be missing or broad, reducing affinity quality.
 - Hidden-feed semantics must be enforced consistently even if ordinary list settings expose hidden feeds.
-- A bounded wait budget balances personalized initial ordering against Home responsiveness.
+- A slower auxiliary query may cause that Home generation to use the exact Phase 2C fallback; NewsFlux deliberately prioritizes Home responsiveness and session stability over waiting for personalization.
 - Cross-device candidate sets and local settings can differ even when Miniflux identity and starred corpus are shared.
 - Freshness bands and sample size require evidence and PM approval before implementation.
 
