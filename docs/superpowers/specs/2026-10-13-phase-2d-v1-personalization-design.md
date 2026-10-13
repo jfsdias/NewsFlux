@@ -63,17 +63,16 @@ The profile is derived data. It must not be sent to a new service, stored in a d
 
 The profile is built from the currently-starred corpus returned for the active Miniflux identity and filtered according to the hidden-feed rule in §15.
 
-Conceptually:
+For each candidate, compute simple occurrence counts over the bounded, currently-starred Miniflux sample:
 
-- count or otherwise deterministically rank support for each feed ID;
-- derive weaker support for each category ID;
-- treat the current candidate's own star separately from the aggregate;
-- omit entries without usable feed/category identifiers from the corresponding aggregate rather than rejecting those candidates;
-- use no topic affinity in V1.
+- `SOURCE_AFFINITY`: the number of other sampled currently-starred entries with the same feed ID;
+- `CATEGORY_AFFINITY`: the number of other sampled currently-starred entries with the same category ID.
 
-A source/category affinity indicates repeated explicit stars in the bounded current corpus. It is not a claim that the user has a durable preference, nor does it imply that all items from that source or category should outrank current news.
+Exclude the candidate's own entry ID before calculating either count. A missing feed ID provides no source-affinity support; a missing category ID provides no category-affinity support. Missing metadata never changes candidate eligibility. The candidate's current starred boolean is a separate direct signal.
 
-The exact aggregation representation and sample size are implementation-planning decisions subject to the calibration gates in §§23–24. No opaque combined weighted score is permitted.
+These raw occurrence counts are the only V1 affinity aggregation algorithm. Do not apply recency decay, publication-date weighting, logarithmic weighting, rank-changing normalization, or another scoring algorithm. A representation may be normalized only when it is mathematically order-preserving and leaves the raw-count ordering unchanged. Source affinity has precedence over category affinity as specified in §9; do not define numeric weights.
+
+Affinity represents repeated explicit stars in a bounded current corpus. It is not a claim that the user has a durable preference, nor does it imply that all items from that source or category should outrank current news. The only open calibration values are the sample limit N and freshness-comparable boundaries in §§23–24.
 
 ## 6. Identity, lifetime, and storage
 
@@ -163,21 +162,19 @@ The existing star UI remains the only visible star treatment. No recommendation 
 
 ## 14. Source and category affinity
 
-Source affinity is derived from currently-starred entries grouped by feed ID. It is stronger than category affinity.
+Source affinity is the simple occurrence count of other sampled currently-starred entries with the candidate's feed ID. Category affinity is the simple occurrence count of other sampled currently-starred entries with the candidate's category ID. The candidate's own entry ID is excluded from both counts.
 
-Category affinity is derived from currently-starred entries grouped by category ID and is a weaker, broader signal. A missing or invalid category ID yields no category contribution and does not affect candidate eligibility.
-
-Affinity must remain deterministic for a fixed bounded corpus. The implementation must document how ties are resolved and must not combine source, category, freshness, and diversity into an opaque weighted score.
+When comparing affinity signals, source affinity precedes category affinity; category remains the weaker, broader signal. Current-item starred remains a separate stronger direct signal. Do not add weights or transform the counts in a way that changes their ordering. Ties proceed through the approved diversity constraints and stable `entry.id` tie-break.
 
 ## 15. Hidden-feed rules
 
-Entries belonging to hidden feeds or hidden categories must not contribute to source or category affinity, regardless of whether the user has enabled a setting that makes hidden feeds visible in ordinary list navigation.
+Entries whose feed is hidden under the existing feed-visibility model must not contribute to either affinity count, even if an ordinary-navigation setting exposes hidden feeds in a list.
 
-The profile query or its in-memory filtering must enforce this rule using the active catalog/visibility data. Miniflux-wide visibility filtering alone is insufficient if NewsFlux has local visibility metadata that is not represented by that filter.
+Enforce the exclusion using existing feed-level visibility data. Do not infer feed visibility from category IDs or redefine any category-visibility behavior. Category affinity continues to group entries from allowed feeds by category ID. If existing category visibility behavior affects feed visibility, report that separately for implementation review; this Phase 2D contract does not expand or redefine it.
 
-The canonical Home candidate query keeps its existing visibility behavior. This profile-specific exclusion must not silently change which Home candidates are visible.
+The canonical Home candidate query keeps its existing visibility behavior. The profile-specific feed exclusion must not silently change which Home candidates are visible.
 
-If every currently-starred entry belongs to a hidden feed/category, the effective profile is empty and Home uses the exact Phase 2C projection.
+If every sampled currently-starred entry belongs to a hidden feed, the effective profile is empty and Home uses the exact Phase 2C projection.
 
 ## 16. Candidate self-exclusion
 
@@ -232,11 +229,11 @@ Preference-query failure must not cause a global Home error, blank content, cand
 
 Cards receive no recommendation/personalization badges, new card styling, or new visual hierarchy. Existing star presentation remains unchanged.
 
-A small information affordance may appear beside “Highlights” only when personalization changes the visible Secondary/Recent ordering relative to the Phase 2C baseline projection for the same canonical snapshot:
+The information affordance beside “Highlights” follows this mandatory truth condition for the same canonical snapshot:
 
-`PERSONALIZATION_APPLIED = personalized visible Secondary/Recent order differs from Phase 2C baseline visible Secondary/Recent order`
+`PERSONALIZATION_APPLIED = personalized visible Secondary/Recent entry order differs from the exact Phase 2C baseline visible order`
 
-If the order is unchanged, the affordance is absent, including when a profile was successfully fetched but had no visible effect. If the order changes, the affordance is present. This truth condition is based on presented entry order, not merely on profile availability.
+If `PERSONALIZATION_APPLIED=true`, the information affordance MUST be visible. If `PERSONALIZATION_APPLIED=false`, it MUST NOT be visible. Profile availability by itself MUST NOT show the affordance. This condition is based on presented entry order, not merely on profile availability.
 
 The explanation communicates that starred sources may influence Secondary Highlights and Recent, Primary remains freshness-driven, and All/Unread remain chronological. It must be small, keyboard accessible, accessible by touch, opaque, non-blocking to editorial layout, and visually distinct from Liquid Glass chrome. It is not persistent navigation chrome and does not introduce card-level labels.
 
@@ -292,9 +289,9 @@ Boundaries must be explicit and testable. No hidden score or arbitrary per-entry
 The Phase 2D test/harness work must cover at least:
 
 - `PRIMARY_ALWAYS_NEWEST_ELIGIBLE_UNREAD`
-- `PHASE2C_BASELINE_PARITY` for zero profile, no useful match, hidden-only profile, fetch failure, and timeout
+- `PHASE2C_BASELINE_PARITY` for zero profile, no useful match, profile containing only entries from hidden feeds, fetch failure, and timeout
 - `CANDIDATE_SELF_EXCLUDED_FROM_AFFINITY`
-- `HIDDEN_FEEDS_EXCLUDED_FROM_PROFILE`
+- `HIDDEN_FEEDS_EXCLUDED_FROM_PROFILE`: entries from hidden feeds contribute to neither affinity count
 - `CURRENT_STAR_DIRECT_SIGNAL`
 - `SOURCE_AFFINITY_PRECEDES_CATEGORY_AFFINITY`
 - `FRESHNESS_BOUNDS_PERSONALIZATION`
@@ -312,7 +309,7 @@ The Phase 2D test/harness work must cover at least:
 - `PROFILE_TIMEOUT_FALLS_BACK`
 - `NO_PROFILE_RETRY_LOOP`
 - `EXPLICIT_REFRESH_SINGLE_RECOMPOSITION`
-- `PERSONALIZATION_EXPLAINER_TRUTHFUL`: changed visible order means present; unchanged order means absent
+- `PERSONALIZATION_EXPLAINER_TRUTHFUL`: changed visible order MUST show the affordance; unchanged order MUST hide it; profile availability alone MUST NOT show it
 - `ONE_AUX_PROFILE_QUERY_PER_HOME_SESSION`: one initial query, with no duplicate calls from renders or unrelated events; an explicit refresh may start one query for its replacement projection
 
 Also retain the applicable Phase 2C Home, All/Unread, mutation, count, pagination, reader-return, and stale-session regression gates. The profile must not change those contracts.
@@ -382,7 +379,7 @@ The Phase 2D V1 design is satisfied when a future implementation:
 
 1. derives source/category affinity only from a bounded currently-starred Miniflux corpus;
 2. keeps the profile in memory for one Home session or approved refresh and guards it by server, user, and session revision;
-3. excludes hidden-feed entries and each candidate from its own aggregate affinity;
+3. excludes hidden-feed entries and each candidate from its own simple occurrence counts;
 4. never changes the canonical Home candidate stream, counts, cursor, pagination, or mutation semantics;
 5. keeps Primary as the newest eligible unread candidate;
 6. personalizes only Secondary Highlights and Recent within approved freshness groups and diversity constraints;
