@@ -53,7 +53,7 @@ At the initial or explicit-refresh generation's canonical snapshot-ready event, 
 
 1. **Profile result misses the canonical deadline or belongs to a prior identity.** The generation tests in Task 4 must prove immediate baseline composition, stale-result discard, and no late recomposition.
 2. **A candidate boosts itself or hidden-feed stories enter affinity counts.** The profile tests in Task 1 must prove stable-ID self-exclusion and exact use of the existing feed-hidden set.
-3. **Affinity crosses freshness or diversity constraints.** The projection tests in Task 2 must cover exact freshness boundaries, source-first/category-second diversity, and source affinity before category affinity.
+3. **Affinity crosses freshness or diversity constraints.** The projection tests in Task 2 must cover the frozen anchor-based freshness groups, exact inclusive boundaries, the anti-chaining case, invalid-timestamp singletons, source-first/category-second diversity, and source affinity before category affinity.
 4. **A refresh partially replaces a still-valid Home or composes twice.** The generation tests and browser gate in Tasks 4 and 6 must prove the old projection stays visible in flight and exactly one replacement is committed at snapshot readiness.
 5. **The explainer claims personalization when the visible order did not change or harms the heading at tablet width.** The projection/UI and viewport gates in Tasks 2, 5, and 6 must verify the exact truth condition, accessible disclosure, opacity, and 884×1104 geometry.
 
@@ -74,7 +74,8 @@ This is a blocking evidence and PM-review gate, not a code task. Do not start an
 
 - [ ] Inspect representative canonical Home candidate `published_at` distributions and the age deltas around Primary, both Secondary slots, and Recent across the agreed page sizes. Use sanitized aggregate distributions and editorial examples; do not retain user-level data.
 - [ ] Compare the proposed deterministic groups against stories just below, exactly at, and just above each boundary. Demonstrate that a preference cannot move a materially older story ahead of a fresher group and that useful within-group choices remain possible.
-- [ ] Specify deterministic treatment for missing/invalid timestamps and verify Primary remains the newest eligible unread candidate regardless of group membership.
+- [ ] Freeze the grouping algorithm as `FRESHNESS_GROUP_ALGORITHM=ANCHOR_BASED`. Its input is the exact Phase 2C baseline order for the candidate sequence. The first ungrouped entry anchors a group; parse that anchor's `published_at`; include each later candidate only when `anchorTimestamp - candidateTimestamp <= PM_APPROVED_HOME_PERSONALIZATION_FRESHNESS_WINDOW` (inclusive). The first candidate outside the window starts the next group. Never chain from the previous neighbor, use absolute epoch buckets, or extend a group transitively. A missing/invalid timestamp is a singleton that cannot be crossed. For a Secondary slot, the group containing its baseline slot/candidate is the only permitted personalization region. For Recent, partition the exact baseline Recent order by the same algorithm and reorder only inside each group. Primary stays fixed.
+- [ ] Specify deterministic treatment for missing/invalid timestamps and verify Primary remains the newest eligible unread candidate regardless of group membership. Add tests for below/equal/above the approved boundary, the three-entry anti-chaining case (A–B and B–C within the window but A–C outside, so C starts a new group), an invalid-timestamp singleton, and exact Phase 2C parity when no preference affects a group.
 - [ ] Return `PROPOSED_HOME_PERSONALIZATION_FRESHNESS_WINDOW=<duration or explicit boundary>`, `RATIONALE=<timestamp distribution and editorial evidence>`, and `PM_APPROVAL_REQUIRED=YES`.
 
 ### Blocking decision
@@ -88,7 +89,7 @@ PM_APPROVAL_HOME_PERSONALIZATION_FRESHNESS_WINDOW=YES
 
 The approved values become `PM_APPROVED_HOME_STARRED_PROFILE_LIMIT` and `PM_APPROVED_HOME_PERSONALIZATION_FRESHNESS_WINDOW` inputs to the implementation tasks; they are not chosen in this plan.
 
-**NO FUNCTIONAL IMPLEMENTATION TASK MAY BEGIN UNTIL PM APPROVES BOTH VALUES.** No third calibration value, wall-clock timeout, or additional wait is permitted. After approval, put the approved values in the named constants specified in Task 2 and cover their exact boundaries in tests.
+**NO FUNCTIONAL IMPLEMENTATION TASK MAY BEGIN UNTIL PM APPROVES BOTH VALUES.** The sample limit (`N`) and freshness window are the only two calibration values; `N` and the freshness window remain unset in this plan. No third calibration value, wall-clock timeout, or additional wait is permitted. After approval, put the approved values in the named constants specified in Task 2 and cover their exact boundaries in tests.
 
 ## Expected Implementation and Test Files
 
@@ -145,7 +146,7 @@ Do not read settings or persist profile data in this helper. Do not add hidden-c
 
 **Files:** `src/utils/home-personalization-constants.js`, `src/utils/home-personalization-projection.js`, `src/utils/home-personalization-projection.test.js`.
 
-- [ ] **Failing tests first:** Build deterministic fixtures for newest Primary, two baseline Secondary slots, and Recent. Cover zero profile, no useful match, hidden-only effective profile, self-exclusion, direct star, source-versus-category affinity, source/category diversity, stable ID ties, and timestamps just below, exactly at, and just above the approved boundary. Include missing/invalid dates. Assert Phase 2C baseline parity whenever no permitted signal changes an ordering decision.
+- [ ] **Failing tests first:** Build deterministic fixtures for newest Primary, two baseline Secondary slots, and Recent. Cover zero profile, no useful match, hidden-only effective profile, self-exclusion, direct star, source-versus-category affinity, source/category diversity, stable ID ties, and timestamps just below, exactly at, and just above the approved boundary. Include the three-entry anti-chaining case (A–B and B–C are within the window but A–C is outside, so C starts a new group), an invalid-timestamp singleton, and exact Phase 2C baseline parity when no permitted signal changes an ordering decision.
 
 ```bash
 node --test src/utils/home-personalization-projection.test.js
@@ -163,7 +164,7 @@ projectHomePersonalization({
 }) // => { highlightIds, recentIds, personalizationApplied }
 ```
 
-Treat the supplied Phase 2C arrays as the authoritative fallback. Keep `baselineHighlightIds[0]` fixed as Primary. A Secondary replacement may come only from the same deterministic freshness group as that baseline slot; constrain choices by source diversity first and category diversity second, then compare current-item star, raw source affinity, raw category affinity, and stable entry ID. Reorder Recent only within groups formed from its baseline order; preserve broad freshness progression. A group includes the exact boundary (`delta <= freshnessWindow`); an invalid timestamp is a fixed singleton that cannot be crossed. If the effective profile has no useful signal for a group, keep its exact baseline order. Compute `personalizationApplied` by comparing the visible concatenated Secondary and Recent IDs with the exact baseline order; never derive it from profile availability.
+Treat the supplied Phase 2C arrays as the authoritative fallback and the exact input order for group formation. Freeze `FRESHNESS_GROUP_ALGORITHM=ANCHOR_BASED`: the first ungrouped entry anchors a group; later entries join only when `anchorTimestamp - candidateTimestamp <= freshnessWindow` (inclusive); the first outside candidate starts the next group. Do not chain from the previous neighbor, use absolute epoch buckets, or extend groups transitively. Missing/invalid timestamps form singleton groups that cannot be crossed. Keep `baselineHighlightIds[0]` fixed as Primary. A Secondary replacement may come only from the group containing that baseline Secondary slot/candidate; constrain choices by source diversity first and category diversity second, then compare current-item star, raw source affinity, raw category affinity, and stable entry ID. Partition the exact baseline Recent order with the same algorithm and reorder only within each resulting group, preserving broad freshness progression. If the effective profile has no useful signal for a group, keep its exact baseline order. Compute `personalizationApplied` by comparing the visible concatenated Secondary and Recent IDs with the exact baseline order; never derive it from profile availability.
 
 - [ ] **Passing tests:**
 
@@ -272,9 +273,9 @@ Preserve and run all current Phase 2C Home, mutation, count, pagination, reader-
 
 - [ ] **Commit:** `test: cover Phase 2D Home personalization behavior`
 
-## Task 7: Whole-branch verification and real-device gate
+## Task 7: Whole-branch verification, candidate handoff, and device gates
 
-This is a verification gate after Tasks 1–6, not an additional product change. Do not repair unrelated findings in this task.
+This is a verification and release-governance gate after Tasks 1–6, not an additional product change. Do not repair unrelated findings in this task. Emulated browser coverage and physical-device validation are separate gates; passing one never implies the other.
 
 - [ ] Run the complete focused unit set:
 
@@ -291,9 +292,52 @@ pnpm build
 git diff --check
 ```
 
-- [ ] Run the existing Phase 2C browser harness plus the Phase 2D suite in light and dark/OLED at `390×844`, `768×1024`, `884×1104`, `1024×768`, `1280×800`, and `1440×900`. At `884×1104`, explicitly verify Primary dominance, balanced Secondary selection, Recent freshness progression, no overflow, no heading compression, opaque explainer surface, and separation from Liquid Glass. Also verify single-pane behavior, Home return, explicit refresh, star/unstar, read-state mutations, and a late profile. Record viewport, theme, gate, and screenshot evidence; do not claim physical-device validation from emulation.
+### A. Automated / emulated viewport gate
+
+- [ ] Run the existing Phase 2C browser harness plus the Phase 2D suite in light and dark/OLED as applicable at `390×844`, `768×1024`, `884×1104`, `1024×768`, `1280×800`, and `1440×900`. At `884×1104`, explicitly verify Primary dominance, balanced Secondary selection, Recent freshness progression, no overflow, no heading compression, opaque explainer surface, and separation from Liquid Glass. Also verify single-pane behavior, Home return, explicit refresh, star/unstar, read-state mutations, and a late profile. Record viewport, theme, gate, and screenshot evidence.
+- [ ] Record `EMULATED_VIEWPORT_GATE=PASS` only after all matrix and retained Phase 2C scenarios pass. This is browser/emulated evidence only and must not be described as physical-device validation.
+
+### B. Exact candidate SHA handoff
+
+- [ ] After code, unit, build, harness, and emulated viewport gates all pass, require a clean worktree, record the exact implementation candidate `HEAD` SHA, and push the implementation branch only to the `jfsdias/NewsFlux` fork. Do not push to `electh/ReactFlux`.
+- [ ] Stop functional work after the push and return the exact SHA to PM. Do not deploy implicitly, deploy branch-latest, open a PR, or merge. The handoff must state:
+
+```text
+CODE_GATE=PASS
+HARNESS_GATE=PASS
+EMULATED_VIEWPORT_GATE=PASS
+CANDIDATE_SHA=<exact SHA>
+READY_FOR_EXACT_SHA_DEPLOY=YES
+REAL_DEVICE_GATE=PENDING
+```
+
+`READY_FOR_EXACT_SHA_DEPLOY=YES` means only that the candidate is ready for PM review and a separately authorized exact-SHA deployment; it is not deployment approval.
+
+### C. PM-controlled exact-SHA deployment
+
+- [ ] Deploy only after explicit PM authorization naming the exact approved candidate SHA. Implementation-plan execution does not itself authorize deployment. Use the approved NewsFlux deployment governance:
+
+```text
+STACK=/dockerdata/compose/newsflux
+REPO=/dockerdata/compose/newsflux/repo
+CONTAINER=newsflux
+IMAGE=newsflux-local:<shortcommit>
+NETWORK=npm-proxyyml_default
+```
+
+- [ ] Build/run the image from that exact approved commit. Never deploy branch latest or substitute a different SHA. If PM authorization or exact-SHA identity is missing, stop before deployment.
+
+### D. Physical real-device gate
+
+- [ ] After the exact-SHA deployment, validate on physical devices: narrow/mobile single-pane; tablet/Fold opened geometry; dark/OLED; Primary dominance; balanced Secondaries; Recent remains news-like; no horizontal overflow; explainer does not compress the Highlights heading; explainer remains opaque and distinct from Liquid Glass chrome; explainer touch accessibility; star/unstar do not reorder the current generation; reader open/return does not unexpectedly recompose; explicit refresh performs one coherent replacement; and no visible late-profile reshuffle.
+- [ ] If a physical device can reproduce `884×1104`, validate that viewport directly. Otherwise keep the exact `884×1104` browser result as emulated evidence and separately validate the closest physical Fold/tablet state; do not conflate the two.
+- [ ] Require `REAL_DEVICE_GATE=PASS` before the implementation is considered ready for PR. No merge authorization is implied.
 
 - [ ] Stop and report any failure outside the approved scope. Do not add a code fix during this gate; return it for a separately scoped decision.
+
+## Upstream Gate Note
+
+At PM review time, `electh/ReactFlux` main was revalidated at `0887f714c36cc6c999f8b4559fa14c7948598629`, matching the already-reviewed upstream baseline. No additional upstream reconciliation is currently required before Phase 2D execution. Before a future PR/merge, PM may recheck upstream if its main branch has moved. This is informational governance only; do not modify or sync upstream.
 
 ## Acceptance Gate Map
 
@@ -304,7 +348,7 @@ git diff --check
 | `PERSONALIZATION_EXPLAINER_TRUTHFUL`: changed shows; unchanged, available/no-effect, or deadline fallback hides | Task 2 projection tests, Task 5 locale/UI, and Task 6 DOM assertions. |
 | `ONE_AUX_PROFILE_QUERY_PER_HOME_SESSION`; `CANONICAL_HOME_QUERY_UNCHANGED`; `NO_SECOND_CANDIDATE_STREAM`; `ALL_UNREAD_UNCHANGED`; `STAR_DOES_NOT_RECOMPOSE_CURRENT_SESSION`; `UNSTAR_DOES_NOT_RECOMPOSE_CURRENT_SESSION` | Task 6 request-count and Phase 2C regression scenarios. |
 | All applicable Phase 2C Home, count, mutation, pagination, reader-return, and stale-session gates | Task 6 and Task 7. |
-| Six viewport sizes, light/dark-OLED, critical `884×1104`, accessible opaque explanation, and unchanged single-pane behavior | Task 6 and Task 7 browser/device matrix. |
+| Six viewport sizes, light/dark-OLED, critical `884×1104`, accessible opaque explanation, and unchanged single-pane behavior | Task 6 and Task 7A automated/emulated matrix; physical validation is a separate Task 7D gate after exact-SHA deployment. |
 
 ## Plan Self-Review
 
@@ -313,4 +357,7 @@ git diff --check
 - **Interface consistency:** The profile, projection, generation, and session interfaces are explicit. The existing canonical request and API helper remain the source of candidate and profile data respectively.
 - **Review Focus:** Exactly five high-risk cases are listed; each maps to an owning test in Tasks 1, 2, 4, 5, or 6.
 - **Proportion:** The plan adds only a transient profile, constrained Home projection, generation guard, accessible explanation, and regression coverage. It leaves cards, All/Unread, APIs, auth, routes, mutations, settings, and global layout untouched.
-- **Calibration/privacy:** No sample limit, freshness value, or wall-clock wait is selected. There are exactly two calibration values; PM approval blocks all functional tasks. No third calibration gate, hidden category rule, weighted score, persistence, telemetry, or late recomposition is introduced.
+- **Calibration/privacy:** `N` and the freshness window remain unset. There are exactly two calibration values; PM approval blocks all functional tasks. No third calibration gate, hidden category rule, weighted score, persistence, telemetry, or late recomposition is introduced.
+- **Freshness grouping:** The anchor-based algorithm is deterministic, boundary-inclusive, non-transitive, and covered by the anti-chaining and invalid-timestamp tests; the numeric window remains a PM calibration value.
+- **Release governance:** Automated/emulated evidence is distinct from the physical real-device gate; candidate SHA handoff precedes any PM-authorized exact-SHA deployment; no PR or merge is authorized by this plan.
+- **Upstream:** The revalidated upstream SHA is informational; no upstream sync or write is part of this plan.
