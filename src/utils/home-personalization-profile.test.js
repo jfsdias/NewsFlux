@@ -34,7 +34,8 @@ test("deduplicates stable entry IDs and excludes hidden feeds from aggregate cou
     hiddenFeedIds: new Set([99]),
   })
 
-  assert.deepEqual([...profile.starredEntryIds], ["1", "2", "3", "4"])
+  assert.deepEqual([...profile.starredEntryIds], ["1", "2", "4"])
+  assert.equal(getCandidatePreferenceSignals(entry(3, 99, 100), profile).currentItemStarred, false)
   assert.equal(profile.sourceCounts.get("10"), 2)
   assert.equal(profile.sourceCounts.has("99"), false)
   assert.equal(profile.categoryCounts.get("100"), 2)

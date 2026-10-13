@@ -25,7 +25,7 @@ export const createHomePersonalizationProfile = ({ entries, hiddenFeedIds = new 
     }
   }
 
-  const starredEntryIds = new Set(uniqueEntriesById.keys())
+  const starredEntryIds = new Set()
   const hiddenFeedIdKeys = normalizedIdSet(hiddenFeedIds)
   const sourceCounts = new Map()
   const categoryCounts = new Map()
@@ -38,6 +38,7 @@ export const createHomePersonalizationProfile = ({ entries, hiddenFeedIds = new 
     }
 
     const categoryId = stableIdKey(entry?.feed?.category?.id)
+    starredEntryIds.add(entryId)
     countedEntryMetadataById.set(entryId, { sourceId, categoryId })
     incrementCount(sourceCounts, sourceId)
     incrementCount(categoryCounts, categoryId)
