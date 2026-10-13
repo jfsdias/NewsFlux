@@ -2,6 +2,21 @@
 // eslint-disable-next-line import/extensions
 import { selectBackfillCandidate, selectInitialHighlightIds } from "./home-editorial-projection.js"
 
+const byPublishedAt = (left, right) =>
+  Date.parse(right.published_at) - Date.parse(left.published_at) ||
+  Number(left.id) - Number(right.id)
+
+const uniqueById = (entries) => {
+  const seen = new Set()
+  return entries.filter((entry) => {
+    if (seen.has(entry.id)) {
+      return false
+    }
+    seen.add(entry.id)
+    return true
+  })
+}
+
 // The request generation is intentionally absent: a refresh retains the committed projection
 // until its canonical response succeeds.
 export const createHomeSessionKey = ({ identityKey, showHiddenFeeds, pageSize, sessionRevision }) =>
@@ -11,18 +26,29 @@ export const createHomeEditorialSession = ({
   requestKey,
   sessionRevision,
   entries,
+  initialProjection,
   scrollRoot = null,
-}) => ({
-  requestKey,
-  sessionRevision,
-  highlightIds: selectInitialHighlightIds(entries),
-  pendingStatusById: {},
-  scrollRoot,
-})
+}) => {
+  const defaultHighlightIds = selectInitialHighlightIds(entries)
+  const highlightIds = initialProjection?.highlightIds ?? defaultHighlightIds
+  const highlighted = new Set(highlightIds)
+  const recentIds =
+    initialProjection?.recentIds ??
+    uniqueById(entries)
+      .filter((entry) => entry.status === "unread" && !highlighted.has(entry.id))
+      .toSorted(byPublishedAt)
+      .map((entry) => entry.id)
 
-const byPublishedAt = (left, right) =>
-  Date.parse(right.published_at) - Date.parse(left.published_at) ||
-  Number(left.id) - Number(right.id)
+  return {
+    requestKey,
+    sessionRevision,
+    highlightIds: [...highlightIds],
+    recentIds: [...recentIds],
+    preserveRecentOrder: Boolean(initialProjection),
+    pendingStatusById: {},
+    scrollRoot,
+  }
+}
 
 export const projectHomeSession = (session, entries) => {
   const highlighted = new Set(session.highlightIds)
@@ -36,12 +62,32 @@ export const projectHomeSession = (session, entries) => {
     return pending ? pending.previousStatus === "unread" : entry.status === "unread"
   })
   const eligibleIds = new Set(eligible.map(({ id }) => id))
-  return {
-    highlightIds: session.highlightIds.map((id) => (eligibleIds.has(id) ? id : null)),
-    recentIds: eligible
+  let recentIds
+  if (session.preserveRecentOrder) {
+    recentIds = []
+    const seenRecentIds = new Set()
+    for (const id of session.recentIds ?? []) {
+      if (eligibleIds.has(id) && !highlighted.has(id) && !seenRecentIds.has(id)) {
+        recentIds.push(id)
+        seenRecentIds.add(id)
+      }
+    }
+    const unseenRecentEntries = eligible
+      .filter((entry) => !highlighted.has(entry.id) && !seenRecentIds.has(entry.id))
+      .toSorted(byPublishedAt)
+    for (const entry of unseenRecentEntries) {
+      recentIds.push(entry.id)
+    }
+  } else {
+    recentIds = eligible
       .filter((entry) => !highlighted.has(entry.id))
       .toSorted(byPublishedAt)
-      .map((entry) => entry.id),
+      .map((entry) => entry.id)
+  }
+
+  return {
+    highlightIds: session.highlightIds.map((id) => (eligibleIds.has(id) ? id : null)),
+    recentIds,
   }
 }
 

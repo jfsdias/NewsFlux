@@ -264,3 +264,65 @@ test("stale status settlement cannot mutate the current Home session", () => {
     session,
   )
 })
+
+test("default session retains byte-for-byte Phase 2C projection order", () => {
+  const session = start()
+  const projection = projectHomeSession(session, loaded)
+  assert.deepEqual(projection.highlightIds, [1, 2, 3])
+  assert.deepEqual(projection.recentIds, [4, 5])
+})
+
+test("retains an explicitly committed initial projection", () => {
+  const session = createHomeEditorialSession({
+    requestKey: key,
+    sessionRevision: 1,
+    entries: loaded,
+    initialProjection: { highlightIds: [1, 3, 2], recentIds: [5, 4] },
+  })
+
+  assert.deepEqual(projectHomeSession(session, loaded), {
+    highlightIds: [1, 3, 2],
+    recentIds: [5, 4],
+  })
+})
+
+test("read-state filtering keeps surviving committed Recent order", () => {
+  const session = createHomeEditorialSession({
+    requestKey: key,
+    sessionRevision: 1,
+    entries: loaded,
+    initialProjection: { highlightIds: [1, 2], recentIds: [5, 4, 3] },
+  })
+  const afterRead = loaded.map((item) => (item.id === 4 ? { ...item, status: "read" } : item))
+
+  assert.deepEqual(projectHomeSession(session, afterRead).recentIds, [5, 3])
+})
+
+test("appends unseen load-more entries in canonical chronological order", () => {
+  const session = createHomeEditorialSession({
+    requestKey: key,
+    sessionRevision: 1,
+    entries: loaded,
+    initialProjection: { highlightIds: [1, 2, 3], recentIds: [5, 4] },
+  })
+
+  assert.deepEqual(
+    projectHomeSession(session, [...loaded, entry(6, 7), entry(7, 6)]).recentIds,
+    [5, 4, 6, 7],
+  )
+})
+
+test("preserves targeted one-slot backfill with a committed Recent order", () => {
+  const session = createHomeEditorialSession({
+    requestKey: key,
+    sessionRevision: 1,
+    entries: loaded,
+    initialProjection: { highlightIds: [1, 2, 3], recentIds: [5, 4] },
+  })
+  const readEntries = loaded.map((item) => (item.id === 2 ? { ...item, status: "read" } : item))
+  const confirmed = transitionHomeSession(session, event(2, "read", "confirmed"), readEntries)
+
+  assert.deepEqual(confirmed.highlightIds, [1, 4, 3])
+  assert.deepEqual(confirmed.recentIds, [5, 4])
+  assert.deepEqual(projectHomeSession(confirmed, readEntries).recentIds, [5])
+})
