@@ -96,6 +96,7 @@ export const phase2cEditorialHomeMatrix = {
   themes: ["light", "dark"],
   automatedGates: [
     "HARNESS_SCENARIO_MATRIX_COMPLETE",
+    "HOME_FIRST_SECTION_CLEAR_OF_CHROME",
     "HOME_NO_OVERFLOW",
     "HOME_SECTION_HIERARCHY",
     "HOME_PRIMARY_TEXT_ONLY",

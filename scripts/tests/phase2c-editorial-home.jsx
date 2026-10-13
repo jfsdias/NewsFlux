@@ -344,6 +344,20 @@ const captureHomeHarnessMetrics = (theme) => {
             : null,
         }
       : null,
+    firstSectionClearance: (() => {
+      const chrome = home?.querySelector(".search-and-sort-bar-home")
+      const heading = home?.querySelector(".home-highlights .home-section-heading")
+      if (!chrome || !heading) {
+        return null
+      }
+      const chromeRect = chrome.getBoundingClientRect()
+      const headingRect = heading.getBoundingClientRect()
+      return {
+        chromeBottom: Math.round(chromeRect.bottom * 100) / 100,
+        headingTop: Math.round(headingRect.top * 100) / 100,
+        gap: Math.round((headingRect.top - chromeRect.bottom) * 100) / 100,
+      }
+    })(),
   }
 }
 const loadNextPage = async (loadedCount) => {
@@ -1673,6 +1687,29 @@ const Harness = () => {
       },
     ],
     [
+      "HOME_FIRST_SECTION_CLEAR_OF_CHROME",
+      async () => {
+        await mountHighlights(highlightFixtures.image)
+        const chrome = homeRoot().querySelector(".search-and-sort-bar-home")
+        const heading = homeRoot().querySelector(".home-highlights .home-section-heading")
+        const root = scrollRoot()
+        assert(chrome && heading && root, "Home chrome, Highlights heading, or scroll root missing")
+        assert(
+          root.scrollTop === 0,
+          `Home did not start at its initial scroll position: ${root.scrollTop}`,
+        )
+        const chromeRect = chrome.getBoundingClientRect()
+        const headingRect = heading.getBoundingClientRect()
+        const gap = headingRect.top - chromeRect.bottom
+        const intendedClearance = 24
+        const tolerance = 1
+        assert(
+          gap + tolerance >= intendedClearance && headingRect.top >= chromeRect.bottom - tolerance,
+          `Highlights heading clearance was ${gap.toFixed(2)}px; expected at least ${intendedClearance - tolerance}px below chrome`,
+        )
+      },
+    ],
+    [
       "HOME_NO_OVERFLOW",
       async () => {
         await mountHighlights(highlightFixtures.image)
@@ -1991,6 +2028,7 @@ const Harness = () => {
         ]
         const requiredThemes = ["light", "dark"]
         const requiredGates = [
+          "HOME_FIRST_SECTION_CLEAR_OF_CHROME",
           "HOME_NO_OVERFLOW",
           "HOME_SECTION_HIERARCHY",
           "HOME_PRIMARY_TEXT_ONLY",
