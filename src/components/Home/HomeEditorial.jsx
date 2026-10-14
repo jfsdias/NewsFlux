@@ -299,8 +299,36 @@ const HomeEditorial = ({
   const isZeroUnread = Boolean(activeSession && total === 0 && !hasProjectedEntries)
   const isInitialLoading = !activeSession && !isArticleListReady && !articleListError
   const isInitialError = !activeSession && isArticleListReady && articleListError
+  const showRuntimeProbe =
+    globalThis.window !== undefined &&
+    new globalThis.URLSearchParams(globalThis.window.location.search).get("__newsflux_probe") ===
+      "7D549"
+
   return (
     <div aria-busy={isInitialLoading} className="home-editorial">
+      {showRuntimeProbe && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: "fixed",
+            right: "8px",
+            bottom: "8px",
+            zIndex: 2_147_483_647,
+            pointerEvents: "none",
+            padding: "5px 7px",
+            border: "1px solid rgba(255, 255, 255, 0.55)",
+            borderRadius: "4px",
+            backgroundColor: "rgba(0, 0, 0, 0.92)",
+            color: "#fff",
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+            fontSize: "12px",
+            lineHeight: 1.2,
+            whiteSpace: "nowrap",
+          }}
+        >
+          NEWSFLUX_R2_RUNTIME_PROBE_7D549
+        </div>
+      )}
       <SearchAndSortBar fullWidth homeMode />
       <AdaptiveScrollArea
         ref={entryListRef}
