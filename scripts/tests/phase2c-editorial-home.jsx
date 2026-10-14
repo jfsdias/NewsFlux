@@ -12,6 +12,7 @@ import {
   paginationEntries,
   personalizationFixtures,
   phase2cEditorialHomeMatrix,
+  readerFixtures,
   routeEntries,
 } from "./fixtures/phase2c-editorial-home"
 
@@ -306,6 +307,232 @@ const listRequests = canonicalEntryRequests
 const scrollRoot = () =>
   homeRoot()?.querySelector(".simplebar-content-wrapper, .adaptive-scroll-area-native")
 const sentinels = () => [...document.querySelectorAll(".home-editorial .load-more-container")]
+// READER-VISUAL-01: reader geometry. The frame is the Article width setting
+// (.article-body); prose is 75% of that setting, never wider than the frame.
+const readerScrollElement = (container) =>
+  container.querySelector(".scroll-container .simplebar-content-wrapper") ??
+  container.querySelector(".scroll-container")
+const rectOf = (node) => node.getBoundingClientRect()
+const isProseBlock = (node) =>
+  !node.parentElement.closest("li, td, th, blockquote, figure, .article-table-scroll") &&
+  !node.querySelector("img:not(.icon-image), iframe, video, .plyr")
+const measureReader = (articleWidth) => {
+  const container = document.querySelector(".article-container")
+  const body = container?.querySelector(".article-body")
+  assert(container && body, "Reader did not render")
+  const bodyRect = body.getBoundingClientRect()
+  const probe = document.createElement("span")
+  probe.style.cssText = "position:absolute;visibility:hidden;width:1ch"
+  body.append(probe)
+  const chPx = probe.getBoundingClientRect().width
+  probe.remove()
+  const expectedProse = Math.min(bodyRect.width, articleWidth * 0.75 * chPx)
+  const prose = [...body.querySelectorAll("p, ul, ol, blockquote, h2, h3")]
+    .filter((node) => isProseBlock(node))
+    .map((node) => ({ tag: node.tagName, rect: rectOf(node) }))
+  const scrollElement = readerScrollElement(container)
+  const content = container.querySelector(".article-content")
+  const title = container.querySelector(".article-title")
+  const header = container.querySelector(".article-header")
+  const background = getComputedStyle(container).backgroundColor
+  return {
+    viewport: [window.innerWidth, window.innerHeight],
+    articleWidth,
+    chPx: Number(chPx.toFixed(2)),
+    contentWidth: Math.round(content.clientWidth),
+    frame: { left: bodyRect.left, width: bodyRect.width },
+    expectedProse,
+    prose,
+    header: rectOf(header),
+    titleFontSize: Number.parseFloat(getComputedStyle(title).fontSize),
+    titleRect: rectOf(title),
+    proseFontSize: Number.parseFloat(getComputedStyle(body).fontSize),
+    proseLineHeight: getComputedStyle(body.querySelector("p")).lineHeight,
+    media: [
+      ...body.querySelectorAll(
+        "pre, .article-table-scroll, iframe, img:not(.icon-image), figure, figcaption",
+      ),
+    ].map((node) => ({
+      tag: node.tagName,
+      className: node.className,
+      rect: rectOf(node),
+      declaredWidth: Number(node.getAttribute("width")) || Number.POSITIVE_INFINITY,
+    })),
+    scrollElement,
+    // User-visible overflow only: the transparent zoom overlay is absolutely positioned
+    // and pre-existingly oversized at <= 768px, but the reader clips it (overflow-x: hidden).
+    overflow:
+      document.documentElement.scrollWidth > window.innerWidth ||
+      [
+        ...body.querySelectorAll(
+          "p, ul, ol, blockquote, h2, h3, pre, .article-table-scroll, iframe, img, figure",
+        ),
+      ].some((node) => {
+        const rect = rectOf(node)
+        return (
+          rect.left < scrollElement.getBoundingClientRect().left - 1 ||
+          rect.right > scrollElement.getBoundingClientRect().right + 1
+        )
+      }),
+    containerRect: rectOf(container),
+    opaque: !background.startsWith("rgba") || background.endsWith(", 1)"),
+    listInert: Boolean(document.querySelector(".entry-col[inert]")),
+  }
+}
+const mountReaderCase = async (mount, caseId, articleWidth = 75) => {
+  const entry = readerFixtures[caseId]
+  await mount(`/all/entry/${entry.id}`, {
+    entries: [entry],
+    total: 1,
+    showStatus: "all",
+    articleWidth,
+  })
+  await waitFor(
+    () =>
+      contentState.get().activeContent?.id === entry.id &&
+      document.querySelector(".article-container .article-body p") &&
+      [...document.querySelectorAll(".article-container .article-body img")].every(
+        (image) => image.complete,
+      ),
+    `${caseId} reader did not render`,
+  )
+  for (let frame = 0; frame < 4; frame += 1) {
+    await settle()
+  }
+  return entry
+}
+const assertReaderLayout = (caseId, metrics) => {
+  const { frame, expectedProse, prose } = metrics
+  assert(!metrics.overflow, `${caseId} reader overflowed horizontally`)
+  assert(metrics.opaque, `${caseId} reader surface is not opaque`)
+  assert(metrics.listInert, `${caseId} reader is not the single active pane`)
+  assert(prose.length > 0, `${caseId} has no prose blocks`)
+  const proseLeft = frame.left + (frame.width - expectedProse) / 2
+  for (const { tag, rect } of prose) {
+    assert(
+      Math.abs(rect.width - expectedProse) < 2 && Math.abs(rect.left - proseLeft) < 2,
+      `${caseId} ${tag} is ${rect.width.toFixed(1)}px at ${rect.left.toFixed(1)}; expected ${expectedProse.toFixed(1)}px at ${proseLeft.toFixed(1)}`,
+    )
+  }
+  for (const { tag, rect } of metrics.media) {
+    // Iframes keep the browser's default 2px border on top of width: 100% (pre-existing).
+    const tolerance = tag === "IFRAME" ? 5 : 1
+    assert(
+      rect.left >= frame.left - tolerance && rect.right <= frame.left + frame.width + tolerance,
+      `${caseId} ${tag} escaped the reader frame`,
+    )
+  }
+  const headerAxis = metrics.header.left + metrics.header.width / 2
+  const proseAxis = proseLeft + expectedProse / 2
+  assert(
+    Math.abs(headerAxis - proseAxis) < 2,
+    `${caseId} title axis ${headerAxis.toFixed(1)} is not aligned with the prose axis ${proseAxis.toFixed(1)}`,
+  )
+  const tier = metrics.contentWidth >= 960 ? 36 : metrics.contentWidth >= 600 ? 32 : 24
+  assert(
+    metrics.titleFontSize === tier,
+    `${caseId} title is ${metrics.titleFontSize}px; expected ${tier}px for a ${metrics.contentWidth}px reader`,
+  )
+  assert(metrics.proseLineHeight !== "normal", `${caseId} prose line height missing`)
+}
+const recordReaderMetrics = (key, metrics) => {
+  const { scrollElement: _scrollElement, ...serializable } = metrics
+  globalThis.__readerVisual01Geometry = {
+    ...globalThis.__readerVisual01Geometry,
+    [key]: serializable,
+  }
+}
+const runReaderCase = async (mount, caseId) => {
+  // Lets an external screenshot driver stage one READER-VISUAL-01 case at a time.
+  globalThis.__readerVisual01MountCase = (nextCaseId, articleWidth) =>
+    mountReaderCase(mount, nextCaseId, articleWidth)
+  await mountReaderCase(mount, caseId)
+  const metrics = measureReader(75)
+  assertReaderLayout(caseId, metrics)
+  const frameWidth = metrics.frame.width
+  const byClass = (predicate) => metrics.media.filter((node) => predicate(node))
+  if (caseId === "longForm") {
+    for (const surface of byClass(
+      ({ tag, className }) =>
+        ["PRE", "IFRAME"].includes(tag) || String(className).includes("article-table-scroll"),
+    )) {
+      assert(
+        Math.abs(surface.rect.width - frameWidth) < (surface.tag === "IFRAME" ? 5 : 2),
+        `${caseId} ${surface.tag} was narrowed to ${surface.rect.width.toFixed(1)}px (frame ${frameWidth.toFixed(1)}px)`,
+      )
+    }
+  }
+  if (caseId === "wideImage") {
+    for (const image of byClass(({ tag }) => tag === "IMG")) {
+      assert(
+        Math.abs(image.rect.width - Math.min(frameWidth, image.declaredWidth)) < 2,
+        `${caseId} wide image is ${image.rect.width.toFixed(1)}px; expected the frame ${frameWidth.toFixed(1)}px`,
+      )
+    }
+    const caption = byClass(({ tag }) => tag === "FIGCAPTION")[0]
+    const figure = byClass(({ tag }) => tag === "FIGURE")[0]
+    assert(
+      caption && figure && Math.abs(caption.rect.width - figure.rect.width) < 2,
+      `${caseId} figcaption does not follow its figure`,
+    )
+  }
+  if (caseId === "portraitImage") {
+    const image = byClass(({ tag }) => tag === "IMG")[0]
+    assert(
+      image && image.rect.height <= window.innerHeight * 0.8 + 1,
+      `${caseId} portrait image is ${image?.rect.height.toFixed(1)}px tall; cap is 80vh`,
+    )
+  }
+  recordReaderMetrics(caseId, metrics)
+}
+const runReaderWidthControl = async (mount) => {
+  const results = []
+  for (const articleWidth of [50, 75, 100]) {
+    await mountReaderCase(mount, "noImage", articleWidth)
+    const metrics = measureReader(articleWidth)
+    assertReaderLayout(`width ${articleWidth}`, metrics)
+    results.push({
+      articleWidth,
+      frame: metrics.frame.width,
+      prose: metrics.prose[0].rect.width,
+      expected: metrics.expectedProse,
+    })
+    recordReaderMetrics(`width${articleWidth}`, metrics)
+  }
+  for (let index = 1; index < results.length; index += 1) {
+    const [previous, current] = [results[index - 1], results[index]]
+    assert(
+      current.frame >= previous.frame - 1 && current.prose >= previous.prose - 1,
+      `Article width is not monotonic: ${JSON.stringify(results)}`,
+    )
+    assert(
+      current.expected - previous.expected < 1 || current.prose > previous.prose + 1,
+      `Article width ${current.articleWidth} did not widen prose: ${JSON.stringify(results)}`,
+    )
+  }
+}
+const runReaderScrollUnderGlass = async (mount) => {
+  await mountReaderCase(mount, "longForm")
+  const container = document.querySelector(".article-container")
+  const scrollElement = readerScrollElement(container)
+  const chrome = container.querySelector(".action-buttons")
+  assert(chrome, "Reader chrome missing")
+  const before = chrome.getBoundingClientRect()
+  scrollElement.scrollTop = 900
+  await settle()
+  const after = chrome.getBoundingClientRect()
+  assert(scrollElement.scrollTop > 0, "Reader did not scroll")
+  assert(Math.abs(after.top - before.top) < 2, "Reader chrome did not stay pinned while scrolling")
+  const underneath = [...container.querySelectorAll(".article-body p")].some((node) => {
+    const rect = node.getBoundingClientRect()
+    return rect.top < after.bottom && rect.bottom > after.top
+  })
+  assert(underneath, "Article content does not pass under the reader chrome")
+  assert(
+    Boolean(chrome.querySelector(".nf-glass-group, .nf-glass-control")),
+    "Reader chrome lost its glass treatment",
+  )
+}
 const MATRIX_RUNS_STORAGE_KEY = "phase2c-editorial-home-task10-matrix-runs-v1"
 const matrixPairId = (viewport, theme) => `${viewport.width}x${viewport.height}:${theme}`
 const readMatrixRuns = () => {
@@ -463,6 +690,7 @@ const Harness = () => {
       orderBy = getDefaultSettings().orderBy,
       orderDirection = getDefaultSettings().orderDirection,
       personalization = null,
+      articleWidth = getDefaultSettings().articleWidth,
     } = {},
   ) => {
     setProbe(null)
@@ -513,6 +741,7 @@ const Harness = () => {
       enableContextMenu: true,
       showFeedIcon: true,
       enableSwipeGesture,
+      articleWidth,
     })
     if (identity === "ready") {
       commitIdentityData({ id: 1, username: "fixture" })
@@ -1720,6 +1949,17 @@ const Harness = () => {
       },
     ],
   ]
+  // READER-VISUAL-01: reader ergonomics cases (Article width 75 unless stated).
+  const readerScenarios = [
+    ["READER_VISUAL_01_SHORT", () => runReaderCase(mount, "short")],
+    ["READER_VISUAL_01_LONG_FORM_TECHNICAL_SURFACES", () => runReaderCase(mount, "longForm")],
+    ["READER_VISUAL_01_LONG_HEADLINE", () => runReaderCase(mount, "longHeadline")],
+    ["READER_VISUAL_01_WIDE_IMAGE", () => runReaderCase(mount, "wideImage")],
+    ["READER_VISUAL_01_PORTRAIT_IMAGE", () => runReaderCase(mount, "portraitImage")],
+    ["READER_VISUAL_01_NO_IMAGE", () => runReaderCase(mount, "noImage")],
+    ["READER_VISUAL_01_ARTICLE_WIDTH_50_75_100", () => runReaderWidthControl(mount)],
+    ["READER_VISUAL_01_SCROLL_UNDER_GLASS", () => runReaderScrollUnderGlass(mount)],
+  ]
   const responsiveScenarios = [
     [
       "HOME_RESPONSIVE_VIEWPORT_STAGE",
@@ -2588,6 +2828,7 @@ const Harness = () => {
           ...stateScenarios,
           ...responsiveScenarios,
           ...personalizationScenarios,
+          ...readerScenarios,
           ...matrixScenarios,
         ]
         const gateNames = new Set(allScenarios.map(([name]) => name))
@@ -2644,6 +2885,7 @@ const Harness = () => {
     { name: "states-and-recovery", scenarios: stateScenarios },
     { name: "responsive-visual", scenarios: responsiveScenarios },
     { name: "personalization", scenarios: personalizationScenarios },
+    { name: "reader-visual-01-reading-ergonomics", scenarios: readerScenarios },
     { name: "matrix-completeness", scenarios: matrixScenarios },
   ]
   const runSuites = async (selectedSuites, { recordViewportTheme = false } = {}) => {
@@ -2652,7 +2894,8 @@ const Harness = () => {
     const next = []
     try {
       for (const { name: suite, scenarios: selectedScenarios } of selectedSuites) {
-        const responsiveMode = selectedScenarios === responsiveScenarios
+        const responsiveMode =
+          selectedScenarios === responsiveScenarios || selectedScenarios === readerScenarios
         if (responsiveMode) {
           document.body.classList.add("phase2c-responsive-running")
           await new Promise((resolve) => {
@@ -2767,6 +3010,9 @@ const Harness = () => {
         </button>
         <button disabled={running} onClick={() => void run(personalizationScenarios)}>
           Run Phase 2D personalization scenario
+        </button>
+        <button disabled={running} onClick={() => void run(readerScenarios)}>
+          Run READER-VISUAL-01 reading ergonomics cases
         </button>
         <button disabled={running} onClick={() => void run(matrixScenarios)}>
           Run scenario matrix completeness gate

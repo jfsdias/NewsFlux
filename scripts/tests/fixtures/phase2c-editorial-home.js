@@ -158,6 +158,14 @@ export const phase2cEditorialHomeMatrix = {
     "EXPLICIT_REFRESH_SINGLE_RECOMPOSITION",
     "ONE_AUX_PROFILE_QUERY_PER_HOME_SESSION",
     "ALL_UNREAD_UNCHANGED",
+    "READER_VISUAL_01_SHORT",
+    "READER_VISUAL_01_LONG_FORM_TECHNICAL_SURFACES",
+    "READER_VISUAL_01_LONG_HEADLINE",
+    "READER_VISUAL_01_WIDE_IMAGE",
+    "READER_VISUAL_01_PORTRAIT_IMAGE",
+    "READER_VISUAL_01_NO_IMAGE",
+    "READER_VISUAL_01_ARTICLE_WIDTH_50_75_100",
+    "READER_VISUAL_01_SCROLL_UNDER_GLASS",
   ],
   scenarios: [
     {
@@ -259,6 +267,20 @@ export const phase2cEditorialHomeMatrix = {
       covers: ["ALL_UNREAD_UNCHANGED"],
       fixtures: ["All", "Unread"],
     },
+    {
+      id: "READER_VISUAL_01_READING_ERGONOMICS",
+      covers: [
+        "READER_VISUAL_01_SHORT",
+        "READER_VISUAL_01_LONG_FORM_TECHNICAL_SURFACES",
+        "READER_VISUAL_01_LONG_HEADLINE",
+        "READER_VISUAL_01_WIDE_IMAGE",
+        "READER_VISUAL_01_PORTRAIT_IMAGE",
+        "READER_VISUAL_01_NO_IMAGE",
+        "READER_VISUAL_01_ARTICLE_WIDTH_50_75_100",
+        "READER_VISUAL_01_SCROLL_UNDER_GLASS",
+      ],
+      fixtures: ["readerFixtures"],
+    },
   ],
   manualGates: [
     "EDITORIAL_HIERARCHY_CLEAR",
@@ -273,4 +295,60 @@ export const phase2cEditorialHomeMatrix = {
     "TOUCH_TARGETS_USABLE",
     "MOBILE_SINGLE_PANE",
   ].map((name) => ({ name, status: "MANUAL_REQUIRED" })),
+}
+
+// READER-VISUAL-01 reader fixtures: ordinary prose plus the technical and media
+// surfaces that must keep the reader frame width while prose narrows.
+const readerAsset = (file) => `${globalThis.location.origin}/scripts/tests/fixtures/${file}`
+const readerParagraph = (n) =>
+  `<p>Paragraph ${n} carries enough ordinary prose to wrap across several lines at every reader width, so the measure, the line height and the paragraph rhythm can be judged on real sentences rather than on single words. A second sentence keeps the block long enough to show the right edge of the column.</p>`
+const readerParagraphs = (count, offset = 0) =>
+  Array.from({ length: count }, (_, index) => readerParagraph(offset + index + 1)).join("")
+const readerEntry = (id, title, content) => ({
+  ...routeEntries[0],
+  id,
+  title,
+  hash: `reader-${id}`,
+  url: `https://example.invalid/reader/${id}`,
+  content,
+  reading_time: 6,
+})
+export const readerFixtures = {
+  short: readerEntry(901, "A short reader article", readerParagraphs(2)),
+  longForm: readerEntry(
+    902,
+    "A long-form reader article with technical surfaces",
+    [
+      readerParagraphs(3),
+      "<h2>Section heading inside the article</h2>",
+      readerParagraphs(2, 3),
+      "<ul><li>First list item with a few words of explanation.</li><li>Second list item that is a little longer so it wraps at narrow widths.</li></ul>",
+      "<blockquote><p>A quoted passage stays inside the prose column and keeps its own indentation.</p></blockquote>",
+      "<h3>Technical surfaces</h3>",
+      "<pre><code>const readerFrame = settings.articleWidth\nconst proseMeasure = readerFrame * 0.75 // characters, before the frame cap\nconsole.log({ readerFrame, proseMeasure, note: 'code keeps the full reader frame width' })</code></pre>",
+      "<table><thead><tr><th>Surface</th><th>Width</th><th>Reason</th></tr></thead><tbody><tr><td>Prose</td><td>75% of Article width</td><td>Comfortable line length</td></tr><tr><td>Media, code, tables</td><td>Article width</td><td>Room for wide content</td></tr></tbody></table>",
+      '<iframe src="about:blank" title="Embedded media fixture"></iframe>',
+      readerParagraphs(6, 5),
+    ].join(""),
+  ),
+  longHeadline: readerEntry(
+    903,
+    "After months of negotiation, the regional council approves a transit plan that rebuilds three rail lines, adds night buses and changes how fares are shared across every town in the valley",
+    readerParagraphs(3),
+  ),
+  wideImage: readerEntry(
+    904,
+    "A reader article with a wide image",
+    `<p><img src="${readerAsset("valid-hero.svg")}" width="1600" height="900" /></p>${readerParagraphs(2)}<figure><img src="${readerAsset("valid-horizontal.svg")}" width="1600" height="900" /><figcaption>A figure caption under a wide image stays with the image.</figcaption></figure>${readerParagraphs(2, 2)}`,
+  ),
+  portraitImage: readerEntry(
+    905,
+    "A reader article with a portrait image",
+    `${readerParagraphs(1)}<p><img src="${readerAsset("valid-vertical.svg")}" width="600" height="1000" /></p>${readerParagraphs(3, 1)}`,
+  ),
+  noImage: readerEntry(
+    906,
+    "A reader article without images",
+    `${readerParagraphs(2)}<h2>Plain section</h2>${readerParagraphs(3, 2)}`,
+  ),
 }
