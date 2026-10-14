@@ -59,6 +59,43 @@ export const highlightFixtures = {
   shared: [highlightEntry(101, "12"), highlightEntry(202, "11"), highlightEntry(303, "10")],
 }
 
+const personalizationEntry = (id, minutesAfterNoon, feedId, categoryId) => ({
+  ...routeEntries[0],
+  id,
+  title: `Personalization article ${id}`,
+  published_at: new Date(Date.UTC(2026, 9, 12, 12, minutesAfterNoon)).toISOString(),
+  url: `https://example.invalid/${id}`,
+  hash: `personalization-${id}`,
+  feed: {
+    ...fixtureFeed,
+    id: feedId,
+    title: `Personalization source ${feedId}`,
+    category: { id: categoryId, title: `Personalization category ${categoryId}` },
+  },
+})
+
+export const personalizationFixtures = {
+  home: [
+    personalizationEntry(601, 0, 1, 1),
+    personalizationEntry(602, -10, 2, 2),
+    personalizationEntry(603, -20, 3, 3),
+    personalizationEntry(604, -30, 4, 4),
+  ],
+  preferredProfile: [
+    { ...personalizationEntry(603, -20, 3, 3), starred: true },
+    { ...personalizationEntry(999, -25, 3, 3), starred: true },
+  ],
+  unchangedProfile: [{ ...personalizationEntry(602, -10, 2, 2), starred: true }],
+  noMatchProfile: [{ ...personalizationEntry(999, -20, 99, 99), starred: true }],
+  hiddenOnlyProfile: [{ ...personalizationEntry(998, -20, 99, 99), starred: true }],
+  directStarOutsideSampleHome: [
+    personalizationEntry(601, 0, 1, 1),
+    personalizationEntry(602, -10, 2, 2),
+    personalizationEntry(603, -20, 3, 3),
+    { ...personalizationEntry(604, -30, 4, 4), starred: true },
+  ],
+}
+
 // Unique timestamps make the existing overlap cursor deterministic across large pages.
 export const paginationEntries = (count, offset = 0) =>
   Array.from({ length: count }, (_, index) => {
@@ -97,6 +134,7 @@ export const phase2cEditorialHomeMatrix = {
   automatedGates: [
     "HARNESS_SCENARIO_MATRIX_COMPLETE",
     "HOME_FIRST_SECTION_CLEAR_OF_CHROME",
+    "HOME_SESSION_STABLE_AFTER_READER_READ",
     "HOME_NO_OVERFLOW",
     "HOME_SECTION_HIERARCHY",
     "HOME_PRIMARY_TEXT_ONLY",
@@ -113,6 +151,14 @@ export const phase2cEditorialHomeMatrix = {
     "HOME_MARK_UNREAD_RECONCILES_TOTAL",
     "HOME_UNLOADED_MARK_UNREAD_REENABLES_PAGINATION",
     "HOME_TOTAL_RECONCILIATION_STALE_SESSION_PROTECTED",
+    "CANONICAL_HOME_QUERY_UNCHANGED",
+    "NO_SECOND_CANDIDATE_STREAM",
+    "PERSONALIZATION_EXPLAINER_TRUTHFUL",
+    "PROFILE_DEADLINE_FALLBACK_NO_RECOMPOSE",
+    "STALE_SESSION_PROFILE_DISCARDED",
+    "EXPLICIT_REFRESH_SINGLE_RECOMPOSITION",
+    "ONE_AUX_PROFILE_QUERY_PER_HOME_SESSION",
+    "ALL_UNREAD_UNCHANGED",
   ],
   scenarios: [
     {
@@ -164,9 +210,12 @@ export const phase2cEditorialHomeMatrix = {
     },
     { id: "LOAD_MORE_ERROR", covers: ["HOME_LOAD_MORE_ERROR"], fixtures: ["failPagination"] },
     {
-      id: "AFTER_READ_BACKFILL",
-      covers: ["HOME_REJECTED_UNREAD_REVERSAL_RECONCILES_CONFIRMED_READ"],
-      fixtures: ["deferredFirstStatusMutation", "rejectStatusMutationCall"],
+      id: "AFTER_CONFIRMED_READ_STABLE_SESSION",
+      covers: [
+        "HOME_REJECTED_UNREAD_REVERSAL_RECONCILES_CONFIRMED_READ",
+        "HOME_SESSION_STABLE_AFTER_READER_READ",
+      ],
+      fixtures: ["reader mark-as-read", "deferredFirstStatusMutation", "rejectStatusMutationCall"],
     },
     {
       id: "AFTER_MARK_UNREAD",
@@ -180,6 +229,49 @@ export const phase2cEditorialHomeMatrix = {
       id: "AFTER_STAR_AND_UNSTAR",
       covers: ["HOME_HIGHLIGHT_ACTIONS"],
       fixtures: ["starMutationRequests"],
+    },
+    {
+      id: "PHASE2D_PERSONALIZED_PROJECTION",
+      covers: ["CANONICAL_HOME_QUERY_UNCHANGED", "NO_SECOND_CANDIDATE_STREAM"],
+      fixtures: ["personalizationFixtures.home", "personalizationFixtures.preferredProfile"],
+    },
+    {
+      id: "PHASE2D_TRUTHFUL_EXPLAINER_AND_FALLBACKS",
+      covers: ["PERSONALIZATION_EXPLAINER_TRUTHFUL"],
+      fixtures: [
+        "personalizationFixtures.noMatchProfile",
+        "personalizationFixtures.hiddenOnlyProfile",
+      ],
+    },
+    {
+      id: "PHASE2D_DEADLINE_AND_STALE_PROFILE",
+      covers: ["PROFILE_DEADLINE_FALLBACK_NO_RECOMPOSE", "STALE_SESSION_PROFILE_DISCARDED"],
+      fixtures: ["deferredStarredProfile"],
+    },
+    {
+      id: "PHASE2D_EXPLICIT_REFRESH",
+      covers: ["EXPLICIT_REFRESH_SINGLE_RECOMPOSITION"],
+      fixtures: ["canonical snapshot refresh", "changed profile order"],
+    },
+    {
+      id: "PHASE2D_QUERY_SCOPE_AND_SESSION",
+      covers: ["ONE_AUX_PROFILE_QUERY_PER_HOME_SESSION"],
+      fixtures: ["load more", "star/unstar", "status settlement", "reader return"],
+    },
+    {
+      id: "PHASE2D_SESSION_STABILITY",
+      covers: ["HOME_SESSION_STABLE_AFTER_READER_READ"],
+      fixtures: [
+        "open unread Primary",
+        "normal read settlement",
+        "close reader",
+        "exact IDs/order",
+      ],
+    },
+    {
+      id: "PHASE2D_NON_HOME_LISTS",
+      covers: ["ALL_UNREAD_UNCHANGED"],
+      fixtures: ["All", "Unread"],
     },
   ],
   manualGates: [

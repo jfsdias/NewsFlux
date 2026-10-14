@@ -481,6 +481,8 @@
   "home_page": {
     "section_highlights": "Destacados",
     "section_recent": "Más recientes",
+    "personalization_info_label": "¿Por qué estas noticias?",
+    "personalization_info": "Las fuentes destacadas pueden influir en los destacados secundarios y en las noticias más recientes. La noticia principal sigue guiándose por la actualidad. Todas y No leídas mantienen el orden cronológico.",
     "type_view": "Vista",
     "type_category": "Categoría",
     "type_feed": "Feed",

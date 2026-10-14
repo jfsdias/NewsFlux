@@ -481,6 +481,8 @@
   "home_page": {
     "section_highlights": "注目記事",
     "section_recent": "最新記事",
+    "personalization_info_label": "この注目記事について",
+    "personalization_info": "スターを付けたフィードは、その他の注目記事や最新記事に影響する場合があります。最初の記事は新しさを基準に選ばれます。「すべて」と「未読」は時系列順のままです。",
     "type_view": "ビュー",
     "type_category": "カテゴリ",
     "type_feed": "フィード",

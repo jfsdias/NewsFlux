@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 const {
+  appendHomeSessionEntries,
   createHomeEditorialSession,
   createHomeSessionKey,
   projectHomeSession,
@@ -14,247 +15,185 @@ const entry = (id, time, feedId = id, status = "unread") => ({
   published_at: `2026-10-${String(time).padStart(2, "0")}T00:00:00Z`,
   feed: { id: feedId, category: { id: feedId } },
 })
+
 const loaded = [entry(1, 12), entry(2, 11), entry(3, 10), entry(4, 9), entry(5, 8)]
-const key = createHomeSessionKey({
+const defaultProjection = { highlightIds: [1, 2, 3], recentIds: [4, 5] }
+const fields = {
   identityKey: "server:user",
   showHiddenFeeds: false,
   pageSize: 5,
   sessionRevision: 1,
-})
-const start = (entries = loaded) =>
-  createHomeEditorialSession({ requestKey: key, sessionRevision: 1, entries })
-const event = (entryId, targetStatus, outcome, previousStatus = "unread", sessionRevision = 1) => ({
-  entryIds: [entryId],
-  previousStatuses: { [entryId]: previousStatus },
+}
+const key = createHomeSessionKey(fields)
+const start = (entries = loaded, initialProjection = defaultProjection, sessionRevision = 1) =>
+  createHomeEditorialSession({
+    requestKey: key,
+    sessionRevision,
+    entries,
+    initialProjection,
+  })
+const event = (
+  entryIds,
+  targetStatus,
+  outcome,
+  previousStatus = "unread",
+  sessionRevision = 1,
+) => ({
+  entryIds: Array.isArray(entryIds) ? entryIds : [entryIds],
+  previousStatuses: Object.fromEntries(
+    (Array.isArray(entryIds) ? entryIds : [entryIds]).map((id) => [id, previousStatus]),
+  ),
   targetStatus,
   outcome,
   sessionRevision,
 })
+const setStatus = (entries, ids, status) =>
+  entries.map((item) => (ids.includes(item.id) ? { ...item, status } : item))
+const projection = (session, entries) => projectHomeSession(session, entries)
 
 test("home session key ignores refresh generation", () => {
-  const fields = {
-    identityKey: "server:user",
-    showHiddenFeeds: false,
-    pageSize: 5,
-    sessionRevision: 1,
-  }
   assert.equal(
     createHomeSessionKey({ ...fields, articleListRevision: 1 }),
     createHomeSessionKey({ ...fields, articleListRevision: 9 }),
   )
 })
 
-test("keeps placement while a read is pending", () => {
-  const pending = transitionHomeSession(start(), event(1, "read", "intent"), loaded)
-  assert.deepEqual(
-    projectHomeSession(
-      pending,
-      loaded.map((item) => (item.id === 1 ? { ...item, status: "read" } : item)),
-    ).highlightIds,
-    [1, 2, 3],
-  )
-})
-
-test("commits exactly one Primary slot backfill only after confirmed read", () => {
-  const pending = transitionHomeSession(start(), event(1, "read", "intent"), loaded)
+test("CONFIRMED_PRIMARY_READ_RETAINS_SLOT — Phase 2D keeps committed Highlights stable", () => {
+  const initial = start()
+  const pending = transitionHomeSession(initial, event(1, "read", "intent"), loaded)
   const confirmed = transitionHomeSession(
     pending,
     event(1, "read", "confirmed"),
-    loaded.map((item) => (item.id === 1 ? { ...item, status: "read" } : item)),
-  )
-  assert.deepEqual(confirmed.highlightIds, [4, 2, 3])
-})
-
-test("commits exactly one Secondary slot backfill", () => {
-  const confirmed = transitionHomeSession(
-    start(),
-    event(2, "read", "confirmed"),
-    loaded.map((item) => (item.id === 2 ? { ...item, status: "read" } : item)),
-  )
-  assert.deepEqual(confirmed.highlightIds, [1, 4, 3])
-})
-
-test("batched reads backfill each vacancy against surviving Highlights", () => {
-  const confirmed = transitionHomeSession(
-    start(),
-    {
-      ...event(1, "read", "confirmed"),
-      entryIds: [1, 2],
-      previousStatuses: { 1: "unread", 2: "unread" },
-    },
-    loaded.map((item) => ([1, 2].includes(item.id) ? { ...item, status: "read" } : item)),
-  )
-  assert.deepEqual(confirmed.highlightIds, [4, 5, 3])
-})
-
-test("candidate absent from loaded Recent leaves a vacancy", () => {
-  const confirmed = transitionHomeSession(
-    start(loaded.slice(0, 3)),
-    event(1, "read", "confirmed"),
-    loaded.slice(0, 3),
-  )
-  assert.deepEqual(confirmed.highlightIds, [null, 2, 3])
-  assert.deepEqual(
-    projectHomeSession(
-      confirmed,
-      loaded.slice(0, 3).map((item) => (item.id === 1 ? { ...item, status: "read" } : item)),
-    ).highlightIds,
-    [null, 2, 3],
-  )
-})
-
-test("vacant Secondary slot keeps Primary and the other Secondary in place", () => {
-  const confirmed = transitionHomeSession(
-    start(loaded.slice(0, 3)),
-    event(2, "read", "confirmed"),
-    loaded.slice(0, 3).map((item) => (item.id === 2 ? { ...item, status: "read" } : item)),
-  )
-  assert.deepEqual(confirmed.highlightIds, [1, null, 3])
-  assert.deepEqual(
-    projectHomeSession(
-      confirmed,
-      loaded.slice(0, 3).map((item) => (item.id === 2 ? { ...item, status: "read" } : item)),
-    ).highlightIds,
-    [1, null, 3],
-  )
-})
-
-test("failed read retains the same projection after rollback", () => {
-  const pending = transitionHomeSession(start(), event(1, "read", "intent"), loaded)
-  const failed = transitionHomeSession(pending, event(1, "read", "rejected"), loaded)
-  assert.deepEqual(failed.highlightIds, [1, 2, 3])
-  assert.deepEqual(projectHomeSession(failed, loaded).highlightIds, [1, 2, 3])
-})
-
-test("repeated status toggles retain the original placement until the latest settlement", () => {
-  const reading = transitionHomeSession(start(), event(1, "read", "intent"), loaded)
-  const unreadIntent = transitionHomeSession(reading, event(1, "unread", "intent", "read"), loaded)
-  const oldReadSettlement = transitionHomeSession(
-    unreadIntent,
-    event(1, "read", "confirmed"),
-    loaded,
-  )
-  assert.deepEqual(
-    projectHomeSession(
-      oldReadSettlement,
-      loaded.map((item) => (item.id === 1 ? { ...item, status: "unread" } : item)),
-    ).highlightIds,
-    [1, 2, 3],
-  )
-  const settled = transitionHomeSession(
-    oldReadSettlement,
-    event(1, "unread", "confirmed", "read"),
-    loaded,
-  )
-  assert.deepEqual(settled.highlightIds, [1, 2, 3])
-})
-
-test("rejected unread reversal applies earlier confirmed read and backfills", () => {
-  const reading = transitionHomeSession(start(), event(1, "read", "intent"), loaded)
-  const reversing = transitionHomeSession(reading, event(1, "unread", "intent", "read"), loaded)
-  const readConfirmed = transitionHomeSession(
-    reversing,
-    { ...event(1, "read", "confirmed"), pendingEntryIds: [1] },
-    loaded,
-  )
-  assert.deepEqual(readConfirmed.highlightIds, [1, 2, 3])
-  assert.equal(readConfirmed.pendingStatusById[1].confirmedStatus, "read")
-  assert.deepEqual(projectHomeSession(readConfirmed, loaded).highlightIds, [1, 2, 3])
-
-  const rolledBack = loaded.map((item) => (item.id === 1 ? { ...item, status: "read" } : item))
-  const final = transitionHomeSession(
-    readConfirmed,
-    { ...event(1, "unread", "rejected", "read"), pendingEntryIds: [] },
-    rolledBack,
-  )
-  assert.deepEqual(final.highlightIds, [4, 2, 3])
-  assert.deepEqual(final.pendingStatusById, {})
-  assert.deepEqual(projectHomeSession(final, rolledBack).highlightIds, [4, 2, 3])
-  assert.equal(projectHomeSession(final, rolledBack).recentIds.includes(1), false)
-})
-
-test("pending unread reversal is not a backfill candidate before its mutation succeeds", () => {
-  const initial = start()
-  const readingRecentEntry = transitionHomeSession(initial, event(4, "read", "intent"), loaded)
-  const reversingRecentEntry = transitionHomeSession(
-    readingRecentEntry,
-    event(4, "unread", "intent", "read"),
-    loaded,
-  )
-  const readConfirmedUnreadPending = transitionHomeSession(
-    reversingRecentEntry,
-    { ...event(4, "read", "confirmed"), pendingEntryIds: [4] },
-    loaded,
-  )
-  assert.equal(readConfirmedUnreadPending.pendingStatusById[4].confirmedStatus, "read")
-
-  const afterAnotherHighlightRead = transitionHomeSession(
-    readConfirmedUnreadPending,
-    event(2, "read", "confirmed"),
-    loaded.map((item) => (item.id === 2 ? { ...item, status: "read" } : item)),
+    setStatus(loaded, [1], "read"),
   )
 
-  assert.deepEqual(afterAnotherHighlightRead.highlightIds, [1, 5, 3])
-})
-
-test("confirmed mark-unread inserts an already-loaded entry only into Recent", () => {
-  const readEntry = entry(6, 13, 6, "read")
-  const session = start([...loaded, readEntry])
-  const pending = transitionHomeSession(session, event(6, "unread", "intent", "read"), [
-    ...loaded,
-    readEntry,
-  ])
-  assert.equal(
-    projectHomeSession(pending, [...loaded, { ...readEntry, status: "unread" }]).recentIds.includes(
-      6,
-    ),
-    false,
-  )
-  const confirmed = transitionHomeSession(pending, event(6, "unread", "confirmed", "read"), [
-    ...loaded,
-    { ...readEntry, status: "unread" },
-  ])
   assert.deepEqual(confirmed.highlightIds, [1, 2, 3])
-  assert.deepEqual(
-    projectHomeSession(confirmed, [...loaded, { ...readEntry, status: "unread" }]).recentIds,
-    [6, 4, 5],
+  assert.deepEqual(projection(confirmed, setStatus(loaded, [1], "read")).highlightIds, [1, 2, 3])
+})
+
+test("CONFIRMED_SECONDARY_READ_RETAINS_SLOT — confirmed read does not backfill Highlights", () => {
+  const readEntries = setStatus(loaded, [2], "read")
+  const confirmed = transitionHomeSession(start(), event(2, "read", "confirmed"), readEntries)
+
+  assert.deepEqual(confirmed.highlightIds, [1, 2, 3])
+  assert.deepEqual(projection(confirmed, readEntries).highlightIds, [1, 2, 3])
+})
+
+test("CONFIRMED_RECENT_READ_RETAINS_POSITION — committed Recent order survives read settlement", () => {
+  const initial = start(loaded, { highlightIds: [1, 2, 3], recentIds: [5, 4] })
+  const readEntries = setStatus(loaded, [4], "read")
+  const confirmed = transitionHomeSession(initial, event(4, "read", "confirmed"), readEntries)
+
+  assert.deepEqual(projection(confirmed, readEntries).recentIds, [5, 4])
+})
+
+test("READER_STYLE_STATUS_CAN_CHANGE_WITHOUT_MEMBERSHIP_CHANGE", () => {
+  const readEntries = setStatus(loaded, [1], "read")
+  const committed = transitionHomeSession(start(), event(1, "read", "confirmed"), readEntries)
+
+  assert.equal(readEntries.find(({ id }) => id === 1).status, "read")
+  assert.deepEqual(projection(committed, readEntries).highlightIds, [1, 2, 3])
+})
+
+test("CONFIRMED_UNREAD_DOES_NOT_INSERT_NONCOMMITTED_ENTRY", () => {
+  const readEntry = entry(6, 13, 6, "read")
+  const initialEntries = [...loaded, readEntry]
+  const initial = start(initialEntries)
+  const unreadEntries = setStatus(initialEntries, [6], "unread")
+  const confirmed = transitionHomeSession(
+    initial,
+    event(6, "unread", "confirmed", "read"),
+    unreadEntries,
   )
+
+  assert.deepEqual(projection(confirmed, unreadEntries), defaultProjection)
 })
 
-test("unloaded mark-unread does not add an article object or trigger an entry fetch", () => {
-  const session = transitionHomeSession(start(), event(99, "unread", "confirmed", "read"), loaded)
-  assert.deepEqual(projectHomeSession(session, loaded).recentIds, [4, 5])
-  assert.equal(session.entries, undefined)
+test("REJECTED_READ_DOES_NOT_CHANGE_PROJECTION after status rollback", () => {
+  const initial = start()
+  const pending = transitionHomeSession(initial, event(1, "read", "intent"), loaded)
+  const rolledBack = transitionHomeSession(pending, event(1, "read", "rejected"), loaded)
+
+  assert.deepEqual(projection(rolledBack, loaded), defaultProjection)
 })
 
-test("star changes never alter highlight ids", () => {
-  const session = transitionHomeSession(
+test("BATCHED_READS_DO_NOT_BACKFILL — exact committed Highlight order remains", () => {
+  const readEntries = setStatus(loaded, [1, 2], "read")
+  const confirmed = transitionHomeSession(start(), event([1, 2], "read", "confirmed"), readEntries)
+
+  assert.deepEqual(projection(confirmed, readEntries).highlightIds, [1, 2, 3])
+})
+
+test("ZERO_UNREAD_SESSION_RETAINS_COMMITTED_PROJECTION", () => {
+  const readEntries = setStatus(loaded, [1, 2, 3, 4, 5], "read")
+  const confirmed = transitionHomeSession(
     start(),
-    { ...event(1, "starred", "confirmed"), targetStatus: "starred" },
-    loaded,
+    event([1, 2, 3, 4, 5], "read", "confirmed"),
+    readEntries,
   )
-  assert.deepEqual(session.highlightIds, [1, 2, 3])
+
+  assert.deepEqual(projection(confirmed, readEntries), defaultProjection)
 })
 
-test("session identity or visibility change discards old highlights", () => {
-  assert.notEqual(
-    key,
-    createHomeSessionKey({
-      identityKey: "other",
-      showHiddenFeeds: false,
-      pageSize: 5,
-      sessionRevision: 1,
-    }),
-  )
-  assert.notEqual(
-    key,
-    createHomeSessionKey({
-      identityKey: "server:user",
-      showHiddenFeeds: true,
-      pageSize: 5,
-      sessionRevision: 1,
-    }),
-  )
+test("LOAD_MORE_APPENDS_WITHOUT_REORDER — newly loaded canonical entries follow committed Recent", () => {
+  const initial = start(loaded, { highlightIds: [1, 2, 3], recentIds: [5, 4] })
+  const loadedMore = [...loaded, entry(6, 7), entry(7, 6)]
+  const appended = appendHomeSessionEntries(initial, loadedMore)
+
+  assert.deepEqual(appended.highlightIds, [1, 2, 3])
+  assert.deepEqual(appended.recentIds, [5, 4, 6, 7])
+
+  const readSix = setStatus(loadedMore, [6], "read")
+  const confirmed = transitionHomeSession(appended, event(6, "read", "confirmed"), readSix)
+  assert.deepEqual(projection(confirmed, readSix).recentIds, [5, 4, 6, 7])
+})
+
+test("STAR_UNSTAR_NO_RECOMPOSE — star-only state keeps the committed projection", () => {
+  const initial = start()
+  const afterStar = transitionHomeSession(initial, event(1, "starred", "confirmed"), loaded)
+  const afterUnstar = transitionHomeSession(afterStar, event(1, "unstarred", "confirmed"), loaded)
+
+  assert.equal(afterStar, initial)
+  assert.equal(afterUnstar, initial)
+  assert.deepEqual(projection(afterUnstar, loaded), defaultProjection)
+})
+
+test("LATE_PROFILE_NO_RECOMPOSE — a late profile result cannot change a committed projection", () => {
+  const initial = start()
+  const before = projection(initial, loaded)
+  const afterLateProfile = projection(initial, loaded)
+
+  assert.deepEqual(afterLateProfile, before)
+  assert.deepEqual(afterLateProfile, defaultProjection)
+})
+
+test("NEW_SESSION_REBUILDS_FROM_CURRENT_UNREAD", () => {
+  const currentUnread = setStatus(loaded, [1], "read")
+  const nextSession = createHomeEditorialSession({
+    requestKey: key,
+    sessionRevision: 2,
+    entries: currentUnread,
+  })
+
+  assert.equal(projection(nextSession, currentUnread).highlightIds.includes(1), false)
+  assert.deepEqual(projection(nextSession, currentUnread).highlightIds, [2, 3, 4])
+})
+
+test("EXPLICIT_REFRESH_REBUILDS_FROM_CURRENT_UNREAD", () => {
+  const currentUnread = setStatus(loaded, [1, 2], "read")
+  const refreshedSession = createHomeEditorialSession({
+    requestKey: key,
+    sessionRevision: 2,
+    entries: currentUnread,
+  })
+
+  assert.equal(projection(refreshedSession, currentUnread).highlightIds.includes(1), false)
+  assert.equal(projection(refreshedSession, currentUnread).highlightIds.includes(2), false)
+})
+
+test("session identity or visibility change discards old Highlights", () => {
+  assert.notEqual(key, createHomeSessionKey({ ...fields, identityKey: "other" }))
+  assert.notEqual(key, createHomeSessionKey({ ...fields, showHiddenFeeds: true }))
 })
 
 test("stale status settlement cannot mutate the current Home session", () => {
@@ -263,4 +202,30 @@ test("stale status settlement cannot mutate the current Home session", () => {
     transitionHomeSession(session, event(1, "read", "confirmed", "unread", 0), loaded),
     session,
   )
+})
+
+test("a new Home session retains canonical Phase 2C order before personalization", () => {
+  const session = createHomeEditorialSession({
+    requestKey: key,
+    sessionRevision: 1,
+    entries: loaded,
+  })
+  assert.deepEqual(projection(session, loaded), defaultProjection)
+})
+
+test("retains an explicitly committed personalized projection", () => {
+  const session = start(loaded, { highlightIds: [1, 3, 2], recentIds: [5, 4] })
+  assert.deepEqual(projection(session, loaded), { highlightIds: [1, 3, 2], recentIds: [5, 4] })
+})
+
+test("load-more ignores already observed IDs and read entries", () => {
+  const initial = start()
+  const appended = appendHomeSessionEntries(initial, [
+    ...loaded,
+    entry(6, 7, 6, "read"),
+    entry(7, 6),
+  ])
+
+  assert.deepEqual(appended.recentIds, [4, 5, 7])
+  assert.deepEqual(appendHomeSessionEntries(appended, [...loaded, entry(7, 6)]), appended)
 })

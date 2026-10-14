@@ -10,6 +10,7 @@ import {
   fixtureFeed,
   highlightFixtures,
   paginationEntries,
+  personalizationFixtures,
   phase2cEditorialHomeMatrix,
   routeEntries,
 } from "./fixtures/phase2c-editorial-home"
@@ -70,6 +71,9 @@ let deferredArticleQuery = null
 let failPagination = false
 let emptyPagePagination = false
 let initialHomeQueryServed = false
+let starredProfileEntries = []
+let starredProfileMode = "resolved"
+let deferredStarredProfile = null
 let failStatusMutation = false
 let starMutationRequests = 0
 let statusMutationRequests = 0
@@ -93,10 +97,19 @@ const instanceToken = (node) => {
 apiClient.get = async (url) => {
   requests.push(url)
   if (url.startsWith("/v1/entries?")) {
+    const params = new URL(url, "https://fixture.invalid").searchParams
+    if (params.get("starred") === "true") {
+      if (starredProfileMode === "failed") {
+        throw new Error("Expected local starred-profile failure")
+      }
+      if (starredProfileMode === "deferred" && deferredStarredProfile) {
+        return deferredStarredProfile.promise
+      }
+      return { entries: starredProfileEntries }
+    }
     if (articleFailure) {
       throw new Error("Expected local article query failure")
     }
-    const params = new URL(url, "https://fixture.invalid").searchParams
     if (params.get("limit") === "1" && failCount) {
       throw new Error("Expected local canonical count failure")
     }
@@ -236,6 +249,18 @@ const assert = (condition, message) => {
   }
 }
 const settle = () => new Promise((resolve) => setTimeout(resolve, 70))
+const createDeferred = () => {
+  let release
+  const promise = new Promise((resolve) => {
+    release = resolve
+  })
+  return { promise, resolve: release }
+}
+const resolveStarredProfile = (entries) => {
+  assert(deferredStarredProfile, "No deferred starred-profile request is pending")
+  deferredStarredProfile.resolve({ entries })
+  deferredStarredProfile = null
+}
 const waitFor = async (predicate, message) => {
   for (let attempt = 0; attempt < 70; attempt += 1) {
     if (predicate()) {
@@ -267,7 +292,17 @@ const recentIds = () =>
   [...document.querySelectorAll(".home-recent .article-entry")].map((node) =>
     Number(node.dataset.entryId),
   )
-const listRequests = () => requests.filter((url) => url.startsWith("/v1/entries?"))
+const starredProfileRequests = () =>
+  requests.filter(
+    (url) => new URL(url, "https://fixture.invalid").searchParams.get("starred") === "true",
+  )
+const canonicalEntryRequests = () =>
+  requests.filter(
+    (url) =>
+      url.startsWith("/v1/entries?") &&
+      new URL(url, "https://fixture.invalid").searchParams.get("starred") !== "true",
+  )
+const listRequests = canonicalEntryRequests
 const scrollRoot = () =>
   homeRoot()?.querySelector(".simplebar-content-wrapper, .adaptive-scroll-area-native")
 const sentinels = () => [...document.querySelectorAll(".home-editorial .load-more-container")]
@@ -321,6 +356,8 @@ const captureHomeHarnessMetrics = (theme) => {
     },
     recentColumns,
     countQueryVisibility: countQueries,
+    canonicalEntryQueryCount: canonicalEntryRequests().length,
+    starredProfileQueryCount: starredProfileRequests().length,
     loadedEligibleUnreadIds: new Set(
       state.entries.filter((entry) => entry.status === "unread").map((entry) => entry.id),
     ).size,
@@ -417,6 +454,7 @@ const Harness = () => {
       total = 2,
       markReadBy = "manually",
       pageSize = getDefaultSettings().pageSize,
+      showStatus = getDefaultSettings().showStatus,
       pages = null,
       deferInitial = false,
       emptyPagePagination: nextEmptyPagePagination = false,
@@ -424,6 +462,7 @@ const Harness = () => {
       enableSwipeGesture = getDefaultSettings().enableSwipeGesture,
       orderBy = getDefaultSettings().orderBy,
       orderDirection = getDefaultSettings().orderDirection,
+      personalization = null,
     } = {},
   ) => {
     setProbe(null)
@@ -446,15 +485,10 @@ const Harness = () => {
           return { promise, resolve: release }
         })()
       : null
-    deferredArticleQuery = deferInitial
-      ? (() => {
-          let release
-          const promise = new Promise((resolve) => {
-            release = resolve
-          })
-          return { promise, resolve: release }
-        })()
-      : null
+    deferredArticleQuery = deferInitial ? createDeferred() : null
+    starredProfileEntries = (personalization?.entries ?? []).map((entry) => ({ ...entry }))
+    starredProfileMode = personalization?.mode ?? "resolved"
+    deferredStarredProfile = starredProfileMode === "deferred" ? createDeferred() : null
     failPagination = false
     emptyPagePagination = nextEmptyPagePagination
     initialHomeQueryServed = false
@@ -471,6 +505,7 @@ const Harness = () => {
       ...getDefaultSettings(),
       markReadBy,
       pageSize,
+      showStatus,
       articleListLayout: layout,
       orderBy,
       orderDirection,
@@ -492,8 +527,24 @@ const Harness = () => {
       width: 16,
       url: `${globalThis.location.origin}/default-feed-icon.png`,
     })
-    dataState.setKey("feedsData", [fixtureFeed])
-    dataState.setKey("categoriesData", [fixtureFeed.category])
+    const hiddenProfileFeed = personalization?.hiddenFeedId
+      ? {
+          ...fixtureFeed,
+          id: personalization.hiddenFeedId,
+          title: `Hidden profile source ${personalization.hiddenFeedId}`,
+          hide_globally: true,
+          category: {
+            id: personalization.hiddenFeedId,
+            title: `Hidden profile category ${personalization.hiddenFeedId}`,
+          },
+        }
+      : null
+    const fixtureFeeds = [fixtureFeed, ...(hiddenProfileFeed ? [hiddenProfileFeed] : [])]
+    dataState.setKey("feedsData", fixtureFeeds)
+    dataState.setKey(
+      "categoriesData",
+      fixtureFeeds.map(({ category }) => category),
+    )
     setDataResourceLoadState("catalog", {
       error: catalogError ? new Error("Expected local catalog failure") : null,
     })
@@ -535,6 +586,79 @@ const Harness = () => {
         assert(
           router.state.location.pathname === "/" && !contentState.get().activeContent,
           "History Forward did not close reader",
+        )
+      },
+    ],
+    [
+      "HOME_SESSION_STABLE_AFTER_READER_READ",
+      async () => {
+        const entries = highlightFixtures.image.filter(
+          (entry, index, all) => all.findIndex(({ id }) => id === entry.id) === index,
+        )
+        const unreadTotal = entries.filter(({ status }) => status === "unread").length
+        await mount("/", { entries, total: unreadTotal, markReadBy: "view" })
+        await waitFor(
+          () => homeRoot()?.getAttribute("aria-busy") === "false",
+          "Home did not commit",
+        )
+        const homeBeforeReaderIds = ids()
+        const homeBeforeReader = homeBeforeReaderIds.join(",")
+        assert(homeBeforeReader === "101,202,303", `Unexpected committed Home: ${homeBeforeReader}`)
+        await waitFor(
+          () => starredProfileRequests().length === 1,
+          "Initial profile request missing",
+        )
+        const profileRequestsBeforeReader = starredProfileRequests().length
+
+        cards()[0].click()
+        await waitFor(() => readerIs(101), "Committed Primary reader did not open")
+        await waitFor(
+          () =>
+            statusMutationRequests === 1 &&
+            contentState.get().entries.find(({ id }) => id === 101)?.status === "read",
+          "Reader open did not settle the normal mark-as-read behavior",
+        )
+        clickLabel(englishPhrases.article_card.close_tooltip)
+        await waitFor(
+          () =>
+            router.state.location.pathname === "/" &&
+            !contentState.get().activeContent &&
+            ids().join(",") === homeBeforeReader,
+          "Reader did not close to the committed Home session",
+        )
+
+        const homeAfterReaderIds = ids()
+        const homeAfterReader = homeAfterReaderIds.join(",")
+        const readPrimary = contentState.get().entries.find(({ id }) => id === 101)
+        const otherEntryIdsReordered =
+          homeBeforeReaderIds.filter((id) => id !== 101).join(",") !==
+          homeAfterReaderIds.filter((id) => id !== 101).join(",")
+        globalThis.__phase2dReaderReturnStability = {
+          homeBeforeReader,
+          homeAfterReader,
+          readStatus: readPrimary?.status,
+          membershipChanged:
+            [...homeBeforeReaderIds].toSorted().join(",") !==
+            [...homeAfterReaderIds].toSorted().join(","),
+          otherEntryIdsReordered,
+          rankingRecomposed: starredProfileRequests().length !== profileRequestsBeforeReader,
+        }
+        assert(
+          homeAfterReader === homeBeforeReader,
+          "Reader return changed committed Home IDs/order",
+        )
+        assert(
+          readPrimary?.status === "read",
+          "Committed Primary did not expose its updated read state",
+        )
+        assert(ids().includes(101), "Read Primary disappeared from committed Home")
+        assert(
+          starredProfileRequests().length === profileRequestsBeforeReader,
+          "Reader read/close requested another profile or recomposed ranking",
+        )
+        assert(
+          !otherEntryIdsReordered,
+          "Reader read changed the relative order of other Home entries",
         )
       },
     ],
@@ -672,6 +796,10 @@ const Harness = () => {
         )
         assert(contentState.get().loadMoreVisible === false, "Zero total retained pagination")
         assert(
+          ids().join(",") === "101" && !cards()[0]?.classList.contains("unread"),
+          "Zero unread replaced the committed Home projection instead of retaining its read card",
+        )
+        assert(
           requests.some(
             (url) => new URL(url, "https://fixture.invalid").searchParams.get("limit") === "1",
           ),
@@ -735,7 +863,7 @@ const Harness = () => {
           routeEntries[0],
           routeEntries[1],
           { ...routeEntries[0], id: 303, title: "Third loaded article" },
-          { ...routeEntries[0], id: 404, title: "Loaded backfill article" },
+          { ...routeEntries[0], id: 404, title: "Loaded Recent article" },
         ]
         await mount("/", { entries, total: 4 })
         await waitFor(() => contentState.get().isArticleListReady, "Initial Home page missing")
@@ -774,14 +902,14 @@ const Harness = () => {
             () =>
               contentState.get().total === 3 &&
               contentState.get().entries.find(({ id }) => id === 101)?.status === "read" &&
-              observedSession.highlightIds[0] === 404,
+              observedSession.highlightIds[0] === 101,
             "Rejected reversal did not reconcile the confirmed read",
           )
           assert(
             JSON.stringify(
               projectHomeSession(observedSession, contentState.get().entries).highlightIds,
-            ) === JSON.stringify([404, 202, 303]),
-            "Confirmed read ID remained projected or displaced surviving Highlights",
+            ) === JSON.stringify([101, 202, 303]),
+            "Confirmed read changed the committed Highlight membership/order",
           )
           assert(
             Object.keys(observedSession.pendingStatusById).length === 0 &&
@@ -986,6 +1114,7 @@ const Harness = () => {
         }
         // No Recent candidate remains: Primary and then Secondary 1 must stay vacant.
         await mountHighlights(highlightFixtures.textOnly)
+        const committedIds = ids().join(",")
         await openMenu(101)
         clickMenu(englishPhrases.article_card.mark_as_read_tooltip)
         await waitFor(
@@ -994,10 +1123,10 @@ const Harness = () => {
         )
         await settle()
         assert(
-          ids().join(",") === "202,303" &&
-            !document.querySelector(".home-highlight-primary") &&
-            cards()[0]?.classList.contains("home-highlight-secondary-1"),
-          "Vacant Primary promoted a Secondary",
+          ids().join(",") === committedIds &&
+            cards()[0]?.classList.contains("home-highlight-primary") &&
+            !cards()[0]?.classList.contains("unread"),
+          "Confirmed Primary read changed its committed slot or failed to update read styling",
         )
         await openMenu(202)
         clickMenu(englishPhrases.article_card.mark_as_read_tooltip)
@@ -1007,8 +1136,10 @@ const Harness = () => {
         )
         await settle()
         assert(
-          ids().join(",") === "303" && cards()[0]?.classList.contains("home-highlight-secondary-2"),
-          "Vacant Secondary compacted surviving slot",
+          ids().join(",") === committedIds &&
+            cards()[1]?.classList.contains("home-highlight-secondary-1") &&
+            !cards()[1]?.classList.contains("unread"),
+          "Confirmed Secondary read changed its committed slot or failed to update read styling",
         )
       },
     ],
@@ -1071,7 +1202,10 @@ const Harness = () => {
           "Highlight read action did not use existing status mutation",
         )
         await settle()
-        assert(!ids().includes(101), "Confirmed Highlight read did not remove card")
+        assert(
+          ids().includes(101) && !cards()[0]?.classList.contains("unread"),
+          "Confirmed Highlight read removed the committed card or failed to update read styling",
+        )
         await mountHighlights(highlightFixtures.image)
         const stage = document.querySelector(".harness-stage")
         const scrollSpacer = document.createElement("div")
@@ -1105,9 +1239,12 @@ const Harness = () => {
           )
           scrollRoot.scrollTop = scrollRoot.scrollHeight
           await waitFor(
-            () => statusMutationRequests > 0 && !ids().includes(101),
+            () =>
+              statusMutationRequests > 0 &&
+              contentState.get().entries.find(({ id }) => id === 101)?.status === "read",
             "Mounted Highlight read-on-scroll did not use existing observer/mutation",
           )
+          assert(ids().includes(101), "Read-on-scroll removed a committed Highlight")
         } finally {
           settingsState.set({ ...settingsState.get(), markReadOnScroll: false })
           stage.style.height = ""
@@ -1284,8 +1421,10 @@ const Harness = () => {
         await mountPagination(20)
         await settle()
         assert(
-          listRequests().length === 1 && requests.length === 1,
-          "Highlights issued an extra fetch",
+          listRequests().length === 1 &&
+            starredProfileRequests().length === 1 &&
+            requests.length === 2,
+          "Home issued an extra canonical or profile fetch",
         )
         assert(
           contentState.get().entries.length === 20 && recentIds().length === 17,
@@ -2014,6 +2153,443 @@ const Harness = () => {
       },
     ],
   ]
+  const personalizationScenarios = [
+    [
+      "PHASE2D_CURRENT_ITEM_STAR_OUTSIDE_PROFILE_SAMPLE",
+      async () => {
+        await mount("/", {
+          deferInitial: true,
+          entries: personalizationFixtures.directStarOutsideSampleHome,
+          total: personalizationFixtures.directStarOutsideSampleHome.length,
+          personalization: { entries: [] },
+        })
+        await waitFor(
+          () => starredProfileRequests().length === 1,
+          "Direct-star auxiliary profile query did not start",
+        )
+        await settle()
+        assert(
+          !contentState.get().isArticleListReady,
+          "Direct-star canonical snapshot was not held until the profile resolved",
+        )
+        deferredArticleQuery.resolve()
+        await waitFor(
+          () => contentState.get().isArticleListReady && cards().length === 3,
+          "Direct-star Home did not reach its canonical snapshot",
+        )
+
+        assert(
+          personalizationFixtures.directStarOutsideSampleHome[3].starred === true &&
+            !starredProfileEntries.some(({ id }) => id === 604),
+          "The canonical starred candidate was unexpectedly present in the auxiliary profile",
+        )
+        assert(
+          contentState.get().entries.find(({ id }) => id === 604)?.starred === true,
+          "Canonical Home snapshot did not preserve the candidate's starred state",
+        )
+        assert(
+          ids().join(",") === "601,604,603" && recentIds().join(",") === "602",
+          `Canonical direct star did not influence an eligible Secondary: ${ids().join(",")}`,
+        )
+        assert(
+          canonicalEntryRequests().length === 1 && starredProfileRequests().length === 1,
+          "Direct-star projection changed candidate or auxiliary query counts",
+        )
+        assert(
+          homeRoot().querySelector(".home-personalization-info-button"),
+          "Direct-star order change did not expose its truthful explanation",
+        )
+      },
+    ],
+    [
+      "PHASE2D_PROFILE_MEMBERSHIP_DOES_NOT_FAKE_DIRECT_STAR",
+      async () => {
+        await mount("/", {
+          entries: personalizationFixtures.home,
+          total: personalizationFixtures.home.length,
+          personalization: { entries: personalizationFixtures.unchangedProfile },
+        })
+        await waitFor(
+          () => contentState.get().isArticleListReady && cards().length === 3,
+          "Inverse direct-star Home did not reach its canonical snapshot",
+        )
+
+        assert(
+          personalizationFixtures.home[1].starred !== true &&
+            personalizationFixtures.unchangedProfile.some(({ id }) => id === 602 && id != null),
+          "Inverse fixture did not separate canonical star state from profile membership",
+        )
+        assert(
+          ids().join(",") === "601,602,603" &&
+            !homeRoot().querySelector(".home-personalization-info-button"),
+          "Profile-only membership created a direct-star treatment or order change",
+        )
+      },
+    ],
+    [
+      "CANONICAL_HOME_QUERY_UNCHANGED",
+      async () => {
+        await mount("/", {
+          deferInitial: true,
+          entries: personalizationFixtures.home,
+          total: personalizationFixtures.home.length,
+          personalization: { entries: personalizationFixtures.preferredProfile },
+        })
+        await waitFor(
+          () => starredProfileRequests().length === 1,
+          "Initial starred-profile query did not start",
+        )
+        await settle()
+        assert(
+          !contentState.get().isArticleListReady,
+          "Canonical Home snapshot was not held for the profile-before-snapshot fixture",
+        )
+        deferredArticleQuery.resolve()
+        await waitFor(
+          () => contentState.get().isArticleListReady && cards().length > 0,
+          "Personalized Home did not reach its canonical snapshot",
+        )
+        const profileRequests = requests.filter((url) => {
+          const params = new URL(url, "https://fixture.invalid").searchParams
+          return params.get("starred") === "true"
+        })
+        const canonicalRequests = requests.filter((url) => {
+          const params = new URL(url, "https://fixture.invalid").searchParams
+          return url.startsWith("/v1/entries?") && params.get("starred") !== "true"
+        })
+        assert(profileRequests.length === 1, "Expected one auxiliary starred-profile request")
+        const profileParams = new URL(profileRequests[0], "https://fixture.invalid").searchParams
+        assert(
+          profileParams.get("limit") === "75" &&
+            profileParams.get("direction") === "desc" &&
+            !profileParams.has("published_after") &&
+            !profileParams.has("published_before"),
+          "Profile query did not use the bounded, date-independent starred corpus",
+        )
+        assert(canonicalRequests.length === 1, "Expected one canonical Home candidate request")
+        const canonical = new URL(canonicalRequests[0], "https://fixture.invalid").searchParams
+        assert(
+          canonical.get("status") === "unread" &&
+            canonical.get("order") === "published_at" &&
+            canonical.get("direction") === "desc" &&
+            canonical.get("limit") === String(settingsState.get().pageSize) &&
+            !canonical.has("starred"),
+          "Personalization changed the canonical Home request policy",
+        )
+        assert(
+          ids().join(",") === "601,603,602",
+          `Starred source did not influence a same-freshness Secondary: ${ids().join(",")}`,
+        )
+        assert(
+          !contentState.get().entries.some(({ id }) => id === 999) &&
+            ![...document.querySelectorAll(".article-entry[data-entry-id]")].some(
+              (entry) => Number(entry.dataset.entryId) === 999,
+            ),
+          "A profile-only starred entry became a Home candidate",
+        )
+        const button = homeRoot().querySelector(".home-personalization-info-button")
+        assert(
+          button && button.getAttribute("aria-expanded") === "false",
+          "Truthful explanation affordance missing",
+        )
+        const heading = homeRoot().querySelector(".home-section-heading")
+        const headingRow = heading?.parentElement
+        assert(
+          heading &&
+            headingRow &&
+            Math.abs(
+              heading.getBoundingClientRect().width - headingRow.getBoundingClientRect().width,
+            ) < 1,
+          "Information control shrank the Highlights heading",
+        )
+        button.focus()
+        button.click()
+        await waitFor(
+          () => button.getAttribute("aria-expanded") === "true",
+          "Personalization explanation did not open",
+        )
+        const disclosure = homeRoot().querySelector("#home-highlights-personalization-explanation")
+        const disclosureStyle = disclosure && getComputedStyle(disclosure)
+        assert(
+          button.getAttribute("aria-expanded") === "true" &&
+            disclosure?.textContent.includes("Starred sources") &&
+            disclosureStyle?.backgroundColor !== "rgba(0, 0, 0, 0)" &&
+            disclosureStyle?.backdropFilter === "none",
+          "Personalization explanation is not visible, localized, and opaque",
+        )
+        await settle()
+        globalThis.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+        )
+        await waitFor(
+          () =>
+            button.getAttribute("aria-expanded") === "false" && document.activeElement === button,
+          "Escape did not close the explanation and restore focus",
+        )
+        assert(
+          button.getAttribute("aria-expanded") === "false" && document.activeElement === button,
+          "Escape did not close the explanation and restore focus",
+        )
+        assert(
+          cards()[0].classList.contains("grid-card-wrapper") &&
+            !cards()[0].closest(".nf-glass-control, .nf-glass-surface"),
+          "Explanation changed the existing opaque card treatment",
+        )
+      },
+    ],
+    [
+      "NO_SECOND_CANDIDATE_STREAM",
+      async () => {
+        await mount("/", {
+          entries: personalizationFixtures.home,
+          total: personalizationFixtures.home.length,
+          personalization: { entries: personalizationFixtures.preferredProfile },
+        })
+        await waitFor(
+          () => contentState.get().isArticleListReady && cards().length === 3,
+          "Home did not load for candidate-stream verification",
+        )
+        assert(
+          canonicalEntryRequests().length === 1 &&
+            starredProfileRequests().length === 1 &&
+            !contentState.get().entries.some(({ id }) => id === 999),
+          "Profile request created a second candidate stream or inserted a profile-only entry",
+        )
+      },
+    ],
+    [
+      "PERSONALIZATION_EXPLAINER_TRUTHFUL",
+      async () => {
+        const cases = [
+          { entries: [], mode: "resolved" },
+          { entries: personalizationFixtures.noMatchProfile, mode: "resolved" },
+          {
+            entries: personalizationFixtures.hiddenOnlyProfile,
+            mode: "resolved",
+            hiddenFeedId: 99,
+          },
+          { entries: personalizationFixtures.unchangedProfile, mode: "resolved" },
+          { entries: [], mode: "failed" },
+        ]
+        for (const personalization of cases) {
+          await mount("/", {
+            entries: personalizationFixtures.home,
+            total: personalizationFixtures.home.length,
+            personalization,
+          })
+          await waitFor(
+            () => contentState.get().isArticleListReady && cards().length === 3,
+            "Fallback Home did not reach its canonical snapshot",
+          )
+          assert(
+            ids().join(",") === "601,602,603" &&
+              recentIds().join(",") === "604" &&
+              !homeRoot().querySelector(".home-personalization-info-button"),
+            `Unavailable, hidden-only, or no-effect profile did not preserve Phase 2C: ${ids().join(",")}`,
+          )
+        }
+      },
+    ],
+    [
+      "PROFILE_DEADLINE_FALLBACK_NO_RECOMPOSE",
+      async () => {
+        await mount("/", {
+          entries: personalizationFixtures.home,
+          total: personalizationFixtures.home.length,
+          personalization: { mode: "deferred" },
+        })
+        await waitFor(
+          () => contentState.get().isArticleListReady && cards().length === 3,
+          "Deferred-profile Home did not reach its canonical snapshot",
+        )
+        const baselineIds = ids().join(",")
+        const originalCards = cards()
+        assert(baselineIds === "601,602,603", "Pending profile did not use exact Phase 2C order")
+        assert(starredProfileRequests().length === 1, "Expected one deferred profile request")
+        assert(
+          !homeRoot().querySelector(".home-personalization-info-button"),
+          "Deadline fallback displayed a personalization explanation",
+        )
+        resolveStarredProfile(personalizationFixtures.preferredProfile)
+        await settle()
+        assert(
+          ids().join(",") === baselineIds &&
+            originalCards.every((card, index) => card === cards()[index]) &&
+            !homeRoot().querySelector(".home-personalization-info-button"),
+          "Late profile recomposed, reordered, or explained the already-committed Home",
+        )
+      },
+    ],
+    [
+      "STALE_SESSION_PROFILE_DISCARDED",
+      async () => {
+        await mount("/", {
+          entries: personalizationFixtures.home,
+          total: personalizationFixtures.home.length,
+          personalization: { mode: "deferred" },
+        })
+        await waitFor(
+          () => contentState.get().isArticleListReady && cards().length === 3,
+          "Initial stale-profile Home did not load",
+        )
+        const firstDeferred = deferredStarredProfile
+        const initialRevision = dataState.get().sessionRevision
+        const initialSnapshotRevision = contentState.get().articleListSnapshotRevision
+        dataState.setKey("sessionRevision", initialRevision + 1)
+        await waitFor(
+          () =>
+            contentState.get().isArticleListReady &&
+            contentState.get().articleListSnapshotRevision > initialSnapshotRevision &&
+            starredProfileRequests().length === 2,
+          "New session did not create its own canonical/profile generation",
+        )
+        firstDeferred.resolve({ entries: personalizationFixtures.preferredProfile })
+        await settle()
+        assert(
+          ids().join(",") === "601,602,603" &&
+            !homeRoot().querySelector(".home-personalization-info-button"),
+          "Prior-session profile affected the new Home generation",
+        )
+      },
+    ],
+    [
+      "EXPLICIT_REFRESH_SINGLE_RECOMPOSITION",
+      async () => {
+        await mount("/", {
+          deferInitial: true,
+          entries: personalizationFixtures.home,
+          total: personalizationFixtures.home.length,
+          personalization: { entries: personalizationFixtures.preferredProfile },
+        })
+        await waitFor(
+          () => starredProfileRequests().length === 1,
+          "Initial profile query did not start before refresh setup",
+        )
+        await settle()
+        deferredArticleQuery.resolve()
+        await waitFor(
+          () => contentState.get().isArticleListReady && ids().join(",") === "601,603,602",
+          "Initial personalized order did not commit",
+        )
+        const oldCards = cards()
+        const previousSnapshotRevision = contentState.get().articleListSnapshotRevision
+        fixtureEntries = personalizationFixtures.directStarOutsideSampleHome.map((entry) => ({
+          ...entry,
+        }))
+        starredProfileEntries = [{ ...personalizationFixtures.home[3], starred: true }]
+        deferredArticleQuery = createDeferred()
+        const refreshEvent = new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          code: "KeyR",
+          key: "r",
+          keyCode: 82,
+          which: 82,
+        })
+        document.body.focus()
+        document.body.dispatchEvent(refreshEvent)
+        document.body.dispatchEvent(refreshEvent)
+        await waitFor(
+          () => listRequests().length === 2 && starredProfileRequests().length === 2,
+          "Explicit refresh did not start one canonical/profile pair",
+        )
+        await waitFor(
+          () => !contentState.get().isArticleListReady,
+          "Explicit refresh did not enter the existing pending state",
+        )
+        assert(
+          ids().join(",") === "601,603,602" &&
+            contentState.get().articleListSnapshotRevision === previousSnapshotRevision &&
+            oldCards.every((card, index) => card === cards()[index]),
+          "Refresh replaced the prior projection before canonical readiness",
+        )
+        deferredArticleQuery.resolve()
+        await waitFor(
+          () =>
+            contentState.get().isArticleListReady &&
+            contentState.get().articleListSnapshotRevision === previousSnapshotRevision + 1,
+          "Explicit refresh did not commit exactly one canonical snapshot",
+        )
+        assert(
+          ids().join(",") === "601,604,603" && recentIds().join(",") === "602",
+          `New generation did not replace its projection once: ${ids().join(",")}`,
+        )
+        assert(
+          listRequests().length === 2 && starredProfileRequests().length === 2,
+          "Explicit refresh started an extra candidate stream or profile request",
+        )
+      },
+    ],
+    [
+      "ONE_AUX_PROFILE_QUERY_PER_HOME_SESSION",
+      async () => {
+        await mount("/", {
+          entries: paginationEntries(20),
+          total: 40,
+          pages: [paginationEntries(20, 18)],
+        })
+        await waitFor(
+          () => contentState.get().isArticleListReady && cards().length === 3,
+          "Home session did not load before request-count checks",
+        )
+        assert(
+          starredProfileRequests().length === 1,
+          "Initial Home profile query count was not one",
+        )
+        await loadNextPage(20)
+        await settle()
+        assert(starredProfileRequests().length === 1, "Load-more re-requested the profile")
+        const highlightId = Number(cards()[0].dataset.entryId)
+        await openMenu(highlightId)
+        clickMenu(englishPhrases.article_card.star_tooltip)
+        await waitFor(() => starMutationRequests === 1, "Existing star mutation did not settle")
+        await openMenu(highlightId)
+        clickMenu(englishPhrases.article_card.unstar_tooltip)
+        await waitFor(() => starMutationRequests === 2, "Existing unstar mutation did not settle")
+        updateEntriesStatusOptimistically([contentState.get().entries[0]], "read")
+        await waitFor(() => statusMutationRequests === 1, "Existing read mutation did not settle")
+        await settle()
+        await navigate(`/entry/${highlightId}`)
+        await waitFor(() => readerIs(highlightId), "Reader did not open from Home")
+        await navigate(-1)
+        await waitFor(
+          () => router.state.location.pathname === "/" && !contentState.get().activeContent,
+          "Browser Back did not return from the reader to Home",
+        )
+        assert(
+          starredProfileRequests().length === 1,
+          "Load-more, star/unstar, status settlement, or reader return re-requested the profile",
+        )
+      },
+    ],
+    [
+      "ALL_UNREAD_UNCHANGED",
+      async () => {
+        await mount("/all", { showStatus: "all" })
+        await waitFor(() => contentState.get().isArticleListReady, "All list did not load")
+        assert(starredProfileRequests().length === 0, "All started a Home-only profile request")
+        const allRequest = new URL(listRequests()[0], "https://fixture.invalid").searchParams
+        assert(!allRequest.has("status"), "All request acquired an unread-only filter")
+        settingsState.set({ ...settingsState.get(), showStatus: "unread" })
+        await waitFor(
+          () => contentState.get().isArticleListReady && listRequests().length === 2,
+          "Unread did not use the existing list request lifecycle",
+        )
+        const unreadRequest = new URL(listRequests()[1], "https://fixture.invalid").searchParams
+        assert(
+          unreadRequest.get("status") === "unread" && starredProfileRequests().length === 0,
+          "Unread request or Home-only profile boundary changed",
+        )
+        assert(
+          contentState
+            .get()
+            .entries.map(({ id }) => id)
+            .join(",") === "101,202",
+          "All/Unread changed canonical candidate order",
+        )
+      },
+    ],
+  ]
   const matrixScenarios = [
     [
       "HARNESS_SCENARIO_MATRIX_COMPLETE",
@@ -2029,6 +2605,7 @@ const Harness = () => {
         const requiredThemes = ["light", "dark"]
         const requiredGates = [
           "HOME_FIRST_SECTION_CLEAR_OF_CHROME",
+          "HOME_SESSION_STABLE_AFTER_READER_READ",
           "HOME_NO_OVERFLOW",
           "HOME_SECTION_HIERARCHY",
           "HOME_PRIMARY_TEXT_ONLY",
@@ -2045,6 +2622,14 @@ const Harness = () => {
           "HOME_MARK_UNREAD_RECONCILES_TOTAL",
           "HOME_UNLOADED_MARK_UNREAD_REENABLES_PAGINATION",
           "HOME_TOTAL_RECONCILIATION_STALE_SESSION_PROTECTED",
+          "CANONICAL_HOME_QUERY_UNCHANGED",
+          "NO_SECOND_CANDIDATE_STREAM",
+          "PERSONALIZATION_EXPLAINER_TRUTHFUL",
+          "PROFILE_DEADLINE_FALLBACK_NO_RECOMPOSE",
+          "STALE_SESSION_PROFILE_DISCARDED",
+          "EXPLICIT_REFRESH_SINGLE_RECOMPOSITION",
+          "ONE_AUX_PROFILE_QUERY_PER_HOME_SESSION",
+          "ALL_UNREAD_UNCHANGED",
         ]
         const requiredProductScenarios = [
           "THREE_PLUS_UNREAD_WITH_IMAGE_PRIMARY",
@@ -2059,9 +2644,16 @@ const Harness = () => {
           "INITIAL_ERROR",
           "REFRESH_ERROR_RETAINS_CONTENT",
           "LOAD_MORE_ERROR",
-          "AFTER_READ_BACKFILL",
+          "AFTER_CONFIRMED_READ_STABLE_SESSION",
           "AFTER_MARK_UNREAD",
           "AFTER_STAR_AND_UNSTAR",
+          "PHASE2D_PERSONALIZED_PROJECTION",
+          "PHASE2D_TRUTHFUL_EXPLAINER_AND_FALLBACKS",
+          "PHASE2D_DEADLINE_AND_STALE_PROFILE",
+          "PHASE2D_EXPLICIT_REFRESH",
+          "PHASE2D_QUERY_SCOPE_AND_SESSION",
+          "PHASE2D_SESSION_STABILITY",
+          "PHASE2D_NON_HOME_LISTS",
         ]
         const requiredManualGates = [
           "EDITORIAL_HIERARCHY_CLEAR",
@@ -2083,6 +2675,7 @@ const Harness = () => {
           ...listSentinelScenarios,
           ...stateScenarios,
           ...responsiveScenarios,
+          ...personalizationScenarios,
           ...matrixScenarios,
         ]
         const gateNames = new Set(allScenarios.map(([name]) => name))
@@ -2138,6 +2731,7 @@ const Harness = () => {
     { name: "list-sentinel-regression", scenarios: listSentinelScenarios },
     { name: "states-and-recovery", scenarios: stateScenarios },
     { name: "responsive-visual", scenarios: responsiveScenarios },
+    { name: "personalization", scenarios: personalizationScenarios },
     { name: "matrix-completeness", scenarios: matrixScenarios },
   ]
   const runSuites = async (selectedSuites, { recordViewportTheme = false } = {}) => {
@@ -2173,6 +2767,9 @@ const Harness = () => {
                   : {}),
                 ...(name === "HOME_LIGHT" || name === "HOME_DARK"
                   ? { themes: globalThis.__phase2cHomeThemeMetrics }
+                  : {}),
+                ...(name === "HOME_SESSION_STABLE_AFTER_READER_READ"
+                  ? { readerReturn: globalThis.__phase2dReaderReturnStability }
                   : {}),
               })
             } catch (error) {
@@ -2258,6 +2855,9 @@ const Harness = () => {
         </button>
         <button disabled={running} onClick={() => void run(responsiveScenarios)}>
           Run Home responsive visual gates
+        </button>
+        <button disabled={running} onClick={() => void run(personalizationScenarios)}>
+          Run Phase 2D personalization scenario
         </button>
         <button disabled={running} onClick={() => void run(matrixScenarios)}>
           Run scenario matrix completeness gate

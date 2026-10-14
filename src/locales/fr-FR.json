@@ -481,6 +481,8 @@
   "home_page": {
     "section_highlights": "À la une",
     "section_recent": "Plus récents",
+    "personalization_info_label": "Pourquoi ces articles ?",
+    "personalization_info": "Les sources favorites peuvent influencer les autres articles à la une et les plus récents. L’article principal reste déterminé par l’actualité. Toutes et Non lus restent chronologiques.",
     "type_view": "Vue",
     "type_category": "Catégorie",
     "type_feed": "Flux",

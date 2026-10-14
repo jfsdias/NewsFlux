@@ -481,6 +481,8 @@
   "home_page": {
     "section_highlights": "Highlights",
     "section_recent": "Neueste",
+    "personalization_info_label": "Warum diese Artikel?",
+    "personalization_info": "Artikel aus markierten Quellen können die weiteren Highlights und die neuesten Artikel beeinflussen. Das Haupt-Highlight richtet sich weiterhin nach Aktualität. Alle und Ungelesen bleiben chronologisch sortiert.",
     "type_view": "Ansicht",
     "type_category": "Kategorie",
     "type_feed": "Feed",
