@@ -49,13 +49,7 @@ const isInHorizontalScrollable = (element) => {
 const shouldIgnoreSwipe = (element) =>
   isInHorizontalScrollable(element) || Boolean(element?.closest?.(".plyr, audio, video"))
 
-const Content = ({
-  info,
-  getEntries,
-  markAllAsRead,
-  listContent: ListContent,
-  entryIdOverride,
-}) => {
+const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }) => {
   const { from: source, id: sourceId } = info
   const { activeContent, isArticleLoading } = useStore(contentState, {
     keys: ["activeContent", "isArticleLoading"],
@@ -266,7 +260,6 @@ const Content = ({
             <FooterPanel
               getEntries={getEntries}
               info={info}
-              markAllAsRead={markAllAsRead}
               refreshArticleList={fetchArticleListWithRelatedData}
             />
           </>

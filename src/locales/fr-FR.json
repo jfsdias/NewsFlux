@@ -110,6 +110,7 @@
     "check": "Vérifier",
     "dismiss": "Ignorer",
     "retry": "Réessayer",
+    "undo": "Annuler",
     "close_dialog": "Fermer %{name}",
     "copy_to_clipboard_tooltip": "Copier dans le presse-papiers",
     "code_language": "Langage du code",

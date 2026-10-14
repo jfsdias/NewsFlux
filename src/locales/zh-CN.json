@@ -110,6 +110,7 @@
     "check": "查看",
     "dismiss": "关闭",
     "retry": "重试",
+    "undo": "撤销",
     "close_dialog": "关闭%{name}",
     "copy_to_clipboard_tooltip": "复制到剪贴板",
     "code_language": "代码语言",
