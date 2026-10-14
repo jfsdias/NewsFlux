@@ -20,7 +20,6 @@ import {
   IconHome,
   IconMinusCircle,
   IconMoreVertical,
-  IconRecord,
   IconRefresh,
   IconRight,
   IconStar,
@@ -71,11 +70,19 @@ import {
   setUnreadInfo,
   unreadTotalState,
   visibleCategoriesState,
+  visibleFeedsState,
 } from "@/store/dataState"
 import { settingsState, updateSettings } from "@/store/settingsState"
 import { expandedCategoriesState, setExpandedCategories } from "@/store/sidebarState"
 import { downloadFile, readFileAsText } from "@/utils/file"
 import { createEntityHomeTarget, isSameHomeTarget } from "@/utils/home-page"
+import {
+  getCurrentZeroUnreadSource,
+  getMatchingCategories,
+  getSearchExpandedCategoryKeys,
+  getUnreadNavigationFeeds,
+  getVisibleFeedSearchMatches,
+} from "@/utils/source-navigation"
 
 import "./Sidebar.css"
 
@@ -230,6 +237,115 @@ const CountDisplay = ({ count }) => {
   )
 }
 
+const SourceNavigationControls = ({ polyglot, query, setQuery, showUnreadFeedsOnly }) => {
+  const unreadModeRef = useRef(null)
+  const allModeRef = useRef(null)
+
+  const handleModeKeyDown = (event) => {
+    const direction = {
+      ArrowDown: 1,
+      ArrowLeft: -1,
+      ArrowRight: 1,
+      ArrowUp: -1,
+    }[event.key]
+    if (direction === undefined) {
+      return
+    }
+
+    event.preventDefault()
+    const currentIndex = event.target.value === "unread" ? 0 : 1
+    const nextIndex = (currentIndex + direction + 2) % 2
+    const nextIsUnread = nextIndex === 0
+    updateSettings({ showUnreadFeedsOnly: nextIsUnread })
+    ;(nextIsUnread ? unreadModeRef : allModeRef).current?.focus()
+  }
+
+  return (
+    <div className="source-navigation-controls">
+      <fieldset
+        aria-label={polyglot.t("sidebar.source_navigation_mode")}
+        className="source-mode-selector"
+        role="radiogroup"
+        onKeyDown={handleModeKeyDown}
+      >
+        <legend className="source-navigation-visually-hidden">
+          {polyglot.t("sidebar.source_navigation_mode")}
+        </legend>
+        <label
+          className={classNames("source-mode-option", {
+            "source-mode-option-selected": showUnreadFeedsOnly,
+          })}
+        >
+          <input
+            ref={unreadModeRef}
+            checked={showUnreadFeedsOnly}
+            data-testid="mode-unread"
+            name="source-navigation-mode"
+            tabIndex={showUnreadFeedsOnly ? 0 : -1}
+            type="radio"
+            value="unread"
+            onChange={() => updateSettings({ showUnreadFeedsOnly: true })}
+          />
+          <span>{polyglot.t("sidebar.unread_mode")}</span>
+        </label>
+        <label
+          className={classNames("source-mode-option", {
+            "source-mode-option-selected": !showUnreadFeedsOnly,
+          })}
+        >
+          <input
+            ref={allModeRef}
+            checked={!showUnreadFeedsOnly}
+            data-testid="mode-all"
+            name="source-navigation-mode"
+            tabIndex={showUnreadFeedsOnly ? -1 : 0}
+            type="radio"
+            value="all"
+            onChange={() => updateSettings({ showUnreadFeedsOnly: false })}
+          />
+          <span>{polyglot.t("sidebar.all_mode")}</span>
+        </label>
+      </fieldset>
+      <div className="source-filter">
+        <label className="source-filter-label" htmlFor="source-navigation-filter">
+          {polyglot.t("sidebar.source_filter")}
+        </label>
+        <div className="source-filter-input-row">
+          <input
+            aria-label={polyglot.t("sidebar.source_filter")}
+            autoComplete="off"
+            className="source-filter-input"
+            data-testid="source-search"
+            id="source-navigation-filter"
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape" && query) {
+                event.preventDefault()
+                event.stopPropagation()
+                setQuery("")
+              }
+            }}
+          />
+          {query && (
+            <Button
+              aria-label={polyglot.t("sidebar.clear_source_filter")}
+              className="source-filter-clear"
+              data-testid="clear-source-search"
+              size="small"
+              type="button"
+              onClick={() => setQuery("")}
+            >
+              <span aria-hidden="true">×</span>
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const CustomMenuItem = ({ path, Icon, label, count }) => {
   const location = useLocation()
   const navigate = useNavigate()
@@ -306,6 +422,8 @@ const FeedMenuItem = ({
   onMarkAllAsRead,
   onRefreshFeed,
   onSetHomePage,
+  showZeroCount = false,
+  className,
 }) => {
   const { showFeedIcon } = useStore(settingsState, { keys: ["showFeedIcon"] })
   const { polyglot } = useStore(polyglotState)
@@ -383,7 +501,8 @@ const FeedMenuItem = ({
       <MenuItem
         key={`/feed/${feed.id}`}
         {...longPressProps}
-        className={classNames("feed-menu-item", { "arco-menu-selected": isSelected })}
+        aria-current={isSelected ? "page" : undefined}
+        className={classNames("feed-menu-item", className, { "arco-menu-selected": isSelected })}
         data-feed-edit-id={feed.id}
         style={{ position: "relative", overflow: "hidden" }}
         onClick={(e) => {
@@ -405,7 +524,7 @@ const FeedMenuItem = ({
             {showFeedIcon && <FeedIcon className="feed-icon-sidebar" feed={feed} />}
             {feed.title}
           </Typography.Ellipsis>
-          {feed.unreadCount !== 0 && (
+          {(feed.unreadCount !== 0 || showZeroCount) && (
             <Typography.Ellipsis className="item-count" expandable={false}>
               {feed.unreadCount}
             </Typography.Ellipsis>
@@ -418,6 +537,7 @@ const FeedMenuItem = ({
 
 const FeedMenuGroup = ({
   categoryId,
+  sourceQuery,
   homePageReady,
   homeTarget,
   onDeleteFeed,
@@ -426,8 +546,8 @@ const FeedMenuGroup = ({
   onRefreshFeed,
   onSetHomePage,
 }) => {
-  const { showUnreadFeedsOnly, compactSidebarGroups } = useStore(settingsState, {
-    keys: ["showUnreadFeedsOnly", "compactSidebarGroups"],
+  const { compactSidebarGroups } = useStore(settingsState, {
+    keys: ["compactSidebarGroups"],
   })
   const feedsGroupedById = useStore(feedsGroupedByIdState)
 
@@ -435,11 +555,8 @@ const FeedMenuGroup = ({
   const scrollableNodeRef = useRef(null)
 
   const filteredFeeds = useMemo(
-    () =>
-      feedsGroupedById[categoryId]?.filter(
-        (feed) => !showUnreadFeedsOnly || feed.unreadCount > 0,
-      ) || [],
-    [feedsGroupedById, categoryId, showUnreadFeedsOnly],
+    () => getVisibleFeedSearchMatches(feedsGroupedById[categoryId] || [], sourceQuery),
+    [feedsGroupedById, categoryId, sourceQuery],
   )
 
   return (
@@ -471,6 +588,7 @@ const FeedMenuGroup = ({
 }
 
 const CategoryGroup = ({
+  sourceQuery,
   homePageReady,
   homeTarget,
   onDeleteCategory,
@@ -483,68 +601,50 @@ const CategoryGroup = ({
   onRefreshFeed,
   onSetHomePage,
 }) => {
-  const { showUnreadFeedsOnly } = useStore(settingsState, { keys: ["showUnreadFeedsOnly"] })
   const feedsGroupedById = useStore(feedsGroupedByIdState)
   const categories = useStore(visibleCategoriesState)
 
   const location = useLocation()
   const currentPath = location.pathname
 
-  return categories
-    .filter((category) => {
-      const feedsInCategory = feedsGroupedById[category.id]
-
-      // If the category does not have a feed
-      if (!feedsInCategory || feedsInCategory.length === 0) {
-        // Display empty categories only if it is not "Show Unread Only" mode
-        return !showUnreadFeedsOnly
-      }
-
-      // If there is a feed, filter by settings
-      return feedsInCategory.some((feed) => {
-        if (showUnreadFeedsOnly) {
-          return feed.unreadCount > 0
-        }
-        return true
-      })
-    })
-    .map((category) => (
-      <Collapse.Item
-        key={category.id}
-        expandIcon={<IconRight aria-hidden="true" />}
-        name={`/category/${category.id}`}
-        style={{ position: "relative", overflow: "hidden" }}
-        header={
-          <CategoryTitle
-            category={category}
-            homePageReady={homePageReady}
-            homeTarget={homeTarget}
-            path={currentPath}
-            onDeleteCategory={onDeleteCategory}
-            onEditCategory={onEditCategory}
-            onMarkAllAsRead={onMarkAllAsReadCategory}
-            onRefreshCategory={onRefreshCategory}
-            onSetHomePage={onSetHomePage}
-          />
-        }
-      >
-        <FeedMenuGroup
-          categoryId={category.id}
+  return getMatchingCategories(categories, feedsGroupedById, sourceQuery).map((category) => (
+    <Collapse.Item
+      key={category.id}
+      expandIcon={<IconRight aria-hidden="true" />}
+      name={`/category/${category.id}`}
+      style={{ position: "relative", overflow: "hidden" }}
+      header={
+        <CategoryTitle
+          category={category}
           homePageReady={homePageReady}
           homeTarget={homeTarget}
-          onDeleteFeed={onDeleteFeed}
-          onEditFeed={onEditFeed}
-          onMarkAllAsRead={onMarkAllAsReadFeed}
-          onRefreshFeed={onRefreshFeed}
+          path={currentPath}
+          onDeleteCategory={onDeleteCategory}
+          onEditCategory={onEditCategory}
+          onMarkAllAsRead={onMarkAllAsReadCategory}
+          onRefreshCategory={onRefreshCategory}
           onSetHomePage={onSetHomePage}
         />
-      </Collapse.Item>
-    ))
+      }
+    >
+      <FeedMenuGroup
+        categoryId={category.id}
+        homePageReady={homePageReady}
+        homeTarget={homeTarget}
+        sourceQuery={sourceQuery}
+        onDeleteFeed={onDeleteFeed}
+        onEditFeed={onEditFeed}
+        onMarkAllAsRead={onMarkAllAsReadFeed}
+        onRefreshFeed={onRefreshFeed}
+        onSetHomePage={onSetHomePage}
+      />
+    </Collapse.Item>
+  ))
 }
 
 const MoreOptionsDropdown = () => {
-  const { showHiddenFeeds, showUnreadFeedsOnly } = useStore(settingsState, {
-    keys: ["showHiddenFeeds", "showUnreadFeedsOnly"],
+  const { showHiddenFeeds } = useStore(settingsState, {
+    keys: ["showHiddenFeeds"],
   })
   const { polyglot } = useStore(polyglotState)
   const [menuVisible, setMenuVisible] = useState(false)
@@ -555,10 +655,6 @@ const MoreOptionsDropdown = () => {
   const handleToggleFeedsVisibility = () => {
     updateSettings({ showHiddenFeeds: !showHiddenFeeds })
     void refreshCounts({ force: true })
-  }
-
-  const handleToggleUnreadFeedsOnly = () => {
-    updateSettings({ showUnreadFeedsOnly: !showUnreadFeedsOnly })
   }
 
   const handleImportOPML = async (e) => {
@@ -624,22 +720,12 @@ const MoreOptionsDropdown = () => {
                 ? polyglot.t("sidebar.hide_hidden_sources")
                 : polyglot.t("sidebar.show_hidden_sources")}
             </MenuItem>
-            <MenuItem key="2" onClick={handleToggleUnreadFeedsOnly}>
-              {showUnreadFeedsOnly ? (
-                <IconMinusCircle className="icon-right" />
-              ) : (
-                <IconRecord className="icon-right" />
-              )}
-              {showUnreadFeedsOnly
-                ? polyglot.t("sidebar.show_read_feeds")
-                : polyglot.t("sidebar.hide_read_feeds")}
-            </MenuItem>
             <Divider style={{ margin: "4px 0" }} />
-            <MenuItem key="3" onClick={() => document.querySelector("#opmlInput").click()}>
+            <MenuItem key="2" onClick={() => document.querySelector("#opmlInput").click()}>
               <IconUpload className="icon-right" />
               {polyglot.t("sidebar.import_opml")}
             </MenuItem>
-            <MenuItem key="4" onClick={handleExportOPML}>
+            <MenuItem key="3" onClick={handleExportOPML}>
               <IconDownload className="icon-right" />
               {polyglot.t("sidebar.export_opml")}
             </MenuItem>
@@ -677,7 +763,12 @@ const Sidebar = ({ headerAction, onNavigate }) => {
   const { catalog: catalogLoadState } = useStore(dataState, { keys: ["loadState"] }).loadState
   const { polyglot } = useStore(polyglotState)
   const expandedCategories = useStore(expandedCategoriesState)
+  const { showUnreadFeedsOnly } = useStore(settingsState, { keys: ["showUnreadFeedsOnly"] })
+  const visibleFeeds = useStore(visibleFeedsState)
+  const visibleCategories = useStore(visibleCategoriesState)
+  const feedsGroupedById = useStore(feedsGroupedByIdState)
 
+  const [sourceQuery, setSourceQuery] = useState("")
   const [categoryModalVisible, setCategoryModalVisible] = useState(false)
   const [feedModalVisible, setFeedModalVisible] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState(null)
@@ -692,6 +783,82 @@ const Sidebar = ({ headerAction, onNavigate }) => {
   const navigate = useNavigate()
   const currentPath = location.pathname
   const selectedKeys = [currentPath]
+  const currentFeedRouteMatch = currentPath.match(/^\/feed\/([^/]+)(?:\/|$)/)
+  const currentFeedId = currentFeedRouteMatch?.[1] ?? null
+  const currentFeed = visibleFeeds.find((feed) => String(feed.id) === currentFeedId)
+  const currentFeedUnreadCount = currentFeed?.unreadCount
+  const [currentFeedContextState, setCurrentFeedContextState] = useState(() => ({
+    feedId: currentFeedId,
+    unreadCount: currentFeedUnreadCount,
+    showUnreadFeedsOnly,
+    retainedFeedId: null,
+  }))
+  let nextCurrentFeedContextState = currentFeedContextState
+
+  if (currentFeedContextState.feedId !== currentFeedId) {
+    nextCurrentFeedContextState = {
+      feedId: currentFeedId,
+      unreadCount: currentFeedUnreadCount,
+      showUnreadFeedsOnly,
+      retainedFeedId: null,
+    }
+  } else if (
+    currentFeedContextState.showUnreadFeedsOnly &&
+    showUnreadFeedsOnly &&
+    currentFeedContextState.unreadCount > 0 &&
+    currentFeedUnreadCount === 0
+  ) {
+    nextCurrentFeedContextState = {
+      feedId: currentFeedId,
+      unreadCount: currentFeedUnreadCount,
+      showUnreadFeedsOnly,
+      retainedFeedId: currentFeedId,
+    }
+  } else if (currentFeedContextState.retainedFeedId !== null && currentFeedUnreadCount > 0) {
+    nextCurrentFeedContextState = {
+      feedId: currentFeedId,
+      unreadCount: currentFeedUnreadCount,
+      showUnreadFeedsOnly,
+      retainedFeedId: null,
+    }
+  } else if (
+    currentFeedContextState.unreadCount !== currentFeedUnreadCount ||
+    currentFeedContextState.showUnreadFeedsOnly !== showUnreadFeedsOnly
+  ) {
+    nextCurrentFeedContextState = {
+      ...currentFeedContextState,
+      unreadCount: currentFeedUnreadCount,
+      showUnreadFeedsOnly,
+    }
+  }
+
+  if (nextCurrentFeedContextState !== currentFeedContextState) {
+    setCurrentFeedContextState(nextCurrentFeedContextState)
+  }
+
+  const currentZeroUnreadSource = getCurrentZeroUnreadSource(
+    visibleFeeds,
+    currentFeedId,
+    showUnreadFeedsOnly,
+    nextCurrentFeedContextState.retainedFeedId,
+  )
+  const unreadNavigationFeeds = useMemo(
+    () => getUnreadNavigationFeeds(visibleFeeds, sourceQuery),
+    [visibleFeeds, sourceQuery],
+  )
+  const hasVisibleUnreadFeeds = visibleFeeds.some((feed) => feed.unreadCount > 0)
+  const searchMatchingCategoryKeys = useMemo(
+    () =>
+      getMatchingCategories(visibleCategories, feedsGroupedById, sourceQuery).map(
+        (category) => `/category/${category.id}`,
+      ),
+    [visibleCategories, feedsGroupedById, sourceQuery],
+  )
+  const displayedExpandedCategories = useMemo(
+    () =>
+      getSearchExpandedCategoryKeys(expandedCategories, searchMatchingCategoryKeys, sourceQuery),
+    [expandedCategories, searchMatchingCategoryKeys, sourceQuery],
+  )
 
   const { refreshFeedData } = useAppData()
   const refreshCounts = useRefreshCounts()
@@ -869,6 +1036,12 @@ const Sidebar = ({ headerAction, onNavigate }) => {
               <MoreOptionsDropdown />
             </div>
           </div>
+          <SourceNavigationControls
+            polyglot={polyglot}
+            query={sourceQuery}
+            setQuery={setSourceQuery}
+            showUnreadFeedsOnly={showUnreadFeedsOnly}
+          />
           <Skeleton
             animation
             loading={!catalogLoadState.hasSnapshot && !catalogLoadState.error}
@@ -886,30 +1059,92 @@ const Sidebar = ({ headerAction, onNavigate }) => {
               </Button>
             </div>
           )}
-          {catalogLoadState.hasSnapshot && (
-            <div aria-busy={catalogLoadState.activity === "refreshing"}>
-              <Collapse
-                activeKey={expandedCategories}
-                bordered={false}
-                triggerRegion="icon"
-                onChange={(_key, keys) => setExpandedCategories(keys)}
-              >
-                <CategoryGroup
-                  homePageReady={homePageReady}
-                  homeTarget={homeTarget}
-                  onDeleteCategory={handleDeleteCategory}
-                  onDeleteFeed={handleDeleteFeed}
-                  onEditCategory={handleEditCategory}
-                  onEditFeed={handleEditFeed}
-                  onMarkAllAsReadCategory={handleMarkAllAsReadCategory}
-                  onMarkAllAsReadFeed={handleMarkAllAsReadFeed}
-                  onRefreshCategory={handleRefreshCategory}
-                  onRefreshFeed={handleRefreshFeed}
-                  onSetHomePage={handleSetHomePage}
-                />
-              </Collapse>
-            </div>
-          )}
+          {catalogLoadState.hasSnapshot &&
+            (showUnreadFeedsOnly ? (
+              <div aria-busy={catalogLoadState.activity === "refreshing"}>
+                {unreadNavigationFeeds.length > 0 ? (
+                  <section
+                    aria-label={polyglot.t("sidebar.unread_sources")}
+                    className="source-navigation-list"
+                  >
+                    <Typography.Title className="section-title source-list-title" heading={6}>
+                      {polyglot.t("sidebar.unread_sources")}
+                    </Typography.Title>
+                    {unreadNavigationFeeds.map((feed) => (
+                      <FeedMenuItem
+                        key={feed.id}
+                        feed={feed}
+                        homePageReady={homePageReady}
+                        homeTarget={homeTarget}
+                        onDeleteFeed={handleDeleteFeed}
+                        onEditFeed={handleEditFeed}
+                        onMarkAllAsRead={handleMarkAllAsReadFeed}
+                        onRefreshFeed={handleRefreshFeed}
+                        onSetHomePage={handleSetHomePage}
+                      />
+                    ))}
+                  </section>
+                ) : (
+                  <div className="source-navigation-empty" role="status">
+                    {polyglot.t(
+                      hasVisibleUnreadFeeds
+                        ? "sidebar.no_matching_sources"
+                        : "sidebar.no_unread_sources",
+                    )}
+                  </div>
+                )}
+                {currentZeroUnreadSource && (
+                  <section
+                    aria-label={polyglot.t("sidebar.current_source")}
+                    className="current-source-section"
+                  >
+                    <Typography.Title className="section-title source-list-title" heading={6}>
+                      {polyglot.t("sidebar.current_source")}
+                    </Typography.Title>
+                    <FeedMenuItem
+                      showZeroCount
+                      className="current-source-feed"
+                      feed={currentZeroUnreadSource}
+                      homePageReady={homePageReady}
+                      homeTarget={homeTarget}
+                      onDeleteFeed={handleDeleteFeed}
+                      onEditFeed={handleEditFeed}
+                      onMarkAllAsRead={handleMarkAllAsReadFeed}
+                      onRefreshFeed={handleRefreshFeed}
+                      onSetHomePage={handleSetHomePage}
+                    />
+                  </section>
+                )}
+              </div>
+            ) : (
+              <div aria-busy={catalogLoadState.activity === "refreshing"}>
+                <Collapse
+                  activeKey={displayedExpandedCategories}
+                  bordered={false}
+                  triggerRegion="icon"
+                  onChange={(_key, keys) => {
+                    if (!sourceQuery.trim()) {
+                      setExpandedCategories(keys)
+                    }
+                  }}
+                >
+                  <CategoryGroup
+                    homePageReady={homePageReady}
+                    homeTarget={homeTarget}
+                    sourceQuery={sourceQuery}
+                    onDeleteCategory={handleDeleteCategory}
+                    onDeleteFeed={handleDeleteFeed}
+                    onEditCategory={handleEditCategory}
+                    onEditFeed={handleEditFeed}
+                    onMarkAllAsReadCategory={handleMarkAllAsReadCategory}
+                    onMarkAllAsReadFeed={handleMarkAllAsReadFeed}
+                    onRefreshCategory={handleRefreshCategory}
+                    onRefreshFeed={handleRefreshFeed}
+                    onSetHomePage={handleSetHomePage}
+                  />
+                </Collapse>
+              </div>
+            ))}
         </Menu>
       </AdaptiveScrollArea>
 
