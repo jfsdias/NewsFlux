@@ -1,5 +1,7 @@
 # ReactFlux
 
+> **说明：** 此文件是从上游 ReactFlux 继承的旧版翻译，尚未描述当前的 NewsFlux fork。NewsFlux 的规范文档请参阅 [README.md](../README.md)。
+
 阅读其他语言版本： [Deutsch](README.de-DE.md), [English](../README.md), [Español](README.es-ES.md), [Français](README.fr-FR.md), [日本語](README.ja-JP.md)
 
 ## 概述

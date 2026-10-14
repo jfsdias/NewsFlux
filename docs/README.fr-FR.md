@@ -1,5 +1,7 @@
 # ReactFlux
 
+> **Avis :** Ce fichier est une ancienne traduction héritée du projet amont ReactFlux et ne décrit pas encore le fork NewsFlux actuel. La documentation de référence de NewsFlux se trouve dans [README.md](../README.md).
+
 Lire dans d'autres langues : [Deutsch](README.de-DE.md), [English](../README.md), [Español](README.es-ES.md), [日本語](README.ja-JP.md), [简体中文](README.zh-CN.md)
 
 ## Aperçu

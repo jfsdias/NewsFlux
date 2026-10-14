@@ -1,5 +1,7 @@
 # ReactFlux
 
+> **お知らせ:** このファイルは上流の ReactFlux から引き継いだ古い翻訳で、現在の NewsFlux フォークの内容はまだ反映していません。NewsFlux の正式なドキュメントは [README.md](../README.md) をご覧ください。
+
 他の言語で読む: [Deutsch](README.de-DE.md), [English](../README.md), [Español](README.es-ES.md), [Français](README.fr-FR.md), [简体中文](README.zh-CN.md)
 
 ## 概要
