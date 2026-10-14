@@ -134,6 +134,7 @@ export const phase2cEditorialHomeMatrix = {
   automatedGates: [
     "HARNESS_SCENARIO_MATRIX_COMPLETE",
     "HOME_FIRST_SECTION_CLEAR_OF_CHROME",
+    "HOME_SESSION_STABLE_AFTER_READER_READ",
     "HOME_NO_OVERFLOW",
     "HOME_SECTION_HIERARCHY",
     "HOME_PRIMARY_TEXT_ONLY",
@@ -209,9 +210,12 @@ export const phase2cEditorialHomeMatrix = {
     },
     { id: "LOAD_MORE_ERROR", covers: ["HOME_LOAD_MORE_ERROR"], fixtures: ["failPagination"] },
     {
-      id: "AFTER_READ_BACKFILL",
-      covers: ["HOME_REJECTED_UNREAD_REVERSAL_RECONCILES_CONFIRMED_READ"],
-      fixtures: ["deferredFirstStatusMutation", "rejectStatusMutationCall"],
+      id: "AFTER_CONFIRMED_READ_STABLE_SESSION",
+      covers: [
+        "HOME_REJECTED_UNREAD_REVERSAL_RECONCILES_CONFIRMED_READ",
+        "HOME_SESSION_STABLE_AFTER_READER_READ",
+      ],
+      fixtures: ["reader mark-as-read", "deferredFirstStatusMutation", "rejectStatusMutationCall"],
     },
     {
       id: "AFTER_MARK_UNREAD",
@@ -253,6 +257,16 @@ export const phase2cEditorialHomeMatrix = {
       id: "PHASE2D_QUERY_SCOPE_AND_SESSION",
       covers: ["ONE_AUX_PROFILE_QUERY_PER_HOME_SESSION"],
       fixtures: ["load more", "star/unstar", "status settlement", "reader return"],
+    },
+    {
+      id: "PHASE2D_SESSION_STABILITY",
+      covers: ["HOME_SESSION_STABLE_AFTER_READER_READ"],
+      fixtures: [
+        "open unread Primary",
+        "normal read settlement",
+        "close reader",
+        "exact IDs/order",
+      ],
     },
     {
       id: "PHASE2D_NON_HOME_LISTS",

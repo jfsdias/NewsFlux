@@ -1,6 +1,6 @@
 // Node's direct unit runner requires the extension; Vite resolves the same module.
 // eslint-disable-next-line import/extensions
-import { selectBackfillCandidate, selectInitialHighlightIds } from "./home-editorial-projection.js"
+import { selectInitialHighlightIds } from "./home-editorial-projection.js"
 
 const byPublishedAt = (left, right) =>
   Date.parse(right.published_at) - Date.parse(left.published_at) ||
@@ -9,7 +9,7 @@ const byPublishedAt = (left, right) =>
 const uniqueById = (entries) => {
   const seen = new Set()
   return entries.filter((entry) => {
-    if (seen.has(entry.id)) {
+    if (entry?.id === undefined || entry?.id === null || seen.has(entry.id)) {
       return false
     }
     seen.add(entry.id)
@@ -29,8 +29,7 @@ export const createHomeEditorialSession = ({
   initialProjection,
   scrollRoot = null,
 }) => {
-  const defaultHighlightIds = selectInitialHighlightIds(entries)
-  const highlightIds = initialProjection?.highlightIds ?? defaultHighlightIds
+  const highlightIds = initialProjection?.highlightIds ?? selectInitialHighlightIds(entries)
   const highlighted = new Set(highlightIds)
   const recentIds =
     initialProjection?.recentIds ??
@@ -44,62 +43,77 @@ export const createHomeEditorialSession = ({
     sessionRevision,
     highlightIds: [...highlightIds],
     recentIds: [...recentIds],
-    preserveRecentOrder: Boolean(initialProjection),
+    // IDs in the initial canonical page cannot be inserted later by status settlement.
+    observedEntryIds: uniqueById(entries).map(({ id }) => id),
     pendingStatusById: {},
     scrollRoot,
   }
 }
 
-export const projectHomeSession = (session, entries) => {
+const appendableRecentEntries = (session, entries) => {
+  const observed = new Set(session.observedEntryIds)
   const highlighted = new Set(session.highlightIds)
-  const seen = new Set()
-  const eligible = entries.filter((entry) => {
-    if (seen.has(entry.id)) {
-      return false
+  return uniqueById(entries)
+    .filter(
+      (entry) => entry.status === "unread" && !observed.has(entry.id) && !highlighted.has(entry.id),
+    )
+    .toSorted(byPublishedAt)
+}
+
+// Load-more extends the committed Recent tail with new canonical unread entries only.
+export const appendHomeSessionEntries = (session, entries) => {
+  const currentIds = uniqueById(entries).map(({ id }) => id)
+  const observed = new Set(session.observedEntryIds)
+  const unseenIds = currentIds.filter((id) => !observed.has(id))
+  if (unseenIds.length === 0) {
+    return session
+  }
+
+  const newRecentIds = appendableRecentEntries(session, entries).map(({ id }) => id)
+  const recentIds = [...session.recentIds]
+  const recentSet = new Set(recentIds)
+  for (const id of newRecentIds) {
+    if (!recentSet.has(id)) {
+      recentIds.push(id)
+      recentSet.add(id)
     }
-    seen.add(entry.id)
-    const pending = session.pendingStatusById[entry.id]
-    return pending ? pending.previousStatus === "unread" : entry.status === "unread"
-  })
-  const eligibleIds = new Set(eligible.map(({ id }) => id))
-  let recentIds
-  if (session.preserveRecentOrder) {
-    recentIds = []
-    const seenRecentIds = new Set()
-    for (const id of session.recentIds ?? []) {
-      if (eligibleIds.has(id) && !highlighted.has(id) && !seenRecentIds.has(id)) {
-        recentIds.push(id)
-        seenRecentIds.add(id)
-      }
-    }
-    const unseenRecentEntries = eligible
-      .filter((entry) => !highlighted.has(entry.id) && !seenRecentIds.has(entry.id))
-      .toSorted(byPublishedAt)
-    for (const entry of unseenRecentEntries) {
-      recentIds.push(entry.id)
-    }
-  } else {
-    recentIds = eligible
-      .filter((entry) => !highlighted.has(entry.id))
-      .toSorted(byPublishedAt)
-      .map((entry) => entry.id)
   }
 
   return {
-    highlightIds: session.highlightIds.map((id) => (eligibleIds.has(id) ? id : null)),
+    ...session,
+    recentIds,
+    observedEntryIds: [...(session.observedEntryIds ?? []), ...unseenIds],
+  }
+}
+
+export const projectHomeSession = (session, entries) => {
+  const additionalRecentIds = appendableRecentEntries(session, entries).map(({ id }) => id)
+  const recentIds = [...session.recentIds]
+  const seenRecentIds = new Set(recentIds)
+  for (const id of additionalRecentIds) {
+    if (!seenRecentIds.has(id)) {
+      recentIds.push(id)
+      seenRecentIds.add(id)
+    }
+  }
+
+  // Membership and order are committed for this Home session. Entry objects remain live so
+  // readers can reflect read/star state without removing or promoting cards.
+  return {
+    highlightIds: [...session.highlightIds],
     recentIds,
   }
 }
 
-export const transitionHomeSession = (session, event, entries) => {
+export const transitionHomeSession = (session, event) => {
   if (!session || event.sessionRevision !== session.sessionRevision) {
     return session
   }
   if (event.targetStatus !== "read" && event.targetStatus !== "unread") {
     return session
   }
+
   const pendingStatusById = { ...session.pendingStatusById }
-  const highlightIds = [...session.highlightIds]
   const pendingAfterSettlement = new Set(
     event.pendingEntryIds ??
       event.entryIds.filter(
@@ -110,13 +124,7 @@ export const transitionHomeSession = (session, event, entries) => {
     event.outcome === "confirmed"
       ? event.targetStatus
       : (pendingStatusById[id]?.confirmedStatus ?? event.previousStatuses[id])
-  const confirmedReadIds = new Set(
-    event.outcome === "intent"
-      ? []
-      : event.entryIds.filter(
-          (id) => !pendingAfterSettlement.has(id) && settledStatus(id) === "read",
-        ),
-  )
+
   for (const id of event.entryIds) {
     const pending = pendingStatusById[id]
     if (event.outcome === "intent") {
@@ -135,26 +143,7 @@ export const transitionHomeSession = (session, event, entries) => {
       continue
     }
     delete pendingStatusById[id]
-    if (!confirmedReadIds.has(id)) {
-      continue
-    }
-    const vacancy = highlightIds.indexOf(id)
-    if (vacancy === -1) {
-      continue
-    }
-    const survivingIds = new Set(
-      highlightIds.filter((candidate) => candidate != null && !confirmedReadIds.has(candidate)),
-    )
-    const surviving = entries.filter((entry) => survivingIds.has(entry.id))
-    const recent = entries.filter(
-      (entry) =>
-        entry.status === "unread" &&
-        !confirmedReadIds.has(entry.id) &&
-        !survivingIds.has(entry.id) &&
-        pendingStatusById[entry.id]?.previousStatus !== "read" &&
-        pendingStatusById[entry.id]?.confirmedStatus !== "read",
-    )
-    highlightIds[vacancy] = selectBackfillCandidate(recent, surviving)?.id ?? null
   }
-  return { ...session, highlightIds, pendingStatusById }
+
+  return { ...session, pendingStatusById }
 }

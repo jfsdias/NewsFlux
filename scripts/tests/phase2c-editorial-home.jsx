@@ -590,6 +590,79 @@ const Harness = () => {
       },
     ],
     [
+      "HOME_SESSION_STABLE_AFTER_READER_READ",
+      async () => {
+        const entries = highlightFixtures.image.filter(
+          (entry, index, all) => all.findIndex(({ id }) => id === entry.id) === index,
+        )
+        const unreadTotal = entries.filter(({ status }) => status === "unread").length
+        await mount("/", { entries, total: unreadTotal, markReadBy: "view" })
+        await waitFor(
+          () => homeRoot()?.getAttribute("aria-busy") === "false",
+          "Home did not commit",
+        )
+        const homeBeforeReaderIds = ids()
+        const homeBeforeReader = homeBeforeReaderIds.join(",")
+        assert(homeBeforeReader === "101,202,303", `Unexpected committed Home: ${homeBeforeReader}`)
+        await waitFor(
+          () => starredProfileRequests().length === 1,
+          "Initial profile request missing",
+        )
+        const profileRequestsBeforeReader = starredProfileRequests().length
+
+        cards()[0].click()
+        await waitFor(() => readerIs(101), "Committed Primary reader did not open")
+        await waitFor(
+          () =>
+            statusMutationRequests === 1 &&
+            contentState.get().entries.find(({ id }) => id === 101)?.status === "read",
+          "Reader open did not settle the normal mark-as-read behavior",
+        )
+        clickLabel(englishPhrases.article_card.close_tooltip)
+        await waitFor(
+          () =>
+            router.state.location.pathname === "/" &&
+            !contentState.get().activeContent &&
+            ids().join(",") === homeBeforeReader,
+          "Reader did not close to the committed Home session",
+        )
+
+        const homeAfterReaderIds = ids()
+        const homeAfterReader = homeAfterReaderIds.join(",")
+        const readPrimary = contentState.get().entries.find(({ id }) => id === 101)
+        const otherEntryIdsReordered =
+          homeBeforeReaderIds.filter((id) => id !== 101).join(",") !==
+          homeAfterReaderIds.filter((id) => id !== 101).join(",")
+        globalThis.__phase2dReaderReturnStability = {
+          homeBeforeReader,
+          homeAfterReader,
+          readStatus: readPrimary?.status,
+          membershipChanged:
+            [...homeBeforeReaderIds].toSorted().join(",") !==
+            [...homeAfterReaderIds].toSorted().join(","),
+          otherEntryIdsReordered,
+          rankingRecomposed: starredProfileRequests().length !== profileRequestsBeforeReader,
+        }
+        assert(
+          homeAfterReader === homeBeforeReader,
+          "Reader return changed committed Home IDs/order",
+        )
+        assert(
+          readPrimary?.status === "read",
+          "Committed Primary did not expose its updated read state",
+        )
+        assert(ids().includes(101), "Read Primary disappeared from committed Home")
+        assert(
+          starredProfileRequests().length === profileRequestsBeforeReader,
+          "Reader read/close requested another profile or recomposed ranking",
+        )
+        assert(
+          !otherEntryIdsReordered,
+          "Reader read changed the relative order of other Home entries",
+        )
+      },
+    ],
+    [
       "HOME_READER_PARAM_BRIDGE",
       async () => {
         await mount("/entry/101", { enableSwipeGesture: false })
@@ -723,6 +796,10 @@ const Harness = () => {
         )
         assert(contentState.get().loadMoreVisible === false, "Zero total retained pagination")
         assert(
+          ids().join(",") === "101" && !cards()[0]?.classList.contains("unread"),
+          "Zero unread replaced the committed Home projection instead of retaining its read card",
+        )
+        assert(
           requests.some(
             (url) => new URL(url, "https://fixture.invalid").searchParams.get("limit") === "1",
           ),
@@ -786,7 +863,7 @@ const Harness = () => {
           routeEntries[0],
           routeEntries[1],
           { ...routeEntries[0], id: 303, title: "Third loaded article" },
-          { ...routeEntries[0], id: 404, title: "Loaded backfill article" },
+          { ...routeEntries[0], id: 404, title: "Loaded Recent article" },
         ]
         await mount("/", { entries, total: 4 })
         await waitFor(() => contentState.get().isArticleListReady, "Initial Home page missing")
@@ -825,14 +902,14 @@ const Harness = () => {
             () =>
               contentState.get().total === 3 &&
               contentState.get().entries.find(({ id }) => id === 101)?.status === "read" &&
-              observedSession.highlightIds[0] === 404,
+              observedSession.highlightIds[0] === 101,
             "Rejected reversal did not reconcile the confirmed read",
           )
           assert(
             JSON.stringify(
               projectHomeSession(observedSession, contentState.get().entries).highlightIds,
-            ) === JSON.stringify([404, 202, 303]),
-            "Confirmed read ID remained projected or displaced surviving Highlights",
+            ) === JSON.stringify([101, 202, 303]),
+            "Confirmed read changed the committed Highlight membership/order",
           )
           assert(
             Object.keys(observedSession.pendingStatusById).length === 0 &&
@@ -1037,6 +1114,7 @@ const Harness = () => {
         }
         // No Recent candidate remains: Primary and then Secondary 1 must stay vacant.
         await mountHighlights(highlightFixtures.textOnly)
+        const committedIds = ids().join(",")
         await openMenu(101)
         clickMenu(englishPhrases.article_card.mark_as_read_tooltip)
         await waitFor(
@@ -1045,10 +1123,10 @@ const Harness = () => {
         )
         await settle()
         assert(
-          ids().join(",") === "202,303" &&
-            !document.querySelector(".home-highlight-primary") &&
-            cards()[0]?.classList.contains("home-highlight-secondary-1"),
-          "Vacant Primary promoted a Secondary",
+          ids().join(",") === committedIds &&
+            cards()[0]?.classList.contains("home-highlight-primary") &&
+            !cards()[0]?.classList.contains("unread"),
+          "Confirmed Primary read changed its committed slot or failed to update read styling",
         )
         await openMenu(202)
         clickMenu(englishPhrases.article_card.mark_as_read_tooltip)
@@ -1058,8 +1136,10 @@ const Harness = () => {
         )
         await settle()
         assert(
-          ids().join(",") === "303" && cards()[0]?.classList.contains("home-highlight-secondary-2"),
-          "Vacant Secondary compacted surviving slot",
+          ids().join(",") === committedIds &&
+            cards()[1]?.classList.contains("home-highlight-secondary-1") &&
+            !cards()[1]?.classList.contains("unread"),
+          "Confirmed Secondary read changed its committed slot or failed to update read styling",
         )
       },
     ],
@@ -1122,7 +1202,10 @@ const Harness = () => {
           "Highlight read action did not use existing status mutation",
         )
         await settle()
-        assert(!ids().includes(101), "Confirmed Highlight read did not remove card")
+        assert(
+          ids().includes(101) && !cards()[0]?.classList.contains("unread"),
+          "Confirmed Highlight read removed the committed card or failed to update read styling",
+        )
         await mountHighlights(highlightFixtures.image)
         const stage = document.querySelector(".harness-stage")
         const scrollSpacer = document.createElement("div")
@@ -1156,9 +1239,12 @@ const Harness = () => {
           )
           scrollRoot.scrollTop = scrollRoot.scrollHeight
           await waitFor(
-            () => statusMutationRequests > 0 && !ids().includes(101),
+            () =>
+              statusMutationRequests > 0 &&
+              contentState.get().entries.find(({ id }) => id === 101)?.status === "read",
             "Mounted Highlight read-on-scroll did not use existing observer/mutation",
           )
+          assert(ids().includes(101), "Read-on-scroll removed a committed Highlight")
         } finally {
           settingsState.set({ ...settingsState.get(), markReadOnScroll: false })
           stage.style.height = ""
@@ -2519,6 +2605,7 @@ const Harness = () => {
         const requiredThemes = ["light", "dark"]
         const requiredGates = [
           "HOME_FIRST_SECTION_CLEAR_OF_CHROME",
+          "HOME_SESSION_STABLE_AFTER_READER_READ",
           "HOME_NO_OVERFLOW",
           "HOME_SECTION_HIERARCHY",
           "HOME_PRIMARY_TEXT_ONLY",
@@ -2557,7 +2644,7 @@ const Harness = () => {
           "INITIAL_ERROR",
           "REFRESH_ERROR_RETAINS_CONTENT",
           "LOAD_MORE_ERROR",
-          "AFTER_READ_BACKFILL",
+          "AFTER_CONFIRMED_READ_STABLE_SESSION",
           "AFTER_MARK_UNREAD",
           "AFTER_STAR_AND_UNSTAR",
           "PHASE2D_PERSONALIZED_PROJECTION",
@@ -2565,6 +2652,7 @@ const Harness = () => {
           "PHASE2D_DEADLINE_AND_STALE_PROFILE",
           "PHASE2D_EXPLICIT_REFRESH",
           "PHASE2D_QUERY_SCOPE_AND_SESSION",
+          "PHASE2D_SESSION_STABILITY",
           "PHASE2D_NON_HOME_LISTS",
         ]
         const requiredManualGates = [
@@ -2679,6 +2767,9 @@ const Harness = () => {
                   : {}),
                 ...(name === "HOME_LIGHT" || name === "HOME_DARK"
                   ? { themes: globalThis.__phase2cHomeThemeMetrics }
+                  : {}),
+                ...(name === "HOME_SESSION_STABLE_AFTER_READER_READ"
+                  ? { readerReturn: globalThis.__phase2dReaderReturnStability }
                   : {}),
               })
             } catch (error) {

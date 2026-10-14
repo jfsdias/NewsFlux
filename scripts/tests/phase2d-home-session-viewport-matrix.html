@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Phase 2D Home session viewport matrix</title>
+    <style>
+      body {
+        font:
+          14px system-ui,
+          sans-serif;
+        margin: 24px;
+      }
+      #runs {
+        display: grid;
+        gap: 8px;
+      }
+      iframe {
+        border: 0;
+        left: 0;
+        opacity: 0.01;
+        position: fixed;
+        top: 0;
+        transform-origin: top left;
+      }
+      pre {
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Phase 2D Home session viewport matrix</h1>
+    <p id="matrix-status">Starting 12 viewport/theme runs…</p>
+    <div id="runs"></div>
+    <pre id="matrix-report">Waiting…</pre>
+    <script type="module" src="./phase2d-home-session-viewport-matrix.js"></script>
+  </body>
+</html>

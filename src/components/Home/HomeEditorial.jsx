@@ -18,6 +18,7 @@ import { settingsState } from "@/store/settingsState"
 import createArticleListRequestKey from "@/utils/article-list-request-key"
 import { subscribeEntryStatusMutationEvents } from "@/utils/entry-status-mutation-events"
 import {
+  appendHomeSessionEntries,
   createHomeEditorialSession,
   createHomeSessionKey,
   projectHomeSession,
@@ -213,6 +214,15 @@ const HomeEditorial = ({
       if (content.infoFrom !== "home") {
         return
       }
+      setSession((previous) => {
+        if (
+          previous?.requestKey !== requestKey ||
+          previous.snapshotRevision !== content.articleListSnapshotRevision
+        ) {
+          return previous
+        }
+        return appendHomeSessionEntries(previous, content.entries)
+      })
 
       const canonicalRequestKey = getCanonicalRequestKey()
       let generation = generationRef.current
