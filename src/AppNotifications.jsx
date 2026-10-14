@@ -1,6 +1,6 @@
 import { Button, Notification } from "@arco-design/web-react"
 import { useStore } from "@nanostores/react"
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import { polyglotState } from "@/hooks/useLanguage"
 import useModalToggle from "@/hooks/useModalToggle"
@@ -8,6 +8,14 @@ import useScreenWidth from "@/hooks/useScreenWidth"
 import useVersionCheck from "@/hooks/useVersionCheck"
 import { duplicateHotkeysState } from "@/store/hotkeysState"
 import { GITHUB_REPO_PATH } from "@/utils/constants"
+import { MARK_ALL_READ_UNDO_NOTIFICATION_ID } from "@/utils/mark-all-read-undo"
+import {
+  getMarkAllReadUndoProbeTrace,
+  installMarkAllReadNotificationProbe,
+  isMarkAllReadUndoProbeEnabled,
+  logMarkAllReadUndoDiagnostic,
+  subscribeToMarkAllReadUndoProbeTrace,
+} from "@/utils/mark-all-read-undo-diagnostics"
 import { isSettingsTabAvailable, SETTINGS_TAB_KEYS } from "@/utils/settings-navigation"
 
 import "./AppNotifications.css"
@@ -28,6 +36,71 @@ const NotificationActions = ({ polyglot, onCheck, onDismiss }) => (
   </div>
 )
 
+const MarkAllReadUndoProbePanel = () => {
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [trace, setTrace] = useState(getMarkAllReadUndoProbeTrace)
+  const [copyStatus, setCopyStatus] = useState("")
+
+  useEffect(
+    () =>
+      subscribeToMarkAllReadUndoProbeTrace(() => {
+        setTrace(getMarkAllReadUndoProbeTrace())
+      }),
+    [],
+  )
+
+  const copyTrace = async () => {
+    try {
+      const clipboard = globalThis.navigator?.clipboard
+      if (typeof clipboard?.writeText !== "function") {
+        throw new TypeError("Clipboard is unavailable")
+      }
+
+      await clipboard.writeText(getMarkAllReadUndoProbeTrace())
+      setCopyStatus("Trace copied")
+    } catch {
+      setIsExpanded(true)
+      setCopyStatus("Clipboard unavailable. Select and copy the trace below.")
+    }
+  }
+
+  return (
+    <aside
+      aria-label="Mark all read Undo diagnostic probe"
+      className={`mark-all-read-undo-probe${isExpanded ? " mark-all-read-undo-probe-expanded" : ""}`}
+    >
+      <div className="mark-all-read-undo-probe-controls">
+        <strong>Undo probe</strong>
+        <Button size="small" type="secondary" onClick={() => void copyTrace()}>
+          Copy trace
+        </Button>
+        <Button
+          aria-expanded={isExpanded}
+          size="small"
+          type="secondary"
+          onClick={() => setIsExpanded((expanded) => !expanded)}
+        >
+          {isExpanded ? "Hide" : "Show"}
+        </Button>
+      </div>
+      {copyStatus && (
+        <div className="mark-all-read-undo-probe-status" role="status">
+          {copyStatus}
+        </div>
+      )}
+      {isExpanded && (
+        <textarea
+          readOnly
+          aria-label="Sanitized Undo probe event trace"
+          className="mark-all-read-undo-probe-trace"
+          spellCheck={false}
+          value={trace}
+        />
+      )}
+    </aside>
+  )
+}
+
 const AppNotifications = () => {
   const { polyglot } = useStore(polyglotState)
   const duplicateHotkeys = useStore(duplicateHotkeysState)
@@ -41,6 +114,21 @@ const AppNotifications = () => {
   const duplicateHotkeysSignature = JSON.stringify(duplicateHotkeys.toSorted())
   const hasDuplicateHotkeys = duplicateHotkeys.length > 0
   const canOpenHotkeysSettings = isSettingsTabAvailable(SETTINGS_TAB_KEYS.HOTKEYS, isBelowMedium)
+
+  useEffect(() => {
+    logMarkAllReadUndoDiagnostic("APP_NOTIFICATIONS_MOUNTED")
+    const uninstallNotificationProbe = installMarkAllReadNotificationProbe(
+      Notification,
+      MARK_ALL_READ_UNDO_NOTIFICATION_ID,
+    )
+
+    return () => {
+      logMarkAllReadUndoDiagnostic("APP_NOTIFICATIONS_UNMOUNTED")
+      uninstallNotificationProbe()
+      Notification.remove(NEW_VERSION_NOTIFICATION_ID)
+      Notification.remove(DUPLICATE_HOTKEYS_NOTIFICATION_ID)
+    }
+  }, [])
 
   useEffect(() => {
     if (!hasUpdate) {
@@ -123,14 +211,7 @@ const AppNotifications = () => {
     setSettingsTabsActiveTab,
   ])
 
-  useEffect(() => {
-    return () => {
-      Notification.remove(NEW_VERSION_NOTIFICATION_ID)
-      Notification.remove(DUPLICATE_HOTKEYS_NOTIFICATION_ID)
-    }
-  }, [])
-
-  return null
+  return isMarkAllReadUndoProbeEnabled() ? <MarkAllReadUndoProbePanel /> : null
 }
 
 export default AppNotifications

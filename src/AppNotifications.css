@@ -8,3 +8,62 @@
 .notification-actions .arco-btn {
   min-height: 44px;
 }
+
+.mark-all-read-undo-probe {
+  position: fixed;
+  z-index: 1100;
+  inset-inline-start: max(8px, env(safe-area-inset-left, 0px));
+  top: 50%;
+  width: max-content;
+  max-width: calc(100vw - 16px);
+  padding: 6px;
+  color: var(--color-text-1, #1d2129);
+  background: var(--color-bg-2, #fff);
+  border: 1px solid var(--color-border-2, #e5e6eb);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 16%);
+  transform: translateY(-50%);
+}
+
+.mark-all-read-undo-probe-expanded {
+  box-sizing: border-box;
+  width: min(360px, calc(100vw - 16px));
+  max-height: min(70dvh, 600px);
+  overflow: hidden;
+}
+
+.mark-all-read-undo-probe-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.mark-all-read-undo-probe-controls .arco-btn {
+  min-height: 44px;
+}
+
+.mark-all-read-undo-probe-status {
+  margin: 4px 2px;
+  font-size: 12px;
+}
+
+.mark-all-read-undo-probe-trace {
+  box-sizing: border-box;
+  width: 100%;
+  height: min(36dvh, 420px);
+  margin-top: 6px;
+  padding: 8px;
+  color: inherit;
+  background: var(--color-bg-1, #fff);
+  border: 1px solid var(--color-border-2, #e5e6eb);
+  border-radius: 4px;
+  font:
+    11px/1.45 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  white-space: pre;
+  overflow: auto;
+  resize: vertical;
+}

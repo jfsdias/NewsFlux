@@ -5,17 +5,22 @@ export const createTimedOneShotActionStore = ({
   now = Date.now,
   setTimer = setTimeout,
   clearTimer = clearTimeout,
+  onEvent = () => {},
 } = {}) => {
   let activeAction = null
   let nextToken = 0
 
-  const clear = (token) => {
+  const clear = (token, trigger = "clear") => {
     if (!activeAction || (token !== undefined && activeAction.token !== token)) {
       return false
     }
 
     clearTimer(activeAction.timer)
     activeAction = null
+    onEvent("MARK_ALL_UNDO_TOKEN_CLEARED", {
+      clearTrigger: trigger,
+      undoTokenPresent: false,
+    })
     return true
   }
 
@@ -27,6 +32,7 @@ export const createTimedOneShotActionStore = ({
     const { onExpire, timer } = activeAction
     clearTimer(timer)
     activeAction = null
+    onEvent("MARK_ALL_UNDO_EXPIRED", { undoTokenPresent: false })
     onExpire?.()
     return true
   }
@@ -43,15 +49,19 @@ export const createTimedOneShotActionStore = ({
       }
 
       const { value } = activeAction
-      clear(token)
+      clear(token, "undo_consumed")
       return value
     },
     replace(value, { durationMs = MARK_ALL_READ_UNDO_DURATION_MS, onExpire } = {}) {
-      clear()
+      clear(undefined, "replaced")
       const token = ++nextToken
       const timer = setTimer(() => expire(token), durationMs)
       activeAction = { expiresAt: now() + durationMs, onExpire, timer, token, value }
+      onEvent("MARK_ALL_UNDO_CREATED", { undoTokenPresent: true })
       return token
+    },
+    hasActiveAction() {
+      return activeAction !== null
     },
   }
 }

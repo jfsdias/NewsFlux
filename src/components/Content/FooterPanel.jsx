@@ -36,11 +36,25 @@ import {
   MARK_ALL_READ_UNDO_NOTIFICATION_ID,
   performMarkAllReadUndo,
 } from "@/utils/mark-all-read-undo"
+import {
+  getDiagnosticRouteName,
+  logMarkAllReadUndoDiagnostic,
+  setMarkAllReadUndoNotificationExpected,
+  setMarkAllReadUndoTokenPresenceReader,
+} from "@/utils/mark-all-read-undo-diagnostics"
 import findAdjacentItem from "@/utils/navigation"
 import reconcileEntriesAfterMarkRead from "@/utils/reconcile-entries-after-mark-read"
 import "./FooterPanel.css"
 
-const markAllReadUndoActions = createTimedOneShotActionStore()
+const markAllReadUndoActions = createTimedOneShotActionStore({
+  onEvent: (event, details = {}) =>
+    logMarkAllReadUndoDiagnostic(event, {
+      clearTrigger: details.clearTrigger,
+      undoTokenPresent: details.undoTokenPresent,
+    }),
+})
+
+setMarkAllReadUndoTokenPresenceReader(() => markAllReadUndoActions.hasActiveAction())
 
 const updateEntriesAsRead = (entryIds) => {
   const { activeContent } = contentState.get()
@@ -120,12 +134,28 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
   const navigate = useNavigate()
   const refreshLabel = polyglot.t("article_list.refresh_tooltip")
 
+  useEffect(() => {
+    logMarkAllReadUndoDiagnostic("FOOTER_MOUNTED", {
+      routeKind: getDiagnosticRouteName(source),
+    })
+    return () =>
+      logMarkAllReadUndoDiagnostic("FOOTER_UNMOUNTED", {
+        routeKind: getDiagnosticRouteName(source),
+      })
+  }, [source])
+
   const handleUndoMarkAllRead = async (token) => {
+    logMarkAllReadUndoDiagnostic("MARK_ALL_UNDO_CLICKED", {
+      undoTokenPresent: markAllReadUndoActions.hasActiveAction(),
+    })
     const action = markAllReadUndoActions.consume(token)
     if (!action) {
       return
     }
 
+    logMarkAllReadUndoDiagnostic("MARK_ALL_UNDO_NOTIFICATION_REMOVE_REQUESTED", {
+      trigger: "undo_clicked",
+    })
     Notification.remove(MARK_ALL_READ_UNDO_NOTIFICATION_ID)
     await performMarkAllReadUndo({
       entryIds: action.entryIds,
@@ -151,6 +181,10 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
         wrap: true,
       })
       if (next) {
+        logMarkAllReadUndoDiagnostic("ROUTE_CHANGE_REQUESTED", {
+          routeKind: "category",
+          undoTokenPresent: markAllReadUndoActions.hasActiveAction(),
+        })
         navigate(`/category/${next.id}`)
       }
     } else if (source === "feed") {
@@ -163,6 +197,10 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
         wrap: true,
       })
       if (next) {
+        logMarkAllReadUndoDiagnostic("ROUTE_CHANGE_REQUESTED", {
+          routeKind: "feed",
+          undoTokenPresent: markAllReadUndoActions.hasActiveAction(),
+        })
         navigate(`/feed/${next.id}`)
       }
     }
@@ -229,7 +267,10 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
         return
       }
 
-      markAllReadUndoActions.clear()
+      markAllReadUndoActions.clear(undefined, "mark_all_completed")
+      logMarkAllReadUndoDiagnostic("MARK_ALL_UNDO_NOTIFICATION_REMOVE_REQUESTED", {
+        trigger: "new_mark_all",
+      })
       Notification.remove(MARK_ALL_READ_UNDO_NOTIFICATION_ID)
       const undoEntryIds = [...markedEntryIds]
       if (undoEntryIds.length > 0) {
@@ -237,7 +278,13 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
           { entryIds: undoEntryIds, sessionRevision },
           {
             durationMs: MARK_ALL_READ_UNDO_DURATION_MS,
-            onExpire: () => Notification.remove(MARK_ALL_READ_UNDO_NOTIFICATION_ID),
+            onExpire: () => {
+              logMarkAllReadUndoDiagnostic("MARK_ALL_UNDO_NOTIFICATION_REMOVE_REQUESTED", {
+                trigger: "action_expired",
+              })
+              Notification.remove(MARK_ALL_READ_UNDO_NOTIFICATION_ID)
+              setMarkAllReadUndoNotificationExpected(false)
+            },
           },
         )
         Notification.success({
@@ -249,7 +296,19 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
               {polyglot.t("actions.undo")}
             </Button>
           ),
-          onClose: () => markAllReadUndoActions.clear(token),
+          onClose: () => {
+            logMarkAllReadUndoDiagnostic("MARK_ALL_UNDO_NOTIFICATION_ON_CLOSE", {
+              notificationExpected: true,
+              undoTokenPresent: markAllReadUndoActions.hasActiveAction(),
+            })
+            setMarkAllReadUndoNotificationExpected(false)
+            markAllReadUndoActions.clear(token, "notification_on_close")
+          },
+        })
+        setMarkAllReadUndoNotificationExpected(true)
+        logMarkAllReadUndoDiagnostic("MARK_ALL_UNDO_NOTIFICATION_OPENED", {
+          notificationExpected: true,
+          undoTokenPresent: markAllReadUndoActions.hasActiveAction(),
         })
       } else {
         Notification.success({

@@ -12,6 +12,10 @@ import { setCurrentRoutePath } from "@/store/locationState"
 import isValidAuth, { getAuthSessionKey } from "@/utils/auth"
 import hideSpinner from "@/utils/loading"
 import {
+  getDiagnosticRouteName,
+  logMarkAllReadRouteChanged,
+} from "@/utils/mark-all-read-undo-diagnostics"
+import {
   checkMinifluxCompatibility,
   MINIMUM_MINIFLUX_VERSION,
 } from "@/utils/miniflux-compatibility"
@@ -97,6 +101,7 @@ const RouterProtect = () => {
   })
   const location = useLocation()
   const navigate = useNavigate()
+  const previousPathnameRef = useRef(location.pathname)
   const [retryCount, setRetryCount] = useState(0)
   const [checkState, setCheckState] = useState(INITIAL_CHECK_STATE)
 
@@ -109,6 +114,14 @@ const RouterProtect = () => {
     checkState.authSessionKey === authSessionKey ? checkState : INITIAL_CHECK_STATE
 
   useLayoutEffect(() => {
+    const previousPathname = previousPathnameRef.current
+    if (previousPathname !== location.pathname) {
+      logMarkAllReadRouteChanged({
+        fromRoute: getDiagnosticRouteName(previousPathname),
+        toRoute: getDiagnosticRouteName(location.pathname),
+      })
+      previousPathnameRef.current = location.pathname
+    }
     setCurrentRoutePath(location.pathname)
   }, [location.pathname])
 
