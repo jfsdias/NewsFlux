@@ -405,3 +405,86 @@ body[arco-theme="dark"] .article-content :not(pre) > code {
     left: calc(var(--mobile-edge-spacing) + env(safe-area-inset-left, 0px));
   }
 }
+
+/*
+ * READER-VISUAL-01: long-form reading ergonomics.
+ * The "Article width" setting (inline max-width on .article-body) is the reader
+ * frame used by media, tables and code. Prose reads at 75% of that setting and
+ * never wider than the frame. The measure is registered as a <length> so it
+ * resolves once at the body font size and headings share the prose column.
+ * A failed computation falls back to no narrowing (the frame width).
+ */
+@property --reader-prose-measure {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 100000px;
+}
+
+.article-content {
+  container: reader / inline-size;
+}
+
+.article-body {
+  --reader-prose-measure: calc(var(--article-width) * 0.75ch);
+  line-height: 1.7;
+}
+
+.article-body
+  :is(p, ul, ol, dl, blockquote, h1, h2, h3, h4, h5, h6, hr):not(
+    :is(li, td, th, blockquote, figure, .article-table-scroll) *
+  ) {
+  box-sizing: border-box;
+  max-width: min(100%, var(--reader-prose-measure));
+  margin-inline: auto;
+}
+
+/* Paragraphs that carry media keep the frame width. */
+.article-body p:has(img:not(.icon-image), iframe, video, .plyr) {
+  max-width: none;
+}
+
+.article-body :is(h2, h3, h4):not(:is(li, td, th, blockquote, figure) *) {
+  margin-block: 1.6em 0.5em;
+  line-height: 1.3;
+}
+
+/* Tall media stays within the viewport; the layout box keeps its size. */
+.article-body img:not(.icon-image) {
+  max-height: 80vh;
+  object-fit: contain;
+}
+
+.article-body td img {
+  max-height: none;
+}
+
+.article-header .article-title.arco-typography {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+.article-header .article-title a {
+  font-weight: 600;
+}
+
+@container reader (min-width: 600px) {
+  .article-header .article-title.arco-typography {
+    font-size: 2rem;
+    line-height: 1.2;
+  }
+}
+
+@container reader (min-width: 960px) {
+  .article-header .article-title.arco-typography {
+    font-size: 2.25rem;
+    line-height: 1.15;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .article-content {
+    padding-inline: 0;
+  }
+}
