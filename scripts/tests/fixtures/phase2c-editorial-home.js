@@ -88,6 +88,12 @@ export const personalizationFixtures = {
   unchangedProfile: [{ ...personalizationEntry(602, -10, 2, 2), starred: true }],
   noMatchProfile: [{ ...personalizationEntry(999, -20, 99, 99), starred: true }],
   hiddenOnlyProfile: [{ ...personalizationEntry(998, -20, 99, 99), starred: true }],
+  directStarOutsideSampleHome: [
+    personalizationEntry(601, 0, 1, 1),
+    personalizationEntry(602, -10, 2, 2),
+    personalizationEntry(603, -20, 3, 3),
+    { ...personalizationEntry(604, -30, 4, 4), starred: true },
+  ],
 }
 
 // Unique timestamps make the existing overlap cursor deterministic across large pages.

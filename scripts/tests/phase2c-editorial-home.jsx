@@ -2069,6 +2069,78 @@ const Harness = () => {
   ]
   const personalizationScenarios = [
     [
+      "PHASE2D_CURRENT_ITEM_STAR_OUTSIDE_PROFILE_SAMPLE",
+      async () => {
+        await mount("/", {
+          deferInitial: true,
+          entries: personalizationFixtures.directStarOutsideSampleHome,
+          total: personalizationFixtures.directStarOutsideSampleHome.length,
+          personalization: { entries: [] },
+        })
+        await waitFor(
+          () => starredProfileRequests().length === 1,
+          "Direct-star auxiliary profile query did not start",
+        )
+        await settle()
+        assert(
+          !contentState.get().isArticleListReady,
+          "Direct-star canonical snapshot was not held until the profile resolved",
+        )
+        deferredArticleQuery.resolve()
+        await waitFor(
+          () => contentState.get().isArticleListReady && cards().length === 3,
+          "Direct-star Home did not reach its canonical snapshot",
+        )
+
+        assert(
+          personalizationFixtures.directStarOutsideSampleHome[3].starred === true &&
+            !starredProfileEntries.some(({ id }) => id === 604),
+          "The canonical starred candidate was unexpectedly present in the auxiliary profile",
+        )
+        assert(
+          contentState.get().entries.find(({ id }) => id === 604)?.starred === true,
+          "Canonical Home snapshot did not preserve the candidate's starred state",
+        )
+        assert(
+          ids().join(",") === "601,604,603" && recentIds().join(",") === "602",
+          `Canonical direct star did not influence an eligible Secondary: ${ids().join(",")}`,
+        )
+        assert(
+          canonicalEntryRequests().length === 1 && starredProfileRequests().length === 1,
+          "Direct-star projection changed candidate or auxiliary query counts",
+        )
+        assert(
+          homeRoot().querySelector(".home-personalization-info-button"),
+          "Direct-star order change did not expose its truthful explanation",
+        )
+      },
+    ],
+    [
+      "PHASE2D_PROFILE_MEMBERSHIP_DOES_NOT_FAKE_DIRECT_STAR",
+      async () => {
+        await mount("/", {
+          entries: personalizationFixtures.home,
+          total: personalizationFixtures.home.length,
+          personalization: { entries: personalizationFixtures.unchangedProfile },
+        })
+        await waitFor(
+          () => contentState.get().isArticleListReady && cards().length === 3,
+          "Inverse direct-star Home did not reach its canonical snapshot",
+        )
+
+        assert(
+          personalizationFixtures.home[1].starred !== true &&
+            personalizationFixtures.unchangedProfile.some(({ id }) => id === 602 && id != null),
+          "Inverse fixture did not separate canonical star state from profile membership",
+        )
+        assert(
+          ids().join(",") === "601,602,603" &&
+            !homeRoot().querySelector(".home-personalization-info-button"),
+          "Profile-only membership created a direct-star treatment or order change",
+        )
+      },
+    ],
+    [
       "CANONICAL_HOME_QUERY_UNCHANGED",
       async () => {
         await mount("/", {
@@ -2315,6 +2387,9 @@ const Harness = () => {
         )
         const oldCards = cards()
         const previousSnapshotRevision = contentState.get().articleListSnapshotRevision
+        fixtureEntries = personalizationFixtures.directStarOutsideSampleHome.map((entry) => ({
+          ...entry,
+        }))
         starredProfileEntries = [{ ...personalizationFixtures.home[3], starred: true }]
         deferredArticleQuery = createDeferred()
         const refreshEvent = new KeyboardEvent("keydown", {

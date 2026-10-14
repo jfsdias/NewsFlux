@@ -37,7 +37,10 @@ if (typeof projectHomePersonalization !== "function") {
     starred,
   })
   const makeProfile = (entries = [], hiddenFeedIds = []) =>
-    createHomePersonalizationProfile({ entries, hiddenFeedIds: new Set(hiddenFeedIds) })
+    createHomePersonalizationProfile({
+      entries: entries.map((entry) => ({ ...entry, starred: true })),
+      hiddenFeedIds: new Set(hiddenFeedIds),
+    })
   const project = (
     entries,
     baselineHighlightIds,
@@ -106,7 +109,7 @@ if (typeof projectHomePersonalization !== "function") {
     const entries = [
       article(1, 0, 1, 1),
       article(2, 0.2, 2, 2),
-      article(3, 0.3, 3, 3),
+      article(3, 0.3, 3, 3, true),
       article(4, 0.4, 4, 4),
     ]
     const result = project(entries, [1, 2], [3, 4], makeProfile([entries[2]]))
@@ -149,6 +152,17 @@ if (typeof projectHomePersonalization !== "function") {
     const entries = [article(1, 0, 1, 1), candidate, article(3, 0.3, 30, 300)]
     const result = project(entries, [1, 3], [2], profile)
     assert.deepEqual(result.highlightIds, [1, 2])
+  })
+
+  test("PROJECTION_DIRECT_STAR_OUTSIDE_SAMPLE can win an equal-freshness Secondary", () => {
+    const entries = [article(1, 0, 1, 1), article(2, 0.2, 2, 2), article(3, 0.3, 3, 3, true)]
+    const profile = makeProfile()
+    const result = project(entries, [1, 2], [3], profile)
+
+    assert.equal(profile.starredEntryIds.has("3"), false)
+    assert.equal(getCandidatePreferenceSignals(entries[2], profile).currentItemStarred, true)
+    assert.deepEqual(result.highlightIds, [1, 3])
+    assert.deepEqual(result.recentIds, [2])
   })
 
   test("SOURCE_AFFINITY_PRECEDES_CATEGORY_AFFINITY", () => {
@@ -204,7 +218,7 @@ if (typeof projectHomePersonalization !== "function") {
     ]
 
     for (const { name, age, expectedSecondary } of cases) {
-      const entries = [article(1, 0, 1, 1), article(2, 0.2, 2, 2), article(3, age, 3, 3)]
+      const entries = [article(1, 0, 1, 1), article(2, 0.2, 2, 2), article(3, age, 3, 3, true)]
       const result = project(entries, [1, 2], [3], makeProfile([entries[2]]))
       assert.equal(result.highlightIds[1], expectedSecondary, name)
     }
@@ -266,7 +280,8 @@ if (typeof projectHomePersonalization !== "function") {
   test("PERSONALIZATION_EXPLAINER_TRUTHFUL only reports a visible order change", () => {
     const entries = [article(1, 0, 1, 1), article(2, 0.1, 2, 2), article(3, 0.2, 3, 3)]
     const noMatch = project(entries, [1, 2], [3], makeProfile([article(90, 3, 90, 90)]))
-    const changed = project(entries, [1, 2], [3], makeProfile([entries[2]]))
+    const changedEntries = [...entries.slice(0, 2), { ...entries[2], starred: true }]
+    const changed = project(changedEntries, [1, 2], [3], makeProfile([changedEntries[2]]))
 
     assert.equal(noMatch.personalizationApplied, false)
     assert.equal(changed.personalizationApplied, true)

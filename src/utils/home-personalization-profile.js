@@ -54,7 +54,7 @@ export const getCandidatePreferenceSignals = (candidate, profile) => {
   const countedMetadata = profile.countedEntryMetadataById.get(candidateId)
 
   return {
-    currentItemStarred: candidateId !== null && profile.starredEntryIds.has(candidateId),
+    currentItemStarred: candidate?.starred === true,
     sourceAffinity: Math.max(
       0,
       (profile.sourceCounts.get(candidateSourceId) ?? 0) -
