@@ -117,6 +117,26 @@ if (typeof projectHomePersonalization !== "function") {
     assertConserved(entries, result)
   })
 
+  test("keeps every Secondary slot filled when an earlier promotion selects a later baseline slot", () => {
+    const entries = [
+      article(1, 0, 1, 1),
+      article(2, 0.1, 2, 2),
+      article(3, 0.2, 3, 3),
+      article(4, 0.3, 4, 4),
+    ]
+    const result = project(
+      entries,
+      [1, 2, 3],
+      [4],
+      makeProfile([article(3, 0.2, 3, 3, true), article(30, 0.25, 3, 3, true)]),
+    )
+
+    assert.deepEqual(result.highlightIds, [1, 3, 2])
+    assert.deepEqual(result.recentIds, [4])
+    assert.equal(result.personalizationApplied, true)
+    assertConserved(entries, result)
+  })
+
   test("CANDIDATE_SELF_EXCLUDED_FROM_AFFINITY and CURRENT_STAR_DIRECT_SIGNAL", () => {
     const candidate = article(2, 0.2, 20, 200, true)
     const profile = makeProfile([candidate])

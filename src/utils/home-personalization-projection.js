@@ -111,7 +111,13 @@ const addToRepresented = (entry, represented) => {
 }
 
 const selectSecondaryCandidate = (candidates, baselineEntry, represented, profile) => {
-  if (candidates.length < 2 || !candidates.some((entry) => hasUsefulSignal(entry, profile))) {
+  if (candidates.length === 0) {
+    return null
+  }
+  if (
+    !candidates.some((entry) => hasUsefulSignal(entry, profile)) &&
+    candidates.some((entry) => idKey(entry.id) === idKey(baselineEntry.id))
+  ) {
     return baselineEntry
   }
 
@@ -197,7 +203,7 @@ export const projectHomePersonalization = ({
 
   for (const baselineId of baselineHighlights.slice(1, 3)) {
     const baselineEntry = entryById.get(idKey(baselineId))
-    if (!baselineEntry || selectedIds.has(idKey(baselineEntry.id))) {
+    if (!baselineEntry) {
       highlightEntries.push(null)
       continue
     }
@@ -207,8 +213,10 @@ export const projectHomePersonalization = ({
     const represented = representedBy(highlightEntries.filter(Boolean))
     const selected = selectSecondaryCandidate(options, baselineEntry, represented, profileContext)
     highlightEntries.push(selected)
-    selectedIds.add(idKey(selected.id))
-    addToRepresented(selected, represented)
+    if (selected) {
+      selectedIds.add(idKey(selected.id))
+      addToRepresented(selected, represented)
+    }
   }
 
   const highlightIds = highlightEntries.map((entry) => entry?.id ?? null)
