@@ -130,7 +130,7 @@ export default function SidebarTrigger() {
         placement="left"
         title={null}
         visible={sidebarVisible}
-        width={240}
+        width="min(80vw, 360px)"
         onCancel={closeSidebar}
       >
         <Sidebar
