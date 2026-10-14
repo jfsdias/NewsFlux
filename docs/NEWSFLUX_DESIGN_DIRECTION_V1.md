@@ -53,6 +53,7 @@ Separating canvas and elevated surfaces avoids making every OLED pixel a high-co
 
 - Use the platform system sans stack; add no font asset in this phase.
 - Editorial lead: 32/38 px on wide screens; story titles: 18–24 px; metadata: 12–14 px. Body copy follows the existing reader settings.
+- Reader measure (READER-VISUAL-01, approved 2026-10-14): the Article width setting is the reader frame for media, code and tables; prose reads at 75% of it, never wider than the frame (default about 56ch). See `NEWSFLUX_READER_VISUAL_01.md`.
 - Use a 4 px base spacing step: 4, 8, 12, 16, 24, 32 and 48 px.
 - Suggested radii: 8 px controls, 12 px cards, 18 px larger sheets/surfaces.
 - Use restrained borders and shadows. Avoid stacking a border and shadow on every card; reserve stronger elevation for overlays and transient controls.
