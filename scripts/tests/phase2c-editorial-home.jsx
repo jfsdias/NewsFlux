@@ -3131,10 +3131,11 @@ const Harness = () => {
     const next = []
     try {
       for (const { name: suite, scenarios: selectedScenarios } of selectedSuites) {
-        const responsiveMode =
-          selectedScenarios === responsiveScenarios ||
-          selectedScenarios === primaryHierarchyScenarios ||
-          selectedScenarios === readerScenarios
+        const responsiveMode = [
+          responsiveScenarios,
+          primaryHierarchyScenarios,
+          readerScenarios,
+        ].includes(selectedScenarios)
         if (responsiveMode) {
           document.body.classList.add("phase2c-responsive-running")
           await new Promise((resolve) => {
