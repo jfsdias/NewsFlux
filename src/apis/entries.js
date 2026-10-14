@@ -13,11 +13,15 @@ import { buildHomeEntryRequest } from "@/utils/home-entry-request"
 
 export const getEntry = async (entryId) => apiClient.get(`/v1/entries/${entryId}`)
 
-const updateEntries = async (entryIds, updates) =>
-  apiClient.put("/v1/entries", {
-    entry_ids: entryIds,
-    ...updates,
-  })
+const updateEntries = async (entryIds, updates, options) =>
+  apiClient.put(
+    "/v1/entries",
+    {
+      entry_ids: entryIds,
+      ...updates,
+    },
+    options,
+  )
 
 export const updateEntriesStatus = async (entryIds, newStatus) =>
   updateEntries(entryIds, { status: newStatus })
@@ -175,12 +179,42 @@ const getAllEntryIds = async (filters) => {
   return [...new Set(entryIds)]
 }
 
-const updateEntryIdsInBatches = async (entryIds, updates) => {
+const updateEntryIdsInBatches = async (
+  entryIds,
+  updates,
+  { sessionRevision = getDataSessionRevision(), retry } = {},
+) => {
   for (let batchStart = 0; batchStart < entryIds.length; batchStart += ENTRY_UPDATE_BATCH_SIZE) {
-    await updateEntries(entryIds.slice(batchStart, batchStart + ENTRY_UPDATE_BATCH_SIZE), updates)
+    if (sessionRevision !== getDataSessionRevision()) {
+      throw new Error("Stale entry update session")
+    }
+    await updateEntries(
+      entryIds.slice(batchStart, batchStart + ENTRY_UPDATE_BATCH_SIZE),
+      updates,
+      retry === undefined ? undefined : { retry },
+    )
+    if (sessionRevision !== getDataSessionRevision()) {
+      throw new Error("Stale entry update session")
+    }
   }
 
   return entryIds.length
+}
+
+export const updateEntriesStatusInBatches = async (
+  entryIds,
+  newStatus,
+  { sessionRevision = getDataSessionRevision() } = {},
+) => {
+  const uniqueEntryIds = [...new Set(entryIds)]
+  return updateEntryIdsInBatches(
+    uniqueEntryIds,
+    { status: newStatus },
+    {
+      sessionRevision,
+      retry: false,
+    },
+  )
 }
 
 export const getHomeEntries = async ({ pageSize = getSettings("pageSize"), cursor } = {}) => {

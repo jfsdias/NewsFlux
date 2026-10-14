@@ -110,6 +110,7 @@
     "check": "Ansehen",
     "dismiss": "Verwerfen",
     "retry": "Erneut versuchen",
+    "undo": "Rückgängig",
     "close_dialog": "%{name} schließen",
     "copy_to_clipboard_tooltip": "In die Zwischenablage kopieren",
     "code_language": "Code-Sprache",
