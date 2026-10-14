@@ -71,11 +71,13 @@ import {
   setUnreadInfo,
   unreadTotalState,
   visibleCategoriesState,
+  visibleFeedsState,
 } from "@/store/dataState"
 import { settingsState, updateSettings } from "@/store/settingsState"
 import { expandedCategoriesState, setExpandedCategories } from "@/store/sidebarState"
 import { downloadFile, readFileAsText } from "@/utils/file"
 import { createEntityHomeTarget, isSameHomeTarget } from "@/utils/home-page"
+import getUnreadShortcutFeeds from "@/utils/unread-feed-shortcut"
 
 import "./Sidebar.css"
 
@@ -299,6 +301,7 @@ const SidebarMenuItems = () => {
 
 const FeedMenuItem = ({
   feed,
+  className,
   homePageReady,
   homeTarget,
   onDeleteFeed,
@@ -383,7 +386,7 @@ const FeedMenuItem = ({
       <MenuItem
         key={`/feed/${feed.id}`}
         {...longPressProps}
-        className={classNames("feed-menu-item", { "arco-menu-selected": isSelected })}
+        className={classNames("feed-menu-item", className, { "arco-menu-selected": isSelected })}
         data-feed-edit-id={feed.id}
         style={{ position: "relative", overflow: "hidden" }}
         onClick={(e) => {
@@ -467,6 +470,55 @@ const FeedMenuGroup = ({
         )}
       </Virtualizer>
     </AdaptiveScrollArea>
+  )
+}
+
+const UnreadFeedShortcut = ({
+  homePageReady,
+  homeTarget,
+  onDeleteFeed,
+  onEditFeed,
+  onMarkAllAsRead,
+  onRefreshFeed,
+  onSetHomePage,
+}) => {
+  const { showUnreadFeedsOnly } = useStore(settingsState, { keys: ["showUnreadFeedsOnly"] })
+  const visibleFeeds = useStore(visibleFeedsState)
+  const { polyglot } = useStore(polyglotState)
+
+  const unreadFeeds = useMemo(
+    () => getUnreadShortcutFeeds(visibleFeeds, showUnreadFeedsOnly),
+    [visibleFeeds, showUnreadFeedsOnly],
+  )
+
+  if (unreadFeeds.length === 0) {
+    return null
+  }
+
+  return (
+    <>
+      <Typography.Title
+        className="section-title unread-source-title"
+        heading={6}
+        style={{ paddingLeft: "12px" }}
+      >
+        {polyglot.t("sidebar.unread_sources")}
+      </Typography.Title>
+      {unreadFeeds.map((feed) => (
+        <FeedMenuItem
+          key={`unread-shortcut-${feed.id}`}
+          className="unread-feed-shortcut-item"
+          feed={feed}
+          homePageReady={homePageReady}
+          homeTarget={homeTarget}
+          onDeleteFeed={onDeleteFeed}
+          onEditFeed={onEditFeed}
+          onMarkAllAsRead={onMarkAllAsRead}
+          onRefreshFeed={onRefreshFeed}
+          onSetHomePage={onSetHomePage}
+        />
+      ))}
+    </>
   )
 }
 
@@ -888,6 +940,15 @@ const Sidebar = ({ headerAction, onNavigate }) => {
           )}
           {catalogLoadState.hasSnapshot && (
             <div aria-busy={catalogLoadState.activity === "refreshing"}>
+              <UnreadFeedShortcut
+                homePageReady={homePageReady}
+                homeTarget={homeTarget}
+                onDeleteFeed={handleDeleteFeed}
+                onEditFeed={handleEditFeed}
+                onMarkAllAsRead={handleMarkAllAsReadFeed}
+                onRefreshFeed={handleRefreshFeed}
+                onSetHomePage={handleSetHomePage}
+              />
               <Collapse
                 activeKey={expandedCategories}
                 bordered={false}

@@ -57,6 +57,7 @@
     "delete_category_confirm_title": "カテゴリの削除確認",
     "delete_category_confirm_content": "カテゴリ「%{title}」を削除してもよろしいですか？この操作は取り消せません。",
     "feeds": "フィード",
+    "unread_sources": "未読記事のあるフィード",
     "load_error": "フィードを読み込めません",
     "logout_success": "ログアウトしました",
     "add_feed": "フィードを追加",

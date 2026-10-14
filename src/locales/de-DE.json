@@ -57,6 +57,7 @@
     "delete_category_confirm_title": "Löschen der Kategorie bestätigen",
     "delete_category_confirm_content": "Sind Sie sicher, dass Sie die Kategorie '%{title}' löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
     "feeds": "Abonnements",
+    "unread_sources": "Feeds mit ungelesenen Artikeln",
     "load_error": "Abonnements konnten nicht geladen werden",
     "logout_success": "Erfolgreich ausgeloggt",
     "add_feed": "Abonnement hinzufügen",
