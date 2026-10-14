@@ -36,6 +36,13 @@ import {
   MARK_ALL_READ_UNDO_NOTIFICATION_ID,
   performMarkAllReadUndo,
 } from "@/utils/mark-all-read-undo"
+import {
+  getMarkAllReadUndoNotificationCount,
+  recordMarkAllReadUndoProbeEvent,
+  scheduleMarkAllReadUndoNotificationObservation,
+  scheduleMarkAllReadUndoProbeFlush,
+  stopMarkAllReadUndoNotificationObservationAfterClose,
+} from "@/utils/mark-all-read-undo-diagnostics"
 import findAdjacentItem from "@/utils/navigation"
 import reconcileEntriesAfterMarkRead from "@/utils/reconcile-entries-after-mark-read"
 import "./FooterPanel.css"
@@ -126,6 +133,9 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
       return
     }
 
+    recordMarkAllReadUndoProbeEvent("UNDO_TOKEN_CLEARED")
+    scheduleMarkAllReadUndoProbeFlush()
+
     Notification.remove(MARK_ALL_READ_UNDO_NOTIFICATION_ID)
     await performMarkAllReadUndo({
       entryIds: action.entryIds,
@@ -151,6 +161,7 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
         wrap: true,
       })
       if (next) {
+        recordMarkAllReadUndoProbeEvent("NAVIGATE_CALL")
         navigate(`/category/${next.id}`)
       }
     } else if (source === "feed") {
@@ -163,6 +174,7 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
         wrap: true,
       })
       if (next) {
+        recordMarkAllReadUndoProbeEvent("NAVIGATE_CALL")
         navigate(`/feed/${next.id}`)
       }
     }
@@ -229,17 +241,28 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
         return
       }
 
-      markAllReadUndoActions.clear()
+      recordMarkAllReadUndoProbeEvent("MARK_ALL_COMPLETE")
+      if (markAllReadUndoActions.clear()) {
+        recordMarkAllReadUndoProbeEvent("UNDO_TOKEN_CLEARED")
+      }
       Notification.remove(MARK_ALL_READ_UNDO_NOTIFICATION_ID)
       const undoEntryIds = [...markedEntryIds]
+      let notificationBaselineCount = null
       if (undoEntryIds.length > 0) {
         const token = markAllReadUndoActions.replace(
           { entryIds: undoEntryIds, sessionRevision },
           {
             durationMs: MARK_ALL_READ_UNDO_DURATION_MS,
-            onExpire: () => Notification.remove(MARK_ALL_READ_UNDO_NOTIFICATION_ID),
+            onExpire: () => {
+              recordMarkAllReadUndoProbeEvent("UNDO_TOKEN_EXPIRED")
+              scheduleMarkAllReadUndoProbeFlush()
+              Notification.remove(MARK_ALL_READ_UNDO_NOTIFICATION_ID)
+            },
           },
         )
+        recordMarkAllReadUndoProbeEvent("UNDO_TOKEN_CREATED")
+        notificationBaselineCount = getMarkAllReadUndoNotificationCount()
+        recordMarkAllReadUndoProbeEvent("UNDO_NOTIFICATION_CALL_START")
         Notification.success({
           id: MARK_ALL_READ_UNDO_NOTIFICATION_ID,
           title: polyglot.t("article_list.mark_all_as_read_success"),
@@ -249,8 +272,16 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
               {polyglot.t("actions.undo")}
             </Button>
           ),
-          onClose: () => markAllReadUndoActions.clear(token),
+          onClose: () => {
+            recordMarkAllReadUndoProbeEvent("UNDO_NOTIFICATION_ON_CLOSE")
+            if (markAllReadUndoActions.clear(token)) {
+              recordMarkAllReadUndoProbeEvent("UNDO_TOKEN_CLEARED")
+            }
+            scheduleMarkAllReadUndoProbeFlush()
+            stopMarkAllReadUndoNotificationObservationAfterClose()
+          },
         })
+        recordMarkAllReadUndoProbeEvent("UNDO_NOTIFICATION_CALL_RETURNED")
       } else {
         Notification.success({
           title: polyglot.t("article_list.mark_all_as_read_success"),
@@ -259,6 +290,10 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
       if (markAllReadJumpToNext && isCurrentList()) {
         jumpToNext()
       }
+      if (notificationBaselineCount !== null) {
+        scheduleMarkAllReadUndoNotificationObservation(notificationBaselineCount)
+      }
+      scheduleMarkAllReadUndoProbeFlush()
     } catch (error) {
       if (!isCurrentSession()) {
         return

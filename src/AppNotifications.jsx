@@ -1,6 +1,7 @@
 import { Button, Notification } from "@arco-design/web-react"
 import { useStore } from "@nanostores/react"
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
+import { useLocation } from "react-router"
 
 import { polyglotState } from "@/hooks/useLanguage"
 import useModalToggle from "@/hooks/useModalToggle"
@@ -8,6 +9,11 @@ import useScreenWidth from "@/hooks/useScreenWidth"
 import useVersionCheck from "@/hooks/useVersionCheck"
 import { duplicateHotkeysState } from "@/store/hotkeysState"
 import { GITHUB_REPO_PATH } from "@/utils/constants"
+import {
+  isMarkAllReadUndoReportMode,
+  readMarkAllReadUndoProbeTrace,
+  startMarkAllReadUndoProbe,
+} from "@/utils/mark-all-read-undo-diagnostics"
 import { isSettingsTabAvailable, SETTINGS_TAB_KEYS } from "@/utils/settings-navigation"
 
 import "./AppNotifications.css"
@@ -29,6 +35,7 @@ const NotificationActions = ({ polyglot, onCheck, onDismiss }) => (
 )
 
 const AppNotifications = () => {
+  const { search } = useLocation()
   const { polyglot } = useStore(polyglotState)
   const duplicateHotkeys = useStore(duplicateHotkeysState)
   const { hasUpdate, dismissUpdate } = useVersionCheck()
@@ -37,10 +44,15 @@ const AppNotifications = () => {
 
   const previousDuplicateHotkeysSignatureRef = useRef(null)
   const isDuplicateHotkeysNotificationDismissedRef = useRef(false)
+  const reportMode = isMarkAllReadUndoReportMode(search)
+  const reportTrace = reportMode ? readMarkAllReadUndoProbeTrace() : []
+  const [copyTraceStatus, setCopyTraceStatus] = useState("")
 
   const duplicateHotkeysSignature = JSON.stringify(duplicateHotkeys.toSorted())
   const hasDuplicateHotkeys = duplicateHotkeys.length > 0
   const canOpenHotkeysSettings = isSettingsTabAvailable(SETTINGS_TAB_KEYS.HOTKEYS, isBelowMedium)
+
+  useEffect(() => startMarkAllReadUndoProbe(), [])
 
   useEffect(() => {
     if (!hasUpdate) {
@@ -130,7 +142,34 @@ const AppNotifications = () => {
     }
   }, [])
 
-  return null
+  if (!reportMode) {
+    return null
+  }
+
+  const copyTrace = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(reportTrace, null, 2))
+      setCopyTraceStatus("Copied")
+    } catch {
+      setCopyTraceStatus("Clipboard unavailable")
+    }
+  }
+
+  return (
+    <div
+      style={{
+        bottom: 12,
+        position: "fixed",
+        right: 12,
+        zIndex: 2000,
+      }}
+    >
+      <Button aria-label="Copy trace" disabled={reportTrace.length === 0} onClick={copyTrace}>
+        Copy trace
+      </Button>
+      {copyTraceStatus && <span aria-live="polite"> {copyTraceStatus}</span>}
+    </div>
+  )
 }
 
 export default AppNotifications

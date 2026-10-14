@@ -12,6 +12,10 @@ import { setCurrentRoutePath } from "@/store/locationState"
 import isValidAuth, { getAuthSessionKey } from "@/utils/auth"
 import hideSpinner from "@/utils/loading"
 import {
+  recordMarkAllReadUndoProbeEvent,
+  scheduleMarkAllReadUndoProbeFlush,
+} from "@/utils/mark-all-read-undo-diagnostics"
+import {
   checkMinifluxCompatibility,
   MINIMUM_MINIFLUX_VERSION,
 } from "@/utils/miniflux-compatibility"
@@ -110,6 +114,8 @@ const RouterProtect = () => {
 
   useLayoutEffect(() => {
     setCurrentRoutePath(location.pathname)
+    recordMarkAllReadUndoProbeEvent("ROUTE_CHANGED")
+    scheduleMarkAllReadUndoProbeFlush()
   }, [location.pathname])
 
   useEffect(() => {
