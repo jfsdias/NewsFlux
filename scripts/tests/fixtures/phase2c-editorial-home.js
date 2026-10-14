@@ -158,6 +158,11 @@ export const phase2cEditorialHomeMatrix = {
     "EXPLICIT_REFRESH_SINGLE_RECOMPOSITION",
     "ONE_AUX_PROFILE_QUERY_PER_HOME_SESSION",
     "ALL_UNREAD_UNCHANGED",
+    "HOME_VISUAL_01_CASE_A_TEXT_PRIMARY_IMAGE_SECONDARIES",
+    "HOME_VISUAL_01_CASE_B_ALL_IMAGES",
+    "HOME_VISUAL_01_CASE_C_ALL_TEXT",
+    "HOME_VISUAL_01_CASE_D_LONG_PRIMARY_TITLE",
+    "HOME_VISUAL_01_CASE_E_SHORT_PRIMARY_STRONG_SECONDARIES",
   ],
   scenarios: [
     {
@@ -259,6 +264,17 @@ export const phase2cEditorialHomeMatrix = {
       covers: ["ALL_UNREAD_UNCHANGED"],
       fixtures: ["All", "Unread"],
     },
+    {
+      id: "HOME_VISUAL_01_PRIMARY_HIERARCHY",
+      covers: [
+        "HOME_VISUAL_01_CASE_A_TEXT_PRIMARY_IMAGE_SECONDARIES",
+        "HOME_VISUAL_01_CASE_B_ALL_IMAGES",
+        "HOME_VISUAL_01_CASE_C_ALL_TEXT",
+        "HOME_VISUAL_01_CASE_D_LONG_PRIMARY_TITLE",
+        "HOME_VISUAL_01_CASE_E_SHORT_PRIMARY_STRONG_SECONDARIES",
+      ],
+      fixtures: ["primaryHierarchyFixtures"],
+    },
   ],
   manualGates: [
     "EDITORIAL_HIERARCHY_CLEAR",
@@ -273,4 +289,78 @@ export const phase2cEditorialHomeMatrix = {
     "TOUCH_TARGETS_USABLE",
     "MOBILE_SINGLE_PANE",
   ].map((name) => ({ name, status: "MANUAL_REQUIRED" })),
+}
+
+// HOME-VISUAL-01 visual cases. Distinct sources and categories keep the frozen
+// Phase 2C selection obvious: the newest entry is Primary, the next two are Secondaries.
+const hierarchyImage = (file) =>
+  `<img src="${globalThis.location.origin}/scripts/tests/fixtures/${file}" width="1600" height="900" />`
+const hierarchyEntry = (id, hour, { image = null, title = `Hierarchy article ${id}` } = {}) => ({
+  ...highlightEntry(id, hour, id, id),
+  title,
+  hash: `hierarchy-${id}`,
+  content: `${image ? hierarchyImage(image) : ""}<p>Deterministic editorial deck for article ${id} explains the story in one plain sentence. A second sentence adds supporting context for the reader.</p>`,
+})
+const HERO = "valid-hero.svg"
+const STRONG = "strong-secondary.svg"
+const hierarchyRecent = (base) => [
+  hierarchyEntry(base + 4, "09", { image: HERO }),
+  hierarchyEntry(base + 5, "08"),
+  hierarchyEntry(base + 6, "07", { image: HERO }),
+]
+export const primaryHierarchyFixtures = {
+  caseA: [
+    hierarchyEntry(701, "12", { title: "Council approves the regional transit plan" }),
+    hierarchyEntry(702, "11", {
+      image: STRONG,
+      title: "Harbour festival returns with a new route",
+    }),
+    hierarchyEntry(703, "10", {
+      image: STRONG,
+      title: "Researchers map the deepest coral reef yet",
+    }),
+    ...hierarchyRecent(700),
+  ],
+  caseB: [
+    hierarchyEntry(711, "12", { image: HERO, title: "Council approves the regional transit plan" }),
+    hierarchyEntry(712, "11", {
+      image: STRONG,
+      title: "Harbour festival returns with a new route",
+    }),
+    hierarchyEntry(713, "10", { image: HERO, title: "Researchers map the deepest coral reef yet" }),
+    ...hierarchyRecent(710),
+  ],
+  caseC: [
+    hierarchyEntry(721, "12", { title: "Council approves the regional transit plan" }),
+    hierarchyEntry(722, "11", { title: "Harbour festival returns with a new route" }),
+    hierarchyEntry(723, "10", { title: "Researchers map the deepest coral reef yet" }),
+    ...hierarchyRecent(720),
+  ],
+  caseD: [
+    hierarchyEntry(731, "12", {
+      title:
+        "After months of negotiation, the regional council approves a transit plan that rebuilds three rail lines, adds night buses and changes how fares are shared across every town in the valley",
+    }),
+    hierarchyEntry(732, "11", {
+      image: STRONG,
+      title: "Harbour festival returns with a new route",
+    }),
+    hierarchyEntry(733, "10", {
+      image: STRONG,
+      title: "Researchers map the deepest coral reef yet",
+    }),
+    ...hierarchyRecent(730),
+  ],
+  caseE: [
+    hierarchyEntry(741, "12", { title: "Rates hold" }),
+    hierarchyEntry(742, "11", {
+      image: STRONG,
+      title: "Harbour festival returns with a new route through the old docks and a night parade",
+    }),
+    hierarchyEntry(743, "10", {
+      image: STRONG,
+      title: "Researchers map the deepest coral reef yet, finding species never recorded before",
+    }),
+    ...hierarchyRecent(740),
+  ],
 }

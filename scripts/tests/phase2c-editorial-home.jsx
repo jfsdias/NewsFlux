@@ -12,6 +12,7 @@ import {
   paginationEntries,
   personalizationFixtures,
   phase2cEditorialHomeMatrix,
+  primaryHierarchyFixtures,
   routeEntries,
 } from "./fixtures/phase2c-editorial-home"
 
@@ -306,6 +307,129 @@ const listRequests = canonicalEntryRequests
 const scrollRoot = () =>
   homeRoot()?.querySelector(".simplebar-content-wrapper, .adaptive-scroll-area-native")
 const sentinels = () => [...document.querySelectorAll(".home-editorial .load-more-container")]
+const measureHighlightSlot = (slot) => {
+  const card = homeRoot().querySelector(`.home-highlight-slot-${slot} .article-entry`)
+  if (!card) {
+    return null
+  }
+  const cardRect = card.getBoundingClientRect()
+  const title = card.querySelector(".grid-card-title")
+  const deck = card.querySelector(".grid-card-summary:not(.grid-card-summary-measure-probe)")
+  const media = card.querySelector(".grid-card-media")
+  const mediaRect = media?.getBoundingClientRect()
+  const contentInside = [
+    ...card.querySelectorAll(
+      ".grid-card-meta, .grid-card-title, .grid-card-summary:not(.grid-card-summary-measure-probe), .grid-card-footer, .grid-card-media",
+    ),
+  ].every((node) => {
+    const rect = node.getBoundingClientRect()
+    return (
+      rect.left >= cardRect.left - 1 &&
+      rect.right <= cardRect.right + 1 &&
+      rect.top >= cardRect.top - 1 &&
+      rect.bottom <= cardRect.bottom + 1
+    )
+  })
+  return {
+    id: Number(card.dataset.entryId),
+    width: Math.round(cardRect.width),
+    height: Math.round(cardRect.height),
+    titleFontSize: Number.parseFloat(getComputedStyle(title).fontSize),
+    titleLines: Math.round(
+      title.clientHeight / Number.parseFloat(getComputedStyle(title).lineHeight),
+    ),
+    titleClamped: title.scrollHeight > title.clientHeight + 1,
+    deck: Boolean(deck),
+    deckClamped: Boolean(deck && deck.scrollHeight > deck.clientHeight + 1),
+    media: mediaRect
+      ? { width: Math.round(mediaRect.width), height: Math.round(mediaRect.height) }
+      : null,
+    contentInside,
+  }
+}
+const mountPrimaryHierarchyCase = async (mountHighlights, caseId) => {
+  const entries = primaryHierarchyFixtures[caseId]
+  await mountHighlights(entries)
+  await waitFor(
+    () =>
+      [...homeRoot().querySelectorAll(".home-highlights .grid-card-cover")].every((image) =>
+        image.classList.contains("grid-card-cover-ready"),
+      ),
+    `${caseId} Highlight images did not load`,
+  )
+  // Deck fitting runs after layout and font loading; let it settle before measuring.
+  for (let frame = 0; frame < 5; frame += 1) {
+    await settle()
+  }
+  return entries
+}
+const runPrimaryHierarchyCase = async (mountHighlights, caseId, covers) => {
+  // Lets an external screenshot driver stage one HOME-VISUAL-01 case at a time.
+  globalThis.__homeVisual01MountCase = (nextCaseId) =>
+    mountPrimaryHierarchyCase(mountHighlights, nextCaseId)
+
+  const entries = await mountPrimaryHierarchyCase(mountHighlights, caseId)
+  const expectedIds = entries.slice(0, 3).map(({ id }) => id)
+  assert(
+    JSON.stringify(ids()) === JSON.stringify(expectedIds),
+    `${caseId} changed Highlight selection: ${ids().join(",")}`,
+  )
+  const [primary, ...secondaries] = ["primary", "secondary-1", "secondary-2"].map((slot) =>
+    measureHighlightSlot(slot),
+  )
+  assert(primary && secondaries.every(Boolean), `${caseId} is missing a Highlight slot`)
+  for (const [index, slot] of [primary, ...secondaries].entries()) {
+    assert(Boolean(slot.media) === covers[index], `${caseId} slot ${index} cover presence changed`)
+  }
+  const highlights = homeRoot().querySelector(".home-highlights").getBoundingClientRect()
+  assert(
+    Math.abs(primary.width - highlights.width) < 2,
+    `${caseId} Primary does not span Highlights`,
+  )
+  assert(
+    document.documentElement.scrollWidth <= window.innerWidth,
+    `${caseId} overflowed horizontally`,
+  )
+  assert(
+    [primary, ...secondaries].every(({ contentInside }) => contentInside),
+    `${caseId} card content escaped its card`,
+  )
+  assert(
+    secondaries.every(({ titleFontSize }) => primary.titleFontSize >= titleFontSize + 4),
+    `${caseId} Primary headline (${primary.titleFontSize}px) is not clearly larger than Secondary headlines (${secondaries.map(({ titleFontSize }) => titleFontSize).join("/")}px)`,
+  )
+  assert(
+    [primary, ...secondaries].every(({ deckClamped }) => !deckClamped),
+    `${caseId} a Highlight deck was truncated`,
+  )
+  assert(
+    secondaries.every(({ titleClamped }) => !titleClamped) &&
+      (caseId === "caseD" || !primary.titleClamped),
+    `${caseId} a Highlight headline was truncated`,
+  )
+  for (const secondary of secondaries.filter(({ media }) => media)) {
+    assert(
+      secondary.media.width <= secondary.width / 2 &&
+        Math.abs(secondary.media.width / secondary.media.height - 4 / 3) < 0.03,
+      `${caseId} Secondary image is not a 4:3 supporting thumbnail: ${secondary.media.width}x${secondary.media.height} in ${secondary.width}px card`,
+    )
+  }
+  if (primary.media) {
+    assert(
+      Math.abs(primary.media.width / primary.media.height - 16 / 9) < 0.03,
+      `${caseId} Primary image left the 16:9 editorial frame`,
+    )
+  }
+  globalThis.__homeVisual01Geometry = {
+    ...globalThis.__homeVisual01Geometry,
+    [caseId]: {
+      viewport: [window.innerWidth, window.innerHeight],
+      highlightsWidth: Math.round(highlights.width),
+      primary,
+      secondaries,
+    },
+  }
+}
 const MATRIX_RUNS_STORAGE_KEY = "phase2c-editorial-home-task10-matrix-runs-v1"
 const matrixPairId = (viewport, theme) => `${viewport.width}x${viewport.height}:${theme}`
 const readMatrixRuns = () => {
@@ -1720,6 +1844,29 @@ const Harness = () => {
       },
     ],
   ]
+  // HOME-VISUAL-01: expected cover presence per Highlight slot (Primary, Secondary 1, Secondary 2).
+  const primaryHierarchyScenarios = [
+    [
+      "HOME_VISUAL_01_CASE_A_TEXT_PRIMARY_IMAGE_SECONDARIES",
+      () => runPrimaryHierarchyCase(mountHighlights, "caseA", [false, true, true]),
+    ],
+    [
+      "HOME_VISUAL_01_CASE_B_ALL_IMAGES",
+      () => runPrimaryHierarchyCase(mountHighlights, "caseB", [true, true, true]),
+    ],
+    [
+      "HOME_VISUAL_01_CASE_C_ALL_TEXT",
+      () => runPrimaryHierarchyCase(mountHighlights, "caseC", [false, false, false]),
+    ],
+    [
+      "HOME_VISUAL_01_CASE_D_LONG_PRIMARY_TITLE",
+      () => runPrimaryHierarchyCase(mountHighlights, "caseD", [false, true, true]),
+    ],
+    [
+      "HOME_VISUAL_01_CASE_E_SHORT_PRIMARY_STRONG_SECONDARIES",
+      () => runPrimaryHierarchyCase(mountHighlights, "caseE", [false, true, true]),
+    ],
+  ]
   const responsiveScenarios = [
     [
       "HOME_RESPONSIVE_VIEWPORT_STAGE",
@@ -2588,6 +2735,7 @@ const Harness = () => {
           ...stateScenarios,
           ...responsiveScenarios,
           ...personalizationScenarios,
+          ...primaryHierarchyScenarios,
           ...matrixScenarios,
         ]
         const gateNames = new Set(allScenarios.map(([name]) => name))
@@ -2644,6 +2792,7 @@ const Harness = () => {
     { name: "states-and-recovery", scenarios: stateScenarios },
     { name: "responsive-visual", scenarios: responsiveScenarios },
     { name: "personalization", scenarios: personalizationScenarios },
+    { name: "home-visual-01-primary-hierarchy", scenarios: primaryHierarchyScenarios },
     { name: "matrix-completeness", scenarios: matrixScenarios },
   ]
   const runSuites = async (selectedSuites, { recordViewportTheme = false } = {}) => {
@@ -2652,7 +2801,9 @@ const Harness = () => {
     const next = []
     try {
       for (const { name: suite, scenarios: selectedScenarios } of selectedSuites) {
-        const responsiveMode = selectedScenarios === responsiveScenarios
+        const responsiveMode =
+          selectedScenarios === responsiveScenarios ||
+          selectedScenarios === primaryHierarchyScenarios
         if (responsiveMode) {
           document.body.classList.add("phase2c-responsive-running")
           await new Promise((resolve) => {
@@ -2767,6 +2918,9 @@ const Harness = () => {
         </button>
         <button disabled={running} onClick={() => void run(personalizationScenarios)}>
           Run Phase 2D personalization scenario
+        </button>
+        <button disabled={running} onClick={() => void run(primaryHierarchyScenarios)}>
+          Run HOME-VISUAL-01 Primary hierarchy cases
         </button>
         <button disabled={running} onClick={() => void run(matrixScenarios)}>
           Run scenario matrix completeness gate
