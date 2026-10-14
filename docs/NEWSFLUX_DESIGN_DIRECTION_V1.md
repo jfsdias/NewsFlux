@@ -78,6 +78,7 @@ Preferred future surfaces are top controls, search, filter pill, floating articl
 ### Imagery and story states
 
 - Keep a 16:9 editorial frame. Use `cover` for source ratios in the accepted editorial range and `contain` against a neutral media surface for vertical/extreme ratios.
+- Scoped exception (HOME-VISUAL-01, approved 2026-10-14): Home Highlights Secondary thumbnails use 4:3. The Home Primary, Recent and all other cards keep the 16:9 frame. See `NEWSFLUX_HOME_VISUAL_01.md`.
 - A missing/failed image yields a text-first card; do not insert a large broken-image placeholder.
 - Unread: maximum title contrast, slightly stronger weight, a small consistent marker, normal image treatment, quiet metadata.
 - Read: remove the unread marker, lower title weight and contrast moderately, quiet metadata, and optionally lower image saturation slightly. Keep all text readable and all actions visible.
