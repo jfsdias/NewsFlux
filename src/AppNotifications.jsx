@@ -12,6 +12,8 @@ import { GITHUB_REPO_PATH } from "@/utils/constants"
 import {
   isMarkAllReadUndoReportMode,
   readMarkAllReadUndoProbeTrace,
+  recordMarkAllReadUndoProbeEvent,
+  scheduleMarkAllReadUndoProbeFlush,
   startMarkAllReadUndoProbe,
 } from "@/utils/mark-all-read-undo-diagnostics"
 import { isSettingsTabAvailable, SETTINGS_TAB_KEYS } from "@/utils/settings-navigation"
@@ -35,7 +37,7 @@ const NotificationActions = ({ polyglot, onCheck, onDismiss }) => (
 )
 
 const AppNotifications = () => {
-  const { search } = useLocation()
+  const { pathname, search } = useLocation()
   const { polyglot } = useStore(polyglotState)
   const duplicateHotkeys = useStore(duplicateHotkeysState)
   const { hasUpdate, dismissUpdate } = useVersionCheck()
@@ -53,6 +55,11 @@ const AppNotifications = () => {
   const canOpenHotkeysSettings = isSettingsTabAvailable(SETTINGS_TAB_KEYS.HOTKEYS, isBelowMedium)
 
   useEffect(() => startMarkAllReadUndoProbe(), [])
+
+  useEffect(() => {
+    recordMarkAllReadUndoProbeEvent("ROUTE_CHANGED")
+    scheduleMarkAllReadUndoProbeFlush()
+  }, [pathname])
 
   useEffect(() => {
     if (!hasUpdate) {
