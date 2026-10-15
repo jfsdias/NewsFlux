@@ -7,6 +7,7 @@ import {
   UPSTREAM_GITHUB_REPO_PATH,
   UPSTREAM_NAME,
 } from "./constants.js"
+import { applyRuntimeProductIdentity } from "./product-identity.js"
 import { shouldNotifyProductUpdate } from "./update-check.js"
 
 test("exposes separate NewsFlux product and ReactFlux upstream identities", () => {
@@ -14,6 +15,31 @@ test("exposes separate NewsFlux product and ReactFlux upstream identities", () =
   assert.equal(PRODUCT_GITHUB_REPO_PATH, "jfsdias/NewsFlux")
   assert.equal(UPSTREAM_NAME, "ReactFlux")
   assert.equal(UPSTREAM_GITHUB_REPO_PATH, "electh/ReactFlux")
+})
+
+test("brands nested runtime phrases without mutating the locale source", () => {
+  const source = {
+    compatibility: {
+      description: "ReactFlux requires Miniflux %{minimumVersion} or newer.",
+    },
+    article: {
+      tooltip: "Open in ReactFlux",
+    },
+    untouched: "Miniflux",
+  }
+
+  const branded = applyRuntimeProductIdentity(source)
+
+  assert.deepEqual(branded, {
+    compatibility: {
+      description: "NewsFlux requires Miniflux %{minimumVersion} or newer.",
+    },
+    article: {
+      tooltip: "Open in NewsFlux",
+    },
+    untouched: "Miniflux",
+  })
+  assert.equal(source.article.tooltip, "Open in ReactFlux")
 })
 
 test("suppresses a main advance that only changes docs", () => {
