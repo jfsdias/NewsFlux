@@ -36,6 +36,29 @@ NewsFlux is a consciously maintained ReactFlux fork for Miniflux. The product di
 - Provider-backed features may advance without new NewsFlux storage only when ownership, limitations and failure semantics are explicit.
 - Do not broaden a PR because an adjacent file is already open.
 
+### Reference-product interpretation
+
+Reference products are inputs, not a checklist.
+
+| Reference | Learn from | Do not copy blindly |
+| --- | --- | --- |
+| Apple News | Editorial rhythm, edition header, focused reading, clear end states, touch-first chrome | Oversized promotional imagery, ad-like blocks, opaque ranking |
+| NetNewsWire | RSS clarity, source organization, redundant read-state cues, next-unread flow, keyboard-driven triage | Permanent three-pane architecture |
+| Fusion | Predictable navigation state, URL-backed reader state | Provider/state semantics that conflict with Miniflux |
+| Feedly | Scoped mark-as-read undo, multi-select/range triage, compact action feedback | Toolbar proliferation, paid/AI assumptions, premature Boards |
+| Inoreader | Explicit search/filter state, rules, tags/library concepts | Dashboard-heavy IA and too many simultaneous controls |
+| NewsBlur | Per-feed preferences, explicit user rules/relevance controls | Learned relevance in All/Unread and excessive visual density |
+| ReadKit / Reeder | External read-later handoff, list/reader continuity, progress, typography, saved-state taxonomy | New internal state without a defined source of truth |
+| Material 3 | Adaptive navigation patterns, verb-first confirmations, snackbar behavior, container transitions | Adaptive navigation without a Fold/device decision and real-device evidence |
+
+Current reference decisions:
+
+- **ADOPT:** multi-select; mark-selected-as-read; keyboard navigation expansion; provider-backed range mark-as-read; visible feed-health signaling; stronger list/read-state redundancy; editorial typography/details that do not alter behavior.
+- **ADAPT:** Favorites as Miniflux `starred`; density control using existing local settings; Miniflux block/keep rules; external-save/read-later handoff through Miniflux integrations; category rhythm on Home; Material-style confirmations/snackbars only where they preserve NewsFlux scope semantics.
+- **PLANNED WITH PRODUCT DECISION:** HOME-VISUAL-02 composition; FILTER-01A search contract; NAV-VISUAL-01 adaptive navigation; contextual chrome consolidation.
+- **HOLD:** NewsFlux-owned Saved umbrella, internal Read Later queue, internal Bookmarks, Boards, Tags, Smart folders, per-feed layout sync, swipe-save to an undefined target, story clustering, ML.
+- **DO NOT COPY:** Apple News ad-like blocks/oversized imagery; Feedly/Inoreader toolbar density; NewsBlur visual density; glass over content; permanent three-pane UI; algorithmic For You outside Home.
+
 ---
 
 ## 2. Status vocabulary
@@ -138,6 +161,61 @@ NewsFlux is a consciously maintained ReactFlux fork for Miniflux. The product di
 - Untitled-entry semantics remain CONTENT-01.
 - A trailing-thumbnail redesign was only a candidate direction and is not considered approved work.
 
+#### Visual-cohesion decision reference
+
+Safe/low-decision directions retained from the accepted design supplement:
+
+- standardize source kicker placement and metadata rhythm;
+- make read/unread redundant and accessible rather than color-only;
+- align list-row visual language with Home secondary stories without turning lists into cards;
+- improve blockquote, caption and link typography in Reader;
+- allow stateless Reader progress only when it does not persist position;
+- restyle raw Arco controls with NewsFlux tokens rather than adding another UI library;
+- prefer verb-first confirmation labels;
+- use deterministic favicon fallback monograms without persistent per-feed style state.
+
+Product/real-device-gated directions remain:
+
+- HOME-VISUAL-02 category/edition composition;
+- contextual consolidation of floating/header/footer controls;
+- scroll-aware opaque/glass chrome switching;
+- auto-hiding Reader chrome;
+- adaptive bottom-bar/rail/sidebar navigation;
+- swipe gestures;
+- View Transition/container transform;
+- serif headline font unless self-hosted and validated for privacy/performance/readability.
+
+Dependency rules remain:
+
+- `Updated N minutes ago` depends on trustworthy HOME-01 refresh semantics;
+- Reader `Next` depends on NAV01 canonical ordering;
+- Reader auto-hide must respect reduced motion and keyboard focus;
+- pull-to-refresh belongs with HOME-01 rather than a visual-only PR.
+
+#### CHROME-01 contract retained
+
+- Prefer verb-first confirmations such as `Mark 18 as read` / `Cancel` over generic `OK` / `Cancel` where semantics are already known.
+- Keep Undo reachable on touch devices; any snackbar relocation must remain generation-safe and one-at-a-time.
+- Raw Arco date selectors, popconfirms and notifications should use NewsFlux tokens rather than a parallel component system.
+- Glass is a chrome behavior only and is justified when content actually passes beneath; reduced-transparency behavior must remain correct.
+- Do not consolidate header/footer controls without a separate product decision.
+
+#### HOME-VISUAL-02 contract retained
+
+- Candidate edition header: date + deterministic new/unread facts + trustworthy refresh recency + refresh affordance.
+- Candidate rhythm: lead/secondary section, category sections and compact text-only Summary rather than one uniform grid.
+- Candidate source kicker should be standardized across Home card types.
+- Candidate caught-up end state is allowed only after the product composition decision.
+- Home composition must not reorder All/Unread.
+
+#### READER-VISUAL-02 contract retained
+
+- Header hierarchy: source kicker -> title -> author/date/reading-time metadata -> hero/content frame.
+- Blockquotes, captions and links should receive restrained editorial typography.
+- Stateless reading progress is allowed; persisted reading position remains architecture-gated.
+- Auto-hide is a later subtrack and must return on upward scroll/focus, respect reduced motion and never hide critical keyboard controls.
+- `Next` is a later subtrack dependent on NAV01.
+
 ### 3.6 Home / presentation
 
 | Item | Status | Notes |
@@ -193,6 +271,18 @@ Upstream audit classification remains `INTEGRATE / ADAPT / SKIP / HOLD`. No revi
 | Smart folders / saved searches | **HOLD — ARCHITECTURE** | Depends on FILTER-01 and saved-filter storage decision |
 | Per-feed layout | **HOLD — ARCHITECTURE** | Decide source/sync after NAV-02F |
 | Swipe-save | **HOLD — ARCHITECTURE** | Target and Fold gesture semantics must be explicit |
+
+### 3.11 Provider-backed capability inventory
+
+The following opportunities do not require new persistent NewsFlux state:
+
+| Item | Source of truth | Current capability / gap | Roadmap handling |
+| --- | --- | --- | --- |
+| BULK-03 range/age mark-as-read | Miniflux read state | Existing batch-ID mutation + Undo primitives; range semantics are new | **PLANNED**, after BULK-01B and before/alongside BULK-02 |
+| FEED-HEALTH-01 | Miniflux feed metadata | Feed objects expose parsing-error information; NewsFlux does not surface it prominently | **PLANNED** near NAV-02F |
+| FILTER-RULES-01 | Miniflux feed `blocklist_rules` / `keeplist_rules` | Provider supports the fields; NewsFlux does not expose the editing contract | **PLANNED** after FILTER-01 |
+| HOME-VISUAL-02 | Miniflux categories + existing Home data | Deterministic editorial grouping; no new ranking state | **HOLD — PRODUCT** pending editorial decision |
+| SAVE-EXT-01 | Miniflux third-party integrations | Existing one-way provider action; NewsFlux cannot enumerate destination items back | **PLANNED** as external handoff, not internal Read Later |
 
 ---
 
@@ -279,6 +369,8 @@ Before an internal Later queue, Bookmarks, Boards, Tags, Saved umbrella, Smart f
 7. relationship to Miniflux read/starred/feeds/categories/history/integrations.
 
 Provider-backed `SAVE-EXT-01`, `FILTER-RULES-01`, `BULK-03` and `FEED-HEALTH-01` are not blocked by this architecture gate because they do not create a second persistent NewsFlux source of truth.
+
+Offline reading, feed notifications, third-party AI summaries and other new persistence/server services remain outside this provider-backed exception and require explicit architecture/privacy decisions.
 
 ---
 
@@ -380,7 +472,26 @@ Roadmap acceptance is not merge authorization.
 
 ---
 
-## 11. Governance invariants
+## 11. Overnight-safe execution policy
+
+An unattended/overnight development session may advance only items that satisfy all of the following:
+
+- no unresolved product, storage, privacy or architecture decision;
+- no upstream sync;
+- no merge or production deployment;
+- no dependence on a real-device PASS for correctness;
+- each independently meaningful change receives its own branch/PR;
+- tests/build/static gates can run autonomously;
+- browser/harness evidence may be collected when available, but absence of a physical-device gate must leave the PR unmerged;
+- incidental discoveries are reported and routed back to the roadmap rather than fixed opportunistically.
+
+Current overnight-safe candidates must be re-evaluated against the current baseline before work begins. Completed tracks such as A11Y-RT-01, BULK-01F and LIST-VISUAL-01 must not be reopened merely because they were historically listed as safe candidates. Candidate work that remains low-decision includes bounded subsets such as READER-VISUAL-02A or CHROME token/copy work, but only after a fresh live-state and scope check.
+
+The unattended agent must stop rather than guess if a candidate unexpectedly requires product semantics, touches upstream-sensitive behavior, overlaps another active PR or cannot be proven with available automated gates.
+
+---
+
+## 12. Governance invariants
 
 - **No merge without explicit user authorization.**
 - **No implicit deployment of `latest`; deploy exact approved SHA only.**
@@ -409,7 +520,7 @@ When a completed task changes roadmap status, sequencing, architectural/product 
 
 ---
 
-## 12. Current promotion state
+## 13. Current promotion state
 
 - `CURRENT_MAIN=fa98531fe153c5689e40eaf210309b8751cb2cc4`
 - `PRODUCTION_SHA=fa98531fe153c5689e40eaf210309b8751cb2cc4`
