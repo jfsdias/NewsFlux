@@ -10,11 +10,16 @@ import { useStore } from "@nanostores/react"
 import { useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router"
 
-import { markEntriesAsReadInBatches } from "@/apis"
+import { markEntriesAsReadInBatches, updateEntriesStatusInBatches } from "@/apis"
 import CustomTooltip from "@/components/ui/CustomTooltip"
 import { polyglotState } from "@/hooks/useLanguage"
 import useRefreshCounts from "@/hooks/useRefreshCounts"
-import { contentState, setActiveContent, setEntries } from "@/store/contentState"
+import {
+  contentState,
+  invalidateArticleList,
+  setActiveContent,
+  setEntries,
+} from "@/store/contentState"
 import {
   getDataSessionRevision,
   isEntryScopeFullyVisible,
@@ -22,54 +27,26 @@ import {
   visibleFeedsState,
 } from "@/store/dataState"
 import { settingsState, updateSettings } from "@/store/settingsState"
-import { hasArticleListFilters } from "@/utils/article-list-filters"
 import createArticleListRequestKey from "@/utils/article-list-request-key"
 import { get24HoursAgoTimestamp } from "@/utils/date"
 import { runEntryMutation } from "@/utils/entry-mutation-state"
+import {
+  createTimedOneShotActionStore,
+  getMarkAllReadUndoNotificationId,
+  MARK_ALL_READ_UNDO_DURATION_MS,
+  performMarkAllReadUndo,
+} from "@/utils/mark-all-read-undo"
 import findAdjacentItem from "@/utils/navigation"
 import reconcileEntriesAfterMarkRead from "@/utils/reconcile-entries-after-mark-read"
 import "./FooterPanel.css"
 
-const isEntryInMarkAllReadScope = (
-  entry,
-  { globallyVisible, source, sourceId, visibleFeedIds },
-) => {
-  const feedId = Number(entry.feed?.id ?? entry.feed_id)
-  if (globallyVisible && !visibleFeedIds.has(feedId)) {
-    return false
-  }
-  switch (source) {
-    case "all": {
-      return true
-    }
-    case "feed": {
-      return feedId === Number(sourceId)
-    }
-    case "category": {
-      return Number(entry.feed?.category?.id) === Number(sourceId)
-    }
-    case "starred": {
-      return Boolean(entry.starred)
-    }
-    default: {
-      return false
-    }
-  }
-}
+const markAllReadUndoActions = createTimedOneShotActionStore()
 
-const updateEntriesAsRead = (entryIds = null, scope = null) => {
-  const { activeContent, entries } = contentState.get()
+const updateEntriesAsRead = (entryIds) => {
+  const { activeContent } = contentState.get()
   const { showStatus } = settingsState.get()
-  const markedEntryIds = new Set(
-    entryIds ??
-      entries
-        .filter((entry) => !scope || isEntryInMarkAllReadScope(entry, scope))
-        .map((entry) => entry.id),
-  )
-  const isActiveEntryMarkedRead =
-    activeContent &&
-    (scope ? isEntryInMarkAllReadScope(activeContent, scope) : markedEntryIds.has(activeContent.id))
-  if (isActiveEntryMarkedRead) {
+  const markedEntryIds = new Set(entryIds)
+  if (activeContent && markedEntryIds.has(activeContent.id)) {
     setActiveContent({ ...activeContent, status: "read" })
   }
   setEntries((prev) => reconcileEntriesAfterMarkRead(prev, markedEntryIds, showStatus))
@@ -128,7 +105,7 @@ const MarkAllReadButton = ({ disabled, from, loading, onConfirm }) => {
   )
 }
 
-const FooterPanel = ({ getEntries, info, refreshArticleList, markAllAsRead }) => {
+const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
   const { from: source, id: sourceId } = info
   const { isArticleListReady } = useStore(contentState, { keys: ["isArticleListReady"] })
   const [markingAllRead, setMarkingAllRead] = useState(false)
@@ -142,6 +119,29 @@ const FooterPanel = ({ getEntries, info, refreshArticleList, markAllAsRead }) =>
   const refreshCounts = useRefreshCounts()
   const navigate = useNavigate()
   const refreshLabel = polyglot.t("article_list.refresh_tooltip")
+
+  const handleUndoMarkAllRead = async (token) => {
+    const action = markAllReadUndoActions.consume(token)
+    if (!action) {
+      return
+    }
+
+    Notification.remove(getMarkAllReadUndoNotificationId(token))
+    await performMarkAllReadUndo({
+      entryIds: action.entryIds,
+      sessionRevision: action.sessionRevision,
+      getCurrentSessionRevision: getDataSessionRevision,
+      updateEntriesStatusInBatches,
+      refreshCounts,
+      invalidateArticleList,
+      onError: (error) => {
+        Notification.error({
+          title: polyglot.t("article_list.mark_all_as_read_error"),
+          content: error.message,
+        })
+      },
+    })
+  }
 
   const jumpToNext = () => {
     if (source === "category") {
@@ -180,6 +180,7 @@ const FooterPanel = ({ getEntries, info, refreshArticleList, markAllAsRead }) =>
     const content = { ...contentState.get(), infoFrom: source, infoId: sourceId }
     const settings = settingsState.get()
     const sessionRevision = getDataSessionRevision()
+    const markedEntryIds = new Set()
     const requestKey = createArticleListRequestKey({ content, settings })
     const isCurrentSession = () => sessionRevision === getDataSessionRevision()
     const isCurrentList = () =>
@@ -189,10 +190,8 @@ const FooterPanel = ({ getEntries, info, refreshArticleList, markAllAsRead }) =>
           content: contentState.get(),
           settings: settingsState.get(),
         })
-    const isFeedOrCategory = ["feed", "category"].includes(source)
-    const starred = isFeedOrCategory && settings.showStatus === "starred"
-    const useBatches = hasArticleListFilters(content) || starred || source === "today"
-    const scope = isFeedOrCategory ? source : "global"
+    const starred = ["feed", "category"].includes(source) && settings.showStatus === "starred"
+    const scope = ["feed", "category"].includes(source) ? source : "global"
     const filterParams = {
       filterDate: source === "today" ? null : content.filterDate,
       globally_visible: !isEntryScopeFullyVisible(scope, sourceId),
@@ -202,26 +201,18 @@ const FooterPanel = ({ getEntries, info, refreshArticleList, markAllAsRead }) =>
       ...(source === "today" && { published_after: get24HoursAgoTimestamp() }),
     }
 
-    const fastPathScope = {
-      source,
-      sourceId,
-      globallyVisible: filterParams.globally_visible,
-      visibleFeedIds: new Set(visibleFeedsState.get().map((feed) => Number(feed.id))),
-    }
-
     markingAllReadRef.current = true
     setMarkingAllRead(true)
     try {
       await runEntryMutation(() => {
-        if (!useBatches) {
-          return markAllAsRead()
-        }
-
         return markEntriesAsReadInBatches(
           (status, options) => getEntries(status, starred, options),
           {
             filterParams,
             onBatchMarkedRead: (entryIds) => {
+              for (const entryId of entryIds) {
+                markedEntryIds.add(entryId)
+              }
               if (isCurrentList()) {
                 updateEntriesAsRead(entryIds)
               }
@@ -233,17 +224,42 @@ const FooterPanel = ({ getEntries, info, refreshArticleList, markAllAsRead }) =>
       if (!isCurrentSession()) {
         return
       }
-      if (!useBatches && isCurrentList()) {
-        updateEntriesAsRead(null, fastPathScope)
-      }
       await refreshCounts({ force: true })
       if (!isCurrentSession()) {
         return
       }
 
-      Notification.success({
-        title: polyglot.t("article_list.mark_all_as_read_success"),
-      })
+      const previousUndoToken = markAllReadUndoActions.getCurrentToken()
+      markAllReadUndoActions.clear()
+      if (previousUndoToken !== null) {
+        Notification.remove(getMarkAllReadUndoNotificationId(previousUndoToken))
+      }
+      const undoEntryIds = [...markedEntryIds]
+      if (undoEntryIds.length > 0) {
+        let token
+        token = markAllReadUndoActions.replace(
+          { entryIds: undoEntryIds, sessionRevision },
+          {
+            durationMs: MARK_ALL_READ_UNDO_DURATION_MS,
+            onExpire: () => Notification.remove(getMarkAllReadUndoNotificationId(token)),
+          },
+        )
+        Notification.success({
+          id: getMarkAllReadUndoNotificationId(token),
+          title: polyglot.t("article_list.mark_all_as_read_success"),
+          duration: MARK_ALL_READ_UNDO_DURATION_MS,
+          btn: (
+            <Button size="small" onClick={() => void handleUndoMarkAllRead(token)}>
+              {polyglot.t("actions.undo")}
+            </Button>
+          ),
+          onClose: () => markAllReadUndoActions.clear(token),
+        })
+      } else {
+        Notification.success({
+          title: polyglot.t("article_list.mark_all_as_read_success"),
+        })
+      }
       if (markAllReadJumpToNext && isCurrentList()) {
         jumpToNext()
       }

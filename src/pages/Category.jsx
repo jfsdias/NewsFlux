@@ -2,9 +2,9 @@ import { useStore } from "@nanostores/react"
 import { useCallback } from "react"
 import { useParams } from "react-router"
 
-import { getCategoryEntries, markCategoryAsRead, markEntriesAsReadInBatches } from "@/apis"
+import { getCategoryEntries } from "@/apis"
 import Content from "@/components/Content/Content"
-import { catalogCategoriesState, isEntryScopeFullyVisible } from "@/store/dataState"
+import { catalogCategoriesState } from "@/store/dataState"
 
 const Category = () => {
   const { id: categoryId } = useParams()
@@ -21,23 +21,7 @@ const Category = () => {
       }),
     [categoryId, categoryIsGloballyHidden],
   )
-  const markAllAsRead = useCallback(() => {
-    if (isEntryScopeFullyVisible("category", categoryId)) {
-      return markCategoryAsRead(categoryId)
-    }
-
-    return markEntriesAsReadInBatches((status, filterParams) =>
-      getCategoryEntries(categoryId, status, false, filterParams),
-    )
-  }, [categoryId])
-
-  return (
-    <Content
-      getEntries={getEntries}
-      info={{ from: "category", id: categoryId }}
-      markAllAsRead={markAllAsRead}
-    />
-  )
+  return <Content getEntries={getEntries} info={{ from: "category", id: categoryId }} />
 }
 
 export default Category

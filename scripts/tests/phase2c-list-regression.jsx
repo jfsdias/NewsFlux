@@ -2,6 +2,7 @@
 /* eslint-disable react-compiler/react-compiler -- Deterministic fixture orchestration controls the mocked network boundary. */
 /* eslint-disable react-hooks/globals, react-hooks/immutability -- Isolated scenarios reset module-scoped fixture state outside React render. */
 import "@arco-design/web-react/es/_util/react-19-adapter"
+import { Notification } from "@arco-design/web-react"
 import { useStore } from "@nanostores/react"
 import Polyglot from "node-polyglot"
 import React, { useLayoutEffect, useState } from "react"
@@ -19,6 +20,10 @@ import englishPhrases from "@/locales/en-US.json"
 import { contentState } from "@/store/contentState"
 import { dataState } from "@/store/dataState"
 import { getDefaultSettings, settingsState } from "@/store/settingsState"
+import {
+  MARK_ALL_READ_UNDO_DURATION_MS,
+  MARK_ALL_READ_UNDO_NOTIFICATION_ID,
+} from "@/utils/mark-all-read-undo"
 
 const feed = {
   id: 1,
@@ -47,6 +52,7 @@ const ordinaryEntries = [
   entry(12, "2026-10-12T10:00:00Z", { feed: { ...feed, id: 2 } }),
   entry(24, "2026-10-11T10:00:00Z"),
 ]
+const fixtureNow = Date.now()
 const homeEntries = [
   entry(101, "2026-10-12T10:00:00Z", { title: "Same title" }),
   entry(102, "2026-10-11T10:00:00Z", { title: "Same title" }),
@@ -54,11 +60,18 @@ const homeEntries = [
 const allAdapter = (status, _starred, filters) => entriesApi.getAllEntries(status, filters)
 const feedAdapter = (status, starred, filters) =>
   entriesApi.getFeedEntries(1, status, starred, filters)
+const categoryAdapter = (status, starred, filters) =>
+  entriesApi.getCategoryEntries(1, status, starred, filters)
+const todayAdapter = (status, _starred, filters) => entriesApi.getTodayEntries(status, filters)
+const starredAdapter = (status, _starred, filters) => entriesApi.getStarredEntries(status, filters)
 // Fallback exposes pre-implementation Home leaks while keeping the harness executable in RED.
 const homeAdapter = (...args) =>
   entriesApi.getHomeEntries ? entriesApi.getHomeEntries(...args) : allAdapter(...args)
 const controls = { current: null }
 const requests = []
+const mutationBodies = []
+const effectOrder = []
+const notifications = new Map()
 let respond
 let mutationRequests = 0
 let mutationFailure = false
@@ -70,24 +83,46 @@ apiClient.get = async (url) => {
   requests.push(url)
   return respond(url)
 }
-apiClient.put = async (url, body) => {
+apiClient.put = async (url, body, options) => {
   mutationRequests += 1
+  mutationBodies.push({ body, options, url })
   if (deferredMutation) {
     await deferredMutation.promise
   }
   if (mutationFailure || mutationRequests > mutationFailureAfter) {
     throw new Error("Expected local mark-all failure")
   }
-  const ids = url === "/v1/entries" ? body.entry_ids : serverEntries.map(({ id }) => id)
+  const ids = body?.entry_ids ?? []
   serverEntries = serverEntries.map((item) =>
-    ids.includes(item.id) ? { ...item, status: "read" } : item,
+    ids.includes(item.id) ? { ...item, status: body.status } : item,
   )
+}
+Notification.success = (options) => {
+  effectOrder.push("success")
+  if (options.id) {
+    notifications.set(options.id, options)
+  }
+}
+Notification.error = (options) => {
+  notifications.set("last-error", options)
+}
+Notification.remove = (id) => {
+  const notification = notifications.get(id)
+  notifications.delete(id)
+  notification?.onClose?.()
 }
 polyglotState.setKey("polyglot", new Polyglot({ phrases: englishPhrases, locale: "en-US" }))
 
 const ListProbe = ({ source }) => {
-  const adapter = source === "home" ? homeAdapter : source === "feed" ? feedAdapter : allAdapter
-  const sourceId = source === "feed" ? 1 : null
+  const adapter =
+    {
+      home: homeAdapter,
+      feed: feedAdapter,
+      category: categoryAdapter,
+      today: todayAdapter,
+      starred: starredAdapter,
+    }[source] ?? allAdapter
+  const sourceId = ["feed", "category"].includes(source) ? 1 : null
   const list = useArticleList(source, sourceId, adapter)
   const pagination = useLoadMore()
   const content = useStore(contentState)
@@ -113,11 +148,6 @@ const ListProbe = ({ source }) => {
           getEntries={adapter}
           info={{ from: source, id: sourceId }}
           refreshArticleList={list.fetchArticleList}
-          markAllAsRead={() =>
-            apiClient.put(
-              source === "feed" ? "/v1/feeds/1/mark-all-as-read" : "/v1/users/1/mark-all-as-read",
-            )
-          }
         />
       )}
     </>
@@ -173,6 +203,9 @@ const serverRespond = (url) => {
   if (params.get("status")) {
     matching = matching.filter(({ status }) => status === params.get("status"))
   }
+  if (params.get("starred") === "true") {
+    matching = matching.filter(({ starred }) => starred)
+  }
   if (params.get("search")) {
     matching = matching.filter(({ title }) => title.includes(params.get("search")))
   }
@@ -191,6 +224,9 @@ const serverRespond = (url) => {
   if (url.startsWith("/v1/feeds/1/")) {
     matching = matching.filter((item) => item.feed.id === 1)
   }
+  if (url.startsWith("/v1/categories/1/entries")) {
+    matching = matching.filter((item) => item.feed.category?.id === 1)
+  }
   return { entries: matching.slice(0, Number(params.get("limit") || 1000)), total: matching.length }
 }
 const clickMarkAll = () => {
@@ -199,6 +235,12 @@ const clickMarkAll = () => {
   )
   assert(button && !button.disabled, "Real FooterPanel Mark All Read control missing")
   button.click()
+}
+const undoNotification = () => notifications.get(MARK_ALL_READ_UNDO_NOTIFICATION_ID)
+const clickUndo = () => {
+  const undoButton = undoNotification()?.btn
+  assert(undoButton?.props?.onClick, "Undo action is missing from the successful mark-all notice")
+  undoButton.props.onClick()
 }
 
 const Harness = () => {
@@ -214,7 +256,11 @@ const Harness = () => {
     setProbe(null)
     await settle()
     controls.current = null
+    Notification.remove(MARK_ALL_READ_UNDO_NOTIFICATION_ID)
+    notifications.clear()
+    effectOrder.length = 0
     requests.length = 0
+    mutationBodies.length = 0
     mutationRequests = 0
     mutationFailure = false
     mutationFailureAfter = Infinity
@@ -243,7 +289,7 @@ const Harness = () => {
       filterString: "",
       filterDate: null,
       infoFrom: source,
-      infoId: source === "feed" ? 1 : null,
+      infoId: ["feed", "category"].includes(source) ? 1 : null,
       isArticleListReady: false,
       loadMoreVisible: false,
       ...contentChanges,
@@ -267,9 +313,21 @@ const Harness = () => {
     "MARK_ALL_READ_FILTER_SCOPE",
     "MARK_ALL_READ_NO_JUMP_ON_FAILURE",
     "MARK_ALL_READ_JUMP_TO_NEXT",
+    "MARK_ALL_READ_AND_JUMP_BEHAVIOR_PRESERVED",
     "STALE_SESSION_PROTECTION",
     "PARTIAL_FAILURE_RECONCILIATION",
     "COUNTS_REFRESH",
+    "BULK_UNDO_FEED_FAST_PATH",
+    "BULK_UNDO_CATEGORY_FAST_PATH",
+    "BULK_UNDO_FILTERED_BATCH",
+    "BULK_UNDO_SEARCH_SCOPE",
+    "BULK_UNDO_DATE_SCOPE",
+    "BULK_UNDO_PARTIAL_FAILURE",
+    "BULK_UNDO_STALE_SESSION",
+    "BULK_UNDO_AFTER_JUMP",
+    "BULK_UNDO_COUNTS_REFRESH",
+    "BULK_UNDO_DOUBLE_CLICK_OR_EXPIRED_ACTION",
+    "UNDO_REVERSAL_FAILURE",
   ]
   const requiredHomeQueryGates = [
     "HOME_CANONICAL_QUERY",
@@ -290,6 +348,10 @@ const Harness = () => {
     {
       file: "src/utils/reconcile-entries-after-mark-read.test.js",
       coverage: ["successful-mark-read-subset", "batch-reconciliation"],
+    },
+    {
+      file: "src/utils/mark-all-read-undo.test.js",
+      coverage: ["undo-expiration-and-one-shot", "undo-session-and-reconciliation"],
     },
   ]
   const scenarios = [
@@ -504,7 +566,13 @@ const Harness = () => {
         assertIds([])
         assert(
           serverEntries.every(({ status }) => status === "read"),
-          "Fast-path mutation did not mark server entries",
+          "ID-batched mutation did not mark server entries",
+        )
+        assert(
+          mutationBodies.every(({ url }) => url === "/v1/entries") &&
+            JSON.stringify(mutationBodies[0]?.body?.entry_ids?.toSorted()) ===
+              JSON.stringify([12, 24, 31]),
+          "Footer did not use the acknowledged ID batch path",
         )
       },
     ],
@@ -577,6 +645,27 @@ const Harness = () => {
       },
     ],
     [
+      "MARK_ALL_READ_AND_JUMP_BEHAVIOR_PRESERVED",
+      async () => {
+        await mount(
+          "feed",
+          { showStatus: "unread", markAllReadJumpToNext: true },
+          {},
+          ordinaryEntries,
+        )
+        respond = serverRespond
+        clickMarkAll()
+        await waitFor(() => controls.current.path === "/feed/2")
+        assert(
+          mutationBodies[0].url === "/v1/entries" &&
+            JSON.stringify(mutationBodies[0].body.entry_ids.toSorted()) ===
+              JSON.stringify([24, 31]),
+          "Footer mark-all did not mutate the exact scoped IDs",
+        )
+        assert(countRefreshes === 1, "Footer jump occurred before count refresh")
+      },
+    ],
+    [
       "STALE_SESSION_PROTECTION",
       async () => {
         await mount(
@@ -623,6 +712,7 @@ const Harness = () => {
           serverEntries.filter(({ status }) => status === "read").length === 2,
           "Failed later batch lost confirmed work",
         )
+        assert(!undoNotification(), "Partial mark-all failure exposed an Undo action")
       },
     ],
     [
@@ -639,6 +729,292 @@ const Harness = () => {
         clickMarkAll()
         await waitFor(() => countRefreshes === 1)
         assert(dataState.get().unreadInfo[1] === 2, "Failure did not refresh source count")
+      },
+    ],
+    [
+      "BULK_UNDO_FEED_FAST_PATH",
+      async () => {
+        await mount("feed", { showStatus: "unread" }, {}, ordinaryEntries)
+        respond = serverRespond
+        clickMarkAll()
+        await waitFor(() => mutationRequests === 1 && countRefreshes === 1)
+        assert(
+          mutationBodies[0].url === "/v1/entries" &&
+            JSON.stringify(mutationBodies[0].body.entry_ids.toSorted()) ===
+              JSON.stringify([24, 31]),
+          "Feed Footer used a bulk endpoint or escaped its feed scope",
+        )
+        assert(serverEntries.find(({ id }) => id === 12).status === "unread")
+        clickUndo()
+        await waitFor(() => mutationRequests === 2 && countRefreshes === 2)
+        assert(
+          mutationBodies[1].body.status === "unread" &&
+            JSON.stringify(mutationBodies[1].body.entry_ids.toSorted()) ===
+              JSON.stringify([24, 31]),
+          "Feed Undo did not reverse the exact acknowledged IDs",
+        )
+      },
+    ],
+    [
+      "BULK_UNDO_CATEGORY_FAST_PATH",
+      async () => {
+        const scoped = [
+          entry(51, "2026-10-10T10:00:00Z"),
+          entry(52, "2026-10-11T10:00:00Z", {
+            feed: { ...feed, id: 2, category: { id: 2, title: "Other category" } },
+          }),
+          entry(53, "2026-10-12T10:00:00Z", { feed: { ...feed, id: 3 } }),
+        ]
+        await mount("category", { showStatus: "unread" }, {}, scoped)
+        respond = serverRespond
+        clickMarkAll()
+        await waitFor(() => mutationRequests === 1 && countRefreshes === 1)
+        assert(
+          mutationBodies[0].url === "/v1/entries" &&
+            JSON.stringify(mutationBodies[0].body.entry_ids.toSorted()) ===
+              JSON.stringify([51, 53]),
+          "Category Footer used a bulk endpoint or escaped its category scope",
+        )
+        assert(serverEntries.find(({ id }) => id === 52).status === "unread")
+        clickUndo()
+        await waitFor(() => mutationRequests === 2 && countRefreshes === 2)
+        assert(
+          JSON.stringify(mutationBodies[1].body.entry_ids.toSorted()) === JSON.stringify([51, 53]),
+          "Category Undo did not use the exact acknowledged IDs",
+        )
+      },
+    ],
+    [
+      "BULK_UNDO_FILTERED_BATCH",
+      async () => {
+        const recent = entry(61, new Date(fixtureNow - 60 * 60 * 1000).toISOString())
+        const old = entry(62, new Date(fixtureNow - 48 * 60 * 60 * 1000).toISOString())
+        await mount("today", { showStatus: "unread" }, {}, [recent, old])
+        respond = serverRespond
+        clickMarkAll()
+        await waitFor(() => mutationRequests === 1 && countRefreshes === 1)
+        assert(
+          JSON.stringify(mutationBodies[0].body.entry_ids) === JSON.stringify([61]) &&
+            serverEntries.find(({ id }) => id === 62).status === "unread",
+          "Today mark-all escaped its rolling date scope",
+        )
+
+        const starred = [
+          entry(71, "2026-10-10T10:00:00Z", { starred: true }),
+          entry(72, "2026-10-11T10:00:00Z"),
+          entry(73, "2026-10-12T10:00:00Z", {
+            starred: true,
+            feed: { ...feed, id: 2 },
+          }),
+        ]
+        await mount("feed", { showStatus: "starred" }, {}, starred)
+        respond = serverRespond
+        clickMarkAll()
+        await waitFor(() => mutationRequests === 1 && countRefreshes === 1)
+        assert(
+          JSON.stringify(mutationBodies[0].body.entry_ids) === JSON.stringify([71]) &&
+            serverEntries.find(({ id }) => id === 72).status === "unread" &&
+            serverEntries.find(({ id }) => id === 73).status === "unread",
+          "Starred feed filter escaped its source or starred scope",
+        )
+
+        const manyEntries = Array.from({ length: 1001 }, (_, index) =>
+          entry(1000 + index, "2026-10-12T10:00:00Z"),
+        )
+        await mount("all", { showStatus: "unread" }, {}, manyEntries)
+        respond = serverRespond
+        clickMarkAll()
+        await waitFor(() => mutationRequests === 2 && countRefreshes === 1)
+        assert(
+          JSON.stringify(mutationBodies.map(({ body }) => body.entry_ids.length)) ===
+            JSON.stringify([1000, 1]),
+          "Mark-all requests did not honor the entry page batch boundary",
+        )
+        clickUndo()
+        await waitFor(() => mutationRequests === 4 && countRefreshes === 2)
+        assert(
+          JSON.stringify(mutationBodies.slice(2).map(({ body }) => body.entry_ids.length)) ===
+            JSON.stringify([1000, 1]),
+          "Undo requests did not honor ENTRY_UPDATE_BATCH_SIZE",
+        )
+        assert(
+          mutationBodies.slice(2).every(({ options }) => options?.retry === false),
+          "Undo reversal requests retained automatic network retries",
+        )
+      },
+    ],
+    [
+      "BULK_UNDO_SEARCH_SCOPE",
+      async () => {
+        const scoped = [
+          entry(81, "2026-10-10T10:00:00Z", { title: "search match" }),
+          entry(82, "2026-10-11T10:00:00Z", { title: "outside scope" }),
+        ]
+        await mount("all", { showStatus: "unread" }, { filterString: "match" }, scoped)
+        respond = serverRespond
+        clickMarkAll()
+        await waitFor(() => mutationRequests === 1 && countRefreshes === 1)
+        assert(query(0).get("search") === "match")
+        assert(
+          JSON.stringify(mutationBodies[0].body.entry_ids) === JSON.stringify([81]) &&
+            serverEntries.find(({ id }) => id === 82).status === "unread",
+          "Search-scoped mark-all changed an out-of-scope entry",
+        )
+        clickUndo()
+        await waitFor(() => mutationRequests === 2 && countRefreshes === 2)
+        assert(JSON.stringify(mutationBodies[1].body.entry_ids) === JSON.stringify([81]))
+      },
+    ],
+    [
+      "BULK_UNDO_DATE_SCOPE",
+      async () => {
+        const scoped = [entry(91, "2026-10-10T10:00:00Z"), entry(92, "2026-10-11T10:00:00Z")]
+        await mount("all", { showStatus: "unread" }, { filterDate: "2026-10-10" }, scoped)
+        respond = serverRespond
+        clickMarkAll()
+        await waitFor(() => mutationRequests === 1 && countRefreshes === 1)
+        const batchQuery = requests
+          .map((url) => new URL(url, "https://fixture.invalid").searchParams)
+          .find((params) => params.get("limit") === "1000")
+        assert(batchQuery?.has("published_after") && batchQuery.has("published_before"))
+        assert(
+          JSON.stringify(mutationBodies[0].body.entry_ids) === JSON.stringify([91]) &&
+            serverEntries.find(({ id }) => id === 92).status === "unread",
+          "Date-scoped mark-all changed an out-of-scope entry",
+        )
+      },
+    ],
+    [
+      "BULK_UNDO_PARTIAL_FAILURE",
+      async () => {
+        const scoped = ordinaryEntries.map((item) => ({ ...item, title: `scope ${item.id}` }))
+        await mount(
+          "feed",
+          { showStatus: "unread", markAllReadJumpToNext: true },
+          { filterString: "scope" },
+          scoped,
+        )
+        respond = (url) => {
+          const response = serverRespond(url)
+          const params = new URL(url, "https://fixture.invalid").searchParams
+          return params.get("limit") === "1000"
+            ? { ...response, entries: response.entries.slice(0, 1) }
+            : response
+        }
+        mutationFailureAfter = 1
+        clickMarkAll()
+        await waitFor(() => mutationRequests === 2 && countRefreshes === 1)
+        assert(!undoNotification(), "Partial mark-all failure exposed Undo")
+        assert(controls.current.path === "/feed/1", "Partial mark-all failure navigated")
+      },
+    ],
+    [
+      "BULK_UNDO_STALE_SESSION",
+      async () => {
+        await mount("all", { showStatus: "unread" }, {}, ordinaryEntries)
+        respond = serverRespond
+        clickMarkAll()
+        await waitFor(() => mutationRequests === 1 && countRefreshes === 1)
+        dataState.setKey("sessionRevision", dataState.get().sessionRevision + 1)
+        clickUndo()
+        await settle()
+        assert(mutationRequests === 1, "Stale Undo wrote old IDs into the new session")
+        assert(countRefreshes === 1, "Stale Undo refreshed the wrong session")
+        assert(!undoNotification(), "Stale Undo notification remained available")
+      },
+    ],
+    [
+      "BULK_UNDO_AFTER_JUMP",
+      async () => {
+        await mount(
+          "feed",
+          { showStatus: "unread", markAllReadJumpToNext: true },
+          {},
+          ordinaryEntries,
+        )
+        respond = serverRespond
+        clickMarkAll()
+        await waitFor(() => controls.current.path === "/feed/2")
+        const listRevisionBeforeUndo = contentState.get().articleListRevision
+        clickUndo()
+        await waitFor(() => mutationRequests === 2 && countRefreshes === 2)
+        await waitFor(() => contentState.get().articleListRevision > listRevisionBeforeUndo)
+        assert(controls.current.path === "/feed/2", "Undo navigated back to the original feed")
+        assert(
+          JSON.stringify(mutationBodies[1].body.entry_ids.toSorted()) === JSON.stringify([24, 31]),
+          "Undo after jump changed IDs outside the original acknowledged batch",
+        )
+      },
+    ],
+    [
+      "BULK_UNDO_COUNTS_REFRESH",
+      async () => {
+        await mount("all", { showStatus: "unread" }, {}, ordinaryEntries)
+        respond = serverRespond
+        clickMarkAll()
+        await waitFor(() => mutationRequests === 1 && countRefreshes === 1)
+        assert(
+          effectOrder.join(",") === "counts,success",
+          "Mark-all success notification appeared before the forced count refresh",
+        )
+        clickUndo()
+        await waitFor(() => mutationRequests === 2 && countRefreshes === 2)
+        assert(
+          effectOrder.join(",") === "counts,success,counts",
+          "Undo did not force a count refresh after its mutation",
+        )
+      },
+    ],
+    [
+      "BULK_UNDO_DOUBLE_CLICK_OR_EXPIRED_ACTION",
+      async () => {
+        await mount("all", { showStatus: "unread" }, {}, ordinaryEntries)
+        respond = serverRespond
+        clickMarkAll()
+        await waitFor(() => mutationRequests === 1 && countRefreshes === 1)
+        assert(undoNotification()?.duration === MARK_ALL_READ_UNDO_DURATION_MS)
+        const obsoleteUndoButton = undoNotification().btn
+        await settle()
+        clickMarkAll()
+        await waitFor(() => countRefreshes === 2)
+        assert(!undoNotification(), "A later empty success left the previous Undo action active")
+        obsoleteUndoButton.props.onClick()
+        await settle()
+        assert(mutationRequests === 1, "A replaced Undo action still mutated entries")
+
+        serverEntries = ordinaryEntries.map((item) => ({ ...item }))
+        await settle()
+        clickMarkAll()
+        await waitFor(() => mutationRequests === 2 && countRefreshes === 3)
+        const undoButton = undoNotification().btn
+        undoButton.props.onClick()
+        undoButton.props.onClick()
+        await waitFor(() => mutationRequests === 3 && countRefreshes === 4)
+        await settle()
+        assert(mutationRequests === 3, "Double-click started more than one Undo request")
+
+        await mount("all", { showStatus: "unread" }, {}, [])
+        respond = serverRespond
+        clickMarkAll()
+        await waitFor(() => countRefreshes === 1)
+        assert(!undoNotification(), "Empty successful mark-all exposed Undo")
+      },
+    ],
+    [
+      "UNDO_REVERSAL_FAILURE",
+      async () => {
+        await mount("all", { showStatus: "unread" }, {}, ordinaryEntries)
+        respond = serverRespond
+        clickMarkAll()
+        await waitFor(() => mutationRequests === 1 && countRefreshes === 1)
+        const listRevisionBeforeUndo = contentState.get().articleListRevision
+        mutationFailureAfter = 1
+        clickUndo()
+        await waitFor(() => mutationRequests === 2 && countRefreshes === 2)
+        await waitFor(() => contentState.get().articleListRevision > listRevisionBeforeUndo)
+        assert(!undoNotification(), "Failed Undo offered a second attempt")
+        assert(notifications.has("last-error"), "Failed Undo did not show error feedback")
+        assert(controls.current.path === "/all", "Failed Undo navigated away")
       },
     ],
   ]
@@ -711,6 +1087,7 @@ const Harness = () => {
           value={{
             refreshCounts: async () => {
               countRefreshes += 1
+              effectOrder.push("counts")
               dataState.setKey("unreadInfo", {
                 1: serverEntries.filter((item) => item.feed.id === 1 && item.status === "unread")
                   .length,
@@ -719,7 +1096,16 @@ const Harness = () => {
             },
           }}
         >
-          <MemoryRouter initialEntries={[probe.source === "feed" ? "/feed/1" : "/all"]}>
+          <MemoryRouter
+            initialEntries={[
+              {
+                feed: "/feed/1",
+                category: "/category/1",
+                today: "/today",
+                starred: "/starred",
+              }[probe.source] ?? "/all",
+            ]}
+          >
             <ListProbe key={probe.key} source={probe.source} />
           </MemoryRouter>
         </AppDataContext.Provider>
