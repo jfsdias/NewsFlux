@@ -43,6 +43,19 @@
   line-height: 22px;
 }
 
+.about-upstream-credit {
+  margin: 4px 0 0;
+  color: var(--color-text-3);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.about-upstream-credit a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .about-build {
   border: 1px solid var(--color-border-2);
   border-radius: var(--border-radius-medium);
