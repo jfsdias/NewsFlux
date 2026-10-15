@@ -23,7 +23,7 @@ import { authState } from "@/store/authState"
 import { resetSettings } from "@/store/contentBrowsingDirectionState"
 import { settingsState, updateSettings } from "@/store/settingsState"
 import { confirmDialogProps, destructiveConfirmButtonProps } from "@/utils/confirm-dialog"
-import { GITHUB_REPO_PATH } from "@/utils/constants"
+import { PRODUCT_GITHUB_REPO_PATH } from "@/utils/constants"
 import { clearSession } from "@/utils/session"
 import { preloadSettingsTabs } from "@/utils/settings-loader"
 import { THEME_MODE_OPTIONS } from "@/utils/settings-options"
@@ -140,7 +140,7 @@ export default function Profile() {
                   key="report-issue"
                   onClick={() =>
                     window.open(
-                      `https://github.com/${GITHUB_REPO_PATH}/issues/new/choose`,
+                      `https://github.com/${PRODUCT_GITHUB_REPO_PATH}/issues/new/choose`,
                       "_blank",
                     )
                   }
