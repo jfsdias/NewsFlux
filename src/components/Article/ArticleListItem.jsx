@@ -15,7 +15,7 @@ const getListSummary = (summary) =>
     ? `${summary.slice(0, MAX_LIST_SUMMARY_LENGTH - 1).trimEnd()}…`
     : summary
 
-const ArticleListItem = ({ entry, previewContent }) => {
+const ArticleListItem = ({ entry, previewContent, feedIconMonogramFallback }) => {
   const { showDetailedRelativeTime, showEstimatedReadingTime, showFeedIcon, showListSummary } =
     useStore(articleListItemSettingsState)
   const listSummary = getListSummary(previewContent)
@@ -23,7 +23,13 @@ const ArticleListItem = ({ entry, previewContent }) => {
   return (
     <div className="list-entry-content">
       <div className="list-entry-source">
-        {showFeedIcon && <FeedIcon className="list-entry-feed-icon" feed={entry.feed} />}
+        {showFeedIcon && (
+          <FeedIcon
+            className="list-entry-feed-icon"
+            feed={entry.feed}
+            monogramFallback={feedIconMonogramFallback}
+          />
+        )}
         <span className="list-entry-source-title">{entry.feed.title}</span>
       </div>
 

@@ -1,0 +1,16 @@
+.feed-icon-monogram {
+  display: inline-flex;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--nf-separator-subtle, var(--color-border-2));
+  border-radius: 20%;
+  background-color: var(--nf-surface-raised, var(--color-fill-2));
+  color: var(--nf-text-secondary, var(--color-text-2));
+  font-size: 0.72em;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+}
