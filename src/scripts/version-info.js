@@ -48,16 +48,17 @@ const dateFromSourceEpoch = () => {
   return Number.isNaN(date.getTime()) ? null : date.toISOString()
 }
 
-const gitHash =
-  readGitValue("rev-parse", "--short", "HEAD") ??
+const gitFullHash =
+  readGitValue("rev-parse", "HEAD") ??
   firstEnvironmentValue(
     "SOURCE_COMMIT",
     "GITHUB_SHA",
     "CF_PAGES_COMMIT_SHA",
     "VERCEL_GIT_COMMIT_SHA",
     "COMMIT",
-  )?.slice(0, 8) ??
+  ) ??
   "unknown"
+const gitHash = gitFullHash === "unknown" ? "unknown" : gitFullHash.slice(0, 8)
 
 const gitDate =
   normalizeDate(readGitValue("log", "-1", "--format=%cI")) ??
@@ -72,7 +73,7 @@ if (!gitDate) {
   console.warn("Commit date unavailable; update checks will be disabled for this build.")
 }
 
-const versionInfo = { gitHash, gitDate }
+const versionInfo = { gitHash, gitFullHash, gitDate }
 const outputPath = new URL("../version-info.json", import.meta.url)
 
 writeFileSync(outputPath, `${JSON.stringify(versionInfo, null, 2)}\n`)
