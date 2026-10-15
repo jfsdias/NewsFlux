@@ -2,14 +2,16 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import test from "node:test"
 
+/* eslint-disable import/extensions -- Node ESM needs explicit extensions. */
 import {
   PRODUCT_GITHUB_REPO_PATH,
   PRODUCT_NAME,
   UPSTREAM_GITHUB_REPO_PATH,
   UPSTREAM_NAME,
-} from "./constants"
-import { applyRuntimeProductIdentity } from "./product-identity"
-import { shouldNotifyProductUpdate } from "./update-check"
+} from "./constants.js"
+import { applyRuntimeProductIdentity } from "./product-identity.js"
+import { shouldNotifyProductUpdate } from "./update-check.js"
+/* eslint-enable import/extensions */
 
 test("exposes separate NewsFlux product and ReactFlux upstream identities", () => {
   assert.equal(PRODUCT_NAME, "NewsFlux")
