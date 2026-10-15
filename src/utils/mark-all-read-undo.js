@@ -61,6 +61,34 @@ export const createTimedOneShotActionStore = ({
   }
 }
 
+export const createMarkAllReadOperationCoordinator = () => {
+  let activeOperation = null
+  let nextLease = 0
+
+  return {
+    acquire(sessionRevision) {
+      if (activeOperation?.sessionRevision === sessionRevision) {
+        return null
+      }
+
+      const lease = ++nextLease
+      activeOperation = { lease, sessionRevision }
+      return lease
+    },
+    release(lease) {
+      if (!activeOperation || activeOperation.lease !== lease) {
+        return false
+      }
+
+      activeOperation = null
+      return true
+    },
+  }
+}
+
+export const markAllReadUndoActions = createTimedOneShotActionStore()
+export const markAllReadOperationCoordinator = createMarkAllReadOperationCoordinator()
+
 export const performMarkAllReadUndo = async ({
   entryIds,
   sessionRevision,
@@ -94,4 +122,41 @@ export const performMarkAllReadUndo = async ({
 
   await reconcile()
   return { status: "success" }
+}
+
+export const performCoordinatedMarkAllReadUndo = async ({
+  token,
+  getCurrentSessionRevision,
+  undoActions = markAllReadUndoActions,
+  operationCoordinator = markAllReadOperationCoordinator,
+  updateEntriesStatusInBatches,
+  refreshCounts,
+  invalidateArticleList,
+  onConsume,
+  onError,
+}) => {
+  const operationLease = operationCoordinator.acquire(getCurrentSessionRevision())
+  if (operationLease === null) {
+    return { status: "busy" }
+  }
+
+  try {
+    const action = undoActions.consume(token)
+    if (!action) {
+      return { status: "missing" }
+    }
+
+    onConsume?.(token)
+    return await performMarkAllReadUndo({
+      entryIds: action.entryIds,
+      sessionRevision: action.sessionRevision,
+      getCurrentSessionRevision,
+      updateEntriesStatusInBatches,
+      refreshCounts,
+      invalidateArticleList,
+      onError,
+    })
+  } finally {
+    operationCoordinator.release(operationLease)
+  }
 }

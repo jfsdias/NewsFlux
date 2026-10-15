@@ -31,16 +31,15 @@ import createArticleListRequestKey from "@/utils/article-list-request-key"
 import { get24HoursAgoTimestamp } from "@/utils/date"
 import { runEntryMutation } from "@/utils/entry-mutation-state"
 import {
-  createTimedOneShotActionStore,
   getMarkAllReadUndoNotificationId,
   MARK_ALL_READ_UNDO_DURATION_MS,
-  performMarkAllReadUndo,
+  markAllReadOperationCoordinator,
+  markAllReadUndoActions,
+  performCoordinatedMarkAllReadUndo,
 } from "@/utils/mark-all-read-undo"
 import findAdjacentItem from "@/utils/navigation"
 import reconcileEntriesAfterMarkRead from "@/utils/reconcile-entries-after-mark-read"
 import "./FooterPanel.css"
-
-const markAllReadUndoActions = createTimedOneShotActionStore()
 
 const updateEntriesAsRead = (entryIds) => {
   const { activeContent } = contentState.get()
@@ -176,19 +175,14 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
   const refreshLabel = polyglot.t("article_list.refresh_tooltip")
 
   const handleUndoMarkAllRead = async (token) => {
-    const action = markAllReadUndoActions.consume(token)
-    if (!action) {
-      return
-    }
-
-    Notification.remove(getMarkAllReadUndoNotificationId(token))
-    await performMarkAllReadUndo({
-      entryIds: action.entryIds,
-      sessionRevision: action.sessionRevision,
+    await performCoordinatedMarkAllReadUndo({
+      token,
       getCurrentSessionRevision: getDataSessionRevision,
       updateEntriesStatusInBatches,
       refreshCounts,
       invalidateArticleList,
+      onConsume: (consumedToken) =>
+        Notification.remove(getMarkAllReadUndoNotificationId(consumedToken)),
       onError: (error) => {
         Notification.error({
           title: polyglot.t("article_list.mark_all_as_read_error"),
@@ -254,6 +248,11 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
       direction: settings.orderDirection,
       ...(content.filterString && { search: content.filterString }),
       ...(source === "today" && { published_after: get24HoursAgoTimestamp() }),
+    }
+
+    const operationLease = markAllReadOperationCoordinator.acquire(sessionRevision)
+    if (operationLease === null) {
+      return
     }
 
     markingAllReadRef.current = true
@@ -334,6 +333,7 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
         })
       }
     } finally {
+      markAllReadOperationCoordinator.release(operationLease)
       markingAllReadRef.current = false
       setMarkingAllRead(false)
     }

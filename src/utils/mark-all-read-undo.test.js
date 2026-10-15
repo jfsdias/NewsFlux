@@ -3,9 +3,13 @@ import test from "node:test"
 
 const {
   createTimedOneShotActionStore,
+  createMarkAllReadOperationCoordinator,
   getMarkAllReadUndoNotificationId,
+  markAllReadOperationCoordinator,
+  markAllReadUndoActions,
   MARK_ALL_READ_UNDO_DURATION_MS,
   performMarkAllReadUndo,
+  performCoordinatedMarkAllReadUndo,
 } = await import(new URL("mark-all-read-undo.js", import.meta.url))
 
 const createFakeClock = () => {
@@ -89,6 +93,103 @@ test("Undo notification IDs are unique per action generation", () => {
   const second = actions.replace("second")
 
   assert.notEqual(getMarkAllReadUndoNotificationId(first), getMarkAllReadUndoNotificationId(second))
+})
+
+test("Footer and Sidebar use one shared one-shot Undo slot", () => {
+  const token = markAllReadUndoActions.replace({ entryIds: [41], source: "footer" })
+  assert.equal(markAllReadUndoActions.getCurrentToken(), token)
+
+  const replacement = markAllReadUndoActions.replace({ entryIds: [52], source: "sidebar" })
+  assert.notEqual(replacement, token)
+  assert.equal(markAllReadUndoActions.consume(token), null)
+  assert.deepEqual(markAllReadUndoActions.consume(replacement), {
+    entryIds: [52],
+    source: "sidebar",
+  })
+})
+
+test("shared Mark All guard rejects overlap and only releases its own lease", () => {
+  const first = markAllReadOperationCoordinator.acquire(7)
+  assert.ok(first)
+  assert.equal(markAllReadOperationCoordinator.acquire(7), null)
+
+  const nextSession = markAllReadOperationCoordinator.acquire(8)
+  assert.ok(nextSession)
+  assert.notEqual(nextSession, first)
+  assert.equal(markAllReadOperationCoordinator.release(first), false)
+  assert.equal(markAllReadOperationCoordinator.acquire(8), null)
+  assert.equal(markAllReadOperationCoordinator.release(nextSession), true)
+  const finalLease = markAllReadOperationCoordinator.acquire(8)
+  assert.ok(finalLease)
+  assert.equal(markAllReadOperationCoordinator.release(finalLease), true)
+})
+
+const createUndoRunner =
+  ({ actions, coordinator, writes, consumedTokens }) =>
+  (token) =>
+    performCoordinatedMarkAllReadUndo({
+      token,
+      getCurrentSessionRevision: () => 7,
+      undoActions: actions,
+      operationCoordinator: coordinator,
+      updateEntriesStatusInBatches: async (entryIds) => writes.push(entryIds),
+      refreshCounts: async () => {},
+      invalidateArticleList: () => {},
+      onConsume: consumedTokens ? (consumedToken) => consumedTokens.push(consumedToken) : undefined,
+    })
+
+test("UNDO_DURING_ACTIVE_MARK_ALL_NO_CONFLICT: busy Undo preserves its token and performs no mutation", async () => {
+  const actions = createTimedOneShotActionStore()
+  const coordinator = createMarkAllReadOperationCoordinator()
+  const writes = []
+  const consumedTokens = []
+  const undo = createUndoRunner({ actions, coordinator, writes, consumedTokens })
+  const tokenA = actions.replace({ entryIds: [41], sessionRevision: 7 })
+  const markAllBLease = coordinator.acquire(7)
+
+  assert.deepEqual(await undo(tokenA), { status: "busy" })
+  assert.equal(actions.getCurrentToken(), tokenA)
+  assert.deepEqual(consumedTokens, [])
+  assert.deepEqual(writes, [])
+
+  coordinator.release(markAllBLease)
+  actions.clear(tokenA)
+})
+
+test("successful Mark All B replaces Undo A after a busy Undo attempt", async () => {
+  const actions = createTimedOneShotActionStore()
+  const coordinator = createMarkAllReadOperationCoordinator()
+  const writes = []
+  const undo = createUndoRunner({ actions, coordinator, writes })
+  const tokenA = actions.replace({ entryIds: [41], sessionRevision: 7 })
+  const markAllBLease = coordinator.acquire(7)
+
+  assert.deepEqual(await undo(tokenA), { status: "busy" })
+  assert.equal(actions.getCurrentToken(), tokenA)
+  coordinator.release(markAllBLease)
+
+  const tokenB = actions.replace({ entryIds: [52], sessionRevision: 7 })
+  assert.deepEqual(await undo(tokenA), { status: "missing" })
+  assert.equal(actions.getCurrentToken(), tokenB)
+  assert.deepEqual(writes, [])
+  actions.clear(tokenB)
+})
+
+test("failed Mark All B releases the guard and preserves Undo A for normal invocation", async () => {
+  const actions = createTimedOneShotActionStore()
+  const coordinator = createMarkAllReadOperationCoordinator()
+  const writes = []
+  const undo = createUndoRunner({ actions, coordinator, writes })
+  const tokenA = actions.replace({ entryIds: [41], sessionRevision: 7 })
+  const markAllBLease = coordinator.acquire(7)
+
+  assert.deepEqual(await undo(tokenA), { status: "busy" })
+  assert.equal(actions.getCurrentToken(), tokenA)
+  coordinator.release(markAllBLease)
+
+  assert.deepEqual(await undo(tokenA), { status: "success" })
+  assert.equal(actions.getCurrentToken(), null)
+  assert.deepEqual(writes, [[41]])
 })
 
 test("stale sessions are rejected before any Undo mutation or reconciliation", async () => {
