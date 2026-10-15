@@ -55,6 +55,7 @@ const ArticleEntry = ({
   observeRead,
   presentationClassName,
   presenter: Presenter,
+  feedIconMonogramFallback = false,
 }) => {
   const { enableContextMenu, markReadOnScroll } = useStore(articleEntryInteractionSettingsState)
   const { infoFrom } = useStore(contentState, { keys: ["infoFrom"] })
@@ -184,7 +185,11 @@ const ArticleEntry = ({
           unread: isUnread,
         })}
       >
-        <Presenter entry={entry} previewContent={previewContent} />
+        <Presenter
+          entry={entry}
+          feedIconMonogramFallback={feedIconMonogramFallback}
+          previewContent={previewContent}
+        />
       </a>
     </Dropdown>
   )

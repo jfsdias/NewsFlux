@@ -2,7 +2,10 @@ import { useRef, useState } from "react"
 
 import useFeedIcons from "@/hooks/useFeedIcons"
 import { updateFeedIcon } from "@/store/feedIconsState"
+import getFeedMonogram from "@/utils/feed-icon"
 import { getSecondHostname } from "@/utils/url"
+
+import "./FeedIcon.css"
 
 const DEFAULT_ICON_URL = `${import.meta.env.BASE_URL}default-feed-icon.png`
 
@@ -11,7 +14,12 @@ const getFallbackIconURL = (feed) => {
   return `https://icons.duckduckgo.com/ip3/${hostname}.ico`
 }
 
-const FeedIcon = ({ feed, className = "feed-icon", fallbackIcon = null }) => {
+const FeedIcon = ({
+  feed,
+  className = "feed-icon",
+  fallbackIcon = null,
+  monogramFallback = false,
+}) => {
   const { icon_id: iconId } = feed.icon
   const fallbackIconURL = getFallbackIconURL(feed)
 
@@ -61,6 +69,14 @@ const FeedIcon = ({ feed, className = "feed-icon", fallbackIcon = null }) => {
 
   if (fallbackIcon && (fallbackFailed || (iconId !== 0 && !fetchedIconURL && !useFallback))) {
     return fallbackIcon
+  }
+
+  if (fallbackFailed && monogramFallback) {
+    return (
+      <span aria-hidden="true" className={`${className} feed-icon-monogram`}>
+        {getFeedMonogram(feed.title)}
+      </span>
+    )
   }
 
   if (fallbackFailed) {

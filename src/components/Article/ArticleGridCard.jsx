@@ -133,7 +133,7 @@ const getCoverCandidates = (entry) =>
       ? [{ height: entry.coverHeight, src: entry.coverSource, width: entry.coverWidth }]
       : []
 
-const ArticleGridCard = ({ entry }) => {
+const ArticleGridCard = ({ entry, feedIconMonogramFallback }) => {
   const { showCardSummary, showDetailedRelativeTime, showEstimatedReadingTime, showFeedIcon } =
     useStore(articleGridCardSettingsState)
   const [coverState, setCoverState] = useState(() => ({
@@ -260,7 +260,13 @@ const ArticleGridCard = ({ entry }) => {
       <div ref={gridCardCopyRef} className="grid-card-copy">
         <div className="grid-card-meta">
           <div className="grid-card-source">
-            {showFeedIcon && <FeedIcon className="grid-card-feed-icon" feed={entry.feed} />}
+            {showFeedIcon && (
+              <FeedIcon
+                className="grid-card-feed-icon"
+                feed={entry.feed}
+                monogramFallback={feedIconMonogramFallback}
+              />
+            )}
             <span>{entry.feed.title}</span>
           </div>
           <time className="grid-card-time" dateTime={entry.published_at}>

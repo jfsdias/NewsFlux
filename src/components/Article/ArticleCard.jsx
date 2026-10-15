@@ -62,7 +62,7 @@ const getInitialCoverState = (entry, coverDisplayMode) => {
   }
 }
 
-const ArticleCard = ({ entry, previewContent }) => {
+const ArticleCard = ({ entry, previewContent, feedIconMonogramFallback }) => {
   const {
     coverDisplayMode,
     showDetailedRelativeTime,
@@ -112,7 +112,13 @@ const ArticleCard = ({ entry, previewContent }) => {
       <div className="card-header">
         <div className="card-meta">
           <div className="card-source">
-            {showFeedIcon && <FeedIcon className="feed-icon-mini" feed={entry.feed} />}
+            {showFeedIcon && (
+              <FeedIcon
+                className="feed-icon-mini"
+                feed={entry.feed}
+                monogramFallback={feedIconMonogramFallback}
+              />
+            )}
             <div className="card-source-content">
               <span className="card-source-title">{entry.feed.title}</span>
               {entry.author && <span className="card-author">{entry.author}</span>}

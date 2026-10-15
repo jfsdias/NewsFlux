@@ -148,6 +148,7 @@ const ArticleList = forwardRef(
                       {item.map((entry) => (
                         <div key={entry.id} className="article-card-grid-cell" role="listitem">
                           <ArticleEntry
+                            feedIconMonogramFallback
                             articleActivation={articleActivation}
                             entry={entry}
                             layout={articleListLayout}
@@ -163,6 +164,7 @@ const ArticleList = forwardRef(
                 return (
                   <div key={item.id} role="listitem">
                     <ArticleEntry
+                      feedIconMonogramFallback
                       articleActivation={articleActivation}
                       entry={item}
                       layout={articleListLayout}
