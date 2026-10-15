@@ -1,26 +1,27 @@
 import { Button, Message, Select } from "@arco-design/web-react"
-import { IconCopy } from "@arco-design/web-react/icon"
+import { IconCode, IconCopy, IconOrderedList } from "@arco-design/web-react/icon"
 import { useStore } from "@nanostores/react"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import classNames from "classnames"
+import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useState } from "react"
 
 import CustomTooltip from "@/components/ui/CustomTooltip"
 import { polyglotState } from "@/hooks/useLanguage"
+import getCodeLineCount, {
+  isCodeBlockLarge,
+  shouldShowCodeLineNumbers,
+  splitCodeIntoLogicalLines,
+} from "@/utils/code-block"
 import {
-  detectCodeLanguage,
   LANGUAGE_DISPLAY_NAMES,
-  registerLanguages,
+  normalizeCodeLanguage,
   SUPPORTED_LANGUAGES,
-  SyntaxHighlighter,
-} from "@/utils/highlighter"
+} from "@/utils/code-languages"
 import scheduleWhenIdle from "@/utils/idle-callback"
 import "./CodeBlock.css"
 
-registerLanguages()
-
+const HighlightedCode = lazy(() => import("./HighlightedCode"))
 const languageCache = new Map()
 const MAX_CACHED_LANGUAGES = 100
-const MAX_LANGUAGE_DETECTION_CHARACTERS = 50_000
-const MAX_NUMBERED_LINES = 500
 
 const cacheLanguage = (code, language) => {
   if (languageCache.size >= MAX_CACHED_LANGUAGES) {
@@ -29,10 +30,133 @@ const cacheLanguage = (code, language) => {
   languageCache.set(code, language)
 }
 
-const CodeBlock = ({ children }) => {
+const PlainCodeBlock = ({ code, isWaiting, showLineNumbers, wrapLongLines }) => {
+  const showNumbers = showLineNumbers && shouldShowCodeLineNumbers(code)
+  const logicalLines = useMemo(
+    () => (showNumbers && wrapLongLines ? splitCodeIntoLogicalLines(code) : null),
+    [code, showNumbers, wrapLongLines],
+  )
+  const numberColumn = useMemo(
+    () =>
+      showNumbers && !wrapLongLines
+        ? Array.from({ length: getCodeLineCount(code) }, (_, index) => index + 1).join("\n")
+        : null,
+    [code, showNumbers, wrapLongLines],
+  )
+
+  return (
+    <pre aria-busy={isWaiting || undefined} className="hljs code-block-plain">
+      {numberColumn !== null && (
+        <span aria-hidden="true" className="code-block-line-numbers">
+          {numberColumn}
+        </span>
+      )}
+      <code>
+        {logicalLines?.map((line, index) => (
+          <span key={index} className="code-block-line code-block-line-numbered">
+            <span aria-hidden="true" className="code-block-line-number">
+              {index + 1}
+            </span>
+            {line}
+          </span>
+        )) ?? code}
+      </code>
+    </pre>
+  )
+}
+
+const CodeBlock = ({ children: code, inView = true, languageHint }) => {
   const { polyglot } = useStore(polyglotState)
-  const code = children.trim()
-  const [language, setLanguage] = useState(() => languageCache.get(code) ?? "plaintext")
+  const isLargeBlock = useMemo(() => isCodeBlockLarge(code), [code])
+  const canAutoDetect = !isLargeBlock && /\S/.test(code)
+  const sourceLanguage = normalizeCodeLanguage(languageHint)
+  const [selectedLanguage, setSelectedLanguage] = useState(
+    () => sourceLanguage ?? (canAutoDetect ? "auto" : "plaintext"),
+  )
+  const [detectedLanguage, setDetectedLanguage] = useState(() => languageCache.get(code) ?? null)
+  const [highlightingEnabled, setHighlightingEnabled] = useState(
+    () => !isLargeBlock && sourceLanguage !== "plaintext",
+  )
+  const [showLineNumbers, setShowLineNumbers] = useState(true)
+  const [wrapLongLines, setWrapLongLines] = useState(false)
+  const [isHighlightReady, setIsHighlightReady] = useState(false)
+  const noticeId = useId()
+  const language =
+    selectedLanguage === "auto" ? (detectedLanguage ?? "plaintext") : selectedLanguage
+  const isDetectionPending =
+    selectedLanguage === "auto" && canAutoDetect && detectedLanguage === null
+  const isUnknownLanguage =
+    selectedLanguage === "auto" &&
+    (detectedLanguage === "unknown" || detectedLanguage === "plaintext")
+  const canHighlight = selectedLanguage !== "plaintext" && !isUnknownLanguage
+  const highlightActive = highlightingEnabled && canHighlight
+  const shouldHighlight =
+    inView && highlightActive && !isDetectionPending && language !== "plaintext"
+  const isWaiting = inView && highlightActive && (isDetectionPending || !isHighlightReady)
+  const canShowLineNumbers = shouldShowCodeLineNumbers(code)
+  const lineNumberWidth = useMemo(
+    () => `${Math.max(2, String(getCodeLineCount(code)).length)}ch`,
+    [code],
+  )
+
+  useEffect(() => {
+    if (
+      !inView ||
+      !highlightActive ||
+      selectedLanguage !== "auto" ||
+      !canAutoDetect ||
+      detectedLanguage
+    ) {
+      return
+    }
+
+    let cancelled = false
+    let cancelDetection
+    const cancelImport = scheduleWhenIdle(() => {
+      void import("@/utils/code-language-detection")
+        .then(({ default: detectCodeLanguage }) => {
+          if (cancelled) {
+            return null
+          }
+
+          return (cancelDetection = scheduleWhenIdle(() => {
+            if (cancelled) {
+              return
+            }
+
+            try {
+              const detected = normalizeCodeLanguage(detectCodeLanguage(code)) ?? "unknown"
+              cacheLanguage(code, detected)
+              setDetectedLanguage(detected)
+            } catch (error) {
+              console.error("Failed to detect code language:", error)
+              cacheLanguage(code, "unknown")
+              setDetectedLanguage("unknown")
+            }
+          }))
+        })
+        .catch((error) => {
+          console.error("Failed to load code language detection:", error)
+          if (!cancelled) {
+            cacheLanguage(code, "unknown")
+            setDetectedLanguage("unknown")
+          }
+        })
+    })
+
+    return () => {
+      cancelled = true
+      cancelImport?.()
+      cancelDetection?.()
+    }
+  }, [canAutoDetect, code, detectedLanguage, highlightActive, inView, selectedLanguage])
+
+  useEffect(() => {
+    if (!shouldHighlight || isHighlightReady) {
+      return
+    }
+    return scheduleWhenIdle(() => setIsHighlightReady(true))
+  }, [isHighlightReady, shouldHighlight])
 
   const copyToClipboard = useCallback(() => {
     navigator.clipboard
@@ -44,57 +168,127 @@ const CodeBlock = ({ children }) => {
       })
   }, [code, polyglot])
 
-  const showLineNumbers = useMemo(
-    () => code.split("\n", MAX_NUMBERED_LINES + 1).length <= MAX_NUMBERED_LINES,
-    [code],
+  const highlightingLabel = polyglot.t(
+    highlightActive ? "actions.disable_syntax_highlighting" : "actions.enable_syntax_highlighting",
   )
-
-  useEffect(() => {
-    const detectLanguage = () => {
-      if (code.length > MAX_LANGUAGE_DETECTION_CHARACTERS) {
-        return
-      }
-
-      const cachedLanguage = languageCache.get(code)
-      if (cachedLanguage) {
-        setLanguage(cachedLanguage)
-        return
-      }
-
-      const detectedLanguage = detectCodeLanguage(code)
-      if (SUPPORTED_LANGUAGES.includes(detectedLanguage)) {
-        cacheLanguage(code, detectedLanguage)
-        setLanguage(detectedLanguage)
-      } else {
-        console.info("detectedLanguage not supported:", detectedLanguage)
-      }
-    }
-
-    return scheduleWhenIdle(detectLanguage)
-  }, [code])
+  const notice = isUnknownLanguage ? polyglot.t("actions.code_language_unknown") : null
+  const plainCode = (
+    <PlainCodeBlock
+      code={code}
+      isWaiting={isWaiting}
+      showLineNumbers={showLineNumbers && canShowLineNumbers}
+      wrapLongLines={wrapLongLines}
+    />
+  )
+  const handleLanguageChange = (nextLanguage) => {
+    setSelectedLanguage(nextLanguage)
+    setHighlightingEnabled(nextLanguage !== "plaintext")
+  }
 
   return (
-    <div className="code-block-container">
+    <div
+      className={classNames("code-block-container", { "code-block-wrap": wrapLongLines })}
+      style={{ "--code-line-number-width": lineNumberWidth }}
+    >
       <div className="code-block-header">
         <LanguageSelector
+          canAutoDetect={canAutoDetect}
           label={polyglot.t("actions.code_language")}
-          language={language}
-          setLanguage={setLanguage}
+          language={selectedLanguage}
+          polyglot={polyglot}
+          setLanguage={handleLanguageChange}
         />
-        <CopyButton onClick={copyToClipboard} />
+        <div className="code-block-actions">
+          <CustomTooltip mini content={highlightingLabel}>
+            <Button
+              aria-describedby={notice ? noticeId : undefined}
+              aria-label={highlightingLabel}
+              aria-pressed={highlightActive}
+              className="code-highlighting-toggle"
+              disabled={!canHighlight}
+              htmlType="button"
+              icon={<IconCode aria-hidden="true" />}
+              onClick={() => setHighlightingEnabled((enabled) => !enabled)}
+            />
+          </CustomTooltip>
+          <CustomTooltip mini content={polyglot.t("actions.code_line_numbers")}>
+            <Button
+              aria-label={polyglot.t("actions.code_line_numbers")}
+              aria-pressed={showLineNumbers && canShowLineNumbers}
+              className="line-numbers-toggle"
+              disabled={!canShowLineNumbers}
+              htmlType="button"
+              icon={<IconOrderedList aria-hidden="true" />}
+              onClick={() => setShowLineNumbers((shown) => !shown)}
+            />
+          </CustomTooltip>
+          <CustomTooltip mini content={polyglot.t("actions.code_word_wrap")}>
+            <Button
+              aria-label={polyglot.t("actions.code_word_wrap")}
+              aria-pressed={wrapLongLines}
+              className="word-wrap-toggle"
+              htmlType="button"
+              icon={
+                <svg
+                  aria-hidden="true"
+                  className="arco-icon"
+                  fill="none"
+                  focusable="false"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="4"
+                  viewBox="0 0 48 48"
+                >
+                  <path d="M6 10h36M6 22h28a8 8 0 0 1 0 16H22m6-6-6 6 6 6M6 38h8" />
+                </svg>
+              }
+              onClick={() => setWrapLongLines((wrapped) => !wrapped)}
+            />
+          </CustomTooltip>
+          <CustomTooltip mini content={polyglot.t("actions.copy_to_clipboard_tooltip")}>
+            <Button
+              aria-label={polyglot.t("actions.copy_to_clipboard_tooltip")}
+              className="copy-button"
+              htmlType="button"
+              icon={<IconCopy aria-hidden="true" />}
+              onClick={copyToClipboard}
+            />
+          </CustomTooltip>
+        </div>
       </div>
-      <SyntaxHighlighter
-        language={language}
-        showLineNumbers={showLineNumbers}
-        useInlineStyles={false}
-      >
-        {code}
-      </SyntaxHighlighter>
+      {notice && (
+        <p className="code-block-notice" id={noticeId}>
+          {notice}
+        </p>
+      )}
+      {shouldHighlight && isHighlightReady ? (
+        <Suspense
+          fallback={
+            <PlainCodeBlock
+              isWaiting
+              code={code}
+              showLineNumbers={showLineNumbers && canShowLineNumbers}
+              wrapLongLines={wrapLongLines}
+            />
+          }
+        >
+          <HighlightedCode
+            language={language}
+            showLineNumbers={showLineNumbers && canShowLineNumbers}
+            wrapLongLines={wrapLongLines}
+          >
+            {code}
+          </HighlightedCode>
+        </Suspense>
+      ) : (
+        plainCode
+      )}
     </div>
   )
 }
 
-const LanguageSelector = ({ label, language, setLanguage }) => (
+const LanguageSelector = ({ canAutoDetect, label, language, polyglot, setLanguage }) => (
   <Select
     showSearch
     aria-label={label}
@@ -109,29 +303,15 @@ const LanguageSelector = ({ label, language, setLanguage }) => (
     }}
     onChange={setLanguage}
   >
+    <Select.Option disabled={!canAutoDetect} value="auto">
+      {polyglot.t("actions.code_language_auto")}
+    </Select.Option>
     {SUPPORTED_LANGUAGES.map((lang) => (
       <Select.Option key={lang} value={lang}>
-        {LANGUAGE_DISPLAY_NAMES[lang] || lang}
+        {LANGUAGE_DISPLAY_NAMES[lang]}
       </Select.Option>
     ))}
   </Select>
 )
-
-const CopyButton = ({ onClick }) => {
-  const { polyglot } = useStore(polyglotState)
-
-  const copyLabel = polyglot.t("actions.copy_to_clipboard_tooltip")
-
-  return (
-    <CustomTooltip mini content={copyLabel}>
-      <Button
-        aria-label={copyLabel}
-        className="copy-button"
-        icon={<IconCopy aria-hidden="true" />}
-        onClick={onClick}
-      />
-    </CustomTooltip>
-  )
-}
 
 export default CodeBlock
