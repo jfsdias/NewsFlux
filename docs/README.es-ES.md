@@ -1,3 +1,5 @@
+> **Aviso:** Esta traducción y sus capturas se heredan del proyecto upstream ReactFlux y pueden no reflejar las funciones ni la interfaz actuales de NewsFlux. Consulta el [README vigente de NewsFlux (en inglés)](../README.md). ReactFlux sigue acreditado y enlazado como proyecto de origen: [ReactFlux](https://github.com/electh/ReactFlux).
+
 # ReactFlux
 
 Lea este texto en otros idiomas: [Deutsch](README.de-DE.md), [English](../README.md), [Français](README.fr-FR.md), [日本語](README.ja-JP.md), [简体中文](README.zh-CN.md)

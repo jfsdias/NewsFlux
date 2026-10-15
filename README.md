@@ -8,8 +8,8 @@ NewsFlux is a third-party web frontend for [Miniflux](https://github.com/miniflu
 
 ## Highlights
 
-- An editorial Home with Highlights and Latest. Starred sources can influence secondary Highlights and Latest while the lead story remains freshness-driven.
-- A focused article view, with configurable Column, Card, and List browsing layouts.
+- An editorial Home with Highlights and Latest. Starred articles can inform source and category affinity for secondary Highlights and Latest, while the lead story remains freshness-driven.
+- A focused article view, plus configurable Column, Card, and List browsing layouts.
 - Responsive layouts with OLED-aware content surfaces and restrained Liquid Glass treatments for navigation and interactive controls.
 - Search, feed and category views, with read/unread and starred state managed by Miniflux.
 - All and Unread keep their chronological behavior; Home personalization affects only the Home story selection.

@@ -1,3 +1,5 @@
+> **说明：** 本翻译文档及其中的截图继承自上游 ReactFlux 项目，可能无法反映 NewsFlux 当前的功能和界面。请以[当前 NewsFlux 英文 README](../README.md)为准。ReactFlux 仍作为上游项目予以[致谢并保留链接](https://github.com/electh/ReactFlux)。
+
 # ReactFlux
 
 阅读其他语言版本： [Deutsch](README.de-DE.md), [English](../README.md), [Español](README.es-ES.md), [Français](README.fr-FR.md), [日本語](README.ja-JP.md)
