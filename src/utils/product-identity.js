@@ -1,4 +1,4 @@
-import { PRODUCT_NAME, UPSTREAM_NAME } from "./constants.js"
+import { PRODUCT_NAME, UPSTREAM_NAME } from "./constants"
 
 export const applyRuntimeProductIdentity = (value) => {
   if (typeof value === "string") {
@@ -6,12 +6,15 @@ export const applyRuntimeProductIdentity = (value) => {
   }
 
   if (Array.isArray(value)) {
-    return value.map(applyRuntimeProductIdentity)
+    return value.map((nestedValue) => applyRuntimeProductIdentity(nestedValue))
   }
 
   if (value && typeof value === "object") {
     return Object.fromEntries(
-      Object.entries(value).map(([key, nestedValue]) => [key, applyRuntimeProductIdentity(nestedValue)]),
+      Object.entries(value).map(([key, nestedValue]) => [
+        key,
+        applyRuntimeProductIdentity(nestedValue),
+      ]),
     )
   }
 

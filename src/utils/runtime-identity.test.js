@@ -1,14 +1,15 @@
-import test from "node:test"
 import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
+import test from "node:test"
 
 import {
   PRODUCT_GITHUB_REPO_PATH,
   PRODUCT_NAME,
   UPSTREAM_GITHUB_REPO_PATH,
   UPSTREAM_NAME,
-} from "./constants.js"
-import { applyRuntimeProductIdentity } from "./product-identity.js"
-import { shouldNotifyProductUpdate } from "./update-check.js"
+} from "./constants"
+import { applyRuntimeProductIdentity } from "./product-identity"
+import { shouldNotifyProductUpdate } from "./update-check"
 
 test("exposes separate NewsFlux product and ReactFlux upstream identities", () => {
   assert.equal(PRODUCT_NAME, "NewsFlux")
@@ -58,10 +59,7 @@ test("reports a main advance that includes runtime code", () => {
     shouldNotifyProductUpdate({
       status: "ahead",
       ahead_by: 2,
-      files: [
-        { filename: "docs/NEWSFLUX_PROJECT_STATE.md" },
-        { filename: "src/App.jsx" },
-      ],
+      files: [{ filename: "docs/NEWSFLUX_PROJECT_STATE.md" }, { filename: "src/App.jsx" }],
     }),
     true,
   )
@@ -85,4 +83,17 @@ test("does not notify when main is not ahead of the build", () => {
       false,
     )
   }
+})
+
+test("sidebar brand uses shared product identity", () => {
+  const sidebarSource = readFileSync(
+    new URL("../components/Sidebar/Sidebar.jsx", import.meta.url),
+    "utf8",
+  )
+
+  assert.ok(sidebarSource.includes('import { PRODUCT_NAME } from "@/utils/constants"'))
+
+  assert.ok(sidebarSource.includes('<span className="home-brand-title">{PRODUCT_NAME}</span>'))
+
+  assert.ok(!sidebarSource.includes('<span className="home-brand-title">ReactFlux</span>'))
 })
