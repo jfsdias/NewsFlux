@@ -7,7 +7,7 @@ import {
   IconStarFill,
 } from "@arco-design/web-react/icon"
 import { useStore } from "@nanostores/react"
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router"
 
 import { markEntriesAsReadInBatches, updateEntriesStatusInBatches } from "@/apis"
@@ -56,7 +56,7 @@ const handleFilterChange = (value) => {
   updateSettings({ showStatus: value })
 }
 
-const MarkAllReadButton = ({ disabled, from, loading, onConfirm }) => {
+const MarkAllReadButton = ({ disabled, from, id, loading, onConfirm }) => {
   const { polyglot } = useStore(polyglotState)
   const { skipMarkAllReadConfirmation } = useStore(settingsState, {
     keys: ["skipMarkAllReadConfirmation"],
@@ -65,10 +65,65 @@ const MarkAllReadButton = ({ disabled, from, loading, onConfirm }) => {
   const isHidden = from === "history"
   const markAllReadLabel = polyglot.t("article_list.mark_all_as_read_tooltip")
   const [confirmVisible, setConfirmVisible] = useState(false)
+  const triggerRef = useRef(null)
+  const getScopedListIdentity = useCallback(
+    () =>
+      JSON.stringify([
+        createArticleListRequestKey({
+          content: contentState.get(),
+          settings: settingsState.get(),
+          info: { from, id },
+        }),
+        getDataSessionRevision(),
+      ]),
+    [from, id],
+  )
+  const scopedListIdentity = getScopedListIdentity()
+  const [pendingFocusReturn, setPendingFocusReturn] = useState(null)
+
+  const handleVisibleChange = (visible) => {
+    setConfirmVisible(visible)
+  }
+
+  const handleConfirm = async () => {
+    const confirmedListIdentity = scopedListIdentity
+    await onConfirm()
+    setPendingFocusReturn(confirmedListIdentity)
+  }
+
+  // Wait for Arco to close and the async trigger to become enabled again.
+  useEffect(() => {
+    if (!pendingFocusReturn || confirmVisible || disabled || loading) {
+      return
+    }
+
+    const frame = requestAnimationFrame(() => {
+      const trigger = triggerRef.current
+      if (
+        trigger?.isConnected &&
+        !trigger.disabled &&
+        getScopedListIdentity() === pendingFocusReturn &&
+        document.activeElement !== trigger
+      ) {
+        trigger.focus({ preventScroll: true })
+      }
+      setPendingFocusReturn(null)
+    })
+
+    return () => cancelAnimationFrame(frame)
+  }, [
+    confirmVisible,
+    disabled,
+    getScopedListIdentity,
+    loading,
+    pendingFocusReturn,
+    scopedListIdentity,
+  ])
 
   const button = (
     <CustomTooltip mini content={markAllReadLabel}>
       <Button
+        ref={triggerRef}
         aria-busy={loading}
         aria-expanded={skipMarkAllReadConfirmation ? undefined : confirmVisible}
         aria-label={markAllReadLabel}
@@ -97,8 +152,8 @@ const MarkAllReadButton = ({ disabled, from, loading, onConfirm }) => {
       triggerProps={{
         boundaryDistance: { bottom: 8, left: 8, right: 8, top: 8 },
       }}
-      onOk={onConfirm}
-      onVisibleChange={setConfirmVisible}
+      onOk={handleConfirm}
+      onVisibleChange={handleVisibleChange}
     >
       {button}
     </Popconfirm>
@@ -332,6 +387,7 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
       <MarkAllReadButton
         disabled={!isArticleListReady}
         from={source}
+        id={sourceId}
         loading={markingAllRead}
         onConfirm={handleMarkAllAsRead}
       />
