@@ -4,12 +4,18 @@ import { useStore } from "@nanostores/react"
 
 import AccessibleModal from "@/components/ui/AccessibleModal"
 import { polyglotState } from "@/hooks/useLanguage"
-import { GITHUB_REPO_PATH } from "@/utils/constants"
+import {
+  PRODUCT_GITHUB_REPO_PATH,
+  PRODUCT_NAME,
+  UPSTREAM_GITHUB_REPO_PATH,
+  UPSTREAM_NAME,
+} from "@/utils/constants"
 import { formatLocalizedDate } from "@/utils/date"
 import buildInfo from "@/version-info.json"
 import "./AboutModal.css"
 
-const REPOSITORY_URL = `https://github.com/${GITHUB_REPO_PATH}`
+const REPOSITORY_URL = `https://github.com/${PRODUCT_GITHUB_REPO_PATH}`
+const UPSTREAM_REPOSITORY_URL = `https://github.com/${UPSTREAM_GITHUB_REPO_PATH}`
 const LOGO_URL = `${import.meta.env.BASE_URL}logo192.png`
 
 const AboutModal = ({ visible, onClose }) => {
@@ -41,8 +47,14 @@ const AboutModal = ({ visible, onClose }) => {
             src={LOGO_URL}
             width="80"
           />
-          <p className="about-product-name">ReactFlux</p>
+          <p className="about-product-name">{PRODUCT_NAME}</p>
           <p className="about-description">{polyglot.t("about.description")}</p>
+          <p className="about-upstream-credit">
+            Based on{" "}
+            <a href={UPSTREAM_REPOSITORY_URL} rel="noopener noreferrer" target="_blank">
+              {UPSTREAM_NAME}
+            </a>
+          </p>
         </header>
 
         <section aria-labelledby="about-build-title" className="about-build">

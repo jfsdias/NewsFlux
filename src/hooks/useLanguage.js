@@ -13,6 +13,7 @@ import { useEffect } from "react"
 import { settingsState, updateSettings } from "@/store/settingsState"
 import { getBrowserLanguage } from "@/utils/locales"
 import createSetter from "@/utils/nanostores"
+import { applyRuntimeProductIdentity } from "@/utils/product-identity"
 
 const languageToLocale = {
   "ja-JP": "ja",
@@ -33,11 +34,11 @@ const loadLanguage = async (language, polyglot) => {
 
   try {
     const phrasesModule = await import(`../locales/${language}.json`)
-    phrases = phrasesModule.default
+    phrases = applyRuntimeProductIdentity(phrasesModule.default)
   } catch (error) {
     console.error("Failed to load language:", error)
     const fallbackModule = await import("@/locales/en-US.json")
-    phrases = fallbackModule.default
+    phrases = applyRuntimeProductIdentity(fallbackModule.default)
     locale = "en-US"
   }
 

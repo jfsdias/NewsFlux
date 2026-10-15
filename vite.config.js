@@ -42,8 +42,8 @@ export default defineConfig(({ mode }) => ({
         enabled: false,
       },
       manifest: {
-        name: "ReactFlux",
-        short_name: "ReactFlux",
+        name: "NewsFlux",
+        short_name: "NewsFlux",
         description: "A Simple but Powerful RSS Reader for Miniflux",
         icons: [
           {

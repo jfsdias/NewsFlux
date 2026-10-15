@@ -7,7 +7,7 @@ import useModalToggle from "@/hooks/useModalToggle"
 import useScreenWidth from "@/hooks/useScreenWidth"
 import useVersionCheck from "@/hooks/useVersionCheck"
 import { duplicateHotkeysState } from "@/store/hotkeysState"
-import { GITHUB_REPO_PATH } from "@/utils/constants"
+import { PRODUCT_GITHUB_REPO_PATH } from "@/utils/constants"
 import { isSettingsTabAvailable, SETTINGS_TAB_KEYS } from "@/utils/settings-navigation"
 
 import "./AppNotifications.css"
@@ -58,7 +58,7 @@ const AppNotifications = () => {
         <NotificationActions
           polyglot={polyglot}
           onCheck={() => {
-            window.open(`https://github.com/${GITHUB_REPO_PATH}/commits/main`, "_blank")
+            window.open(`https://github.com/${PRODUCT_GITHUB_REPO_PATH}/commits/main`, "_blank")
             Notification.remove(NEW_VERSION_NOTIFICATION_ID)
           }}
           onDismiss={() => {

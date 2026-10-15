@@ -4,8 +4,9 @@ import { useCallback, useEffect, useState } from "react"
 
 import { dataState } from "@/store/dataState"
 import { settingsState } from "@/store/settingsState"
-import { GITHUB_REPO_PATH, UPDATE_NOTIFICATION_KEY } from "@/utils/constants"
+import { PRODUCT_GITHUB_REPO_PATH, UPDATE_NOTIFICATION_KEY } from "@/utils/constants"
 import { checkIsInLast24Hours, getTimestamp } from "@/utils/date"
+import { shouldNotifyProductUpdate } from "@/utils/update-check"
 import buildInfo from "@/version-info.json"
 
 function useVersionCheck() {
@@ -22,7 +23,15 @@ function useVersionCheck() {
   }, [])
 
   useEffect(() => {
-    if (!isServerInfoReady || import.meta.env.DEV || !checkForUpdates || !buildInfo.gitDate) {
+    const buildCommit = buildInfo.gitFullHash || buildInfo.gitHash
+
+    if (
+      !isServerInfoReady ||
+      import.meta.env.DEV ||
+      !checkForUpdates ||
+      !buildCommit ||
+      buildCommit === "unknown"
+    ) {
       return
     }
 
@@ -33,12 +42,11 @@ function useVersionCheck() {
           return
         }
 
-        const data = await ofetch(`https://api.github.com/repos/${GITHUB_REPO_PATH}/commits/main`)
+        const data = await ofetch(
+          `https://api.github.com/repos/${PRODUCT_GITHUB_REPO_PATH}/compare/${buildCommit}...main`,
+        )
 
-        const currentGitTimestamp = getTimestamp(buildInfo.gitDate)
-        const latestGitTimestamp = getTimestamp(data.commit.committer.date)
-
-        setHasUpdate(currentGitTimestamp < latestGitTimestamp)
+        setHasUpdate(shouldNotifyProductUpdate(data))
       } catch (error) {
         console.error("Check update failed", error)
       }

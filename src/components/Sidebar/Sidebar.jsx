@@ -77,6 +77,7 @@ import {
 import { settingsState, updateSettings } from "@/store/settingsState"
 import { expandedCategoriesState, setExpandedCategories } from "@/store/sidebarState"
 import { confirmDialogProps } from "@/utils/confirm-dialog"
+import { PRODUCT_NAME } from "@/utils/constants"
 import { runEntryMutation } from "@/utils/entry-mutation-state"
 import { downloadFile, readFileAsText } from "@/utils/file"
 import { createEntityHomeTarget, isSameHomeTarget } from "@/utils/home-page"
@@ -1118,7 +1119,7 @@ const Sidebar = ({ headerAction, onNavigate }) => {
                     src={LOGO_URL}
                     width="32"
                   />
-                  <span className="home-brand-title">ReactFlux</span>
+                  <span className="home-brand-title">{PRODUCT_NAME}</span>
                 </button>
               </span>
             </CustomTooltip>

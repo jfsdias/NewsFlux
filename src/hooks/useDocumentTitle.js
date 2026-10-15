@@ -5,8 +5,7 @@ import { useParams } from "react-router"
 import { polyglotState } from "@/hooks/useLanguage"
 import { contentState } from "@/store/contentState"
 import { catalogCategoriesState, catalogFeedsState } from "@/store/dataState"
-
-const BASE_TITLE = "ReactFlux"
+import { PRODUCT_NAME } from "@/utils/constants"
 
 const useDocumentTitle = () => {
   const { activeContent, infoFrom } = useStore(contentState, {
@@ -44,7 +43,7 @@ const useDocumentTitle = () => {
     }
 
     const title = getTitle()
-    document.title = title ? `${title} - ${BASE_TITLE}` : BASE_TITLE
+    document.title = title ? `${title} - ${PRODUCT_NAME}` : PRODUCT_NAME
   }, [activeContent, infoFrom, id, feeds, categories, polyglot])
 }
 

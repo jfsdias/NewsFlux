@@ -1,7 +1,10 @@
 export const ANIMATION_DURATION_S = 0.25
 export const ANIMATION_DURATION_MS = ANIMATION_DURATION_S * 1000
 
-export const GITHUB_REPO_PATH = "electh/ReactFlux"
+export const PRODUCT_NAME = "NewsFlux"
+export const PRODUCT_GITHUB_REPO_PATH = "jfsdias/NewsFlux"
+export const UPSTREAM_NAME = "ReactFlux"
+export const UPSTREAM_GITHUB_REPO_PATH = "electh/ReactFlux"
 
 export const MIN_ENTRIES_PER_PAGE = 1
 export const MAX_ENTRIES_PER_PAGE = 1000
