@@ -1,3 +1,5 @@
+> **Hinweis:** Diese Übersetzung und die darin enthaltenen Screenshots stammen aus dem ReactFlux-Upstream und geben möglicherweise nicht die aktuellen Funktionen oder die Oberfläche von NewsFlux wieder. Das aktuelle NewsFlux-README (Englisch) ist [README.md](../README.md). ReactFlux bleibt als Upstream-Projekt [verlinkt](https://github.com/electh/ReactFlux).
+
 # ReactFlux
 
 In anderen Sprachen lesen: [English](../README.md), [Español](README.es-ES.md), [Français](README.fr-FR.md), [日本語](README.ja-JP.md), [简体中文](README.zh-CN.md)
