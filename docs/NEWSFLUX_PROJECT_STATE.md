@@ -2,17 +2,21 @@
 
 - **Purpose:** concise operational state for PM handoffs and future sessions. The roadmap remains the source for sequencing and product/architecture detail.
 - **Last reconciled:** 2026-10-15.
-- **Document baseline:** product `main` and production at `fa98531fe153c5689e40eaf210309b8751cb2cc4`.
+- **Documented product baseline:** `fa98531fe153c5689e40eaf210309b8751cb2cc4`.
 
 ## Current state
 
+`CURRENT_MAIN` is intentionally **not** stored as a self-updating commit SHA. A documentation-only merge would change `main` immediately and make the document stale. Live GitHub state must therefore be re-read before every action. The stable values recorded here are the last reconciled **product/runtime baseline** and production SHA.
+
 ```text
-CURRENT_MAIN=fa98531fe153c5689e40eaf210309b8751cb2cc4
+CURRENT_MAIN=RESOLVE_LIVE_GITHUB
+DOCUMENTED_MAIN_BASE_SHA=fa98531fe153c5689e40eaf210309b8751cb2cc4
+PRODUCT_BASELINE_SHA=fa98531fe153c5689e40eaf210309b8751cb2cc4
 PRODUCTION_SHA=fa98531fe153c5689e40eaf210309b8751cb2cc4
-MAIN_EQUALS_PRODUCTION=YES
+RUNTIME_PRODUCT_BASELINE_EQUALS_PRODUCTION=YES
 
 CURRENT_PHASE=POST_LIST_VISUAL_01A_STABLE_BASELINE
-CURRENT_PR=NONE
+CURRENT_PRODUCT_PR=NONE
 
 LAST_COMPLETED=LIST-VISUAL-01A / PR #28
 UPSTREAM_INTEGRATED_THROUGH=3045a5f8f69ffd7f571f73540031efa8b4ff6e6d
@@ -23,8 +27,10 @@ NEXT_AUTHORIZED_ACTION=NONE
 ROLLBACK_BASELINE=newsflux-local:b3d75867b901
 
 DOCUMENT_LAST_RECONCILED_AT=2026-10-15
-DOCUMENT_LAST_RECONCILED_SHA=fa98531fe153c5689e40eaf210309b8751cb2cc4
+DOCUMENT_PRODUCT_BASELINE_SHA=fa98531fe153c5689e40eaf210309b8751cb2cc4
 ```
+
+If a docs-only commit lands after this baseline, `main` may be ahead of production **without any runtime/product delta**. Do not interpret that as deployment drift until the diff is classified. Product/runtime changes still require exact-SHA deployment and explicit reconciliation.
 
 ## Recently completed
 
@@ -159,17 +165,19 @@ The specialized upstream monitor must live-check the current upstream head befor
 This is a recommendation only. Before implementation:
 
 1. live-check GitHub `main`, open PRs and production baseline;
-2. prepare one-purpose scope and regression gates;
-3. keep it separate from visual redesign and upstream sync;
-4. obtain authorization for the implementation track;
-5. never merge without explicit user authorization.
+2. classify any docs-only commits separately from runtime/product drift;
+3. prepare one-purpose scope and regression gates;
+4. keep it separate from visual redesign and upstream sync;
+5. obtain authorization for the implementation track;
+6. never merge without explicit user authorization.
 
 ## Deployment governance
 
-- Deploy only an exact approved SHA.
+- Deploy only an exact approved product/runtime SHA.
 - Never deploy `latest` or a moving branch implicitly.
 - Current production image: `newsflux-local:fa98531fe153`.
 - Preserved rollback image: `newsflux-local:b3d75867b901`.
+- Docs-only commits do not require production deployment merely to force SHA equality; classify their runtime delta as none.
 - Do not delete rollback images/backups incidentally.
 
 ## Documentation closure policy
@@ -191,7 +199,7 @@ Allowed `DOCUMENTATION_ACTION` values:
 - `UPDATE_IN_SCOPE`
 - `FOLLOW_UP_DOCS_PR`
 
-Documentation must be updated in-scope or through a dedicated follow-up PR when a task changes roadmap status, sequencing, architectural/product decisions, current/production SHA, upstream baseline, known debt, open findings or the next recommended action.
+Documentation must be updated in-scope or through a dedicated follow-up PR when a task changes roadmap status, sequencing, architectural/product decisions, production/runtime baseline, upstream baseline, known debt, open findings or the next recommended action.
 
 ## Governance invariants
 
