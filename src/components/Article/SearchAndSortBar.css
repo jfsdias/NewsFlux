@@ -77,6 +77,45 @@
   touch-action: manipulation;
 }
 
+.mobile-date-picker-popup .arco-picker-container {
+  border: 1px solid var(--nf-separator-subtle, var(--color-neutral-3));
+  border-radius: var(--nf-radius-surface, var(--border-radius-medium));
+  background-color: var(--nf-surface-elevated, var(--color-bg-popup));
+}
+
+.mobile-date-picker-popup .arco-picker-header {
+  border-bottom-color: var(--nf-separator-subtle, var(--color-neutral-3));
+}
+
+.mobile-date-picker-popup .arco-picker-header-value,
+.mobile-date-picker-popup .arco-picker-cell-in-view .arco-picker-date-value {
+  color: var(--nf-text-primary, var(--color-text-1));
+}
+
+.mobile-date-picker-popup .arco-picker-header-icon,
+.mobile-date-picker-popup .arco-picker-week-list-item {
+  color: var(--nf-text-secondary, var(--color-text-2));
+}
+
+.mobile-date-picker-popup .arco-picker-header-icon:hover,
+.mobile-date-picker-popup .arco-picker-cell:hover .arco-picker-date-value {
+  background-color: var(--nf-state-hover, var(--color-fill-3));
+}
+
+.mobile-date-picker-popup .arco-picker-cell-selected .arco-picker-date-value,
+.mobile-date-picker-popup .arco-picker-cell-selected:hover .arco-picker-date-value {
+  color: var(--nf-surface-content, var(--color-bg-1));
+  background-color: var(--nf-accent, rgb(var(--primary-6)));
+}
+
+.mobile-date-picker-popup .arco-picker-cell-today::after {
+  background-color: var(--nf-accent, rgb(var(--primary-6)));
+}
+
+.mobile-date-picker-popup .arco-picker-footer {
+  border-top-color: var(--nf-separator-subtle, var(--color-neutral-3));
+}
+
 @media screen and (max-width: 768px) {
   .search-and-sort-bar {
     padding: calc(env(safe-area-inset-top, 0px) + var(--mobile-navigation-spacing)) 0
