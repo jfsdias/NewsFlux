@@ -73,7 +73,7 @@
   align-items: center;
   gap: 7px;
   min-width: 0;
-  color: var(--nf-text-tertiary, var(--color-text-3));
+  color: var(--nf-text-secondary, var(--color-text-2));
   font-weight: 500;
 }
 

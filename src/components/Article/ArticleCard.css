@@ -85,10 +85,14 @@
 }
 
 .card-source-title {
+  min-width: 0;
+  overflow: hidden;
   color: var(--nf-text-secondary, var(--color-text-2));
   font-size: 0.8125rem;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .card-text {

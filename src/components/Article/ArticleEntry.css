@@ -87,17 +87,6 @@
   font-weight: 400;
 }
 
-.article-entry.read .card-source-title,
-.article-entry.read .card-time-wrapper,
-.article-entry.read .list-entry-source-title,
-.article-entry.read .list-entry-meta {
-  color: var(--nf-text-secondary, var(--color-text-2));
-}
-
-.article-entry.read .card-reading-time {
-  color: var(--nf-text-secondary, var(--color-text-2));
-}
-
 .article-entry.read .card-preview,
 .article-entry.read .grid-card-summary,
 .article-entry.read .list-entry-summary {
