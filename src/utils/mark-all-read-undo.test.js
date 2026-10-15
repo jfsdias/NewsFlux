@@ -4,6 +4,8 @@ import test from "node:test"
 const {
   createTimedOneShotActionStore,
   getMarkAllReadUndoNotificationId,
+  markAllReadOperationCoordinator,
+  markAllReadUndoActions,
   MARK_ALL_READ_UNDO_DURATION_MS,
   performMarkAllReadUndo,
 } = await import(new URL("mark-all-read-undo.js", import.meta.url))
@@ -89,6 +91,35 @@ test("Undo notification IDs are unique per action generation", () => {
   const second = actions.replace("second")
 
   assert.notEqual(getMarkAllReadUndoNotificationId(first), getMarkAllReadUndoNotificationId(second))
+})
+
+test("Footer and Sidebar use one shared one-shot Undo slot", () => {
+  const token = markAllReadUndoActions.replace({ entryIds: [41], source: "footer" })
+  assert.equal(markAllReadUndoActions.getCurrentToken(), token)
+
+  const replacement = markAllReadUndoActions.replace({ entryIds: [52], source: "sidebar" })
+  assert.notEqual(replacement, token)
+  assert.equal(markAllReadUndoActions.consume(token), null)
+  assert.deepEqual(markAllReadUndoActions.consume(replacement), {
+    entryIds: [52],
+    source: "sidebar",
+  })
+})
+
+test("shared Mark All guard rejects overlap and only releases its own lease", () => {
+  const first = markAllReadOperationCoordinator.acquire(7)
+  assert.ok(first)
+  assert.equal(markAllReadOperationCoordinator.acquire(7), null)
+
+  const nextSession = markAllReadOperationCoordinator.acquire(8)
+  assert.ok(nextSession)
+  assert.notEqual(nextSession, first)
+  assert.equal(markAllReadOperationCoordinator.release(first), false)
+  assert.equal(markAllReadOperationCoordinator.acquire(8), null)
+  assert.equal(markAllReadOperationCoordinator.release(nextSession), true)
+  const finalLease = markAllReadOperationCoordinator.acquire(8)
+  assert.ok(finalLease)
+  assert.equal(markAllReadOperationCoordinator.release(finalLease), true)
 })
 
 test("stale sessions are rejected before any Undo mutation or reconciliation", async () => {

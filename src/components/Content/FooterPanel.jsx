@@ -31,16 +31,15 @@ import createArticleListRequestKey from "@/utils/article-list-request-key"
 import { get24HoursAgoTimestamp } from "@/utils/date"
 import { runEntryMutation } from "@/utils/entry-mutation-state"
 import {
-  createTimedOneShotActionStore,
   getMarkAllReadUndoNotificationId,
   MARK_ALL_READ_UNDO_DURATION_MS,
+  markAllReadOperationCoordinator,
+  markAllReadUndoActions,
   performMarkAllReadUndo,
 } from "@/utils/mark-all-read-undo"
 import findAdjacentItem from "@/utils/navigation"
 import reconcileEntriesAfterMarkRead from "@/utils/reconcile-entries-after-mark-read"
 import "./FooterPanel.css"
-
-const markAllReadUndoActions = createTimedOneShotActionStore()
 
 const updateEntriesAsRead = (entryIds) => {
   const { activeContent } = contentState.get()
@@ -256,6 +255,11 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
       ...(source === "today" && { published_after: get24HoursAgoTimestamp() }),
     }
 
+    const operationLease = markAllReadOperationCoordinator.acquire(sessionRevision)
+    if (operationLease === null) {
+      return
+    }
+
     markingAllReadRef.current = true
     setMarkingAllRead(true)
     try {
@@ -334,6 +338,7 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
         })
       }
     } finally {
+      markAllReadOperationCoordinator.release(operationLease)
       markingAllReadRef.current = false
       setMarkingAllRead(false)
     }

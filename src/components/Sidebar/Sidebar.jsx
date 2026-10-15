@@ -5,6 +5,7 @@ import {
   Dropdown,
   Form,
   Menu,
+  Modal,
   Notification,
   Skeleton,
   Typography,
@@ -38,9 +39,10 @@ import Profile from "./Profile.jsx"
 import {
   exportOPML,
   getCategoryEntries,
+  getFeedEntries,
   importOPML,
-  markCategoryAsRead,
   markEntriesAsReadInBatches,
+  updateEntriesStatusInBatches,
 } from "@/apis"
 import { refreshCategoryFeed } from "@/apis/categories"
 import AdaptiveScrollArea from "@/components/ui/AdaptiveScrollArea"
@@ -66,16 +68,31 @@ import {
 import {
   dataState,
   feedsGroupedByIdState,
+  getDataSessionRevision,
   isEntryScopeFullyVisible,
-  setUnreadInfo,
   unreadTotalState,
   visibleCategoriesState,
   visibleFeedsState,
 } from "@/store/dataState"
 import { settingsState, updateSettings } from "@/store/settingsState"
 import { expandedCategoriesState, setExpandedCategories } from "@/store/sidebarState"
+import { confirmDialogProps } from "@/utils/confirm-dialog"
+import { runEntryMutation } from "@/utils/entry-mutation-state"
 import { downloadFile, readFileAsText } from "@/utils/file"
 import { createEntityHomeTarget, isSameHomeTarget } from "@/utils/home-page"
+import {
+  getMarkAllReadUndoNotificationId,
+  MARK_ALL_READ_UNDO_DURATION_MS,
+  markAllReadOperationCoordinator,
+  markAllReadUndoActions,
+  performMarkAllReadUndo,
+} from "@/utils/mark-all-read-undo"
+import reconcileEntriesAfterMarkRead from "@/utils/reconcile-entries-after-mark-read"
+import {
+  isSidebarSourceListAffected,
+  markSidebarSourceEntriesAsRead,
+  requestSidebarMarkAllRead,
+} from "@/utils/sidebar-mark-all-read"
 import {
   getCurrentZeroUnreadSource,
   getMatchingCategories,
@@ -755,8 +772,14 @@ const MoreOptionsDropdown = () => {
   )
 }
 
-const updateAllEntriesAsRead = () => {
-  setEntries((prev) => prev.map((entry) => ({ ...entry, status: "read" })))
+const updateEntriesAsRead = (entryIds) => {
+  const { activeContent } = contentState.get()
+  const { showStatus } = settingsState.get()
+  const markedEntryIds = new Set(entryIds)
+  if (activeContent && markedEntryIds.has(activeContent.id)) {
+    setActiveContent({ ...activeContent, status: "read" })
+  }
+  setEntries((previous) => reconcileEntriesAfterMarkRead(previous, markedEntryIds, showStatus))
 }
 
 const Sidebar = ({ headerAction, onNavigate }) => {
@@ -776,7 +799,7 @@ const Sidebar = ({ headerAction, onNavigate }) => {
   const [categoryForm] = Form.useForm()
   const [feedForm] = Form.useForm()
 
-  const { refreshSingleFeed, handleDeleteFeed, markFeedAsRead } = useFeedOperations(true)
+  const { refreshSingleFeed, handleDeleteFeed } = useFeedOperations(true)
   const { handleDeleteCategory } = useCategoryOperations(true)
 
   const location = useLocation()
@@ -862,7 +885,6 @@ const Sidebar = ({ headerAction, onNavigate }) => {
 
   const { refreshFeedData } = useAppData()
   const refreshCounts = useRefreshCounts()
-  const { infoFrom, infoId } = useStore(contentState, { keys: ["infoFrom", "infoId"] })
   const {
     identityReady: homeIdentityReady,
     setTarget: setHomePageTarget,
@@ -870,6 +892,144 @@ const Sidebar = ({ headerAction, onNavigate }) => {
     visibilityReady: homeVisibilityReady,
   } = useHomePage()
   const homePageReady = homeIdentityReady && homeVisibilityReady
+
+  const isCurrentListAffected = (scope, sourceId) => {
+    const { infoFrom, infoId } = contentState.get()
+    return isSidebarSourceListAffected({
+      scope,
+      sourceId,
+      infoFrom,
+      infoId,
+      feedsByCategory: feedsGroupedByIdState.get(),
+    })
+  }
+
+  const handleUndoMarkAllRead = async (token) => {
+    const action = markAllReadUndoActions.consume(token)
+    if (!action) {
+      return
+    }
+
+    Notification.remove(getMarkAllReadUndoNotificationId(token))
+    await performMarkAllReadUndo({
+      entryIds: action.entryIds,
+      sessionRevision: action.sessionRevision,
+      getCurrentSessionRevision: getDataSessionRevision,
+      updateEntriesStatusInBatches,
+      refreshCounts,
+      invalidateArticleList,
+      onError: (error) => {
+        Notification.error({
+          title: polyglot.t("article_list.mark_all_as_read_error"),
+          content: error.message,
+        })
+      },
+    })
+  }
+
+  const performSidebarMarkAllAsRead = async (scope, source) => {
+    const sourceId = source.id
+    const sessionRevision = getDataSessionRevision()
+    const operationLease = markAllReadOperationCoordinator.acquire(sessionRevision)
+    if (operationLease === null) {
+      return
+    }
+
+    const markedEntryIds = new Set()
+    const isCurrentSession = () => sessionRevision === getDataSessionRevision()
+
+    try {
+      await runEntryMutation(() =>
+        markSidebarSourceEntriesAsRead({
+          scope,
+          sourceId,
+          isEntryScopeFullyVisible,
+          getFeedEntries,
+          getCategoryEntries,
+          markEntriesAsReadInBatches,
+          onBatchMarkedRead: (entryIds) => {
+            for (const entryId of entryIds) {
+              markedEntryIds.add(entryId)
+            }
+            if (isCurrentSession() && isCurrentListAffected(scope, sourceId)) {
+              updateEntriesAsRead(entryIds)
+            }
+          },
+        }),
+      )
+
+      if (!isCurrentSession()) {
+        return
+      }
+
+      invalidateArticleList()
+      await refreshCounts({ force: true })
+      if (!isCurrentSession()) {
+        return
+      }
+
+      const previousUndoToken = markAllReadUndoActions.getCurrentToken()
+      markAllReadUndoActions.clear()
+      if (previousUndoToken !== null) {
+        Notification.remove(getMarkAllReadUndoNotificationId(previousUndoToken))
+      }
+
+      const entryIds = [...markedEntryIds]
+      if (entryIds.length > 0) {
+        let token
+        token = markAllReadUndoActions.replace(
+          { entryIds, sessionRevision },
+          {
+            durationMs: MARK_ALL_READ_UNDO_DURATION_MS,
+            onExpire: () => Notification.remove(getMarkAllReadUndoNotificationId(token)),
+          },
+        )
+        Notification.success({
+          id: getMarkAllReadUndoNotificationId(token),
+          title: polyglot.t("article_list.mark_all_as_read_success"),
+          duration: MARK_ALL_READ_UNDO_DURATION_MS,
+          btn: (
+            <Button size="small" onClick={() => void handleUndoMarkAllRead(token)}>
+              {polyglot.t("actions.undo")}
+            </Button>
+          ),
+          onClose: () => markAllReadUndoActions.clear(token),
+        })
+      } else {
+        Notification.success({
+          title: polyglot.t("article_list.mark_all_as_read_success"),
+        })
+      }
+    } catch (error) {
+      if (!isCurrentSession()) {
+        return
+      }
+      console.error(`Failed to mark Sidebar ${scope} entries as read:`, error)
+      invalidateArticleList()
+      await refreshCounts({ force: true })
+      if (isCurrentSession()) {
+        Notification.error({
+          title: polyglot.t("article_list.mark_all_as_read_error"),
+          content: error.message,
+        })
+      }
+    } finally {
+      markAllReadOperationCoordinator.release(operationLease)
+    }
+  }
+
+  const requestSidebarMarkAllAsRead = (scope, source) =>
+    requestSidebarMarkAllRead({
+      scope,
+      skipConfirmation: settingsState.get().skipMarkAllReadConfirmation,
+      confirm: (onConfirm) =>
+        Modal.confirm({
+          ...confirmDialogProps,
+          title: polyglot.t("article_list.mark_all_as_read_confirm"),
+          onOk: onConfirm,
+        }),
+      onConfirm: () => performSidebarMarkAllAsRead(scope, source),
+    })
 
   const handleEditCategory = (category) => {
     setSelectedCategory(category)
@@ -896,51 +1056,8 @@ const Sidebar = ({ headerAction, onNavigate }) => {
     }
   }
 
-  const handleMarkAllAsReadCategory = async (category) => {
-    try {
-      await (isEntryScopeFullyVisible("category", category.id)
-        ? markCategoryAsRead(category.id)
-        : markEntriesAsReadInBatches((status, filterParams) =>
-            getCategoryEntries(category.id, status, false, filterParams),
-          ))
-      const feedsGroupedById = feedsGroupedByIdState.get()
-      const feedsInCategory = feedsGroupedById[category.id] || []
-
-      setUnreadInfo((prevUnreadInfo) => {
-        const newUnreadInfo = { ...prevUnreadInfo }
-        for (const feed of feedsInCategory) {
-          newUnreadInfo[feed.id] = 0
-        }
-        return newUnreadInfo
-      })
-
-      if (
-        (infoFrom === "category" && category.id === Number(infoId)) ||
-        (infoFrom === "feed" && feedsInCategory.some((feed) => feed.id === Number(infoId)))
-      ) {
-        updateAllEntriesAsRead()
-      }
-
-      invalidateArticleList()
-      await refreshCounts({ force: true })
-
-      Notification.success({
-        title: polyglot.t("article_list.mark_all_as_read_success"),
-      })
-    } catch (error) {
-      console.error("Failed to mark visible category entries as read:", error)
-      await refreshFeedData({ force: true }).catch((refreshError) => {
-        console.error(
-          "Failed to refresh data after marking category entries as read:",
-          refreshError,
-        )
-      })
-      invalidateArticleList()
-      Notification.error({
-        title: polyglot.t("article_list.mark_all_as_read_error"),
-      })
-    }
-  }
+  const handleMarkAllAsReadCategory = (category) =>
+    requestSidebarMarkAllAsRead("category", category)
 
   const handleEditFeed = (feed) => {
     setSelectedFeed(feed)
@@ -965,9 +1082,7 @@ const Sidebar = ({ headerAction, onNavigate }) => {
     await refreshCounts({ force: true })
   }
 
-  const handleMarkAllAsReadFeed = async (feed) => {
-    await markFeedAsRead(feed)
-  }
+  const handleMarkAllAsReadFeed = (feed) => requestSidebarMarkAllAsRead("feed", feed)
 
   const handleSetHomePage = (target, name) => {
     if (setHomePageTarget(target)) {
