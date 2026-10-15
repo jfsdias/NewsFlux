@@ -1,5 +1,7 @@
 export const MARK_ALL_READ_UNDO_DURATION_MS = 8000
 export const MARK_ALL_READ_UNDO_NOTIFICATION_ID = "footer-mark-all-read-undo"
+export const getMarkAllReadUndoNotificationId = (token) =>
+  `${MARK_ALL_READ_UNDO_NOTIFICATION_ID}-${token}`
 
 export const createTimedOneShotActionStore = ({
   now = Date.now,
@@ -33,6 +35,9 @@ export const createTimedOneShotActionStore = ({
 
   return {
     clear,
+    getCurrentToken() {
+      return activeAction?.token ?? null
+    },
     consume(token) {
       if (!activeAction || activeAction.token !== token) {
         return null

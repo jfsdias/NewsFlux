@@ -32,8 +32,8 @@ import { get24HoursAgoTimestamp } from "@/utils/date"
 import { runEntryMutation } from "@/utils/entry-mutation-state"
 import {
   createTimedOneShotActionStore,
+  getMarkAllReadUndoNotificationId,
   MARK_ALL_READ_UNDO_DURATION_MS,
-  MARK_ALL_READ_UNDO_NOTIFICATION_ID,
   performMarkAllReadUndo,
 } from "@/utils/mark-all-read-undo"
 import findAdjacentItem from "@/utils/navigation"
@@ -126,7 +126,7 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
       return
     }
 
-    Notification.remove(MARK_ALL_READ_UNDO_NOTIFICATION_ID)
+    Notification.remove(getMarkAllReadUndoNotificationId(token))
     await performMarkAllReadUndo({
       entryIds: action.entryIds,
       sessionRevision: action.sessionRevision,
@@ -229,19 +229,23 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
         return
       }
 
+      const previousUndoToken = markAllReadUndoActions.getCurrentToken()
       markAllReadUndoActions.clear()
-      Notification.remove(MARK_ALL_READ_UNDO_NOTIFICATION_ID)
+      if (previousUndoToken !== null) {
+        Notification.remove(getMarkAllReadUndoNotificationId(previousUndoToken))
+      }
       const undoEntryIds = [...markedEntryIds]
       if (undoEntryIds.length > 0) {
-        const token = markAllReadUndoActions.replace(
+        let token
+        token = markAllReadUndoActions.replace(
           { entryIds: undoEntryIds, sessionRevision },
           {
             durationMs: MARK_ALL_READ_UNDO_DURATION_MS,
-            onExpire: () => Notification.remove(MARK_ALL_READ_UNDO_NOTIFICATION_ID),
+            onExpire: () => Notification.remove(getMarkAllReadUndoNotificationId(token)),
           },
         )
         Notification.success({
-          id: MARK_ALL_READ_UNDO_NOTIFICATION_ID,
+          id: getMarkAllReadUndoNotificationId(token),
           title: polyglot.t("article_list.mark_all_as_read_success"),
           duration: MARK_ALL_READ_UNDO_DURATION_MS,
           btn: (

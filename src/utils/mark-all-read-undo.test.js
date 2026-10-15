@@ -1,8 +1,12 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-const { createTimedOneShotActionStore, MARK_ALL_READ_UNDO_DURATION_MS, performMarkAllReadUndo } =
-  await import(new URL("mark-all-read-undo.js", import.meta.url))
+const {
+  createTimedOneShotActionStore,
+  getMarkAllReadUndoNotificationId,
+  MARK_ALL_READ_UNDO_DURATION_MS,
+  performMarkAllReadUndo,
+} = await import(new URL("mark-all-read-undo.js", import.meta.url))
 
 const createFakeClock = () => {
   let currentTime = 100
@@ -42,9 +46,11 @@ test("Undo action lasts eight seconds, expires, and can only be consumed once", 
     },
   })
 
+  assert.equal(actions.getCurrentToken(), token)
   clock.advance(MARK_ALL_READ_UNDO_DURATION_MS - 1)
   assert.equal(expired, 0)
   assert.equal(actions.consume(token), "captured IDs")
+  assert.equal(actions.getCurrentToken(), null)
   assert.equal(actions.consume(token), null)
 
   const expiringToken = actions.replace("next IDs", {
@@ -68,10 +74,21 @@ test("replacing an Undo action invalidates the previous action", () => {
   })
   const currentToken = actions.replace("new IDs")
 
+  assert.equal(actions.getCurrentToken(), currentToken)
   assert.equal(actions.consume(previousToken), null)
   assert.equal(actions.consume(currentToken), "new IDs")
+  assert.equal(actions.getCurrentToken(), null)
   clock.advance(MARK_ALL_READ_UNDO_DURATION_MS)
   assert.equal(previousExpired, false)
+})
+
+test("Undo notification IDs are unique per action generation", () => {
+  const clock = createFakeClock()
+  const actions = createTimedOneShotActionStore(clock)
+  const first = actions.replace("first")
+  const second = actions.replace("second")
+
+  assert.notEqual(getMarkAllReadUndoNotificationId(first), getMarkAllReadUndoNotificationId(second))
 })
 
 test("stale sessions are rejected before any Undo mutation or reconciliation", async () => {
