@@ -53,7 +53,7 @@
 .list-entry-source-title {
   color: var(--nf-text-secondary, var(--color-text-2));
   font-size: 0.8125rem;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.35;
   overflow: hidden;
   text-overflow: ellipsis;
