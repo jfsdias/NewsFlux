@@ -1,9 +1,9 @@
 # NewsFlux Roadmap
 
-- **Status:** canonical roadmap reconciled after PR #28 and production promotion.
+- **Status:** canonical roadmap reconciled after PR #30 and production promotion.
 - **Created:** 2026-10-15.
 - **Last reconciled:** 2026-10-15.
-- **Reconciled against:** `main` and production at `fa98531fe153c5689e40eaf210309b8751cb2cc4`.
+- **Reconciled against:** product/runtime baseline and production at `b94c10926ae787382da4918e394c0821785f9c10`.
 - **Purpose:** preserve completed work, accepted findings, sequencing, architecture/product gates, upstream baseline, and the next recommended action without turning the roadmap into implementation authorization.
 
 This document is the canonical **roadmap**, not an implementation authorization. Detailed design decisions remain in the dedicated design documents and implementation plans remain in `docs/superpowers/plans/` where present.
@@ -106,6 +106,8 @@ Current reference decisions:
 | #26 | Upstream sync | **COMPLETED** | Adapted upstream article code-block experience through `3045a5f8...` |
 | #27 | BULK-01F | **COMPLETED** | Footer Mark All Read focus restoration |
 | #28 | LIST-VISUAL-01A | **COMPLETED** | Read-state + metadata/source hierarchy cohesion across Column/Card/List |
+| #29 | Documentation | **COMPLETED** | Roadmap/project-state reconciliation after PR #28 production promotion |
+| #30 | BULK-01B | **COMPLETED** | Sidebar Feed/Category Mark All confirmation + safe shared Undo; race hardening; exact merge-SHA deployed |
 
 ### 3.3 Functional behavior and defect tracks
 
@@ -113,13 +115,13 @@ Current reference decisions:
 | --- | --- | --- | --- |
 | BULK-01 — Footer Mark All Read Undo | **COMPLETED** | PR #20 | One-shot 8 s undo; repeated-operation behavior validated |
 | BULK-01F — footer focus return | **COMPLETED** | PR #27 | Focus returns deterministically without stale-list refocus |
-| BULK-01B — Sidebar context Mark All | **NEXT** | R2-01, **P1** | Unify confirmation + undo contract for feed/category context actions; dedicated functional PR |
+| BULK-01B — Sidebar context Mark All | **COMPLETED** | PR #30, R2-01 | Feed/Category confirmation + acknowledged-ID Undo; shared Mark-All/Undo coordinator; no Sidebar jump; physical touch gate waived by owner, physical PASS not claimed |
 | BULK-01C — scoped undo copy | **PLANNED** | R2-09, product copy decision | Name affected scope/count; remain separate from BULK-01B |
-| BULK-03 — range/age mark-as-read | **PLANNED** | After BULK-01B, before/alongside BULK-02 | Provider-backed; explicit ID-set semantics + acknowledged-ID Undo |
+| BULK-03 — range/age mark-as-read | **PLANNED** | BULK-01B dependency satisfied; before/alongside BULK-02 | Provider-backed; explicit ID-set semantics + acknowledged-ID Undo |
 | FILTER-01A — search scope rules | **NEXT** | R2-02, **P1**, product decision required | Decide reset-on-scope-change vs visible persistent/global search state |
 | FILTER-01B — date/status filter behavior | **PLANNED** | After FILTER-01A | Define visible scoped state and transition matrix |
 | FILTER-RULES-01 | **PLANNED** | After FILTER-01 | Miniflux `blocklist_rules` / `keeplist_rules`; no NewsFlux rule database |
-| BULK-02 — Multi-select | **PLANNED** | Blocked by BULK-01B + FILTER-01A | Visible/session selection only; mark selected read; Undo always |
+| BULK-02 — Multi-select | **PLANNED** | BULK-01B satisfied; still blocked by FILTER-01A | Visible/session selection only; mark selected read; Undo always |
 | READER-KEY-01 — layered Escape | **NEXT** | R2-05, P2 | Escape closes topmost menu/popover before reader |
 | STATE-ERR-01 — unavailable entry route | **NEXT** | R2-06, P2, product decision | Explicit unavailable state or safe redirect with feedback |
 | CONTENT-01 — untitled entry fallback | **NEXT** | R2-07, P2, copy decision | Deterministic accessible fallback; unread cue must remain non-empty |
@@ -229,7 +231,7 @@ Dependency rules remain:
 | Item | Status | Notes |
 | --- | --- | --- |
 | ID-01R | **COMPLETED** | PR #21 |
-| ID-RUNTIME-01 | **NEXT** | Product name, update check, About and issue links should target NewsFlux while preserving upstream credit |
+| ID-RUNTIME-01 | **NEXT / RECOMMENDED** | Product name, update check, About and issue links should target NewsFlux while preserving upstream credit |
 | GitHub metadata | **NEXT** | Description/homepage/topics remain a separate metadata write |
 | ID-DEPLOY-01 | **HOLD — ARCHITECTURE** | Choose local-build vs registry/deployer contract before checked-in distribution changes |
 | APP-BADGE-01 | **BACKLOG** | After ID-DEPLOY; use Miniflux unread counts subject to browser/PWA capability |
@@ -278,7 +280,7 @@ The following opportunities do not require new persistent NewsFlux state:
 
 | Item | Source of truth | Current capability / gap | Roadmap handling |
 | --- | --- | --- | --- |
-| BULK-03 range/age mark-as-read | Miniflux read state | Existing batch-ID mutation + Undo primitives; range semantics are new | **PLANNED**, after BULK-01B and before/alongside BULK-02 |
+| BULK-03 range/age mark-as-read | Miniflux read state | Existing batch-ID mutation + Undo primitives; range semantics are new | **PLANNED**; BULK-01B dependency satisfied, before/alongside BULK-02 |
 | FEED-HEALTH-01 | Miniflux feed metadata | Feed objects expose parsing-error information; NewsFlux does not surface it prominently | **PLANNED** near NAV-02F |
 | FILTER-RULES-01 | Miniflux feed `blocklist_rules` / `keeplist_rules` | Provider supports the fields; NewsFlux does not expose the editing contract | **PLANNED** after FILTER-01 |
 | HOME-VISUAL-02 | Miniflux categories + existing Home data | Deterministic editorial grouping; no new ranking state | **HOLD — PRODUCT** pending editorial decision |
@@ -290,7 +292,7 @@ The following opportunities do not require new persistent NewsFlux state:
 
 P1 findings:
 
-1. **R2-01 / BULK-01B** — still open and NEXT.
+1. **R2-01 / BULK-01B** — **COMPLETED** in PR #30.
 2. **R2-02 / FILTER-01A** — still open and NEXT, product decision required.
 3. **R2-03 / A11Y-01** — still open and NEXT.
 
@@ -376,32 +378,31 @@ Offline reading, feed notifications, third-party AI summaries and other new pers
 
 ## 7. Recommended execution order from the current baseline
 
-The earlier deterministic items A11Y-RT-01, BULK-01F and LIST-VISUAL-01 have now been completed. The ordered remaining tracks are:
+The earlier deterministic items A11Y-RT-01, BULK-01F, LIST-VISUAL-01 and BULK-01B have now been completed. The ordered remaining tracks are:
 
-1. **BULK-01B** — P1 sidebar confirmation/undo contract.
-2. **ID-RUNTIME-01** — runtime product identity and upstream-safe links.
-3. **A11Y-01** — P1 landmarks/headings/skip navigation.
-4. **FILTER-01A** — P1 after explicit product choice.
-5. **READER-KEY-01**, **STATE-ERR-01**, **CONTENT-01** — separate bugfix PRs.
-6. **READER-VISUAL-02A** — typography/header/stateless progress only.
-7. **BULK-03** and **FEED-HEALTH-01** — separate provider-backed PRs.
-8. **HOME-01**, **NAV01**, **Keyboard/touch parity** — separate functional/interaction tracks.
-9. **READER-MEDIA-01** — real-device gate for edge-to-edge media.
-10. **FILTER-01B**, then **FILTER-RULES-01**.
-11. **CHROME-01 remaining subsets** — keep behavior, token styling and any glass/context consolidation isolated.
-12. **BULK-02** — only after BULK-01B + FILTER-01A.
-13. **NAV-02F**, **HOME-SKEL-01**, **READER-MEASURE-01**.
-14. **SAVE-EXT-01** after wording/placement are specified.
-15. **HOME-VISUAL-02** after explicit editorial decision + HOME-01.
-16. **READER-VISUAL-02B** after reduced-motion/focus contract + NAV01.
-17. **NAV-VISUAL-01** after explicit adaptive-navigation decision + real-device plan.
-18. **ID-DEPLOY-01** after distribution architecture decision.
-19. **First-party saved-state work** only after storage/sync/privacy/source-of-truth decisions.
-20. **Personalization V2**.
-21. **MOTION-01** after interaction architecture stabilizes.
-22. **ML ranking** last.
+1. **ID-RUNTIME-01** — runtime product identity and upstream-safe links.
+2. **A11Y-01** — P1 landmarks/headings/skip navigation.
+3. **FILTER-01A** — P1 after explicit product choice.
+4. **READER-KEY-01**, **STATE-ERR-01**, **CONTENT-01** — separate bugfix PRs.
+5. **READER-VISUAL-02A** — typography/header/stateless progress only.
+6. **BULK-03** and **FEED-HEALTH-01** — separate provider-backed PRs.
+7. **HOME-01**, **NAV01**, **Keyboard/touch parity** — separate functional/interaction tracks.
+8. **READER-MEDIA-01** — real-device gate for edge-to-edge media.
+9. **FILTER-01B**, then **FILTER-RULES-01**.
+10. **CHROME-01 remaining subsets** — keep behavior, token styling and any glass/context consolidation isolated.
+11. **BULK-02** — FILTER-01A remains its outstanding blocker; BULK-01B dependency is satisfied.
+12. **NAV-02F**, **HOME-SKEL-01**, **READER-MEASURE-01**.
+13. **SAVE-EXT-01** after wording/placement are specified.
+14. **HOME-VISUAL-02** after explicit editorial decision + HOME-01.
+15. **READER-VISUAL-02B** after reduced-motion/focus contract + NAV01.
+16. **NAV-VISUAL-01** after explicit adaptive-navigation decision + real-device plan.
+17. **ID-DEPLOY-01** after distribution architecture decision.
+18. **First-party saved-state work** only after storage/sync/privacy/source-of-truth decisions.
+19. **Personalization V2**.
+20. **MOTION-01** after interaction architecture stabilizes.
+21. **ML ranking** last.
 
-`BULK-01C` may be scheduled once copy is decided, but it remains separate from BULK-01B.
+`BULK-01C` may be scheduled once copy is decided, but it remains separate from the completed BULK-01B implementation.
 
 Read-only upstream auditing can run in parallel, but no sync follows automatically.
 
@@ -482,10 +483,10 @@ An unattended/overnight development session may advance only items that satisfy 
 - no dependence on a real-device PASS for correctness;
 - each independently meaningful change receives its own branch/PR;
 - tests/build/static gates can run autonomously;
-- browser/harness evidence may be collected when available, but absence of a physical-device gate must leave the PR unmerged;
+- browser/harness evidence may be collected when available, but absence of a physical-device gate must leave the PR unmerged unless the owner later makes an explicit attended waiver decision;
 - incidental discoveries are reported and routed back to the roadmap rather than fixed opportunistically.
 
-Current overnight-safe candidates must be re-evaluated against the current baseline before work begins. Completed tracks such as A11Y-RT-01, BULK-01F and LIST-VISUAL-01 must not be reopened merely because they were historically listed as safe candidates. Candidate work that remains low-decision includes bounded subsets such as READER-VISUAL-02A or CHROME token/copy work, but only after a fresh live-state and scope check.
+Current overnight-safe candidates must be re-evaluated against the current baseline before work begins. Completed tracks such as A11Y-RT-01, BULK-01F, LIST-VISUAL-01 and BULK-01B must not be reopened merely because they were historically listed as safe candidates. Candidate work that remains low-decision includes bounded subsets such as READER-VISUAL-02A or CHROME token/copy work, but only after a fresh live-state and scope check.
 
 The unattended agent must stop rather than guess if a candidate unexpectedly requires product semantics, touches upstream-sensitive behavior, overlaps another active PR or cannot be proven with available automated gates.
 
@@ -522,11 +523,16 @@ When a completed task changes roadmap status, sequencing, architectural/product 
 
 ## 13. Current promotion state
 
-- `CURRENT_MAIN=fa98531fe153c5689e40eaf210309b8751cb2cc4`
-- `PRODUCTION_SHA=fa98531fe153c5689e40eaf210309b8751cb2cc4`
-- `LIST_VISUAL_01A=COMPLETED`
+- `CURRENT_MAIN=RESOLVE_LIVE_GITHUB`
+- `DOCUMENTED_MAIN_BASE_SHA=b94c10926ae787382da4918e394c0821785f9c10`
+- `PRODUCT_BASELINE_SHA=b94c10926ae787382da4918e394c0821785f9c10`
+- `PRODUCTION_SHA=b94c10926ae787382da4918e394c0821785f9c10`
+- `RUNTIME_PRODUCT_BASELINE_EQUALS_PRODUCTION=YES`
+- `BULK_01B=COMPLETED`
+- `PR30_REAL_DEVICE_GATE=WAIVED_BY_OWNER`
+- `PR30_PHYSICAL_TOUCH_PASS=NOT_CLAIMED`
 - `UPSTREAM_INTEGRATED_THROUGH=3045a5f8f69ffd7f571f73540031efa8b4ff6e6d`
-- `NEXT_RECOMMENDED_ACTION=BULK-01B`
+- `NEXT_RECOMMENDED_ACTION=ID-RUNTIME-01`
 - `NEXT_AUTHORIZED_ACTION=NONE`
 
-The next implementation unit requires a fresh live-state check and explicit authorization. No roadmap entry authorizes a merge or production deployment by itself.
+A docs-only merge after this reconciliation may advance live `main` without changing the product/runtime baseline or requiring redeployment. The next implementation unit still requires a fresh live-state check and explicit authorization. No roadmap entry authorizes a merge or production deployment by itself.
