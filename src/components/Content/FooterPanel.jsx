@@ -35,7 +35,7 @@ import {
   MARK_ALL_READ_UNDO_DURATION_MS,
   markAllReadOperationCoordinator,
   markAllReadUndoActions,
-  performMarkAllReadUndo,
+  performCoordinatedMarkAllReadUndo,
 } from "@/utils/mark-all-read-undo"
 import findAdjacentItem from "@/utils/navigation"
 import reconcileEntriesAfterMarkRead from "@/utils/reconcile-entries-after-mark-read"
@@ -175,19 +175,14 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
   const refreshLabel = polyglot.t("article_list.refresh_tooltip")
 
   const handleUndoMarkAllRead = async (token) => {
-    const action = markAllReadUndoActions.consume(token)
-    if (!action) {
-      return
-    }
-
-    Notification.remove(getMarkAllReadUndoNotificationId(token))
-    await performMarkAllReadUndo({
-      entryIds: action.entryIds,
-      sessionRevision: action.sessionRevision,
+    await performCoordinatedMarkAllReadUndo({
+      token,
       getCurrentSessionRevision: getDataSessionRevision,
       updateEntriesStatusInBatches,
       refreshCounts,
       invalidateArticleList,
+      onConsume: (consumedToken) =>
+        Notification.remove(getMarkAllReadUndoNotificationId(consumedToken)),
       onError: (error) => {
         Notification.error({
           title: polyglot.t("article_list.mark_all_as_read_error"),

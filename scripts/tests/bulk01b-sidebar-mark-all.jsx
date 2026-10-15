@@ -24,6 +24,7 @@ import { contentState } from "@/store/contentState"
 import { dataState } from "@/store/dataState"
 import { getDefaultSettings, replaceSettings, settingsState } from "@/store/settingsState"
 import { setExpandedCategories } from "@/store/sidebarState"
+import { markAllReadUndoActions } from "@/utils/mark-all-read-undo"
 
 const searchParams = new URLSearchParams(location.search)
 const initialScope = searchParams.get("scope") === "category" ? "category" : "feed"
@@ -31,6 +32,7 @@ const skipConfirmation = searchParams.get("skip") === "1"
 const failMutation = searchParams.get("fail") === "1"
 const showHiddenFeeds = searchParams.get("hidden") === "1"
 const jumpToNext = searchParams.get("jump") === "1"
+const footerScopeOverride = searchParams.get("footerScope")
 const category = { id: 5, title: "Fixture category", hide_globally: false }
 const nextCategory = { id: 6, title: "Next category", hide_globally: false }
 const feeds = [
@@ -71,6 +73,15 @@ let fixtureEntries = [
 let reportState = () => {}
 let requestedSourceFilters = []
 let mutationBodies = []
+let delayNextMarkAllMutation = false
+let releasePendingMarkAllMutation = null
+
+globalThis.__delayNextMarkAllMutation = () => {
+  delayNextMarkAllMutation = true
+}
+globalThis.__releasePendingMarkAllMutation = () => releasePendingMarkAllMutation?.()
+globalThis.__hasPendingMarkAllMutation = () => releasePendingMarkAllMutation !== null
+globalThis.__getActiveMarkAllUndoToken = () => markAllReadUndoActions.getCurrentToken()
 
 polyglotState.setKey("polyglot", new Polyglot({ phrases: englishPhrases, locale: "en-US" }))
 authState.set({ server: "", token: "", username: "", password: "" })
@@ -142,7 +153,18 @@ apiClient.put = async (url, body) => {
     mutationState: "running",
     mutationCount: mutationBodies.length,
     lastMutationBody: JSON.stringify(body),
+    mutationLog: JSON.stringify(mutationBodies),
   })
+  if (delayNextMarkAllMutation) {
+    delayNextMarkAllMutation = false
+    reportState({ mutationState: "pending" })
+    await new Promise((resolve) => {
+      releasePendingMarkAllMutation = () => {
+        releasePendingMarkAllMutation = null
+        resolve()
+      }
+    })
+  }
   if (failMutation) {
     throw new Error("Fixture mutation failure")
   }
@@ -163,10 +185,11 @@ const fixtureUnreadCounts = () => {
 }
 
 const entriesAdapter = async (requestedStatus, _starred, filters = {}) => {
+  const footerScope = footerScopeOverride || initialScope
   const entries = fixtureEntries.filter(
     (entry) =>
       entry.status === requestedStatus &&
-      (initialScope === "category" ? entry.feed.category.id === 5 : entry.feed.id === 11) &&
+      (footerScope === "category" ? entry.feed.category.id === 5 : entry.feed.id === 11) &&
       visibleForQuery(entry, new URLSearchParams(filters)),
   )
   return { entries, total: entries.length }
@@ -179,7 +202,7 @@ const LocationProbe = () => {
 
 const RoutedFooter = () => {
   const { pathname } = useLocation()
-  const source = pathname.startsWith("/category/") ? "category" : "feed"
+  const source = footerScopeOverride || (pathname.startsWith("/category/") ? "category" : "feed")
   const id = source === "category" ? 5 : 11
   return (
     <FooterPanel
@@ -260,6 +283,7 @@ const Harness = () => {
             {report.lastMutationBody ? JSON.parse(report.lastMutationBody).entry_ids.join(",") : ""}
           </output>
           <output data-testid="mutation-bodies">{report.lastMutationBody ?? "[]"}</output>
+          <output data-testid="mutation-log">{report.mutationLog ?? "[]"}</output>
           <output data-testid="feed-11-unread">{unreadCounts[11]}</output>
           <output data-testid="feed-12-unread">{unreadCounts[12]}</output>
           <output data-testid="feed-21-unread">{unreadCounts[21]}</output>

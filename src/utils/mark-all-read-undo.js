@@ -123,3 +123,40 @@ export const performMarkAllReadUndo = async ({
   await reconcile()
   return { status: "success" }
 }
+
+export const performCoordinatedMarkAllReadUndo = async ({
+  token,
+  getCurrentSessionRevision,
+  undoActions = markAllReadUndoActions,
+  operationCoordinator = markAllReadOperationCoordinator,
+  updateEntriesStatusInBatches,
+  refreshCounts,
+  invalidateArticleList,
+  onConsume,
+  onError,
+}) => {
+  const operationLease = operationCoordinator.acquire(getCurrentSessionRevision())
+  if (operationLease === null) {
+    return { status: "busy" }
+  }
+
+  try {
+    const action = undoActions.consume(token)
+    if (!action) {
+      return { status: "missing" }
+    }
+
+    onConsume?.(token)
+    return await performMarkAllReadUndo({
+      entryIds: action.entryIds,
+      sessionRevision: action.sessionRevision,
+      getCurrentSessionRevision,
+      updateEntriesStatusInBatches,
+      refreshCounts,
+      invalidateArticleList,
+      onError,
+    })
+  } finally {
+    operationCoordinator.release(operationLease)
+  }
+}
