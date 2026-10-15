@@ -163,7 +163,8 @@ body[arco-theme="dark"] {
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  body {
+  body,
+  body[arco-theme="dark"] {
     --nf-glass-fill: var(--nf-glass-fill-solid);
     --nf-glass-border: var(--nf-separator-subtle);
     --nf-glass-highlight: transparent;
