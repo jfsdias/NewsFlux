@@ -39,7 +39,7 @@ export const formatSettingsBackupFilename = (date = new Date()) => {
   const hours = padNumber(date.getHours())
   const minutes = padNumber(date.getMinutes())
 
-  return `reactflux-settings-${year}${month}${day}-${hours}${minutes}.json`
+  return `newsflux-settings-${year}${month}${day}-${hours}${minutes}.json`
 }
 
 const sanitizeSnapshot = (
