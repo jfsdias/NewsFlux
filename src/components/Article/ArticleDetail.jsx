@@ -33,6 +33,8 @@ import useScreenWidth, { prefersReducedMotionState } from "@/hooks/useScreenWidt
 import { activeContentState } from "@/store/contentState"
 import { articleDetailSettingsState } from "@/store/settingsState"
 import returnToArticleImage from "@/utils/article-image-return"
+import extractCodeContent from "@/utils/code-content"
+import { getCodeLanguage } from "@/utils/code-languages"
 import { generateReadableDate, generateReadingTime } from "@/utils/date"
 import buildArticleImageModel from "@/utils/images"
 import { getSafeExternalUrl } from "@/utils/url"
@@ -42,7 +44,15 @@ import "./littlefoot.css"
 const ArticleLightbox = lazy(() => import("./ArticleLightbox"))
 const EMPTY_ATTACHMENTS = { items: [], primaryMedia: null }
 
-const renderCodeBlock = (codeContent) => <DeferredCodeBlock>{codeContent}</DeferredCodeBlock>
+const renderCodeBlock = (preElement) => {
+  const codeElement = preElement.children?.find((child) => child.name === "code") ?? preElement
+
+  return (
+    <DeferredCodeBlock languageHint={getCodeLanguage(preElement)}>
+      {extractCodeContent(codeElement)}
+    </DeferredCodeBlock>
+  )
+}
 
 const handleLinkWithImage = (node, getImageIndex, togglePhotoSlider) => {
   const imgNodes = node.children.filter((child) => child.type === "tag" && child.name === "img")
@@ -116,32 +126,6 @@ const handleImage = (node, getImageIndex, togglePhotoSlider) => {
   return <ImageOverlayButton index={index} node={node} togglePhotoSlider={togglePhotoSlider} />
 }
 
-const htmlEntities = {
-  "&#39;": "'",
-  "&quot;": '"',
-  "&lt;": "<",
-  "&gt;": ">",
-  "&amp;": "&",
-}
-
-const decodeAndParseCodeContent = (preElement) => {
-  return preElement.children
-    .map((child) => {
-      if (child.type === "tag" && child.name === "p") {
-        return `${child.children[0]?.data ?? ""}\n`
-      }
-      if (child.type === "tag" && child.name === "strong") {
-        return child.children[0]?.data ?? ""
-      }
-      return child.data ?? (child.name === "br" ? "\n" : "")
-    })
-    .join("")
-    .replaceAll(
-      new RegExp(Object.keys(htmlEntities).join("|"), "g"),
-      (match) => htmlEntities[match],
-    )
-}
-
 const handleTableBasedCode = (node) => {
   const tbody = node.children.find((child) => child.name === "tbody")
   if (!tbody) {
@@ -166,13 +150,7 @@ const handleTableBasedCode = (node) => {
     return null
   }
 
-  // Check if there's a <code> element inside the pre
-  const codeElement = codePre.children?.find((child) => child.name === "code")
-  if (codeElement) {
-    return decodeAndParseCodeContent(codeElement)
-  }
-
-  return decodeAndParseCodeContent(codePre)
+  return codePre
 }
 
 // Preserve presentational tables; normalize and wrap data tables for horizontal scrolling.
@@ -231,14 +209,19 @@ const handleFigure = (node, getImageIndex, togglePhotoSlider, options) => {
 
   // Handle code blocks wrapped in figure
   if (firstChild?.name === "pre") {
-    const codeContent = decodeAndParseCodeContent(firstChild)
-    return codeContent ? renderCodeBlock(codeContent) : null
+    const codeElement = firstChild.children?.find((child) => child.name === "code") ?? firstChild
+    return extractCodeContent(codeElement) ? renderCodeBlock(firstChild) : null
   }
 
   // Handle table-based code blocks with line numbers
   if (firstChild?.name === "table") {
-    const codeContent = handleTableBasedCode(firstChild)
-    return codeContent ? renderCodeBlock(codeContent) : null
+    const codePre = handleTableBasedCode(firstChild)
+    if (!codePre) {
+      return null
+    }
+
+    const codeElement = codePre.children?.find((child) => child.name === "code") ?? codePre
+    return extractCodeContent(codeElement) ? renderCodeBlock(codePre) : null
   }
 
   // Handle multiple images in figure with figcaption support
@@ -284,13 +267,7 @@ const handleCodeBlock = (node) => {
     currentNode = nextNode
   }
 
-  // Extract code content
-  const codeContent =
-    node.children[0]?.name === "code"
-      ? decodeAndParseCodeContent(node.children[0])
-      : decodeAndParseCodeContent(node)
-
-  return renderCodeBlock(codeContent)
+  return renderCodeBlock(node)
 }
 
 const handleVideo = (node) => {
