@@ -172,6 +172,9 @@ export const phase2cEditorialHomeMatrix = {
     "READER_VISUAL_01_NO_IMAGE",
     "READER_VISUAL_01_ARTICLE_WIDTH_50_75_100",
     "READER_VISUAL_01_SCROLL_UNDER_GLASS",
+    "READER_VISUAL_02A1_NORMAL",
+    "READER_VISUAL_02A1_STRESS",
+    "READER_VISUAL_02A1_TECHNICAL",
   ],
   scenarios: [
     {
@@ -310,6 +313,15 @@ export const phase2cEditorialHomeMatrix = {
         "READER_VISUAL_01_SCROLL_UNDER_GLASS",
       ],
       fixtures: ["readerFixtures"],
+    },
+    {
+      id: "READER_VISUAL_02A1_EDITORIAL_TYPOGRAPHY",
+      covers: [
+        "READER_VISUAL_02A1_NORMAL",
+        "READER_VISUAL_02A1_STRESS",
+        "READER_VISUAL_02A1_TECHNICAL",
+      ],
+      fixtures: ["readerTypographyFixtures"],
     },
   ],
   manualGates: [
@@ -454,5 +466,96 @@ export const readerFixtures = {
     906,
     "A reader article without images",
     `${readerParagraphs(2)}<h2>Plain section</h2>${readerParagraphs(3, 2)}`,
+  ),
+}
+
+// READER-VISUAL-02A1: typography fixtures. Source markup stresses the editorial scale: a former h1 (normalized to
+// h2 by A11Y-01), nested headings, links before punctuation, lists, quotes, inline code, long paths, footnotes
+// and technical surfaces. Dates and feeds stay fixed: this slice does not touch the header.
+const typographyEntry = (id, title, content, extra) => ({
+  ...readerEntry(id, title, content),
+  ...extra,
+})
+const typographyFeed = (id, title, categoryTitle) => ({
+  ...fixtureFeed,
+  id,
+  title,
+  category: { id, title: categoryTitle },
+})
+export const readerTypographyFixtures = {
+  typographyNormal: typographyEntry(
+    931,
+    "City council approves €4.2 billion plan to rebuild the waterfront",
+    [
+      `<figure><img src="${readerAsset("valid-hero.svg")}" width="1600" height="900" alt="" /><figcaption>Caption under the hero image, kept as is by this slice.</figcaption></figure>`,
+      `<p><strong>LISBON —</strong> After nine hours of debate the council voted 24 to 17 on Tuesday, according to <a href="https://example.invalid/report">the council’s report</a>, to approve a <em>€4.2 billion</em> package.</p>`,
+      `<p>Links before punctuation: see <a href="https://example.invalid/a">the fund</a>, the <a href="https://example.invalid/b">tram line</a>, and <a href="https://example.invalid/c">the budget</a>.</p>`,
+      "<h2>What changes for residents</h2>",
+      readerParagraphs(1),
+      "<h3>The cost question</h3>",
+      readerParagraphs(1, 1),
+      "<h4>A smaller heading</h4>",
+      readerParagraphs(1, 2),
+      "<blockquote><p>We have spent fifty years designing the city around the car and then wondering why nobody wants to walk in it.</p></blockquote>",
+      "<blockquote><p>A longer quoted passage that comes from a forum thread and keeps going for a while so that the quote spans more than one line.</p><p>A second paragraph inside the same quote.</p></blockquote>",
+      `<ul><li>First item with <a href="https://example.invalid/d">a link</a> and <code>inlineCode()</code>.<ul><li>Nested item one</li><li>Nested item two</li></ul></li><li>Second item that is a little longer so it wraps at narrow widths and shows the item spacing.</li><li>Third item</li></ul>`,
+      "<ol><li>Step one</li><li>Step two with <strong>strong</strong> and <em>emphasis</em></li></ol>",
+      readerParagraphs(1, 3),
+    ].join(""),
+    {
+      author: "Maria Santos",
+      feed: typographyFeed(21, "The Daily Ledger", "News"),
+      reading_time: 7,
+    },
+  ),
+  typographyStress: typographyEntry(
+    932,
+    "A very long headline that keeps going well past what any editor would approve because the feed publishes the whole sentence as the title and then adds a second clause that nobody asked for",
+    [
+      "<h1>An h1 inside the article body</h1>",
+      "<h2>An h2 immediately after</h2>",
+      readerParagraphs(1),
+      `<p>A very long link: <a href="https://example.invalid/a/very/long/path/that/never/breaks/because/it/has/no/spaces/and/keeps/going/and/going">https://example.invalid/a/very/long/path/that/never/breaks/because/it/has/no/spaces/and/keeps/going/and/going</a> ends here.</p>`,
+      "<h3>An h3</h3>",
+      readerParagraphs(1, 1),
+      "<h4>An h4</h4>",
+      "<h5>An h5</h5>",
+      "<h6>An h6</h6>",
+      readerParagraphs(1, 2),
+      "<blockquote><h2>A nested h2 inside a quote</h2><p>Quoted text.</p></blockquote>",
+      "<ul><li><h1>A nested h1 inside a list item</h1></li></ul>",
+      "<table><tbody><tr><td><h2>A nested h2 in a cell</h2></td></tr></tbody></table>",
+    ].join(""),
+    {
+      author: "Alexandria Montgomery-Fitzgerald and Christopher Vandenberghe-Okonkwo",
+      feed: typographyFeed(
+        22,
+        "The International Journal of Regional Infrastructure Planning and Public Policy",
+        "Long category name for stress testing",
+      ),
+      reading_time: 12,
+    },
+  ),
+  typographyTechnical: typographyEntry(
+    933,
+    "Moving 400 packages to a monorepo without stopping the release train",
+    [
+      readerParagraphs(1),
+      "<h2>The migration script</h2>",
+      "<pre><code class=\"language-javascript\">import { execFileSync } from 'node:child_process'\n\nexport function importRepository({ name, remote, target }) {\n  const git = (...args) => execFileSync('git', args, { stdio: 'inherit' })\n  git('remote', 'add', name, remote)\n}\n</code></pre>",
+      "<p>The path <code>/home/runner/work/monorepo/monorepo/packages/ui-button/node_modules/.cache/babel-loader/a1b2c3d4e5f6</code> appeared in more error messages than we care to admit, and <code>process.cwd()</code> was misused.</p>",
+      `<h3>Build times</h3><table><thead><tr><th>Metric</th><th>Before</th><th>After</th><th>Change</th></tr></thead><tbody><tr><td>Cold build</td><td>38 min</td><td>9 min</td><td>−76%</td></tr><tr><td>See <a href="https://example.invalid/t">the report</a></td><td>12 min</td><td>2 min</td><td>−83%</td></tr></tbody></table>`,
+      `<ul><li>Link in list: <a href="https://example.invalid/e">handbook</a></li><li>Plain item</li></ul>`,
+      "<blockquote><h3>A heading inside a quote</h3><p>Quoted text.</p></blockquote>",
+      "<ul><li><h4>A heading inside a list item</h4></li></ul>",
+      `<p><a href="https://example.invalid/gallery"><img src="${readerAsset("valid-horizontal.svg")}" width="1000" height="1000" alt="" /><img src="${readerAsset("valid-vertical.svg")}" width="1000" height="1000" alt="" /></a></p>`,
+      `<p>A footnote-style reference<sup><a href="https://example.invalid/note">1</a></sup> in a sentence.</p>`,
+      readerParagraphs(1, 1),
+    ].join(""),
+    {
+      author: "Priya Raman",
+      feed: typographyFeed(23, "Engineering at Meridian", "Programming"),
+      reading_time: 9,
+    },
   ),
 }

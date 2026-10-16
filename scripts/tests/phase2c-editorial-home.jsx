@@ -14,6 +14,7 @@ import {
   phase2cEditorialHomeMatrix,
   primaryHierarchyFixtures,
   readerFixtures,
+  readerTypographyFixtures,
   routeEntries,
 } from "./fixtures/phase2c-editorial-home"
 
@@ -471,6 +472,10 @@ const measureReader = (articleWidth) => {
     titleFontSize: Number.parseFloat(getComputedStyle(title).fontSize),
     titleRect: rectOf(title),
     proseFontSize: Number.parseFloat(getComputedStyle(body).fontSize),
+    sourceH2FontSize: (() => {
+      const heading = [...body.querySelectorAll("h2")].find((node) => isProseBlock(node))
+      return heading ? Number.parseFloat(getComputedStyle(heading).fontSize) : null
+    })(),
     proseLineHeight: getComputedStyle(body.querySelector("p")).lineHeight,
     media: [
       ...body.querySelectorAll(
@@ -503,13 +508,19 @@ const measureReader = (articleWidth) => {
     listInert: Boolean(document.querySelector(".entry-col[inert]")),
   }
 }
-const mountReaderCase = async (mount, caseId, articleWidth = 75) => {
-  const entry = readerFixtures[caseId]
+const mountReaderCase = async (
+  mount,
+  caseId,
+  articleWidth = 75,
+  { fixtures = readerFixtures, fontSize } = {},
+) => {
+  const entry = fixtures[caseId]
   await mount(`/all/entry/${entry.id}`, {
     entries: [entry],
     total: 1,
     showStatus: "all",
     articleWidth,
+    fontSize,
   })
   await waitFor(
     () =>
@@ -552,10 +563,23 @@ const assertReaderLayout = (caseId, metrics) => {
     Math.abs(headerAxis - proseAxis) < 2,
     `${caseId} title axis ${headerAxis.toFixed(1)} is not aligned with the prose axis ${proseAxis.toFixed(1)}`,
   )
-  const tier = metrics.contentWidth >= 960 ? 36 : metrics.contentWidth >= 600 ? 32 : 24
+  const [floor, step, cap] =
+    metrics.contentWidth >= 960
+      ? [1.6, 2.2, 2.9]
+      : metrics.contentWidth >= 600
+        ? [1.5, 2, 2.6]
+        : [1.25, 1.55, 2]
+  const expectedTitle = Math.max(
+    metrics.proseFontSize * floor,
+    Math.min(metrics.proseFontSize * step, cap * 16),
+  )
   assert(
-    metrics.titleFontSize === tier,
-    `${caseId} title is ${metrics.titleFontSize}px; expected ${tier}px for a ${metrics.contentWidth}px reader`,
+    Math.abs(metrics.titleFontSize - expectedTitle) < 0.05,
+    `${caseId} title is ${metrics.titleFontSize}px; expected ${expectedTitle.toFixed(2)}px for a ${metrics.contentWidth}px reader`,
+  )
+  assert(
+    metrics.sourceH2FontSize === null || metrics.titleFontSize >= 1.1 * metrics.sourceH2FontSize,
+    `${caseId} title ${metrics.titleFontSize}px does not outrank source h2 ${metrics.sourceH2FontSize}px`,
   )
   assert(metrics.proseLineHeight !== "normal", `${caseId} prose line height missing`)
 }
@@ -635,6 +659,445 @@ const runReaderWidthControl = async (mount) => {
     )
   }
 }
+// READER-VISUAL-02A1: editorial typography foundation. Every size is measured twice, with and without the
+// ReaderStyles.css <style> element (Vite dev), so protected surfaces and prose geometry are compared with the
+// real pre-change baseline instead of frozen numbers.
+const READER_TYPOGRAPHY_SIZES = [1, 1.05, 1.5]
+const READER_SURFACE_PROPS = [
+  "fontSize",
+  "fontWeight",
+  "lineHeight",
+  "marginTop",
+  "marginBottom",
+  "marginLeft",
+  "marginRight",
+  "paddingTop",
+  "paddingBottom",
+  "paddingLeft",
+  "paddingRight",
+  "color",
+  "backgroundColor",
+  "borderTopWidth",
+  "borderBottomWidth",
+  "borderLeftWidth",
+  "borderRightWidth",
+  "borderTopColor",
+  "borderRadius",
+  "fontFamily",
+  "letterSpacing",
+  "textDecorationLine",
+  "transitionDuration",
+  "transitionProperty",
+  "animationName",
+]
+// The prose paragraph changes leading by design; every other protected surface must stay identical.
+const READER_PROTECTED_SURFACES = {
+  pre: ["pre", READER_SURFACE_PROPS],
+  preCode: ["pre code", READER_SURFACE_PROPS],
+  tableScroll: [".article-table-scroll", READER_SURFACE_PROPS],
+  th: ["th", READER_SURFACE_PROPS],
+  td: ["td", READER_SURFACE_PROPS],
+  figure: ["figure", READER_SURFACE_PROPS],
+  figcaption: ["figcaption", READER_SURFACE_PROPS],
+  figureImage: ["figure img", READER_SURFACE_PROPS],
+  linkTag: ["a.link-tag", READER_SURFACE_PROPS],
+  header: [".article-header", READER_SURFACE_PROPS],
+  meta: [".article-meta", READER_SURFACE_PROPS],
+  date: [".article-date", READER_SURFACE_PROPS],
+  divider: [".article-header .arco-divider", READER_SURFACE_PROPS],
+  // Inline elements inside prose inherit the new prose leading; only their typeface properties are protected.
+  strong: ["strong", ["fontSize", "fontWeight"]],
+  sup: ["sup", ["fontSize", "verticalAlign"]],
+  body: [".article-body", READER_SURFACE_PROPS],
+  article: [".article-content", ["paddingTop", "paddingBottom", "paddingLeft", "paddingRight"]],
+  paragraph: [
+    ".article-body > p",
+    READER_SURFACE_PROPS.filter((property) => property !== "lineHeight"),
+  ],
+}
+// These keep every computed style, but removing the global link margin on the links they hold legitimately
+// shrinks their own box (and re-flows table columns), and the code text box depends on async highlighting.
+const READER_GEOMETRY_EXEMPT = new Set(["th", "td", "sup", "preCode"])
+const readerStyleElement = () => {
+  const styles = [...document.querySelectorAll("style[data-vite-dev-id]")].filter((style) =>
+    style.dataset.viteDevId.endsWith("/ReaderStyles.css"),
+  )
+  assert(
+    styles.length === 1,
+    `expected one ReaderStyles.css <style> element, found ${styles.length}`,
+  )
+  return styles[0]
+}
+const measureWithoutReaderStyles = async (measure) => {
+  const { sheet } = readerStyleElement()
+  sheet.disabled = true
+  try {
+    await settle()
+    return measure()
+  } finally {
+    sheet.disabled = false
+    await settle()
+  }
+}
+let readerColorContext = null
+const readerColor = (value) => {
+  readerColorContext ??= Object.assign(document.createElement("canvas"), {
+    width: 1,
+    height: 1,
+  }).getContext("2d", { willReadFrequently: true })
+  readerColorContext.clearRect(0, 0, 1, 1)
+  readerColorContext.fillStyle = "#000"
+  readerColorContext.fillStyle = value
+  readerColorContext.fillRect(0, 0, 1, 1)
+  const [red, green, blue, alpha] = readerColorContext.getImageData(0, 0, 1, 1).data
+  return [red, green, blue, alpha / 255]
+}
+const readerBackground = (node) => {
+  for (let element = node; element; element = element.parentElement) {
+    const color = readerColor(getComputedStyle(element).backgroundColor)
+    if (color[3] > 0.99) {
+      return color
+    }
+  }
+  return [255, 255, 255, 1]
+}
+const srgbChannel = (value) => {
+  const unit = value / 255
+  return unit <= 0.03928 ? unit / 12.92 : ((unit + 0.055) / 1.055) ** 2.4
+}
+const relativeLuminance = ([red, green, blue]) =>
+  0.2126 * srgbChannel(red) + 0.7152 * srgbChannel(green) + 0.0722 * srgbChannel(blue)
+const readerContrast = (node, surface = node) => {
+  const foreground = readerColor(getComputedStyle(node).color)
+  const background = readerBackground(surface)
+  const blended =
+    foreground[3] < 1
+      ? foreground
+          .slice(0, 3)
+          .map((value, index) => value * foreground[3] + background[index] * (1 - foreground[3]))
+      : foreground
+  const [lighter, darker] = [relativeLuminance(blended), relativeLuminance(background)].toSorted(
+    (a, b) => b - a,
+  )
+  return (lighter + 0.05) / (darker + 0.05)
+}
+const readerNestedContext = "li, td, th, blockquote, figure"
+const readerStyle = (node) => getComputedStyle(node)
+const readerPx = (node, property) => Number.parseFloat(readerStyle(node)[property])
+const readerHeadingMetrics = (node) => ({
+  tag: node.tagName,
+  fontSize: readerPx(node, "fontSize"),
+  fontWeight: readerStyle(node).fontWeight,
+  synthesis: readerStyle(node).fontSynthesisWeight,
+  parentFontSize: readerPx(node.parentElement, "fontSize"),
+})
+const measureReaderTypography = () => {
+  const container = document.querySelector(".article-container")
+  const content = container?.querySelector(".article-content")
+  const body = container?.querySelector(".article-body")
+  const title = container?.querySelector(".article-title")
+  assert(content && body && title, "Reader did not render")
+  const fontSize = readerPx(body, "fontSize")
+  const containerWidth =
+    content.clientWidth - readerPx(content, "paddingLeft") - readerPx(content, "paddingRight")
+  const headings = [...body.querySelectorAll("h1, h2, h3, h4, h5, h6")]
+  const links = [...body.querySelectorAll("a:not(.link-tag)")].map((link) => ({
+    marginLeft: readerStyle(link).marginLeft,
+    marginRight: readerStyle(link).marginRight,
+    borderBottomWidth: readerStyle(link).borderBottomWidth,
+    underline: readerStyle(link).textDecorationLine.includes("underline"),
+    thickness: readerStyle(link).textDecorationThickness,
+    color: readerStyle(link).color,
+    contrast: readerContrast(link, body),
+  }))
+  const prose = [...body.querySelectorAll("p, ul, ol, blockquote, h2, h3")]
+    .filter((node) => isProseBlock(node))
+    .map((node) => ({
+      key: `${node.tagName}:${rectOf(node).width.toFixed(1)}@${rectOf(node).left.toFixed(1)}`,
+    }))
+  const firstProse = body.querySelector(":scope > p")
+  const blockquote = body.querySelector("blockquote")
+  const inlineCode = [...body.querySelectorAll("code")].filter((code) => !code.closest("pre"))
+  const meta = container.querySelector(".article-date, .article-meta")
+  const caption = body.querySelector("figcaption")
+  const listItem = body.querySelector("li")
+  const surfaces = Object.fromEntries(
+    Object.entries(READER_PROTECTED_SURFACES).map(([name, [selector, properties]]) => {
+      const node = container.querySelector(selector)
+      return [
+        name,
+        node
+          ? {
+              style: Object.fromEntries(
+                properties.map((property) => [property, readerStyle(node)[property]]),
+              ),
+              width: Number(rectOf(node).width.toFixed(1)),
+              left: Number(rectOf(node).left.toFixed(1)),
+            }
+          : null,
+      ]
+    }),
+  )
+  const linkTag = body.querySelector("a.link-tag")
+  return {
+    fontSize,
+    containerWidth,
+    forcedColors: globalThis.matchMedia("(forced-colors: active)").matches,
+    title: { ...readerHeadingMetrics(title), contrast: readerContrast(title, body) },
+    sourceH1Count: body.querySelectorAll("h1").length,
+    headings: headings
+      .filter((node) => !node.closest(readerNestedContext))
+      .map((node) => ({ ...readerHeadingMetrics(node), contrast: readerContrast(node, body) })),
+    nestedHeadings: headings
+      .filter((node) => node.closest(readerNestedContext))
+      .map((node) => readerHeadingMetrics(node)),
+    leading: [...body.querySelectorAll("p, li, dd, dt, blockquote")]
+      .filter((node) => !node.closest("figure, figcaption, table, pre, .footnotes"))
+      .map((node) => readerPx(node, "lineHeight") / readerPx(node, "fontSize")),
+    bodyContrast: firstProse ? readerContrast(firstProse, body) : null,
+    links,
+    linkTagCount: body.querySelectorAll("a.link-tag").length,
+    linkTagMargins: linkTag
+      ? [readerStyle(linkTag).marginLeft, readerStyle(linkTag).marginRight]
+      : null,
+    blockquote: blockquote
+      ? {
+          borderWidth: readerStyle(blockquote).borderInlineStartWidth,
+          borderStyle: readerStyle(blockquote).borderInlineStartStyle,
+          marginTop: readerPx(blockquote, "marginTop"),
+          paragraphMargin: readerPx(blockquote.querySelector("p"), "marginTop"),
+          contrast: readerContrast(blockquote.querySelector("p"), body),
+        }
+      : null,
+    listItemMargin: listItem
+      ? { top: readerPx(listItem, "marginTop"), bottom: readerPx(listItem, "marginBottom") }
+      : null,
+    inlineCode: inlineCode.map((code) => ({
+      ratio: readerPx(code, "fontSize") / readerPx(code.parentElement, "fontSize"),
+      borderWidth: readerStyle(code).borderTopWidth,
+      borderStyle: readerStyle(code).borderTopStyle,
+      contrast: readerContrast(code),
+    })),
+    metaContrast: meta ? readerContrast(meta, body) : null,
+    captionContrast: caption ? readerContrast(caption, body) : null,
+    prose: prose.map(({ key }) => key),
+    surfaces,
+    overflow: document.documentElement.scrollWidth - window.innerWidth,
+    offscreen: [
+      ...container.querySelectorAll(
+        ".article-header *, .article-body p, .article-body li, .article-body h1, .article-body h2, .article-body h3, .article-body h4, .article-body h5, .article-body h6, .article-body a, .article-body code, .article-body blockquote",
+      ),
+    ]
+      .filter((node) => {
+        const rect = rectOf(node)
+        return (
+          rect.width > 0 &&
+          !node.closest(".article-table-scroll, pre, .code-block-container") &&
+          (rect.right > window.innerWidth + 1 || rect.left < -1)
+        )
+      })
+      .map((node) => `${node.tagName}.${node.className}`),
+  }
+}
+const assertReaderTypography = (label, after, before) => {
+  const near = (actual, expected, tolerance = 0.05) => Math.abs(actual - expected) <= tolerance
+  const clamp = (floor, step, cap) => Math.max(floor, Math.min(step, cap))
+  const size = after.fontSize
+  const wide = after.containerWidth >= 600
+  const expectedTitle =
+    after.containerWidth >= 960
+      ? clamp(1.6 * size, 2.2 * size, 2.9 * 16)
+      : wide
+        ? clamp(1.5 * size, 2 * size, 2.6 * 16)
+        : clamp(1.25 * size, 1.55 * size, 2 * 16)
+  assert(
+    near(after.title.fontSize, expectedTitle),
+    `${label} title is ${after.title.fontSize}px; expected ${expectedTitle.toFixed(2)}px`,
+  )
+  assert(
+    after.title.fontWeight === "650" && after.title.synthesis === "none",
+    `${label} title weight/synthesis is ${after.title.fontWeight}/${after.title.synthesis}`,
+  )
+  assert(after.sourceH1Count === 0, `${label} a source h1 reached the reader unnormalized`)
+  const expectedH2 = clamp(1.08 * size, (wide ? 1.4 : 1.32) * size, (wide ? 1.75 : 1.6) * 16)
+  const expectedH3 = clamp(size, 1.15 * size, 1.35 * 16)
+  for (const heading of after.headings) {
+    const expected = { H2: expectedH2, H3: expectedH3 }[heading.tag] ?? size
+    assert(
+      near(heading.fontSize, expected),
+      `${label} ${heading.tag} is ${heading.fontSize}px; expected ${expected.toFixed(2)}px`,
+    )
+    assert(
+      heading.fontWeight === "600" && heading.synthesis === "none",
+      `${label} ${heading.tag} weight/synthesis is ${heading.fontWeight}/${heading.synthesis}`,
+    )
+    assert(heading.fontSize >= size - 0.01, `${label} ${heading.tag} is smaller than the body`)
+    assert(heading.contrast >= 7, `${label} ${heading.tag} contrast ${heading.contrast.toFixed(2)}`)
+  }
+  assert(
+    after.nestedHeadings.length === before.nestedHeadings.length,
+    `${label} nested heading count changed`,
+  )
+  for (const [index, heading] of after.nestedHeadings.entries()) {
+    if (["H1", "H2"].includes(heading.tag)) {
+      assert(
+        near(heading.fontSize, 1.17 * heading.parentFontSize, 0.06),
+        `${label} nested ${heading.tag} is ${heading.fontSize}px; cap is 1.17em of ${heading.parentFontSize}px`,
+      )
+    } else {
+      assert(
+        heading.fontSize === before.nestedHeadings[index].fontSize,
+        `${label} nested ${heading.tag} changed size`,
+      )
+    }
+  }
+  const largestHeading = Math.max(
+    0,
+    ...after.headings.map(({ fontSize }) => fontSize),
+    ...after.nestedHeadings.map(({ fontSize }) => fontSize),
+  )
+  assert(
+    after.title.fontSize >= 1.1 * largestHeading - 0.01,
+    `${label} title ${after.title.fontSize}px does not outrank the largest internal heading ${largestHeading}px`,
+  )
+  const expectedLeading = after.containerWidth < 600 ? 1.62 : 1.7
+  assert(
+    after.leading.length > 0 && after.leading.every((ratio) => near(ratio, expectedLeading, 0.005)),
+    `${label} prose leading ${[...new Set(after.leading.map((ratio) => ratio.toFixed(3)))]}; expected ${expectedLeading}`,
+  )
+  assert(after.bodyContrast >= 7, `${label} body contrast ${after.bodyContrast?.toFixed(2)}`)
+  assert(after.title.contrast >= 7, `${label} title contrast ${after.title.contrast.toFixed(2)}`)
+  assert(after.links.length > 0, `${label} has no inline links to measure`)
+  for (const link of after.links) {
+    assert(
+      link.marginLeft === "0px" && link.marginRight === "0px",
+      `${label} inline link margin ${link.marginLeft}/${link.marginRight}`,
+    )
+    assert(
+      link.borderBottomWidth === "0px" && link.underline && link.thickness === "1px",
+      `${label} inline link is not a 1px underline`,
+    )
+    assert(link.contrast >= 4.5, `${label} link contrast ${link.contrast.toFixed(2)}`)
+  }
+  assert(
+    after.linkTagCount === before.linkTagCount &&
+      JSON.stringify(after.linkTagMargins) === JSON.stringify(before.linkTagMargins),
+    `${label} a.link-tag was changed`,
+  )
+  if (after.blockquote) {
+    assert(
+      after.blockquote.borderWidth === "2px" && after.blockquote.borderStyle === "solid",
+      `${label} blockquote rule is ${after.blockquote.borderWidth} ${after.blockquote.borderStyle}`,
+    )
+    assert(
+      near(after.blockquote.marginTop, 1.6 * size, 0.1) &&
+        near(after.blockquote.paragraphMargin, 0.5 * size, 0.1),
+      `${label} blockquote rhythm ${after.blockquote.marginTop}/${after.blockquote.paragraphMargin}`,
+    )
+    assert(
+      after.blockquote.contrast >= 7,
+      `${label} blockquote contrast ${after.blockquote.contrast.toFixed(2)}`,
+    )
+  }
+  if (after.listItemMargin) {
+    assert(
+      near(after.listItemMargin.top, 0.4 * size, 0.1) &&
+        near(after.listItemMargin.bottom, 0.4 * size, 0.1),
+      `${label} list item margin ${after.listItemMargin.top}/${after.listItemMargin.bottom}`,
+    )
+  }
+  for (const code of after.inlineCode) {
+    assert(
+      near(code.ratio, 0.88, 0.005) && code.borderWidth === "1px" && code.contrast >= 4.5,
+      `${label} inline code ratio ${code.ratio.toFixed(3)} border ${code.borderWidth} contrast ${code.contrast.toFixed(2)}`,
+    )
+  }
+  for (const [name, contrast] of [
+    ["meta", after.metaContrast],
+    ["caption", after.captionContrast],
+  ]) {
+    assert(contrast === null || contrast >= 4.5, `${label} ${name} contrast ${contrast}`)
+  }
+  assert(after.overflow <= 0, `${label} overflowed horizontally by ${after.overflow}px`)
+  assert(after.offscreen.length === 0, `${label} content left the viewport: ${after.offscreen}`)
+  assert(
+    JSON.stringify(after.prose) === JSON.stringify(before.prose),
+    `${label} prose geometry changed: ${before.prose.slice(0, 4)} -> ${after.prose.slice(0, 4)}`,
+  )
+  for (const name of Object.keys(READER_PROTECTED_SURFACES)) {
+    const [now, then] = [after.surfaces[name], before.surfaces[name]]
+    assert(Boolean(now) === Boolean(then), `${label} protected surface ${name} presence changed`)
+    if (now) {
+      const changed = Object.keys(now.style).filter(
+        (property) => now.style[property] !== then.style[property],
+      )
+      assert(
+        changed.length === 0,
+        `${label} protected surface ${name} changed: ${changed.map((property) => `${property} ${then.style[property]} -> ${now.style[property]}`)}`,
+      )
+      assert(
+        READER_GEOMETRY_EXEMPT.has(name) ||
+          (Math.abs(now.width - then.width) < 0.6 && Math.abs(now.left - then.left) < 0.6),
+        `${label} protected surface ${name} moved: ${then.width}@${then.left} -> ${now.width}@${now.left}`,
+      )
+    }
+  }
+  if (after.forcedColors) {
+    assert(
+      after.blockquote === null || after.blockquote.borderStyle === "solid",
+      `${label} forced-colors blockquote rule is not visible`,
+    )
+    assert(
+      after.links.every((link) => link.underline),
+      `${label} forced-colors links lost their underline`,
+    )
+    assert(
+      after.inlineCode.every((code) => code.borderStyle === "solid"),
+      `${label} forced-colors inline code lost its border`,
+    )
+  }
+}
+const runReaderTypographyCase = async (mount, caseId) => {
+  // Lets an external screenshot driver stage one READER-VISUAL-02A1 case at a time.
+  globalThis.__readerVisual02a1MountCase = (nextCaseId, fontSize) =>
+    mountReaderCase(mount, nextCaseId, 75, { fixtures: readerTypographyFixtures, fontSize })
+  const sizes = []
+  for (const fontSize of READER_TYPOGRAPHY_SIZES) {
+    const label = `${caseId}@${fontSize}rem`
+    await mountReaderCase(mount, caseId, 75, { fixtures: readerTypographyFixtures, fontSize })
+    if (caseId === "typographyTechnical") {
+      document.querySelector(".deferred-code-block, .code-block-container")?.scrollIntoView()
+      await waitFor(
+        () => document.querySelector(".code-block-container .code-block-header"),
+        `${label} CodeBlock did not mount`,
+      )
+    }
+    assertReaderLayout(label, measureReader(75))
+    const after = measureReaderTypography()
+    const before = await measureWithoutReaderStyles(measureReaderTypography)
+    assertReaderTypography(label, after, before)
+    const largestHeading = Math.max(
+      ...after.headings.map(({ fontSize: size }) => size),
+      ...after.nestedHeadings.map(({ fontSize: size }) => size),
+    )
+    sizes.push({
+      fontSize,
+      viewport: [window.innerWidth, window.innerHeight],
+      containerWidth: after.containerWidth,
+      forcedColors: after.forcedColors,
+      title: after.title.fontSize,
+      largestHeading,
+      titleRatio: Number((after.title.fontSize / largestHeading).toFixed(3)),
+      bodyContrast: Number(after.bodyContrast.toFixed(2)),
+      linkContrast: Number(Math.min(...after.links.map(({ contrast }) => contrast)).toFixed(2)),
+    })
+  }
+  globalThis.__readerVisual02a1Metrics = {
+    ...globalThis.__readerVisual02a1Metrics,
+    [caseId]: sizes,
+  }
+}
+
 const runReaderScrollUnderGlass = async (mount) => {
   await mountReaderCase(mount, "longForm")
   const container = document.querySelector(".article-container")
@@ -815,6 +1278,7 @@ const Harness = () => {
       orderDirection = getDefaultSettings().orderDirection,
       personalization = null,
       articleWidth = getDefaultSettings().articleWidth,
+      fontSize = getDefaultSettings().fontSize,
     } = {},
   ) => {
     setProbe(null)
@@ -866,6 +1330,7 @@ const Harness = () => {
       showFeedIcon: true,
       enableSwipeGesture,
       articleWidth,
+      fontSize,
     })
     if (identity === "ready") {
       commitIdentityData({ id: 1, username: "fixture" })
@@ -2193,6 +2658,11 @@ const Harness = () => {
     ["READER_VISUAL_01_ARTICLE_WIDTH_50_75_100", () => runReaderWidthControl(mount)],
     ["READER_VISUAL_01_SCROLL_UNDER_GLASS", () => runReaderScrollUnderGlass(mount)],
   ]
+  const readerTypographyScenarios = [
+    ["READER_VISUAL_02A1_NORMAL", () => runReaderTypographyCase(mount, "typographyNormal")],
+    ["READER_VISUAL_02A1_STRESS", () => runReaderTypographyCase(mount, "typographyStress")],
+    ["READER_VISUAL_02A1_TECHNICAL", () => runReaderTypographyCase(mount, "typographyTechnical")],
+  ]
   const responsiveScenarios = [
     [
       "HOME_RESPONSIVE_VIEWPORT_STAGE",
@@ -3065,6 +3535,7 @@ const Harness = () => {
           ...personalizationScenarios,
           ...primaryHierarchyScenarios,
           ...readerScenarios,
+          ...readerTypographyScenarios,
           ...matrixScenarios,
         ]
         const gateNames = new Set(allScenarios.map(([name]) => name))
@@ -3123,6 +3594,7 @@ const Harness = () => {
     { name: "personalization", scenarios: personalizationScenarios },
     { name: "home-visual-01-primary-hierarchy", scenarios: primaryHierarchyScenarios },
     { name: "reader-visual-01-reading-ergonomics", scenarios: readerScenarios },
+    { name: "reader-visual-02a1-editorial-typography", scenarios: readerTypographyScenarios },
     { name: "matrix-completeness", scenarios: matrixScenarios },
   ]
   const runSuites = async (selectedSuites, { recordViewportTheme = false } = {}) => {
@@ -3135,6 +3607,7 @@ const Harness = () => {
           responsiveScenarios,
           primaryHierarchyScenarios,
           readerScenarios,
+          readerTypographyScenarios,
         ].includes(selectedScenarios)
         if (responsiveMode) {
           document.body.classList.add("phase2c-responsive-running")
@@ -3259,6 +3732,9 @@ const Harness = () => {
         </button>
         <button disabled={running} onClick={() => void run(readerScenarios)}>
           Run READER-VISUAL-01 reading ergonomics cases
+        </button>
+        <button disabled={running} onClick={() => void run(readerTypographyScenarios)}>
+          Run READER-VISUAL-02A1 editorial typography cases
         </button>
         <button disabled={running} onClick={() => void run(matrixScenarios)}>
           Run scenario matrix completeness gate
