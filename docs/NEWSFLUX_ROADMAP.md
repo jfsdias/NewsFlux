@@ -55,7 +55,7 @@ Current reference decisions:
 
 - **ADOPT:** multi-select; mark-selected-as-read; keyboard navigation expansion; provider-backed range mark-as-read; visible feed-health signaling; stronger list/read-state redundancy; editorial typography/details that do not alter behavior.
 - **ADAPT:** Favorites as Miniflux `starred`; density control using existing local settings; Miniflux block/keep rules; external-save/read-later handoff through Miniflux integrations; category rhythm on Home; Material-style confirmations/snackbars only where they preserve NewsFlux scope semantics.
-- **PLANNED WITH PRODUCT DECISION:** HOME-VISUAL-02 composition; FILTER-01A search contract; NAV-VISUAL-01 adaptive navigation; contextual chrome consolidation.
+- **PLANNED WITH PRODUCT DECISION:** HOME-VISUAL-02 composition; NAV-VISUAL-01 adaptive navigation; contextual chrome consolidation.
 - **HOLD:** NewsFlux-owned Saved umbrella, internal Read Later queue, internal Bookmarks, Boards, Tags, Smart folders, per-feed layout sync, swipe-save to an undefined target, story clustering, ML.
 - **DO NOT COPY:** Apple News ad-like blocks/oversized imagery; Feedly/Inoreader toolbar density; NewsBlur visual density; glass over content; permanent three-pane UI; algorithmic For You outside Home.
 
@@ -119,24 +119,24 @@ Current reference decisions:
 
 ### 3.3 Functional behavior and defect tracks
 
-| Item                                       | Status          | Priority / dependency                                   | Notes                                                                                                                                                                |
-| ------------------------------------------ | --------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| BULK-01 — Footer Mark All Read Undo        | **COMPLETED**   | PR #20                                                  | One-shot 8 s undo; repeated-operation behavior validated                                                                                                             |
-| BULK-01F — footer focus return             | **COMPLETED**   | PR #27                                                  | Focus returns deterministically without stale-list refocus                                                                                                           |
-| BULK-01B — Sidebar context Mark All        | **COMPLETED**   | PR #30, R2-01                                           | Feed/Category confirmation + acknowledged-ID Undo; shared Mark-All/Undo coordinator; no Sidebar jump; physical touch gate waived by owner, physical PASS not claimed |
-| BULK-01C — scoped undo copy                | **PLANNED**     | R2-09, product copy decision                            | Name affected scope/count; remain separate from BULK-01B                                                                                                             |
-| BULK-03 — range/age mark-as-read           | **IN PROGRESS** | BULK-01B dependency satisfied; before/alongside BULK-02 | BULK-03A above/below actions completed in PR #43; remaining range/age scope stays provider-backed with explicit ID-set semantics + acknowledged-ID Undo              |
-| FILTER-01A — search scope rules            | **NEXT**        | R2-02, **P1**, product decision required                | Decide reset-on-scope-change vs visible persistent/global search state                                                                                               |
-| FILTER-01B — date/status filter behavior   | **COMPLETED**   | PR #39                                                  | Date/status transitions and scoped search behavior; merged before the Reader Measure production baseline                                                             |
-| FILTER-RULES-01                            | **PLANNED**     | After FILTER-01                                         | Miniflux `blocklist_rules` / `keeplist_rules`; no NewsFlux rule database                                                                                             |
-| BULK-02 — Multi-select                     | **PLANNED**     | BULK-01B satisfied; still blocked by FILTER-01A         | Visible/session selection only; mark selected read; Undo always                                                                                                      |
-| READER-KEY-01 — layered Escape             | **NEXT**        | R2-05, P2                                               | Escape closes topmost menu/popover before reader                                                                                                                     |
-| STATE-ERR-01 — unavailable entry route     | **NEXT**        | R2-06, P2, product decision                             | Explicit unavailable state or safe redirect with feedback                                                                                                            |
-| CONTENT-01 — untitled entry fallback       | **NEXT**        | R2-07, P2, copy decision                                | Deterministic accessible fallback; unread cue must remain non-empty                                                                                                  |
-| HOME-01 — refresh/focus/reconnect          | **PLANNED**     | R2-12                                                   | Refresh must not unexpectedly reshuffle an active Phase 2D session                                                                                                   |
-| NAV01 — reader previous/next + next unread | **PLANNED**     | R2-14                                                   | Preserve canonical originating-scope order and next-unread-source flow                                                                                               |
-| NAV-02F — navigation follow-ups            | **PLANNED**     | R2-13/R2-17/R2-18                                       | Long source names, unread grouping/mode persistence decisions, and human-readable unread labels                                                                      |
-| FEED-HEALTH-01                             | **IN PROGRESS** | 01A completed in PR #40; 01B remains                    | Sidebar reports Miniflux update errors; detailed message, checked time and Retry remain a separate follow-up                                                         |
+| Item                                       | Status          | Priority / dependency                                                               | Notes                                                                                                                                                                |
+| ------------------------------------------ | --------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| BULK-01 — Footer Mark All Read Undo        | **COMPLETED**   | PR #20                                                                              | One-shot 8 s undo; repeated-operation behavior validated                                                                                                             |
+| BULK-01F — footer focus return             | **COMPLETED**   | PR #27                                                                              | Focus returns deterministically without stale-list refocus                                                                                                           |
+| BULK-01B — Sidebar context Mark All        | **COMPLETED**   | PR #30, R2-01                                                                       | Feed/Category confirmation + acknowledged-ID Undo; shared Mark-All/Undo coordinator; no Sidebar jump; physical touch gate waived by owner, physical PASS not claimed |
+| BULK-01C — scoped undo copy                | **PLANNED**     | R2-09, product copy decision                                                        | Name affected scope/count; remain separate from BULK-01B                                                                                                             |
+| BULK-03 — range/age mark-as-read           | **IN PROGRESS** | BULK-01B dependency satisfied; before/alongside BULK-02                             | BULK-03A above/below actions completed in PR #43; remaining range/age scope stays provider-backed with explicit ID-set semantics + acknowledged-ID Undo              |
+| FILTER-01A — search scope rules            | **COMPLETED**   | PR #37; merged as `73f793f51ba3f81e04c2fbaaf3093fc6c5983078`                        | Search is source-scoped; changing source clears it, same-scope reader return/refresh/pagination preserve it; no global search or new persistence                     |
+| FILTER-01B — date/status filter behavior   | **COMPLETED**   | PR #39                                                                              | Date/status transitions and scoped search behavior; merged before the Reader Measure production baseline                                                             |
+| FILTER-RULES-01                            | **PLANNED**     | After FILTER-01                                                                     | Miniflux `blocklist_rules` / `keeplist_rules`; no NewsFlux rule database                                                                                             |
+| BULK-02 — Multi-select                     | **PLANNED**     | BULK-01B and FILTER-01A complete; remaining sequencing/product gates require review | Visible/session selection only; mark selected read; Undo always                                                                                                      |
+| READER-KEY-01 — layered Escape             | **NEXT**        | R2-05, P2                                                                           | Escape closes topmost menu/popover before reader                                                                                                                     |
+| STATE-ERR-01 — unavailable entry route     | **NEXT**        | R2-06, P2, product decision                                                         | Explicit unavailable state or safe redirect with feedback                                                                                                            |
+| CONTENT-01 — untitled entry fallback       | **NEXT**        | R2-07, P2, copy decision                                                            | Deterministic accessible fallback; unread cue must remain non-empty                                                                                                  |
+| HOME-01 — refresh/focus/reconnect          | **PLANNED**     | R2-12                                                                               | Refresh must not unexpectedly reshuffle an active Phase 2D session                                                                                                   |
+| NAV01 — reader previous/next + next unread | **PLANNED**     | R2-14                                                                               | Preserve canonical originating-scope order and next-unread-source flow                                                                                               |
+| NAV-02F — navigation follow-ups            | **PLANNED**     | R2-13/R2-17/R2-18                                                                   | Long source names, unread grouping/mode persistence decisions, and human-readable unread labels                                                                      |
+| FEED-HEALTH-01                             | **IN PROGRESS** | 01A completed in PR #40; 01B remains                                                | Sidebar reports Miniflux update errors; detailed message, checked time and Retry remain a separate follow-up                                                         |
 
 ### 3.4 Accessibility and interaction foundation
 
@@ -255,11 +255,11 @@ Dependency rules remain:
 | Item                                 | Status       | Notes                                                                                    |
 | ------------------------------------ | ------------ | ---------------------------------------------------------------------------------------- |
 | Selective upstream maintenance model | **ONGOING**  | Never blindly merge or Sync fork                                                         |
-| Last formally reviewed upstream      | **BASELINE** | `3045a5f8f69ffd7f571f73540031efa8b4ff6e6d`                                               |
+| Last formally reviewed upstream      | **BASELINE** | `f1d6e4362aeaf7c5126cdb9dc0b041dd0dc8cb7d`                                               |
 | Last integrated upstream             | **BASELINE** | `3045a5f8f69ffd7f571f73540031efa8b4ff6e6d` via PR #26 article-code-block adaptation      |
-| Next upstream audit                  | **PLANNED**  | Specialized monitor must live-check upstream and review only commits after `3045a5f8...` |
+| Next upstream audit                  | **PLANNED**  | Specialized monitor must live-check upstream and review only commits after `f1d6e436...` |
 
-Upstream audit classification remains `INTEGRATE / ADAPT / SKIP / HOLD`. No reviewed/integrated baseline advances merely because upstream has a newer head.
+Upstream audit classification remains `INTEGRATE / ADAPT / SKIP / HOLD`. The formal review frontier does not advance the integration baseline; commits classified `HOLD` are not claimed as integrated. No reviewed/integrated baseline advances merely because upstream has a newer head.
 
 ### 3.9 Personalization and explicit rules
 
@@ -306,7 +306,7 @@ The following opportunities do not require new persistent NewsFlux state:
 P1 findings:
 
 1. **R2-01 / BULK-01B** — **COMPLETED** in PR #30.
-2. **R2-02 / FILTER-01A** — still open and NEXT, product decision required.
+2. **R2-02 / FILTER-01A** — **COMPLETED** in PR #37; source-scoped search/reset behavior is frozen.
 3. **R2-03 / A11Y-01** — **COMPLETED** in PR #34; exact merge-SHA production promotion and authenticated post-merge smoke passed.
 
 P2 disposition:
@@ -330,15 +330,6 @@ P3 debt remains under NAV-02F and HOME-SKEL-01 rather than being fixed incidenta
 ---
 
 ## 5. Product decisions required before implementation
-
-### FILTER-01A
-
-Choose one contract:
-
-- **scope-local search:** clear search when scope changes; or
-- **persistent/global search:** preserve query but expose it as visible removable filter state.
-
-Do not implement BULK-02 until this is decided because the selected visible set depends on a defined filtered scope.
 
 ### STATE-ERR-01
 
@@ -408,24 +399,23 @@ READER-VISUAL-02A1 is complete in PR #41, and READER-MEASURE-01 is complete in P
 
 1. **RUNTIME-BASE-01 / PR #38 reconciliation** — next engineering track after this docs PR; candidate branch `codex/runtime-base-01` is based on `73f793f51ba3f81e04c2fbaaf3093fc6c5983078` and must be reconciled with current `main`.
 2. **READER-VISUAL-02A2** — not started; follows the existing 02A1 typography foundation and READER-MEASURE-01. It must provide the real `.article-header-column` before header/body alignment can be validated against production markup.
-3. **FILTER-01A** — P1 after explicit product choice.
-4. **READER-KEY-01**, **STATE-ERR-01**, **CONTENT-01** — separate bugfix PRs.
-5. **BULK-03 remaining scope** and **FEED-HEALTH-01B** — separate provider-backed PRs; BULK-03A and FEED-HEALTH-01A are already complete.
-6. **HOME-01**, **NAV01**, **Keyboard/touch parity** — separate functional/interaction tracks.
-7. **READER-MEDIA-01** — real-device gate for edge-to-edge media.
-8. **FILTER-RULES-01** — after FILTER-01B, which is complete.
-9. **CHROME-01 remaining subsets** — keep behavior, token styling and any glass/context consolidation isolated.
-10. **BULK-02** — FILTER-01A remains its outstanding blocker; BULK-01B dependency is satisfied.
-11. **NAV-02F** and **HOME-SKEL-01**.
-12. **SAVE-EXT-01** after wording/placement are specified.
-13. **HOME-VISUAL-02** after explicit editorial decision + HOME-01.
-14. **READER-VISUAL-02B** after reduced-motion/focus contract + NAV01.
-15. **NAV-VISUAL-01** after explicit adaptive-navigation decision + real-device plan.
-16. **ID-DEPLOY-01** after distribution architecture decision.
-17. **First-party saved-state work** only after storage/sync/privacy/source-of-truth decisions.
-18. **Personalization V2**.
-19. **MOTION-01** after interaction architecture stabilizes.
-20. **ML ranking** last.
+3. **READER-KEY-01**, **STATE-ERR-01**, **CONTENT-01** — separate bugfix PRs.
+4. **BULK-03 remaining scope** and **FEED-HEALTH-01B** — separate provider-backed PRs; BULK-03A and FEED-HEALTH-01A are already complete.
+5. **HOME-01**, **NAV01**, **Keyboard/touch parity** — separate functional/interaction tracks.
+6. **READER-MEDIA-01** — real-device gate for edge-to-edge media.
+7. **FILTER-RULES-01** — after FILTER-01B, which is complete.
+8. **CHROME-01 remaining subsets** — keep behavior, token styling and any glass/context consolidation isolated.
+9. **BULK-02** — FILTER-01A and BULK-01B prerequisites are complete; remaining sequencing/product gates must be reviewed before authorization.
+10. **NAV-02F** and **HOME-SKEL-01**.
+11. **SAVE-EXT-01** after wording/placement are specified.
+12. **HOME-VISUAL-02** after explicit editorial decision + HOME-01.
+13. **READER-VISUAL-02B** after reduced-motion/focus contract + NAV01.
+14. **NAV-VISUAL-01** after explicit adaptive-navigation decision + real-device plan.
+15. **ID-DEPLOY-01** after distribution architecture decision.
+16. **First-party saved-state work** only after storage/sync/privacy/source-of-truth decisions.
+17. **Personalization V2**.
+18. **MOTION-01** after interaction architecture stabilizes.
+19. **ML ranking** last.
 
 `BULK-01C` may be scheduled once copy is decided, but it remains separate from the completed BULK-01B implementation.
 
@@ -586,6 +576,8 @@ When a completed task changes roadmap status, sequencing, architectural/product 
 - `PR30_REAL_DEVICE_GATE=WAIVED_BY_OWNER`
 - `PR30_PHYSICAL_TOUCH_PASS=NOT_CLAIMED`
 - `UPSTREAM_INTEGRATED_THROUGH=3045a5f8f69ffd7f571f73540031efa8b4ff6e6d`
+- `LAST_FORMALLY_REVIEWED_UPSTREAM_SHA=f1d6e4362aeaf7c5126cdb9dc0b041dd0dc8cb7d`
+- `NEXT_UPSTREAM_AUDIT_FROM=f1d6e4362aeaf7c5126cdb9dc0b041dd0dc8cb7d`
 - `LAST_COMPLETED=READER-MEASURE-01 / PR #44`
 - `READER_VISUAL_02A1=COMPLETED_PR41`
 - `READER_MEASURE_01=COMPLETED_MERGED_PROMOTED`
