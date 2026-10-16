@@ -57,6 +57,7 @@
     "delete_category_confirm_title": "Confirmar Eliminación de Categoría",
     "delete_category_confirm_content": "¿Está seguro de que desea eliminar la categoría '%{title}'? Esta acción no se puede deshacer.",
     "feeds": "Feeds",
+    "feed_update_error": "Error al actualizar el feed",
     "source_navigation_mode": "Modo de navegación de fuentes",
     "unread_mode": "No leídas",
     "all_mode": "Todas",

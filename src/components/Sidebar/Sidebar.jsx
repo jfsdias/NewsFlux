@@ -15,6 +15,7 @@ import {
   IconDelete,
   IconDownload,
   IconEdit,
+  IconExclamationCircle,
   IconEye,
   IconEyeInvisible,
   IconHistory,
@@ -79,6 +80,7 @@ import { expandedCategoriesState, setExpandedCategories } from "@/store/sidebarS
 import { confirmDialogProps } from "@/utils/confirm-dialog"
 import { PRODUCT_NAME } from "@/utils/constants"
 import { runEntryMutation } from "@/utils/entry-mutation-state"
+import hasProviderReportedFeedError from "@/utils/feed-health"
 import { downloadFile, readFileAsText } from "@/utils/file"
 import { createEntityHomeTarget, isSameHomeTarget } from "@/utils/home-page"
 import {
@@ -540,6 +542,15 @@ const FeedMenuItem = ({
             }}
           >
             {showFeedIcon && <FeedIcon className="feed-icon-sidebar" feed={feed} />}
+            {hasProviderReportedFeedError(feed) && (
+              <span
+                aria-label={polyglot.t("sidebar.feed_update_error")}
+                className="feed-health-indicator"
+                role="img"
+              >
+                <IconExclamationCircle aria-hidden="true" />
+              </span>
+            )}
             {feed.title}
           </Typography.Ellipsis>
           {(feed.unreadCount !== 0 || showZeroCount) && (

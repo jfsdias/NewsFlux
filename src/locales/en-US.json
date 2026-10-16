@@ -57,6 +57,7 @@
     "delete_category_confirm_title": "Confirm Delete Category",
     "delete_category_confirm_content": "Are you sure you want to delete category '%{title}'? This action cannot be undone.",
     "feeds": "Feeds",
+    "feed_update_error": "Feed update error",
     "source_navigation_mode": "Source navigation mode",
     "unread_mode": "Unread",
     "all_mode": "All",
