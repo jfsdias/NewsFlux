@@ -9,6 +9,7 @@ import {
   MAX_ENTRY_IDS_PER_PAGE,
 } from "@/utils/constants"
 import { get24HoursAgoTimestamp, getDayEndTimestamp, getTimestamp } from "@/utils/date"
+import { updateEntryIdsInBatches as updateEntryIdsInBatchesWithAcknowledgement } from "@/utils/entry-id-batches"
 import { buildHomeEntryRequest } from "@/utils/home-entry-request"
 
 export const getEntry = async (entryId) => apiClient.get(`/v1/entries/${entryId}`)
@@ -182,29 +183,22 @@ const getAllEntryIds = async (filters) => {
 const updateEntryIdsInBatches = async (
   entryIds,
   updates,
-  { sessionRevision = getDataSessionRevision(), retry } = {},
-) => {
-  for (let batchStart = 0; batchStart < entryIds.length; batchStart += ENTRY_UPDATE_BATCH_SIZE) {
-    if (sessionRevision !== getDataSessionRevision()) {
-      throw new Error("Stale entry update session")
-    }
-    await updateEntries(
-      entryIds.slice(batchStart, batchStart + ENTRY_UPDATE_BATCH_SIZE),
-      updates,
-      retry === undefined ? undefined : { retry },
-    )
-    if (sessionRevision !== getDataSessionRevision()) {
-      throw new Error("Stale entry update session")
-    }
-  }
-
-  return entryIds.length
-}
+  { sessionRevision = getDataSessionRevision(), retry, onBatchUpdated } = {},
+) =>
+  updateEntryIdsInBatchesWithAcknowledgement({
+    entryIds,
+    batchSize: ENTRY_UPDATE_BATCH_SIZE,
+    send: (batchEntryIds) =>
+      updateEntries(batchEntryIds, updates, retry === undefined ? undefined : { retry }),
+    sessionRevision,
+    getSessionRevision: getDataSessionRevision,
+    onBatchUpdated,
+  })
 
 export const updateEntriesStatusInBatches = async (
   entryIds,
   newStatus,
-  { sessionRevision = getDataSessionRevision() } = {},
+  { sessionRevision = getDataSessionRevision(), onBatchUpdated } = {},
 ) => {
   const uniqueEntryIds = [...new Set(entryIds)]
   return updateEntryIdsInBatches(
@@ -213,6 +207,7 @@ export const updateEntriesStatusInBatches = async (
     {
       sessionRevision,
       retry: false,
+      onBatchUpdated,
     },
   )
 }
