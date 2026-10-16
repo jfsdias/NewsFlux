@@ -8,6 +8,7 @@ import {
   setArticleListError,
   setEntries,
   setEntriesWithDeduplication,
+  setFilterString,
   setIsArticleListReady,
   setLoadMoreError,
   setLoadMoreVisible,
@@ -25,6 +26,10 @@ import {
 import { articleListRequestSettingsState, settingsState } from "@/store/settingsState"
 import { hasArticleListFilters } from "@/utils/article-list-filters"
 import createArticleListRequestKey from "@/utils/article-list-request-key"
+import {
+  createArticleListSearchScopeKey,
+  reconcileArticleListSearchScope,
+} from "@/utils/article-list-search-scope"
 import subscribeArticleListTotalRefresh from "@/utils/article-list-total-refresh"
 import {
   getEntryMutationSnapshot,
@@ -73,11 +78,33 @@ const useArticleList = (source, sourceId, getEntries) => {
     info: { from: source, id: sourceId },
     sessionRevision,
   })
+  const searchScope = { from: source, id: sourceId, showStatus: settingsSnapshot.showStatus }
+  const searchScopeKey = createArticleListSearchScopeKey(searchScope)
 
   const committedHomeSnapshot = useRef(null)
   const latestRequestId = useRef(0)
   const loadingRequestKey = useRef(null)
   const currentRequestKey = useRef(null)
+  const previousSearchScopeRef = useRef({
+    from: contentSnapshot.infoFrom,
+    id: contentSnapshot.infoId,
+    showStatus: settingsSnapshot.showStatus,
+  })
+
+  useLayoutEffect(() => {
+    const content = contentState.get()
+    const nextScope = { from: source, id: sourceId, showStatus: settingsSnapshot.showStatus }
+    const transition = reconcileArticleListSearchScope({
+      previousScope: previousSearchScopeRef.current,
+      nextScope,
+      filterString: content.filterString,
+    })
+
+    previousSearchScopeRef.current = nextScope
+    if (transition.filterString !== content.filterString) {
+      setFilterString(transition.filterString)
+    }
+  }, [searchScopeKey, settingsSnapshot.showStatus, source, sourceId])
 
   useLayoutEffect(() => {
     if (currentRequestKey.current === automaticRequestKey) {
