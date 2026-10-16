@@ -9,6 +9,7 @@ import {
 } from "./dataState"
 import { settingsState } from "./settingsState"
 
+import { reconcileArticleListFilterScope } from "@/utils/article-list-filter-scope"
 import { hasArticleListFilters } from "@/utils/article-list-filters"
 import removeDuplicateEntries from "@/utils/deduplicate"
 import { extractHeadings } from "@/utils/dom"
@@ -153,10 +154,68 @@ export const incrementArticleListSnapshotRevision = () =>
     (contentState.get().articleListSnapshotRevision ?? 0) + 1,
   )
 export const setEntries = createSetter(contentState, "entries")
-export const setFilterDate = createSetter(contentState, "filterDate")
+export const reconcileArticleListFilters = ({ filterDate, filterString }) => {
+  const current = contentState.get()
+  const nextFilterDate = filterDate ?? null
+  const nextFilterString = filterString ?? ""
+  if (current.filterDate === nextFilterDate && current.filterString === nextFilterString) {
+    return false
+  }
+
+  contentState.set({
+    ...current,
+    filterDate: nextFilterDate,
+    filterString: nextFilterString,
+  })
+  return true
+}
+export const setFilterDate = (filterDate) => {
+  const { infoFrom } = contentState.get()
+  contentState.setKey(
+    "filterDate",
+    ["home", "today"].includes(infoFrom) ? null : (filterDate ?? null),
+  )
+}
 export const setFilterString = createSetter(contentState, "filterString")
 export const setInfoFrom = createSetter(contentState, "infoFrom")
 export const setInfoId = createSetter(contentState, "infoId")
+export const setArticleListSource = ({ from, id }) => {
+  const current = contentState.get()
+  const nextScope = {
+    from: from ?? "all",
+    id: id ?? null,
+    showStatus: settingsState.get().showStatus,
+  }
+  const previousScope = {
+    from: current.infoFrom,
+    id: current.infoId,
+    showStatus: settingsState.get().showStatus,
+  }
+  const filters = reconcileArticleListFilterScope({
+    previousScope,
+    nextScope,
+    filterDate: current.filterDate,
+    filterString: current.filterString,
+  })
+
+  if (
+    current.infoFrom === nextScope.from &&
+    String(current.infoId ?? "") === String(nextScope.id ?? "") &&
+    current.filterDate === filters.filterDate &&
+    current.filterString === filters.filterString
+  ) {
+    return false
+  }
+
+  contentState.set({
+    ...current,
+    infoFrom: nextScope.from,
+    infoId: nextScope.id,
+    filterDate: filters.filterDate,
+    filterString: filters.filterString,
+  })
+  return true
+}
 export const setIsArticleListReady = createSetter(contentState, "isArticleListReady")
 export const setIsArticleLoading = createSetter(contentState, "isArticleLoading")
 const setOriginalContentRequestTokens = createSetter(contentState, "originalContentRequestTokens")

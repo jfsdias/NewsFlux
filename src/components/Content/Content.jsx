@@ -22,8 +22,7 @@ import useScreenWidth from "@/hooks/useScreenWidth"
 import {
   contentState,
   setActiveContent,
-  setInfoFrom,
-  setInfoId,
+  setArticleListSource,
   setIsArticleLoading,
 } from "@/store/contentState"
 import { articleListLayoutState, contentGestureSettingsState } from "@/store/settingsState"
@@ -85,8 +84,7 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
     const { activeContent: storedActiveContent, infoFrom, infoId } = contentState.get()
     const sourceChanged = infoFrom !== source || String(infoId ?? "") !== String(sourceId ?? "")
 
-    setInfoFrom(source)
-    setInfoId(sourceId)
+    setArticleListSource({ from: source, id: sourceId })
     if (sourceChanged) {
       setIsArticleLoading(false)
       if (storedActiveContent) {

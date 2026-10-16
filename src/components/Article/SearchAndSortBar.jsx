@@ -28,6 +28,10 @@ import { catalogCategoriesState, catalogFeedsState } from "@/store/dataState"
 import { duplicateHotkeysState, hotkeysState } from "@/store/hotkeysState"
 import { settingsState, updateSettings } from "@/store/settingsState"
 import {
+  isArticleListDateFilterActive,
+  isArticleListDateFilterVisible,
+} from "@/utils/article-list-filter-scope"
+import {
   createArticleListSearchScopeKey,
   resolveArticleListSearchInputValue,
 } from "@/utils/article-list-search-scope"
@@ -124,7 +128,7 @@ const ActiveButton = ({ active, expanded, icon, tooltip, onClick }) => (
   </CustomTooltip>
 )
 
-const DateFilter = ({ filterDate, polyglot }) => {
+const DateFilter = ({ filterDate, from, polyglot }) => {
   const [calendarVisible, setCalendarVisible] = useState(false)
   const selectDateLabel = polyglot.t("search.select_date")
 
@@ -160,10 +164,12 @@ const DateFilter = ({ filterDate, polyglot }) => {
             aria-expanded={calendarVisible}
             aria-haspopup="dialog"
             aria-label={selectDateLabel}
-            className={`nf-glass-control${filterDate ? " nf-glass-control-active" : ""}`}
             icon={<IconCalendar aria-hidden="true" />}
             shape="circle"
             size="small"
+            className={`nf-glass-control${
+              isArticleListDateFilterActive({ from, filterDate }) ? " nf-glass-control-active" : ""
+            }`}
           />
         </CustomTooltip>
       }
@@ -211,6 +217,7 @@ const SearchAndSortBar = ({ fullWidth = false, homeMode = false }) => {
     id: infoId,
     showStatus,
   })
+  const showDateFilter = isArticleListDateFilterVisible({ from: infoFrom, homeMode })
   const modalInputValue = resolveArticleListSearchInputValue({
     activeQuery: filterString,
     activeScopeKey: searchScopeKey,
@@ -323,8 +330,8 @@ const SearchAndSortBar = ({ fullWidth = false, homeMode = false }) => {
           tooltip={searchLabel}
           onClick={openSearchModal}
         />
-        {!homeMode && infoFrom !== "today" && (
-          <DateFilter filterDate={filterDate} polyglot={polyglot} />
+        {showDateFilter && (
+          <DateFilter filterDate={filterDate} from={infoFrom} polyglot={polyglot} />
         )}
         {!homeMode && (
           <CustomTooltip mini content={sortLabel}>
