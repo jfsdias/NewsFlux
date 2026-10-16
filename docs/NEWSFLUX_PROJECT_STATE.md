@@ -2,7 +2,7 @@
 
 - **Purpose:** concise operational state for PM handoffs and future sessions. The roadmap remains the source for sequencing and product/architecture detail.
 - **Last reconciled:** 2026-10-15.
-- **Documented product baseline:** `b94c10926ae787382da4918e394c0821785f9c10`.
+- **Documented product baseline:** `099bdcb0483ef516f6c325e67eefb41b618a4713`.
 
 ## Current state
 
@@ -10,25 +10,33 @@
 
 ```text
 CURRENT_MAIN=RESOLVE_LIVE_GITHUB
-DOCUMENTED_MAIN_BASE_SHA=b94c10926ae787382da4918e394c0821785f9c10
-PRODUCT_BASELINE_SHA=b94c10926ae787382da4918e394c0821785f9c10
-PRODUCTION_SHA=b94c10926ae787382da4918e394c0821785f9c10
+DOCUMENTED_MAIN_BASE_SHA=099bdcb0483ef516f6c325e67eefb41b618a4713
+PRODUCT_BASELINE_SHA=099bdcb0483ef516f6c325e67eefb41b618a4713
+PRODUCTION_SHA=099bdcb0483ef516f6c325e67eefb41b618a4713
 RUNTIME_PRODUCT_BASELINE_EQUALS_PRODUCTION=YES
 
-CURRENT_PHASE=POST_BULK_01B_STABLE_BASELINE
+CURRENT_PHASE=POST_ID_RUNTIME_01_STABLE_BASELINE
 CURRENT_PRODUCT_PR=NONE
 
-LAST_COMPLETED=BULK-01B / PR #30
+LAST_COMPLETED=ID-RUNTIME-01 / PR #32
 UPSTREAM_INTEGRATED_THROUGH=3045a5f8f69ffd7f571f73540031efa8b4ff6e6d
 
-NEXT_RECOMMENDED_ACTION=ID-RUNTIME-01
+NEXT_RECOMMENDED_ACTION=A11Y-01
+NEXT_FUNCTIONAL_PRODUCT_UNIT=A11Y-01
 NEXT_AUTHORIZED_ACTION=NONE
 
-PRODUCTION_IMAGE=newsflux-local:b94c10926ae7
+PRODUCTION_IMAGE=newsflux-local:099bdcb0483e
+PRODUCTION_IMAGE_ID=sha256:51e36a5fcb84429c45868dcdd066ec5d8cd51d8b3150405c8f13caa64a1cd846
 ROLLBACK_BASELINE=newsflux-local:fa98531fe153
 
 DOCUMENT_LAST_RECONCILED_AT=2026-10-15
-DOCUMENT_PRODUCT_BASELINE_SHA=b94c10926ae787382da4918e394c0821785f9c10
+DOCUMENT_PRODUCT_BASELINE_SHA=099bdcb0483ef516f6c325e67eefb41b618a4713
+ID_RUNTIME_01_STATUS=COMPLETED
+ID_RUNTIME_01_PR=32
+ID_RUNTIME_01_APPROVED_HEAD=1237f77ff2566015ef50939e268c4ec19f66fe88
+ID_RUNTIME_01_MERGE_SHA=099bdcb0483ef516f6c325e67eefb41b618a4713
+POST_MERGE_BROWSER_SMOKE=PASS
+EXACT_MERGE_SHA_DEPLOY=PASS
 ```
 
 If a docs-only commit lands after this baseline, `main` may be ahead of production **without any runtime/product delta**. Do not interpret that as deployment drift until the diff is classified. Product/runtime changes still require exact-SHA deployment and explicit reconciliation.
@@ -45,7 +53,8 @@ If a docs-only commit lands after this baseline, `main` may be ahead of producti
 - **PR #27 / BULK-01F:** deterministic footer Mark All Read focus restoration.
 - **PR #28 / LIST-VISUAL-01A:** read-state and metadata/source hierarchy cohesion across Column/Card/List.
 - **PR #29 / documentation:** roadmap and project-state reconciliation after LIST-VISUAL-01A production promotion.
-- **PR #30 / BULK-01B:** Sidebar Feed/Category Mark All confirmation + safe shared Undo, including one shared Mark-All/Undo operation coordinator and source-scoped reconciliation. Merged as `b94c10926ae787382da4918e394c0821785f9c10` and deployed exactly as `newsflux-local:b94c10926ae7` with internal HTTP `200`.
+- **PR #30 / BULK-01B:** Sidebar Feed/Category Mark All confirmation + safe shared Undo, including one shared Mark-All/Undo operation coordinator and source-scoped reconciliation. Merged as `b94c10926ae787382da4918e394c0821785f9c10` and deployed exactly as `newsflux-local:b94c10926ae7` with internal HTTP `200`. This was the previous production baseline before PR #32.
+- **PR #32 / ID-RUNTIME-01:** runtime identity and NewsFlux-safe update/About/issues links; approved head `1237f77ff2566015ef50939e268c4ec19f66fe88`, merged and deployed as `099bdcb0483ef516f6c325e67eefb41b618a4713`. Post-merge browser smoke and exact merge-SHA deployment passed. The initial candidate readiness attempt was `DEPLOY_HARNESS_STARTUP_RACE_CONFIRMED`; bounded retry passed, with no product regression.
 
 ## BULK-01B closure
 
@@ -101,12 +110,11 @@ Not authorized by package completion:
 
 ### P1
 
-- **FILTER-01A — NEXT / PRODUCT DECISION:** define search scope transition semantics.
-- **A11Y-01 — NEXT:** main landmark, heading hierarchy, named navigation and skip navigation.
+- **A11Y-01 — NEXT FUNCTIONAL PRODUCT UNIT:** main landmark, heading hierarchy, named navigation and skip navigation.
+- **FILTER-01A — NEXT AFTER A11Y-01 / PRODUCT DECISION:** define search scope transition semantics.
 
 ### Other NEXT tracks
 
-- **ID-RUNTIME-01 — NEXT RECOMMENDED:** visible runtime identity, update/About/issues routing to NewsFlux while preserving upstream credit.
 - **READER-KEY-01:** layered Escape behavior.
 - **STATE-ERR-01:** unavailable-entry route behavior; product decision required.
 - **CONTENT-01:** deterministic untitled-entry fallback; copy decision required.
@@ -127,12 +135,16 @@ Not authorized by package completion:
 ## Visual / presentation backlog
 
 - **CHROME-01 — PLANNED:** DatePicker subset is complete; remaining confirmation/snackbar/raw-Arco work must stay decomposed.
-- **READER-VISUAL-02A — PLANNED:** typography/header/stateless progress only.
+- **READER-VISUAL-02A — PLANNED:** discovery complete; A2 / Quiet Column refinement is the recommended direction; implementation has not started and is not authorized; owner decisions remain unreconciled. 02A2 depends on A11Y-01.
 - **READER-VISUAL-02B — PLANNED:** auto-hide + Next card only after interaction/NAV dependencies.
 - **HOME-VISUAL-02 — HOLD — PRODUCT.**
 - **NAV-VISUAL-01 — HOLD — PRODUCT.**
+- **READER-COVER-01 — HOLD — PRODUCT.**
+- **READER-FONT-01 — HOLD — PRODUCT.**
 - **HOME-SKEL-01 — BACKLOG.**
 - **READER-MEASURE-01 — BACKLOG.**
+- **HARNESS-VIS-01 — BACKLOG (test debt).**
+- **TEST-ENV-01 — BACKLOG (verification required).**
 - **MOTION-01 — BACKLOG.**
 
 ## Personalization / saved-state architecture
@@ -167,6 +179,17 @@ The specialized upstream monitor must live-check the current upstream head befor
 - Product behavior intentionally uses generation/action-scoped IDs to prevent sequential notification collisions.
 - Fix only in a dedicated test-maintenance PR.
 
+### HARNESS-CODEBLOCK-SSR-01
+
+- Classification: `PREEXISTING_TEST_HARNESS_DEBT`.
+- Surface: `scripts/article-code-block-controls.test.js`.
+- Cause signature: Vite SSR / CommonJS named export `Select` from `@arco-design/web-react` under the current Node/container harness.
+- Impact: does not invalidate ID-RUNTIME-01.
+- Scope: out of ID-RUNTIME-01.
+- Next: dedicated maintenance PR.
+
+Do not fix this debt in unrelated product or documentation work.
+
 ## Open findings / residual risks
 
 - PR #28 physical validation accepted the normal-source/Card/Grid comparison, but no real long-source entry was available to exercise the exact ellipsis case on physical hardware. Automated visual coverage included the long-source geometry and critical `884×1104` viewport. This remains an accepted validation limitation rather than an open blocker.
@@ -190,14 +213,16 @@ The specialized upstream monitor must live-check the current upstream head befor
 
 ## Next recommended action
 
-**ID-RUNTIME-01** is the next recommended implementation unit because it is bounded, does not require new persistent state, and can correct visible runtime identity/update/About/issues routing while preserving ReactFlux upstream credit.
+**A11Y-01** is the next functional product unit after this documentation closure: complete the main landmark, heading hierarchy, named navigation and skip-navigation foundation.
 
-This is a recommendation only. Before implementation:
+Reader visual discovery/design-contract work may proceed in parallel. READER-VISUAL-02A remains planned, with A2 / Quiet Column refinement recommended; implementation is not started or authorized. Any 02A2 work depending on header semantics must follow A11Y-01. 02A1 may be specified separately if it does not absorb 02A2's functional header semantics.
+
+This is sequencing guidance, not implementation or merge authorization. Before the next implementation:
 
 1. live-check GitHub `main`, open PRs and production baseline;
-2. classify any docs-only commits separately from runtime/product drift;
+2. classify docs-only commits separately from runtime/product drift;
 3. prepare one-purpose scope and regression gates;
-4. keep it separate from visual redesign and upstream sync;
+4. keep unrelated visual work and upstream sync separate;
 5. obtain authorization for the implementation track;
 6. never merge without explicit user authorization.
 
@@ -205,10 +230,12 @@ This is a recommendation only. Before implementation:
 
 - Deploy only an exact approved product/runtime SHA.
 - Never deploy `latest` or a moving branch implicitly.
-- Current production product baseline: `b94c10926ae787382da4918e394c0821785f9c10`.
-- Current production image: `newsflux-local:b94c10926ae7`.
+- Current production product baseline: `099bdcb0483ef516f6c325e67eefb41b618a4713`.
+- Current production image: `newsflux-local:099bdcb0483e`.
+- Current production image ID: `sha256:51e36a5fcb84429c45868dcdd066ec5d8cd51d8b3150405c8f13caa64a1cd846`.
 - Preserved rollback image: `newsflux-local:fa98531fe153`.
 - The exact merge-SHA deployment for PR #30 passed container-image identity and internal HTTP `200` gates.
+- PR #32 exact merge-SHA deployment and post-merge browser smoke passed. The initial candidate readiness attempt was classified as `DEPLOY_HARNESS_STARTUP_RACE_CONFIRMED`; bounded retry passed, so this was not a product regression.
 - Docs-only commits do not require production deployment merely to force SHA equality; classify their runtime delta as none.
 - Do not delete rollback images/backups incidentally.
 
