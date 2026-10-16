@@ -1,9 +1,9 @@
 # NewsFlux Roadmap
 
-- **Status:** canonical roadmap reconciled after ID-RUNTIME-01 / PR #32 and exact merge-SHA production promotion.
+- **Status:** canonical roadmap reconciled after A11Y-01 / PR #34 exact merge-SHA production promotion.
 - **Created:** 2026-10-15.
 - **Last reconciled:** 2026-10-15.
-- **Reconciled against:** product/runtime baseline and production at `099bdcb0483ef516f6c325e67eefb41b618a4713`.
+- **Reconciled against:** product/runtime baseline and production at `7b0a7e04d1e1052c33ccb23559467f1ed2dc9ac0`.
 - **Purpose:** preserve completed work, accepted findings, sequencing, architecture/product gates, upstream baseline, and the next recommended action without turning the roadmap into implementation authorization.
 
 This document is the canonical **roadmap**, not an implementation authorization. Detailed design decisions remain in the dedicated design documents and implementation plans remain in `docs/superpowers/plans/` where present.
@@ -95,20 +95,21 @@ Current reference decisions:
 
 ### 3.2 Recently completed PRs
 
-| PR  | Track                            | Status        | Notes                                                                                                                                                    |
-| --- | -------------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| #20 | BULK-01                          | **COMPLETED** | Footer Mark All Read Undo; generation-scoped notification IDs; acknowledged-ID undo                                                                      |
-| #21 | ID-01R                           | **COMPLETED** | Repository/document provenance and translated README reconciliation                                                                                      |
-| #22 | Documentation                    | **COMPLETED** | Canonical roadmap red-team R2 reconciliation                                                                                                             |
-| #23 | A11Y-RT-01                       | **COMPLETED** | Reduced-transparency dark/OLED specificity fix                                                                                                           |
-| #24 | LIST-VISUAL-01 / monogram subset | **COMPLETED** | Deterministic favicon monogram fallback                                                                                                                  |
-| #25 | CHROME-01A / DatePicker subset   | **COMPLETED** | NewsFlux token styling for DatePicker                                                                                                                    |
-| #26 | Upstream sync                    | **COMPLETED** | Adapted upstream article code-block experience through `3045a5f8...`                                                                                     |
-| #27 | BULK-01F                         | **COMPLETED** | Footer Mark All Read focus restoration                                                                                                                   |
-| #28 | LIST-VISUAL-01A                  | **COMPLETED** | Read-state + metadata/source hierarchy cohesion across Column/Card/List                                                                                  |
-| #29 | Documentation                    | **COMPLETED** | Roadmap/project-state reconciliation after PR #28 production promotion                                                                                   |
-| #30 | BULK-01B                         | **COMPLETED** | Sidebar Feed/Category Mark All confirmation + safe shared Undo; race hardening; exact merge-SHA deployed                                                 |
-| #32 | ID-RUNTIME-01                    | **COMPLETED** | Approved head `1237f77ff2566015ef50939e268c4ec19f66fe88`; merged/deployed as `099bdcb0483ef516f6c325e67eefb41b618a4713`; post-merge browser smoke passed |
+| PR  | Track                            | Status        | Notes                                                                                                                                                                                               |
+| --- | -------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #20 | BULK-01                          | **COMPLETED** | Footer Mark All Read Undo; generation-scoped notification IDs; acknowledged-ID undo                                                                                                                 |
+| #21 | ID-01R                           | **COMPLETED** | Repository/document provenance and translated README reconciliation                                                                                                                                 |
+| #22 | Documentation                    | **COMPLETED** | Canonical roadmap red-team R2 reconciliation                                                                                                                                                        |
+| #23 | A11Y-RT-01                       | **COMPLETED** | Reduced-transparency dark/OLED specificity fix                                                                                                                                                      |
+| #24 | LIST-VISUAL-01 / monogram subset | **COMPLETED** | Deterministic favicon monogram fallback                                                                                                                                                             |
+| #25 | CHROME-01A / DatePicker subset   | **COMPLETED** | NewsFlux token styling for DatePicker                                                                                                                                                               |
+| #26 | Upstream sync                    | **COMPLETED** | Adapted upstream article code-block experience through `3045a5f8...`                                                                                                                                |
+| #27 | BULK-01F                         | **COMPLETED** | Footer Mark All Read focus restoration                                                                                                                                                              |
+| #28 | LIST-VISUAL-01A                  | **COMPLETED** | Read-state + metadata/source hierarchy cohesion across Column/Card/List                                                                                                                             |
+| #29 | Documentation                    | **COMPLETED** | Roadmap/project-state reconciliation after PR #28 production promotion                                                                                                                              |
+| #30 | BULK-01B                         | **COMPLETED** | Sidebar Feed/Category Mark All confirmation + safe shared Undo; race hardening; exact merge-SHA deployed                                                                                            |
+| #32 | ID-RUNTIME-01                    | **COMPLETED** | Approved head `1237f77ff2566015ef50939e268c4ec19f66fe88`; merged/deployed as `099bdcb0483ef516f6c325e67eefb41b618a4713`; post-merge browser smoke passed                                            |
+| #34 | A11Y-01                          | **COMPLETED** | Approved head `c62ce9160c928eedcdb09d25a1271253c8baf91c`; merged/deployed as `7b0a7e04d1e1052c33ccb23559467f1ed2dc9ac0`; tree parity, exact-SHA promotion and authenticated post-merge smoke passed |
 
 ### 3.3 Functional behavior and defect tracks
 
@@ -133,32 +134,32 @@ Current reference decisions:
 
 ### 3.4 Accessibility and interaction foundation
 
-| Item                                            | Status        | Notes                                                                                   |
-| ----------------------------------------------- | ------------- | --------------------------------------------------------------------------------------- |
-| A11Y-RT-01                                      | **COMPLETED** | PR #23                                                                                  |
-| A11Y-01 — landmarks / heading / skip navigation | **NEXT**      | R2-03, **P1**; `<main>`, named navigation, one h1 per view, reader hierarchy, skip link |
-| Keyboard/touch parity                           | **PLANNED**   | R2-05/R2-11/R2-16; touch hit areas >=44 px while visual icons may remain smaller        |
-| SWIPE-ENTRY-01                                  | **BACKLOG**   | Miniflux-backed; real-device gate mandatory because Fold/back gestures may conflict     |
-| READER-MEDIA-01                                 | **PLANNED**   | R2-15/R2-19; edge-to-edge media requires real-device gate                               |
-| READER-MEASURE-01                               | **BACKLOG**   | R2-22/R2-23/R2-24; width minimum, phone semantics, title geometry                       |
-| READER-PROGRESS-01                              | **BACKLOG**   | Stateless progress only; persisted reading position remains architecture-gated          |
-| READER-PRESETS-01                               | **BACKLOG**   | Group existing local typography/width/theme settings after READER-MEASURE-01            |
+| Item                                            | Status        | Notes                                                                                                                                               |
+| ----------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A11Y-RT-01                                      | **COMPLETED** | PR #23                                                                                                                                              |
+| A11Y-01 — landmarks / heading / skip navigation | **COMPLETED** | PR #34; `<main>`, named navigation, one h1 per view, reader hierarchy and skip link; exact merge-SHA deploy + authenticated post-merge smoke passed |
+| Keyboard/touch parity                           | **PLANNED**   | R2-05/R2-11/R2-16; touch hit areas >=44 px while visual icons may remain smaller                                                                    |
+| SWIPE-ENTRY-01                                  | **BACKLOG**   | Miniflux-backed; real-device gate mandatory because Fold/back gestures may conflict                                                                 |
+| READER-MEDIA-01                                 | **PLANNED**   | R2-15/R2-19; edge-to-edge media requires real-device gate                                                                                           |
+| READER-MEASURE-01                               | **SEQUENCED** | Separate PR after READER-VISUAL-02A1; width minimum, phone semantics, title geometry                                                                |
+| READER-PROGRESS-01                              | **BACKLOG**   | Stateless progress only; persisted reading position remains architecture-gated                                                                      |
+| READER-PRESETS-01                               | **BACKLOG**   | Group existing local typography/width/theme settings after READER-MEASURE-01                                                                        |
 
 ### 3.5 Visual-cohesion packages
 
-| Package           | Status             | Scope / remainder                                                                                                                                                                        |
-| ----------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| LIST-VISUAL-01    | **COMPLETED**      | Monogram fallback (#24) + read-state/source/metadata cohesion (#28). Human-readable unread-count labels were rehomed to NAV-02F. No thumbnail redesign is authorized by this completion. |
-| CHROME-01         | **PLANNED**        | DatePicker token subset completed in #25; verb-first confirmations, snackbar placement and remaining raw-Arco styling remain separate scoped work                                        |
-| HOME-VISUAL-02    | **HOLD — PRODUCT** | Edition/category composition requires explicit editorial decision and HOME-01 dependency resolution                                                                                      |
-| READER-VISUAL-02A | **PLANNED**        | Discovery complete; A2 / Quiet Column refinement recommended; implementation not started or authorized; owner decisions unreconciled; 02A2 depends on A11Y-01                            |
-| READER-VISUAL-02B | **PLANNED**        | Auto-hide + Next only after interaction/NAV dependencies                                                                                                                                 |
-| NAV-VISUAL-01     | **HOLD — PRODUCT** | Adaptive bottom bar/rail/drawer requires explicit decision + real Fold gate                                                                                                              |
-| READER-COVER-01   | **HOLD — PRODUCT** | Preserve the design-handoff hold; no implementation authorization                                                                                                                        |
-| READER-FONT-01    | **HOLD — PRODUCT** | Preserve the design-handoff hold; no implementation authorization                                                                                                                        |
-| HARNESS-VIS-01    | **BACKLOG**        | Test debt; not ordered                                                                                                                                                                   |
-| TEST-ENV-01       | **BACKLOG**        | Verification required; not ordered                                                                                                                                                       |
-| MOTION-01         | **BACKLOG**        | View Transition/container transform after main interaction architecture stabilizes                                                                                                       |
+| Package           | Status                            | Scope / remainder                                                                                                                                                                        |
+| ----------------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| LIST-VISUAL-01    | **COMPLETED**                     | Monogram fallback (#24) + read-state/source/metadata cohesion (#28). Human-readable unread-count labels were rehomed to NAV-02F. No thumbnail redesign is authorized by this completion. |
+| CHROME-01         | **PLANNED**                       | DatePicker token subset completed in #25; verb-first confirmations, snackbar placement and remaining raw-Arco styling remain separate scoped work                                        |
+| HOME-VISUAL-02    | **HOLD — PRODUCT**                | Edition/category composition requires explicit editorial decision and HOME-01 dependency resolution                                                                                      |
+| READER-VISUAL-02A | **AUTHORIZED WITH SEQUENCE LOCK** | A2 / Quiet Column approved (D5/D9); 02A1 next; spec frozen pending post-A11Y implementation-base reconciliation; separate READER-MEASURE-01 PR follows 02A1; 02A2 has not started        |
+| READER-VISUAL-02B | **PLANNED**                       | Auto-hide + Next only after interaction/NAV dependencies                                                                                                                                 |
+| NAV-VISUAL-01     | **HOLD — PRODUCT**                | Adaptive bottom bar/rail/drawer requires explicit decision + real Fold gate                                                                                                              |
+| READER-COVER-01   | **HOLD — PRODUCT**                | Preserve the design-handoff hold; no implementation authorization                                                                                                                        |
+| READER-FONT-01    | **HOLD — PRODUCT**                | Preserve the design-handoff hold; no implementation authorization                                                                                                                        |
+| HARNESS-VIS-01    | **BACKLOG**                       | Test debt; not ordered                                                                                                                                                                   |
+| TEST-ENV-01       | **BACKLOG**                       | Verification required; not ordered                                                                                                                                                       |
+| MOTION-01         | **BACKLOG**                       | View Transition/container transform after main interaction architecture stabilizes                                                                                                       |
 
 #### LIST-VISUAL-01 closure notes
 
@@ -300,7 +301,7 @@ P1 findings:
 
 1. **R2-01 / BULK-01B** — **COMPLETED** in PR #30.
 2. **R2-02 / FILTER-01A** — still open and NEXT, product decision required.
-3. **R2-03 / A11Y-01** — still open and NEXT.
+3. **R2-03 / A11Y-01** — **COMPLETED** in PR #34; exact merge-SHA production promotion and authenticated post-merge smoke passed.
 
 P2 disposition:
 
@@ -318,7 +319,7 @@ P2 disposition:
 - R2-15 reader edge-to-edge media — **PLANNED** as READER-MEDIA-01.
 - R2-16 category keyboard tab-stop — re-check before fixing under keyboard/touch parity.
 
-P3 debt remains under NAV-02F, HOME-SKEL-01 and READER-MEASURE-01 rather than being fixed incidentally.
+P3 debt remains under NAV-02F and HOME-SKEL-01 rather than being fixed incidentally. READER-MEASURE-01 is separately sequenced after READER-VISUAL-02A1.
 
 ---
 
@@ -395,28 +396,29 @@ Offline reading, feed notifications, third-party AI summaries and other new pers
 
 ## 7. Recommended execution order from the current baseline
 
-The earlier deterministic items A11Y-RT-01, BULK-01F, LIST-VISUAL-01 and BULK-01B are complete, and ID-RUNTIME-01 is now complete in PR #32. After this documentation closure, the next functional product unit is A11Y-01. The ordered remaining tracks are:
+The earlier deterministic items A11Y-RT-01, BULK-01F, LIST-VISUAL-01, BULK-01B and ID-RUNTIME-01 are complete; A11Y-01 is now complete in PR #34 and deployed at the exact merge SHA. The next authorized sequence is READER-VISUAL-02A1, then a separate READER-MEASURE-01 PR, then READER-VISUAL-02A2. The ordered remaining tracks are:
 
-1. **A11Y-01** — P1 landmarks/headings/skip navigation; next functional product unit.
-2. **FILTER-01A** — P1 after explicit product choice.
-3. **READER-KEY-01**, **STATE-ERR-01**, **CONTENT-01** — separate bugfix PRs.
-4. **READER-VISUAL-02A** — discovery complete; A2 / Quiet Column refinement recommended; implementation not started or authorized. Discovery/design-contract work may proceed in parallel; 02A2 depends on A11Y-01.
-5. **BULK-03** and **FEED-HEALTH-01** — separate provider-backed PRs.
-6. **HOME-01**, **NAV01**, **Keyboard/touch parity** — separate functional/interaction tracks.
-7. **READER-MEDIA-01** — real-device gate for edge-to-edge media.
-8. **FILTER-01B**, then **FILTER-RULES-01**.
-9. **CHROME-01 remaining subsets** — keep behavior, token styling and any glass/context consolidation isolated.
-10. **BULK-02** — FILTER-01A remains its outstanding blocker; BULK-01B dependency is satisfied.
-11. **NAV-02F**, **HOME-SKEL-01**, **READER-MEASURE-01**.
-12. **SAVE-EXT-01** after wording/placement are specified.
-13. **HOME-VISUAL-02** after explicit editorial decision + HOME-01.
-14. **READER-VISUAL-02B** after reduced-motion/focus contract + NAV01.
-15. **NAV-VISUAL-01** after explicit adaptive-navigation decision + real-device plan.
-16. **ID-DEPLOY-01** after distribution architecture decision.
-17. **First-party saved-state work** only after storage/sync/privacy/source-of-truth decisions.
-18. **Personalization V2**.
-19. **MOTION-01** after interaction architecture stabilizes.
-20. **ML ranking** last.
+1. **READER-VISUAL-02A1** — next authorized functional unit; A2 / Quiet Column, sequence-locked, with specification reconciliation against the post-A11Y base required before implementation.
+2. **READER-MEASURE-01** — separate PR after 02A1.
+3. **READER-VISUAL-02A2** — after 02A1 and READER-MEASURE-01; not started.
+4. **FILTER-01A** — P1 after explicit product choice.
+5. **READER-KEY-01**, **STATE-ERR-01**, **CONTENT-01** — separate bugfix PRs.
+6. **BULK-03** and **FEED-HEALTH-01** — separate provider-backed PRs.
+7. **HOME-01**, **NAV01**, **Keyboard/touch parity** — separate functional/interaction tracks.
+8. **READER-MEDIA-01** — real-device gate for edge-to-edge media.
+9. **FILTER-01B**, then **FILTER-RULES-01**.
+10. **CHROME-01 remaining subsets** — keep behavior, token styling and any glass/context consolidation isolated.
+11. **BULK-02** — FILTER-01A remains its outstanding blocker; BULK-01B dependency is satisfied.
+12. **NAV-02F** and **HOME-SKEL-01**.
+13. **SAVE-EXT-01** after wording/placement are specified.
+14. **HOME-VISUAL-02** after explicit editorial decision + HOME-01.
+15. **READER-VISUAL-02B** after reduced-motion/focus contract + NAV01.
+16. **NAV-VISUAL-01** after explicit adaptive-navigation decision + real-device plan.
+17. **ID-DEPLOY-01** after distribution architecture decision.
+18. **First-party saved-state work** only after storage/sync/privacy/source-of-truth decisions.
+19. **Personalization V2**.
+20. **MOTION-01** after interaction architecture stabilizes.
+21. **ML ranking** last.
 
 `BULK-01C` may be scheduled once copy is decided, but it remains separate from the completed BULK-01B implementation.
 
@@ -551,24 +553,38 @@ When a completed task changes roadmap status, sequencing, architectural/product 
 ## 13. Current promotion state
 
 - `CURRENT_MAIN=RESOLVE_LIVE_GITHUB`
-- `DOCUMENTED_MAIN_BASE_SHA=099bdcb0483ef516f6c325e67eefb41b618a4713`
-- `PRODUCT_BASELINE_SHA=099bdcb0483ef516f6c325e67eefb41b618a4713`
-- `PRODUCTION_SHA=099bdcb0483ef516f6c325e67eefb41b618a4713`
+- `DOCUMENTED_MAIN_BASE_SHA=7b0a7e04d1e1052c33ccb23559467f1ed2dc9ac0`
+- `PRODUCT_BASELINE_SHA=7b0a7e04d1e1052c33ccb23559467f1ed2dc9ac0`
+- `PRODUCTION_SHA=7b0a7e04d1e1052c33ccb23559467f1ed2dc9ac0`
 - `RUNTIME_PRODUCT_BASELINE_EQUALS_PRODUCTION=YES`
+- `A11Y_01=COMPLETED`
+- `A11Y_01_PR=34`
+- `A11Y_01_APPROVED_HEAD=c62ce9160c928eedcdb09d25a1271253c8baf91c`
+- `A11Y_01_MERGE_TREE=124a4e5c62649a3ffd9229ec03c490e94f6874c5`
+- `A11Y_01_CANDIDATE_TREE=124a4e5c62649a3ffd9229ec03c490e94f6874c5`
+- `A11Y_01_TREE_PARITY=PASS`
+- `A11Y_01_EXACT_MERGE_SHA_DEPLOY=PASS`
+- `A11Y_01_POST_MERGE_BROWSER_SMOKE=PASS`
 - `ID_RUNTIME_01=COMPLETED`
 - `ID_RUNTIME_01_PR=32`
 - `ID_RUNTIME_01_APPROVED_HEAD=1237f77ff2566015ef50939e268c4ec19f66fe88`
 - `ID_RUNTIME_01_MERGE_SHA=099bdcb0483ef516f6c325e67eefb41b618a4713`
 - `POST_MERGE_BROWSER_SMOKE=PASS`
 - `EXACT_MERGE_SHA_DEPLOY=PASS`
-- `PRODUCTION_IMAGE=newsflux-local:099bdcb0483e`
-- `PRODUCTION_IMAGE_ID=sha256:51e36a5fcb84429c45868dcdd066ec5d8cd51d8b3150405c8f13caa64a1cd846`
+- `PRODUCTION_IMAGE=newsflux-local:7b0a7e04d1e1`
+- `PRODUCTION_IMAGE_ID=sha256:c5d64a7a9686aec005490882e24cabb03c664afd60cc5ea82e51e6bb730be5c4`
+- `ROLLBACK_BASELINE=newsflux-local:099bdcb0483e`
+- `ROLLBACK_IMAGE_ID=sha256:51e36a5fcb84429c45868dcdd066ec5d8cd51d8b3150405c8f13caa64a1cd846`
+- `PRESERVED_OLDER_ROLLBACKS=newsflux-local:b94c10926ae7,newsflux-local:fa98531fe153`
 - `BULK_01B=COMPLETED`
 - `PR30_REAL_DEVICE_GATE=WAIVED_BY_OWNER`
 - `PR30_PHYSICAL_TOUCH_PASS=NOT_CLAIMED`
 - `UPSTREAM_INTEGRATED_THROUGH=3045a5f8f69ffd7f571f73540031efa8b4ff6e6d`
-- `NEXT_RECOMMENDED_ACTION=A11Y-01`
-- `NEXT_FUNCTIONAL_PRODUCT_UNIT=A11Y-01`
-- `NEXT_AUTHORIZED_ACTION=NONE`
+- `NEXT_RECOMMENDED_ACTION=READER-VISUAL-02A1`
+- `NEXT_FUNCTIONAL_PRODUCT_UNIT=READER-VISUAL-02A1`
+- `NEXT_AUTHORIZED_ACTION=READER-VISUAL-02A1`
+- `READER_VISUAL_02A1=AUTHORIZED_WITH_SEQUENCE_LOCK`
+- `READER_MEASURE_01=SEPARATE_PR_AFTER_02A1`
+- `READER_VISUAL_02A2=NOT_STARTED`
 
-A docs-only merge after this reconciliation may advance live `main` without changing the product/runtime baseline or requiring redeployment. The next implementation unit still requires a fresh live-state check and explicit authorization. No roadmap entry authorizes a merge or production deployment by itself.
+A docs-only merge after this reconciliation may advance live `main` without changing the product/runtime baseline or requiring redeployment. Before READER-VISUAL-02A1 implementation, re-check live state and reconcile its frozen specification against the post-A11Y implementation base. The 02A1 sequence authorization does not authorize a merge or production deployment.
