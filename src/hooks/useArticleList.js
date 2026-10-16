@@ -5,10 +5,10 @@ import { markDuplicatesAsRead } from "@/hooks/useEntryActions"
 import {
   contentState,
   incrementArticleListSnapshotRevision,
+  reconcileArticleListFilters,
   setArticleListError,
   setEntries,
   setEntriesWithDeduplication,
-  setFilterString,
   setIsArticleListReady,
   setLoadMoreError,
   setLoadMoreVisible,
@@ -24,12 +24,10 @@ import {
   setUnreadTodayCount,
 } from "@/store/dataState"
 import { articleListRequestSettingsState, settingsState } from "@/store/settingsState"
+import { reconcileArticleListFilterScope } from "@/utils/article-list-filter-scope"
 import { hasArticleListFilters } from "@/utils/article-list-filters"
 import createArticleListRequestKey from "@/utils/article-list-request-key"
-import {
-  createArticleListSearchScopeKey,
-  reconcileArticleListSearchScope,
-} from "@/utils/article-list-search-scope"
+import { createArticleListSearchScopeKey } from "@/utils/article-list-search-scope"
 import subscribeArticleListTotalRefresh from "@/utils/article-list-total-refresh"
 import {
   getEntryMutationSnapshot,
@@ -85,7 +83,7 @@ const useArticleList = (source, sourceId, getEntries) => {
   const latestRequestId = useRef(0)
   const loadingRequestKey = useRef(null)
   const currentRequestKey = useRef(null)
-  const previousSearchScopeRef = useRef({
+  const previousFilterScopeRef = useRef({
     from: contentSnapshot.infoFrom,
     id: contentSnapshot.infoId,
     showStatus: settingsSnapshot.showStatus,
@@ -94,15 +92,19 @@ const useArticleList = (source, sourceId, getEntries) => {
   useLayoutEffect(() => {
     const content = contentState.get()
     const nextScope = { from: source, id: sourceId, showStatus: settingsSnapshot.showStatus }
-    const transition = reconcileArticleListSearchScope({
-      previousScope: previousSearchScopeRef.current,
+    const transition = reconcileArticleListFilterScope({
+      previousScope: previousFilterScopeRef.current,
       nextScope,
+      filterDate: content.filterDate,
       filterString: content.filterString,
     })
 
-    previousSearchScopeRef.current = nextScope
-    if (transition.filterString !== content.filterString) {
-      setFilterString(transition.filterString)
+    previousFilterScopeRef.current = nextScope
+    if (
+      transition.filterDate !== content.filterDate ||
+      transition.filterString !== content.filterString
+    ) {
+      reconcileArticleListFilters(transition)
     }
   }, [searchScopeKey, settingsSnapshot.showStatus, source, sourceId])
 
