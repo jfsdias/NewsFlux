@@ -1,6 +1,4 @@
-import {
-  reconcileArticleListSearchScope,
-} from "./article-list-search-scope.js" // eslint-disable-line import/extensions -- Node ESM tests require the explicit extension.
+import { reconcileArticleListSearchScope } from "./article-list-search-scope.js" // eslint-disable-line import/extensions -- Node ESM tests require the explicit extension.
 
 const ID_SCOPED_SOURCES = new Set(["category", "feed"])
 const SOURCES_WITHOUT_DATE_FILTER = new Set(["home", "today"])
