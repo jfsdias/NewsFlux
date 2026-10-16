@@ -27,7 +27,7 @@ NEXT_AUTHORIZED_ACTION=NONE
 
 PRODUCTION_IMAGE=newsflux-local:099bdcb0483e
 PRODUCTION_IMAGE_ID=sha256:51e36a5fcb84429c45868dcdd066ec5d8cd51d8b3150405c8f13caa64a1cd846
-ROLLBACK_BASELINE=newsflux-local:fa98531fe153
+ROLLBACK_BASELINE=newsflux-local:b94c10926ae7
 
 DOCUMENT_LAST_RECONCILED_AT=2026-10-15
 DOCUMENT_PRODUCT_BASELINE_SHA=099bdcb0483ef516f6c325e67eefb41b618a4713
@@ -233,7 +233,7 @@ This is sequencing guidance, not implementation or merge authorization. Before t
 - Current production product baseline: `099bdcb0483ef516f6c325e67eefb41b618a4713`.
 - Current production image: `newsflux-local:099bdcb0483e`.
 - Current production image ID: `sha256:51e36a5fcb84429c45868dcdd066ec5d8cd51d8b3150405c8f13caa64a1cd846`.
-- Preserved rollback image: `newsflux-local:fa98531fe153`.
+- Preserved older rollback image (`PRESERVED_OLDER_ROLLBACK`): `newsflux-local:fa98531fe153`.
 - The exact merge-SHA deployment for PR #30 passed container-image identity and internal HTTP `200` gates.
 - PR #32 exact merge-SHA deployment and post-merge browser smoke passed. The initial candidate readiness attempt was classified as `DEPLOY_HARNESS_STARTUP_RACE_CONFIRMED`; bounded retry passed, so this was not a product regression.
 - Docs-only commits do not require production deployment merely to force SHA equality; classify their runtime delta as none.
