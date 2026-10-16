@@ -1,8 +1,8 @@
 # NewsFlux Roadmap
 
-- **Status:** canonical roadmap reconciled after A11Y-01 / PR #34 exact merge-SHA production promotion.
+- **Status:** canonical roadmap reconciled after READER-MEASURE-01 / PR #44 exact merge-SHA production promotion.
 - **Created:** 2026-10-15.
-- **Last reconciled:** 2026-10-15.
+- **Last reconciled:** 2026-10-16.
 - **Reconciled against:** `main` and production at `118ecb2c63f7df3583d0f2524b5cc8c62bd518c1` on 2026-10-16.
 - **Purpose:** preserve completed work, accepted findings, sequencing, architecture/product gates, upstream baseline, and the next recommended action without turning the roadmap into implementation authorization.
 
