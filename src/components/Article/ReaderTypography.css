@@ -1,8 +1,8 @@
 /*
  * READER-VISUAL-02A1 — Reader typography scope (NewsFlux-owned; reference contract).
  * Imported AFTER ArticleDetail.css. Tokens --reader-fs / --reader-family are set inline on
- * <article class="article-content"> by ArticleDetail.jsx. Presentation only: no markup, no measure,
- * no frame, no media, no chrome.
+ * <article class="article-content"> by ArticleDetail.jsx. Presentation only: no markup, no frame, no media,
+ * no chrome. The only measure rule is the READER-MEASURE-01 prose-measure token below.
  */
 
 /* ---------- tokens ---------- */
@@ -11,6 +11,16 @@
 }
 body[arco-theme="dark"] .article-content {
   --reader-link: color-mix(in srgb, var(--nf-accent) 72%, #fff);
+}
+
+/* ---------- prose measure (READER-MEASURE-01) ----------
+ * One token for the prose column, driven only by the existing Article width setting (--article-width, a unitless
+ * number set inline on .article-body). ArticleDetail.css keeps its unclamped calc and registers the token as a
+ * <length>; this rule wins by specificity. The 02A2 header column joins through the second selector and shares the
+ * value. The measure only narrows prose: media, tables and code keep the frame (see ArticleDetail.css). */
+.article-content .article-body,
+.article-content .article-header .article-header-column {
+  --reader-prose-measure: clamp(40ch, calc(var(--article-width) * 0.75ch), 58ch);
 }
 
 /* ---------- leading: only prose blocks, only below the 600px reader tier (>= 600px keeps READER-VISUAL-01's 1.7) ---------- */
