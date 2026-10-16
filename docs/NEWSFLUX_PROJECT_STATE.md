@@ -24,7 +24,15 @@ OPEN_RUNTIME_PR=38 (RUNTIME-BASE-01; RECONCILIATION_REQUIRED)
 
 LAST_COMPLETED=READER-MEASURE-01 / PR #44
 PRE_READER_MEASURE_FUNCTIONAL_BASELINE=FILTER-01B #39; FEED-HEALTH-01A #40; BULK-03A #43
+FILTER_01A_STATUS=COMPLETED
+FILTER_01A_PR=37
+FILTER_01A_MERGE_SHA=73f793f51ba3f81e04c2fbaaf3093fc6c5983078
+FILTER_01A_PRODUCT_DECISION=SEARCH_SCOPED_AND_RESET_ON_SCOPE_CHANGE
+
 UPSTREAM_INTEGRATED_THROUGH=3045a5f8f69ffd7f571f73540031efa8b4ff6e6d
+LAST_FORMALLY_REVIEWED_UPSTREAM_SHA=f1d6e4362aeaf7c5126cdb9dc0b041dd0dc8cb7d
+LAST_INTEGRATED_UPSTREAM_SHA=3045a5f8f69ffd7f571f73540031efa8b4ff6e6d
+NEXT_UPSTREAM_AUDIT_FROM=f1d6e4362aeaf7c5126cdb9dc0b041dd0dc8cb7d
 
 NEXT_RECOMMENDED_ACTION=RUNTIME-BASE-01 / PR #38 RECONCILIATION AFTER DOCS PR CLOSES
 NEXT_ENGINEERING_TRACK=RUNTIME-BASE-01 / PR #38 RECONCILIATION
@@ -63,6 +71,7 @@ If a docs-only commit lands after this baseline, `main` may be ahead of producti
 - **PR #30 / BULK-01B:** Sidebar Feed/Category Mark All confirmation + safe shared Undo, including one shared Mark-All/Undo operation coordinator and source-scoped reconciliation. Merged as `b94c10926ae787382da4918e394c0821785f9c10` and deployed exactly as `newsflux-local:b94c10926ae7` with internal HTTP `200`. This was the previous production baseline before PR #32.
 - **PR #32 / ID-RUNTIME-01:** runtime identity and NewsFlux-safe update/About/issues links; approved head `1237f77ff2566015ef50939e268c4ec19f66fe88`, merged and deployed as `099bdcb0483ef516f6c325e67eefb41b618a4713`. Post-merge browser smoke and exact merge-SHA deployment passed. The initial candidate readiness attempt was `DEPLOY_HARNESS_STARTUP_RACE_CONFIRMED`; bounded retry passed, with no product regression.
 - **PR #34 / A11Y-01:** main landmark, heading hierarchy, named navigation and skip navigation; approved head `c62ce9160c928eedcdb09d25a1271253c8baf91c`, merged as `7b0a7e04d1e1052c33ccb23559467f1ed2dc9ac0`, tree parity PASS, exact merge-SHA production promotion PASS and authenticated post-merge browser smoke PASS.
+- **PR #37 / FILTER-01A:** active-source-scoped search; source changes clear search, while same-scope reader return/refresh/pagination preserve it; no global search or new persistence. Merged as `73f793f51ba3f81e04c2fbaaf3093fc6c5983078`.
 - **PR #39 / FILTER-01B:** source/date/search transition behavior; merged as `cfef27e50fae9a153151cfc91bd0bf92c1270a37`.
 - **PR #40 / FEED-HEALTH-01A:** Miniflux-reported feed update error indicator; merged as `2947169a68e5193f4cd9273d0bb7ed0faef00623`.
 - **PR #41 / READER-VISUAL-02A1:** editorial typography foundation; merged as `3f72d554177c10c9eee16649ea7297495b4f6977`.
@@ -137,7 +146,7 @@ Not authorized by package completion:
 
 ### P1
 
-- **FILTER-01A — P1 / PRODUCT DECISION REQUIRED:** define search scope transition semantics. A11Y-01 is complete; FILTER-01A remains an open product decision and is not the next authorized implementation unit.
+- FILTER-01A is complete in PR #37; its former P1 search-scope product decision is closed.
 
 ### Other NEXT tracks
 
@@ -149,7 +158,7 @@ Not authorized by package completion:
 
 - BULK-01C — scoped Undo copy.
 - BULK-03 — provider-backed range/age mark-as-read; BULK-03A above/below actions completed in PR #43, with remaining scope still separate.
-- BULK-02 — multi-select; BULK-01B dependency is satisfied, but FILTER-01A remains blocking.
+- BULK-02 — multi-select; BULK-01B and FILTER-01A are complete prerequisites. Remaining sequencing/product gates must be reviewed before authorization.
 - FILTER-RULES-01; FILTER-01B was completed in PR #39.
 - HOME-01 — refresh/focus/reconnect semantics.
 - NAV01 — previous/next + next unread source flow.
@@ -188,9 +197,9 @@ Not authorized by package completion:
 ```text
 UPSTREAM_REPOSITORY=electh/ReactFlux
 UPSTREAM_MODE=SELECTIVE_INTEGRATION
-LAST_FORMALLY_REVIEWED_UPSTREAM_SHA=3045a5f8f69ffd7f571f73540031efa8b4ff6e6d
+LAST_FORMALLY_REVIEWED_UPSTREAM_SHA=f1d6e4362aeaf7c5126cdb9dc0b041dd0dc8cb7d
 LAST_INTEGRATED_UPSTREAM_SHA=3045a5f8f69ffd7f571f73540031efa8b4ff6e6d
-NEXT_UPSTREAM_AUDIT_FROM=3045a5f8f69ffd7f571f73540031efa8b4ff6e6d
+NEXT_UPSTREAM_AUDIT_FROM=f1d6e4362aeaf7c5126cdb9dc0b041dd0dc8cb7d
 ```
 
 The specialized upstream monitor must live-check the current upstream head before auditing. New commits are classified `INTEGRATE / ADAPT / SKIP / HOLD`; never blindly Sync fork or merge upstream/main.
@@ -228,7 +237,6 @@ Do not fix this debt in unrelated product or documentation work.
 
 ## Product decisions pending
 
-- FILTER-01A search scope contract.
 - STATE-ERR-01 unavailable-entry contract.
 - CONTENT-01 untitled fallback wording.
 - BULK-03 exact above/below/age semantics.
