@@ -5,6 +5,7 @@ import { useHotkeys } from "react-hotkeys-hook"
 import useEntryActions from "@/hooks/useEntryActions"
 import useKeyHandlers from "@/hooks/useKeyHandlers"
 import { duplicateHotkeysState, hotkeysState } from "@/store/hotkeysState"
+import shouldDeferReaderEscape from "@/utils/reader-escape"
 
 const SCROLL_HOTKEY_IGNORE_SELECTOR = [
   "a[href]",
@@ -68,7 +69,10 @@ const useContentHotkeys = ({ handleRefreshArticleList }) => {
     handleToggleStatus,
   } = useEntryActions()
 
-  useHotkeys(filteredHotkeys.exitDetailView, exitDetailView)
+  useHotkeys(filteredHotkeys.exitDetailView, exitDetailView, {
+    eventListenerOptions: { capture: true },
+    ignoreEventWhen: shouldDeferReaderEscape,
+  })
 
   useHotkeys(filteredHotkeys.fetchOriginalArticle, () => fetchOriginalArticle(handleFetchContent))
 

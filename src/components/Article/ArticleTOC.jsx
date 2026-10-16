@@ -20,6 +20,20 @@ const ArticleTOCPanel = ({ onBack, onClose }) => {
   const [filterValue, setFilterValue] = useState("")
   const isFilterVisible = Boolean(onBack) || isBelowMedium
 
+  const handleKeyDown = (event) => {
+    if (event.key !== "Escape") {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    if (onBack) {
+      onBack()
+    } else {
+      onClose?.()
+    }
+  }
+
   const filteredHeadings = isFilterVisible
     ? headings.filter((heading) => includesIgnoreCase(heading.text, filterValue))
     : headings
@@ -30,7 +44,7 @@ const ArticleTOCPanel = ({ onBack, onClose }) => {
   }
 
   return (
-    <div className="toc-droplist-container">
+    <div className="toc-droplist-container" onKeyDown={handleKeyDown}>
       {isFilterVisible && (
         <div className={`toc-filter-container${onBack ? " toc-filter-container-with-back" : ""}`}>
           {onBack && (
@@ -93,6 +107,7 @@ const ArticleTOC = () => {
       triggerProps={{
         boundaryDistance: { bottom: 8, left: 8, right: 8, top: 8 },
         className: "toc-dropdown",
+        escToClose: true,
       }}
       onVisibleChange={setDropdownVisible}
     >
