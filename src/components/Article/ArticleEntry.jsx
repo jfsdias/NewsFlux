@@ -1,5 +1,7 @@
 import { Divider, Dropdown, Menu } from "@arco-design/web-react/es"
 import {
+  IconArrowDown,
+  IconArrowUp,
   IconBook,
   IconLaunch,
   IconMinusCircle,
@@ -15,9 +17,11 @@ import { memo, useLayoutEffect, useMemo, useRef } from "react"
 import useEntryActions from "@/hooks/useEntryActions"
 import { polyglotState } from "@/hooks/useLanguage"
 import useLongPressContextMenu from "@/hooks/useLongPressContextMenu"
+import useMarkRelativeRead from "@/hooks/useMarkRelativeRead"
 import { contentState, createEntrySelectedState } from "@/store/contentState"
 import { hasIntegrationsState } from "@/store/dataState"
 import { articleEntryInteractionSettingsState } from "@/store/settingsState"
+import { getRelativeUnreadTargetIds } from "@/utils/relative-read-targets"
 
 import "./ArticleEntry.css"
 
@@ -75,7 +79,22 @@ const ArticleEntry = ({
   const { dropdownProps, longPressProps } = useLongPressContextMenu({
     disabled: !enableContextMenu,
   })
+  const markRelativeRead = useMarkRelativeRead()
   const entryRef = useRef(null)
+  const isContextMenuOpen = dropdownProps.popupVisible
+  // Targets are derived from the displayed list only when the menu opens, so closed rows never
+  // subscribe to list changes.
+  const relativeTargetAvailability = useMemo(() => {
+    if (!isContextMenuOpen) {
+      return { above: false, below: false }
+    }
+
+    const displayedEntries = contentState.get().entries
+    return {
+      above: getRelativeUnreadTargetIds(displayedEntries, entry.id, "above").length > 0,
+      below: getRelativeUnreadTargetIds(displayedEntries, entry.id, "below").length > 0,
+    }
+  }, [entry.id, isContextMenuOpen])
 
   useLayoutEffect(() => {
     if (!isUnread || !markReadOnScroll || infoFrom === "history") {
@@ -169,6 +188,32 @@ const ArticleEntry = ({
               </div>
             </Menu.Item>
           )}
+
+          <Divider style={{ margin: "4px 0" }} />
+
+          <Menu.Item
+            key="mark-articles-above-read"
+            aria-disabled={!relativeTargetAvailability.above}
+            disabled={!relativeTargetAvailability.above}
+            onClick={() => void markRelativeRead(entry.id, "above")}
+          >
+            <div className="settings-menu-item">
+              <span>{polyglot.t("article_card.mark_articles_above_as_read_tooltip")}</span>
+              <IconArrowUp aria-hidden="true" />
+            </div>
+          </Menu.Item>
+
+          <Menu.Item
+            key="mark-articles-below-read"
+            aria-disabled={!relativeTargetAvailability.below}
+            disabled={!relativeTargetAvailability.below}
+            onClick={() => void markRelativeRead(entry.id, "below")}
+          >
+            <div className="settings-menu-item">
+              <span>{polyglot.t("article_card.mark_articles_below_as_read_tooltip")}</span>
+              <IconArrowDown aria-hidden="true" />
+            </div>
+          </Menu.Item>
         </Menu>
       }
     >
