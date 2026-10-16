@@ -20,10 +20,7 @@ import englishPhrases from "@/locales/en-US.json"
 import { contentState } from "@/store/contentState"
 import { dataState } from "@/store/dataState"
 import { getDefaultSettings, settingsState } from "@/store/settingsState"
-import {
-  MARK_ALL_READ_UNDO_DURATION_MS,
-  MARK_ALL_READ_UNDO_NOTIFICATION_ID,
-} from "@/utils/mark-all-read-undo"
+import { MARK_ALL_READ_UNDO_DURATION_MS } from "@/utils/mark-all-read-undo"
 
 const feed = {
   id: 1,
@@ -236,7 +233,10 @@ const clickMarkAll = () => {
   assert(button && !button.disabled, "Real FooterPanel Mark All Read control missing")
   button.click()
 }
-const undoNotification = () => notifications.get(MARK_ALL_READ_UNDO_NOTIFICATION_ID)
+const undoNotification = () =>
+  [...notifications.values()].findLast(
+    ({ id, btn }) => typeof id === "string" && typeof btn?.props?.onClick === "function",
+  )
 const clickUndo = () => {
   const undoButton = undoNotification()?.btn
   assert(undoButton?.props?.onClick, "Undo action is missing from the successful mark-all notice")
@@ -256,7 +256,9 @@ const Harness = () => {
     setProbe(null)
     await settle()
     controls.current = null
-    Notification.remove(MARK_ALL_READ_UNDO_NOTIFICATION_ID)
+    for (const notificationId of notifications.keys()) {
+      Notification.remove(notificationId)
+    }
     notifications.clear()
     effectOrder.length = 0
     requests.length = 0
@@ -972,8 +974,14 @@ const Harness = () => {
         respond = serverRespond
         clickMarkAll()
         await waitFor(() => mutationRequests === 1 && countRefreshes === 1)
-        assert(undoNotification()?.duration === MARK_ALL_READ_UNDO_DURATION_MS)
-        const obsoleteUndoButton = undoNotification().btn
+        const firstUndoNotification = undoNotification()
+        assert(
+          typeof firstUndoNotification?.id === "string" &&
+            firstUndoNotification.duration === MARK_ALL_READ_UNDO_DURATION_MS,
+          "Successful mark-all did not expose its timed Undo action",
+        )
+        const firstUndoNotificationId = firstUndoNotification.id
+        const obsoleteUndoButton = firstUndoNotification.btn
         await settle()
         clickMarkAll()
         await waitFor(() => countRefreshes === 2)
@@ -986,7 +994,16 @@ const Harness = () => {
         await settle()
         clickMarkAll()
         await waitFor(() => mutationRequests === 2 && countRefreshes === 3)
-        const undoButton = undoNotification().btn
+        const currentUndoNotification = undoNotification()
+        assert(
+          typeof currentUndoNotification?.id === "string",
+          "A later successful mark-all did not expose its Undo action",
+        )
+        assert(
+          currentUndoNotification.id !== firstUndoNotificationId,
+          "Sequential Undo actions reused a notification identity",
+        )
+        const undoButton = currentUndoNotification.btn
         undoButton.props.onClick()
         undoButton.props.onClick()
         await waitFor(() => mutationRequests === 3 && countRefreshes === 4)
