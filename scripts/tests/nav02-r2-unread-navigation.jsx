@@ -53,17 +53,11 @@ const fixtureCategories = [general, science, hiddenCategory, makeCategory(4, "Em
 const initialUnread = { 2: 2, 3: 8, 4: 0, 5: 7, 6: 6 }
 const readRequests = []
 let refreshCountCalls = 0
-let unreadPageFetches = 0
 let router
 
 apiClient.put = async (url) => {
   readRequests.push(url)
   return {}
-}
-apiClient.get = async (url) => {
-  assert(url.startsWith("/v1/feeds/2/entries"), `Unexpected fixture GET: ${url}`)
-  unreadPageFetches += 1
-  return { entries: unreadPageFetches === 1 ? [{ id: 21 }, { id: 22 }] : [] }
 }
 
 polyglotState.setKey("polyglot", new Polyglot({ phrases: englishPhrases, locale: "en-US" }))
@@ -72,7 +66,6 @@ const appData = {
   refreshFeedData: async () => {},
   refreshCounts: async () => {
     refreshCountCalls += 1
-    setUnreadInfo((previous) => ({ ...previous, 2: 0 }))
     return { error: null }
   },
 }
@@ -389,8 +382,6 @@ const scenarios = [
     "MARK_ALL_READ_AND_JUMP_BEHAVIOR_PRESERVED",
     async () => {
       await resetFixture("/feed/2", { unreadMode: true })
-      settingsState.set({ ...settingsState.get(), skipMarkAllReadConfirmation: true })
-      unreadPageFetches = 0
       const contentBefore = contentState.get()
       const row = activeFeedRow(2)
       assert(row, "Current unread feed is missing before mark-all-read")
@@ -418,7 +409,7 @@ const scenarios = [
           contentState.get().entries === contentBefore.entries,
         "Mark-all-read reconciliation changed active article content",
       )
-      assert(readRequests[0] === "/v1/entries", "Mark-all-read batch route changed")
+      assert(readRequests[0] === "/v1/feeds/2/mark-all-as-read", "Mark-all-read route changed")
     },
   ],
   [
