@@ -1,0 +1,146 @@
+/*
+ * READER-VISUAL-02A1 — Reader typography scope (NewsFlux-owned; reference contract).
+ * Imported AFTER ArticleDetail.css. Tokens --reader-fs / --reader-family are set inline on
+ * <article class="article-content"> by ArticleDetail.jsx. Presentation only: no markup, no measure,
+ * no frame, no media, no chrome.
+ */
+
+/* ---------- tokens ---------- */
+.article-content {
+  --reader-link: var(--nf-accent);
+}
+body[arco-theme="dark"] .article-content {
+  --reader-link: color-mix(in srgb, var(--nf-accent) 72%, #fff);
+}
+
+/* ---------- leading: only prose blocks, only below the 600px reader tier (>= 600px keeps READER-VISUAL-01's 1.7) ---------- */
+@container reader (max-width: 599.98px) {
+  .article-content
+    .article-body
+    :is(p, li, dd, dt, blockquote):not(:is(figure, figcaption, table, pre, .footnotes) *) {
+    line-height: 1.62;
+  }
+}
+
+/* ---------- page title (existing header markup; size now follows the user's font size) ---------- */
+.article-content .article-header .article-title.arco-typography {
+  font-size: clamp(
+    calc(var(--reader-fs, 1.05rem) * 1.25),
+    calc(var(--reader-fs, 1.05rem) * 1.55),
+    2rem
+  );
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.012em;
+  font-synthesis-weight: none;
+}
+.article-content .article-header .article-title a {
+  margin-inline: 0;
+  font-weight: inherit;
+}
+@container reader (min-width: 600px) {
+  .article-content .article-header .article-title.arco-typography {
+    font-size: clamp(
+      calc(var(--reader-fs, 1.05rem) * 1.5),
+      calc(var(--reader-fs, 1.05rem) * 2),
+      2.6rem
+    );
+    line-height: 1.16;
+  }
+}
+@container reader (min-width: 960px) {
+  .article-content .article-header .article-title.arco-typography {
+    font-size: clamp(
+      calc(var(--reader-fs, 1.05rem) * 1.6),
+      calc(var(--reader-fs, 1.05rem) * 2.2),
+      2.9rem
+    );
+    line-height: 1.14;
+  }
+}
+
+/* ---------- in-article headings: h1 shares the h2 step so no heading can outrank the title ---------- */
+.article-content
+  .article-body
+  :is(h1, h2, h3, h4, h5, h6):not(:is(li, td, th, blockquote, figure) *) {
+  font-weight: 600;
+  line-height: 1.28;
+  letter-spacing: -0.008em;
+  font-synthesis-weight: none;
+}
+.article-content .article-body :is(h1, h2):not(:is(li, td, th, blockquote, figure) *) {
+  font-size: clamp(
+    calc(var(--reader-fs, 1.05rem) * 1.08),
+    calc(var(--reader-fs, 1.05rem) * 1.32),
+    1.6rem
+  );
+  margin-block: 1.9em 0.55em;
+}
+.article-content .article-body h3:not(:is(li, td, th, blockquote, figure) *) {
+  font-size: clamp(var(--reader-fs, 1.05rem), calc(var(--reader-fs, 1.05rem) * 1.15), 1.35rem);
+  margin-block: 1.6em 0.45em;
+}
+.article-content .article-body :is(h4, h5, h6):not(:is(li, td, th, blockquote, figure) *) {
+  font-size: 1em;
+  margin-block: 1.5em 0.4em;
+}
+@container reader (min-width: 600px) {
+  .article-content .article-body :is(h1, h2):not(:is(li, td, th, blockquote, figure) *) {
+    font-size: clamp(
+      calc(var(--reader-fs, 1.05rem) * 1.08),
+      calc(var(--reader-fs, 1.05rem) * 1.4),
+      1.75rem
+    );
+  }
+}
+
+/* Headings nested in li / td / th / blockquote / figure keep UA sizing, but h1/h2 are capped so no heading can outrank the title. */
+.article-content .article-body :is(li, td, th, blockquote, figure) :is(h1, h2) {
+  font-size: 1.17em;
+}
+
+/* ---------- lists ---------- */
+.article-content .article-body li {
+  margin-block: 0.4em;
+}
+
+/* ---------- blockquote (logical properties; keeps the READER-VISUAL-01 measure rule untouched) ---------- */
+.article-content .article-body blockquote {
+  margin-block: 1.6em;
+  border: 0;
+  border-inline-start: 2px solid color-mix(in srgb, var(--nf-accent) 60%, transparent);
+  padding-block: 0.1em;
+  padding-inline: 1.1em 0;
+  color: var(--nf-text-primary);
+}
+.article-content .article-body blockquote p {
+  margin-block: 0.5em;
+}
+
+/* ---------- links: global `a { margin }` must not leak into prose; image link tags are excluded ---------- */
+.article-content .article-body a:not(.link-tag) {
+  margin-inline: 0;
+  border-bottom: 0;
+  color: var(--reader-link);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+}
+.article-content .article-body a:not(.link-tag):hover {
+  border-bottom: 0;
+  color: var(--reader-link);
+  text-decoration: underline;
+  text-decoration-color: currentColor;
+}
+
+/* ---------- inline code: NF tokens (selectors reach the dark rule's specificity) ---------- */
+.article-content .article-body :not(pre) > code,
+body[arco-theme="dark"] .article-content .article-body :not(pre) > code {
+  border: 1px solid var(--nf-separator-subtle);
+  border-radius: 6px;
+  background-color: var(--nf-surface-raised);
+  padding: 0.1em 0.36em;
+  color: var(--nf-text-primary);
+  font-size: 0.88em;
+}

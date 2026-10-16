@@ -1,0 +1,4 @@
+/* READER-VISUAL-02A aggregator: the only Reader stylesheet imported by ArticleDetail.jsx. Each slice appends one @import (order = cascade order). */
+@import "./ReaderTypography.css";
+/* 02A3 appends: @import "./ReaderMedia.css"; */
+/* 02A4 appends: @import "./ReaderChrome.css"; */

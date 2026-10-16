@@ -39,6 +39,7 @@ import { generateReadableDate, generateReadingTime } from "@/utils/date"
 import buildArticleImageModel from "@/utils/images"
 import { getSafeExternalUrl } from "@/utils/url"
 import "./ArticleDetail.css"
+import "./ReaderStyles.css"
 import "./littlefoot.css"
 
 const ArticleLightbox = lazy(() => import("./ArticleLightbox"))
@@ -574,6 +575,7 @@ const ArticleDetail = forwardRef((_, ref) => {
     <article
       ref={ref}
       className={`article-content ${edgeToEdgeImages ? "edge-to-edge" : ""}`}
+      style={{ "--reader-fs": `${fontSize}rem`, "--reader-family": fontFamily }}
       tabIndex={-1}
     >
       <AdaptiveScrollArea
