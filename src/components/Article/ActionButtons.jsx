@@ -135,6 +135,7 @@ const ActionButtons = () => {
   const prevContent = useStore(prevContentState)
 
   const [dropdownVisible, setDropdownVisible] = useState(false)
+  const [fontSubmenuVisible, setFontSubmenuVisible] = useState(false)
   const [isCompactTocVisible, setIsCompactTocVisible] = useState(false)
   const compactTocMenuItemRef = useRef(null)
   const moreButtonRef = useRef(null)
@@ -211,8 +212,29 @@ const ActionButtons = () => {
   const handleDropdownVisibleChange = (visible) => {
     setDropdownVisible(visible)
     if (!visible) {
+      setFontSubmenuVisible(false)
       setIsCompactTocVisible(false)
     }
+  }
+
+  const handleMoreMenuKeyDown = (event) => {
+    if (event.key !== "Escape") {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    if (fontSubmenuVisible) {
+      setFontSubmenuVisible(false)
+      requestAnimationFrame(() =>
+        document
+          .querySelector(".font-family-submenu .arco-dropdown-menu-pop-header")
+          ?.focus({ preventScroll: true }),
+      )
+      return
+    }
+
+    handleCompactTocClose()
   }
 
   const handleMoreMenuItemClick = (key) => {
@@ -329,12 +351,16 @@ const ActionButtons = () => {
         popupVisible={dropdownVisible}
         position="br"
         trigger="click"
-        triggerProps={{ className: "settings-dropdown" }}
+        triggerProps={{ className: "settings-dropdown", escToClose: true }}
         droplist={
           isCompactTocVisible && showTocInMenu ? (
             <ArticleTOCPanel onBack={handleCompactTocBack} onClose={handleCompactTocClose} />
           ) : (
-            <Menu className="mobile-action-menu" onClickMenuItem={handleMoreMenuItemClick}>
+            <Menu
+              className="mobile-action-menu"
+              onClickMenuItem={handleMoreMenuItemClick}
+              onKeyDown={handleMoreMenuKeyDown}
+            >
               {hasIntegrations && isBelowMedium && (
                 <Menu.Item
                   key="save_to_third_party_services"
@@ -435,7 +461,6 @@ const ActionButtons = () => {
 
               <Menu.SubMenu
                 key="font-family"
-                triggerProps={{ className: "font-family-submenu" }}
                 title={
                   <div className="settings-menu-item">
                     <span>{polyglot.t("appearance.font_family_label")}</span>
@@ -444,6 +469,17 @@ const ActionButtons = () => {
                     </span>
                   </div>
                 }
+                triggerProps={{
+                  className: "font-family-submenu",
+                  escToClose: true,
+                  onKeyDown: (event) => {
+                    if (event.key === "Escape" && fontSubmenuVisible) {
+                      event.stopPropagation()
+                    }
+                  },
+                  onVisibleChange: setFontSubmenuVisible,
+                  popupVisible: fontSubmenuVisible,
+                }}
               >
                 {fontFamilyOptions.map(({ label, value }) => (
                   <Menu.Item key={value} onClick={() => updateSettings({ fontFamily: value })}>
