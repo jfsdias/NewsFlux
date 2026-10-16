@@ -432,8 +432,9 @@ const runPrimaryHierarchyCase = async (mountHighlights, caseId, covers) => {
     },
   }
 }
-// READER-VISUAL-01: reader geometry. The frame is the Article width setting
-// (.article-body); prose is 75% of that setting, never wider than the frame.
+// READER-VISUAL-01: reader geometry. The frame is the Article width setting (.article-body); prose is
+// clamp(40ch, 75% of that setting, 58ch) since READER-MEASURE-01, never wider than the frame.
+const readerMeasureCh = (articleWidth) => Math.min(58, Math.max(40, articleWidth * 0.75))
 const readerScrollElement = (container) =>
   container.querySelector(".scroll-container .simplebar-content-wrapper") ??
   container.querySelector(".scroll-container")
@@ -451,7 +452,7 @@ const measureReader = (articleWidth) => {
   body.append(probe)
   const chPx = probe.getBoundingClientRect().width
   probe.remove()
-  const expectedProse = Math.min(bodyRect.width, articleWidth * 0.75 * chPx)
+  const expectedProse = Math.min(bodyRect.width, readerMeasureCh(articleWidth) * chPx)
   const prose = [...body.querySelectorAll("p, ul, ol, blockquote, h2, h3")]
     .filter((node) => isProseBlock(node))
     .map((node) => ({ tag: node.tagName, rect: rectOf(node) }))
@@ -1097,6 +1098,600 @@ const runReaderTypographyCase = async (mount, caseId) => {
     [caseId]: sizes,
   }
 }
+
+// READER-MEASURE-01: prose measure. The "Article width" setting stays the only width control; prose reads at
+// clamp(40ch, articleWidth * 0.75ch, 58ch) and never wider than the frame, while media, tables and code keep the
+// frame. The rule is toggled through the CSSOM, so every comparison uses the same page and the same stylesheets
+// minus the rule (the promoted READER-VISUAL-01 + 02A1 behavior), never frozen numbers.
+const READER_MEASURE_FORMULA = "clamp(40ch, calc(var(--article-width) * 0.75ch), 58ch)"
+const READER_MEASURE_LEGACY_FORMULA = "calc(var(--article-width) * 0.75ch)"
+const READER_MEASURE_SELECTORS = [
+  ".article-content .article-body",
+  ".article-content .article-header .article-header-column",
+]
+const READER_MEASURE_CPL_LIMIT = 74
+const READER_MEASURE_TOLERANCE = 0.5
+const READER_MEASURE_WIDTHS = [
+  ...Array.from({ length: 51 }, (_, index) => 50 + index),
+  77.33,
+  77.34,
+].toSorted((a, b) => a - b)
+const READER_MEASURE_CPL_WIDTHS = [75, 80, 90, 100]
+const READER_MEASURE_PROTECTED_WIDTHS = [50, 75, 100]
+const READER_MEASURE_HEADER_WIDTHS = [50, 60, 75, 90, 100]
+const READER_MEASURE_PARITY_CASES = [
+  [readerFixtures, "short"],
+  [readerFixtures, "longForm"],
+  [readerFixtures, "longHeadline"],
+  [readerFixtures, "wideImage"],
+  [readerFixtures, "portraitImage"],
+  [readerFixtures, "noImage"],
+  [readerTypographyFixtures, "typographyNormal"],
+  [readerTypographyFixtures, "typographyStress"],
+]
+const READER_MEASURE_MEDIA = "img:not(.icon-image), figure, figcaption, iframe, video, audio, .plyr"
+const READER_MEASURE_TABLE = ".article-table-scroll, table"
+const READER_MEASURE_CODE = "pre, .code-block-container"
+const READER_MEASURE_BLOCKS =
+  "p, ul, ol, dl, blockquote, h1, h2, h3, h4, h5, h6, hr, li, pre, figure, figcaption, img, iframe, .article-table-scroll, table"
+const normalizeSpace = (text) => text.replaceAll(/\s+/gu, " ").trim()
+let readerMeasureSweepCache = null
+const readerBody = () => document.querySelector(".article-container .article-body")
+const readerChPx = (node) => {
+  // 1ch is snapped to the 1/64px layout grid; measuring 100ch keeps the ratio exact enough for 0.005ch tolerances.
+  const probe = document.createElement("span")
+  probe.style.cssText = "position:absolute;visibility:hidden;width:100ch"
+  node.append(probe)
+  const { width } = probe.getBoundingClientRect()
+  probe.remove()
+  return width / 100
+}
+const readerMeasureToken = (node) =>
+  Number.parseFloat(getComputedStyle(node).getPropertyValue("--reader-prose-measure"))
+const readerMeasureRules = () => {
+  const found = []
+  const visit = (rules, container) => {
+    for (const [index, rule] of [...rules].entries()) {
+      if (rule.style?.getPropertyValue("--reader-prose-measure")) {
+        found.push({ container, index, rule })
+      }
+      if (rule.cssRules?.length) {
+        visit(rule.cssRules, rule)
+      }
+    }
+  }
+  for (const sheet of document.styleSheets) {
+    try {
+      visit(sheet.cssRules, sheet)
+    } catch {
+      // Cross-origin sheets are not part of the Reader.
+    }
+  }
+  return found
+}
+const readerMeasureDeclared = (rule) =>
+  normalizeSpace(rule.style.getPropertyValue("--reader-prose-measure"))
+const readerMeasureContractRules = () =>
+  readerMeasureRules().filter(({ rule }) => readerMeasureDeclared(rule) === READER_MEASURE_FORMULA)
+const withReaderMeasureRuleDisabled = async (measure) => {
+  const targets = readerMeasureContractRules()
+  assert(
+    targets.length === 1,
+    `expected one READER-MEASURE-01 rule in the CSSOM, found ${targets.length}`,
+  )
+  const [{ container, index, rule }] = targets
+  const { cssText } = rule
+  container.deleteRule(index)
+  try {
+    await settle()
+    return await measure()
+  } finally {
+    container.insertRule(cssText, index)
+    await settle()
+  }
+}
+const setReaderArticleWidth = async (articleWidth) => {
+  settingsState.set({ ...settingsState.get(), articleWidth })
+  await waitFor(
+    () => readerBody()?.style.getPropertyValue("--article-width") === String(articleWidth),
+    `article width ${articleWidth} did not reach the reader`,
+  )
+  await settle()
+}
+const sampleReaderMeasure = (articleWidth) => {
+  const body = readerBody()
+  assert(body, "Reader did not render")
+  const tokenPx = readerMeasureToken(body)
+  const chPx = readerChPx(body)
+  const frame = body.getBoundingClientRect().width
+  const prose = [...body.querySelectorAll("p, ul, ol, blockquote, h2, h3")]
+    .filter((node) => isProseBlock(node))
+    .map((node) => node.getBoundingClientRect().width)
+  assert(prose.length > 0, "Reader has no prose blocks to measure")
+  return {
+    articleWidth,
+    tokenPx,
+    chPx,
+    tokenCh: tokenPx / chPx,
+    expectedCh: readerMeasureCh(articleWidth),
+    frame,
+    prose,
+  }
+}
+const readerMeasureSweep = async (mount) => {
+  readerMeasureSweepCache ??= await (async () => {
+    await mountReaderCase(mount, "noImage", 75)
+    const samples = []
+    for (const articleWidth of READER_MEASURE_WIDTHS) {
+      await setReaderArticleWidth(articleWidth)
+      samples.push(sampleReaderMeasure(articleWidth))
+    }
+    await setReaderArticleWidth(75)
+    return samples
+  })()
+  return readerMeasureSweepCache
+}
+const recordReaderMeasure = (key, value) => {
+  globalThis.__readerMeasure01Metrics = { ...globalThis.__readerMeasure01Metrics, [key]: value }
+}
+const exposeReaderMeasureHooks = (mount) => {
+  // Lets an external driver stage one READER-MEASURE-01 case at a time.
+  globalThis.__readerMeasure01MountCase = async (
+    caseId,
+    articleWidth = 75,
+    typography = false,
+    fontSize,
+  ) => {
+    await mountReaderCase(mount, caseId, articleWidth, {
+      fixtures: typography ? readerTypographyFixtures : readerFixtures,
+      fontSize,
+    })
+  }
+  globalThis.__readerMeasure01SetWidth = setReaderArticleWidth
+}
+const runReaderMeasureFormula = async (mount) => {
+  exposeReaderMeasureHooks(mount)
+  readerMeasureSweepCache = null
+  globalThis.__readerMeasure01Metrics = {}
+  await mountReaderCase(mount, "noImage", 75)
+  const declared = readerMeasureRules().map(({ rule }) => ({
+    selector: normalizeSpace(rule.selectorText),
+    value: readerMeasureDeclared(rule),
+  }))
+  const contract = readerMeasureContractRules()
+  assert(
+    contract.length === 1,
+    `expected exactly one rule declaring ${READER_MEASURE_FORMULA}; declarations: ${JSON.stringify(declared)}`,
+  )
+  const selectors = contract[0].rule.selectorText
+    .split(",")
+    .map((selector) => normalizeSpace(selector))
+    .toSorted()
+  assert(
+    JSON.stringify(selectors) === JSON.stringify([...READER_MEASURE_SELECTORS].toSorted()),
+    `the measure rule must target exactly ${READER_MEASURE_SELECTORS.join(" | ")}; found ${selectors.join(" | ")}`,
+  )
+  assert(
+    contract[0].rule.parentStyleSheet === readerStyleElement().sheet,
+    "the measure rule must ship in ReaderStyles.css (via ReaderTypography.css)",
+  )
+  const others = declared.filter(({ value }) => value !== READER_MEASURE_FORMULA)
+  assert(
+    others.every(({ value }) => value === READER_MEASURE_LEGACY_FORMULA),
+    `unexpected --reader-prose-measure declarations: ${JSON.stringify(others)}`,
+  )
+  // The registered <length> token must resolve through the contract rule, not the legacy calc, at the cap.
+  await setReaderArticleWidth(100)
+  const capped = sampleReaderMeasure(100)
+  assert(
+    Math.abs(capped.tokenCh - 58) < 0.01,
+    `at Article width 100 the token is ${capped.tokenCh.toFixed(3)}ch; the contract formula gives 58ch (legacy would give 75ch)`,
+  )
+  await setReaderArticleWidth(75)
+  recordReaderMeasure("formula", { declared, selectors })
+}
+const runReaderMeasureWidth50Floor = async (mount) => {
+  const [first] = await readerMeasureSweep(mount)
+  assert(first.articleWidth === 50, "sweep did not start at Article width 50")
+  assert(
+    Math.abs(first.tokenCh - 40) < 0.005,
+    `Article width 50 resolves to ${first.tokenCh.toFixed(3)}ch; the floor is 40ch (50 * 0.75 = 37.5ch)`,
+  )
+  const proseExpected = Math.min(first.frame, first.tokenPx)
+  for (const width of first.prose) {
+    assert(
+      Math.abs(width - proseExpected) < 1,
+      `Article width 50 prose is ${width.toFixed(1)}px; expected ${proseExpected.toFixed(1)}px`,
+    )
+  }
+  recordReaderMeasure("width50", { tokenCh: first.tokenCh, chPx: first.chPx, frame: first.frame })
+}
+const runReaderMeasureMonotonicity = async (mount) => {
+  const sweep = await readerMeasureSweep(mount)
+  for (const sample of sweep) {
+    const expectedPx = Math.min(sample.frame, sample.tokenPx)
+    for (const width of sample.prose) {
+      assert(
+        Math.abs(width - expectedPx) < 1,
+        `Article width ${sample.articleWidth}: a prose block is ${width.toFixed(1)}px, expected min(frame, measure) ${expectedPx.toFixed(1)}px`,
+      )
+    }
+    assert(
+      Math.abs(sample.tokenCh - sample.expectedCh) < 0.005,
+      `Article width ${sample.articleWidth}: token ${sample.tokenCh.toFixed(3)}ch, contract ${sample.expectedCh.toFixed(3)}ch`,
+    )
+  }
+  for (let index = 1; index < sweep.length; index += 1) {
+    const [previous, current] = [sweep[index - 1], sweep[index]]
+    assert(
+      current.tokenPx >= previous.tokenPx - 0.01,
+      `measure decreased from ${previous.tokenPx.toFixed(2)}px at ${previous.articleWidth} to ${current.tokenPx.toFixed(2)}px at ${current.articleWidth}`,
+    )
+    assert(
+      current.prose[0] >= previous.prose[0] - READER_MEASURE_TOLERANCE,
+      `prose narrowed from ${previous.prose[0].toFixed(1)}px at ${previous.articleWidth} to ${current.prose[0].toFixed(1)}px at ${current.articleWidth}`,
+    )
+  }
+  const point = (width) => sweep.find(({ articleWidth }) => articleWidth === width)
+  assert(
+    point(55).tokenPx > point(50).tokenPx - 0.01 && point(75).tokenPx > point(60).tokenPx,
+    "measure is not rising across the 50-75 range",
+  )
+  recordReaderMeasure(
+    "sweep",
+    sweep.map(({ articleWidth, tokenCh, frame }) => ({
+      articleWidth,
+      tokenCh: Number(tokenCh.toFixed(3)),
+      frame: Number(frame.toFixed(1)),
+    })),
+  )
+}
+const runReaderMeasureMinBound = async (mount) => {
+  const sweep = await readerMeasureSweep(mount)
+  for (const sample of sweep) {
+    assert(
+      sample.tokenPx >= 40 * sample.chPx - 0.01,
+      `Article width ${sample.articleWidth}: measure ${sample.tokenCh.toFixed(3)}ch is below the 40ch floor`,
+    )
+    for (const width of sample.prose) {
+      assert(
+        width >= Math.min(sample.frame, 40 * sample.chPx) - READER_MEASURE_TOLERANCE,
+        `Article width ${sample.articleWidth}: a prose block is ${width.toFixed(1)}px, below min(frame, 40ch)`,
+      )
+    }
+  }
+}
+const runReaderMeasureMaxBound = async (mount) => {
+  const sweep = await readerMeasureSweep(mount)
+  for (const sample of sweep) {
+    assert(
+      sample.tokenPx <= 58 * sample.chPx + 0.01,
+      `Article width ${sample.articleWidth}: measure ${sample.tokenCh.toFixed(3)}ch is above the 58ch cap`,
+    )
+    for (const width of sample.prose) {
+      assert(
+        width <= 58 * sample.chPx + READER_MEASURE_TOLERANCE,
+        `Article width ${sample.articleWidth}: a prose block is ${width.toFixed(1)}px, above the 58ch cap`,
+      )
+    }
+  }
+  const capped = sweep.filter(({ articleWidth }) => articleWidth >= 77.34)
+  assert(
+    capped.every(({ tokenCh }) => Math.abs(tokenCh - 58) < 0.005),
+    "the cap does not hold from Article width 77.34 upwards",
+  )
+}
+const readerGeometry = (body) =>
+  [...body.querySelectorAll(READER_MEASURE_BLOCKS)].map((node) => {
+    const rect = node.getBoundingClientRect()
+    return { tag: node.tagName, left: rect.left, width: rect.width, height: rect.height }
+  })
+const runReaderMeasureDefault75Parity = async (mount) => {
+  const checked = []
+  for (const [fixtures, caseId] of READER_MEASURE_PARITY_CASES) {
+    await mountReaderCase(mount, caseId, 75, { fixtures })
+    // Absolute default: 56.25ch centered in the frame, exactly what the promoted READER-VISUAL-01 baseline gives.
+    assertReaderLayout(`${caseId}@75`, measureReader(75))
+    const body = readerBody()
+    const withRule = { geometry: readerGeometry(body), token: readerMeasureToken(body) }
+    const withoutRule = await withReaderMeasureRuleDisabled(() => ({
+      geometry: readerGeometry(readerBody()),
+      token: readerMeasureToken(readerBody()),
+    }))
+    assert(
+      Math.abs(withRule.token - withoutRule.token) < 0.01,
+      `${caseId}: the default-width token moved from ${withoutRule.token.toFixed(2)}px to ${withRule.token.toFixed(2)}px`,
+    )
+    assert(
+      withRule.geometry.length === withoutRule.geometry.length,
+      `${caseId}: block count changed with the rule`,
+    )
+    for (const [index, block] of withRule.geometry.entries()) {
+      const reference = withoutRule.geometry[index]
+      for (const key of ["left", "width", "height"]) {
+        assert(
+          Math.abs(block[key] - reference[key]) <= READER_MEASURE_TOLERANCE,
+          `${caseId}: ${block.tag}#${index} ${key} is ${block[key].toFixed(1)}px with the rule and ${reference[key].toFixed(1)}px without it at Article width 75`,
+        )
+      }
+    }
+    checked.push({ caseId, blocks: withRule.geometry.length })
+  }
+  // The A/B must be able to see the rule at all: the cap has to change the measure.
+  await mountReaderCase(mount, "noImage", 100)
+  const capped = readerMeasureToken(readerBody())
+  const legacy = await withReaderMeasureRuleDisabled(() => readerMeasureToken(readerBody()))
+  assert(
+    capped < legacy - 1,
+    `the rule toggle is ineffective: ${capped.toFixed(1)}px with, ${legacy.toFixed(1)}px without at Article width 100`,
+  )
+  recordReaderMeasure("parity75", checked)
+}
+const readerLineLengths = (paragraph) => {
+  const range = document.createRange()
+  const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT)
+  const lines = []
+  let previousCenter = null
+  const lineHeight = Number.parseFloat(getComputedStyle(paragraph).lineHeight) || 24
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    let offset = 0
+    for (const character of node.textContent) {
+      range.setStart(node, offset)
+      range.setEnd(node, offset + character.length)
+      offset += character.length
+      const [rect] = range.getClientRects()
+      if (!rect || (rect.width === 0 && rect.height === 0)) {
+        continue
+      }
+      const center = rect.top + rect.height / 2
+      if (previousCenter === null || center - previousCenter > lineHeight * 0.6) {
+        lines.push("")
+      }
+      lines[lines.length - 1] += character
+      previousCenter = center
+    }
+  }
+  return lines.map((line) => line.trimEnd().length)
+}
+const runReaderMeasureCpl = async (mount) => {
+  const cases = [
+    [readerFixtures, "noImage"],
+    [readerFixtures, "longForm"],
+    [readerTypographyFixtures, "typographyNormal"],
+  ]
+  const report = []
+  for (const [fixtures, caseId] of cases) {
+    await mountReaderCase(mount, caseId, 75, { fixtures })
+    for (const articleWidth of READER_MEASURE_CPL_WIDTHS) {
+      await setReaderArticleWidth(articleWidth)
+      const body = readerBody()
+      const sample = sampleReaderMeasure(articleWidth)
+      const paragraphs = [...body.querySelectorAll("p")].filter((node) => isProseBlock(node))
+      const lengths = paragraphs.flatMap((node) => readerLineLengths(node))
+      assert(
+        lengths.length >= 4,
+        `${caseId}@${articleWidth} produced ${lengths.length} measurable lines`,
+      )
+      const longest = Math.max(...lengths)
+      assert(
+        longest <= READER_MEASURE_CPL_LIMIT,
+        `${caseId}@${articleWidth}: ${longest} characters on one line; the limit is ${READER_MEASURE_CPL_LIMIT}`,
+      )
+      if (sample.frame >= sample.tokenPx) {
+        // Not vacuous: when the column is free to reach its measure, lines really fill it.
+        assert(
+          longest >= 40,
+          `${caseId}@${articleWidth}: longest line is only ${longest} characters; the CPL probe is not measuring a full column`,
+        )
+      }
+      report.push({
+        caseId,
+        articleWidth,
+        longest,
+        lines: lengths.length,
+        chPx: Number(sample.chPx.toFixed(2)),
+        measureCh: Number(sample.tokenCh.toFixed(2)),
+      })
+    }
+  }
+  await setReaderArticleWidth(75)
+  recordReaderMeasure("cpl", report)
+}
+// The READER-VISUAL-02A2 header column (.article-header-column) is not in the production markup yet, so a probe with
+// that class stands in for it. The probe proves that the one rule gives both selectors the same measure: in ch
+// (any font) and in px once the header uses the reader font, as the 02A2 contract does. Point this gate at the real
+// element when 02A2 ships it.
+const runReaderMeasureHeaderBodyAlignment = async (mount) => {
+  await mountReaderCase(mount, "noImage", 75)
+  const header = document.querySelector(".article-container .article-header")
+  assert(header, "Reader header missing")
+  const probes = []
+  const report = []
+  const addProbe = (articleWidth, readerFont) => {
+    const probe = document.createElement("div")
+    probe.className = "article-header-column"
+    probe.dataset.measureProbe = readerFont ? "reader-font" : "inherited-font"
+    probe.style.cssText = `position:absolute;visibility:hidden;--article-width:${articleWidth}`
+    if (readerFont) {
+      // READER-VISUAL-02A2 contract: the header resolves ch in the reader font, like the body.
+      probe.style.fontFamily = "var(--reader-family, inherit)"
+      probe.style.fontSize = "var(--reader-fs, 1.05rem)"
+    }
+    probe.textContent = "x"
+    header.append(probe)
+    probes.push(probe)
+    return probe
+  }
+  try {
+    for (const articleWidth of READER_MEASURE_HEADER_WIDTHS) {
+      await setReaderArticleWidth(articleWidth)
+      for (const probe of probes.splice(0)) {
+        probe.remove()
+      }
+      const body = readerBody()
+      const bodyToken = readerMeasureToken(body)
+      const bodyCh = bodyToken / readerChPx(body)
+      const inherited = addProbe(articleWidth, false)
+      const reader = addProbe(articleWidth, true)
+      const inheritedCh = readerMeasureToken(inherited) / readerChPx(inherited)
+      assert(
+        Math.abs(inheritedCh - bodyCh) < 0.005 &&
+          Math.abs(inheritedCh - readerMeasureCh(articleWidth)) < 0.005,
+        `Article width ${articleWidth}: header column ${inheritedCh.toFixed(3)}ch, body ${bodyCh.toFixed(3)}ch, contract ${readerMeasureCh(articleWidth).toFixed(3)}ch`,
+      )
+      const readerToken = readerMeasureToken(reader)
+      assert(
+        Math.abs(readerToken - bodyToken) < 0.05,
+        `Article width ${articleWidth}: header column ${readerToken.toFixed(2)}px does not align with the body ${bodyToken.toFixed(2)}px when both use the reader font`,
+      )
+      const firstProse = [...body.querySelectorAll("p")].find((node) => isProseBlock(node))
+      const proseRect = firstProse.getBoundingClientRect()
+      const headerRect = header.getBoundingClientRect()
+      assert(
+        Math.abs(headerRect.left + headerRect.width / 2 - (proseRect.left + proseRect.width / 2)) <
+          2,
+        `Article width ${articleWidth}: the header axis is not aligned with the prose axis`,
+      )
+      report.push({
+        articleWidth,
+        bodyCh: Number(bodyCh.toFixed(3)),
+        headerCh: Number(inheritedCh.toFixed(3)),
+        bodyPx: Number(bodyToken.toFixed(2)),
+        headerPx: Number(readerToken.toFixed(2)),
+      })
+    }
+  } finally {
+    for (const probe of header.querySelectorAll("[data-measure-probe]")) {
+      probe.remove()
+    }
+  }
+  await setReaderArticleWidth(75)
+  recordReaderMeasure("headerBodyAlignment", {
+    productionHeaderColumnPresent: Boolean(
+      document.querySelector(".article-header-column:not([data-measure-probe])"),
+    ),
+    report,
+  })
+}
+const readerSurfaces = (body, selector) =>
+  [...body.querySelectorAll(selector)].map((node) => {
+    const rect = node.getBoundingClientRect()
+    const style = getComputedStyle(node)
+    return {
+      tag: node.tagName,
+      className: String(node.className),
+      left: rect.left,
+      width: rect.width,
+      height: rect.height,
+      overflowX: style.overflowX,
+      whiteSpace: style.whiteSpace,
+      scrollWidth: node.scrollWidth,
+      clientWidth: node.clientWidth,
+    }
+  })
+const assertSameSurfaces = (label, withRule, withoutRule) => {
+  assert(
+    withRule.length === withoutRule.length,
+    `${label}: ${withRule.length} surfaces with the rule, ${withoutRule.length} without`,
+  )
+  for (const [index, surface] of withRule.entries()) {
+    const reference = withoutRule[index]
+    for (const key of ["left", "width", "height"]) {
+      assert(
+        Math.abs(surface[key] - reference[key]) <= READER_MEASURE_TOLERANCE,
+        `${label}: ${surface.tag}.${surface.className} ${key} is ${surface[key].toFixed(1)}px with the rule and ${reference[key].toFixed(1)}px without it`,
+      )
+    }
+    for (const key of ["overflowX", "whiteSpace", "scrollWidth", "clientWidth"]) {
+      assert(
+        surface[key] === reference[key],
+        `${label}: ${surface.tag}.${surface.className} ${key} is ${surface[key]} with the rule and ${reference[key]} without it`,
+      )
+    }
+  }
+}
+const runReaderMeasureProtection = async (mount, { name, caseIds, selector, absolute }) => {
+  const report = []
+  for (const caseId of caseIds) {
+    await mountReaderCase(mount, caseId, 75)
+    for (const articleWidth of READER_MEASURE_PROTECTED_WIDTHS) {
+      await setReaderArticleWidth(articleWidth)
+      const label = `${name} ${caseId}@${articleWidth}`
+      const sample = sampleReaderMeasure(articleWidth)
+      const withRule = readerSurfaces(readerBody(), selector)
+      assert(withRule.length > 0, `${label} has no protected surfaces`)
+      const withoutRule = await withReaderMeasureRuleDisabled(() =>
+        readerSurfaces(readerBody(), selector),
+      )
+      assertSameSurfaces(label, withRule, withoutRule)
+      absolute({ label, caseId, articleWidth, sample, surfaces: withRule })
+      report.push({ caseId, articleWidth, surfaces: withRule.length })
+    }
+  }
+  await setReaderArticleWidth(75)
+  recordReaderMeasure(name, report)
+}
+const runReaderMeasureMediaProtection = (mount) =>
+  runReaderMeasureProtection(mount, {
+    name: "media",
+    caseIds: ["wideImage", "portraitImage", "longForm"],
+    selector: READER_MEASURE_MEDIA,
+    absolute: ({ label, caseId, sample, surfaces }) => {
+      for (const surface of surfaces) {
+        const right = surface.left + surface.width
+        const bodyLeft = readerBody().getBoundingClientRect().left
+        const tolerance = surface.tag === "IFRAME" ? 5 : 1
+        assert(
+          surface.left >= bodyLeft - tolerance && right <= bodyLeft + sample.frame + tolerance,
+          `${label}: ${surface.tag} escaped the reader frame`,
+        )
+      }
+      if (caseId === "wideImage") {
+        for (const image of surfaces.filter(({ tag }) => tag === "IMG")) {
+          assert(
+            Math.abs(image.width - Math.min(sample.frame, 1600)) < 2,
+            `${label}: wide image is ${image.width.toFixed(1)}px; expected the frame ${sample.frame.toFixed(1)}px, not the ${sample.tokenPx.toFixed(1)}px prose measure`,
+          )
+        }
+      }
+    },
+  })
+const runReaderMeasureTableProtection = (mount) =>
+  runReaderMeasureProtection(mount, {
+    name: "table",
+    caseIds: ["longForm"],
+    selector: READER_MEASURE_TABLE,
+    absolute: ({ label, sample, surfaces }) => {
+      const wrapper = surfaces.find(({ className }) => className.includes("article-table-scroll"))
+      assert(wrapper, `${label} has no table scroll wrapper`)
+      assert(
+        Math.abs(wrapper.width - sample.frame) < 2,
+        `${label}: table wrapper is ${wrapper.width.toFixed(1)}px; expected the frame ${sample.frame.toFixed(1)}px`,
+      )
+      assert(
+        ["auto", "scroll"].includes(wrapper.overflowX),
+        `${label}: table wrapper lost its horizontal overflow (${wrapper.overflowX})`,
+      )
+    },
+  })
+const runReaderMeasurePreCodeProtection = (mount) =>
+  runReaderMeasureProtection(mount, {
+    name: "preCode",
+    caseIds: ["longForm"],
+    selector: READER_MEASURE_CODE,
+    absolute: ({ label, sample, surfaces }) => {
+      const pre = surfaces.find(({ tag }) => tag === "PRE")
+      assert(pre, `${label} has no pre surface`)
+      assert(
+        Math.abs(pre.width - sample.frame) < 2,
+        `${label}: pre is ${pre.width.toFixed(1)}px; expected the frame ${sample.frame.toFixed(1)}px`,
+      )
+      assert(
+        ["auto", "scroll"].includes(pre.overflowX) && pre.whiteSpace.startsWith("pre"),
+        `${label}: pre lost its overflow or white-space behavior (${pre.overflowX}, ${pre.whiteSpace})`,
+      )
+    },
+  })
 
 const runReaderScrollUnderGlass = async (mount) => {
   await mountReaderCase(mount, "longForm")
@@ -2663,6 +3258,19 @@ const Harness = () => {
     ["READER_VISUAL_02A1_STRESS", () => runReaderTypographyCase(mount, "typographyStress")],
     ["READER_VISUAL_02A1_TECHNICAL", () => runReaderTypographyCase(mount, "typographyTechnical")],
   ]
+  const readerMeasureScenarios = [
+    ["READER_MEASURE_01_PROSE_MEASURE_FORMULA", () => runReaderMeasureFormula(mount)],
+    ["READER_MEASURE_01_WIDTH_50_FLOOR", () => runReaderMeasureWidth50Floor(mount)],
+    ["READER_MEASURE_01_WIDTH_MONOTONICITY", () => runReaderMeasureMonotonicity(mount)],
+    ["READER_MEASURE_01_MIN_BOUND", () => runReaderMeasureMinBound(mount)],
+    ["READER_MEASURE_01_MAX_BOUND", () => runReaderMeasureMaxBound(mount)],
+    ["READER_MEASURE_01_DEFAULT_75_PARITY", () => runReaderMeasureDefault75Parity(mount)],
+    ["READER_MEASURE_01_CPL", () => runReaderMeasureCpl(mount)],
+    ["READER_MEASURE_01_HEADER_BODY_ALIGNMENT", () => runReaderMeasureHeaderBodyAlignment(mount)],
+    ["READER_MEASURE_01_MEDIA_PROTECTION", () => runReaderMeasureMediaProtection(mount)],
+    ["READER_MEASURE_01_TABLE_PROTECTION", () => runReaderMeasureTableProtection(mount)],
+    ["READER_MEASURE_01_PRE_CODE_PROTECTION", () => runReaderMeasurePreCodeProtection(mount)],
+  ]
   const responsiveScenarios = [
     [
       "HOME_RESPONSIVE_VIEWPORT_STAGE",
@@ -3536,6 +4144,7 @@ const Harness = () => {
           ...primaryHierarchyScenarios,
           ...readerScenarios,
           ...readerTypographyScenarios,
+          ...readerMeasureScenarios,
           ...matrixScenarios,
         ]
         const gateNames = new Set(allScenarios.map(([name]) => name))
@@ -3595,6 +4204,7 @@ const Harness = () => {
     { name: "home-visual-01-primary-hierarchy", scenarios: primaryHierarchyScenarios },
     { name: "reader-visual-01-reading-ergonomics", scenarios: readerScenarios },
     { name: "reader-visual-02a1-editorial-typography", scenarios: readerTypographyScenarios },
+    { name: "reader-measure-01-prose-measure", scenarios: readerMeasureScenarios },
     { name: "matrix-completeness", scenarios: matrixScenarios },
   ]
   const runSuites = async (selectedSuites, { recordViewportTheme = false } = {}) => {
@@ -3608,6 +4218,7 @@ const Harness = () => {
           primaryHierarchyScenarios,
           readerScenarios,
           readerTypographyScenarios,
+          readerMeasureScenarios,
         ].includes(selectedScenarios)
         if (responsiveMode) {
           document.body.classList.add("phase2c-responsive-running")
@@ -3735,6 +4346,9 @@ const Harness = () => {
         </button>
         <button disabled={running} onClick={() => void run(readerTypographyScenarios)}>
           Run READER-VISUAL-02A1 editorial typography cases
+        </button>
+        <button disabled={running} onClick={() => void run(readerMeasureScenarios)}>
+          Run READER-MEASURE-01 prose measure cases
         </button>
         <button disabled={running} onClick={() => void run(matrixScenarios)}>
           Run scenario matrix completeness gate
