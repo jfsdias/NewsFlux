@@ -107,6 +107,7 @@
     "github_link_label": "在新标签页中打开 GitHub 上的 ReactFlux"
   },
   "actions": {
+    "skip_to_main_content": "跳转到主要内容",
     "check": "查看",
     "dismiss": "关闭",
     "retry": "重试",

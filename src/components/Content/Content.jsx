@@ -71,7 +71,7 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
   const { entryId: routeEntryId } = useParams()
   const entryId = entryIdOverride ?? routeEntryId
 
-  useDocumentTitle()
+  const pageTitle = useDocumentTitle()
 
   const { entryDetailRef, entryListRef, handleEntryClick, restoreEntryListFocus } =
     useContentContext()
@@ -231,6 +231,7 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
 
   return (
     <>
+      {!activeContent && <h1 className="a11y-visually-hidden">{pageTitle}</h1>}
       <div
         aria-hidden={isDetailLayerActive || undefined}
         className={classNames("entry-col", { "entry-col-full-width": isEntryColFullWidth })}

@@ -107,6 +107,7 @@
     "github_link_label": "Voir ReactFlux sur GitHub (s’ouvre dans un nouvel onglet)"
   },
   "actions": {
+    "skip_to_main_content": "Aller au contenu principal",
     "check": "Vérifier",
     "dismiss": "Ignorer",
     "retry": "Réessayer",

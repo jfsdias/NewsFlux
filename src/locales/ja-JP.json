@@ -107,6 +107,7 @@
     "github_link_label": "GitHub で ReactFlux を見る（新しいタブで開きます）"
   },
   "actions": {
+    "skip_to_main_content": "メインコンテンツへ移動",
     "check": "確認",
     "dismiss": "閉じる",
     "retry": "再試行",
