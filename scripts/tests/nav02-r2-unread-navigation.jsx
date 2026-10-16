@@ -15,7 +15,13 @@ import { polyglotState } from "@/hooks/useLanguage"
 import englishPhrases from "@/locales/en-US.json"
 import { authState } from "@/store/authState"
 import { contentState, resetContent } from "@/store/contentState"
-import { commitCatalogData, commitIdentityData, resetData, setUnreadInfo } from "@/store/dataState"
+import {
+  commitCatalogData,
+  commitIdentityData,
+  dataState,
+  resetData,
+  setUnreadInfo,
+} from "@/store/dataState"
 import { feedIconsState } from "@/store/feedIconsState"
 import { getDefaultSettings, settingsState } from "@/store/settingsState"
 import { expandedCategoriesState, setExpandedCategories } from "@/store/sidebarState"
@@ -52,12 +58,22 @@ const fixtureFeeds = [
 const fixtureCategories = [general, science, hiddenCategory, makeCategory(4, "Empty")]
 const initialUnread = { 2: 2, 3: 8, 4: 0, 5: 7, 6: 6 }
 const readRequests = []
+const readBodies = []
+const unreadPageUrls = []
 let refreshCountCalls = 0
+let unreadPageFetches = 0
 let router
 
-apiClient.put = async (url) => {
+apiClient.put = async (url, body) => {
   readRequests.push(url)
+  readBodies.push(body)
   return {}
+}
+apiClient.get = async (url) => {
+  assert(url.startsWith("/v1/feeds/2/entries"), `Unexpected fixture GET: ${url}`)
+  unreadPageUrls.push(url)
+  unreadPageFetches += 1
+  return { entries: unreadPageFetches === 1 ? [{ id: 21 }, { id: 22 }] : [] }
 }
 
 polyglotState.setKey("polyglot", new Polyglot({ phrases: englishPhrases, locale: "en-US" }))
@@ -66,6 +82,7 @@ const appData = {
   refreshFeedData: async () => {},
   refreshCounts: async () => {
     refreshCountCalls += 1
+    setUnreadInfo((previous) => ({ ...previous, 2: 0 }))
     return { error: null }
   },
 }
@@ -382,6 +399,11 @@ const scenarios = [
     "MARK_ALL_READ_AND_JUMP_BEHAVIOR_PRESERVED",
     async () => {
       await resetFixture("/feed/2", { unreadMode: true })
+      settingsState.set({ ...settingsState.get(), skipMarkAllReadConfirmation: true })
+      unreadPageFetches = 0
+      readRequests.length = 0
+      readBodies.length = 0
+      unreadPageUrls.length = 0
       const contentBefore = contentState.get()
       const row = activeFeedRow(2)
       assert(row, "Current unread feed is missing before mark-all-read")
@@ -409,7 +431,21 @@ const scenarios = [
           contentState.get().entries === contentBefore.entries,
         "Mark-all-read reconciliation changed active article content",
       )
-      assert(readRequests[0] === "/v1/feeds/2/mark-all-as-read", "Mark-all-read route changed")
+      assert(readRequests[0] === "/v1/entries", "Mark-all-read batch route changed")
+      const [body] = readBodies
+      assert(
+        body?.status === "read" && [...(body.entry_ids ?? [])].toSorted().join(",") === "21,22",
+        `Mark-all-read batch payload changed: ${JSON.stringify(body)}`,
+      )
+      assert(
+        unreadPageUrls.length >= 2 &&
+          unreadPageUrls.every((url) => url.includes("status=unread") && !/offset=[1-9]/.test(url)),
+        `Mark-all-read did not page unread entries from offset zero until empty: ${unreadPageUrls.join(" | ")}`,
+      )
+      assert(
+        dataState.get().unreadInfo[2] === 0 && dataState.get().unreadInfo[3] === 8,
+        "Mark-all-read count refresh did not zero only the scoped feed",
+      )
     },
   ],
   [
