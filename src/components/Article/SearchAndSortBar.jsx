@@ -27,6 +27,10 @@ import {
 import { catalogCategoriesState, catalogFeedsState } from "@/store/dataState"
 import { duplicateHotkeysState, hotkeysState } from "@/store/hotkeysState"
 import { settingsState, updateSettings } from "@/store/settingsState"
+import {
+  createArticleListSearchScopeKey,
+  resolveArticleListSearchInputValue,
+} from "@/utils/article-list-search-scope"
 import { getStartOfToday } from "@/utils/date"
 import "./SearchAndSortBar.css"
 
@@ -174,11 +178,20 @@ const DateFilter = ({ filterDate, polyglot }) => {
 }
 
 const SearchAndSortBar = ({ fullWidth = false, homeMode = false }) => {
-  const { articleListError, filterDate, filterString, infoFrom, isArticleListReady } = useStore(
-    contentState,
-    { keys: ["articleListError", "filterDate", "filterString", "infoFrom", "isArticleListReady"] },
-  )
-  const { orderDirection } = useStore(settingsState, { keys: ["orderDirection"] })
+  const { articleListError, filterDate, filterString, infoFrom, infoId, isArticleListReady } =
+    useStore(contentState, {
+      keys: [
+        "articleListError",
+        "filterDate",
+        "filterString",
+        "infoFrom",
+        "infoId",
+        "isArticleListReady",
+      ],
+    })
+  const { orderDirection, showStatus } = useStore(settingsState, {
+    keys: ["orderDirection", "showStatus"],
+  })
   const { polyglot } = useStore(polyglotState)
   const feeds = useStore(catalogFeedsState)
   const categories = useStore(catalogCategoriesState)
@@ -192,7 +205,19 @@ const SearchAndSortBar = ({ fullWidth = false, homeMode = false }) => {
   const { isBelowMedium } = useScreenWidth()
 
   const [searchModalVisible, setSearchModalVisible] = useState(false)
-  const [modalInputValue, setModalInputValue] = useState("")
+  const [modalDraft, setModalDraft] = useState({ scopeKey: null, query: null, value: "" })
+  const searchScopeKey = createArticleListSearchScopeKey({
+    from: infoFrom,
+    id: infoId,
+    showStatus,
+  })
+  const modalInputValue = resolveArticleListSearchInputValue({
+    activeQuery: filterString,
+    activeScopeKey: searchScopeKey,
+    draftQuery: modalDraft.query,
+    draftScopeKey: modalDraft.scopeKey,
+    draftValue: modalDraft.value,
+  })
 
   const searchLabel = filterString
     ? polyglot.t("search.active_query", { query: filterString })
@@ -234,8 +259,12 @@ const SearchAndSortBar = ({ fullWidth = false, homeMode = false }) => {
   }
 
   const openSearchModal = () => {
-    setModalInputValue(filterString)
+    setModalDraft({ scopeKey: searchScopeKey, query: filterString, value: filterString })
     setSearchModalVisible(true)
+  }
+
+  const handleModalInputChange = (value) => {
+    setModalDraft({ scopeKey: searchScopeKey, query: filterString, value })
   }
 
   useHotkeys(openSearchModalHotkeys, openSearchModal, {
@@ -320,7 +349,7 @@ const SearchAndSortBar = ({ fullWidth = false, homeMode = false }) => {
         value={modalInputValue}
         visible={searchModalVisible}
         onCancel={closeSearchModal}
-        onChange={setModalInputValue}
+        onChange={handleModalInputChange}
         onConfirm={handleConfirmSearch}
       />
     </div>
