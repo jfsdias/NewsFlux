@@ -312,6 +312,11 @@ const getHtmlParserOptions = (getImageIndex, togglePhotoSlider) => {
       }
 
       switch (node.name) {
+        case "h1": {
+          return (
+            <h2 {...attributesToProps(node.attribs, "h2")}>{domToReact(node.children, options)}</h2>
+          )
+        }
         case "a": {
           return node.children.length > 0
             ? handleLinkWithImage(node, getImageIndex, togglePhotoSlider)
@@ -584,7 +589,7 @@ const ArticleDetail = forwardRef((_, ref) => {
           >
             <Typography.Title
               className="article-title"
-              heading={3}
+              heading={1}
               style={{ fontFamily: fontFamily }}
             >
               {sourceUrl ? (

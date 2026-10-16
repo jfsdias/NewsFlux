@@ -16,35 +16,34 @@ const useDocumentTitle = () => {
   const feeds = useStore(catalogFeedsState)
   const categories = useStore(catalogCategoriesState)
 
-  useEffect(() => {
-    const getTitle = () => {
-      if (activeContent?.title) {
-        return activeContent.title
-      }
-
-      if (id) {
-        if (infoFrom === "category") {
-          return categories.find((c) => c.id === Number(id))?.title
-        }
-        if (infoFrom === "feed") {
-          return feeds.find((f) => f.id === Number(id))?.title
-        }
-      }
-
-      const pathToKey = {
-        all: "sidebar.all",
-        starred: "sidebar.starred",
-        history: "sidebar.history",
-        today: "sidebar.today",
-      }
-
-      const translationKey = pathToKey[infoFrom]
-      return translationKey ? polyglot.t(translationKey) : ""
+  let title = ""
+  if (activeContent?.title) {
+    title = activeContent.title
+  } else if (id && infoFrom === "category") {
+    title = categories.find((category) => category.id === Number(id))?.title ?? ""
+  } else if (id && infoFrom === "feed") {
+    title = feeds.find((feed) => feed.id === Number(id))?.title ?? ""
+  } else {
+    const pathToKey = {
+      home: "settings.post_login_page_option_home",
+      all: "sidebar.all",
+      starred: "sidebar.starred",
+      history: "sidebar.history",
+      today: "sidebar.today",
     }
 
-    const title = getTitle()
-    document.title = title ? `${title} - ${PRODUCT_NAME}` : PRODUCT_NAME
-  }, [activeContent, infoFrom, id, feeds, categories, polyglot])
+    const translationKey = pathToKey[infoFrom]
+    title = translationKey ? polyglot.t(translationKey) : ""
+  }
+
+  const hasTitle = typeof title === "string" && title.trim().length > 0
+  const pageTitle = hasTitle ? title : PRODUCT_NAME
+
+  useEffect(() => {
+    document.title = hasTitle ? `${title} - ${PRODUCT_NAME}` : PRODUCT_NAME
+  }, [hasTitle, title])
+
+  return pageTitle
 }
 
 export default useDocumentTitle

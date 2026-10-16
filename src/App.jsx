@@ -135,6 +135,9 @@ const App = () => {
         <AppNotifications />
         <HomePageManager />
         <DesktopSidebarContext.Provider value={desktopSidebarContextValue}>
+          <a className="skip-link" href="#main-content">
+            {polyglot.t("actions.skip_to_main_content")}
+          </a>
           <div className="app" style={{ "--desktop-sidebar-width": `${sidebarWidth}px` }}>
             {!isBelowLarge && (
               <Layout.Sider

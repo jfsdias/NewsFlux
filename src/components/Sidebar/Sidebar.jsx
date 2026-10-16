@@ -1099,7 +1099,7 @@ const Sidebar = ({ headerAction, onNavigate }) => {
   }
 
   return (
-    <div className="sidebar-container">
+    <nav aria-label={PRODUCT_NAME} className="sidebar-container">
       <AdaptiveScrollArea style={{ maxHeight: "100%" }}>
         <Menu hasCollapseButton={false} selectedKeys={selectedKeys}>
           <div className="menu-header">
@@ -1280,7 +1280,7 @@ const Sidebar = ({ headerAction, onNavigate }) => {
           visible={feedModalVisible}
         />
       )}
-    </div>
+    </nav>
   )
 }
 
