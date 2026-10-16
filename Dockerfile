@@ -4,7 +4,7 @@ ARG VITE_BASE_PATH=/
 
 # Stage 1: Build the React application
 # Specify the version to ensure consistent builds
-FROM --platform=$BUILDPLATFORM node:22-alpine AS build
+FROM --platform=$BUILDPLATFORM node:24.22.0-alpine3.24@sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f AS build
 
 ARG SOURCE_COMMIT
 ARG SOURCE_COMMIT_DATE
@@ -34,7 +34,7 @@ RUN pnpm run build
 
 # Stage 2: Run the server using Caddy
 # Specify the version for consistency
-FROM caddy:2
+FROM caddy:2.11.7@sha256:685ae3d7c34d9b5f8caeddc5d14051db7bbd88ff1f5a2fa0c16bd8ca328fb7af
 
 ARG VITE_BASE_PATH
 ENV REACTFLUX_BASE_PATH=$VITE_BASE_PATH
