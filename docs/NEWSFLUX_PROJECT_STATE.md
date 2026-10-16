@@ -1,63 +1,49 @@
 # NewsFlux Project State
 
 - **Purpose:** concise operational state for PM handoffs and future sessions. The roadmap remains the source for sequencing and product/architecture detail.
-- **Last reconciled:** 2026-10-15.
-- **Documented product baseline:** `7b0a7e04d1e1052c33ccb23559467f1ed2dc9ac0`.
+- **Last reconciled:** 2026-10-16.
+- **Documented product baseline:** `118ecb2c63f7df3583d0f2524b5cc8c62bd518c1`.
 
 ## Current state
 
-`CURRENT_MAIN` is intentionally **not** stored as a self-updating commit SHA. A documentation-only merge would change `main` immediately and make the document stale. Live GitHub state must therefore be re-read before every action. The stable values recorded here are the last reconciled **product/runtime baseline** and production SHA.
+The values below are a snapshot verified during this reconciliation: live `main` and production both resolve to `118ecb2c63f7df3583d0f2524b5cc8c62bd518c1`. A docs-only merge will advance `main` without changing the product/runtime baseline. Re-read live GitHub and production before every follow-on action.
 
 ```text
-CURRENT_MAIN=RESOLVE_LIVE_GITHUB
-DOCUMENTED_MAIN_BASE_SHA=7b0a7e04d1e1052c33ccb23559467f1ed2dc9ac0
-PRODUCT_BASELINE_SHA=7b0a7e04d1e1052c33ccb23559467f1ed2dc9ac0
-PRODUCTION_SHA=7b0a7e04d1e1052c33ccb23559467f1ed2dc9ac0
+CURRENT_MAIN=118ecb2c63f7df3583d0f2524b5cc8c62bd518c1
+DOCUMENTED_MAIN_BASE_SHA=118ecb2c63f7df3583d0f2524b5cc8c62bd518c1
+PRODUCT_BASELINE_SHA=118ecb2c63f7df3583d0f2524b5cc8c62bd518c1
+PRODUCTION_SHA=118ecb2c63f7df3583d0f2524b5cc8c62bd518c1
+MAIN_PRODUCTION_PARITY=YES
 RUNTIME_PRODUCT_BASELINE_EQUALS_PRODUCTION=YES
 
-CURRENT_PHASE=POST_A11Y_01_STABLE_BASELINE
+CURRENT_PHASE=POST_READER_MEASURE_01
+CURRENT_TRACK=RUNTIME-BASE-01_RECONCILIATION_PENDING_DOCS_PR_CLOSE
 CURRENT_PRODUCT_PR=NONE
+CURRENT_READER_PR=NONE
+OPEN_RUNTIME_PR=38 (RUNTIME-BASE-01; RECONCILIATION_REQUIRED)
 
-LAST_COMPLETED=A11Y-01 / PR #34
+LAST_COMPLETED=READER-MEASURE-01 / PR #44
+PRE_READER_MEASURE_FUNCTIONAL_BASELINE=FILTER-01B #39; FEED-HEALTH-01A #40; BULK-03A #43
 UPSTREAM_INTEGRATED_THROUGH=3045a5f8f69ffd7f571f73540031efa8b4ff6e6d
 
-NEXT_RECOMMENDED_ACTION=READER-VISUAL-02A1
-NEXT_FUNCTIONAL_PRODUCT_UNIT=READER-VISUAL-02A1
-NEXT_AUTHORIZED_ACTION=READER-VISUAL-02A1
+NEXT_RECOMMENDED_ACTION=RUNTIME-BASE-01 / PR #38 RECONCILIATION AFTER DOCS PR CLOSES
+NEXT_ENGINEERING_TRACK=RUNTIME-BASE-01 / PR #38 RECONCILIATION
+NEXT_AUTHORIZED_ACTION=RUNTIME-BASE-01 / PR #38 RECONCILIATION AFTER DOCS PR CLOSES
 
-PRODUCTION_IMAGE=newsflux-local:7b0a7e04d1e1
-PRODUCTION_IMAGE_ID=sha256:c5d64a7a9686aec005490882e24cabb03c664afd60cc5ea82e51e6bb730be5c4
-ROLLBACK_BASELINE=newsflux-local:099bdcb0483e
-ROLLBACK_IMAGE_ID=sha256:51e36a5fcb84429c45868dcdd066ec5d8cd51d8b3150405c8f13caa64a1cd846
-PRESERVED_OLDER_ROLLBACKS=newsflux-local:b94c10926ae7,newsflux-local:fa98531fe153
+PRODUCTION_IMAGE=newsflux-local:118ecb2c63f7
+PRODUCTION_IMAGE_ID=sha256:a8c7e764d0cf5ef333da113fc9e46a15dde043297a9b65122498aebba4d65499
+ROLLBACK_BASELINE=newsflux-local:cfef27e50fae
 
-DOCUMENT_LAST_RECONCILED_AT=2026-10-15
-DOCUMENT_PRODUCT_BASELINE_SHA=7b0a7e04d1e1052c33ccb23559467f1ed2dc9ac0
-A11Y_01_STATUS=COMPLETED
-A11Y_01_PR=34
-A11Y_01_APPROVED_HEAD=c62ce9160c928eedcdb09d25a1271253c8baf91c
-A11Y_01_MERGE_SHA=7b0a7e04d1e1052c33ccb23559467f1ed2dc9ac0
-A11Y_01_TREE_PARITY=PASS
-A11Y_01_EXACT_MERGE_SHA_DEPLOY=PASS
-A11Y_01_POST_MERGE_BROWSER_SMOKE=PASS
-A11Y_01_STRUCTURAL_NORMALIZATION=PASS
-A11Y_01_LIVE_SOURCE_H1_FIXTURE=NOT_EXERCISED
-A11Y_01_FOCUSED_TESTS=9/9
-A11Y_01_AGGREGATE_NODE_TESTS=29/29
-A11Y_01_LINT=PASS_3_PREEXISTING_WARNINGS
-A11Y_01_FORMAT=PASS
-A11Y_01_BUILD=PASS
-A11Y_01_DIFF_CHECK=PASS
-A11Y_01_BROWSER_MATRIX=PASS
-A11Y_01_REAL_DEVICE_GATE=NOT_REQUIRED
-A11Y_01_RESOURCE_404=NON_BLOCKING_UNATTRIBUTED
-A11Y_01_TODAY_COUNT_DELTA=UNATTRIBUTED
-ID_RUNTIME_01_STATUS=COMPLETED
-ID_RUNTIME_01_PR=32
-ID_RUNTIME_01_APPROVED_HEAD=1237f77ff2566015ef50939e268c4ec19f66fe88
-ID_RUNTIME_01_MERGE_SHA=099bdcb0483ef516f6c325e67eefb41b618a4713
-POST_MERGE_BROWSER_SMOKE=PASS
-EXACT_MERGE_SHA_DEPLOY=PASS
+DOCUMENT_LAST_RECONCILED_AT=2026-10-16
+DOCUMENT_PRODUCT_BASELINE_SHA=118ecb2c63f7df3583d0f2524b5cc8c62bd518c1
+READER_MEASURE_01_STATUS=COMPLETED_MERGED_PROMOTED
+READER_MEASURE_01_PR=44
+READER_MEASURE_01_FEATURE_HEAD=1d280c0132a3f1d0d6fae49aeb10ed20ea613bd0
+READER_MEASURE_01_MERGE_SHA=118ecb2c63f7df3583d0f2524b5cc8c62bd518c1
+READER_MEASURE_01_REAL_DEVICE_GATE=NOT_EXECUTED_NONBLOCKING
+READER_MEASURE_01_NODE_CADDY_BASE_PARITY=PASS
+READER_VISUAL_02A1_STATUS=COMPLETED_PR41
+READER_VISUAL_02A2_STATUS=NOT_STARTED
 ```
 
 If a docs-only commit lands after this baseline, `main` may be ahead of production **without any runtime/product delta**. Do not interpret that as deployment drift until the diff is classified. Product/runtime changes still require exact-SHA deployment and explicit reconciliation.
@@ -77,6 +63,12 @@ If a docs-only commit lands after this baseline, `main` may be ahead of producti
 - **PR #30 / BULK-01B:** Sidebar Feed/Category Mark All confirmation + safe shared Undo, including one shared Mark-All/Undo operation coordinator and source-scoped reconciliation. Merged as `b94c10926ae787382da4918e394c0821785f9c10` and deployed exactly as `newsflux-local:b94c10926ae7` with internal HTTP `200`. This was the previous production baseline before PR #32.
 - **PR #32 / ID-RUNTIME-01:** runtime identity and NewsFlux-safe update/About/issues links; approved head `1237f77ff2566015ef50939e268c4ec19f66fe88`, merged and deployed as `099bdcb0483ef516f6c325e67eefb41b618a4713`. Post-merge browser smoke and exact merge-SHA deployment passed. The initial candidate readiness attempt was `DEPLOY_HARNESS_STARTUP_RACE_CONFIRMED`; bounded retry passed, with no product regression.
 - **PR #34 / A11Y-01:** main landmark, heading hierarchy, named navigation and skip navigation; approved head `c62ce9160c928eedcdb09d25a1271253c8baf91c`, merged as `7b0a7e04d1e1052c33ccb23559467f1ed2dc9ac0`, tree parity PASS, exact merge-SHA production promotion PASS and authenticated post-merge browser smoke PASS.
+- **PR #39 / FILTER-01B:** source/date/search transition behavior; merged as `cfef27e50fae9a153151cfc91bd0bf92c1270a37`.
+- **PR #40 / FEED-HEALTH-01A:** Miniflux-reported feed update error indicator; merged as `2947169a68e5193f4cd9273d0bb7ed0faef00623`.
+- **PR #41 / READER-VISUAL-02A1:** editorial typography foundation; merged as `3f72d554177c10c9eee16649ea7297495b4f6977`.
+- **PR #42:** NAV-02 Mark All harness maintenance; merged as `a21726365ce80b3f7883907228e27d9c5f693a87`.
+- **PR #43 / BULK-03A:** mark articles above/below as read; merged as `978d7b009755ae6750ce84b1e172792703e98e4f`.
+- **PR #44 / READER-MEASURE-01:** bounded responsive prose measure; merged and promoted at `118ecb2c63f7df3583d0f2524b5cc8c62bd518c1`. Automated Reader Measure, RV01, 02A1 and protected-surface gates passed; exact-SHA promotion, provenance, Node/Caddy base parity and default-width-75 visual parity passed. The CPL sandbox reached exactly 74 characters.
 
 ## A11Y-01 closure
 
@@ -156,27 +148,27 @@ Not authorized by package completion:
 ## Planned functional tracks
 
 - BULK-01C — scoped Undo copy.
-- BULK-03 — provider-backed range/age mark-as-read; BULK-01B dependency is now satisfied.
+- BULK-03 — provider-backed range/age mark-as-read; BULK-03A above/below actions completed in PR #43, with remaining scope still separate.
 - BULK-02 — multi-select; BULK-01B dependency is satisfied, but FILTER-01A remains blocking.
-- FILTER-01B, then FILTER-RULES-01.
+- FILTER-RULES-01; FILTER-01B was completed in PR #39.
 - HOME-01 — refresh/focus/reconnect semantics.
 - NAV01 — previous/next + next unread source flow.
 - NAV-02F — navigation follow-ups including human-readable unread-count labels.
-- FEED-HEALTH-01 — visible Miniflux feed/parsing health.
+- FEED-HEALTH-01B — detailed message, last checked and Retry flow; the compact error indicator in 01A completed in PR #40.
 - Keyboard/touch parity.
 - READER-MEDIA-01.
 
 ## Visual / presentation backlog
 
 - **CHROME-01 — PLANNED:** DatePicker subset is complete; remaining confirmation/snackbar/raw-Arco work must stay decomposed.
-- **READER-VISUAL-02A — AUTHORIZED WITH SEQUENCE LOCK:** A2 / Quiet Column is the approved direction (D5 and D9 approved). 02A1 is the next authorized functional unit; its existing spec remains frozen pending reconciliation against the post-A11Y implementation base. READER-MEASURE-01 is a separate PR after 02A1; 02A2 follows both and has not started.
+- **READER-VISUAL-02A — IN PROGRESS:** A2 / Quiet Column is the approved direction (D5 and D9 approved); 02A1 completed in PR #41 and READER-MEASURE-01 completed in PR #44. 02A2 remains not started; its header/body alignment gate needs the production `.article-header-column` element.
 - **READER-VISUAL-02B — PLANNED:** auto-hide + Next card only after interaction/NAV dependencies.
 - **HOME-VISUAL-02 — HOLD — PRODUCT.**
 - **NAV-VISUAL-01 — HOLD — PRODUCT.**
 - **READER-COVER-01 — HOLD — PRODUCT.**
 - **READER-FONT-01 — HOLD — PRODUCT.**
 - **HOME-SKEL-01 — BACKLOG.**
-- **READER-MEASURE-01 — SEQUENCED AFTER READER-VISUAL-02A1:** separate PR; measurement decision follows 02A1 and precedes 02A2.
+- **READER-MEASURE-01 — COMPLETED:** PR #44 merged and promoted at the current product/production SHA.
 - **HARNESS-VIS-01 — BACKLOG (test debt).**
 - **TEST-ENV-01 — BACKLOG (verification required).**
 - **MOTION-01 — BACKLOG.**
@@ -226,6 +218,9 @@ Do not fix this debt in unrelated product or documentation work.
 
 ## Open findings / residual risks
 
+- **READER-MEASURE-01 real-device gate:** not executed; nonblocking. A physical `884×1104` Fold/tablet and a phone remain recommended for long-form comfort and OLED review.
+- **Reader header/body alignment:** the production CSS includes `.article-header-column` in preparation for READER-VISUAL-02A2, but the production element does not exist yet. Current alignment validation is probe-based; 02A2 must use the real element.
+- **Search focus observation:** during production smoke, Search initially focused “Search syntax help” rather than the input. Search functionality worked; this was not investigated and is not a confirmed regression. Keep as an open finding for a dedicated reproduction.
 - PR #28 physical validation accepted the normal-source/Card/Grid comparison, but no real long-source entry was available to exercise the exact ellipsis case on physical hardware. Automated visual coverage included the long-source geometry and critical `884×1104` viewport. This remains an accepted validation limitation rather than an open blocker.
 - PR #30 completed with `REAL_DEVICE_GATE=WAIVED_BY_OWNER`; physical touch PASS is not claimed for the exact PR #30 head. Full automated/browser coverage and authenticated `884×1104` evidence passed where tooling was deterministic. This is an accepted residual validation limitation, not an open product defect.
 - Global formatting historically reported four out-of-scope documentation files; do not conflate pre-existing formatting debt with product regressions. Re-check when documentation tooling is next touched.
@@ -243,33 +238,25 @@ Do not fix this debt in unrelated product or documentation work.
 - NAV-02F grouping/mode persistence/count presentation.
 - NAV-VISUAL-01 adaptive navigation.
 - CHROME-01 contextual control consolidation.
-- READER-MEASURE-01 prose width/phone behavior.
 - ID-DEPLOY-01 local-build vs registry/deployer architecture.
 
 ## Next recommended action
 
-**READER-VISUAL-02A1** is the next authorized functional product unit after A11Y-01 / PR #34. The approved direction is A2 / Quiet Column (D5 and D9 approved). The existing 02A1 specification is frozen pending reconciliation against the post-A11Y implementation base; no Claude handoff is recorded in this reconciliation. READER-MEASURE-01 must remain a separate PR after 02A1, followed by READER-VISUAL-02A2. 02A2 has not started.
+**RUNTIME-BASE-01 / PR #38 reconciliation** is the next engineering track after this documentation PR closes. PR #38 remains open on branch `codex/runtime-base-01` with base `73f793f51ba3f81e04c2fbaaf3093fc6c5983078` and head `0add12108d5cf5fc0a8e7aa7162d0307bb7888e2`; reconcile it against live `main` in its dedicated runtime-only scope. This documentation task does not modify PR #38 and does not authorize merge or deployment.
 
-This sequence authorizes only the listed 02A1 work; it does not authorize a merge or deployment. Before implementation:
-
-1. live-check GitHub `main`, open PRs and production baseline;
-2. classify docs-only commits separately from runtime/product drift;
-3. reconcile the frozen 02A1 specification against the post-A11Y implementation base;
-4. prepare one-purpose scope and regression gates;
-5. keep READER-MEASURE-01 separate and do not start 02A2 before its sequence point;
-6. never merge without explicit user authorization.
+After that track closes, re-read live project state before resuming Reader work. READER-VISUAL-02A2 remains not started and must validate header/body alignment against the real production element.
 
 ## Deployment governance
 
 - Deploy only an exact approved product/runtime SHA.
 - Never deploy `latest` or a moving branch implicitly.
-- Current production product baseline: `7b0a7e04d1e1052c33ccb23559467f1ed2dc9ac0`.
-- Current production image: `newsflux-local:7b0a7e04d1e1`.
-- Current production image ID: `sha256:c5d64a7a9686aec005490882e24cabb03c664afd60cc5ea82e51e6bb730be5c4`.
-- Current rollback baseline: `newsflux-local:099bdcb0483e` (`sha256:51e36a5fcb84429c45868dcdd066ec5d8cd51d8b3150405c8f13caa64a1cd846`). Preserved older rollback images: `newsflux-local:b94c10926ae7` and `newsflux-local:fa98531fe153`.
-- The promotion backup is `/dockerdata/compose/newsflux/compose.yaml.pre-a11y01.20261016T014001Z.bak` (SHA-256 `3bc8dd1a21525471a685bd134ebb4c2265674467a9cba3342f794d72badc9129`).
+- Current production product baseline: `118ecb2c63f7df3583d0f2524b5cc8c62bd518c1`.
+- Current production image: `newsflux-local:118ecb2c63f7` (image ID `sha256:a8c7e764d0cf5ef333da113fc9e46a15dde043297a9b65122498aebba4d65499`).
+- Current rollback baseline: `newsflux-local:cfef27e50fae`.
+- The READER-MEASURE-01 promotion backup is `/dockerdata/compose/newsflux/compose.yaml.pre-reader-measure-01-20261016T201834Z.bak` (SHA-256 `94ffebe7ff81f95e02fe3bf93cf56844e8a95eacac45d43b10e5b4942a603351`).
 - PR #30 and PR #32 exact merge-SHA deployments passed; their deployment history remains recorded above.
 - PR #34 / A11Y-01 exact merge-SHA deployment and authenticated post-merge browser smoke passed. The exact merge image passed internal HTTP and provenance checks, remained stable after restart and had restart count `0`.
+- PR #44 / READER-MEASURE-01 exact merge-SHA promotion passed with target source/revision provenance, served asset hash parity and Node/Caddy base-image digest parity. The default width 75 retained visual parity. No real-device gate was run; this remains nonblocking. The NewsFlux container has no configured healthcheck.
 - Docs-only commits do not require production deployment merely to force SHA equality; classify their runtime delta as none.
 - Do not delete rollback images/backups incidentally.
 
