@@ -135,6 +135,21 @@
   height: 16px;
 }
 
+.feed-health-indicator {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  margin-right: 4px;
+  color: var(--color-warning-light-3);
+  vertical-align: -2px;
+}
+
+.feed-health-indicator .arco-icon {
+  width: 16px;
+  height: 16px;
+}
+
 .arco-collapse-item-header-title {
   width: 100%;
 }

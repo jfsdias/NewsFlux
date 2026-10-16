@@ -57,6 +57,7 @@
     "delete_category_confirm_title": "Confirmer la Suppression de la Catégorie",
     "delete_category_confirm_content": "Êtes-vous sûr de vouloir supprimer la catégorie '%{title}' ? Cette action est irréversible.",
     "feeds": "Flux",
+    "feed_update_error": "Erreur de mise à jour du flux",
     "source_navigation_mode": "Mode de navigation des sources",
     "unread_mode": "Non lues",
     "all_mode": "Toutes",
