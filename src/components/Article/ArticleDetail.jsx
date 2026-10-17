@@ -582,8 +582,12 @@ const ArticleDetail = forwardRef((_, ref) => {
     <article
       ref={ref}
       className={`article-content ${edgeToEdgeImages ? "edge-to-edge" : ""}`}
-      style={{ "--reader-fs": `${fontSize}rem`, "--reader-family": fontFamily }}
       tabIndex={-1}
+      style={{
+        "--article-width": articleWidth,
+        "--reader-fs": `${fontSize}rem`,
+        "--reader-family": fontFamily,
+      }}
     >
       <AdaptiveScrollArea
         ref={scrollContainerRef}
@@ -596,42 +600,48 @@ const ArticleDetail = forwardRef((_, ref) => {
             className="article-header"
             style={{ maxWidth: responsiveMaxWidth, textAlign: titleAlignment }}
           >
-            <Typography.Title
-              className="article-title"
-              heading={1}
-              style={{ fontFamily: fontFamily }}
-            >
-              {sourceUrl ? (
-                <a href={sourceUrl} rel="noopener" target="_blank">
-                  {displayTitle}
-                </a>
-              ) : (
-                displayTitle
-              )}
-            </Typography.Title>
-            <div className="article-meta">
-              <Typography.Text>
-                <CustomLink text={feedTitle} url={`/feed/${feedId}`} />
+            <div className="article-header-column">
+              <div className="article-source">
+                <Typography.Text>
+                  <CustomLink text={feedTitle} url={`/feed/${feedId}`} />
+                </Typography.Text>
+              </div>
+              <Typography.Title
+                className="article-title"
+                heading={1}
+                style={{ fontFamily: fontFamily }}
+              >
+                {sourceUrl ? (
+                  <a href={sourceUrl} rel="noopener" target="_blank">
+                    {displayTitle}
+                  </a>
+                ) : (
+                  displayTitle
+                )}
+              </Typography.Title>
+              <div className="article-meta">
+                {activeContent.author && (
+                  <Typography.Text> - {activeContent.author}</Typography.Text>
+                )}
+                <Typography.Text>
+                  <Tag
+                    size="small"
+                    style={{ marginLeft: "10px", cursor: "pointer" }}
+                    onClick={() => navigate(`/category/${categoryId}`)}
+                  >
+                    {categoryTitle}
+                  </Tag>
+                </Typography.Text>
+              </div>
+              <Typography.Text className="article-date">
+                {generateReadableDate(activeContent.published_at)}
               </Typography.Text>
-              {activeContent.author && <Typography.Text> - {activeContent.author}</Typography.Text>}
-              <Typography.Text>
-                <Tag
-                  size="small"
-                  style={{ marginLeft: "10px", cursor: "pointer" }}
-                  onClick={() => navigate(`/category/${categoryId}`)}
-                >
-                  {categoryTitle}
-                </Tag>
+              <br />
+              <Typography.Text className="article-date">
+                {generateReadingTime(activeContent.reading_time)}
               </Typography.Text>
+              <Divider />
             </div>
-            <Typography.Text className="article-date">
-              {generateReadableDate(activeContent.published_at)}
-            </Typography.Text>
-            <br />
-            <Typography.Text className="article-date">
-              {generateReadingTime(activeContent.reading_time)}
-            </Typography.Text>
-            <Divider />
           </div>
           <div
             key={activeContent.id}
@@ -641,7 +651,6 @@ const ArticleDetail = forwardRef((_, ref) => {
               fontSize: `${fontSize}rem`,
               maxWidth: responsiveMaxWidth,
               fontFamily: fontFamily,
-              "--article-width": articleWidth,
             }}
           >
             {isArticleBodyPending ? (
