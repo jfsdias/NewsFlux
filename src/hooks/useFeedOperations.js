@@ -26,6 +26,7 @@ export const handleFeedRefresh = async (
   refreshFeedData,
   displayMessage = true,
   useNotification = false,
+  { reconcileProviderData = true } = {},
 ) => {
   const { polyglot } = polyglotState.get()
 
@@ -50,9 +51,11 @@ export const handleFeedRefresh = async (
       throw new Error(`Unexpected refresh status: ${response.status}`)
     }
 
-    await refreshFeedData({ force: true })
-    if (!isCurrentSession()) {
-      return false
+    if (reconcileProviderData) {
+      await refreshFeedData({ force: true })
+      if (!isCurrentSession()) {
+        return false
+      }
     }
 
     if (displayMessage) {
@@ -73,6 +76,62 @@ export const handleFeedRefresh = async (
   }
 }
 
+export const handleBulkFeedRefresh = async ({
+  feeds,
+  refreshSingleFeed,
+  refreshFeedData,
+  waitBetweenRequests = async () => {},
+}) => {
+  const sessionRevision = getDataSessionRevision()
+  const isCurrentSession = () => sessionRevision === getDataSessionRevision()
+  let successCount = 0
+  let failureCount = 0
+
+  for (const feed of feeds) {
+    if (!isCurrentSession()) {
+      return { status: "stale-session", successCount, failureCount }
+    }
+
+    try {
+      const isSuccessful = await refreshSingleFeed(feed, false, {
+        reconcileProviderData: false,
+      })
+      isSuccessful ? successCount++ : failureCount++
+    } catch {
+      failureCount++
+    }
+
+    if (!isCurrentSession()) {
+      return { status: "stale-session", successCount, failureCount }
+    }
+
+    await waitBetweenRequests()
+
+    if (!isCurrentSession()) {
+      return { status: "stale-session", successCount, failureCount }
+    }
+  }
+
+  if (feeds.length === 0) {
+    return { status: "completed", successCount, failureCount }
+  }
+
+  try {
+    await refreshFeedData({ force: true })
+  } catch (error) {
+    if (!isCurrentSession()) {
+      return { status: "stale-session", successCount, failureCount }
+    }
+    return { status: "metadata-reload-failure", successCount, failureCount, error }
+  }
+
+  if (!isCurrentSession()) {
+    return { status: "stale-session", successCount, failureCount }
+  }
+
+  return { status: "completed", successCount, failureCount }
+}
+
 export const useFeedOperations = (useNotification = false) => {
   const { polyglot } = polyglotState.get()
   const { infoFrom, infoId } = contentState.get()
@@ -89,13 +148,14 @@ export const useFeedOperations = (useNotification = false) => {
     }
   }
 
-  const refreshSingleFeed = async (feed, displayMessage = true) => {
+  const refreshSingleFeed = async (feed, displayMessage = true, options = {}) => {
     const feedId = feed.id || feed.key
     return handleFeedRefresh(
       () => refreshFeed(feedId),
       refreshFeedData,
       displayMessage,
       useNotification,
+      options,
     )
   }
 

@@ -13,7 +13,7 @@ import SidebarTrigger from "@/components/Article/SidebarTrigger"
 import Sidebar from "@/components/Sidebar/Sidebar"
 import AppDataContext from "@/contexts/app-data-context"
 import DesktopSidebarContext from "@/contexts/desktop-sidebar-context"
-import { useFeedOperations } from "@/hooks/useFeedOperations"
+import { handleBulkFeedRefresh, useFeedOperations } from "@/hooks/useFeedOperations"
 import { polyglotState } from "@/hooks/useLanguage"
 import englishPhrases from "@/locales/en-US.json"
 import { authState } from "@/store/authState"
@@ -93,6 +93,13 @@ apiClient.raw = async (...args) => {
   if (args[0]?.includes("/refresh") && requestMode === "failure") {
     throw new Error("Fixture refresh request failed")
   }
+  if (
+    args[0]?.includes("/refresh") &&
+    requestMode === "partial-failure" &&
+    args[0]?.includes("/73/refresh")
+  ) {
+    throw new Error("Fixture refresh request failed for feed 73")
+  }
   if (args[0]?.includes("/refresh") && requestMode === "stale-after-refresh") {
     resetData()
     commitIdentityData({ id: 1, username: "fixture" })
@@ -104,7 +111,7 @@ apiClient.raw = async (...args) => {
       releaseRefreshRequest = () => resolve({ status: 204 })
     })
   }
-  if (args[0]?.includes("/refresh") && requestMode === "success") {
+  if (args[0]?.includes("/refresh") && ["success", "partial-failure"].includes(requestMode)) {
     return { status: 204 }
   }
   throw new Error(`Unexpected fixture API request: raw ${args[0]}`)
@@ -366,13 +373,109 @@ const runScenarios = async () => {
     const after = dataState.get().feedsData.find(({ id }) => id === 72)
     assert(after.checked_at === fixtureCheckedAt, "Refresh failure fabricated checked_at")
   })
-  await gate("SHARED_REFRESH_RELOADS_PROVIDER_METADATA", async () => {
+  await gate("SINGLE_FEED_REFRESH_RECONCILIATION", async () => {
     const { feed, operations } = await runRefreshFixture("success", "still-error")
     await operations.refreshSingleFeed(feed, false)
     const after = dataState.get().feedsData.find(({ id }) => id === 72)
     assert(metadataReloadCalls === 1, "Successful refresh did not reload provider metadata")
     assert(after.parsing_error_count === 2, "UI did not use the refreshed provider error count")
     assert(after.checked_at === updatedProviderCheckedAt, "UI did not use provider checked_at")
+  })
+  const runBulkRefreshFixture = async (mode = "success", reload = "none") => {
+    const { operations } = await runRefreshFixture(mode, reload)
+    const erroredFeeds = dataState
+      .get()
+      .feedsData.filter(({ parsing_error_count }) => parsing_error_count > 0)
+    requests.length = 0
+    const result = await handleBulkFeedRefresh({
+      feeds: erroredFeeds,
+      refreshSingleFeed: operations.refreshSingleFeed,
+      refreshFeedData: appData.refreshFeedData,
+    })
+    const refreshRequestCount = requests.filter(
+      ({ method, args }) => method === "raw" && args[0]?.includes("/refresh"),
+    ).length
+    return { erroredFeeds, refreshRequestCount, result }
+  }
+
+  await gate("BULK_ERROR_FEEDS_REQUEST_COUNT", async () => {
+    const { erroredFeeds, refreshRequestCount, result } = await runBulkRefreshFixture()
+    const refreshRequests = requests.filter(
+      ({ method, args }) => method === "raw" && args[0]?.includes("/refresh"),
+    )
+    assert(erroredFeeds.length >= 3, "Fixture needs at least three feeds with errors")
+    assert(
+      refreshRequestCount === 3,
+      `Expected 3 refresh requests, received ${refreshRequestCount}`,
+    )
+    assert(
+      refreshRequests.every(({ args }) => args[1]?.method === "PUT"),
+      "Bulk refresh did not issue PUT requests",
+    )
+    assert(result.status === "completed", "Bulk refresh did not complete")
+    assert(
+      result.successCount === 3 && result.failureCount === 0,
+      "Request results were miscounted",
+    )
+  })
+  await gate("BULK_ERROR_FEEDS_SINGLE_METADATA_RELOAD", async () => {
+    const { refreshRequestCount } = await runBulkRefreshFixture()
+    assert(
+      refreshRequestCount === 3,
+      `Expected 3 refresh requests, received ${refreshRequestCount}`,
+    )
+    assert(
+      metadataReloadCalls === 1,
+      `Expected one metadata reload for 3 requests, received ${metadataReloadCalls}`,
+    )
+  })
+  await gate("BULK_ERROR_FEEDS_PARTIAL_REQUEST_FAILURE", async () => {
+    const { refreshRequestCount, result } = await runBulkRefreshFixture("partial-failure")
+    assert(
+      refreshRequestCount === 3,
+      `Expected 3 refresh requests, received ${refreshRequestCount}`,
+    )
+    assert(result.status === "completed", "Partial request failure prevented reconciliation")
+    assert(
+      result.successCount === 2 && result.failureCount === 1,
+      `Partial failure counts are wrong: ${result.successCount} successful, ${result.failureCount} failed`,
+    )
+    assert(metadataReloadCalls === 1, "Partial request failure did not reconcile exactly once")
+  })
+  await gate("BULK_ERROR_FEEDS_METADATA_RELOAD_FAILURE", async () => {
+    const before = cloneFeeds()
+    const { refreshRequestCount, result } = await runBulkRefreshFixture("success", "failure")
+    const after = dataState.get().feedsData
+    assert(
+      refreshRequestCount === 3,
+      `Expected 3 refresh requests, received ${refreshRequestCount}`,
+    )
+    assert(result.status === "metadata-reload-failure", "Reload failure was reported as success")
+    assert(metadataReloadCalls === 1, "Failed metadata reload was not attempted exactly once")
+    assert(
+      after.every((feed, index) =>
+        ["parsing_error_count", "checked_at", "parsing_error_message"].every(
+          (field) => feed[field] === before[index][field],
+        ),
+      ),
+      "A failed metadata reload fabricated provider feed state",
+    )
+  })
+  await gate("BULK_ERROR_FEEDS_STALE_SESSION", async () => {
+    const requestResult = await runBulkRefreshFixture("stale-after-refresh")
+    assert(
+      requestResult.result.status === "stale-session",
+      "Session change during PUTs was not detected",
+    )
+    assert(requestResult.refreshRequestCount === 1, "Requests continued after the session changed")
+    assert(metadataReloadCalls === 0, "Metadata reloaded after the session changed during PUTs")
+
+    const reloadResult = await runBulkRefreshFixture("success", "stale-after-reload")
+    assert(
+      reloadResult.result.status === "stale-session",
+      "Session change during final reconciliation was not detected",
+    )
+    assert(metadataReloadCalls === 1, "Final metadata reconciliation did not run once")
   })
   await gate("DETAIL_TRIGGER_NO_NAVIGATION", async () => {
     restoreFixtureData()
@@ -456,6 +559,17 @@ const runScenarios = async () => {
       dataState.get().feedsData.find(({ id }) => id === 72)?.parsing_error_count === 0,
       "Recovered feed retained its error state",
     )
+  })
+  await gate("FEED_HEALTH_RETRY_RECONCILIATION", async () => {
+    const { feed, operations } = await runRefreshFixture("success", "recovered")
+    requests.length = 0
+    const result = await operations.retryFeedHealth(feed)
+    const refreshRequestCount = requests.filter(
+      ({ method, args }) => method === "raw" && args[0]?.includes("/refresh"),
+    ).length
+    assert(result.status === "recovered", "Retry did not use provider-backed recovery state")
+    assert(refreshRequestCount === 1, "Retry did not issue exactly one refresh request")
+    assert(metadataReloadCalls === 1, "Retry did not reconcile provider metadata exactly once")
   })
   await gate("RETRY_REQUEST_FAILURE", async () => {
     const { feed, operations } = await runRefreshFixture("failure")
