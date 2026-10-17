@@ -15,12 +15,20 @@ body[arco-theme="dark"] .article-content {
 
 /* ---------- prose measure (READER-MEASURE-01) ----------
  * One token for the prose column, driven only by the existing Article width setting (--article-width, a unitless
- * number set inline on .article-body). ArticleDetail.css keeps its unclamped calc and registers the token as a
+ * number set inline on .article-content). ArticleDetail.css keeps its unclamped calc and registers the token as a
  * <length>; this rule wins by specificity. The 02A2 header column joins through the second selector and shares the
  * value. The measure only narrows prose: media, tables and code keep the frame (see ArticleDetail.css). */
 .article-content .article-body,
 .article-content .article-header .article-header-column {
   --reader-prose-measure: clamp(40ch, calc(var(--article-width) * 0.75ch), 58ch);
+}
+
+.article-content .article-header-column {
+  box-sizing: border-box;
+  max-width: min(100%, var(--reader-prose-measure));
+  margin-inline: auto;
+  font-family: var(--reader-family, inherit);
+  font-size: var(--reader-fs, 1.05rem);
 }
 
 /* ---------- leading: only prose blocks, only below the 600px reader tier (>= 600px keeps READER-VISUAL-01's 1.7) ---------- */

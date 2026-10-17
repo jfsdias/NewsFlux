@@ -513,7 +513,7 @@ const mountReaderCase = async (
   mount,
   caseId,
   articleWidth = 75,
-  { fixtures = readerFixtures, fontSize } = {},
+  { fixtures = readerFixtures, fontSize, waitForImages = true } = {},
 ) => {
   const entry = fixtures[caseId]
   await mount(`/all/entry/${entry.id}`, {
@@ -527,9 +527,10 @@ const mountReaderCase = async (
     () =>
       contentState.get().activeContent?.id === entry.id &&
       document.querySelector(".article-container .article-body p") &&
-      [...document.querySelectorAll(".article-container .article-body img")].every(
-        (image) => image.complete,
-      ),
+      (!waitForImages ||
+        [...document.querySelectorAll(".article-container .article-body img")].every(
+          (image) => image.complete,
+        )),
     `${caseId} reader did not render`,
   )
   for (let frame = 0; frame < 4; frame += 1) {
@@ -716,9 +717,10 @@ const READER_PROTECTED_SURFACES = {
     READER_SURFACE_PROPS.filter((property) => property !== "lineHeight"),
   ],
 }
-// These keep every computed style, but removing the global link margin on the links they hold legitimately
-// shrinks their own box (and re-flows table columns), and the code text box depends on async highlighting.
-const READER_GEOMETRY_EXEMPT = new Set(["th", "td", "sup", "preCode"])
+// These keep every computed style, but their geometry can change without a typography regression: table cell
+// link margins reflow tables, code depends on async highlighting, and 02A2 intentionally aligns metadata/divider
+// inside the narrower editorial header column.
+const READER_GEOMETRY_EXEMPT = new Set(["th", "td", "sup", "preCode", "meta", "divider"])
 const readerStyleElement = () => {
   const styles = [...document.querySelectorAll("style[data-vite-dev-id]")].filter((style) =>
     style.dataset.viteDevId.endsWith("/ReaderStyles.css"),
@@ -1061,11 +1063,19 @@ const assertReaderTypography = (label, after, before) => {
 const runReaderTypographyCase = async (mount, caseId) => {
   // Lets an external screenshot driver stage one READER-VISUAL-02A1 case at a time.
   globalThis.__readerVisual02a1MountCase = (nextCaseId, fontSize) =>
-    mountReaderCase(mount, nextCaseId, 75, { fixtures: readerTypographyFixtures, fontSize })
+    mountReaderCase(mount, nextCaseId, 75, {
+      fixtures: readerTypographyFixtures,
+      fontSize,
+      waitForImages: nextCaseId !== "typographyTechnical",
+    })
   const sizes = []
   for (const fontSize of READER_TYPOGRAPHY_SIZES) {
     const label = `${caseId}@${fontSize}rem`
-    await mountReaderCase(mount, caseId, 75, { fixtures: readerTypographyFixtures, fontSize })
+    await mountReaderCase(mount, caseId, 75, {
+      fixtures: readerTypographyFixtures,
+      fontSize,
+      waitForImages: caseId !== "typographyTechnical",
+    })
     if (caseId === "typographyTechnical") {
       document.querySelector(".deferred-code-block, .code-block-container")?.scrollIntoView()
       await waitFor(
@@ -1137,6 +1147,7 @@ const READER_MEASURE_BLOCKS =
 const normalizeSpace = (text) => text.replaceAll(/\s+/gu, " ").trim()
 let readerMeasureSweepCache = null
 const readerBody = () => document.querySelector(".article-container .article-body")
+const readerContent = () => document.querySelector(".article-container .article-content")
 const readerChPx = (node) => {
   // 1ch is snapped to the 1/64px layout grid; measuring 100ch keeps the ratio exact enough for 0.005ch tolerances.
   const probe = document.createElement("span")
@@ -1193,7 +1204,7 @@ const withReaderMeasureRuleDisabled = async (measure) => {
 const setReaderArticleWidth = async (articleWidth) => {
   settingsState.set({ ...settingsState.get(), articleWidth })
   await waitFor(
-    () => readerBody()?.style.getPropertyValue("--article-width") === String(articleWidth),
+    () => readerContent()?.style.getPropertyValue("--article-width") === String(articleWidth),
     `article width ${articleWidth} did not reach the reader`,
   )
   await settle()
@@ -1497,79 +1508,125 @@ const runReaderMeasureCpl = async (mount) => {
   await setReaderArticleWidth(75)
   recordReaderMeasure("cpl", report)
 }
-// The READER-VISUAL-02A2 header column (.article-header-column) is not in the production markup yet, so a probe with
-// that class stands in for it. The probe proves that the one rule gives both selectors the same measure: in ch
-// (any font) and in px once the header uses the reader font, as the 02A2 contract does. Point this gate at the real
-// element when 02A2 ships it.
+// READER-VISUAL-02A2 checks the production header column against the first real prose block at each
+// Article width setting; neither a detached probe nor the broader header frame can satisfy this gate.
 const runReaderMeasureHeaderBodyAlignment = async (mount) => {
-  await mountReaderCase(mount, "noImage", 75)
+  await mountReaderCase(mount, "longHeadline", 75)
   const header = document.querySelector(".article-container .article-header")
   assert(header, "Reader header missing")
-  const probes = []
+  const headerColumn = header.querySelector(":scope > .article-header-column")
+  assert(headerColumn, "Production article header column missing")
+  const body = readerBody()
+  assert(body, "Reader body missing")
   const report = []
-  const addProbe = (articleWidth, readerFont) => {
-    const probe = document.createElement("div")
-    probe.className = "article-header-column"
-    probe.dataset.measureProbe = readerFont ? "reader-font" : "inherited-font"
-    probe.style.cssText = `position:absolute;visibility:hidden;--article-width:${articleWidth}`
-    if (readerFont) {
-      // READER-VISUAL-02A2 contract: the header resolves ch in the reader font, like the body.
-      probe.style.fontFamily = "var(--reader-family, inherit)"
-      probe.style.fontSize = "var(--reader-fs, 1.05rem)"
-    }
-    probe.textContent = "x"
-    header.append(probe)
-    probes.push(probe)
-    return probe
+  for (const articleWidth of READER_MEASURE_HEADER_WIDTHS) {
+    await setReaderArticleWidth(articleWidth)
+    const bodyToken = readerMeasureToken(body)
+    const headerToken = readerMeasureToken(headerColumn)
+    const bodyCh = bodyToken / readerChPx(body)
+    const headerCh = headerToken / readerChPx(headerColumn)
+    assert(
+      Math.abs(headerCh - bodyCh) < 0.005 &&
+        Math.abs(headerCh - readerMeasureCh(articleWidth)) < 0.005,
+      `Article width ${articleWidth}: production header column ${headerCh.toFixed(3)}ch, body ${bodyCh.toFixed(3)}ch, contract ${readerMeasureCh(articleWidth).toFixed(3)}ch`,
+    )
+    assert(
+      Math.abs(headerToken - bodyToken) < 0.05,
+      `Article width ${articleWidth}: production header measure ${headerToken.toFixed(2)}px does not match body measure ${bodyToken.toFixed(2)}px`,
+    )
+
+    const firstProse = [...body.querySelectorAll("p")].find((node) => isProseBlock(node))
+    assert(firstProse, `Article width ${articleWidth}: reader has no prose paragraph to align`)
+    const headerFrameRect = header.getBoundingClientRect()
+    const headerColumnRect = headerColumn.getBoundingClientRect()
+    const bodyFrameRect = body.getBoundingClientRect()
+    const proseRect = firstProse.getBoundingClientRect()
+    const leftDelta = headerColumnRect.left - proseRect.left
+    const rightDelta = headerColumnRect.right - (proseRect.left + proseRect.width)
+    assert(
+      Math.abs(leftDelta) < 2 && Math.abs(rightDelta) < 2,
+      `Article width ${articleWidth}: header/prose edges differ by ${leftDelta.toFixed(2)}px left and ${rightDelta.toFixed(2)}px right`,
+    )
+
+    const headerStyle = getComputedStyle(headerColumn)
+    const title = headerColumn.querySelector(".article-title")
+    const sourceLink = headerColumn.querySelector(".article-source a[href^='/feed/']")
+    const metadata = headerColumn.querySelector(".article-meta")
+    const dates = headerColumn.querySelectorAll(".article-date")
+    assert(title, "Reader title missing from header column")
+    assert(
+      title.scrollWidth <= title.clientWidth + 1,
+      `Article width ${articleWidth}: long title overflows its column (${title.scrollWidth}px > ${title.clientWidth}px)`,
+    )
+    assert(sourceLink, "Reader source link missing from editorial header")
+    assert(metadata && dates.length === 2, "Reader author/category/date metadata changed")
+    assert(
+      Boolean(sourceLink.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING) &&
+        Boolean(title.compareDocumentPosition(metadata) & Node.DOCUMENT_POSITION_FOLLOWING) &&
+        Boolean(metadata.compareDocumentPosition(dates[0]) & Node.DOCUMENT_POSITION_FOLLOWING),
+      "Reader editorial order must be source, title, author/category metadata, then dates",
+    )
+    assert(
+      readerContent().querySelectorAll("h1").length === 1,
+      "Reader must keep exactly one top-level article title",
+    )
+    assert(
+      header.style.textAlign === settingsState.get().titleAlignment,
+      `Article width ${articleWidth}: header no longer follows the saved title alignment`,
+    )
+    assert(
+      getComputedStyle(title).textAlign === getComputedStyle(header).textAlign,
+      `Article width ${articleWidth}: title alignment no longer follows the saved setting`,
+    )
+    assert(
+      document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      `Article width ${articleWidth}: reader introduced horizontal overflow`,
+    )
+    report.push({
+      articleWidth,
+      headerFrameWidth: Number(headerFrameRect.width.toFixed(2)),
+      headerColumnWidth: Number(headerColumnRect.width.toFixed(2)),
+      bodyFrameWidth: Number(bodyFrameRect.width.toFixed(2)),
+      proseWidth: Number(proseRect.width.toFixed(2)),
+      proseMeasure: Number(headerToken.toFixed(2)),
+      headerBodyLeftEdgeDelta: Number(leftDelta.toFixed(2)),
+      headerBodyRightEdgeDelta: Number(rightDelta.toFixed(2)),
+      titleAlignment: headerStyle.textAlign,
+    })
   }
+  const savedAlignment = settingsState.get().titleAlignment
+  const alignmentSettings = []
   try {
-    for (const articleWidth of READER_MEASURE_HEADER_WIDTHS) {
-      await setReaderArticleWidth(articleWidth)
-      for (const probe of probes.splice(0)) {
-        probe.remove()
-      }
-      const body = readerBody()
-      const bodyToken = readerMeasureToken(body)
-      const bodyCh = bodyToken / readerChPx(body)
-      const inherited = addProbe(articleWidth, false)
-      const reader = addProbe(articleWidth, true)
-      const inheritedCh = readerMeasureToken(inherited) / readerChPx(inherited)
-      assert(
-        Math.abs(inheritedCh - bodyCh) < 0.005 &&
-          Math.abs(inheritedCh - readerMeasureCh(articleWidth)) < 0.005,
-        `Article width ${articleWidth}: header column ${inheritedCh.toFixed(3)}ch, body ${bodyCh.toFixed(3)}ch, contract ${readerMeasureCh(articleWidth).toFixed(3)}ch`,
+    for (const titleAlignment of ["left", "center"]) {
+      settingsState.set({ ...settingsState.get(), titleAlignment })
+      await waitFor(
+        () => readerContent()?.querySelector(".article-header")?.style.textAlign === titleAlignment,
+        `saved title alignment ${titleAlignment} did not reach the Reader`,
       )
-      const readerToken = readerMeasureToken(reader)
+      const currentHeader = readerContent().querySelector(".article-header")
+      const currentTitle = currentHeader.querySelector(".article-title")
       assert(
-        Math.abs(readerToken - bodyToken) < 0.05,
-        `Article width ${articleWidth}: header column ${readerToken.toFixed(2)}px does not align with the body ${bodyToken.toFixed(2)}px when both use the reader font`,
+        getComputedStyle(currentTitle).textAlign === getComputedStyle(currentHeader).textAlign,
+        `Title alignment ${titleAlignment} did not pass through the header column`,
       )
-      const firstProse = [...body.querySelectorAll("p")].find((node) => isProseBlock(node))
-      const proseRect = firstProse.getBoundingClientRect()
-      const headerRect = header.getBoundingClientRect()
-      assert(
-        Math.abs(headerRect.left + headerRect.width / 2 - (proseRect.left + proseRect.width / 2)) <
-          2,
-        `Article width ${articleWidth}: the header axis is not aligned with the prose axis`,
-      )
-      report.push({
-        articleWidth,
-        bodyCh: Number(bodyCh.toFixed(3)),
-        headerCh: Number(inheritedCh.toFixed(3)),
-        bodyPx: Number(bodyToken.toFixed(2)),
-        headerPx: Number(readerToken.toFixed(2)),
+      alignmentSettings.push({
+        setting: titleAlignment,
+        computed: getComputedStyle(currentTitle).textAlign,
       })
     }
   } finally {
-    for (const probe of header.querySelectorAll("[data-measure-probe]")) {
-      probe.remove()
-    }
+    settingsState.set({ ...settingsState.get(), titleAlignment: savedAlignment })
+    await waitFor(
+      () => readerContent()?.querySelector(".article-header")?.style.textAlign === savedAlignment,
+      "saved title alignment was not restored after the harness case",
+    )
   }
   await setReaderArticleWidth(75)
   recordReaderMeasure("headerBodyAlignment", {
     productionHeaderColumnPresent: Boolean(
       document.querySelector(".article-header-column:not([data-measure-probe])"),
     ),
+    alignmentSettings,
     report,
   })
 }
@@ -3271,6 +3328,9 @@ const Harness = () => {
     ["READER_MEASURE_01_TABLE_PROTECTION", () => runReaderMeasureTableProtection(mount)],
     ["READER_MEASURE_01_PRE_CODE_PROTECTION", () => runReaderMeasurePreCodeProtection(mount)],
   ]
+  const readerVisual02a2Scenarios = [
+    ["READER_VISUAL_02A2_HEADER_PROSE_ALIGNMENT", () => runReaderMeasureHeaderBodyAlignment(mount)],
+  ]
   const responsiveScenarios = [
     [
       "HOME_RESPONSIVE_VIEWPORT_STAGE",
@@ -4205,6 +4265,7 @@ const Harness = () => {
     { name: "reader-visual-01-reading-ergonomics", scenarios: readerScenarios },
     { name: "reader-visual-02a1-editorial-typography", scenarios: readerTypographyScenarios },
     { name: "reader-measure-01-prose-measure", scenarios: readerMeasureScenarios },
+    { name: "reader-visual-02a2-editorial-header-column", scenarios: readerVisual02a2Scenarios },
     { name: "matrix-completeness", scenarios: matrixScenarios },
   ]
   const runSuites = async (selectedSuites, { recordViewportTheme = false } = {}) => {
@@ -4219,6 +4280,7 @@ const Harness = () => {
           readerScenarios,
           readerTypographyScenarios,
           readerMeasureScenarios,
+          readerVisual02a2Scenarios,
         ].includes(selectedScenarios)
         if (responsiveMode) {
           document.body.classList.add("phase2c-responsive-running")
@@ -4249,6 +4311,13 @@ const Harness = () => {
                   : {}),
                 ...(name === "HOME_SESSION_STABLE_AFTER_READER_READ"
                   ? { readerReturn: globalThis.__phase2dReaderReturnStability }
+                  : {}),
+                ...(name === "READER_MEASURE_01_HEADER_BODY_ALIGNMENT" ||
+                name === "READER_VISUAL_02A2_HEADER_PROSE_ALIGNMENT"
+                  ? {
+                      readerHeaderBodyAlignment:
+                        globalThis.__readerMeasure01Metrics?.headerBodyAlignment,
+                    }
                   : {}),
               })
             } catch (error) {
@@ -4349,6 +4418,9 @@ const Harness = () => {
         </button>
         <button disabled={running} onClick={() => void run(readerMeasureScenarios)}>
           Run READER-MEASURE-01 prose measure cases
+        </button>
+        <button disabled={running} onClick={() => void run(readerVisual02a2Scenarios)}>
+          Run READER-VISUAL-02A2 header-column alignment gate
         </button>
         <button disabled={running} onClick={() => void run(matrixScenarios)}>
           Run scenario matrix completeness gate

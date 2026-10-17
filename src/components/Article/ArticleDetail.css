@@ -1,5 +1,4 @@
 .article-body {
-  --article-width: 60%;
   --image-margin: calc((var(--image-scale) - 100%) / -2);
   --image-scale: calc((100 / var(--article-width)) * 100%);
   line-height: 1.8;
@@ -79,10 +78,40 @@
   padding-top: 20px;
 }
 
-.article-meta .arco-typography {
+.article-meta .arco-typography,
+.article-source .arco-typography {
   color: var(--color-text-2);
   font-size: 0.875rem;
   line-height: 2 !important;
+}
+
+.article-meta,
+.article-source {
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.article-meta,
+.article-source,
+.article-date,
+.article-header .arco-divider {
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    PingFang SC,
+    Hiragino Sans GB,
+    noto sans,
+    Microsoft YaHei,
+    "Helvetica Neue",
+    Helvetica,
+    Arial,
+    sans-serif;
+}
+
+.article-header .arco-divider {
+  font-size: 0.875rem;
+  line-height: 1.5;
 }
 
 .article-meta .arco-tag {
@@ -408,7 +437,7 @@ body[arco-theme="dark"] .article-content :not(pre) > code {
 
 /*
  * READER-VISUAL-01: long-form reading ergonomics.
- * The "Article width" setting (inline max-width on .article-body) is the reader
+ * The "Article width" setting (shared from .article-content) is the reader
  * frame used by media, tables and code. Prose reads at 75% of that setting and
  * never wider than the frame. The measure is registered as a <length> so it
  * resolves once at the body font size and headings share the prose column.
