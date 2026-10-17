@@ -58,6 +58,7 @@
     "delete_category_confirm_content": "Êtes-vous sûr de vouloir supprimer la catégorie '%{title}' ? Cette action est irréversible.",
     "feeds": "Flux",
     "feed_update_error": "Erreur de mise à jour du flux",
+    "feed_update_error_for_feed": "Erreur de mise à jour du flux %{feed}",
     "source_navigation_mode": "Mode de navigation des sources",
     "unread_mode": "Non lues",
     "all_mode": "Toutes",

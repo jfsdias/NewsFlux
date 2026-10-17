@@ -58,6 +58,7 @@
     "delete_category_confirm_content": "确定要删除分类「%{title}」吗？此操作无法撤销。",
     "feeds": "订阅源",
     "feed_update_error": "订阅源更新错误",
+    "feed_update_error_for_feed": "订阅源“%{feed}”更新错误",
     "source_navigation_mode": "来源导航模式",
     "unread_mode": "未读",
     "all_mode": "全部",

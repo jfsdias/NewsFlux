@@ -29,7 +29,8 @@ import AccessibleModal from "@/components/ui/AccessibleModal"
 import CustomLink from "@/components/ui/CustomLink"
 import CustomTooltip from "@/components/ui/CustomTooltip"
 import EditFeedModal from "@/components/ui/EditFeedModal"
-import { handleFeedRefresh, updateFeedStatus, useFeedOperations } from "@/hooks/useFeedOperations"
+import useAppData from "@/hooks/useAppData"
+import { handleFeedRefresh, useFeedOperations } from "@/hooks/useFeedOperations"
 import { polyglotState } from "@/hooks/useLanguage"
 import useRefreshCounts from "@/hooks/useRefreshCounts"
 import { invalidateArticleList } from "@/store/contentState"
@@ -175,12 +176,13 @@ const FeedRowActions = ({ record, polyglot, onDelete, onEdit, onRefresh }) => {
 const RefreshModal = ({ visible, setVisible }) => {
   const { polyglot } = useStore(polyglotState)
   const filteredFeeds = useStore(filteredFeedsState)
+  const { refreshFeedData } = useAppData()
 
   const { refreshSingleFeed } = useFeedOperations(false)
 
   const refreshAllFeeds = async () => {
     setVisible(false)
-    await handleFeedRefresh(refreshAllFeed, updateFeedStatus, true, false)
+    await handleFeedRefresh(refreshAllFeed, refreshFeedData, true, false)
   }
 
   const refreshErrorFeeds = async () => {

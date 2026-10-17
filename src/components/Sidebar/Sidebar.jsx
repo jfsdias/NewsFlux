@@ -7,6 +7,7 @@ import {
   Menu,
   Modal,
   Notification,
+  Popover,
   Skeleton,
   Typography,
 } from "@arco-design/web-react"
@@ -30,7 +31,7 @@ import {
 } from "@arco-design/web-react/icon"
 import { useStore } from "@nanostores/react"
 import classNames from "classnames"
-import { useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useLocation, useNavigate } from "react-router"
 import { Virtualizer } from "virtua"
 
@@ -79,6 +80,7 @@ import { settingsState, updateSettings } from "@/store/settingsState"
 import { expandedCategoriesState, setExpandedCategories } from "@/store/sidebarState"
 import { confirmDialogProps } from "@/utils/confirm-dialog"
 import { PRODUCT_NAME } from "@/utils/constants"
+import { generateReadableDate } from "@/utils/date"
 import { runEntryMutation } from "@/utils/entry-mutation-state"
 import hasProviderReportedFeedError from "@/utils/feed-health"
 import { downloadFile, readFileAsText } from "@/utils/file"
@@ -441,6 +443,8 @@ const FeedMenuItem = ({
   onEditFeed,
   onMarkAllAsRead,
   onRefreshFeed,
+  onRetryFeedHealth,
+  retryingFeedIds,
   onSetHomePage,
   showZeroCount = false,
   className,
@@ -453,10 +457,42 @@ const FeedMenuItem = ({
   const navigate = useNavigate()
   const location = useLocation()
   const { dropdownProps, longPressProps } = useLongPressContextMenu()
+  const navigationRef = useRef(null)
+  const healthTriggerRef = useRef(null)
+  const [detailsVisible, setDetailsVisible] = useState(false)
   const isSelected =
     location.pathname === `/feed/${feed.id}` || location.pathname.startsWith(`/feed/${feed.id}/`)
   const feedTarget = createEntityHomeTarget("feed", feed.id)
   const isHomePage = isSameHomeTarget(homeTarget, feedTarget)
+  const hasFeedHealthError = hasProviderReportedFeedError(feed)
+  const retrying = retryingFeedIds?.has(String(feed.id)) ?? false
+  const detailsId = `feed-health-details-${feed.id}`
+  const detailsLabel = polyglot.t("sidebar.feed_update_error")
+
+  useEffect(() => {
+    if (!hasFeedHealthError && detailsVisible) {
+      globalThis.requestAnimationFrame(() => {
+        setDetailsVisible(false)
+        navigationRef.current?.focus({ preventScroll: true })
+      })
+    }
+  }, [detailsVisible, hasFeedHealthError])
+
+  const handleDetailsVisibilityChange = (visible) => {
+    setDetailsVisible(visible)
+    globalThis.requestAnimationFrame(() => {
+      const focusTarget = hasFeedHealthError ? healthTriggerRef.current : navigationRef.current
+      focusTarget?.focus({ preventScroll: true })
+    })
+  }
+
+  const handleDetailsPanelKeyDown = (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault()
+      event.stopPropagation()
+      handleDetailsVisibilityChange(false)
+    }
+  }
 
   return (
     <Dropdown
@@ -518,48 +554,107 @@ const FeedMenuItem = ({
         </Menu>
       }
     >
-      <MenuItem
-        key={`/feed/${feed.id}`}
-        {...longPressProps}
-        aria-current={isSelected ? "page" : undefined}
-        className={classNames("feed-menu-item", className, { "arco-menu-selected": isSelected })}
-        data-feed-edit-id={feed.id}
-        style={{ position: "relative", overflow: "hidden" }}
-        onClick={(e) => {
-          e.stopPropagation()
-          navigate(`/feed/${feed.id}`)
-          setActiveContent(null)
-        }}
-      >
-        <div className="custom-menu-item">
-          <Typography.Ellipsis
-            expandable={false}
-            showTooltip={!isBelowMedium}
-            style={{
-              width: feed.unreadCount ? "80%" : "100%",
-              paddingLeft: "20px",
-              boxSizing: "border-box",
-            }}
-          >
-            {showFeedIcon && <FeedIcon className="feed-icon-sidebar" feed={feed} />}
-            {hasProviderReportedFeedError(feed) && (
-              <span
-                aria-label={polyglot.t("sidebar.feed_update_error")}
-                className="feed-health-indicator"
-                role="img"
-              >
-                <IconExclamationCircle aria-hidden="true" />
-              </span>
-            )}
-            {feed.title}
-          </Typography.Ellipsis>
-          {(feed.unreadCount !== 0 || showZeroCount) && (
-            <Typography.Ellipsis className="item-count" expandable={false}>
-              {feed.unreadCount}
+      <div className="feed-menu-item-row">
+        <MenuItem
+          key={`/feed/${feed.id}`}
+          ref={navigationRef}
+          {...longPressProps}
+          aria-current={isSelected ? "page" : undefined}
+          className={classNames("feed-menu-item", className, { "arco-menu-selected": isSelected })}
+          data-feed-edit-id={feed.id}
+          onClick={(e) => {
+            e.stopPropagation()
+            navigate(`/feed/${feed.id}`)
+            setActiveContent(null)
+          }}
+        >
+          <div className="custom-menu-item">
+            <Typography.Ellipsis
+              expandable={false}
+              showTooltip={!isBelowMedium}
+              style={{
+                width: feed.unreadCount ? "80%" : "100%",
+                paddingLeft: "20px",
+                boxSizing: "border-box",
+              }}
+            >
+              {showFeedIcon && <FeedIcon className="feed-icon-sidebar" feed={feed} />}
+              {hasFeedHealthError && (
+                <span aria-hidden="true" className="feed-health-indicator">
+                  <IconExclamationCircle />
+                </span>
+              )}
+              {feed.title}
             </Typography.Ellipsis>
-          )}
-        </div>
-      </MenuItem>
+            {(feed.unreadCount !== 0 || showZeroCount) && (
+              <Typography.Ellipsis className="item-count" expandable={false}>
+                {feed.unreadCount}
+              </Typography.Ellipsis>
+            )}
+          </div>
+        </MenuItem>
+        {hasFeedHealthError && (
+          <Popover
+            className="feed-health-popover"
+            escToClose={false}
+            getPopupContainer={() => document.body}
+            popupVisible={detailsVisible}
+            position={isBelowMedium ? "bottom" : "rt"}
+            trigger="click"
+            content={
+              <div
+                aria-label={`${detailsLabel}: ${feed.title}`}
+                className="feed-health-details"
+                data-testid={detailsId}
+                id={detailsId}
+                role="dialog"
+                onKeyDownCapture={handleDetailsPanelKeyDown}
+              >
+                <div className="feed-health-details-title">{detailsLabel}</div>
+                <div className="feed-health-error-message">{feed.parsing_error_message}</div>
+                {feed.checked_at && (
+                  <div className="feed-health-checked-at">
+                    <span>{polyglot.t("feed_table.table_checked_at")}</span>
+                    <time dateTime={feed.checked_at}>{generateReadableDate(feed.checked_at)}</time>
+                  </div>
+                )}
+                <Button
+                  className="feed-health-retry"
+                  disabled={retrying}
+                  loading={retrying}
+                  type="button"
+                  onClick={() => onRetryFeedHealth?.(feed)}
+                >
+                  {polyglot.t("sidebar.context_menu.refresh_feed")}
+                </Button>
+              </div>
+            }
+            onVisibleChange={handleDetailsVisibilityChange}
+          >
+            <Button
+              ref={healthTriggerRef}
+              aria-controls={detailsId}
+              aria-expanded={detailsVisible}
+              aria-haspopup="dialog"
+              className="feed-health-trigger"
+              data-feed-health-trigger={feed.id}
+              icon={<IconExclamationCircle aria-hidden="true" />}
+              type="button"
+              aria-label={polyglot.t("sidebar.feed_update_error_for_feed", {
+                feed: feed.title,
+              })}
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => {
+                if (event.key === "Escape" && detailsVisible) {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  handleDetailsVisibilityChange(false)
+                }
+              }}
+            />
+          </Popover>
+        )}
+      </div>
     </Dropdown>
   )
 }
@@ -573,6 +668,8 @@ const FeedMenuGroup = ({
   onEditFeed,
   onMarkAllAsRead,
   onRefreshFeed,
+  onRetryFeedHealth,
+  retryingFeedIds,
   onSetHomePage,
 }) => {
   const { compactSidebarGroups } = useStore(settingsState, {
@@ -604,10 +701,12 @@ const FeedMenuGroup = ({
             feed={feed}
             homePageReady={homePageReady}
             homeTarget={homeTarget}
+            retryingFeedIds={retryingFeedIds}
             onDeleteFeed={onDeleteFeed}
             onEditFeed={onEditFeed}
             onMarkAllAsRead={onMarkAllAsRead}
             onRefreshFeed={onRefreshFeed}
+            onRetryFeedHealth={onRetryFeedHealth}
             onSetHomePage={onSetHomePage}
           />
         )}
@@ -628,6 +727,8 @@ const CategoryGroup = ({
   onMarkAllAsReadFeed,
   onRefreshCategory,
   onRefreshFeed,
+  onRetryFeedHealth,
+  retryingFeedIds,
   onSetHomePage,
 }) => {
   const feedsGroupedById = useStore(feedsGroupedByIdState)
@@ -660,11 +761,13 @@ const CategoryGroup = ({
         categoryId={category.id}
         homePageReady={homePageReady}
         homeTarget={homeTarget}
+        retryingFeedIds={retryingFeedIds}
         sourceQuery={sourceQuery}
         onDeleteFeed={onDeleteFeed}
         onEditFeed={onEditFeed}
         onMarkAllAsRead={onMarkAllAsReadFeed}
         onRefreshFeed={onRefreshFeed}
+        onRetryFeedHealth={onRetryFeedHealth}
         onSetHomePage={onSetHomePage}
       />
     </Collapse.Item>
@@ -811,7 +914,8 @@ const Sidebar = ({ headerAction, onNavigate }) => {
   const [categoryForm] = Form.useForm()
   const [feedForm] = Form.useForm()
 
-  const { refreshSingleFeed, handleDeleteFeed } = useFeedOperations(true)
+  const { refreshSingleFeed, retryFeedHealth, retryingFeedIds, handleDeleteFeed } =
+    useFeedOperations(true)
   const { handleDeleteCategory } = useCategoryOperations(true)
 
   const location = useLocation()
@@ -1198,10 +1302,12 @@ const Sidebar = ({ headerAction, onNavigate }) => {
                         feed={feed}
                         homePageReady={homePageReady}
                         homeTarget={homeTarget}
+                        retryingFeedIds={retryingFeedIds}
                         onDeleteFeed={handleDeleteFeed}
                         onEditFeed={handleEditFeed}
                         onMarkAllAsRead={handleMarkAllAsReadFeed}
                         onRefreshFeed={handleRefreshFeed}
+                        onRetryFeedHealth={retryFeedHealth}
                         onSetHomePage={handleSetHomePage}
                       />
                     ))}
@@ -1229,10 +1335,12 @@ const Sidebar = ({ headerAction, onNavigate }) => {
                       feed={currentZeroUnreadSource}
                       homePageReady={homePageReady}
                       homeTarget={homeTarget}
+                      retryingFeedIds={retryingFeedIds}
                       onDeleteFeed={handleDeleteFeed}
                       onEditFeed={handleEditFeed}
                       onMarkAllAsRead={handleMarkAllAsReadFeed}
                       onRefreshFeed={handleRefreshFeed}
+                      onRetryFeedHealth={retryFeedHealth}
                       onSetHomePage={handleSetHomePage}
                     />
                   </section>
@@ -1253,6 +1361,7 @@ const Sidebar = ({ headerAction, onNavigate }) => {
                   <CategoryGroup
                     homePageReady={homePageReady}
                     homeTarget={homeTarget}
+                    retryingFeedIds={retryingFeedIds}
                     sourceQuery={sourceQuery}
                     onDeleteCategory={handleDeleteCategory}
                     onDeleteFeed={handleDeleteFeed}
@@ -1262,6 +1371,7 @@ const Sidebar = ({ headerAction, onNavigate }) => {
                     onMarkAllAsReadFeed={handleMarkAllAsReadFeed}
                     onRefreshCategory={handleRefreshCategory}
                     onRefreshFeed={handleRefreshFeed}
+                    onRetryFeedHealth={retryFeedHealth}
                     onSetHomePage={handleSetHomePage}
                   />
                 </Collapse>
