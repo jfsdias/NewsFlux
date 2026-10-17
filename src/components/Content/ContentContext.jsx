@@ -7,6 +7,7 @@ import { updateEntriesStatusOptimistically } from "@/hooks/useEntryActions"
 import { polyglotState } from "@/hooks/useLanguage"
 import { contentState, setActiveContent } from "@/store/contentState"
 import { settingsState } from "@/store/settingsState"
+import handleUnavailableEntry from "@/utils/unavailable-entry"
 import { buildEntryDetailPath, extractBasePath, isEntryDetailPath } from "@/utils/url"
 
 const Context = createContext()
@@ -55,6 +56,19 @@ export const ContextProvider = ({ children }) => {
     restoreEntryListFocus(activeEntryId)
   }, [location.pathname, navigate, restoreEntryListFocus])
 
+  const handleEntryUnavailable = useCallback(
+    (error, isCurrentRequest) =>
+      handleUnavailableEntry({
+        pathname: location.pathname,
+        error,
+        isCurrentRequest,
+        clearActiveContent: () => setActiveContent(null),
+        navigate,
+        notify: () => Message.warning(polyglot.t("content.entry_unavailable")),
+      }),
+    [location.pathname, navigate, polyglot],
+  )
+
   const handleEntryClick = useCallback(
     (entry) => {
       const shouldAutoMarkAsRead = markReadBy === "view"
@@ -92,11 +106,12 @@ export const ContextProvider = ({ children }) => {
       entryDetailRef,
       entryListRef,
       handleEntryClick,
+      handleEntryUnavailable,
       restoreEntryListFocus,
       setActiveContent,
       closeActiveContent,
     }),
-    [handleEntryClick, restoreEntryListFocus, closeActiveContent],
+    [handleEntryClick, handleEntryUnavailable, restoreEntryListFocus, closeActiveContent],
   )
 
   return <Context.Provider value={value}>{children}</Context.Provider>

@@ -208,7 +208,8 @@
     "media_error": "Este contenido multimedia no se puede reproducir aquí. Usa el enlace del archivo adjunto que aparece abajo."
   },
   "content": {
-    "mark_as_read_error": "No se pudo marcar como leído, por favor intente de nuevo más tarde"
+    "mark_as_read_error": "No se pudo marcar como leído, por favor intente de nuevo más tarde",
+    "entry_unavailable": "Este artículo ya no está disponible."
   },
   "deduplicate": {
     "mark_as_read_error": "No se pudo marcar los artículos duplicados como leídos"

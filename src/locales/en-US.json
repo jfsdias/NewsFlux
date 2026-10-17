@@ -208,7 +208,8 @@
     "media_error": "This media cannot be played here. Use the attachment link below."
   },
   "content": {
-    "mark_as_read_error": "Failed to mark as read, please try again later"
+    "mark_as_read_error": "Failed to mark as read, please try again later",
+    "entry_unavailable": "This article is no longer available."
   },
   "deduplicate": {
     "mark_as_read_error": "Failed to mark duplicate articles as read"

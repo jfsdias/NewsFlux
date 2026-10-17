@@ -208,7 +208,8 @@
     "media_error": "このメディアはここでは再生できません。下記の添付リンクをご利用ください。"
   },
   "content": {
-    "mark_as_read_error": "既読への変更に失敗しました。後で再試行してください"
+    "mark_as_read_error": "既読への変更に失敗しました。後で再試行してください",
+    "entry_unavailable": "この記事は利用できなくなりました。"
   },
   "deduplicate": {
     "mark_as_read_error": "重複記事の既読化に失敗しました"

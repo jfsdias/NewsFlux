@@ -208,7 +208,8 @@
     "media_error": "Ce média ne peut pas être lu ici. Utilisez le lien de la pièce jointe ci-dessous."
   },
   "content": {
-    "mark_as_read_error": "Impossible de marquer comme lu, veuillez réessayer plus tard"
+    "mark_as_read_error": "Impossible de marquer comme lu, veuillez réessayer plus tard",
+    "entry_unavailable": "Cet article n’est plus disponible."
   },
   "deduplicate": {
     "mark_as_read_error": "Impossible de marquer les articles en double comme lus"
