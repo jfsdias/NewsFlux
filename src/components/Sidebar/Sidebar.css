@@ -150,6 +150,82 @@
   height: 16px;
 }
 
+.feed-menu-item-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.feed-menu-item-row > .feed-menu-item {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.feed-health-popover {
+  flex: none;
+  margin-right: 8px;
+}
+
+.feed-health-trigger.arco-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  padding: 0;
+  min-width: 40px;
+  min-height: 40px;
+  color: var(--color-warning-light-3);
+}
+
+.feed-health-trigger.arco-btn .arco-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.feed-health-trigger.arco-btn:focus-visible {
+  outline: 2px solid var(--nf-focus-ring, rgb(var(--primary-6)));
+  outline-offset: -2px;
+}
+
+.feed-health-details {
+  display: grid;
+  box-sizing: border-box;
+  gap: 12px;
+  width: min(320px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.feed-health-details-title {
+  color: var(--color-text-1);
+  font-weight: 600;
+}
+
+.feed-health-error-message {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.feed-health-checked-at {
+  display: grid;
+  gap: 4px;
+  color: var(--color-text-2);
+  font-size: 12px;
+}
+
+.feed-health-retry.arco-btn {
+  justify-self: start;
+  min-height: 40px;
+}
+
 .arco-collapse-item-header-title {
   width: 100%;
 }

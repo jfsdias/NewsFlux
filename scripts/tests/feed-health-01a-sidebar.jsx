@@ -171,13 +171,15 @@ const runScenarios = async () => {
     ),
   )
   await gate("ERROR_FEED_NON_COLOR_SIGNAL", () => {
-    const indicator = errored?.querySelector(".feed-health-indicator")
-    assert(indicator?.getAttribute("role") === "img", "Indicator does not expose image semantics")
-    assert(indicator.getAttribute("aria-label"), "Indicator has no non-color accessible text")
+    const trigger = errored?.parentElement?.querySelector(".feed-health-trigger")
+    assert(trigger instanceof HTMLButtonElement, "Indicator is not an interactive control")
+    assert(trigger.getAttribute("aria-label"), "Indicator has no non-color accessible text")
   })
   await gate("ERROR_FEED_ACCESSIBLE_NAME", () =>
     assert(
-      errored?.querySelector(".feed-health-indicator[aria-label='Feed update error']"),
+      errored?.parentElement?.querySelector(
+        ".feed-health-trigger[aria-label*='Errored fixture feed']",
+      ),
       "Indicator accessible name is missing or not localized",
     ),
   )

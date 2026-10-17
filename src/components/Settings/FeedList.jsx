@@ -29,7 +29,12 @@ import AccessibleModal from "@/components/ui/AccessibleModal"
 import CustomLink from "@/components/ui/CustomLink"
 import CustomTooltip from "@/components/ui/CustomTooltip"
 import EditFeedModal from "@/components/ui/EditFeedModal"
-import { handleFeedRefresh, updateFeedStatus, useFeedOperations } from "@/hooks/useFeedOperations"
+import useAppData from "@/hooks/useAppData"
+import {
+  handleBulkFeedRefresh,
+  handleFeedRefresh,
+  useFeedOperations,
+} from "@/hooks/useFeedOperations"
 import { polyglotState } from "@/hooks/useLanguage"
 import useRefreshCounts from "@/hooks/useRefreshCounts"
 import { invalidateArticleList } from "@/store/contentState"
@@ -175,38 +180,50 @@ const FeedRowActions = ({ record, polyglot, onDelete, onEdit, onRefresh }) => {
 const RefreshModal = ({ visible, setVisible }) => {
   const { polyglot } = useStore(polyglotState)
   const filteredFeeds = useStore(filteredFeedsState)
+  const { refreshFeedData } = useAppData()
 
   const { refreshSingleFeed } = useFeedOperations(false)
 
   const refreshAllFeeds = async () => {
     setVisible(false)
-    await handleFeedRefresh(refreshAllFeed, updateFeedStatus, true, false)
+    await handleFeedRefresh(refreshAllFeed, refreshFeedData, true, false)
   }
 
   const refreshErrorFeeds = async () => {
     setVisible(false)
     const feedsWithErrors = filteredFeeds.filter((feed) => feed.parsing_error_count > 0)
     const messageId = "bulk-refresh-error-feeds"
-    Message.loading({
+    const closeLoadingMessage = Message.loading({
       id: messageId,
       duration: 0,
       content: polyglot.t("feed_table.bulk_refresh_error_feeds_message"),
     })
 
-    let successCount = 0
-    let failureCount = 0
+    const result = await handleBulkFeedRefresh({
+      feeds: feedsWithErrors,
+      refreshSingleFeed,
+      refreshFeedData,
+      waitBetweenRequests: () => sleep(500),
+    })
 
-    for (const feed of feedsWithErrors) {
-      const isSuccessful = await refreshSingleFeed(feed, false)
-      isSuccessful ? successCount++ : failureCount++
-      await sleep(500)
+    if (result.status === "stale-session") {
+      closeLoadingMessage()
+      return
+    }
+
+    if (result.status === "metadata-reload-failure") {
+      Message.error({
+        id: messageId,
+        content: polyglot.t("feed_table.refresh_error"),
+      })
+      return
     }
 
     Message.success({
       id: messageId,
       content: polyglot.t("feed_table.bulk_refresh_error_feeds_result", {
-        success: successCount,
-        failure: failureCount,
+        success: result.successCount,
+        failure: result.failureCount,
       }),
     })
   }

@@ -58,6 +58,7 @@
     "delete_category_confirm_content": "Sind Sie sicher, dass Sie die Kategorie '%{title}' löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
     "feeds": "Abonnements",
     "feed_update_error": "Fehler beim Aktualisieren des Feeds",
+    "feed_update_error_for_feed": "Fehler beim Aktualisieren des Feeds %{feed}",
     "source_navigation_mode": "Quellennavigation",
     "unread_mode": "Ungelesen",
     "all_mode": "Alle",

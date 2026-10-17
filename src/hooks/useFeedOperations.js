@@ -1,12 +1,14 @@
 import { Message, Modal, Notification } from "@arco-design/web-react"
+import { useState } from "react"
 import { useNavigate } from "react-router"
 
 import { deleteFeed, getFeedEntries, refreshFeed } from "@/apis"
 import { markFeedAsRead as markFeedAsReadAPI } from "@/apis/feeds"
+import useAppData from "@/hooks/useAppData"
 import { polyglotState } from "@/hooks/useLanguage"
 import useRefreshCounts from "@/hooks/useRefreshCounts"
 import { contentState, invalidateArticleList, setEntries } from "@/store/contentState"
-import { setFeedsData, setUnreadInfo } from "@/store/dataState"
+import { dataState, getDataSessionRevision, setFeedsData, setUnreadInfo } from "@/store/dataState"
 import {
   getCurrentHomePath,
   getCurrentHomeTarget,
@@ -14,25 +16,17 @@ import {
 } from "@/store/homePageState"
 import { currentRoutePathState } from "@/store/locationState"
 import { confirmDialogProps, destructiveConfirmButtonProps } from "@/utils/confirm-dialog"
-import { getUTCDate } from "@/utils/date"
+import hasProviderReportedFeedError from "@/utils/feed-health"
 import { createEntityHomeTarget, isSameHomeTarget } from "@/utils/home-page"
 
-export const updateFeedStatus = (feed, isSuccessful, targetFeedId = null) => {
-  if (targetFeedId === null || targetFeedId === feed.id) {
-    return {
-      ...feed,
-      parsing_error_count: isSuccessful ? 0 : feed.parsing_error_count + 1,
-      checked_at: getUTCDate(),
-    }
-  }
-  return feed
-}
+const feedHealthRetriesInFlight = new Set()
 
 export const handleFeedRefresh = async (
   refreshFunc,
-  feedUpdater,
+  refreshFeedData,
   displayMessage = true,
   useNotification = false,
+  { reconcileProviderData = true } = {},
 ) => {
   const { polyglot } = polyglotState.get()
 
@@ -44,34 +38,107 @@ export const handleFeedRefresh = async (
     }
   }
 
+  const sessionRevision = getDataSessionRevision()
+  const isCurrentSession = () => sessionRevision === getDataSessionRevision()
+
   try {
     const response = await refreshFunc()
-    const isSuccessful = response.status === 204
-
-    if (displayMessage) {
-      const message = isSuccessful
-        ? polyglot.t("feed_table.refresh_success")
-        : polyglot.t("feed_table.refresh_error")
-      showMessage(message, isSuccessful ? "success" : "error")
+    if (!isCurrentSession()) {
+      return false
     }
 
-    setFeedsData((feeds) => feeds.map((feed) => feedUpdater(feed, isSuccessful)))
-    return isSuccessful
+    if (response.status !== 204) {
+      throw new Error(`Unexpected refresh status: ${response.status}`)
+    }
+
+    if (reconcileProviderData) {
+      await refreshFeedData({ force: true })
+      if (!isCurrentSession()) {
+        return false
+      }
+    }
+
+    if (displayMessage) {
+      showMessage(polyglot.t("feed_table.refresh_success"))
+    }
+
+    return true
   } catch (error) {
+    if (!isCurrentSession()) {
+      return false
+    }
+
     console.error("Failed to refresh feed:", error)
     if (displayMessage) {
       showMessage(polyglot.t("feed_table.refresh_error"), "error")
     }
-    setFeedsData((feeds) => feeds.map((feed) => feedUpdater(feed, false)))
     return false
   }
+}
+
+export const handleBulkFeedRefresh = async ({
+  feeds,
+  refreshSingleFeed,
+  refreshFeedData,
+  waitBetweenRequests = async () => {},
+}) => {
+  const sessionRevision = getDataSessionRevision()
+  const isCurrentSession = () => sessionRevision === getDataSessionRevision()
+  let successCount = 0
+  let failureCount = 0
+
+  for (const feed of feeds) {
+    if (!isCurrentSession()) {
+      return { status: "stale-session", successCount, failureCount }
+    }
+
+    try {
+      const isSuccessful = await refreshSingleFeed(feed, false, {
+        reconcileProviderData: false,
+      })
+      isSuccessful ? successCount++ : failureCount++
+    } catch {
+      failureCount++
+    }
+
+    if (!isCurrentSession()) {
+      return { status: "stale-session", successCount, failureCount }
+    }
+
+    await waitBetweenRequests()
+
+    if (!isCurrentSession()) {
+      return { status: "stale-session", successCount, failureCount }
+    }
+  }
+
+  if (feeds.length === 0) {
+    return { status: "completed", successCount, failureCount }
+  }
+
+  try {
+    await refreshFeedData({ force: true })
+  } catch (error) {
+    if (!isCurrentSession()) {
+      return { status: "stale-session", successCount, failureCount }
+    }
+    return { status: "metadata-reload-failure", successCount, failureCount, error }
+  }
+
+  if (!isCurrentSession()) {
+    return { status: "stale-session", successCount, failureCount }
+  }
+
+  return { status: "completed", successCount, failureCount }
 }
 
 export const useFeedOperations = (useNotification = false) => {
   const { polyglot } = polyglotState.get()
   const { infoFrom, infoId } = contentState.get()
+  const { refreshFeedData } = useAppData()
   const refreshCounts = useRefreshCounts()
   const navigate = useNavigate()
+  const [retryingFeedIds, setRetryingFeedIds] = useState(() => new Set())
 
   const showMessage = (message, type = "success") => {
     if (useNotification) {
@@ -81,14 +148,99 @@ export const useFeedOperations = (useNotification = false) => {
     }
   }
 
-  const refreshSingleFeed = async (feed, displayMessage = true) => {
+  const refreshSingleFeed = async (feed, displayMessage = true, options = {}) => {
     const feedId = feed.id || feed.key
     return handleFeedRefresh(
       () => refreshFeed(feedId),
-      (feed, isSuccessful) => updateFeedStatus(feed, isSuccessful, feedId),
+      refreshFeedData,
       displayMessage,
       useNotification,
+      options,
     )
+  }
+
+  const retryFeedHealth = async (feed) => {
+    const feedId = feed.id || feed.key
+    const feedKey = String(feedId)
+
+    if (feed.disabled === true || !hasProviderReportedFeedError(feed)) {
+      return { status: "not-eligible" }
+    }
+    if (feedHealthRetriesInFlight.has(feedKey)) {
+      return { status: "already-running" }
+    }
+
+    const sessionRevision = getDataSessionRevision()
+    const isCurrentSession = () => sessionRevision === getDataSessionRevision()
+    feedHealthRetriesInFlight.add(feedKey)
+    setRetryingFeedIds((currentIds) => new Set(currentIds).add(feedKey))
+
+    const showRetryError = (error) => {
+      console.error(`Failed to reconcile feed ${feedId} after retry:`, error)
+      showMessage(polyglot.t("feed_table.refresh_error"), "error")
+    }
+
+    try {
+      let response
+      try {
+        response = await refreshFeed(feedId)
+      } catch (error) {
+        if (!isCurrentSession()) {
+          return { status: "stale-after-refresh" }
+        }
+        showRetryError(error)
+        return { status: "request-failure", error }
+      }
+
+      if (!isCurrentSession()) {
+        return { status: "stale-after-refresh" }
+      }
+      if (response.status !== 204) {
+        const error = new Error(`Unexpected refresh status: ${response.status}`)
+        showRetryError(error)
+        return { status: "request-failure", error }
+      }
+
+      try {
+        await refreshFeedData({ force: true })
+      } catch (error) {
+        if (!isCurrentSession()) {
+          return { status: "stale-after-metadata-reload" }
+        }
+        showRetryError(error)
+        return { status: "metadata-reload-failure", error }
+      }
+
+      if (!isCurrentSession()) {
+        return { status: "stale-after-metadata-reload" }
+      }
+
+      const refreshedFeed = dataState
+        .get()
+        .feedsData.find((candidate) => String(candidate.id) === feedKey)
+
+      if (!refreshedFeed) {
+        return { status: "disappeared" }
+      }
+      if (refreshedFeed.disabled === true) {
+        return { status: "disabled", feed: refreshedFeed }
+      }
+      if (Number(refreshedFeed.parsing_error_count ?? 0) === 0) {
+        showMessage(polyglot.t("feed_table.refresh_success"))
+        return { status: "recovered", feed: refreshedFeed }
+      }
+
+      return { status: "still-error", feed: refreshedFeed }
+    } finally {
+      feedHealthRetriesInFlight.delete(feedKey)
+      if (isCurrentSession()) {
+        setRetryingFeedIds((currentIds) => {
+          const nextIds = new Set(currentIds)
+          nextIds.delete(feedKey)
+          return nextIds
+        })
+      }
+    }
   }
 
   const deleteFeedDirectly = async (feed) => {
@@ -181,9 +333,10 @@ export const useFeedOperations = (useNotification = false) => {
 
   return {
     refreshSingleFeed,
+    retryFeedHealth,
+    retryingFeedIds,
     deleteFeedDirectly,
     handleDeleteFeed,
     markFeedAsRead,
-    updateFeedStatus,
   }
 }
