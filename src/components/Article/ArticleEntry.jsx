@@ -21,6 +21,7 @@ import useMarkRelativeRead from "@/hooks/useMarkRelativeRead"
 import { contentState, createEntrySelectedState } from "@/store/contentState"
 import { hasIntegrationsState } from "@/store/dataState"
 import { articleEntryInteractionSettingsState } from "@/store/settingsState"
+import getEntryDisplayTitle from "@/utils/entry-display-title"
 import { getRelativeUnreadTargetIds } from "@/utils/relative-read-targets"
 
 import "./ArticleEntry.css"
@@ -69,6 +70,10 @@ const ArticleEntry = ({
   const isSelected = useStore(selectedState)
   const isUnread = entry.status === "unread"
   const isStarred = entry.starred
+  const displayTitle = getEntryDisplayTitle(
+    entry.title,
+    polyglot.t("article_card.untitled_article"),
+  )
 
   const {
     handleSaveToThirdPartyServices,
@@ -114,8 +119,8 @@ const ArticleEntry = ({
   const { getPrimaryLinkProps, openInReactFlux, opensSourceOnCardClick } = articleActivation
   const primaryLinkProps = getPrimaryLinkProps(entry)
   const accessibleLabel = isUnread
-    ? polyglot.t("article_card.unread_article_aria_label", { title: entry.title })
-    : entry.title
+    ? polyglot.t("article_card.unread_article_aria_label", { title: displayTitle })
+    : displayTitle
   const menuOpenAction = opensSourceOnCardClick
     ? {
         icon: <IconBook aria-hidden="true" />,
@@ -231,6 +236,7 @@ const ArticleEntry = ({
         })}
       >
         <Presenter
+          displayTitle={displayTitle}
           entry={entry}
           feedIconMonogramFallback={feedIconMonogramFallback}
           previewContent={previewContent}

@@ -6,6 +6,7 @@ import { polyglotState } from "@/hooks/useLanguage"
 import { contentState } from "@/store/contentState"
 import { catalogCategoriesState, catalogFeedsState } from "@/store/dataState"
 import { PRODUCT_NAME } from "@/utils/constants"
+import getEntryDisplayTitle from "@/utils/entry-display-title"
 
 const useDocumentTitle = () => {
   const { activeContent, infoFrom } = useStore(contentState, {
@@ -17,8 +18,8 @@ const useDocumentTitle = () => {
   const categories = useStore(catalogCategoriesState)
 
   let title = ""
-  if (activeContent?.title) {
-    title = activeContent.title
+  if (activeContent) {
+    title = getEntryDisplayTitle(activeContent.title, polyglot.t("article_card.untitled_article"))
   } else if (id && infoFrom === "category") {
     title = categories.find((category) => category.id === Number(id))?.title ?? ""
   } else if (id && infoFrom === "feed") {

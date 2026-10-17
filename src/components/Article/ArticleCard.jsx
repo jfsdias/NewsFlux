@@ -62,7 +62,7 @@ const getInitialCoverState = (entry, coverDisplayMode) => {
   }
 }
 
-const ArticleCard = ({ entry, previewContent, feedIconMonogramFallback }) => {
+const ArticleCard = ({ displayTitle, entry, previewContent, feedIconMonogramFallback }) => {
   const {
     coverDisplayMode,
     showDetailedRelativeTime,
@@ -136,7 +136,7 @@ const ArticleCard = ({ entry, previewContent, feedIconMonogramFallback }) => {
           </div>
         </div>
 
-        <h3 className="article-entry-title card-title">{entry.title}</h3>
+        <h3 className="article-entry-title card-title">{displayTitle}</h3>
       </div>
 
       {shouldRenderCover && isWideImage && (

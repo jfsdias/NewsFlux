@@ -28,6 +28,7 @@ import AdaptiveScrollArea from "@/components/ui/AdaptiveScrollArea"
 import CustomLink from "@/components/ui/CustomLink"
 import FadeTransition from "@/components/ui/FadeTransition"
 import PlyrPlayer from "@/components/ui/LazyPlyrPlayer"
+import { polyglotState } from "@/hooks/useLanguage"
 import usePhotoSlider from "@/hooks/usePhotoSlider"
 import useScreenWidth, { prefersReducedMotionState } from "@/hooks/useScreenWidth"
 import { activeContentState } from "@/store/contentState"
@@ -36,6 +37,7 @@ import returnToArticleImage from "@/utils/article-image-return"
 import extractCodeContent from "@/utils/code-content"
 import { getCodeLanguage } from "@/utils/code-languages"
 import { generateReadableDate, generateReadingTime } from "@/utils/date"
+import getEntryDisplayTitle from "@/utils/entry-display-title"
 import buildArticleImageModel from "@/utils/images"
 import { getSafeExternalUrl } from "@/utils/url"
 import "./ArticleDetail.css"
@@ -354,8 +356,13 @@ const ArticleDetail = forwardRef((_, ref) => {
   const navigate = useNavigate()
   const { isBelowMedium } = useScreenWidth()
   const prefersReducedMotion = useStore(prefersReducedMotionState)
+  const { polyglot } = useStore(polyglotState)
 
   const activeContent = useStore(activeContentState)
+  const displayTitle = getEntryDisplayTitle(
+    activeContent.title,
+    polyglot.t("article_card.untitled_article"),
+  )
   const activeContentHtml = activeContent.content ?? ""
   const deferredContentHtml = useDeferredValue(activeContentHtml, "")
   const isArticleBodyPending = deferredContentHtml !== activeContentHtml
@@ -596,10 +603,10 @@ const ArticleDetail = forwardRef((_, ref) => {
             >
               {sourceUrl ? (
                 <a href={sourceUrl} rel="noopener" target="_blank">
-                  {activeContent.title}
+                  {displayTitle}
                 </a>
               ) : (
-                activeContent.title
+                displayTitle
               )}
             </Typography.Title>
             <div className="article-meta">

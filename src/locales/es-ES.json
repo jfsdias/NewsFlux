@@ -159,6 +159,7 @@
     "open_in_reactflux_tooltip": "Abrir en ReactFlux",
     "invalid_source_link_fallback": "El enlace de origen no es válido. El artículo se abrirá en ReactFlux.",
     "unread_article_aria_label": "%{title}, sin leer",
+    "untitled_article": "Artículo sin título",
     "star_tooltip": "Marcar como favorito",
     "unstar_tooltip": "Desmarcar como favorito",
     "fetch_original_tooltip": "Obtener contenido original",
