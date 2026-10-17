@@ -1,12 +1,12 @@
 # READER-VISUAL-01 — Long-form reading ergonomics
 
-- **Status:** READER-VISUAL-01 design reference. Its READER-MEASURE-01 slice was implemented in PR #44, merged and promoted at exact SHA `118ecb2c63f7df3583d0f2524b5cc8c62bd518c1` on 2026-10-16. The other findings below were not completed by that slice.
+- **Status:** READER-VISUAL-01 design reference. READER-MEASURE-01 was implemented in PR #44, merged and promoted at exact SHA `118ecb2c63f7df3583d0f2524b5cc8c62bd518c1` on 2026-10-16. READER-VISUAL-02A, including 02A2 / Quiet Column, completed in PR #49 (head `cafe47e1ae19b6a203e8aef35339931015614c7c`, merge `e4752d290bdfb4961d379dd05548ef3da5da42ba`).
 - **Approved:** 2026-10-14 by the product owner, including the Article-width-as-frame model.
 - **Critical viewport:** 884 × 1104.
 
 ## Problem
 
-The reader filled its whole width with prose. At the default settings the text column measured 794 px at 884 px and wider (about 98 characters per line), 673 px at 768 px (about 83) and 764 px at 1024 px with the sidebar. Images always shared the prose width, portrait images rendered taller than the viewport, and the title (28 px, weight 500) sat in a header narrower than the text below it.
+At the initial pre-READER-VISUAL-01 baseline, the reader filled its whole width with prose. At the default settings the text column measured 794 px at 884 px and wider (about 98 characters per line), 673 px at 768 px (about 83) and 764 px at 1024 px with the sidebar. Images always shared the prose width, portrait images rendered taller than the viewport, and the title (28 px, weight 500) sat in a header narrower than the text below it; PR #49 later aligned the real header column with prose.
 
 ## Reader model
 
@@ -19,7 +19,7 @@ The existing **Article width** setting (`articleWidth`, 50–100, default 75; st
 | Paragraphs that contain media                                                                   | The frame, so an image inside a `<p>` is not narrowed.                                                                                                       |
 | Nested blocks (inside list items, table cells, blockquotes, figures)                            | Unchanged; they follow their parent.                                                                                                                         |
 
-The prose measure is a registered custom property (`@property --reader-prose-measure`, `<length>`), computed on `.article-body`, so headings inside the article share the paragraph column even though their font is larger. The production stylesheet also declares the same formula for `.article-content .article-header .article-header-column` in anticipation of READER-VISUAL-02A2; that production element does not exist yet, so header/body alignment remains probe-based until 02A2 provides it. If the computation ever fails, the fallback is "no narrowing" (the frame width), never a collapsed column. Browsers without `:has()` keep image paragraphs at prose width.
+The prose measure is a registered custom property (`@property --reader-prose-measure`, `<length>`), computed on `.article-body`, so headings inside the article share the paragraph column even though their font is larger. PR #49 added the production `.article-header-column` under `.article-content`; the header and body resolve their measure from the same `--article-width` source and frozen Reader Measure formula. The live production element passed the 02A2 geometry gate. If the computation ever fails, the fallback is "no narrowing" (the frame width), never a collapsed column. Browsers without `:has()` keep image paragraphs at prose width.
 
 ## Typography and rhythm
 
@@ -48,7 +48,7 @@ Article width 50 / 75 / 100 resolves to 40ch / 56.25ch / 58ch before the frame c
 
 ## Validation
 
-`scripts/tests/phase2c-editorial-home.jsx`, suite `reader-visual-01-reading-ergonomics`, fixtures `readerFixtures`: short, long-form with code, table, iframe, list and quote, long headline, wide image with figure and caption, portrait image, no image; plus Article width 50 / 75 / 100 and scrolling under the glass chrome. Every case checks: no user-visible horizontal overflow, opaque single-pane reader (list inert), every prose block at the expected measure and centred, a harness probe for title-axis alignment (the production header element is deferred to 02A2), media and technical surfaces inside the frame (code, table and iframe at the full frame width), wide image and figure caption at the frame, portrait image within 80vh, the title tier for the reader width, and the reader chrome staying pinned with content passing under its glass.
+`scripts/tests/phase2c-editorial-home.jsx`, suite `reader-visual-01-reading-ergonomics`, fixtures `readerFixtures`: short, long-form with code, table, iframe, list and quote, long headline, wide image with figure and caption, portrait image, no image; plus Article width 50 / 75 / 100 and scrolling under the glass chrome. Every case checks: no user-visible horizontal overflow, opaque single-pane reader (list inert), every prose block at the expected measure and centred, media and technical surfaces inside the frame (code, table and iframe at the full frame width), wide image and figure caption at the frame, portrait image within 80vh, the title tier for the reader width, and the reader chrome staying pinned with content passing under its glass. PR #49 added and passed the separate production-element header/prose alignment gate.
 
 Run it with the dev server: open `/scripts/tests/phase2c-editorial-home.html` and select "Run READER-VISUAL-01 reading ergonomics cases", or "Run all scenarios at this viewport and theme".
 
@@ -63,6 +63,5 @@ READER-MEASURE-01 completed in PR #44 (feature head `1d280c0132a3f1d0d6fae49aeb1
 - **Article width 50:** the implemented 40ch floor replaces the earlier unbounded 75% proposal. The automated gate passed; physical-device comfort review remains part of the nonblocking real-device follow-up.
 - **Phone:** the Article width setting still has no effect at ≤ 768 px (fixed 90% frame, existing JS).
 - **Feeds that wrap text in `div`/`section` without block elements** keep the frame width for that text.
-- **Title alignment setting "left":** the title box (header, about 662 px at default) is wider than the prose column (595 px), so a left-aligned title starts about 33 px outside the prose edge (previously 66 px). The default centred alignment shares one axis.
 - **Harness flake (pre-existing):** `HOME_ROUTE_ROOT_AND_READER_RETURN` can fail on the first run after page load ("Root did not render Home"); it asserts synchronously after a lazy route mount. It failed once in the 12-pair regression run here and at the same rate on `2f75fe3` in an earlier interleaved A/B.
-- **Header alignment:** the `.article-header-column` selector is present for READER-VISUAL-02A2, but no production element currently matches it. Alignment remains probe-based until 02A2 supplies the real header column.
+- **READER-VISUAL-02A2 closure:** PR #49 added the real header column and passed edge alignment within 0.02 px at 390×844, 768×1024, 884×1104, 1024×768, 1280×800 and 1440×900; at Article widths 50%, 60%, 75%, 90% and 100%; in light and dark. `REAL_DEVICE_GATE=NOT_REQUIRED` for this geometry-only change; no physical-device run is claimed.
