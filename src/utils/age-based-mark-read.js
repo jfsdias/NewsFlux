@@ -15,6 +15,14 @@ export const getAgeReadCutoffTimestamp = (ageDays, nowMs = Date.now()) => {
   return Math.floor(nowMs / 1000) - ageDays * SECONDS_PER_DAY
 }
 
+export const getAgeReadConfirmationBoundaries = (ageDays, source, confirmedAtMs) => {
+  const cutoff = getAgeReadCutoffTimestamp(ageDays, confirmedAtMs)
+  const publishedAfter =
+    source === "today" ? getAgeReadCutoffTimestamp(1, confirmedAtMs) : undefined
+
+  return { cutoff, publishedAfter }
+}
+
 const getPublishedAtTimestamp = (value) => {
   if (typeof value === "number") {
     return Number.isFinite(value) ? (Math.abs(value) >= 1e12 ? value / 1000 : value) : Number.NaN

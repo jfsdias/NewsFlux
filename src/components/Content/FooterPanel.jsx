@@ -38,7 +38,7 @@ import {
 import { settingsState, updateSettings } from "@/store/settingsState"
 import {
   AGE_BASED_READ_PRESETS,
-  getAgeReadCutoffTimestamp,
+  getAgeReadConfirmationBoundaries,
   markAgeBasedUnreadEntriesAsRead,
 } from "@/utils/age-based-mark-read"
 import createArticleListRequestKey from "@/utils/article-list-request-key"
@@ -403,6 +403,12 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
       return
     }
 
+    const confirmedAtMs = Date.now()
+    const { cutoff, publishedAfter } = getAgeReadConfirmationBoundaries(
+      ageDays,
+      confirmedSource,
+      confirmedAtMs,
+    )
     const content = { ...contentState.get(), infoFrom: confirmedSource, infoId: confirmedSourceId }
     const settings = settingsState.get()
     const sessionRevision = getDataSessionRevision()
@@ -418,7 +424,7 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
       order: confirmedSource === "starred" ? "changed_at" : settings.orderBy,
       direction: settings.orderDirection,
       ...(content.filterString && { search: content.filterString }),
-      ...(confirmedSource === "today" && { published_after: get24HoursAgoTimestamp() }),
+      ...(confirmedSource === "today" && { published_after: publishedAfter }),
     }
 
     const operationLease = markAllReadOperationCoordinator.acquire(sessionRevision)
@@ -430,8 +436,7 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
     markingOlderReadRef.current = true
     setMarkingOlderRead(true)
     try {
-      // Freeze the age boundary at confirmation and use it throughout discovery and mutation.
-      const cutoff = getAgeReadCutoffTimestamp(ageDays)
+      // Reuse the confirmation-time boundaries throughout discovery and mutation.
       const result = await runEntryMutation(() =>
         markAgeBasedUnreadEntriesAsRead({
           cutoff,

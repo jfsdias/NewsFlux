@@ -2,8 +2,12 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 const module = await import(new URL("age-based-mark-read.js", import.meta.url)).catch(() => ({}))
-const { getAgeBasedUnreadTargetIds, getAgeReadCutoffTimestamp, markAgeBasedUnreadEntriesAsRead } =
-  module
+const {
+  getAgeBasedUnreadTargetIds,
+  getAgeReadConfirmationBoundaries,
+  getAgeReadCutoffTimestamp,
+  markAgeBasedUnreadEntriesAsRead,
+} = module
 
 const entry = (id, publishedAt, status = "unread") => ({ id, published_at: publishedAt, status })
 const cutoffFor = (days, now = Date.UTC(2026, 9, 16, 12)) => {
@@ -283,4 +287,48 @@ test("ACKNOWLEDGEMENTS_MUST_COVER_EVERY_TARGET_FOR_SUCCESS", async () => {
 
   assert.equal(result.status, "failed")
   assert.deepEqual(result.acknowledgedIds, [])
+})
+
+test("TODAY_TIME_BOUNDARY_SINGLE_SNAPSHOT", () => {
+  const beforeSecondBoundary = Date.UTC(2026, 9, 16, 12, 0, 0, 999)
+  const afterSecondBoundary = beforeSecondBoundary + 1
+  const splitTodayBoundary = getAgeReadCutoffTimestamp(1, beforeSecondBoundary)
+  const splitAgeCutoff = getAgeReadCutoffTimestamp(1, afterSecondBoundary)
+
+  assert.equal(splitAgeCutoff - splitTodayBoundary, 1)
+  assert.equal(
+    typeof getAgeReadConfirmationBoundaries,
+    "function",
+    "confirmation boundaries must be derived from one captured timestamp",
+  )
+
+  const sharedBoundaries = getAgeReadConfirmationBoundaries(1, "today", afterSecondBoundary)
+  assert.equal(sharedBoundaries.cutoff, sharedBoundaries.publishedAfter)
+})
+
+test("TODAY_1D_EXACT_EMPTY_INTERSECTION", () => {
+  assert.equal(
+    typeof getAgeReadConfirmationBoundaries,
+    "function",
+    "confirmation boundaries must be derived from one captured timestamp",
+  )
+  const boundary = getAgeReadConfirmationBoundaries(
+    1,
+    "today",
+    Date.UTC(2026, 9, 16, 12, 0, 0, 999),
+  )
+  const candidates = [
+    entry("before", boundary.publishedAfter - 1),
+    entry("boundary", boundary.publishedAfter),
+    entry("after", boundary.publishedAfter + 1),
+  ]
+  const olderThanCutoff = new Set(getAgeBasedUnreadTargetIds(candidates, boundary.cutoff))
+  const todayAndOlder = candidates
+    .filter(
+      (candidate) =>
+        candidate.published_at >= boundary.publishedAfter && olderThanCutoff.has(candidate.id),
+    )
+    .map((candidate) => candidate.id)
+
+  assert.deepEqual(todayAndOlder, [])
 })
