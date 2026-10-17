@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FILTER-RULES-01 responsive matrix</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 24px;
+      }
+
+      pre {
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>FILTER-RULES-01 responsive matrix</h1>
+    <p data-testid="matrix-summary">RUNNING</p>
+    <pre data-testid="matrix-results"></pre>
+    <script>
+      const cases = [
+        { width: 390, height: 844 },
+        { width: 884, height: 1104 },
+      ]
+      const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
+      const waitForSuite = async (frame) => {
+        const deadline = Date.now() + 180000
+        while (Date.now() < deadline) {
+          const summary = frame.contentDocument?.querySelector('[data-testid="suite-summary"]')
+          if (summary && summary.textContent !== "Ready" && summary.textContent !== "RUNNING") {
+            return {
+              summary: summary.textContent,
+              results: frame.contentDocument.querySelector('[data-testid="suite-results"]')
+                ?.textContent,
+              viewport: {
+                width: frame.contentWindow.innerWidth,
+                height: frame.contentWindow.innerHeight,
+              },
+            }
+          }
+          await wait(100)
+        }
+        throw new Error("Timed out waiting for embedded suite")
+      }
+
+      const run = async () => {
+        const output = []
+        for (const viewport of cases) {
+          const frame = document.createElement("iframe")
+          frame.width = viewport.width
+          frame.height = viewport.height
+          frame.title = `Filter rules ${viewport.width} by ${viewport.height}`
+          frame.style.cssText = `position:fixed;left:0;top:0;width:${viewport.width}px;height:${viewport.height}px;border:0;z-index:10;background:white`
+          frame.src = `/scripts/tests/filter-rules-01.html?autostart=1&width=${viewport.width}&height=${viewport.height}`
+          document.body.append(frame)
+          await new Promise((resolve, reject) => {
+            frame.addEventListener("load", resolve, { once: true })
+            setTimeout(() => reject(new Error("Timed out loading embedded harness")), 30000)
+          })
+          const result = await waitForSuite(frame)
+          const geometry = JSON.parse(result.results).find(
+            (gate) => gate.name === "RESPONSIVE_MODAL_GEOMETRY",
+          )
+          output.push({ ...result, geometry: geometry?.detail })
+          frame.remove()
+        }
+
+        document.querySelector('[data-testid="matrix-results"]').textContent = JSON.stringify(
+          output,
+          null,
+          2,
+        )
+        document.querySelector('[data-testid="matrix-summary"]').textContent = output.every(
+          (item) =>
+            item.summary === "21/21 PASS" &&
+            item.geometry?.viewport === `${item.viewport.width}x${item.viewport.height}`,
+        )
+          ? "2/2 VIEWPORTS PASS"
+          : "VIEWPORT MATRIX FAILED"
+      }
+
+      run().catch((error) => {
+        document.querySelector('[data-testid="matrix-summary"]').textContent = "FAIL"
+        document.querySelector('[data-testid="matrix-results"]').textContent = error.stack
+      })
+    </script>
+  </body>
+</html>
