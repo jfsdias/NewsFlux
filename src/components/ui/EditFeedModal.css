@@ -1,0 +1,56 @@
+.edit-modal {
+  box-sizing: border-box;
+  max-height: calc(100vh - 32px);
+  max-width: calc(100vw - 32px);
+  overflow: hidden;
+  width: min(520px, calc(100vw - 32px)) !important;
+}
+
+@supports (height: 100dvh) {
+  .edit-modal {
+    max-height: calc(100dvh - 32px);
+  }
+}
+
+.edit-modal .arco-modal-content {
+  box-sizing: border-box;
+  max-height: calc(100vh - 145px);
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+@supports (height: 100dvh) {
+  .edit-modal .arco-modal-content {
+    max-height: calc(100dvh - 145px);
+  }
+}
+
+.edit-modal .filter-rules-hint,
+.edit-modal .filter-rules-field-help,
+.edit-modal .filter-rules-warning,
+.edit-modal .filter-rules-error {
+  overflow-wrap: anywhere;
+}
+
+.edit-modal .filter-rules-hint {
+  margin: 0 0 16px;
+}
+
+.edit-modal .filter-rules-warning,
+.edit-modal .filter-rules-error {
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.edit-modal .filter-rules-warning {
+  margin: 0 0 12px;
+}
+
+.edit-modal .filter-rules-error {
+  margin: 12px 0;
+}
+
+.edit-modal .filter-rules-textarea {
+  min-height: 76px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}

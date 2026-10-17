@@ -2,6 +2,8 @@ import apiClient from "./ofetch"
 
 export const getFeeds = async () => apiClient.get("/v1/feeds")
 
+export const getFeed = async (id) => apiClient.get(`/v1/feeds/${id}`)
+
 export const getCounters = async () => apiClient.get("/v1/feeds/counters")
 
 export const refreshFeed = async (id) => apiClient.raw(`/v1/feeds/${id}/refresh`, { method: "PUT" })
@@ -20,7 +22,7 @@ export const deleteFeed = async (id) => apiClient.raw(`/v1/feeds/${id}`, { metho
 export const updateFeed = async (id, newDetails) => {
   const { categoryId, title, siteUrl, feedUrl, hidden, disabled, isFullText } = newDetails
 
-  return apiClient.put(`/v1/feeds/${id}`, {
+  const payload = {
     category_id: categoryId,
     title,
     site_url: siteUrl,
@@ -28,7 +30,16 @@ export const updateFeed = async (id, newDetails) => {
     hide_globally: hidden,
     disabled,
     crawler: isFullText,
-  })
+  }
+
+  if (Object.hasOwn(newDetails, "blocklistRules")) {
+    payload.blocklist_rules = newDetails.blocklistRules
+  }
+  if (Object.hasOwn(newDetails, "keeplistRules")) {
+    payload.keeplist_rules = newDetails.keeplistRules
+  }
+
+  return apiClient.put(`/v1/feeds/${id}`, payload)
 }
 
 export const markFeedAsRead = async (id) => apiClient.put(`/v1/feeds/${id}/mark-all-as-read`)

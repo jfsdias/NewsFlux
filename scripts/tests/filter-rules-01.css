@@ -1,0 +1,59 @@
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--color-bg-1);
+  color: var(--color-text-1);
+  font-family: var(--font-family);
+}
+
+.filter-rules-harness {
+  max-width: 760px;
+  margin: 24px auto;
+  padding: 16px;
+}
+
+.filter-rules-harness-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.filter-rules-results {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.filter-rules-harness .filter-rules-status {
+  min-height: 24px;
+}
+
+.edit-modal .filter-rules-textarea {
+  min-height: 100px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.edit-modal .filter-rules-hint,
+.edit-modal .filter-rules-warning,
+.edit-modal .filter-rules-error {
+  margin: 0 0 12px;
+  overflow-wrap: anywhere;
+}
+
+.edit-modal .filter-rules-warning,
+.edit-modal .filter-rules-error {
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+@media (max-width: 600px) {
+  .filter-rules-harness {
+    margin: 8px auto;
+    padding: 8px;
+  }
+}
