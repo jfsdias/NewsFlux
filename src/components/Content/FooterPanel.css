@@ -135,6 +135,12 @@
     font-size: var(--mobile-form-icon-size);
   }
 
+  .mark-older-read-modal {
+    box-sizing: border-box;
+    width: calc(100vw - 32px) !important;
+    max-width: calc(100vw - 32px);
+  }
+
   .mark-all-read-popconfirm .arco-popconfirm-inner-content {
     font-size: 14px;
     line-height: 22px;

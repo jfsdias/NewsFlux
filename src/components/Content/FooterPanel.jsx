@@ -1,7 +1,16 @@
-import { Button, Notification, Popconfirm, Radio } from "@arco-design/web-react"
+import {
+  Button,
+  Dropdown,
+  Menu,
+  Modal,
+  Notification,
+  Popconfirm,
+  Radio,
+} from "@arco-design/web-react"
 import {
   IconAlignLeft,
   IconCheck,
+  IconClockCircle,
   IconRecord,
   IconRefresh,
   IconStarFill,
@@ -27,6 +36,11 @@ import {
   visibleFeedsState,
 } from "@/store/dataState"
 import { settingsState, updateSettings } from "@/store/settingsState"
+import {
+  AGE_BASED_READ_PRESETS,
+  getAgeReadCutoffTimestamp,
+  markAgeBasedUnreadEntriesAsRead,
+} from "@/utils/age-based-mark-read"
 import createArticleListRequestKey from "@/utils/article-list-request-key"
 import { get24HoursAgoTimestamp } from "@/utils/date"
 import { runEntryMutation } from "@/utils/entry-mutation-state"
@@ -164,6 +178,14 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
   const { isArticleListReady } = useStore(contentState, { keys: ["isArticleListReady"] })
   const [markingAllRead, setMarkingAllRead] = useState(false)
   const markingAllReadRef = useRef(false)
+  const [markingOlderRead, setMarkingOlderRead] = useState(false)
+  const markingOlderReadRef = useRef(false)
+  const [ageMenuVisible, setAgeMenuVisible] = useState(false)
+  const [agePresetDays, setAgePresetDays] = useState(null)
+  const listScopeRef = useRef({ from: source, id: sourceId })
+  useEffect(() => {
+    listScopeRef.current = { from: source, id: sourceId }
+  }, [source, sourceId])
   const { markAllReadJumpToNext, showStatus } = useStore(settingsState, {
     keys: ["markAllReadJumpToNext", "showStatus"],
   })
@@ -173,6 +195,16 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
   const refreshCounts = useRefreshCounts()
   const navigate = useNavigate()
   const refreshLabel = polyglot.t("article_list.refresh_tooltip")
+  const getCurrentListIdentity = () => {
+    const { from, id } = listScopeRef.current
+    const content = { ...contentState.get(), infoFrom: from, infoId: id }
+    return createArticleListRequestKey({
+      content,
+      settings: settingsState.get(),
+      info: { from, id },
+      sessionRevision: getDataSessionRevision(),
+    })
+  }
 
   const handleUndoMarkAllRead = async (token) => {
     await performCoordinatedMarkAllReadUndo({
@@ -186,6 +218,24 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
       onError: (error) => {
         Notification.error({
           title: polyglot.t("article_list.mark_all_as_read_error"),
+          content: error.message,
+        })
+      },
+    })
+  }
+
+  const handleUndoOlderRead = async (token) => {
+    await performCoordinatedMarkAllReadUndo({
+      token,
+      getCurrentSessionRevision: getDataSessionRevision,
+      updateEntriesStatusInBatches,
+      refreshCounts,
+      invalidateArticleList,
+      onConsume: (consumedToken) =>
+        Notification.remove(getMarkAllReadUndoNotificationId(consumedToken)),
+      onError: (error) => {
+        Notification.error({
+          title: polyglot.t("article_list.mark_older_as_read_error"),
           content: error.message,
         })
       },
@@ -339,6 +389,157 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
     }
   }
 
+  const handleConfirmOlderRead = async () => {
+    const ageDays = agePresetDays
+    const { from: confirmedSource, id: confirmedSourceId } = listScopeRef.current
+    if (
+      !ageDays ||
+      markingOlderReadRef.current ||
+      markingAllReadRef.current ||
+      !contentState.get().isArticleListReady ||
+      confirmedSource === "history"
+    ) {
+      setAgePresetDays(null)
+      return
+    }
+
+    const content = { ...contentState.get(), infoFrom: confirmedSource, infoId: confirmedSourceId }
+    const settings = settingsState.get()
+    const sessionRevision = getDataSessionRevision()
+    const requestKey = getCurrentListIdentity()
+    const isCurrentSession = () => sessionRevision === getDataSessionRevision()
+    const isCurrentList = () => isCurrentSession() && requestKey === getCurrentListIdentity()
+    const starred =
+      ["feed", "category"].includes(confirmedSource) && settings.showStatus === "starred"
+    const scope = ["feed", "category"].includes(confirmedSource) ? confirmedSource : "global"
+    const filterParams = {
+      filterDate: confirmedSource === "today" ? null : content.filterDate,
+      globally_visible: !isEntryScopeFullyVisible(scope, confirmedSourceId),
+      order: confirmedSource === "starred" ? "changed_at" : settings.orderBy,
+      direction: settings.orderDirection,
+      ...(content.filterString && { search: content.filterString }),
+      ...(confirmedSource === "today" && { published_after: get24HoursAgoTimestamp() }),
+    }
+
+    const operationLease = markAllReadOperationCoordinator.acquire(sessionRevision)
+    if (operationLease === null) {
+      setAgePresetDays(null)
+      return
+    }
+
+    markingOlderReadRef.current = true
+    setMarkingOlderRead(true)
+    try {
+      // Freeze the age boundary at confirmation and use it throughout discovery and mutation.
+      const cutoff = getAgeReadCutoffTimestamp(ageDays)
+      const result = await runEntryMutation(() =>
+        markAgeBasedUnreadEntriesAsRead({
+          cutoff,
+          fetchEntries: (status, options) => getEntries(status, starred, options),
+          filterParams,
+          getSessionRevision: getDataSessionRevision,
+          isCurrentList,
+          sessionRevision,
+          updateEntriesStatusInBatches,
+          onBatchAcknowledged: (entryIds) => {
+            if (isCurrentList()) {
+              updateEntriesAsRead(entryIds)
+            }
+          },
+        }),
+      )
+
+      if (!isCurrentSession() || result.status === "stale") {
+        return
+      }
+      if (result.status === "empty") {
+        return
+      }
+
+      await refreshCounts({ force: true })
+      if (!isCurrentSession()) {
+        return
+      }
+      if (isCurrentList()) {
+        invalidateArticleList()
+      }
+
+      if (result.status === "success" || result.status === "partial") {
+        const previousUndoToken = markAllReadUndoActions.getCurrentToken()
+        markAllReadUndoActions.clear()
+        if (previousUndoToken !== null) {
+          Notification.remove(getMarkAllReadUndoNotificationId(previousUndoToken))
+        }
+
+        let token
+        token = markAllReadUndoActions.replace(
+          { entryIds: result.acknowledgedIds, sessionRevision },
+          {
+            durationMs: MARK_ALL_READ_UNDO_DURATION_MS,
+            onExpire: () => Notification.remove(getMarkAllReadUndoNotificationId(token)),
+          },
+        )
+        const notification = {
+          id: getMarkAllReadUndoNotificationId(token),
+          duration: MARK_ALL_READ_UNDO_DURATION_MS,
+          btn: (
+            <Button size="small" onClick={() => void handleUndoOlderRead(token)}>
+              {polyglot.t("actions.undo")}
+            </Button>
+          ),
+          onClose: () => markAllReadUndoActions.clear(token),
+        }
+
+        if (result.status === "partial") {
+          Notification.warning({
+            ...notification,
+            title: polyglot.t("article_list.mark_older_as_read_partial", {
+              marked: result.acknowledgedIds.length,
+              total: result.requestedCount,
+            }),
+          })
+        } else {
+          Notification.success({
+            ...notification,
+            title: polyglot.t("article_list.mark_older_as_read_success", {
+              smart_count: result.acknowledgedIds.length,
+            }),
+          })
+        }
+      } else {
+        console.error("Failed to mark older articles as read:", result.error)
+        Notification.error({
+          title: polyglot.t("article_list.mark_older_as_read_error"),
+          content: result.error?.message,
+        })
+      }
+    } finally {
+      markAllReadOperationCoordinator.release(operationLease)
+      markingOlderReadRef.current = false
+      setMarkingOlderRead(false)
+      setAgePresetDays(null)
+    }
+  }
+
+  const getAgePresetLabel = (days) =>
+    polyglot.t("article_list.mark_older_as_read_preset", {
+      age: polyglot.t("date.days", days),
+    })
+
+  const markOlderReadLabel = polyglot.t("article_list.mark_older_as_read_tooltip")
+  const agePresetMenu = (
+    <Menu
+      onClickMenuItem={(key) => {
+        setAgeMenuVisible(false)
+        setAgePresetDays(Number(key))
+      }}
+    >
+      {AGE_BASED_READ_PRESETS.map((days) => (
+        <Menu.Item key={days}>{getAgePresetLabel(days)}</Menu.Item>
+      ))}
+    </Menu>
+  )
+
   const baseFilterOptions = [
     {
       label: polyglot.t("article_list.filter_status_unread"),
@@ -391,6 +592,28 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
         loading={markingAllRead}
         onConfirm={handleMarkAllAsRead}
       />
+      {source !== "history" && (
+        <Dropdown
+          droplist={agePresetMenu}
+          popupVisible={ageMenuVisible}
+          trigger="click"
+          onVisibleChange={setAgeMenuVisible}
+        >
+          <CustomTooltip mini content={markOlderReadLabel}>
+            <Button
+              aria-expanded={ageMenuVisible}
+              aria-haspopup="menu"
+              aria-label={markOlderReadLabel}
+              className="nf-glass-control"
+              disabled={!isArticleListReady || markingAllRead || markingOlderRead}
+              icon={<IconClockCircle aria-hidden="true" />}
+              loading={markingOlderRead}
+              shape="circle"
+              size="small"
+            />
+          </CustomTooltip>
+        </Dropdown>
+      )}
       <Radio.Group
         className="nf-glass-group entry-panel-filter-group"
         style={{ visibility: source === "history" ? "hidden" : "visible" }}
@@ -410,6 +633,22 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
           onClick={refreshArticleList}
         />
       </CustomTooltip>
+      <Modal
+        className="mark-older-read-modal"
+        confirmLoading={markingOlderRead}
+        title={agePresetDays === null ? markOlderReadLabel : getAgePresetLabel(agePresetDays)}
+        visible={agePresetDays !== null}
+        onCancel={() => setAgePresetDays(null)}
+        onOk={handleConfirmOlderRead}
+      >
+        <p>
+          {agePresetDays === null
+            ? markOlderReadLabel
+            : polyglot.t("article_list.mark_older_as_read_confirm", {
+                age: polyglot.t("date.days", agePresetDays),
+              })}
+        </p>
+      </Modal>
     </div>
   )
 }
