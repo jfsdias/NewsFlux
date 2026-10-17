@@ -2,48 +2,60 @@
 
 - **Purpose:** concise operational state for PM handoffs and future sessions. The roadmap remains the source for sequencing and product/architecture detail.
 - **Last reconciled:** 2026-10-17.
-- **Documented main/product baseline:** `a8dbe15497f7d526298f223188955b82589a84a4`.
+- **Documented main/product baseline:** `046cd647c65583cdfdc7ab282701be79d4b34294`.
 
 ## Current state
 
-Live GitHub and OMV inspection on 2026-10-17 found `main` at `a8dbe15497f7d526298f223188955b82589a84a4`, zero open PRs before this docs PR, and the production container `newsflux` running image `newsflux-local:118ecb2c63f7`. The image tag prefix resolves to exact source SHA `118ecb2c63f7df3583d0f2524b5cc8c62bd518c1`. Production image ID was not returned by the read-only OMV RPC. Main and production are not at parity; PRs #46–#50 were merged without production promotion in this PM flow.
+Live GitHub and OMV inspection on 2026-10-17 found `main` at `046cd647c65583cdfdc7ab282701be79d4b34294`, zero open PRs before this docs PR, and production container `newsflux` running image `newsflux-local:118ecb2c63f7` (source SHA `118ecb2c63f7df3583d0f2524b5cc8c62bd518c1`), image ID `sha256:a8c7e764d0cf5ef333da113fc9e46a15dde043297a9b65122498aebba4d65499`, and restart count 0. Main and production are not at parity; PRs #52 and #53 were merged without production promotion.
 
 ```text
-CURRENT_MAIN=a8dbe15497f7d526298f223188955b82589a84a4
-DOCUMENTED_MAIN_BASE_SHA=a8dbe15497f7d526298f223188955b82589a84a4
-PRODUCT_BASELINE_SHA=a8dbe15497f7d526298f223188955b82589a84a4
+CURRENT_MAIN=046cd647c65583cdfdc7ab282701be79d4b34294
+DOCUMENTED_MAIN_BASE_SHA=046cd647c65583cdfdc7ab282701be79d4b34294
+PRODUCT_BASELINE_SHA=046cd647c65583cdfdc7ab282701be79d4b34294
 PRODUCTION_CONTAINER=newsflux
-PRODUCTION_CONTAINER_STATUS=Up 7 hours (observed 2026-10-17)
+PRODUCTION_CONTAINER_ID=5c1882d2792a48a894c0806231bbb371f97b60d49b6922f5b9218a1c905bf8ef
+PRODUCTION_CONTAINER_STATUS=running (observed 2026-10-17)
+PRODUCTION_RESTART_COUNT=0
 PRODUCTION_IMAGE=newsflux-local:118ecb2c63f7
 PRODUCTION_SHA=118ecb2c63f7df3583d0f2524b5cc8c62bd518c1
-PRODUCTION_IMAGE_ID=NOT_OBSERVED_BY_LIVE_RPC
+PRODUCTION_IMAGE_ID=sha256:a8c7e764d0cf5ef333da113fc9e46a15dde043297a9b65122498aebba4d65499
 MAIN_PRODUCTION_PARITY=NO
 RUNTIME_PRODUCT_BASELINE_EQUALS_PRODUCTION=NO
 OPEN_PRS_BEFORE_THIS_DOCS_PR=0
 
-CURRENT_PHASE=POST_BULK_03B
-CURRENT_TRACK=FEED_HEALTH_01B_DISCOVERY_DESIGN
+CURRENT_PHASE=POST_FEED_HEALTH_01B_AND_SELECTIVE_UPSTREAM_SYNC
+CURRENT_TRACK=FILTER_RULES_01_DISCOVERY_DESIGN
 CURRENT_PRODUCT_PR=NONE
 OPEN_RUNTIME_PR=NONE
 
-LAST_COMPLETED=BULK-03B / PR #50
+LAST_COMPLETED_FUNCTIONAL=FEED-HEALTH-01B / PR #52
+LAST_COMPLETED_MAINTENANCE=SELECTIVE_UPSTREAM_SYNC / PR #53
 LAST_PRODUCTION_PROMOTION=READER-MEASURE-01 / PR #44 / 118ecb2c63f7df3583d0f2524b5cc8c62bd518c1
 READER_VISUAL_02A_STATUS=COMPLETED (02A1 + Measure + 02A2 / Quiet Column)
 BULK_03_STATUS=COMPLETED (03A + 03B)
 
-UPSTREAM_INTEGRATED_THROUGH=3045a5f8f69ffd7f571f73540031efa8b4ff6e6d
-LAST_FORMALLY_REVIEWED_UPSTREAM_SHA=f1d6e4362aeaf7c5126cdb9dc0b041dd0dc8cb7d
+UPSTREAM_INTEGRATION_MODE=SELECTIVE_NON_LINEAR
+LAST_LINEAR_INTEGRATED_UPSTREAM_BASELINE=3045a5f8f69ffd7f571f73540031efa8b4ff6e6d
+LAST_FORMALLY_REVIEWED_UPSTREAM_SHA=ed0be6db9a8126d8bfdfc5afe41d2e058b7e5036
 LAST_INTEGRATED_UPSTREAM_SHA=3045a5f8f69ffd7f571f73540031efa8b4ff6e6d
-NEXT_UPSTREAM_AUDIT_FROM=f1d6e4362aeaf7c5126cdb9dc0b041dd0dc8cb7d
+NEXT_UPSTREAM_AUDIT_FROM=ed0be6db9a8126d8bfdfc5afe41d2e058b7e5036
+SELECTIVELY_INTEGRATED=e46d92ab64adcbd0bb8ac2caf6048fa37f527939
+SELECTIVELY_ADAPTED=0c28762de6987c980306b8553753e549e753b4e0
+UPSTREAM_HOLD_VITE=4a2d4ce540cc0e3dd88bfd8d386e4c6645c47abe (8.3.1 to 8.3.4; dedicated bundler/lockfile/harness regression gate required)
+UPSTREAM_HOLD_FRAMER_MOTION=ed0be6db9a8126d8bfdfc5afe41d2e058b7e5036 (14.0.0 to 14.2.0; dedicated production visual/motion regression gate required)
+FEED_HEALTH_01A=COMPLETED
+FEED_HEALTH_01B=COMPLETED
+FEED_HEALTH_01_STATUS=COMPLETED
 
-NEXT_RECOMMENDED_ACTION=FEED-HEALTH-01B_READ_ONLY_DISCOVERY_AND_BOUNDED_DESIGN
-NEXT_ENGINEERING_TRACK=FEED-HEALTH-01B
-NEXT_AUTHORIZED_ACTION=DISCOVERY_AND_DESIGN_ONLY; implementation requires explicit design approval
+NEXT_RECOMMENDED_ACTION=FILTER_RULES_01_READ_ONLY_DISCOVERY_AND_BOUNDED_DESIGN
+NEXT_ENGINEERING_TRACK=FILTER-RULES-01
+NEXT_AUTHORIZED_ACTION=DISCOVERY_AND_DESIGN_ONLY
+FILTER_RULES_01_IMPLEMENTATION_AUTHORIZED=NO
 IMPLEMENTATION_AUTHORIZED=NO
 
 ROLLBACK_BASELINE=NOT_REVALIDATED
-DOCUMENTATION_RECONCILIATION_BRANCH=codex/docs-post-bulk03b-reconciliation
-DOCUMENTATION_RECONCILIATION_BASE_SHA=a8dbe15497f7d526298f223188955b82589a84a4
+DOCUMENTATION_RECONCILIATION_BRANCH=codex/docs-post-feed-health-upstream-sync
+DOCUMENTATION_RECONCILIATION_BASE_SHA=046cd647c65583cdfdc7ab282701be79d4b34294
 DOCUMENTATION_SCOPE=DOCUMENTATION_ONLY
 DEPLOY_PERFORMED=NO
 MERGE_AUTHORIZED=NO
@@ -80,7 +92,10 @@ A docs-only branch does not alter production. Any later deployment decision must
 - **PR #47 / STATE-ERR-01:** unavailable-entry 404 behavior complete; feature head `379fa241d8fa1a4d6d9e216c374b6409322a573d`, merge `e59295501cc51a6df2b64a435c0c32eb5431aed5`.
 - **PR #48 / CONTENT-01:** deterministic untitled fallback complete; feature head `1032b5409298629382685a85935b85fdc2292f85`, merge `9f521edfd5f031e8e833a4854d896acc42a22fae`.
 - **PR #49 / READER-VISUAL-02A2:** quiet editorial header aligned to the production prose column; feature head `cafe47e1ae19b6a203e8aef35339931015614c7c`, merge `e4752d290bdfb4961d379dd05548ef3da5da42ba`.
-- **PR #50 / BULK-03B:** 1/7/30-day age presets, full discovery before writes, strict `published_at` cutoff, scope preservation, acknowledged-only Undo, shared Today time snapshot and focus restoration; feature head `dd9e68650f3f40080199b90107c2b35722166697`, merge/current main `a8dbe15497f7d526298f223188955b82589a84a4`. No production promotion.
+- **PR #50 / BULK-03B:** 1/7/30-day age presets, full discovery before writes, strict `published_at` cutoff, scope preservation, acknowledged-only Undo, shared Today time snapshot and focus restoration; feature head `dd9e68650f3f40080199b90107c2b35722166697`, merge `a8dbe15497f7d526298f223188955b82589a84a4`. No production promotion.
+- **PR #51 / documentation:** reconciled project state and roadmap after BULK-03B; merged as `0d3b1e9648d59018cdd1f9f17948c7d34b19924b`.
+- **PR #52 / FEED-HEALTH-01B:** provider-reported error detail, provider-owned `checked_at`/`parsing_error_count`, accessible details and Retry, stale-session fencing, and one final metadata reconciliation after bulk refresh; feature head `1b03865311993f7e72df0632ea662bbe94e926e9`, merged as `051e461d1d1eb4408e15a0ebcd4e1331b546de7a`. No production promotion.
+- **PR #53 / selective upstream maintenance:** integrated pnpm build-script hardening and adapted setup-node pins; feature head `f4db01106ca28fca3b7340be45cb87fa4059845d`, merged as `046cd647c65583cdfdc7ab282701be79d4b34294`. No production promotion.
 
 ## A11Y-01 closure
 
@@ -153,7 +168,7 @@ Not authorized by package completion:
 
 ### Next track
 
-- **FEED-HEALTH-01B discovery/design:** expose provider-reported error detail, last checked time and Retry through the existing feed-health flow. Keep the discovery read-only and bounded. Implementation waits for explicit approval of the in-chat design.
+- **FILTER-RULES-01 discovery/design:** read-only, bounded discovery of Miniflux `blocklist_rules` / `keeplist_rules`, available API scopes, UX entry point, validation and failure semantics. Miniflux remains source of truth; no NewsFlux rule database. Implementation is not authorized before design approval.
 
 ## Planned functional tracks
 
@@ -164,7 +179,6 @@ Not authorized by package completion:
 - HOME-01 — refresh/focus/reconnect semantics.
 - NAV01 — previous/next + next unread source flow.
 - NAV-02F — navigation follow-ups including human-readable unread-count labels.
-- FEED-HEALTH-01B — next discovery/design track for detailed provider error, last checked and Retry; 01A compact indicator completed in PR #40.
 - Keyboard/touch parity.
 - READER-MEDIA-01.
 
@@ -197,15 +211,24 @@ Not authorized by package completion:
 
 ```text
 UPSTREAM_REPOSITORY=electh/ReactFlux
-UPSTREAM_MODE=SELECTIVE_INTEGRATION
-LAST_FORMALLY_REVIEWED_UPSTREAM_SHA=f1d6e4362aeaf7c5126cdb9dc0b041dd0dc8cb7d
+UPSTREAM_INTEGRATION_MODE=SELECTIVE_NON_LINEAR
+LAST_FORMALLY_REVIEWED_UPSTREAM_SHA=ed0be6db9a8126d8bfdfc5afe41d2e058b7e5036
 LAST_INTEGRATED_UPSTREAM_SHA=3045a5f8f69ffd7f571f73540031efa8b4ff6e6d
-NEXT_UPSTREAM_AUDIT_FROM=f1d6e4362aeaf7c5126cdb9dc0b041dd0dc8cb7d
+LAST_LINEAR_INTEGRATED_UPSTREAM_BASELINE=3045a5f8f69ffd7f571f73540031efa8b4ff6e6d
+NEXT_UPSTREAM_AUDIT_FROM=ed0be6db9a8126d8bfdfc5afe41d2e058b7e5036
+SELECTIVELY_INTEGRATED=e46d92ab64adcbd0bb8ac2caf6048fa37f527939
+SELECTIVELY_ADAPTED=0c28762de6987c980306b8553753e549e753b4e0
+HOLD_VITE=4a2d4ce540cc0e3dd88bfd8d386e4c6645c47abe (8.3.1 to 8.3.4; lockfile/Rolldown churn, harness sensitivity, dedicated regression gate)
+HOLD_FRAMER_MOTION=ed0be6db9a8126d8bfdfc5afe41d2e058b7e5036 (14.0.0 to 14.2.0; production motion dependency, dedicated visual/motion regression gate)
 ```
+
+PR #53 completed selective maintenance: `e46d92ab64adcbd0bb8ac2caf6048fa37f527939` was integrated as `allowBuilds.plyr=false` in `pnpm-workspace.yaml`; `0c28762de6987c980306b8553753e549e753b4e0` was adapted by updating only `actions/setup-node` from 7.0.0 to 7.1.0 in five equivalent workflows, preserving NewsFlux customizations. The reviewed frontier is not a linear integration claim. Holds remain unapproved for implementation.
 
 The specialized upstream monitor must live-check the current upstream head before auditing. New commits are classified `INTEGRATE / ADAPT / SKIP / HOLD`; never blindly Sync fork or merge upstream/main.
 
 ## Known test debt and incidental findings
+
+- **Workflow repository guard finding:** existing `github.repository == 'electh/ReactFlux'` guards remain an open, non-blocking finding. Track a separate maintenance decision; do not change them as part of upstream reconciliation.
 
 - `HARNESS-UNDO-ID-01` was resolved by PR #36; the nine stale fixed-ID assertions were repaired and the focused list gate passed 29/29.
 - `HARNESS-CODEBLOCK-SSR-01` is not open on the current runtime baseline; PR #38 reports `CODEBLOCK_SSR_GATE=PASS` in the full Node suite on both main and candidate.
@@ -233,20 +256,19 @@ The specialized upstream monitor must live-check the current upstream head befor
 
 ## Next recommended action
 
-**FEED-HEALTH-01B read-only discovery and bounded design.** Confirm whether the existing Sidebar, feed-refresh flow and Miniflux metadata can support detailed error text, last checked time and Retry without new persistence or API calls. Classify the `useFeedOperations` failure-reconciliation behavior as part of discovery. Present a short in-chat contract and stop before implementation; explicit design approval is required.
+**FILTER-RULES-01 read-only discovery and bounded design.** Confirm Miniflux support for `blocklist_rules` and `keeplist_rules`, available feed/category API scopes, UX entry point, validation and failure semantics. Keep Miniflux as source of truth; do not create a NewsFlux rule database. Stop before implementation; this reconciliation does not authorize implementation.
 
 ## Deployment governance
 
 - Deploy only an exact approved product/runtime SHA.
 - Never deploy `latest` or a moving branch implicitly.
-- Live production container: `newsflux` (status `Up 7 hours` at the 2026-10-17 check).
-- Live production image tag: `newsflux-local:118ecb2c63f7`; its prefix resolves to full source SHA `118ecb2c63f7df3583d0f2524b5cc8c62bd518c1`.
-- The live OMV RPC did not return the immutable image ID. The previously documented image ID and rollback tag were not treated as current because they were not returned by this inspection.
-- `MAIN_PRODUCTION_PARITY=NO`; current main is `a8dbe15497f7d526298f223188955b82589a84a4`.
+- Live production container: `newsflux`, ID `5c1882d2792a48a894c0806231bbb371f97b60d49b6922f5b9218a1c905bf8ef`, status `running`, restart count `0` at the 2026-10-17 read-only SSH inspection.
+- Live production image tag: `newsflux-local:118ecb2c63f7`; its prefix resolves to full source SHA `118ecb2c63f7df3583d0f2524b5cc8c62bd518c1`. Image ID observed: `sha256:a8c7e764d0cf5ef333da113fc9e46a15dde043297a9b65122498aebba4d65499`.
+- `MAIN_PRODUCTION_PARITY=NO`; current main is `046cd647c65583cdfdc7ab282701be79d4b34294`.
 - The READER-MEASURE-01 promotion backup is `/dockerdata/compose/newsflux/compose.yaml.pre-reader-measure-01-20261016T201834Z.bak` (SHA-256 `94ffebe7ff81f95e02fe3bf93cf56844e8a95eacac45d43b10e5b4942a603351`).
 - PR #30 and PR #32 exact merge-SHA deployments passed; their deployment history remains recorded above.
 - PR #34 / A11Y-01 exact merge-SHA deployment and authenticated post-merge browser smoke passed. The exact merge image passed internal HTTP and provenance checks, remained stable after restart and had restart count `0`.
-- PR #44 / READER-MEASURE-01 is the last confirmed production promotion. The live OMV image tag still resolves to its exact merge SHA. PRs #46–#50 were merged without production promotion; production remains at the #44 baseline. PR #49's real-element geometry gate passed; `REAL_DEVICE_GATE=NOT_REQUIRED` for that geometry-only change.
+- PR #44 / READER-MEASURE-01 is the last confirmed production promotion. PRs #46–#50, #52 and #53 were merged without production promotion; production remains at the #44 baseline. `PRODUCTION_CHANGED_BY_PR52=NO` and `PRODUCTION_CHANGED_BY_PR53=NO`. PR #49's real-element geometry gate passed; `REAL_DEVICE_GATE=NOT_REQUIRED` for that geometry-only change.
 - Docs-only commits do not require production deployment merely to force SHA equality; classify their runtime delta as none.
 - Do not delete rollback images/backups incidentally.
 
