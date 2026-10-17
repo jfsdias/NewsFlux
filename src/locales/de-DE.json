@@ -159,6 +159,7 @@
     "open_in_reactflux_tooltip": "In ReactFlux öffnen",
     "invalid_source_link_fallback": "Der Quelllink ist ungültig. Der Artikel wird stattdessen in ReactFlux geöffnet.",
     "unread_article_aria_label": "%{title}, ungelesen",
+    "untitled_article": "Artikel ohne Titel",
     "star_tooltip": "Lesezeichen hinzufügen",
     "unstar_tooltip": "Lesezeichen entfernen",
     "fetch_original_tooltip": "Originalinhalt herunterladen",

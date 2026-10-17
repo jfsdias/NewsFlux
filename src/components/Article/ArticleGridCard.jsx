@@ -133,7 +133,7 @@ const getCoverCandidates = (entry) =>
       ? [{ height: entry.coverHeight, src: entry.coverSource, width: entry.coverWidth }]
       : []
 
-const ArticleGridCard = ({ entry, feedIconMonogramFallback }) => {
+const ArticleGridCard = ({ displayTitle, entry, feedIconMonogramFallback }) => {
   const { showCardSummary, showDetailedRelativeTime, showEstimatedReadingTime, showFeedIcon } =
     useStore(articleGridCardSettingsState)
   const [coverState, setCoverState] = useState(() => ({
@@ -274,7 +274,7 @@ const ArticleGridCard = ({ entry, feedIconMonogramFallback }) => {
           </time>
         </div>
 
-        <h3 className="article-entry-title grid-card-title">{entry.title}</h3>
+        <h3 className="article-entry-title grid-card-title">{displayTitle}</h3>
 
         {showCardSummary && hasCardDeckCandidates && (
           <p

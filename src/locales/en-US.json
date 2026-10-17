@@ -159,6 +159,7 @@
     "open_in_reactflux_tooltip": "Open in ReactFlux",
     "invalid_source_link_fallback": "The source link is invalid. Opening the article in ReactFlux instead.",
     "unread_article_aria_label": "%{title}, unread",
+    "untitled_article": "Untitled article",
     "star_tooltip": "Star",
     "unstar_tooltip": "Unstar",
     "fetch_original_tooltip": "Fetch original content",

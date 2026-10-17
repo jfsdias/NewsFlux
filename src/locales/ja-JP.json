@@ -159,6 +159,7 @@
     "open_in_reactflux_tooltip": "ReactFlux で開く",
     "invalid_source_link_fallback": "この記事の配信元リンクは無効です。代わりに ReactFlux で開きます。",
     "unread_article_aria_label": "%{title}、未読",
+    "untitled_article": "タイトルのない記事",
     "star_tooltip": "スターを付ける",
     "unstar_tooltip": "スターを解除",
     "fetch_original_tooltip": "元の本文を取得",
