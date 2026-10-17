@@ -620,9 +620,7 @@ const ArticleDetail = forwardRef((_, ref) => {
                 )}
               </Typography.Title>
               <div className="article-meta">
-                {activeContent.author && (
-                  <Typography.Text> - {activeContent.author}</Typography.Text>
-                )}
+                {activeContent.author && <Typography.Text>{activeContent.author}</Typography.Text>}
                 <Typography.Text>
                   <Tag
                     size="small"
