@@ -279,6 +279,25 @@ Explicit HOLDs from the reviewed range:
 
 These HOLDs are not immediate planned upgrades or implementation authorization.
 
+#### Dependency updates from the reviewed range
+
+These dependency updates are classified separately from the selectively integrated and adapted changes above. Classification does not authorize an upgrade PR.
+
+| Classification                | Commit                                     | Package transition                          | Disposition                                                                                          |
+| ----------------------------- | ------------------------------------------ | ------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| **MAINTENANCE_CANDIDATE**     | `09c24d35c788ab636b2871879bfa1a8ffb14780d` | `@types/node` 26.6.4 to 26.6.5              | No urgency; consider with a future low-risk grouped dependency-maintenance window.                   |
+| **MAINTENANCE_CANDIDATE**     | `c3a023c1`                                 | `lefthook` 2.2.0 to 2.2.2                   | No urgency; consider with a future low-risk grouped dependency-maintenance window.                   |
+| **MAINTENANCE_CANDIDATE**     | `6fa26be8`                                 | `prettier` 3.9.9 to 3.9.10                  | No urgency; consider with a future low-risk grouped dependency-maintenance window.                   |
+| **MAINTENANCE_CANDIDATE**     | `f1d6e4362aeaf7c5126cdb9dc0b041dd0dc8cb7d` | `postcss` 8.5.29 to 8.5.30                  | No urgency; consider with a future low-risk grouped dependency-maintenance window.                   |
+| **HOLD_TOOLCHAIN**            | `a0b232f4`                                 | `@vitejs/plugin-react` 6.1.1 to 6.1.2       | Same toolchain/build surface as Vite; use a dedicated gate and do not separate the plugin from Vite. |
+| **HOLD_TOOLCHAIN**            | `4a2d4ce540cc0e3dd88bfd8d386e4c6645c47abe` | `vite` 8.3.1 to 8.3.4                       | Same toolchain/build surface as plugin-react; use a dedicated gate and do not split the pair.        |
+| **HOLD_PRESENTATION**         | `19bb464c`                                 | `@arco-design/web-react` 2.66.16 to 2.66.18 | Drawer, Modal and Popover are affected; require visual and interaction regression coverage.          |
+| **HOLD_PRESENTATION**         | `ed0be6db9a8126d8bfdfc5afe41d2e058b7e5036` | `framer-motion` 14.0.0 to 14.2.0            | Runtime presentation/motion dependency; require visual and interaction regression coverage.          |
+| **HOLD_UNTIL_RELEVANT_TRACK** | `fc09d0d5`                                 | `plyr` 3.8.4 to 3.8.5                       | Reassess with READER-MEDIA-01; do not treat as a next PR.                                            |
+| **HOLD_UNTIL_RELEVANT_TRACK** | `30e034a3`                                 | `react-syntax-highlighter` 16.1.1 to 16.1.2 | Reassess with article/code-block maintenance; do not treat as a next PR.                             |
+
+The four maintenance candidates have no urgency and may be evaluated together later. The toolchain pair and presentation dependencies remain held; no upgrade is authorized here.
+
 ### 3.9 Personalization and explicit rules
 
 | Item                                           | Status                      | Notes                                                                                                  |
@@ -309,13 +328,13 @@ These HOLDs are not immediate planned upgrades or implementation authorization.
 
 The following opportunities do not require new persistent NewsFlux state:
 
-| Item                           | Source of truth                                    | Current capability / gap                                                                                                                                        | Roadmap handling                                                                                                |
-| ------------------------------ | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| BULK-03 range/age mark-as-read | Miniflux read state                                | Existing batch-ID mutation + Undo primitives; range semantics are new                                                                                           | **IN PROGRESS**; BULK-03A above/below completed in #43; remaining range/age work stays before/alongside BULK-02 |
-| FEED-HEALTH-01                 | Miniflux feed metadata                             | 01A compact error indicator and 01B provider-backed details/checked time/Retry are complete in #40/#52; bulk refresh performs one final metadata reconciliation | **COMPLETED**                                                                                                   |
-| FILTER-RULES-01                | Miniflux feed `blocklist_rules` / `keeplist_rules` | Provider supports the fields; NewsFlux does not expose the editing contract                                                                                     | **PLANNED** after FILTER-01                                                                                     |
-| HOME-VISUAL-02                 | Miniflux categories + existing Home data           | Deterministic editorial grouping; no new ranking state                                                                                                          | **HOLD — PRODUCT** pending editorial decision                                                                   |
-| SAVE-EXT-01                    | Miniflux third-party integrations                  | Existing one-way provider action; NewsFlux cannot enumerate destination items back                                                                              | **PLANNED** as external handoff, not internal Read Later                                                        |
+| Item                           | Source of truth                                    | Current capability / gap                                                                                                                                        | Roadmap handling                                              |
+| ------------------------------ | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| BULK-03 range/age mark-as-read | Miniflux read state                                | Above/below and 1/7/30-day range/age actions; strict `published_at` cutoff, scoped discovery/writes, and acknowledged-only Undo                                 | **COMPLETED** in PRs #43 and #50                              |
+| FEED-HEALTH-01                 | Miniflux feed metadata                             | 01A compact error indicator and 01B provider-backed details/checked time/Retry are complete in #40/#52; bulk refresh performs one final metadata reconciliation | **COMPLETED**                                                 |
+| FILTER-RULES-01                | Miniflux feed `blocklist_rules` / `keeplist_rules` | Discovery covers provider fields/API scope, UX entry point, validation/failure semantics, and Miniflux as source of truth; no NewsFlux rule database            | **NEXT — DISCOVERY/DESIGN**; implementation is not authorized |
+| HOME-VISUAL-02                 | Miniflux categories + existing Home data           | Deterministic editorial grouping; no new ranking state                                                                                                          | **HOLD — PRODUCT** pending editorial decision                 |
+| SAVE-EXT-01                    | Miniflux third-party integrations                  | Existing one-way provider action; NewsFlux cannot enumerate destination items back                                                                              | **PLANNED** as external handoff, not internal Read Later      |
 
 ---
 
