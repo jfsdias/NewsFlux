@@ -208,7 +208,8 @@
     "media_error": "无法在此播放该媒体，请使用下方的附件链接。"
   },
   "content": {
-    "mark_as_read_error": "标记为已读失败，请稍后再试"
+    "mark_as_read_error": "标记为已读失败，请稍后再试",
+    "entry_unavailable": "这篇文章已无法访问。"
   },
   "deduplicate": {
     "mark_as_read_error": "标记重复文章为已读失败"

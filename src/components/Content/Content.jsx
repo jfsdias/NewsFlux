@@ -72,8 +72,13 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
 
   const pageTitle = useDocumentTitle()
 
-  const { entryDetailRef, entryListRef, handleEntryClick, restoreEntryListFocus } =
-    useContentContext()
+  const {
+    entryDetailRef,
+    entryListRef,
+    handleEntryClick,
+    handleEntryUnavailable,
+    restoreEntryListFocus,
+  } = useContentContext()
 
   const { navigateToNextArticle, navigateToPreviousArticle } = useKeyHandlers()
 
@@ -104,34 +109,38 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
     [fetchArticleList, refreshFeedData],
   )
 
-  const fetchSingleEntry = useCallback(async (entryId) => {
-    const requestId = ++entryRequestIdRef.current
-    const isCurrentRequest = () => entryRequestIdRef.current === requestId
-    const numericEntryId = Number(entryId)
-    const existingEntry = contentState.get().entries.find((entry) => entry.id === numericEntryId)
+  const fetchSingleEntry = useCallback(
+    async (entryId) => {
+      const requestId = ++entryRequestIdRef.current
+      const isCurrentRequest = () => entryRequestIdRef.current === requestId
+      const numericEntryId = Number(entryId)
+      const existingEntry = contentState.get().entries.find((entry) => entry.id === numericEntryId)
 
-    if (existingEntry) {
-      setIsArticleLoading(false)
-      setActiveContent(existingEntry)
-      return
-    }
-
-    try {
-      setIsArticleLoading(true)
-      const entry = await getEntry(entryId)
-      if (isCurrentRequest()) {
-        setActiveContent(prepareEntry(entry))
-      }
-    } catch (error) {
-      if (isCurrentRequest()) {
-        console.error("Failed to fetch entry:", error)
-      }
-    } finally {
-      if (isCurrentRequest()) {
+      if (existingEntry) {
         setIsArticleLoading(false)
+        setActiveContent(existingEntry)
+        return
       }
-    }
-  }, [])
+
+      try {
+        setIsArticleLoading(true)
+        const entry = await getEntry(entryId)
+        if (isCurrentRequest()) {
+          setActiveContent(prepareEntry(entry))
+        }
+      } catch (error) {
+        if (isCurrentRequest()) {
+          console.error("Failed to fetch entry:", error)
+          handleEntryUnavailable(error, isCurrentRequest)
+        }
+      } finally {
+        if (isCurrentRequest()) {
+          setIsArticleLoading(false)
+        }
+      }
+    },
+    [handleEntryUnavailable],
+  )
 
   useContentHotkeys({ handleRefreshArticleList: fetchArticleListWithRelatedData })
 
