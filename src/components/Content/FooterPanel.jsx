@@ -1,12 +1,4 @@
-import {
-  Button,
-  Dropdown,
-  Menu,
-  Modal,
-  Notification,
-  Popconfirm,
-  Radio,
-} from "@arco-design/web-react"
+import { Button, Dropdown, Menu, Notification, Popconfirm, Radio } from "@arco-design/web-react"
 import {
   IconAlignLeft,
   IconCheck,
@@ -20,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router"
 
 import { markEntriesAsReadInBatches, updateEntriesStatusInBatches } from "@/apis"
+import AccessibleModal from "@/components/ui/AccessibleModal"
 import CustomTooltip from "@/components/ui/CustomTooltip"
 import { polyglotState } from "@/hooks/useLanguage"
 import useRefreshCounts from "@/hooks/useRefreshCounts"
@@ -532,6 +525,8 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
     })
 
   const markOlderReadLabel = polyglot.t("article_list.mark_older_as_read_tooltip")
+  const agePresetTitle =
+    agePresetDays === null ? markOlderReadLabel : getAgePresetLabel(agePresetDays)
   const agePresetMenu = (
     <Menu
       onClickMenuItem={(key) => {
@@ -609,7 +604,7 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
               aria-expanded={ageMenuVisible}
               aria-haspopup="menu"
               aria-label={markOlderReadLabel}
-              className="nf-glass-control"
+              className="nf-glass-control mark-older-read-trigger"
               disabled={!isArticleListReady || markingAllRead || markingOlderRead}
               icon={<IconClockCircle aria-hidden="true" />}
               loading={markingOlderRead}
@@ -638,10 +633,13 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
           onClick={refreshArticleList}
         />
       </CustomTooltip>
-      <Modal
+      <AccessibleModal
         className="mark-older-read-modal"
+        closeLabel={polyglot.t("actions.close_dialog", { name: agePresetTitle })}
         confirmLoading={markingOlderRead}
-        title={agePresetDays === null ? markOlderReadLabel : getAgePresetLabel(agePresetDays)}
+        dialogLabel={agePresetTitle}
+        fallbackFocusSelector=".mark-older-read-trigger"
+        title={agePresetTitle}
         visible={agePresetDays !== null}
         onCancel={() => setAgePresetDays(null)}
         onOk={handleConfirmOlderRead}
@@ -653,7 +651,7 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
                 age: polyglot.t("date.days", agePresetDays),
               })}
         </p>
-      </Modal>
+      </AccessibleModal>
     </div>
   )
 }
