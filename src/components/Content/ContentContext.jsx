@@ -70,7 +70,7 @@ export const ContextProvider = ({ children }) => {
   )
 
   const handleEntryClick = useCallback(
-    (entry) => {
+    (entry, { basePath: requestedBasePath } = {}) => {
       const shouldAutoMarkAsRead = markReadBy === "view"
       const updatedEntry = shouldAutoMarkAsRead ? { ...entry, status: "read" } : { ...entry }
 
@@ -82,7 +82,7 @@ export const ContextProvider = ({ children }) => {
       setActiveContent(updatedEntry)
 
       const currentPath = location.pathname
-      const basePath = extractBasePath(currentPath)
+      const basePath = requestedBasePath ?? extractBasePath(currentPath)
       const entryDetailPath = buildEntryDetailPath(basePath, entry.id)
 
       navigate(entryDetailPath)

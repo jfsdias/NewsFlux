@@ -28,7 +28,7 @@ const SCROLL_HOTKEY_OPTIONS = {
   ignoreEventWhen: ({ target }) => Boolean(target?.closest?.(SCROLL_HOTKEY_IGNORE_SELECTOR)),
 }
 
-const useContentHotkeys = ({ handleRefreshArticleList }) => {
+const useContentHotkeys = ({ handleRefreshArticleList, readerNavigation }) => {
   const duplicateHotkeys = useStore(duplicateHotkeysState)
   const hotkeys = useStore(hotkeysState)
 
@@ -60,7 +60,7 @@ const useContentHotkeys = ({ handleRefreshArticleList }) => {
     showHotkeysSettings,
     toggleReadStatus,
     toggleStarStatus,
-  } = useKeyHandlers()
+  } = useKeyHandlers({ readerNavigation })
 
   const {
     handleFetchContent,

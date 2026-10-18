@@ -110,7 +110,7 @@ const scrollArticle = (direction, entryDetailRef, isRepeating) => {
   return true
 }
 
-const useKeyHandlers = () => {
+const useKeyHandlers = ({ readerNavigation } = {}) => {
   const { polyglot } = useStore(polyglotState)
   const { isBelowMedium } = useScreenWidth()
   const navigate = useNavigate()
@@ -148,7 +148,7 @@ const useKeyHandlers = () => {
   const exitDetailView = withActiveContent(withPhotoSliderCheck(closeActiveContent))
 
   // eslint-disable-next-line react-hooks/refs
-  const navigateToPreviousArticle = withPhotoSliderCheck(() => {
+  const legacyNavigateToPreviousArticle = withPhotoSliderCheck(() => {
     const previousContent = prevContentState.get()
     if (previousContent) {
       handleEntryClick(previousContent)
@@ -159,7 +159,7 @@ const useKeyHandlers = () => {
   })
 
   // eslint-disable-next-line react-hooks/refs
-  const navigateToNextArticle = withPhotoSliderCheck(() => {
+  const legacyNavigateToNextArticle = withPhotoSliderCheck(() => {
     const nextContent = nextContentState.get()
     if (nextContent) {
       handleEntryClick(nextContent)
@@ -170,7 +170,7 @@ const useKeyHandlers = () => {
   })
 
   // eslint-disable-next-line react-hooks/refs
-  const navigateToAdjacentUnreadArticle = withPhotoSliderCheck((direction) => {
+  const legacyNavigateToAdjacentUnreadArticle = withPhotoSliderCheck((direction) => {
     const adjacentUnreadEntry = findAdjacentUnreadEntry(
       activeEntryIndexState.get(),
       direction,
@@ -185,6 +185,20 @@ const useKeyHandlers = () => {
       Message.info(polyglot.t("actions.no_next_unread_article"))
     }
   })
+
+  const navigateToPreviousArticle = readerNavigation
+    ? withPhotoSliderCheck(readerNavigation.navigateToPreviousArticle)
+    : legacyNavigateToPreviousArticle
+  const navigateToNextArticle = readerNavigation
+    ? withPhotoSliderCheck(readerNavigation.navigateToNextArticle)
+    : legacyNavigateToNextArticle
+  const navigateToAdjacentUnreadArticle = readerNavigation
+    ? withPhotoSliderCheck((direction) =>
+        direction === "prev"
+          ? readerNavigation.navigateToPreviousUnreadArticle()
+          : readerNavigation.navigateToNextUnreadArticle(),
+      )
+    : legacyNavigateToAdjacentUnreadArticle
 
   const navigateToPreviousUnreadArticle = () => navigateToAdjacentUnreadArticle("prev")
   const navigateToNextUnreadArticle = () => navigateToAdjacentUnreadArticle("next")
