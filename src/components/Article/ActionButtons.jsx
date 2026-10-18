@@ -101,7 +101,7 @@ const MobileButtons = memo(({ commonButtons, hasHeadings, moveContextActionToMen
 ))
 MobileButtons.displayName = "MobileButtons"
 
-const ActionButtons = () => {
+const ActionButtons = ({ readerNavigation }) => {
   const { detailCloseButtonRef } = useDesktopSidebar()
   const { activeContent, isOriginalContentFetched } = useStore(contentState, {
     keys: ["activeContent", "isOriginalContentFetched"],
@@ -150,7 +150,9 @@ const ActionButtons = () => {
     handleOpenLinkExternally,
   } = useEntryActions()
 
-  const { exitDetailView, navigateToNextArticle, navigateToPreviousArticle } = useKeyHandlers()
+  const { exitDetailView, navigateToNextArticle, navigateToPreviousArticle } = useKeyHandlers({
+    readerNavigation,
+  })
 
   const { isBelowCompact, isBelowMedium } = useScreenWidth()
 
@@ -256,12 +258,12 @@ const ActionButtons = () => {
   }
 
   const previousNavigation = {
-    content: prevContent,
+    content: readerNavigation ? readerNavigation.canNavigatePrevious : prevContent,
     label: actionLabels.previous,
     navigate: navigateToPreviousArticle,
   }
   const nextNavigation = {
-    content: nextContent,
+    content: readerNavigation ? readerNavigation.canNavigateNext : nextContent,
     label: actionLabels.next,
     navigate: navigateToNextArticle,
   }
@@ -274,8 +276,9 @@ const ActionButtons = () => {
         <CustomTooltip mini content={leftNavigation.label}>
           <Button
             aria-label={leftNavigation.label}
-            disabled={!leftNavigation.content}
+            disabled={!leftNavigation.content || readerNavigation?.isResolving}
             icon={<IconArrowLeft aria-hidden="true" />}
+            loading={readerNavigation?.isResolving}
             shape="circle"
             onClick={leftNavigation.navigate}
           />
@@ -286,8 +289,9 @@ const ActionButtons = () => {
         <CustomTooltip mini content={rightNavigation.label}>
           <Button
             aria-label={rightNavigation.label}
-            disabled={!rightNavigation.content}
+            disabled={!rightNavigation.content || readerNavigation?.isResolving}
             icon={<IconArrowRight aria-hidden="true" />}
+            loading={readerNavigation?.isResolving}
             shape="circle"
             onClick={rightNavigation.navigate}
           />

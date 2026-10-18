@@ -1,5 +1,30 @@
 const normalizeSourceQuery = (query) => query.trim().toLocaleLowerCase()
 
+export const getNextUnreadSources = (source, categories, feeds) => {
+  const isCategory = source?.type === "category" || source?.from === "category"
+  const items = isCategory
+    ? categories
+    : categories.flatMap((category) => feeds.filter((feed) => feed.category.id === category.id))
+  const currentIndex = items.findIndex((item) => String(item.id) === String(source.id))
+  if (currentIndex === -1 || items.length < 2) {
+    return []
+  }
+  const ordered = []
+  for (let offset = 1; offset < items.length; offset += 1) {
+    const item = items[(currentIndex + offset) % items.length]
+    if (item.unreadCount > 0) {
+      ordered.push({
+        type: isCategory ? "category" : "feed",
+        id: item.id,
+      })
+    }
+  }
+  return ordered
+}
+
+export const getNextUnreadSource = (source, categories, feeds = []) =>
+  getNextUnreadSources(source, categories, feeds)[0] ?? null
+
 export const getVisibleFeedSearchMatches = (feeds, query = "") => {
   const normalizedQuery = normalizeSourceQuery(query)
   if (!normalizedQuery) {

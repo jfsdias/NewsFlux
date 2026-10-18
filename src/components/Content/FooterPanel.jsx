@@ -44,8 +44,8 @@ import {
   markAllReadUndoActions,
   performCoordinatedMarkAllReadUndo,
 } from "@/utils/mark-all-read-undo"
-import findAdjacentItem from "@/utils/navigation"
 import reconcileEntriesAfterMarkRead from "@/utils/reconcile-entries-after-mark-read"
+import { getNextUnreadSource } from "@/utils/source-navigation"
 import "./FooterPanel.css"
 
 const updateEntriesAsRead = (entryIds) => {
@@ -248,29 +248,10 @@ const FooterPanel = ({
   }
 
   const jumpToNext = () => {
-    if (source === "category") {
-      const currentIndex = categories.findIndex((category) => category.id === Number(sourceId))
-      const next = findAdjacentItem(categories, currentIndex, "next", {
-        predicate: (category) => category.unreadCount > 0,
-        wrap: true,
-      })
-      if (next) {
-        navigate(`/category/${next.id}`)
-        return true
-      }
-    } else if (source === "feed") {
-      const orderedFeeds = categories.flatMap((category) =>
-        feeds.filter((feed) => feed.category.id === category.id),
-      )
-      const currentIndex = orderedFeeds.findIndex((feed) => feed.id === Number(sourceId))
-      const next = findAdjacentItem(orderedFeeds, currentIndex, "next", {
-        predicate: (feed) => feed.unreadCount > 0,
-        wrap: true,
-      })
-      if (next) {
-        navigate(`/feed/${next.id}`)
-        return true
-      }
+    const next = getNextUnreadSource({ type: source, id: sourceId }, categories, feeds)
+    if (next) {
+      navigate(`/${next.type}/${next.id}`)
+      return true
     }
     return false
   }

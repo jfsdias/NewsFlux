@@ -1,0 +1,27 @@
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+.nav01-harness {
+  box-sizing: border-box;
+  display: grid;
+  gap: 16px;
+  margin: 0 auto;
+  max-width: 760px;
+  padding: 24px;
+}
+
+.nav01-harness output {
+  font-variant-numeric: tabular-nums;
+}
+
+.nav01-harness li {
+  overflow-wrap: anywhere;
+}
+
+.nav01-harness li[data-status="FAIL"] {
+  color: #b42318;
+}

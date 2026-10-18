@@ -20,6 +20,7 @@ import useContentHotkeys from "@/hooks/useContentHotkeys"
 import useDocumentTitle from "@/hooks/useDocumentTitle"
 import useKeyHandlers from "@/hooks/useKeyHandlers"
 import useMarkSelectedRead from "@/hooks/useMarkSelectedRead"
+import useReaderNavigation from "@/hooks/useReaderNavigation"
 import useScreenWidth from "@/hooks/useScreenWidth"
 import {
   contentState,
@@ -99,8 +100,27 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
     handleEntryUnavailable,
     restoreEntryListFocus,
   } = useContentContext()
-
-  const { navigateToNextArticle, navigateToPreviousArticle } = useKeyHandlers()
+  const [homeProjection, setHomeProjection] = useState(null)
+  const handleHomeProjectionChange = useCallback((projection) => {
+    setHomeProjection((previous) => {
+      if (
+        previous?.requestKey === projection?.requestKey &&
+        previous?.sessionRevision === projection?.sessionRevision &&
+        previous?.highlightIds?.join(",") === projection?.highlightIds?.join(",") &&
+        previous?.recentIds?.join(",") === projection?.recentIds?.join(",")
+      ) {
+        return previous
+      }
+      return projection
+    })
+  }, [])
+  const readerNavigation = useReaderNavigation({
+    source,
+    sourceId,
+    getEntries,
+    homeProjection,
+  })
+  const { navigateToNextArticle, navigateToPreviousArticle } = useKeyHandlers({ readerNavigation })
 
   const { refreshFeedData } = useAppData()
   const { isBelowMedium } = useScreenWidth()
@@ -176,7 +196,10 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
     [handleEntryUnavailable],
   )
 
-  useContentHotkeys({ handleRefreshArticleList: fetchArticleListWithRelatedData })
+  useContentHotkeys({
+    handleRefreshArticleList: fetchArticleListWithRelatedData,
+    readerNavigation,
+  })
 
   const handleSwiping = (eventData) => {
     if (swipeDirectionRef.current === eventData.dir) {
@@ -289,6 +312,7 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
             handleEntryClick={handleEntryClick}
             refreshArticleList={fetchArticleListWithRelatedData}
             retryArticleList={fetchArticleList}
+            onReaderProjectionChange={handleHomeProjectionChange}
           />
         ) : (
           <>
@@ -348,7 +372,7 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
                 )}
               </AnimatePresence>
               <Suspense fallback={<div aria-busy="true" style={{ flex: 1 }} />}>
-                <ArticleDetail ref={entryDetailRef} />
+                <ArticleDetail ref={entryDetailRef} readerNavigation={readerNavigation} />
               </Suspense>
             </>
           )}

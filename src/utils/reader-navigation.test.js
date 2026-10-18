@@ -1,0 +1,1064 @@
+import assert from "node:assert/strict"
+import { test } from "node:test"
+
+/* eslint-disable import/extensions -- Node's native ESM runner requires explicit extensions. */
+import removeDuplicateEntries from "./deduplicate.js"
+import {
+  buildReaderPageRequest,
+  createReaderNavigationOperationGate,
+  getReaderSourceHopQuery,
+  hasReaderPaginationContinuation,
+  resolveReaderNavigation,
+} from "./reader-navigation.js"
+import * as readerNavigation from "./reader-navigation.js"
+import { getNextUnreadSource } from "./source-navigation.js"
+/* eslint-enable import/extensions */
+
+const entry = (id, status = "unread", minute = id) => ({
+  id,
+  status,
+  published_at: new Date(Date.UTC(2026, 9, 18, 12, minute)).toISOString(),
+})
+
+const datedReaderEntry = (id, minute, values = {}) => ({
+  ...entry(id),
+  published_at: new Date(Date.UTC(2026, 9, 18, 12, minute)).toISOString(),
+  hash: `hash-${id}`,
+  title: `Title ${id}`,
+  url: `/entry/${id}`,
+  ...values,
+})
+
+const sequenceIds = (entries) => entries.map(({ id }) => id)
+
+const createResolver = (overrides = {}) => {
+  const state = {
+    entries: overrides.entries ?? [entry(1), entry(2)],
+    sequenceIds: overrides.sequenceIds ?? sequenceIds(overrides.entries ?? [entry(1), entry(2)]),
+  }
+  const pages = [...(overrides.pages ?? [])]
+  const appendedPages = []
+  const fetchCalls = []
+  const sourceCalls = []
+  const fetchPage =
+    overrides.fetchPage ??
+    (async (request) => {
+      fetchCalls.push(request)
+      return pages.shift() ?? { entries: [], total: state.entries.length }
+    })
+  const appendPage =
+    overrides.appendPage ??
+    (async ({ entries: pageEntries, direction, sequenceIds: currentIds }) => {
+      appendedPages.push(pageEntries)
+      const seen = new Set(state.entries.map(({ id }) => id))
+      const unique = pageEntries.filter(({ id }) => !seen.has(id))
+      state.entries =
+        direction === "previous" ? [...unique, ...state.entries] : [...state.entries, ...unique]
+      state.sequenceIds =
+        direction === "previous"
+          ? [...unique.map(({ id }) => id), ...currentIds]
+          : [...currentIds, ...unique.map(({ id }) => id)]
+      return { entries: state.entries, sequenceIds: state.sequenceIds }
+    })
+  const input = {
+    activeEntryId: overrides.activeEntryId ?? state.entries.at(-1)?.id,
+    direction: overrides.direction ?? "next",
+    mode: overrides.mode ?? "article",
+    source: overrides.source ?? { from: "all", id: null },
+    showStatus: overrides.showStatus ?? "all",
+    prepareTargetEntry: overrides.prepareTargetEntry,
+    getEntries: () => state.entries,
+    getSequenceIds: () => state.sequenceIds,
+    canContinue: overrides.canContinue ?? (() => pages.length > 0),
+    fetchPage,
+    appendPage,
+    isCurrent: overrides.isCurrent ?? (() => true),
+    getNextSources: overrides.getNextSources ?? (() => []),
+    fetchSourceEntries:
+      overrides.fetchSourceEntries ??
+      (async (source) => {
+        sourceCalls.push(source)
+        return { entries: [] }
+      }),
+  }
+  return { input, state, pages, appendedPages, fetchCalls, sourceCalls }
+}
+
+const makeDedupOnlyPageResolver = (removeDuplicates, { finalPage = false } = {}) => {
+  const currentEntries = [datedReaderEntry(1, 10), datedReaderEntry(2, 9), datedReaderEntry(3, 8)]
+  const duplicateValues = {
+    hash: currentEntries[0].hash,
+    title: currentEntries[0].title,
+    url: currentEntries[0].url,
+  }
+  const pageTwoEntries = [
+    datedReaderEntry(4, 7, duplicateValues),
+    datedReaderEntry(5, 6, duplicateValues),
+  ]
+  const pageThreeEntry = datedReaderEntry(6, 5)
+  const total = finalPage ? 5 : 6
+  const initialCursor = buildReaderPageRequest({
+    source: { from: "feed", id: 10 },
+    content: {},
+    settings: { ...requestSettings, orderDirection: "desc", pageSize: 2 },
+    entries: currentEntries,
+    direction: "next",
+  }).filterParams.published_before
+  const advancedCursor = buildReaderPageRequest({
+    source: { from: "feed", id: 10 },
+    content: {},
+    settings: { ...requestSettings, orderDirection: "desc", pageSize: 2 },
+    entries: [...currentEntries, ...pageTwoEntries],
+    direction: "next",
+  }).filterParams.published_before
+  let sharedEntries = currentEntries
+  let sharedSequenceIds = sequenceIds(currentEntries)
+  const fetchCursors = []
+  const pageTwoRetainedIds = []
+  const input = {
+    activeEntryId: 3,
+    direction: "next",
+    mode: "article",
+    source: { from: "feed", id: 10 },
+    getEntries: () => sharedEntries,
+    getSequenceIds: () => sharedSequenceIds,
+    canContinue: (_direction, context) => {
+      const knownEntries = context.paginationEntries ?? context.entries
+      return context.total === null || context.total > knownEntries.length
+    },
+    fetchPage: async ({ entries, paginationEntries }) => {
+      const request = buildReaderPageRequest({
+        source: { from: "feed", id: 10 },
+        content: {},
+        settings: { ...requestSettings, orderDirection: "desc", pageSize: 2 },
+        entries: paginationEntries ?? entries,
+        direction: "next",
+      })
+      const cursor = request.filterParams.published_before
+      fetchCursors.push(cursor)
+      if (cursor === initialCursor) {
+        return fetchCursors.filter((value) => value === initialCursor).length === 1
+          ? { entries: pageTwoEntries, total }
+          : { entries: [], total }
+      }
+      if (cursor === advancedCursor && !finalPage) {
+        return { entries: [pageThreeEntry], total }
+      }
+      throw new Error(`Unexpected canonical cursor ${cursor}`)
+    },
+    appendPage: ({ entries: pageEntries, direction, sequenceIds: currentSequenceIds }) => {
+      const appended = readerNavigation.appendReaderPageEntries({
+        currentEntries: sharedEntries,
+        pageEntries,
+        sequenceIds: currentSequenceIds,
+        direction,
+        source: "feed",
+        removeDuplicates,
+      })
+      pageTwoRetainedIds.push(
+        ...appended.entries
+          .filter(({ id }) => pageTwoEntries.some((pageEntry) => pageEntry.id === id))
+          .map(({ id }) => id),
+      )
+      sharedEntries = appended.entries
+      sharedSequenceIds = appended.sequenceIds
+      return appended
+    },
+    isCurrent: () => true,
+    getNextSources: () => [],
+    fetchSourceEntries: async () => ({ entries: [] }),
+  }
+
+  return {
+    input,
+    fetchCursors,
+    initialCursor,
+    advancedCursor,
+    pageTwoEntries,
+    pageThreeEntry,
+    pageTwoRetainedIds,
+    get entries() {
+      return sharedEntries
+    },
+    get sequenceIds() {
+      return sharedSequenceIds
+    },
+  }
+}
+
+test("NAV01_PREVIOUS_LOADED_NEIGHBOR", async () => {
+  const entries = [entry(1), entry(2), entry(3)]
+  const { input, fetchCalls } = createResolver({ entries, activeEntryId: 2, direction: "previous" })
+  const result = await resolveReaderNavigation(input)
+
+  assert.equal(result.entry.id, 1)
+  assert.equal(fetchCalls.length, 0)
+})
+
+test("NAV01_NEXT_LOADED_NEIGHBOR", async () => {
+  const entries = [entry(1), entry(2), entry(3)]
+  const { input, fetchCalls } = createResolver({ entries, activeEntryId: 2 })
+  const result = await resolveReaderNavigation(input)
+
+  assert.equal(result.entry.id, 3)
+  assert.equal(fetchCalls.length, 0)
+})
+
+test("NAV01_NEXT_FETCHES_BEYOND_LOADED_BOUNDARY", async () => {
+  const entries = [entry(1), entry(2)]
+  const { input, appendedPages, fetchCalls } = createResolver({
+    entries,
+    pages: [{ entries: [entry(3), entry(4)], total: 4 }],
+  })
+  const result = await resolveReaderNavigation(input)
+
+  assert.equal(result.entry.id, 3)
+  assert.equal(fetchCalls.length, 1)
+  assert.deepEqual(
+    appendedPages[0].map(({ id }) => id),
+    [3, 4],
+  )
+})
+
+test("NAV01_RETAINED_HOME_SESSION_ENTRIES_DO_NOT_CLOSE_CANONICAL_PAGINATION", () => {
+  const response = {
+    entries: Array.from({ length: 20 }, (_, index) => entry(index + 100)),
+    total: 60,
+  }
+
+  assert.equal(hasReaderPaginationContinuation(response, 20), true)
+  assert.equal(hasReaderPaginationContinuation({ entries: [entry(200)], total: 60 }, 20), false)
+})
+
+test("NAV01_TRUE_END_REPORTS_NO_NEXT", async () => {
+  const { input } = createResolver({
+    pages: [{ entries: [], total: 2 }],
+    canContinue: () => true,
+  })
+  const result = await resolveReaderNavigation(input)
+
+  assert.equal(result.status, "end")
+  assert.equal(result.reason, "scope-exhausted")
+})
+
+test("NAV01_ORDINARY_NEXT_NEVER_HOPS_SOURCE", async () => {
+  let sourceHopCalls = 0
+  const { input } = createResolver({
+    source: { from: "feed", id: 10 },
+    pages: [{ entries: [], total: 2 }],
+    canContinue: () => true,
+    getNextSources: () => {
+      sourceHopCalls += 1
+      return [{ type: "feed", id: 11 }]
+    },
+  })
+  const result = await resolveReaderNavigation(input)
+
+  assert.equal(result.status, "end")
+  assert.equal(sourceHopCalls, 0)
+})
+
+const requestSettings = {
+  orderBy: "published_at",
+  orderDirection: "asc",
+  pageSize: 20,
+  showHiddenFeeds: false,
+  showStatus: "unread",
+}
+
+test("NAV01_SOURCE_HOP_QUERY_PRESERVES_GLOBAL_STATUS_SEMANTICS", () => {
+  assert.deepEqual(getReaderSourceHopQuery("all"), { status: "unread", starred: false })
+  assert.deepEqual(getReaderSourceHopQuery("unread"), { status: "unread", starred: false })
+  assert.deepEqual(getReaderSourceHopQuery("starred"), { status: "unread", starred: true })
+})
+
+test("NAV01_FILTER_SCOPE_PRESERVED", () => {
+  const request = buildReaderPageRequest({
+    source: { from: "feed", id: 12 },
+    content: { filterString: "climate", filterDate: "2026-10-18" },
+    settings: requestSettings,
+    entries: [entry(1), entry(2)],
+    direction: "next",
+    mode: "article",
+  })
+
+  assert.deepEqual(request.source, { from: "feed", id: 12 })
+  assert.equal(request.filterParams.search, "climate")
+  assert.equal(request.filterParams.filterDate, "2026-10-18")
+})
+
+test("NAV01_SEARCH_SCOPE_PRESERVED", () => {
+  const request = buildReaderPageRequest({
+    source: { from: "category", id: 9 },
+    content: { filterString: "science", filterDate: null },
+    settings: requestSettings,
+    entries: [entry(1), entry(2)],
+    direction: "next",
+    mode: "article",
+  })
+
+  assert.equal(request.filterParams.search, "science")
+})
+
+test("NAV01_DATE_SCOPE_PRESERVED", () => {
+  const request = buildReaderPageRequest({
+    source: { from: "feed", id: 12 },
+    content: { filterString: "", filterDate: "2026-10-17" },
+    settings: requestSettings,
+    entries: [entry(1), entry(2)],
+    direction: "next",
+    mode: "article",
+  })
+
+  assert.equal(request.filterParams.filterDate, "2026-10-17")
+})
+
+test("NAV01_SORT_DIRECTION_PRESERVED", () => {
+  const request = buildReaderPageRequest({
+    source: { from: "feed", id: 12 },
+    content: { filterString: "", filterDate: null },
+    settings: requestSettings,
+    entries: [entry(1), entry(2)],
+    direction: "next",
+    mode: "article",
+  })
+
+  assert.equal(request.filterParams.order, "published_at")
+  assert.equal(request.filterParams.direction, "asc")
+  assert.equal(
+    request.filterParams.published_after,
+    Math.floor(Date.parse(entry(1).published_at) / 1000),
+  )
+})
+
+const timestampEntry = (id, property, value) => ({
+  ...entry(id),
+  [property]: new Date(value).toISOString(),
+})
+
+const equalBoundaryEntries = (property, direction) => {
+  const values =
+    direction === "desc"
+      ? [
+          "2026-10-18T12:05:00Z",
+          "2026-10-18T12:04:00Z",
+          "2026-10-18T12:03:00Z",
+          "2026-10-18T12:03:00Z",
+          "2026-10-18T12:02:00Z",
+        ]
+      : [
+          "2026-10-18T12:00:00Z",
+          "2026-10-18T12:01:00Z",
+          "2026-10-18T12:02:00Z",
+          "2026-10-18T12:02:00Z",
+          "2026-10-18T12:03:00Z",
+        ]
+  return values.map((value, index) => timestampEntry(index + 1, property, value))
+}
+
+for (const [property, direction, cursorName] of [
+  ["published_at", "desc", "published_before"],
+  ["published_at", "asc", "published_after"],
+  ["changed_at", "desc", "changed_before"],
+  ["changed_at", "asc", "changed_after"],
+]) {
+  const gateName = `${property === "published_at" ? "PUBLISHED" : "CHANGED"}_${direction.toUpperCase()}`
+  test(`NAV01_${gateName}_EQUAL_TIMESTAMP_BOUNDARY_NO_GAP`, () => {
+    const entries = equalBoundaryEntries(property, direction)
+    const request = buildReaderPageRequest({
+      source: { from: "feed", id: 12 },
+      content: {},
+      settings: { ...requestSettings, orderBy: property, orderDirection: direction },
+      entries,
+      direction: "next",
+      mode: "article",
+    })
+    const overlappingBoundary = Math.floor(Date.parse(entries[2][property]) / 1000)
+
+    assert.equal(request.filterParams[cursorName], overlappingBoundary)
+    assert.notEqual(
+      request.filterParams[cursorName],
+      Math.floor(Date.parse(entries.at(-1)[property]) / 1000),
+    )
+    assert.equal(entries[2][property], entries[3][property])
+  })
+}
+
+test("NAV01_DEDUP_NONE_PRESERVES_UNIQUE_IDS", () => {
+  const appendPage = readerNavigation.appendReaderPageEntries
+  assert.equal(
+    typeof appendPage,
+    "function",
+    "reader append should expose its list-membership step",
+  )
+  if (typeof appendPage !== "function") {
+    return
+  }
+
+  const result = appendPage({
+    currentEntries: [{ ...entry(1), hash: "a", title: "one", url: "/one" }],
+    pageEntries: [
+      { ...entry(2), hash: "a", title: "one duplicate", url: "/two" },
+      { ...entry(2), hash: "a", title: "one duplicate", url: "/two" },
+      { ...entry(3), hash: "c", title: "three", url: "/three" },
+    ],
+    sequenceIds: [1],
+    direction: "next",
+    source: "feed",
+    removeDuplicates: "none",
+  })
+
+  assert.deepEqual(
+    result.entries.map(({ id }) => id),
+    [1, 2, 3],
+  )
+  assert.deepEqual(result.sequenceIds, [1, 2, 3])
+})
+
+for (const mode of ["hash", "title", "url"]) {
+  test(`NAV01_DEDUP_${mode.toUpperCase()}_MATCHES_LIST_PRESENTATION`, () => {
+    const appendPage = readerNavigation.appendReaderPageEntries
+    assert.equal(
+      typeof appendPage,
+      "function",
+      "reader append should expose its list-membership step",
+    )
+    if (typeof appendPage !== "function") {
+      return
+    }
+
+    const currentEntries = [
+      { ...entry(1), hash: "shared-hash", title: "Shared title", url: "/shared" },
+    ]
+    const pageEntries = [
+      { ...entry(2), hash: "shared-hash", title: "Different title", url: "/two" },
+      { ...entry(3), hash: "three", title: "Shared title", url: "/three" },
+      { ...entry(4), hash: "four", title: "Four", url: "/shared" },
+      { ...entry(5), hash: "five", title: "Five", url: "/five" },
+    ]
+    const result = appendPage({
+      currentEntries,
+      pageEntries,
+      sequenceIds: [1],
+      direction: "next",
+      source: "feed",
+      removeDuplicates: mode,
+    })
+    const expected = removeDuplicateEntries([...currentEntries, ...pageEntries], mode).entries
+
+    assert.deepEqual(
+      result.entries.map(({ id }) => id),
+      expected.map(({ id }) => id),
+    )
+    assert.deepEqual(
+      result.sequenceIds,
+      expected.map(({ id }) => id),
+    )
+  })
+}
+
+test("NAV01_DEDUP_DOES_NOT_INTRODUCE_PROVIDER_WRITE", () => {
+  const appendPage = readerNavigation.appendReaderPageEntries
+  assert.equal(
+    typeof appendPage,
+    "function",
+    "reader append should expose a pure list-membership step",
+  )
+  if (typeof appendPage !== "function") {
+    return
+  }
+
+  const originalFetch = globalThis.fetch
+  const providerRequests = []
+  globalThis.fetch = async (...args) => {
+    providerRequests.push(args)
+    return new Response(null, { status: 204 })
+  }
+  try {
+    appendPage({
+      currentEntries: [{ ...entry(1), hash: "same", title: "same", url: "/same" }],
+      pageEntries: [{ ...entry(2), hash: "same", title: "same", url: "/same" }],
+      sequenceIds: [1],
+      direction: "next",
+      source: "feed",
+      removeDuplicates: "hash",
+    })
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+
+  assert.equal(providerRequests.length, 0)
+})
+
+test("NAV01_SEQUENCE_EXCLUDES_PRESENTATION_DUPLICATES", async () => {
+  const appendPage = readerNavigation.appendReaderPageEntries
+  assert.equal(
+    typeof appendPage,
+    "function",
+    "reader append should expose list membership and sequence",
+  )
+  if (typeof appendPage !== "function") {
+    return
+  }
+
+  let sharedEntries = [{ ...entry(1), hash: "same", title: "existing", url: "/one" }]
+  let sharedSequenceIds = [1]
+  const { input } = createResolver({
+    entries: sharedEntries,
+    activeEntryId: 1,
+    pages: [
+      {
+        entries: [
+          { ...entry(2), hash: "same", title: "duplicate", url: "/two" },
+          { ...entry(3), hash: "unique", title: "next", url: "/three" },
+        ],
+        total: 3,
+      },
+    ],
+    appendPage: ({ entries: pageEntries, sequenceIds, direction }) => {
+      const appended = appendPage({
+        currentEntries: sharedEntries,
+        pageEntries,
+        sequenceIds,
+        direction,
+        source: "feed",
+        removeDuplicates: "hash",
+      })
+      sharedEntries = appended.entries
+      sharedSequenceIds = appended.sequenceIds
+      return appended
+    },
+  })
+  const result = await resolveReaderNavigation(input)
+
+  assert.equal(result.entry.id, 3)
+  assert.deepEqual(
+    sharedEntries.map(({ id }) => id),
+    [1, 3],
+  )
+  assert.deepEqual(sharedSequenceIds, [1, 3])
+})
+
+test("NAV01_OVERLAPPING_PAGE_IDS_DO_NOT_DUPLICATE_NAVIGATION", async () => {
+  let sharedEntries = [entry(1), entry(2)]
+  let sharedSequenceIds = [1, 2]
+  const { input } = createResolver({
+    entries: sharedEntries,
+    activeEntryId: 2,
+    pages: [{ entries: [entry(2), entry(3)], total: 3 }],
+    appendPage: ({ entries: pageEntries, sequenceIds, direction }) => {
+      const appended = readerNavigation.appendReaderPageEntries({
+        currentEntries: sharedEntries,
+        pageEntries,
+        sequenceIds,
+        direction,
+        source: "feed",
+        removeDuplicates: "none",
+      })
+      sharedEntries = appended.entries
+      sharedSequenceIds = appended.sequenceIds
+      return appended
+    },
+  })
+  const result = await resolveReaderNavigation(input)
+
+  assert.equal(result.entry.id, 3)
+  assert.deepEqual(
+    sharedEntries.map(({ id }) => id),
+    [1, 2, 3],
+  )
+  assert.deepEqual(sharedSequenceIds, [1, 2, 3])
+})
+
+for (const mode of ["hash", "title", "url"]) {
+  const testName =
+    mode === "hash"
+      ? "NAV01_DEDUP_ONLY_PAGE_ADVANCES_TO_NEXT_CANONICAL_PAGE"
+      : `NAV01_DEDUP_ONLY_PAGE_ADVANCES_${mode.toUpperCase()}`
+  test(testName, async () => {
+    const scenario = makeDedupOnlyPageResolver(mode)
+    const result = await resolveReaderNavigation(scenario.input)
+
+    assert.equal(result.status, "found")
+    assert.equal(result.entry.id, scenario.pageThreeEntry.id)
+    assert.deepEqual(scenario.fetchCursors, [scenario.initialCursor, scenario.advancedCursor])
+    assert.equal(
+      scenario.fetchCursors.filter((cursor) => cursor === scenario.initialCursor).length,
+      1,
+    )
+    assert.deepEqual(scenario.pageTwoRetainedIds, [])
+  })
+}
+
+test("NAV01_DEDUP_ONLY_FINAL_PAGE_TERMINATES", async () => {
+  const scenario = makeDedupOnlyPageResolver("hash", { finalPage: true })
+  const result = await resolveReaderNavigation(scenario.input)
+
+  assert.equal(result.status, "end")
+  assert.deepEqual(scenario.fetchCursors, [scenario.initialCursor])
+  assert.deepEqual(scenario.pageTwoRetainedIds, [])
+  assert.deepEqual(
+    scenario.entries.map(({ id }) => id),
+    [1, 2, 3],
+  )
+  assert.deepEqual(scenario.sequenceIds, [1, 2, 3])
+})
+
+test("NAV01_DEDUP_ONLY_PAGE_NO_PROVIDER_WRITE", async () => {
+  const scenario = makeDedupOnlyPageResolver("hash")
+  const originalFetch = globalThis.fetch
+  const providerWrites = []
+  globalThis.fetch = async (...args) => {
+    providerWrites.push(args)
+    return new Response(null, { status: 204 })
+  }
+  try {
+    const result = await resolveReaderNavigation(scenario.input)
+    assert.equal(result.status, "found")
+    assert.equal(result.entry?.id, scenario.pageThreeEntry.id)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+
+  assert.equal(providerWrites.length, 0)
+})
+
+test("NAV01_DEDUP_ONLY_PAGE_SEQUENCE_REMAINS_PRESENTATION_ALIGNED", async () => {
+  const scenario = makeDedupOnlyPageResolver("hash")
+  const result = await resolveReaderNavigation(scenario.input)
+  const retainedIds = scenario.entries.map(({ id }) => id)
+
+  assert.equal(result.status, "found")
+  assert.equal(result.entry?.id, scenario.pageThreeEntry.id)
+  assert.deepEqual(scenario.sequenceIds, retainedIds)
+  assert.equal(
+    scenario.pageTwoRetainedIds.some((id) => scenario.sequenceIds.includes(id)),
+    false,
+  )
+})
+
+test("NAV01_PREVIOUS_TEMPORAL_CURSOR_OVERLAPS_CANONICAL_START_BOUNDARY", () => {
+  const entries = ["12:05", "12:04", "12:03", "12:02", "12:01"].map((time, index) =>
+    timestampEntry(index + 1, "published_at", `2026-10-18T${time}:00Z`),
+  )
+  const request = buildReaderPageRequest({
+    source: { from: "feed", id: 12 },
+    content: {},
+    settings: { ...requestSettings, orderDirection: "desc" },
+    entries,
+    direction: "previous",
+  })
+
+  assert.equal(
+    request.filterParams.published_after,
+    Math.floor(Date.parse(entries[1].published_at) / 1000),
+  )
+  assert.equal(request.filterParams.published_before, undefined)
+})
+
+test("NAV01_CREATED_AT_CONTINUES_TO_USE_ENTRY_ID_CURSOR", () => {
+  const entries = ["12:00", "12:01", "12:02", "12:02", "12:03"].map((time, index) =>
+    timestampEntry(index + 1, "created_at", `2026-10-18T${time}:00Z`),
+  )
+  const request = buildReaderPageRequest({
+    source: { from: "feed", id: 12 },
+    content: {},
+    settings: { ...requestSettings, orderBy: "created_at", orderDirection: "asc" },
+    entries,
+    direction: "next",
+  })
+
+  assert.equal(request.filterParams.after_entry_id, entries[3].id)
+  assert.equal(request.filterParams.published_after, undefined)
+})
+
+test("NAV01_STARRED_AND_HISTORY_KEEP_EXISTING_PRESENTATION_DEDUP_EXCLUSIONS", () => {
+  const appendPage = readerNavigation.appendReaderPageEntries
+  const currentEntries = [{ ...entry(1), hash: "same", title: "same", url: "/same" }]
+  const pageEntries = [{ ...entry(2), hash: "same", title: "same", url: "/same" }]
+
+  for (const source of ["starred", "history"]) {
+    const result = appendPage({
+      currentEntries,
+      pageEntries,
+      sequenceIds: [1],
+      direction: "next",
+      source,
+      removeDuplicates: "hash",
+    })
+    assert.deepEqual(
+      result.entries.map(({ id }) => id),
+      [1, 2],
+    )
+    assert.deepEqual(result.sequenceIds, [1, 2])
+  }
+})
+
+test("NAV01_HOME_FOLLOWS_COMMITTED_PROJECTION", async () => {
+  const entries = [entry(1), entry(2), entry(3)]
+  const { input } = createResolver({
+    entries,
+    sequenceIds: [1, 3, 2],
+    activeEntryId: 3,
+    source: { from: "home", id: null },
+  })
+  const result = await resolveReaderNavigation(input)
+
+  assert.equal(result.entry.id, 2)
+})
+
+test("NAV01_HOME_DOES_NOT_RERANK", async () => {
+  const entries = [entry(1), entry(2)]
+  const originalHighlights = [1]
+  let seenSequence = null
+  const { input } = createResolver({
+    entries,
+    sequenceIds: [1, 2],
+    activeEntryId: 2,
+    source: { from: "home", id: null },
+    pages: [{ entries: [entry(3)], total: 3 }],
+    appendPage: async ({ entries: page, sequenceIds: currentIds }) => {
+      seenSequence = [...currentIds]
+      return {
+        entries: [...entries, ...page],
+        sequenceIds: [...currentIds, ...page.map(({ id }) => id)],
+      }
+    },
+  })
+  const result = await resolveReaderNavigation(input)
+
+  assert.deepEqual(originalHighlights, [1])
+  assert.deepEqual(seenSequence, [1, 2])
+  assert.equal(result.entry.id, 3)
+})
+
+test("NAV01_NEXT_UNREAD_LOADED", async () => {
+  const entries = [entry(1), entry(2, "read"), entry(3)]
+  const { input } = createResolver({ entries, activeEntryId: 1, mode: "unread" })
+  const result = await resolveReaderNavigation(input)
+
+  assert.equal(result.entry.id, 3)
+})
+
+test("NAV01_NEXT_UNREAD_BEYOND_LOADED_PAGE", async () => {
+  const entries = [entry(1), entry(2, "read")]
+  const { input } = createResolver({
+    entries,
+    activeEntryId: 1,
+    mode: "unread",
+    pages: [{ entries: [entry(3, "read"), entry(4)], total: 4 }],
+  })
+  const result = await resolveReaderNavigation(input)
+
+  assert.equal(result.entry.id, 4)
+})
+
+test("NAV01_NEXT_UNREAD_FEED_HOPS_TO_NEXT_SOURCE", async () => {
+  const { input, sourceCalls } = createResolver({
+    source: { from: "feed", id: 10 },
+    mode: "unread",
+    pages: [{ entries: [], total: 2 }],
+    canContinue: () => true,
+    getNextSources: () => [{ type: "feed", id: 11 }],
+    fetchSourceEntries: async (source) => {
+      sourceCalls.push(source)
+      return { entries: [entry(20)] }
+    },
+  })
+  const result = await resolveReaderNavigation(input)
+
+  assert.equal(result.targetSource.id, 11)
+  assert.equal(sourceCalls.length, 1)
+})
+
+test("NAV01_NEXT_UNREAD_CATEGORY_HOPS_TO_NEXT_SOURCE", async () => {
+  const { input } = createResolver({
+    source: { from: "category", id: 7 },
+    mode: "unread",
+    pages: [{ entries: [], total: 2 }],
+    canContinue: () => true,
+    getNextSources: () => [{ type: "category", id: 8 }],
+    fetchSourceEntries: async () => ({ entries: [entry(30)] }),
+  })
+  const result = await resolveReaderNavigation(input)
+
+  assert.equal(result.targetSource.type, "category")
+  assert.equal(result.entry.id, 30)
+})
+
+test("NAV01_NEXT_UNREAD_OPENS_FIRST_UNREAD_IN_TARGET", async () => {
+  const { input } = createResolver({
+    source: { from: "feed", id: 10 },
+    mode: "unread",
+    pages: [{ entries: [], total: 2 }],
+    canContinue: () => true,
+    getNextSources: () => [{ type: "feed", id: 11 }],
+    fetchSourceEntries: async () => ({ entries: [entry(31), entry(32)] }),
+  })
+  const result = await resolveReaderNavigation(input)
+
+  assert.equal(result.entry.id, 31)
+})
+
+for (const showStatus of ["all", "unread"]) {
+  test(`NAV01_SOURCE_HOP_${showStatus.toUpperCase()}_OPENS_UNREAD`, async () => {
+    const { input } = createResolver({
+      source: { from: "feed", id: 10 },
+      showStatus,
+      mode: "unread",
+      getNextSources: () => [{ type: "feed", id: 11 }],
+      fetchSourceEntries: async () => ({
+        entries: [entry(20, "read"), { ...entry(21), feed: { id: 11 } }],
+      }),
+    })
+    const result = await resolveReaderNavigation(input)
+
+    assert.equal(result.status, "found")
+    assert.equal(result.entry.id, 21)
+  })
+}
+
+test("NAV01_SOURCE_HOP_STARRED_REQUIRES_UNREAD_STARRED", async () => {
+  const { input } = createResolver({
+    source: { from: "feed", id: 10 },
+    showStatus: "starred",
+    mode: "unread",
+    getNextSources: () => [{ type: "feed", id: 11 }],
+    fetchSourceEntries: async () => ({
+      entries: [
+        { ...entry(20), starred: false, feed: { id: 11 } },
+        { ...entry(21, "read"), starred: true, feed: { id: 11 } },
+        { ...entry(22), starred: true, feed: { id: 11 } },
+      ],
+    }),
+  })
+  const result = await resolveReaderNavigation(input)
+
+  assert.equal(result.status, "found")
+  assert.equal(result.entry.id, 22)
+  assert.equal(result.entry.status, "unread")
+  assert.equal(result.entry.starred, true)
+})
+
+test("NAV01_SOURCE_HOP_STARRED_SKIPS_SOURCE_WITH_NO_MATCH", async () => {
+  const queriedSources = []
+  const { input } = createResolver({
+    source: { from: "feed", id: 10 },
+    showStatus: "starred",
+    mode: "unread",
+    getNextSources: () => [
+      { type: "feed", id: 11 },
+      { type: "feed", id: 12 },
+    ],
+    fetchSourceEntries: async (targetSource) => {
+      queriedSources.push(targetSource.id)
+      return {
+        entries:
+          targetSource.id === 11
+            ? [{ ...entry(30), starred: false, feed: { id: 11 } }]
+            : [{ ...entry(31), starred: true, feed: { id: 12 } }],
+      }
+    },
+  })
+  const result = await resolveReaderNavigation(input)
+
+  assert.deepEqual(queriedSources, [11, 12])
+  assert.equal(result.status, "found")
+  assert.equal(result.targetSource.id, 12)
+  assert.equal(result.entry.feed.id, 12)
+})
+
+test("NAV01_SOURCE_HOP_STARRED_TARGET_BELONGS_TO_DESTINATION_SCOPE", async () => {
+  const destination = { type: "category", id: 7 }
+  const { input } = createResolver({
+    source: { from: "category", id: 6 },
+    showStatus: "starred",
+    mode: "unread",
+    getNextSources: () => [destination],
+    fetchSourceEntries: async (targetSource) => ({
+      entries: [
+        { ...entry(40), starred: true, feed: { id: 104, category: { id: targetSource.id } } },
+      ],
+    }),
+  })
+  const result = await resolveReaderNavigation(input)
+
+  assert.deepEqual(result.targetSource, destination)
+  assert.equal(result.entry.feed.category.id, destination.id)
+})
+
+test("NAV01_SOURCE_HOP_TARGET_IS_PREPARED", async () => {
+  const rawTarget = {
+    ...entry(50),
+    feed: { id: 11 },
+    enclosures: [{ url: "https://example.test/audio/episode.mp3", mime_type: "audio/mpeg" }],
+  }
+  const { input } = createResolver({
+    source: { from: "feed", id: 10 },
+    mode: "unread",
+    getNextSources: () => [{ type: "feed", id: 11 }],
+    fetchSourceEntries: async () => ({ entries: [rawTarget] }),
+    prepareTargetEntry: (target) => ({
+      ...target,
+      attachments: { items: [{ displayName: "episode.mp3", canPlay: true }] },
+    }),
+  })
+  const result = await resolveReaderNavigation(input)
+
+  assert.equal(result.entry.id, rawTarget.id)
+  assert.equal(result.entry.attachments.items[0].displayName, "episode.mp3")
+  assert.equal(result.entry.status, "unread")
+})
+
+test("NAV01_SOURCE_HOP_READ_ON_VIEW_UNCHANGED", async () => {
+  const rawTarget = entry(51)
+  const { input } = createResolver({
+    source: { from: "feed", id: 10 },
+    mode: "unread",
+    getNextSources: () => [{ type: "feed", id: 11 }],
+    fetchSourceEntries: async () => ({ entries: [rawTarget] }),
+    prepareTargetEntry: (target) => ({ ...target, derivedPresentation: true }),
+  })
+  const result = await resolveReaderNavigation(input)
+
+  assert.equal(result.entry.status, "unread")
+  assert.equal(result.entry.derivedPresentation, true)
+})
+
+test("NAV01_STALE_UNREAD_COUNT_SKIPS_EMPTY_TARGET", async () => {
+  const candidates = [
+    { type: "feed", id: 11 },
+    { type: "feed", id: 12 },
+  ]
+  const tried = []
+  const { input } = createResolver({
+    source: { from: "feed", id: 10 },
+    mode: "unread",
+    pages: [{ entries: [], total: 2 }],
+    canContinue: () => true,
+    getNextSources: () => candidates,
+    fetchSourceEntries: async (source) => {
+      tried.push(source.id)
+      return { entries: source.id === 11 ? [] : [entry(42)] }
+    },
+  })
+  const result = await resolveReaderNavigation(input)
+
+  assert.deepEqual(tried, [11, 12])
+  assert.equal(result.entry.id, 42)
+})
+
+test("NAV01_TARGET_FETCH_FAILURE_DOES_NOT_NAVIGATE", async () => {
+  const { input } = createResolver({
+    source: { from: "feed", id: 10 },
+    mode: "unread",
+    pages: [{ entries: [], total: 2 }],
+    canContinue: () => true,
+    getNextSources: () => [{ type: "feed", id: 11 }],
+    fetchSourceEntries: async () => {
+      throw new Error("provider unavailable")
+    },
+  })
+  const result = await resolveReaderNavigation(input)
+
+  assert.equal(result.status, "error")
+  assert.equal(result.entry, undefined)
+})
+
+test("NAV01_PREVIOUS_UNREAD_DOES_NOT_HOP_SOURCE", async () => {
+  let sourceHopCalls = 0
+  const entries = [entry(1), entry(2)]
+  const { input } = createResolver({
+    entries,
+    sequenceIds: [1, 2],
+    activeEntryId: 1,
+    direction: "previous",
+    mode: "unread",
+    source: { from: "feed", id: 10 },
+    getNextSources: () => {
+      sourceHopCalls += 1
+      return [{ type: "feed", id: 11 }]
+    },
+  })
+  const result = await resolveReaderNavigation(input)
+
+  assert.equal(result.status, "end")
+  assert.equal(sourceHopCalls, 0)
+})
+
+test("NAV01_STALE_SESSION_CANNOT_NAVIGATE", async () => {
+  const entries = [entry(1), entry(2)]
+  let current = true
+  const { input, appendedPages } = createResolver({
+    entries,
+    pages: [{ entries: [entry(3)], total: 3 }],
+    canContinue: () => true,
+    isCurrent: () => current,
+    fetchPage: async () => {
+      current = false
+      return { entries: [entry(3)], total: 3 }
+    },
+  })
+  const result = await resolveReaderNavigation(input)
+
+  assert.equal(result.status, "stale")
+  assert.equal(appendedPages.length, 0)
+})
+
+test("NAV01_STALE_SCOPE_CANNOT_APPEND", async () => {
+  const entries = [entry(1), entry(2)]
+  let current = true
+  const { input, appendedPages } = createResolver({
+    entries,
+    pages: [{ entries: [entry(3)], total: 3 }],
+    canContinue: () => true,
+    isCurrent: () => current,
+    fetchPage: async () => {
+      current = false
+      return { entries: [entry(3)], total: 3 }
+    },
+  })
+  const result = await resolveReaderNavigation(input)
+
+  assert.equal(result.status, "stale")
+  assert.equal(appendedPages.length, 0)
+})
+
+test("NAV01_DOUBLE_ACTION_COALESCED_OR_GUARDED", async () => {
+  const gate = createReaderNavigationOperationGate()
+  let calls = 0
+  let release
+  const pending = new Promise((resolve) => {
+    release = resolve
+  })
+  const first = gate.run(async () => {
+    calls += 1
+    await pending
+    return "done"
+  })
+  const second = await gate.run(async () => {
+    calls += 1
+    return "duplicate"
+  })
+  release()
+
+  const firstResult = await first
+  assert.equal(firstResult.value, "done")
+  assert.equal(second.status, "busy")
+  assert.equal(calls, 1)
+})
+
+test("MARK_ALL_READ_JUMP_TO_NEXT_PRESERVED", () => {
+  const categories = [
+    { id: 1, unreadCount: 0 },
+    { id: 2, unreadCount: 1 },
+  ]
+  const feeds = [
+    { id: 10, category: { id: 1 }, unreadCount: 1 },
+    { id: 11, category: { id: 1 }, unreadCount: 2 },
+    { id: 12, category: { id: 2 }, unreadCount: 1 },
+  ]
+
+  assert.equal(getNextUnreadSource({ type: "feed", id: 10 }, categories, feeds).id, 11)
+  assert.equal(getNextUnreadSource({ type: "category", id: 1 }, categories, feeds).id, 2)
+})

@@ -16,7 +16,6 @@ import {
 import { getDataSessionRevision } from "@/store/dataState"
 import { settingsState } from "@/store/settingsState"
 import createArticleListRequestKey from "@/utils/article-list-request-key"
-import { getTimestamp } from "@/utils/date"
 import {
   getEntryMutationSnapshot,
   isEntryMutationSnapshotCurrent,
@@ -25,6 +24,7 @@ import {
 import prepareEntry from "@/utils/entry-presentation"
 import { getHomePaginationBoundary } from "@/utils/home-editorial-session"
 import createSetter from "@/utils/nanostores"
+import { buildPaginationCursorParams } from "@/utils/pagination-cursor"
 
 const loadingMoreState = atom(false)
 const setLoadingMore = createSetter(loadingMoreState)
@@ -82,12 +82,11 @@ const useLoadMore = () => {
       return cursor === null ? {} : { published_before: cursor }
     }
 
-    const referenceEntry = getReferenceEntry(currentEntries)
-    if (!referenceEntry) {
-      return {}
-    }
-
-    return buildFilterParams(referenceEntry)
+    return buildPaginationCursorParams({
+      entries: currentEntries,
+      sortProperty,
+      orderDirection: cursorDirection,
+    })
   }
 
   const sortProperty =
@@ -97,59 +96,6 @@ const useLoadMore = () => {
         ? "changed_at"
         : orderBy
   const cursorDirection = infoFrom === "home" ? "desc" : orderDirection
-
-  const getReferenceEntry = (currentEntries) => {
-    const sortedEntries = [...currentEntries].toSorted((a, b) => {
-      const aValue = getTimestamp(a[sortProperty])
-      const bValue = getTimestamp(b[sortProperty])
-      return cursorDirection === "desc" ? bValue - aValue : aValue - bValue
-    })
-
-    const entriesByTimestamp = {}
-    for (const entry of sortedEntries) {
-      const timestamp = getTimestamp(entry[sortProperty])
-      if (!entriesByTimestamp[timestamp]) {
-        entriesByTimestamp[timestamp] = []
-      }
-      entriesByTimestamp[timestamp].push(entry)
-    }
-
-    const timestamps = Object.keys(entriesByTimestamp)
-      .map(Number)
-      .toSorted((a, b) => (cursorDirection === "desc" ? b - a : a - b))
-
-    if (timestamps.length === 0) {
-      return null
-    }
-
-    const referenceTimestampIndex = timestamps.length > 1 ? timestamps.length - 2 : 0
-    const referenceTimestamp = timestamps[referenceTimestampIndex]
-
-    const timestampEntries = entriesByTimestamp[referenceTimestamp]
-    return timestampEntries.at(-1)
-  }
-
-  const buildFilterParams = (referenceEntry) => {
-    if (sortProperty === "changed_at") {
-      return cursorDirection === "desc"
-        ? { changed_before: getTimestamp(referenceEntry.changed_at) }
-        : { changed_after: getTimestamp(referenceEntry.changed_at) }
-    }
-
-    if (sortProperty === "created_at") {
-      return cursorDirection === "desc"
-        ? { before_entry_id: referenceEntry.id }
-        : { after_entry_id: referenceEntry.id }
-    }
-
-    if (sortProperty === "published_at") {
-      return cursorDirection === "desc"
-        ? { published_before: getTimestamp(referenceEntry.published_at) }
-        : { published_after: getTimestamp(referenceEntry.published_at) }
-    }
-
-    return {}
-  }
 
   const getCurrentArticleListRequestKey = () =>
     createArticleListRequestKey({

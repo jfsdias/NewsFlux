@@ -60,6 +60,7 @@ const HomeEditorial = ({
   entryListRef,
   getEntries,
   handleEntryClick,
+  onReaderProjectionChange,
   refreshArticleList,
   retryArticleList,
 }) => {
@@ -389,6 +390,23 @@ const HomeEditorial = ({
 
   const activeSession = session?.requestKey === requestKey ? session : null
   const projection = activeSession ? projectHomeSession(activeSession, entries) : null
+  useEffect(() => {
+    onReaderProjectionChange?.(
+      projection
+        ? {
+            requestKey: createArticleListRequestKey({
+              content: contentState.get(),
+              settings: settingsState.get(),
+              info: { from: "home", id: "" },
+              sessionRevision: getDataSessionRevision(),
+            }),
+            sessionRevision,
+            highlightIds: projection.highlightIds,
+            recentIds: projection.recentIds,
+          }
+        : null,
+    )
+  }, [onReaderProjectionChange, projection, sessionRevision])
   const hasProjectedEntries =
     projection?.highlightIds.some((id) => id != null) || projection?.recentIds.length > 0
   const isZeroUnread = Boolean(activeSession && total === 0 && !hasProjectedEntries)
