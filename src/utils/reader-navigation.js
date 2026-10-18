@@ -32,6 +32,11 @@ const homeBoundary = (entries) => {
   return timestamps.at(timestamps.length > 1 ? -2 : -1) ?? null
 }
 
+export const getReaderSourceHopQuery = (showStatus) => ({
+  status: "unread",
+  starred: showStatus === "starred",
+})
+
 const getScopeStatus = (source, settings) => {
   if (source.from === "home") {
     return { status: "unread", starred: false }
@@ -189,6 +194,8 @@ export const resolveReaderNavigation = async (input) => {
     isCurrent,
     getNextSources,
     fetchSourceEntries,
+    showStatus = "all",
+    prepareTargetEntry = (entry) => entry,
   } = input
 
   if (!isCurrent()) {
@@ -302,9 +309,11 @@ export const resolveReaderNavigation = async (input) => {
       return result("stale")
     }
     const entries = Array.isArray(response) ? response : response?.entries
-    const firstUnread = entries?.find((entry) => entry.status === "unread")
+    const firstUnread = entries?.find(
+      (entry) => entry.status === "unread" && (showStatus !== "starred" || entry.starred === true),
+    )
     if (firstUnread) {
-      return result("found", { entry: firstUnread, targetSource })
+      return result("found", { entry: prepareTargetEntry(firstUnread), targetSource })
     }
   }
 

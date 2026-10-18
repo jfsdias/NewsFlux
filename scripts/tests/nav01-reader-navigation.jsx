@@ -5,6 +5,7 @@ import React, { useEffect, useState } from "react"
 import { createRoot } from "react-dom/client"
 
 import { contentState, setEntries } from "@/store/contentState"
+import prepareEntry from "@/utils/entry-presentation"
 import {
   appendReaderPageEntries,
   buildReaderPageRequest,
@@ -29,8 +30,10 @@ const makeNavigation = ({
   source = { from: "feed", id: 10 },
   pages = [],
   removeDuplicates = "none",
+  showStatus = "all",
   nextSources = [],
   fetchSourceEntries = async () => ({ entries: [] }),
+  prepareTargetEntry,
   isCurrent = () => true,
 } = {}) => {
   let currentEntries = entries
@@ -55,6 +58,8 @@ const makeNavigation = ({
         direction,
         mode,
         source,
+        showStatus,
+        prepareTargetEntry,
         getEntries: () => currentEntries,
         getSequenceIds: () => sequenceIds,
         canContinue: () => pageQueue.length > 0,
@@ -249,6 +254,67 @@ const cases = [
       assert(
         result.targetSource.id === 11 && result.entry.id === 20,
         "Source hop did not open its first unread entry",
+      )
+    },
+  ],
+  [
+    "SOURCE_HOP_TARGET_IS_PREPARED",
+    async () => {
+      const rawTarget = {
+        ...entry(20),
+        feed: { id: 11 },
+        content: "",
+        enclosures: [
+          {
+            url: "https://example.test/audio/episode.mp3",
+            mime_type: "audio/mpeg",
+            size: 1024,
+          },
+        ],
+      }
+      const navigation = makeNavigation({
+        mode: "unread",
+        nextSources: [{ type: "feed", id: 11 }],
+        fetchSourceEntries: async () => ({ entries: [rawTarget] }),
+        prepareTargetEntry: prepareEntry,
+      })
+      const result = await navigation.run()
+      assert(
+        result.entry.attachments?.primaryMedia?.canPlay === true &&
+          result.entry.attachments.items[0].displayName === "episode.mp3",
+        "Source-hop target did not receive normal attachment presentation metadata",
+      )
+      assert(result.entry.status === "unread", "Preparation changed the provider read status")
+    },
+  ],
+  [
+    "SOURCE_HOP_STARRED_REQUIRES_UNREAD_STARRED_AND_SKIPS_STALE_SOURCE",
+    async () => {
+      const queriedSources = []
+      const navigation = makeNavigation({
+        showStatus: "starred",
+        mode: "unread",
+        nextSources: [
+          { type: "feed", id: 11 },
+          { type: "feed", id: 12 },
+        ],
+        fetchSourceEntries: async (targetSource) => {
+          queriedSources.push(targetSource.id)
+          return {
+            entries:
+              targetSource.id === 11
+                ? [{ ...entry(30), starred: false, feed: { id: 11 } }]
+                : [{ ...entry(31), starred: true, feed: { id: 12 } }],
+          }
+        },
+      })
+      const result = await navigation.run()
+      assert(
+        queriedSources.join(",") === "11,12" &&
+          result.targetSource.id === 12 &&
+          result.entry.status === "unread" &&
+          result.entry.starred === true,
+        "Starred source-hop selected an entry outside the destination Starred list",
       )
     },
   ],

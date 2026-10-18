@@ -29,6 +29,7 @@ import {
   appendReaderPageEntries,
   buildReaderPageRequest,
   createReaderNavigationOperationGate,
+  getReaderSourceHopQuery,
   hasReaderPaginationContinuation,
   resolveReaderNavigation,
 } from "@/utils/reader-navigation"
@@ -191,6 +192,7 @@ const useReaderNavigation = ({ source, sourceId, getEntries, homeProjection }) =
 
   const fetchSourceEntries = useCallback(async (targetSource) => {
     const latestSettings = settingsState.get()
+    const query = getReaderSourceHopQuery(latestSettings.showStatus)
     const filterParams = {
       order: latestSettings.orderBy,
       direction: latestSettings.orderDirection,
@@ -198,8 +200,8 @@ const useReaderNavigation = ({ source, sourceId, getEntries, homeProjection }) =
       globally_visible: !isEntryScopeFullyVisible(targetSource.type, targetSource.id),
     }
     return targetSource.type === "feed"
-      ? getFeedEntries(targetSource.id, "unread", false, filterParams)
-      : getCategoryEntries(targetSource.id, "unread", false, filterParams)
+      ? getFeedEntries(targetSource.id, query.status, query.starred, filterParams)
+      : getCategoryEntries(targetSource.id, query.status, query.starred, filterParams)
   }, [])
 
   const scrollSelectedEntryIntoView = useCallback(
@@ -247,6 +249,8 @@ const useReaderNavigation = ({ source, sourceId, getEntries, homeProjection }) =
             getNextSources: () =>
               getNextUnreadSources({ type: source, id: sourceId }, categories, feeds),
             fetchSourceEntries,
+            showStatus: settingsState.get().showStatus,
+            prepareTargetEntry: prepareEntry,
           })
           if (resolved.status === "stale") {
             return resolved

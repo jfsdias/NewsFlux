@@ -18,6 +18,10 @@ body,
   font-variant-numeric: tabular-nums;
 }
 
+.nav01-harness li {
+  overflow-wrap: anywhere;
+}
+
 .nav01-harness li[data-status="FAIL"] {
   color: #b42318;
 }

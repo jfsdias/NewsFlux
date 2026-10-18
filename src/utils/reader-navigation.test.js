@@ -6,6 +6,7 @@ import removeDuplicateEntries from "./deduplicate.js"
 import {
   buildReaderPageRequest,
   createReaderNavigationOperationGate,
+  getReaderSourceHopQuery,
   hasReaderPaginationContinuation,
   resolveReaderNavigation,
 } from "./reader-navigation.js"
@@ -64,6 +65,8 @@ const createResolver = (overrides = {}) => {
     direction: overrides.direction ?? "next",
     mode: overrides.mode ?? "article",
     source: overrides.source ?? { from: "all", id: null },
+    showStatus: overrides.showStatus ?? "all",
+    prepareTargetEntry: overrides.prepareTargetEntry,
     getEntries: () => state.entries,
     getSequenceIds: () => state.sequenceIds,
     canContinue: overrides.canContinue ?? (() => pages.length > 0),
@@ -262,6 +265,12 @@ const requestSettings = {
   showHiddenFeeds: false,
   showStatus: "unread",
 }
+
+test("NAV01_SOURCE_HOP_QUERY_PRESERVES_GLOBAL_STATUS_SEMANTICS", () => {
+  assert.deepEqual(getReaderSourceHopQuery("all"), { status: "unread", starred: false })
+  assert.deepEqual(getReaderSourceHopQuery("unread"), { status: "unread", starred: false })
+  assert.deepEqual(getReaderSourceHopQuery("starred"), { status: "unread", starred: true })
+})
 
 test("NAV01_FILTER_SCOPE_PRESERVED", () => {
   const request = buildReaderPageRequest({
@@ -789,6 +798,131 @@ test("NAV01_NEXT_UNREAD_OPENS_FIRST_UNREAD_IN_TARGET", async () => {
   const result = await resolveReaderNavigation(input)
 
   assert.equal(result.entry.id, 31)
+})
+
+for (const showStatus of ["all", "unread"]) {
+  test(`NAV01_SOURCE_HOP_${showStatus.toUpperCase()}_OPENS_UNREAD`, async () => {
+    const { input } = createResolver({
+      source: { from: "feed", id: 10 },
+      showStatus,
+      mode: "unread",
+      getNextSources: () => [{ type: "feed", id: 11 }],
+      fetchSourceEntries: async () => ({
+        entries: [entry(20, "read"), { ...entry(21), feed: { id: 11 } }],
+      }),
+    })
+    const result = await resolveReaderNavigation(input)
+
+    assert.equal(result.status, "found")
+    assert.equal(result.entry.id, 21)
+  })
+}
+
+test("NAV01_SOURCE_HOP_STARRED_REQUIRES_UNREAD_STARRED", async () => {
+  const { input } = createResolver({
+    source: { from: "feed", id: 10 },
+    showStatus: "starred",
+    mode: "unread",
+    getNextSources: () => [{ type: "feed", id: 11 }],
+    fetchSourceEntries: async () => ({
+      entries: [
+        { ...entry(20), starred: false, feed: { id: 11 } },
+        { ...entry(21, "read"), starred: true, feed: { id: 11 } },
+        { ...entry(22), starred: true, feed: { id: 11 } },
+      ],
+    }),
+  })
+  const result = await resolveReaderNavigation(input)
+
+  assert.equal(result.status, "found")
+  assert.equal(result.entry.id, 22)
+  assert.equal(result.entry.status, "unread")
+  assert.equal(result.entry.starred, true)
+})
+
+test("NAV01_SOURCE_HOP_STARRED_SKIPS_SOURCE_WITH_NO_MATCH", async () => {
+  const queriedSources = []
+  const { input } = createResolver({
+    source: { from: "feed", id: 10 },
+    showStatus: "starred",
+    mode: "unread",
+    getNextSources: () => [
+      { type: "feed", id: 11 },
+      { type: "feed", id: 12 },
+    ],
+    fetchSourceEntries: async (targetSource) => {
+      queriedSources.push(targetSource.id)
+      return {
+        entries:
+          targetSource.id === 11
+            ? [{ ...entry(30), starred: false, feed: { id: 11 } }]
+            : [{ ...entry(31), starred: true, feed: { id: 12 } }],
+      }
+    },
+  })
+  const result = await resolveReaderNavigation(input)
+
+  assert.deepEqual(queriedSources, [11, 12])
+  assert.equal(result.status, "found")
+  assert.equal(result.targetSource.id, 12)
+  assert.equal(result.entry.feed.id, 12)
+})
+
+test("NAV01_SOURCE_HOP_STARRED_TARGET_BELONGS_TO_DESTINATION_SCOPE", async () => {
+  const destination = { type: "category", id: 7 }
+  const { input } = createResolver({
+    source: { from: "category", id: 6 },
+    showStatus: "starred",
+    mode: "unread",
+    getNextSources: () => [destination],
+    fetchSourceEntries: async (targetSource) => ({
+      entries: [
+        { ...entry(40), starred: true, feed: { id: 104, category: { id: targetSource.id } } },
+      ],
+    }),
+  })
+  const result = await resolveReaderNavigation(input)
+
+  assert.deepEqual(result.targetSource, destination)
+  assert.equal(result.entry.feed.category.id, destination.id)
+})
+
+test("NAV01_SOURCE_HOP_TARGET_IS_PREPARED", async () => {
+  const rawTarget = {
+    ...entry(50),
+    feed: { id: 11 },
+    enclosures: [{ url: "https://example.test/audio/episode.mp3", mime_type: "audio/mpeg" }],
+  }
+  const { input } = createResolver({
+    source: { from: "feed", id: 10 },
+    mode: "unread",
+    getNextSources: () => [{ type: "feed", id: 11 }],
+    fetchSourceEntries: async () => ({ entries: [rawTarget] }),
+    prepareTargetEntry: (target) => ({
+      ...target,
+      attachments: { items: [{ displayName: "episode.mp3", canPlay: true }] },
+    }),
+  })
+  const result = await resolveReaderNavigation(input)
+
+  assert.equal(result.entry.id, rawTarget.id)
+  assert.equal(result.entry.attachments.items[0].displayName, "episode.mp3")
+  assert.equal(result.entry.status, "unread")
+})
+
+test("NAV01_SOURCE_HOP_READ_ON_VIEW_UNCHANGED", async () => {
+  const rawTarget = entry(51)
+  const { input } = createResolver({
+    source: { from: "feed", id: 10 },
+    mode: "unread",
+    getNextSources: () => [{ type: "feed", id: 11 }],
+    fetchSourceEntries: async () => ({ entries: [rawTarget] }),
+    prepareTargetEntry: (target) => ({ ...target, derivedPresentation: true }),
+  })
+  const result = await resolveReaderNavigation(input)
+
+  assert.equal(result.entry.status, "unread")
+  assert.equal(result.entry.derivedPresentation, true)
 })
 
 test("NAV01_STALE_UNREAD_COUNT_SKIPS_EMPTY_TARGET", async () => {
