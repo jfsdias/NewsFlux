@@ -287,6 +287,7 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
             entryListRef={entryListRef}
             getEntries={getEntries}
             handleEntryClick={handleEntryClick}
+            refreshArticleList={fetchArticleListWithRelatedData}
             retryArticleList={fetchArticleList}
           />
         ) : (

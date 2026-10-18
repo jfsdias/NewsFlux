@@ -3946,7 +3946,7 @@ const Harness = () => {
       },
     ],
     [
-      "STALE_SESSION_PROFILE_DISCARDED",
+      "HOME_STALE_SESSION_CANNOT_COMMIT",
       async () => {
         await mount("/", {
           entries: personalizationFixtures.home,
@@ -3978,12 +3978,53 @@ const Harness = () => {
       },
     ],
     [
-      "EXPLICIT_REFRESH_SINGLE_RECOMPOSITION",
+      "HOME_REQUEST_KEY_CHANGE_CREATES_NEW_SESSION",
       async () => {
         await mount("/", {
-          deferInitial: true,
           entries: personalizationFixtures.home,
           total: personalizationFixtures.home.length,
+          personalization: { entries: personalizationFixtures.preferredProfile },
+        })
+        await waitFor(
+          () => contentState.get().isArticleListReady && cards().length === 3,
+          "Initial Home request-key session did not commit",
+        )
+        const initialRequestCount = listRequests().length
+        const initialProfileCount = starredProfileRequests().length
+        settingsState.set({ ...settingsState.get(), showHiddenFeeds: true })
+        await waitFor(
+          () =>
+            contentState.get().isArticleListReady &&
+            listRequests().length === initialRequestCount + 1 &&
+            starredProfileRequests().length === initialProfileCount + 1,
+          "Existing request-key boundary did not create a fresh Home session",
+        )
+        assert(
+          contentState.get().entries.length === personalizationFixtures.home.length,
+          "New request-key session did not commit canonical entries",
+        )
+      },
+    ],
+    [
+      "HOME_MANUAL_REFRESH_PRESERVES_SESSION",
+      async () => {
+        const initialEntries = [
+          ...personalizationFixtures.home,
+          ...Array.from({ length: 20 }, (_, index) => {
+            const id = 700 + index
+            return {
+              ...personalizationFixtures.home[3],
+              id,
+              title: `Older Home story ${id}`,
+              published_at: new Date(Date.UTC(2026, 9, 12, 10, 59 - index)).toISOString(),
+              url: `https://example.invalid/${id}`,
+            }
+          }),
+        ]
+        await mount("/", {
+          deferInitial: true,
+          entries: initialEntries,
+          total: initialEntries.length,
           personalization: { entries: personalizationFixtures.preferredProfile },
         })
         await waitFor(
@@ -3997,10 +4038,47 @@ const Harness = () => {
           "Initial personalized order did not commit",
         )
         const oldCards = cards()
+        const oldRecentIds = recentIds()
+        const oldCardNodes = new Map(
+          [...homeRoot().querySelectorAll(".article-entry[data-entry-id]")].map((node) => [
+            Number(node.dataset.entryId),
+            node,
+          ]),
+        )
+        const root = scrollRoot()
+        assert(root && root.scrollHeight > root.clientHeight, "Home scroll root is not scrollable")
+        root.scrollTop = Math.round((root.scrollHeight - root.clientHeight) / 2)
+        root.dispatchEvent(new Event("scroll"))
+        await settle()
+        const rootBounds = root.getBoundingClientRect()
+        const visibleAnchor = [
+          ...homeRoot().querySelectorAll(".article-entry[data-entry-id]"),
+        ].find((node) => {
+          const bounds = node.getBoundingClientRect()
+          return bounds.bottom > rootBounds.top && bounds.top < rootBounds.bottom
+        })
+        assert(visibleAnchor, "Home has no visible card anchor before refresh")
+        const previousAnchorTop = visibleAnchor.getBoundingClientRect().top
+        const focusedCard = oldCards.find((node) => Number(node.dataset.entryId) === 601)
+        assert(focusedCard, "Expected Primary card to focus before refresh")
+        focusedCard.focus({ preventScroll: true })
+        assert(document.activeElement === focusedCard, "Primary card did not receive focus")
         const previousSnapshotRevision = contentState.get().articleListSnapshotRevision
-        fixtureEntries = personalizationFixtures.directStarOutsideSampleHome.map((entry) => ({
-          ...entry,
-        }))
+        const refreshedEntries = [
+          ...initialEntries.map((entry) => ({
+            ...entry,
+            ...(entry.id === 601 ? { title: "Updated Primary title", status: "read" } : {}),
+          })),
+          {
+            ...personalizationFixtures.home[0],
+            id: 605,
+            title: "Newly discovered unread story",
+            published_at: "2026-10-12T12:05:00Z",
+            url: "https://example.invalid/605",
+          },
+        ]
+        fixtureEntries = refreshedEntries
+        fixtureTotal = refreshedEntries.filter(({ status }) => status === "unread").length
         starredProfileEntries = [{ ...personalizationFixtures.home[3], starred: true }]
         deferredArticleQuery = createDeferred()
         const refreshEvent = new KeyboardEvent("keydown", {
@@ -4015,8 +4093,8 @@ const Harness = () => {
         document.body.dispatchEvent(refreshEvent)
         document.body.dispatchEvent(refreshEvent)
         await waitFor(
-          () => listRequests().length === 2 && starredProfileRequests().length === 2,
-          "Explicit refresh did not start one canonical/profile pair",
+          () => listRequests().length === 2,
+          "Explicit refresh did not start one canonical request",
         )
         await waitFor(
           () => !contentState.get().isArticleListReady,
@@ -4036,13 +4114,258 @@ const Harness = () => {
           "Explicit refresh did not commit exactly one canonical snapshot",
         )
         assert(
-          ids().join(",") === "601,604,603" && recentIds().join(",") === "602",
-          `New generation did not replace its projection once: ${ids().join(",")}`,
+          starredProfileRequests().length === 1,
+          "Manual refresh started another personalization profile request",
         )
         assert(
-          listRequests().length === 2 && starredProfileRequests().length === 2,
-          "Explicit refresh started an extra candidate stream or profile request",
+          ids().join(",") === "601,603,602",
+          `Manual refresh changed committed Highlights: ${ids().join(",")}`,
         )
+        assert(
+          recentIds().slice(0, oldRecentIds.length).join(",") === oldRecentIds.join(",") &&
+            recentIds().at(-1) === 605 &&
+            !ids().includes(605),
+          "New unread entry was not appended to the existing Recent tail",
+        )
+        assert(
+          contentState.get().entries.find(({ id }) => id === 601)?.status === "read" &&
+            homeRoot().querySelector('[data-entry-id="601"] .grid-card-title')?.textContent ===
+              "Updated Primary title",
+          "Canonical refresh data did not update a live committed entry",
+        )
+        assert(
+          [...oldCardNodes].every(
+            ([id, node]) =>
+              [...homeRoot().querySelectorAll(".article-entry[data-entry-id]")].find(
+                (entry) => Number(entry.dataset.entryId) === id,
+              ) === node,
+          ),
+          "Manual refresh replaced a committed Home card node",
+        )
+        assert(
+          root === scrollRoot() &&
+            visibleAnchor.isConnected &&
+            Math.abs(visibleAnchor.getBoundingClientRect().top - previousAnchorTop) < 1,
+          "Manual refresh replaced the scroll root or moved the visible card anchor",
+        )
+        assert(
+          document.activeElement === focusedCard,
+          "Manual refresh stole focus from the active Home card",
+        )
+        assert(
+          listRequests().length === 2 && starredProfileRequests().length === 1,
+          "Manual refresh started an extra candidate or profile stream",
+        )
+      },
+    ],
+    [
+      "HOME_REFRESH_FAILURE_PRESERVES_COMMITTED_SESSION",
+      async () => {
+        const entries = [
+          ...personalizationFixtures.home,
+          ...Array.from({ length: 20 }, (_, index) => ({
+            ...personalizationFixtures.home[3],
+            id: 760 + index,
+            title: `Older failure story ${760 + index}`,
+            published_at: new Date(Date.UTC(2026, 9, 12, 10, 59 - index)).toISOString(),
+            url: `https://example.invalid/${760 + index}`,
+          })),
+        ]
+        await mount("/", {
+          entries,
+          total: entries.length,
+          personalization: { entries: personalizationFixtures.preferredProfile },
+        })
+        await waitFor(
+          () => contentState.get().isArticleListReady && cards().length === 3,
+          "Home session did not commit before failed refresh",
+        )
+        const committedIds = ids().join(",")
+        const committedCards = cards()
+        const committedNodes = [...homeRoot().querySelectorAll(".article-entry[data-entry-id]")]
+        const root = scrollRoot()
+        root.scrollTop = Math.round((root.scrollHeight - root.clientHeight) / 2)
+        root.dispatchEvent(new Event("scroll"))
+        await settle()
+        const previousScrollTop = root.scrollTop
+        const focusedCard = committedCards[0]
+        focusedCard.focus({ preventScroll: true })
+        articleFailure = true
+        document.body.focus()
+        document.body.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            bubbles: true,
+            cancelable: true,
+            code: "KeyR",
+            key: "r",
+            keyCode: 82,
+            which: 82,
+          }),
+        )
+        await waitFor(
+          () => contentState.get().articleListError,
+          "Failed refresh did not expose its existing error state",
+        )
+        assert(
+          ids().join(",") === committedIds &&
+            committedCards.every((card, index) => card === cards()[index]) &&
+            committedNodes.every((node) => homeRoot().contains(node)),
+          "Failed refresh changed committed Home membership or card nodes",
+        )
+        assert(
+          root === scrollRoot() && Math.abs(root.scrollTop - previousScrollTop) < 1,
+          "Failed refresh replaced the Home scroll root or reset its position",
+        )
+        assert(document.activeElement === focusedCard, "Failed refresh stole Home keyboard focus")
+      },
+    ],
+    [
+      "HOME_RESUME_TRIGGERS_REFRESH",
+      async () => {
+        await mount("/", {
+          entries: personalizationFixtures.home,
+          total: personalizationFixtures.home.length,
+        })
+        await waitFor(
+          () => contentState.get().isArticleListReady,
+          "Home did not load before resume refresh",
+        )
+        const initialRequestCount = listRequests().length
+        const originalVisibility = Object.getOwnPropertyDescriptor(document, "visibilityState")
+        let visibility = "visible"
+        try {
+          Object.defineProperty(document, "visibilityState", {
+            configurable: true,
+            get: () => visibility,
+          })
+          globalThis.dispatchEvent(new Event("blur"))
+          visibility = "hidden"
+          document.dispatchEvent(new Event("visibilitychange"))
+          visibility = "visible"
+          document.dispatchEvent(new Event("visibilitychange"))
+          globalThis.dispatchEvent(new Event("focus"))
+          await waitFor(
+            () => listRequests().length > initialRequestCount,
+            "Returning from hidden/blurred state did not refresh Home",
+          )
+          await new Promise((resolve) => setTimeout(resolve, 400))
+          assert(
+            listRequests().length === initialRequestCount + 1,
+            "Visibility and focus started more than one Home refresh",
+          )
+        } finally {
+          if (originalVisibility) {
+            Object.defineProperty(document, "visibilityState", originalVisibility)
+          } else {
+            delete document.visibilityState
+          }
+        }
+      },
+    ],
+    [
+      "HOME_RECONNECT_TRIGGERS_REFRESH",
+      async () => {
+        await mount("/", {
+          entries: personalizationFixtures.home,
+          total: personalizationFixtures.home.length,
+        })
+        await waitFor(
+          () => contentState.get().isArticleListReady,
+          "Home did not load before reconnect refresh",
+        )
+        const initialRequestCount = listRequests().length
+        const originalOnline = Object.getOwnPropertyDescriptor(navigator, "onLine")
+        let online = true
+        try {
+          Object.defineProperty(navigator, "onLine", {
+            configurable: true,
+            get: () => online,
+          })
+          online = false
+          globalThis.dispatchEvent(new Event("offline"))
+          online = true
+          globalThis.dispatchEvent(new Event("online"))
+          await waitFor(
+            () => listRequests().length > initialRequestCount,
+            "Offline-to-online recovery did not refresh Home",
+          )
+          await new Promise((resolve) => setTimeout(resolve, 400))
+          assert(
+            listRequests().length === initialRequestCount + 1,
+            "Reconnect started more than one Home refresh",
+          )
+        } finally {
+          if (originalOnline) {
+            Object.defineProperty(navigator, "onLine", originalOnline)
+          } else {
+            delete navigator.onLine
+          }
+        }
+      },
+    ],
+    [
+      "HOME_RESUME_RECONNECT_EVENTS_COALESCE",
+      async () => {
+        await mount("/", {
+          entries: personalizationFixtures.home,
+          total: personalizationFixtures.home.length,
+        })
+        await waitFor(
+          () => contentState.get().isArticleListReady && cards().length === 3,
+          "Home did not load before lifecycle refresh checks",
+        )
+        const initialRequestCount = listRequests().length
+        const originalVisibility = Object.getOwnPropertyDescriptor(document, "visibilityState")
+        const originalOnline = Object.getOwnPropertyDescriptor(navigator, "onLine")
+        let visibility = "visible"
+        let online = true
+        try {
+          Object.defineProperty(document, "visibilityState", {
+            configurable: true,
+            get: () => visibility,
+          })
+          Object.defineProperty(navigator, "onLine", {
+            configurable: true,
+            get: () => online,
+          })
+
+          online = false
+          globalThis.dispatchEvent(new Event("offline"))
+          globalThis.dispatchEvent(new Event("blur"))
+          visibility = "hidden"
+          document.dispatchEvent(new Event("visibilitychange"))
+
+          visibility = "visible"
+          document.dispatchEvent(new Event("visibilitychange"))
+          online = true
+          globalThis.dispatchEvent(new Event("online"))
+          globalThis.dispatchEvent(new Event("focus"))
+
+          await waitFor(
+            () => listRequests().length > initialRequestCount,
+            "Resume/reconnect did not refresh the Home list",
+          )
+          await new Promise((resolve) => setTimeout(resolve, 400))
+          assert(
+            listRequests().length === initialRequestCount + 1,
+            `Resume and reconnect started ${listRequests().length - initialRequestCount} refresh requests`,
+          )
+          assert(
+            starredProfileRequests().length === 1,
+            "Resume/reconnect started another personalization profile request",
+          )
+        } finally {
+          if (originalVisibility) {
+            Object.defineProperty(document, "visibilityState", originalVisibility)
+          } else {
+            delete document.visibilityState
+          }
+          if (originalOnline) {
+            Object.defineProperty(navigator, "onLine", originalOnline)
+          } else {
+            delete navigator.onLine
+          }
+        }
       },
     ],
     [
@@ -4151,8 +4474,13 @@ const Harness = () => {
           "NO_SECOND_CANDIDATE_STREAM",
           "PERSONALIZATION_EXPLAINER_TRUTHFUL",
           "PROFILE_DEADLINE_FALLBACK_NO_RECOMPOSE",
-          "STALE_SESSION_PROFILE_DISCARDED",
-          "EXPLICIT_REFRESH_SINGLE_RECOMPOSITION",
+          "HOME_STALE_SESSION_CANNOT_COMMIT",
+          "HOME_REQUEST_KEY_CHANGE_CREATES_NEW_SESSION",
+          "HOME_MANUAL_REFRESH_PRESERVES_SESSION",
+          "HOME_REFRESH_FAILURE_PRESERVES_COMMITTED_SESSION",
+          "HOME_RESUME_TRIGGERS_REFRESH",
+          "HOME_RECONNECT_TRIGGERS_REFRESH",
+          "HOME_RESUME_RECONNECT_EVENTS_COALESCE",
           "ONE_AUX_PROFILE_QUERY_PER_HOME_SESSION",
           "ALL_UNREAD_UNCHANGED",
         ]
