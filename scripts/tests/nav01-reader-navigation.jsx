@@ -4,7 +4,10 @@ import { Button } from "@arco-design/web-react"
 import React, { useEffect, useState } from "react"
 import { createRoot } from "react-dom/client"
 
+import { contentState, setEntries } from "@/store/contentState"
 import {
+  appendReaderPageEntries,
+  buildReaderPageRequest,
   createReaderNavigationOperationGate,
   resolveReaderNavigation,
 } from "@/utils/reader-navigation"
@@ -25,6 +28,7 @@ const makeNavigation = ({
   mode = "article",
   source = { from: "feed", id: 10 },
   pages = [],
+  removeDuplicates = "none",
   nextSources = [],
   fetchSourceEntries = async () => ({ entries: [] }),
   isCurrent = () => true,
@@ -39,6 +43,12 @@ const makeNavigation = ({
     fetches,
     sourceFetches,
     appended,
+    get entries() {
+      return currentEntries
+    },
+    get sequenceIds() {
+      return sequenceIds
+    },
     run: () =>
       resolveReaderNavigation({
         activeEntryId: activeId,
@@ -52,19 +62,23 @@ const makeNavigation = ({
           fetches.push(request)
           return pageQueue.shift()
         },
-        appendPage: ({ entries: pageEntries, direction: pageDirection }) => {
+        appendPage: ({
+          entries: pageEntries,
+          direction: pageDirection,
+          sequenceIds: currentIds,
+        }) => {
           appended.push(pageEntries.map(({ id }) => id))
-          const known = new Set(currentEntries.map(({ id }) => String(id)))
-          const unique = pageEntries.filter(({ id }) => !known.has(String(id)))
-          currentEntries =
-            pageDirection === "previous"
-              ? [...unique, ...currentEntries]
-              : [...currentEntries, ...unique]
-          sequenceIds =
-            pageDirection === "previous"
-              ? [...unique.map(({ id }) => id), ...sequenceIds]
-              : [...sequenceIds, ...unique.map(({ id }) => id)]
-          return { entries: currentEntries, sequenceIds }
+          const appendedPage = appendReaderPageEntries({
+            currentEntries,
+            pageEntries,
+            sequenceIds: currentIds,
+            direction: pageDirection,
+            source: source.from,
+            removeDuplicates,
+          })
+          currentEntries = appendedPage.entries
+          sequenceIds = appendedPage.sequenceIds
+          return appendedPage
         },
         isCurrent,
         getNextSources: () => nextSources,
@@ -111,6 +125,102 @@ const cases = [
         navigation.appended.length === 1 && navigation.appended[0][0] === 3,
         "Page was not appended once",
       )
+    },
+  ],
+  [
+    "EQUAL_TIMESTAMP_CURSOR_BOUNDARIES_OVERLAP",
+    async () => {
+      const cases = [
+        ["published_at", "desc", "published_before"],
+        ["published_at", "asc", "published_after"],
+        ["changed_at", "desc", "changed_before"],
+        ["changed_at", "asc", "changed_after"],
+      ]
+      for (const [property, direction, cursor] of cases) {
+        const values =
+          direction === "desc"
+            ? ["12:05", "12:04", "12:03", "12:03", "12:02"]
+            : ["12:00", "12:01", "12:02", "12:02", "12:03"]
+        const entries = values.map((time, index) => ({
+          ...entry(index + 1),
+          [property]: `2026-10-18T${time}:00Z`,
+        }))
+        const request = buildReaderPageRequest({
+          source: { from: "feed", id: 10 },
+          content: {},
+          settings: { orderBy: property, orderDirection: direction, pageSize: 5 },
+          entries,
+          direction: "next",
+        })
+        const boundary = Math.floor(Date.parse(entries[2][property]) / 1000)
+        assert(
+          request.filterParams[cursor] === boundary &&
+            entries[2][property] === entries[3][property],
+          `${property} ${direction} cursor did not overlap its equal-timestamp boundary`,
+        )
+      }
+    },
+  ],
+  [
+    "READER_APPEND_MATCHES_PRESENTATION_DEDUP",
+    async () => {
+      const navigation = makeNavigation({
+        entries: [{ ...entry(1), hash: "same", title: "existing", url: "/one" }],
+        pages: [
+          {
+            entries: [
+              { ...entry(2), hash: "same", title: "duplicate", url: "/two" },
+              { ...entry(3), hash: "unique", title: "next", url: "/three" },
+            ],
+            total: 3,
+          },
+        ],
+        removeDuplicates: "hash",
+      })
+      const result = await navigation.run()
+      assert(result.entry.id === 3, "Navigation selected a presentation duplicate")
+      assert(
+        navigation.entries.map(({ id }) => id).join(",") === "1,3" &&
+          navigation.sequenceIds.join(",") === "1,3",
+        "Reader close would leave list membership inconsistent with presentation dedup",
+      )
+    },
+  ],
+  [
+    "READER_CLOSE_RETAINS_SHARED_LIST_MEMBERSHIP",
+    async () => {
+      const originalContent = contentState.get()
+      const currentEntries = [{ ...entry(1), hash: "same", title: "existing", url: "/one" }]
+      try {
+        contentState.set({
+          ...originalContent,
+          infoFrom: "feed",
+          entries: currentEntries,
+          activeContent: { id: 1 },
+        })
+        const appendedPage = appendReaderPageEntries({
+          currentEntries: contentState.get().entries,
+          pageEntries: [
+            { ...entry(2), hash: "same", title: "duplicate", url: "/two" },
+            { ...entry(3), hash: "unique", title: "next", url: "/three" },
+          ],
+          sequenceIds: [1],
+          direction: "next",
+          source: "feed",
+          removeDuplicates: "hash",
+        })
+        setEntries(appendedPage.entries)
+        contentState.setKey("activeContent", null)
+        assert(
+          contentState
+            .get()
+            .entries.map(({ id }) => id)
+            .join(",") === "1,3" && appendedPage.sequenceIds.join(",") === "1,3",
+          "Closing the reader left shared content state inconsistent with list presentation",
+        )
+      } finally {
+        contentState.set(originalContent)
+      }
     },
   ],
   [

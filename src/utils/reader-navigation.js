@@ -1,3 +1,8 @@
+/* eslint-disable import/extensions -- Native ESM tests import this pure utility directly. */
+import removeDuplicateEntries from "./deduplicate.js"
+import { buildPaginationCursorParams } from "./pagination-cursor.js"
+/* eslint-enable import/extensions */
+
 const entryIdEquals = (left, right) => String(left) === String(right)
 
 const uniqueEntries = (entries) => {
@@ -83,23 +88,12 @@ export const buildReaderPageRequest = ({
     ? "changed_at"
     : (settings.orderBy ?? "published_at")
   const orderDirection = settings.orderDirection ?? "desc"
-  const edgeEntry = direction === "previous" ? currentEntries[0] : currentEntries.at(-1)
-  const isEarlierInCanonicalOrder =
-    (direction === "next" && orderDirection === "desc") ||
-    (direction === "previous" && orderDirection !== "desc")
-  const cursorSuffix = isEarlierInCanonicalOrder ? "before" : "after"
-  let cursorParams = {}
-
-  if (edgeEntry) {
-    if (order === "created_at") {
-      cursorParams = { [`${cursorSuffix}_entry_id`]: edgeEntry.id }
-    } else if (["published_at", "changed_at"].includes(order)) {
-      const timestamp = entryTimestamp(edgeEntry, order)
-      if (timestamp !== null) {
-        cursorParams = { [`${order.replace(/_at$/, "")}_${cursorSuffix}`]: timestamp }
-      }
-    }
-  }
+  const cursorParams = buildPaginationCursorParams({
+    entries: currentEntries,
+    sortProperty: order,
+    orderDirection,
+    pageDirection: direction,
+  })
 
   const { status, starred } = getScopeStatus(source, settings)
   const filterParams = {
@@ -115,6 +109,49 @@ export const buildReaderPageRequest = ({
   }
 
   return { source, status, starred, filterParams, mode, direction }
+}
+
+export const appendReaderPageEntries = ({
+  currentEntries,
+  pageEntries,
+  sequenceIds,
+  direction,
+  source,
+  removeDuplicates = "none",
+  homeHighlightIds = [],
+}) => {
+  const knownIds = new Set(currentEntries.map(({ id }) => String(id)))
+  const newEntries = uniqueEntries(pageEntries).filter(({ id }) => !knownIds.has(String(id)))
+  const combinedEntries =
+    direction === "previous"
+      ? [...newEntries, ...currentEntries]
+      : [...currentEntries, ...newEntries]
+  const shouldDeduplicate =
+    source !== "home" && !["starred", "history"].includes(source) && removeDuplicates !== "none"
+  const retainedEntries = shouldDeduplicate
+    ? removeDuplicateEntries(combinedEntries, removeDuplicates).entries
+    : combinedEntries
+
+  if (source === "home") {
+    const retainedSequenceIds = [
+      ...sequenceIds,
+      ...newEntries
+        .filter(
+          ({ id, status }) =>
+            status === "unread" &&
+            !homeHighlightIds.some((highlightId) => entryIdEquals(highlightId, id)) &&
+            !sequenceIds.some((sequenceId) => entryIdEquals(sequenceId, id)),
+        )
+        .map(({ id }) => id),
+    ]
+    return { entries: retainedEntries, sequenceIds: retainedSequenceIds, newEntries }
+  }
+
+  return {
+    entries: retainedEntries,
+    sequenceIds: retainedEntries.map(({ id }) => id),
+    newEntries,
+  }
 }
 
 const findAdjacentInSequence = (entries, sequenceIds, activeEntryId, direction, mode) => {

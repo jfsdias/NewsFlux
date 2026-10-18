@@ -2,12 +2,14 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 
 /* eslint-disable import/extensions -- Node's native ESM runner requires explicit extensions. */
+import removeDuplicateEntries from "./deduplicate.js"
 import {
   buildReaderPageRequest,
   createReaderNavigationOperationGate,
   hasReaderPaginationContinuation,
   resolveReaderNavigation,
 } from "./reader-navigation.js"
+import * as readerNavigation from "./reader-navigation.js"
 import { getNextUnreadSource } from "./source-navigation.js"
 /* eslint-enable import/extensions */
 
@@ -205,8 +207,304 @@ test("NAV01_SORT_DIRECTION_PRESERVED", () => {
   assert.equal(request.filterParams.direction, "asc")
   assert.equal(
     request.filterParams.published_after,
-    Math.floor(Date.parse(entry(2).published_at) / 1000),
+    Math.floor(Date.parse(entry(1).published_at) / 1000),
   )
+})
+
+const timestampEntry = (id, property, value) => ({
+  ...entry(id),
+  [property]: new Date(value).toISOString(),
+})
+
+const equalBoundaryEntries = (property, direction) => {
+  const values =
+    direction === "desc"
+      ? [
+          "2026-10-18T12:05:00Z",
+          "2026-10-18T12:04:00Z",
+          "2026-10-18T12:03:00Z",
+          "2026-10-18T12:03:00Z",
+          "2026-10-18T12:02:00Z",
+        ]
+      : [
+          "2026-10-18T12:00:00Z",
+          "2026-10-18T12:01:00Z",
+          "2026-10-18T12:02:00Z",
+          "2026-10-18T12:02:00Z",
+          "2026-10-18T12:03:00Z",
+        ]
+  return values.map((value, index) => timestampEntry(index + 1, property, value))
+}
+
+for (const [property, direction, cursorName] of [
+  ["published_at", "desc", "published_before"],
+  ["published_at", "asc", "published_after"],
+  ["changed_at", "desc", "changed_before"],
+  ["changed_at", "asc", "changed_after"],
+]) {
+  const gateName = `${property === "published_at" ? "PUBLISHED" : "CHANGED"}_${direction.toUpperCase()}`
+  test(`NAV01_${gateName}_EQUAL_TIMESTAMP_BOUNDARY_NO_GAP`, () => {
+    const entries = equalBoundaryEntries(property, direction)
+    const request = buildReaderPageRequest({
+      source: { from: "feed", id: 12 },
+      content: {},
+      settings: { ...requestSettings, orderBy: property, orderDirection: direction },
+      entries,
+      direction: "next",
+      mode: "article",
+    })
+    const overlappingBoundary = Math.floor(Date.parse(entries[2][property]) / 1000)
+
+    assert.equal(request.filterParams[cursorName], overlappingBoundary)
+    assert.notEqual(
+      request.filterParams[cursorName],
+      Math.floor(Date.parse(entries.at(-1)[property]) / 1000),
+    )
+    assert.equal(entries[2][property], entries[3][property])
+  })
+}
+
+test("NAV01_DEDUP_NONE_PRESERVES_UNIQUE_IDS", () => {
+  const appendPage = readerNavigation.appendReaderPageEntries
+  assert.equal(
+    typeof appendPage,
+    "function",
+    "reader append should expose its list-membership step",
+  )
+  if (typeof appendPage !== "function") {
+    return
+  }
+
+  const result = appendPage({
+    currentEntries: [{ ...entry(1), hash: "a", title: "one", url: "/one" }],
+    pageEntries: [
+      { ...entry(2), hash: "a", title: "one duplicate", url: "/two" },
+      { ...entry(2), hash: "a", title: "one duplicate", url: "/two" },
+      { ...entry(3), hash: "c", title: "three", url: "/three" },
+    ],
+    sequenceIds: [1],
+    direction: "next",
+    source: "feed",
+    removeDuplicates: "none",
+  })
+
+  assert.deepEqual(
+    result.entries.map(({ id }) => id),
+    [1, 2, 3],
+  )
+  assert.deepEqual(result.sequenceIds, [1, 2, 3])
+})
+
+for (const mode of ["hash", "title", "url"]) {
+  test(`NAV01_DEDUP_${mode.toUpperCase()}_MATCHES_LIST_PRESENTATION`, () => {
+    const appendPage = readerNavigation.appendReaderPageEntries
+    assert.equal(
+      typeof appendPage,
+      "function",
+      "reader append should expose its list-membership step",
+    )
+    if (typeof appendPage !== "function") {
+      return
+    }
+
+    const currentEntries = [
+      { ...entry(1), hash: "shared-hash", title: "Shared title", url: "/shared" },
+    ]
+    const pageEntries = [
+      { ...entry(2), hash: "shared-hash", title: "Different title", url: "/two" },
+      { ...entry(3), hash: "three", title: "Shared title", url: "/three" },
+      { ...entry(4), hash: "four", title: "Four", url: "/shared" },
+      { ...entry(5), hash: "five", title: "Five", url: "/five" },
+    ]
+    const result = appendPage({
+      currentEntries,
+      pageEntries,
+      sequenceIds: [1],
+      direction: "next",
+      source: "feed",
+      removeDuplicates: mode,
+    })
+    const expected = removeDuplicateEntries([...currentEntries, ...pageEntries], mode).entries
+
+    assert.deepEqual(
+      result.entries.map(({ id }) => id),
+      expected.map(({ id }) => id),
+    )
+    assert.deepEqual(
+      result.sequenceIds,
+      expected.map(({ id }) => id),
+    )
+  })
+}
+
+test("NAV01_DEDUP_DOES_NOT_INTRODUCE_PROVIDER_WRITE", () => {
+  const appendPage = readerNavigation.appendReaderPageEntries
+  assert.equal(
+    typeof appendPage,
+    "function",
+    "reader append should expose a pure list-membership step",
+  )
+  if (typeof appendPage !== "function") {
+    return
+  }
+
+  const originalFetch = globalThis.fetch
+  const providerRequests = []
+  globalThis.fetch = async (...args) => {
+    providerRequests.push(args)
+    return new Response(null, { status: 204 })
+  }
+  try {
+    appendPage({
+      currentEntries: [{ ...entry(1), hash: "same", title: "same", url: "/same" }],
+      pageEntries: [{ ...entry(2), hash: "same", title: "same", url: "/same" }],
+      sequenceIds: [1],
+      direction: "next",
+      source: "feed",
+      removeDuplicates: "hash",
+    })
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+
+  assert.equal(providerRequests.length, 0)
+})
+
+test("NAV01_SEQUENCE_EXCLUDES_PRESENTATION_DUPLICATES", async () => {
+  const appendPage = readerNavigation.appendReaderPageEntries
+  assert.equal(
+    typeof appendPage,
+    "function",
+    "reader append should expose list membership and sequence",
+  )
+  if (typeof appendPage !== "function") {
+    return
+  }
+
+  let sharedEntries = [{ ...entry(1), hash: "same", title: "existing", url: "/one" }]
+  let sharedSequenceIds = [1]
+  const { input } = createResolver({
+    entries: sharedEntries,
+    activeEntryId: 1,
+    pages: [
+      {
+        entries: [
+          { ...entry(2), hash: "same", title: "duplicate", url: "/two" },
+          { ...entry(3), hash: "unique", title: "next", url: "/three" },
+        ],
+        total: 3,
+      },
+    ],
+    appendPage: ({ entries: pageEntries, sequenceIds, direction }) => {
+      const appended = appendPage({
+        currentEntries: sharedEntries,
+        pageEntries,
+        sequenceIds,
+        direction,
+        source: "feed",
+        removeDuplicates: "hash",
+      })
+      sharedEntries = appended.entries
+      sharedSequenceIds = appended.sequenceIds
+      return appended
+    },
+  })
+  const result = await resolveReaderNavigation(input)
+
+  assert.equal(result.entry.id, 3)
+  assert.deepEqual(
+    sharedEntries.map(({ id }) => id),
+    [1, 3],
+  )
+  assert.deepEqual(sharedSequenceIds, [1, 3])
+})
+
+test("NAV01_OVERLAPPING_PAGE_IDS_DO_NOT_DUPLICATE_NAVIGATION", async () => {
+  let sharedEntries = [entry(1), entry(2)]
+  let sharedSequenceIds = [1, 2]
+  const { input } = createResolver({
+    entries: sharedEntries,
+    activeEntryId: 2,
+    pages: [{ entries: [entry(2), entry(3)], total: 3 }],
+    appendPage: ({ entries: pageEntries, sequenceIds, direction }) => {
+      const appended = readerNavigation.appendReaderPageEntries({
+        currentEntries: sharedEntries,
+        pageEntries,
+        sequenceIds,
+        direction,
+        source: "feed",
+        removeDuplicates: "none",
+      })
+      sharedEntries = appended.entries
+      sharedSequenceIds = appended.sequenceIds
+      return appended
+    },
+  })
+  const result = await resolveReaderNavigation(input)
+
+  assert.equal(result.entry.id, 3)
+  assert.deepEqual(
+    sharedEntries.map(({ id }) => id),
+    [1, 2, 3],
+  )
+  assert.deepEqual(sharedSequenceIds, [1, 2, 3])
+})
+
+test("NAV01_PREVIOUS_TEMPORAL_CURSOR_OVERLAPS_CANONICAL_START_BOUNDARY", () => {
+  const entries = ["12:05", "12:04", "12:03", "12:02", "12:01"].map((time, index) =>
+    timestampEntry(index + 1, "published_at", `2026-10-18T${time}:00Z`),
+  )
+  const request = buildReaderPageRequest({
+    source: { from: "feed", id: 12 },
+    content: {},
+    settings: { ...requestSettings, orderDirection: "desc" },
+    entries,
+    direction: "previous",
+  })
+
+  assert.equal(
+    request.filterParams.published_after,
+    Math.floor(Date.parse(entries[1].published_at) / 1000),
+  )
+  assert.equal(request.filterParams.published_before, undefined)
+})
+
+test("NAV01_CREATED_AT_CONTINUES_TO_USE_ENTRY_ID_CURSOR", () => {
+  const entries = ["12:00", "12:01", "12:02", "12:02", "12:03"].map((time, index) =>
+    timestampEntry(index + 1, "created_at", `2026-10-18T${time}:00Z`),
+  )
+  const request = buildReaderPageRequest({
+    source: { from: "feed", id: 12 },
+    content: {},
+    settings: { ...requestSettings, orderBy: "created_at", orderDirection: "asc" },
+    entries,
+    direction: "next",
+  })
+
+  assert.equal(request.filterParams.after_entry_id, entries[3].id)
+  assert.equal(request.filterParams.published_after, undefined)
+})
+
+test("NAV01_STARRED_AND_HISTORY_KEEP_EXISTING_PRESENTATION_DEDUP_EXCLUSIONS", () => {
+  const appendPage = readerNavigation.appendReaderPageEntries
+  const currentEntries = [{ ...entry(1), hash: "same", title: "same", url: "/same" }]
+  const pageEntries = [{ ...entry(2), hash: "same", title: "same", url: "/same" }]
+
+  for (const source of ["starred", "history"]) {
+    const result = appendPage({
+      currentEntries,
+      pageEntries,
+      sequenceIds: [1],
+      direction: "next",
+      source,
+      removeDuplicates: "hash",
+    })
+    assert.deepEqual(
+      result.entries.map(({ id }) => id),
+      [1, 2],
+    )
+    assert.deepEqual(result.sequenceIds, [1, 2])
+  }
 })
 
 test("NAV01_HOME_FOLLOWS_COMMITTED_PROJECTION", async () => {

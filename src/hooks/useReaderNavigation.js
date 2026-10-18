@@ -26,6 +26,7 @@ import { get24HoursAgoTimestamp } from "@/utils/date"
 import prepareEntry from "@/utils/entry-presentation"
 import { getHomePaginationBoundary } from "@/utils/home-editorial-session"
 import {
+  appendReaderPageEntries,
   buildReaderPageRequest,
   createReaderNavigationOperationGate,
   hasReaderPaginationContinuation,
@@ -145,41 +146,23 @@ const useReaderNavigation = ({ source, sourceId, getEntries, homeProjection }) =
   const appendPage = useCallback(
     ({ entries: pageEntries, direction, sequenceIds: currentSequenceIds, response }) => {
       const latest = contentState.get()
-      const seen = new Set(latest.entries.map(({ id }) => String(id)))
-      const newEntries = pageEntries
-        .filter(({ id }) => !seen.has(String(id)))
-        .map((entry) => prepareEntry(entry))
-      if (newEntries.length === 0) {
+      const appended = appendReaderPageEntries({
+        currentEntries: latest.entries,
+        pageEntries: pageEntries.map((entry) => prepareEntry(entry)),
+        sequenceIds: currentSequenceIds,
+        direction,
+        source,
+        removeDuplicates: settingsState.get().removeDuplicates,
+        homeHighlightIds: homeProjection?.highlightIds,
+      })
+      if (appended.newEntries.length === 0) {
         if (Number.isFinite(response?.total)) {
           setLoadMoreVisible(false)
         }
         return { entries: latest.entries, sequenceIds: currentSequenceIds }
       }
 
-      const nextEntries =
-        direction === "previous"
-          ? [...newEntries, ...latest.entries]
-          : [...latest.entries, ...newEntries]
-      const nextSequenceIds =
-        source === "home"
-          ? [
-              ...currentSequenceIds,
-              ...newEntries
-                .filter(
-                  ({ id, status }) =>
-                    status === "unread" &&
-                    !homeProjection?.highlightIds.some((highlightId) =>
-                      idsEqual(highlightId, id),
-                    ) &&
-                    !currentSequenceIds.some((sequenceId) => idsEqual(sequenceId, id)),
-                )
-                .map(({ id }) => id),
-            ]
-          : direction === "previous"
-            ? [...newEntries.map(({ id }) => id), ...currentSequenceIds]
-            : [...currentSequenceIds, ...newEntries.map(({ id }) => id)]
-
-      setEntries(nextEntries)
+      setEntries(appended.entries)
       if (Number.isFinite(response?.total)) {
         setTotal(response.total)
         setLoadMoreVisible(hasReaderPaginationContinuation(response, settings.pageSize))
@@ -197,7 +180,7 @@ const useReaderNavigation = ({ source, sourceId, getEntries, homeProjection }) =
           cursor: getHomePaginationBoundary(pageEntries),
         })
       }
-      return { entries: nextEntries, sequenceIds: nextSequenceIds }
+      return { entries: appended.entries, sequenceIds: appended.sequenceIds }
     },
     [homeProjection?.highlightIds, settings.pageSize, source, sourceId],
   )
