@@ -9,6 +9,7 @@ import {
   setArticleListError,
   setEntries,
   setEntriesWithDeduplication,
+  setHomePaginationBoundary,
   setIsArticleListReady,
   setLoadMoreError,
   setLoadMoreVisible,
@@ -35,9 +36,14 @@ import {
   waitForEntryMutations,
 } from "@/utils/entry-mutation-state"
 import prepareEntry from "@/utils/entry-presentation"
-import { mergeHomeSessionEntries } from "@/utils/home-editorial-session"
+import { getHomePaginationBoundary, mergeHomeSessionEntries } from "@/utils/home-editorial-session"
 
-const handleResponses = (response, isHome, preserveHomeSession = false) => {
+const handleResponses = (
+  response,
+  isHome,
+  preserveHomeSession = false,
+  homePaginationSession = null,
+) => {
   const isValidResponse =
     Array.isArray(response?.entries) && Number.isFinite(response?.total) && response.total >= 0
   if (!isValidResponse) {
@@ -51,6 +57,10 @@ const handleResponses = (response, isHome, preserveHomeSession = false) => {
       : canonicalEntries
   if (isHome) {
     setEntries(preparedEntries)
+    setHomePaginationBoundary({
+      ...homePaginationSession,
+      cursor: getHomePaginationBoundary(canonicalEntries),
+    })
   } else {
     const duplicateEntries = setEntriesWithDeduplication(preparedEntries)
     markDuplicatesAsRead(duplicateEntries)
@@ -205,7 +215,10 @@ const useArticleList = (source, sourceId, getEntries) => {
         previousHomeSnapshot.sessionRevision === requestSessionRevision &&
         previousHomeSnapshot.pageSize === settings.pageSize &&
         previousHomeSnapshot.showHiddenFeeds === settings.showHiddenFeeds
-      handleResponses(response, source === "home", preservesHomeSession)
+      handleResponses(response, source === "home", preservesHomeSession, {
+        requestKey,
+        sessionRevision: requestSessionRevision,
+      })
       if (source === "home") {
         committedHomeSnapshot.current = {
           requestKey,

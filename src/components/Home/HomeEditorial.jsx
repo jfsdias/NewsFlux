@@ -313,7 +313,11 @@ const HomeEditorial = ({
       refreshTimer = globalThis.setTimeout(() => {
         refreshTimer = null
         const now = Date.now()
-        if (!canRefreshHome() || now - lastRefreshAt < HOME_RESUME_DUPLICATE_WINDOW_MS) {
+        if (
+          !canRefreshHome() ||
+          navigator.onLine === false ||
+          now - lastRefreshAt < HOME_RESUME_DUPLICATE_WINDOW_MS
+        ) {
           return
         }
         lastRefreshAt = now

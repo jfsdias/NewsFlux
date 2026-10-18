@@ -69,6 +69,7 @@ const requests = []
 let fixtureEntries = routeEntries
 let fixtureTotal = 2
 let paginationPages = null
+let strictHomePagination = false
 let deferredPagination = null
 let deferredArticleQuery = null
 let failPagination = false
@@ -120,6 +121,15 @@ apiClient.get = async (url) => {
       return deferredCount.promise
     }
     const isEmptyHomePageAppend = emptyPagePagination && initialHomeQueryServed
+    if (strictHomePagination && params.has("published_before")) {
+      const cursor = Number(params.get("published_before"))
+      const limit = Number(params.get("limit"))
+      const entries = fixtureEntries
+        .toSorted((left, right) => Date.parse(right.published_at) - Date.parse(left.published_at))
+        .filter((entry) => Date.parse(entry.published_at) / 1000 <= cursor)
+        .slice(0, limit)
+      return { entries, total: fixtureTotal }
+    }
     if ((params.has("published_before") || isEmptyHomePageAppend) && paginationPages) {
       if (failPagination) {
         throw new Error("Expected local pagination failure")
@@ -134,6 +144,13 @@ apiClient.get = async (url) => {
     if (!params.has("published_before") && deferredArticleQuery) {
       await deferredArticleQuery.promise
       deferredArticleQuery = null
+    }
+    if (strictHomePagination) {
+      const limit = Number(params.get("limit"))
+      const entries = fixtureEntries
+        .toSorted((left, right) => Date.parse(right.published_at) - Date.parse(left.published_at))
+        .slice(0, limit)
+      return { entries, total: fixtureTotal }
     }
     if (emptyPagePagination) {
       initialHomeQueryServed = true
@@ -1922,6 +1939,7 @@ const Harness = () => {
       pageSize = getDefaultSettings().pageSize,
       showStatus = getDefaultSettings().showStatus,
       pages = null,
+      strictHomePagination: useStrictHomePagination = false,
       deferInitial = false,
       emptyPagePagination: nextEmptyPagePagination = false,
       layout = getDefaultSettings().articleListLayout,
@@ -1944,6 +1962,7 @@ const Harness = () => {
     fixtureEntries = entries.map((entry) => ({ ...entry }))
     fixtureTotal = total
     paginationPages = pages?.map((page) => page.map((entry) => ({ ...entry }))) ?? null
+    strictHomePagination = useStrictHomePagination
     deferredPagination = pages?.length
       ? (() => {
           let release
@@ -2862,6 +2881,95 @@ const Harness = () => {
             queries[1].get("published_before") === cursor(18) &&
             queries[2].get("published_before") === cursor(36),
           "Home cursor sequence did not advance once per page",
+        )
+      },
+    ],
+    [
+      "HOME_REFRESH_AFTER_PAGINATION_DOES_NOT_SKIP_NEW_CANONICAL_GAP",
+      async () => {
+        const oldEntries = paginationEntries(40)
+        await mount("/", {
+          entries: oldEntries,
+          total: oldEntries.length,
+          pageSize: 20,
+          strictHomePagination: true,
+        })
+        await waitFor(
+          () => contentState.get().isArticleListReady && contentState.get().entries.length === 20,
+          "Initial canonical Home page did not load",
+        )
+        await loadNextPage(20)
+        assert(contentState.get().entries.length === 38, "Second Home page did not load")
+
+        const committedHighlights = ids()
+        const committedRecent = recentIds()
+        const newerEntries = paginationEntries(30, -30)
+        fixtureEntries = [...newerEntries, ...oldEntries].toSorted(
+          (left, right) => Date.parse(right.published_at) - Date.parse(left.published_at),
+        )
+        fixtureTotal = fixtureEntries.length
+        deferredArticleQuery = createDeferred()
+        const previousSnapshotRevision = contentState.get().articleListSnapshotRevision
+        const previousRequestCount = listRequests().length
+        document.body.focus()
+        document.body.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            bubbles: true,
+            cancelable: true,
+            code: "KeyR",
+            key: "r",
+            keyCode: 82,
+            which: 82,
+          }),
+        )
+        await waitFor(
+          () => listRequests().length === previousRequestCount + 1,
+          "HOME-01 refresh did not issue one canonical first-page request",
+        )
+        await waitFor(
+          () => !contentState.get().isArticleListReady,
+          "Refresh did not become pending",
+        )
+        deferredArticleQuery.resolve()
+        await waitFor(
+          () =>
+            contentState.get().isArticleListReady &&
+            contentState.get().articleListSnapshotRevision === previousSnapshotRevision + 1,
+          "Canonical refreshed page did not commit",
+        )
+
+        assert(ids().join(",") === committedHighlights.join(","), "Refresh promoted new Highlights")
+        assert(
+          recentIds().slice(0, committedRecent.length).join(",") === committedRecent.join(","),
+          "Refresh reordered already committed Recent cards",
+        )
+        assert(
+          newerEntries.slice(0, 20).every(({ id }) => recentIds().includes(id)) &&
+            newerEntries.every(({ id }) => !ids().includes(id)),
+          "Refreshed canonical page was not appended to Recent without promoting Highlights",
+        )
+
+        const loadedAfterRefresh = contentState.get().entries.length
+        await loadNextPage(loadedAfterRefresh)
+        const nextRequest = new URL(listRequests().at(-1), "https://fixture.invalid").searchParams
+        const expectedBoundary = String(Date.parse(newerEntries[18].published_at) / 1000)
+        assert(
+          nextRequest.get("published_before") === expectedBoundary,
+          `Load More used retained-session cursor ${nextRequest.get("published_before")} instead of canonical refreshed boundary ${expectedBoundary}`,
+        )
+        assert(
+          newerEntries.slice(20).every(({ id }) => recentIds().includes(id)),
+          "Load More skipped the unread entries in the post-refresh canonical gap",
+        )
+        const loadedIds = contentState.get().entries.map(({ id }) => id)
+        assert(
+          new Set(loadedIds).size === loadedIds.length,
+          "Refresh pagination created duplicate entries",
+        )
+        assert(
+          ids().join(",") === committedHighlights.join(",") &&
+            newerEntries.every(({ id }) => !ids().includes(id)),
+          "Gap fill promoted canonical page entries into Highlights",
         )
       },
     ],
@@ -4369,6 +4477,79 @@ const Harness = () => {
       },
     ],
     [
+      "HOME_RESUME_WHILE_OFFLINE_WAITS_FOR_RECONNECT",
+      async () => {
+        await mount("/", {
+          entries: personalizationFixtures.home,
+          total: personalizationFixtures.home.length,
+        })
+        await waitFor(
+          () => contentState.get().isArticleListReady && cards().length === 3,
+          "Home did not commit before offline resume test",
+        )
+        const committedHighlights = ids()
+        const committedRecent = recentIds()
+        const initialRequestCount = listRequests().length
+        const originalVisibility = Object.getOwnPropertyDescriptor(document, "visibilityState")
+        const originalOnline = Object.getOwnPropertyDescriptor(navigator, "onLine")
+        let visibility = "visible"
+        let online = true
+        try {
+          Object.defineProperty(document, "visibilityState", {
+            configurable: true,
+            get: () => visibility,
+          })
+          Object.defineProperty(navigator, "onLine", {
+            configurable: true,
+            get: () => online,
+          })
+
+          online = false
+          globalThis.dispatchEvent(new Event("offline"))
+          globalThis.dispatchEvent(new Event("blur"))
+          visibility = "hidden"
+          document.dispatchEvent(new Event("visibilitychange"))
+          articleFailure = true
+          visibility = "visible"
+          document.dispatchEvent(new Event("visibilitychange"))
+          globalThis.dispatchEvent(new Event("focus"))
+          await new Promise((resolve) => setTimeout(resolve, 350))
+          const offlineRefreshCount = listRequests().length - initialRequestCount
+
+          articleFailure = false
+          online = true
+          globalThis.dispatchEvent(new Event("online"))
+          await new Promise((resolve) => setTimeout(resolve, 400))
+          const reconnectRefreshCount =
+            listRequests().length - initialRequestCount - offlineRefreshCount
+
+          assert(
+            offlineRefreshCount === 0 && reconnectRefreshCount === 1,
+            `Offline resume consumed the lifecycle refresh opportunity (offline=${offlineRefreshCount}, reconnect=${reconnectRefreshCount})`,
+          )
+          assert(
+            contentState.get().isArticleListReady &&
+              !contentState.get().articleListError &&
+              ids().join(",") === committedHighlights.join(",") &&
+              recentIds().join(",") === committedRecent.join(","),
+            "Reconnect did not recover the committed Home projection cleanly",
+          )
+        } finally {
+          articleFailure = false
+          if (originalVisibility) {
+            Object.defineProperty(document, "visibilityState", originalVisibility)
+          } else {
+            delete document.visibilityState
+          }
+          if (originalOnline) {
+            Object.defineProperty(navigator, "onLine", originalOnline)
+          } else {
+            delete navigator.onLine
+          }
+        }
+      },
+    ],
+    [
       "ONE_AUX_PROFILE_QUERY_PER_HOME_SESSION",
       async () => {
         await mount("/", {
@@ -4481,6 +4662,8 @@ const Harness = () => {
           "HOME_RESUME_TRIGGERS_REFRESH",
           "HOME_RECONNECT_TRIGGERS_REFRESH",
           "HOME_RESUME_RECONNECT_EVENTS_COALESCE",
+          "HOME_RESUME_WHILE_OFFLINE_WAITS_FOR_RECONNECT",
+          "HOME_REFRESH_AFTER_PAGINATION_DOES_NOT_SKIP_NEW_CANONICAL_GAP",
           "ONE_AUX_PROFILE_QUERY_PER_HOME_SESSION",
           "ALL_UNREAD_UNCHANGED",
         ]

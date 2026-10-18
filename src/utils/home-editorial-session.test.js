@@ -5,6 +5,7 @@ const {
   appendHomeSessionEntries,
   createHomeEditorialSession,
   createHomeSessionKey,
+  getHomePaginationBoundary,
   mergeHomeSessionEntries,
   projectHomeSession,
   transitionHomeSession,
@@ -207,6 +208,19 @@ test("REFRESH_MERGE_PRESERVES_SESSION_MEMBERS_AND_USES_CANONICAL_ENTRY_OBJECTS",
     merged.find(({ id }) => id === 2),
     loaded[1],
   )
+})
+
+test("Home pagination boundary uses the second-oldest canonical timestamp for overlap", () => {
+  const canonicalPage = Array.from({ length: 20 }, (_, index) => ({
+    id: index + 1,
+    published_at: new Date(Date.UTC(2026, 9, 18, 12, -index)).toISOString(),
+  }))
+
+  assert.equal(
+    getHomePaginationBoundary(canonicalPage),
+    Math.floor(Date.parse(canonicalPage[18].published_at) / 1000),
+  )
+  assert.equal(getHomePaginationBoundary([]), null)
 })
 
 test("session identity or visibility change discards old Highlights", () => {

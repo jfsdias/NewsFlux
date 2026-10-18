@@ -9,6 +9,7 @@ import {
   contentState,
   setEntries,
   setEntriesWithDeduplication,
+  setHomePaginationBoundary,
   setLoadMoreError,
   setLoadMoreVisible,
 } from "@/store/contentState"
@@ -22,6 +23,7 @@ import {
   waitForEntryMutations,
 } from "@/utils/entry-mutation-state"
 import prepareEntry from "@/utils/entry-presentation"
+import { getHomePaginationBoundary } from "@/utils/home-editorial-session"
 import createSetter from "@/utils/nanostores"
 
 const loadingMoreState = atom(false)
@@ -66,9 +68,18 @@ const useLoadMore = () => {
     }
   }
 
-  const getFilterParams = (currentEntries) => {
+  const getFilterParams = (currentEntries, requestKey, sessionRevision) => {
     if (currentEntries.length === 0) {
       return {}
+    }
+
+    if (infoFrom === "home") {
+      const boundary = contentState.get().homePaginationBoundary
+      const cursor =
+        boundary?.requestKey === requestKey && boundary.sessionRevision === sessionRevision
+          ? boundary.cursor
+          : getHomePaginationBoundary(currentEntries)
+      return cursor === null ? {} : { published_before: cursor }
     }
 
     const referenceEntry = getReferenceEntry(currentEntries)
@@ -194,7 +205,11 @@ const useLoadMore = () => {
         }
 
         synchronizePaginationProgress()
-        const filterParams = getFilterParams(contentState.get().entries)
+        const filterParams = getFilterParams(
+          contentState.get().entries,
+          requestKey,
+          requestSessionRevision,
+        )
         if (infoFrom !== "home" && filterString) {
           filterParams.search = filterString
         }
@@ -258,6 +273,13 @@ const useLoadMore = () => {
       if (response.entries.length > 0) {
         const newEntries = response.entries.map((entry) => prepareEntry(entry))
         updateEntries(newEntries)
+        if (infoFrom === "home") {
+          setHomePaginationBoundary({
+            requestKey,
+            sessionRevision: requestSessionRevision,
+            cursor: getHomePaginationBoundary(response.entries),
+          })
+        }
         for (const entryId of responseEntryIds) {
           progress.seenResponseEntryIds.add(entryId)
         }

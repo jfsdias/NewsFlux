@@ -162,6 +162,8 @@ export const phase2cEditorialHomeMatrix = {
     "HOME_RESUME_TRIGGERS_REFRESH",
     "HOME_RECONNECT_TRIGGERS_REFRESH",
     "HOME_RESUME_RECONNECT_EVENTS_COALESCE",
+    "HOME_RESUME_WHILE_OFFLINE_WAITS_FOR_RECONNECT",
+    "HOME_REFRESH_AFTER_PAGINATION_DOES_NOT_SKIP_NEW_CANONICAL_GAP",
     "ONE_AUX_PROFILE_QUERY_PER_HOME_SESSION",
     "ALL_UNREAD_UNCHANGED",
     "HOME_VISUAL_01_CASE_A_TEXT_PRIMARY_IMAGE_SECONDARIES",
@@ -294,8 +296,14 @@ export const phase2cEditorialHomeMatrix = {
         "HOME_RESUME_TRIGGERS_REFRESH",
         "HOME_RECONNECT_TRIGGERS_REFRESH",
         "HOME_RESUME_RECONNECT_EVENTS_COALESCE",
+        "HOME_RESUME_WHILE_OFFLINE_WAITS_FOR_RECONNECT",
       ],
       fixtures: ["visibility/focus resume", "offline/online recovery"],
+    },
+    {
+      id: "HOME_01_REFRESH_PAGINATION_BOUNDARY",
+      covers: ["HOME_REFRESH_AFTER_PAGINATION_DOES_NOT_SKIP_NEW_CANONICAL_GAP"],
+      fixtures: ["two committed pages", "new canonical first page", "gap-filling next page"],
     },
     {
       id: "PHASE2D_QUERY_SCOPE_AND_SESSION",

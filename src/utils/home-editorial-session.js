@@ -36,6 +36,19 @@ export const mergeHomeSessionEntries = (previousEntries, refreshedEntries) => {
   return merged
 }
 
+// Keep the canonical page boundary separate from older retained Home session entries.
+export const getHomePaginationBoundary = (entries) => {
+  const timestamps = [
+    ...new Set(entries.map(({ published_at }) => Math.floor(Date.parse(published_at) / 1000))),
+  ].toSorted((left, right) => right - left)
+
+  if (timestamps.length === 0) {
+    return null
+  }
+
+  return timestamps[timestamps.length > 1 ? timestamps.length - 2 : 0]
+}
+
 export const createHomeEditorialSession = ({
   requestKey,
   sessionRevision,
