@@ -86,7 +86,10 @@ const useReaderNavigation = ({ source, sourceId, getEntries, homeProjection }) =
         return Boolean(latest.loadMoreVisible)
       }
       const total = context.total ?? latest.total
-      return Boolean(latest.loadMoreVisible || total > (context.entries ?? latest.entries).length)
+      const paginationEntries = context.paginationEntries ?? context.entries ?? latest.entries
+      return Number.isFinite(total)
+        ? total > paginationEntries.length
+        : Boolean(latest.loadMoreVisible)
     },
     [source],
   )
@@ -112,7 +115,7 @@ const useReaderNavigation = ({ source, sourceId, getEntries, homeProjection }) =
   )
 
   const fetchPage = useCallback(
-    async ({ direction, mode }) => {
+    async ({ direction, mode, paginationEntries }) => {
       const latestContent = contentState.get()
       const latestSettings = settingsState.get()
       const request = buildReaderPageRequest({
@@ -124,7 +127,8 @@ const useReaderNavigation = ({ source, sourceId, getEntries, homeProjection }) =
             ? { ...latestContent, homePaginationBoundary: null }
             : latestContent,
         settings: latestSettings,
-        entries: latestContent.entries,
+        entries:
+          source === "home" ? latestContent.entries : (paginationEntries ?? latestContent.entries),
         direction,
         mode,
         todayPublishedAfter: source === "today" ? get24HoursAgoTimestamp() : undefined,

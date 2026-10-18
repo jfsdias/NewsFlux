@@ -201,6 +201,7 @@ export const resolveReaderNavigation = async (input) => {
   }
 
   let currentEntries = getEntries()
+  let paginationEntries = uniqueEntries(input.getPaginationEntries?.() ?? currentEntries)
   let adjacent = findAdjacentInSequence(
     currentEntries,
     initialSequence,
@@ -214,7 +215,14 @@ export const resolveReaderNavigation = async (input) => {
 
   let sequenceIds = initialSequence
   let latestTotal = null
-  while (canContinue(direction, { entries: currentEntries, sequenceIds, total: latestTotal })) {
+  while (
+    canContinue(direction, {
+      entries: currentEntries,
+      paginationEntries,
+      sequenceIds,
+      total: latestTotal,
+    })
+  ) {
     if (!isCurrent()) {
       return result("stale")
     }
@@ -225,6 +233,7 @@ export const resolveReaderNavigation = async (input) => {
         direction,
         mode,
         entries: currentEntries,
+        paginationEntries,
         sequenceIds,
       })
     } catch (error) {
@@ -239,7 +248,18 @@ export const resolveReaderNavigation = async (input) => {
       break
     }
 
-    const sequenceBeforeAppend = sequenceIds
+    const canonicalIds = new Set(paginationEntries.map(({ id }) => String(id)))
+    const newCanonicalEntries = uniqueEntries(pageEntries).filter(
+      ({ id }) => !canonicalIds.has(String(id)),
+    )
+    if (newCanonicalEntries.length === 0) {
+      break
+    }
+    paginationEntries =
+      direction === "previous"
+        ? [...newCanonicalEntries, ...paginationEntries]
+        : [...paginationEntries, ...newCanonicalEntries]
+
     const appended = await appendPage({
       entries: uniqueEntries(pageEntries),
       direction,
@@ -255,14 +275,6 @@ export const resolveReaderNavigation = async (input) => {
     adjacent = findAdjacentInSequence(currentEntries, sequenceIds, activeEntryId, direction, mode)
     if (adjacent) {
       return result("found", { entry: adjacent })
-    }
-
-    const currentIds = new Set(sequenceBeforeAppend.map(String))
-    const hasNewSequenceMember = uniqueEntries(pageEntries).some(
-      ({ id }) => !currentIds.has(String(id)),
-    )
-    if (!hasNewSequenceMember) {
-      break
     }
   }
 

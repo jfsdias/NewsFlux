@@ -19,6 +19,15 @@ const entry = (id, status = "unread", minute = id) => ({
   published_at: new Date(Date.UTC(2026, 9, 18, 12, minute)).toISOString(),
 })
 
+const datedReaderEntry = (id, minute, values = {}) => ({
+  ...entry(id),
+  published_at: new Date(Date.UTC(2026, 9, 18, 12, minute)).toISOString(),
+  hash: `hash-${id}`,
+  title: `Title ${id}`,
+  url: `/entry/${id}`,
+  ...values,
+})
+
 const sequenceIds = (entries) => entries.map(({ id }) => id)
 
 const createResolver = (overrides = {}) => {
@@ -70,6 +79,108 @@ const createResolver = (overrides = {}) => {
       }),
   }
   return { input, state, pages, appendedPages, fetchCalls, sourceCalls }
+}
+
+const makeDedupOnlyPageResolver = (removeDuplicates, { finalPage = false } = {}) => {
+  const currentEntries = [datedReaderEntry(1, 10), datedReaderEntry(2, 9), datedReaderEntry(3, 8)]
+  const duplicateValues = {
+    hash: currentEntries[0].hash,
+    title: currentEntries[0].title,
+    url: currentEntries[0].url,
+  }
+  const pageTwoEntries = [
+    datedReaderEntry(4, 7, duplicateValues),
+    datedReaderEntry(5, 6, duplicateValues),
+  ]
+  const pageThreeEntry = datedReaderEntry(6, 5)
+  const total = finalPage ? 5 : 6
+  const initialCursor = buildReaderPageRequest({
+    source: { from: "feed", id: 10 },
+    content: {},
+    settings: { ...requestSettings, orderDirection: "desc", pageSize: 2 },
+    entries: currentEntries,
+    direction: "next",
+  }).filterParams.published_before
+  const advancedCursor = buildReaderPageRequest({
+    source: { from: "feed", id: 10 },
+    content: {},
+    settings: { ...requestSettings, orderDirection: "desc", pageSize: 2 },
+    entries: [...currentEntries, ...pageTwoEntries],
+    direction: "next",
+  }).filterParams.published_before
+  let sharedEntries = currentEntries
+  let sharedSequenceIds = sequenceIds(currentEntries)
+  const fetchCursors = []
+  const pageTwoRetainedIds = []
+  const input = {
+    activeEntryId: 3,
+    direction: "next",
+    mode: "article",
+    source: { from: "feed", id: 10 },
+    getEntries: () => sharedEntries,
+    getSequenceIds: () => sharedSequenceIds,
+    canContinue: (_direction, context) => {
+      const knownEntries = context.paginationEntries ?? context.entries
+      return context.total === null || context.total > knownEntries.length
+    },
+    fetchPage: async ({ entries, paginationEntries }) => {
+      const request = buildReaderPageRequest({
+        source: { from: "feed", id: 10 },
+        content: {},
+        settings: { ...requestSettings, orderDirection: "desc", pageSize: 2 },
+        entries: paginationEntries ?? entries,
+        direction: "next",
+      })
+      const cursor = request.filterParams.published_before
+      fetchCursors.push(cursor)
+      if (cursor === initialCursor) {
+        return fetchCursors.filter((value) => value === initialCursor).length === 1
+          ? { entries: pageTwoEntries, total }
+          : { entries: [], total }
+      }
+      if (cursor === advancedCursor && !finalPage) {
+        return { entries: [pageThreeEntry], total }
+      }
+      throw new Error(`Unexpected canonical cursor ${cursor}`)
+    },
+    appendPage: ({ entries: pageEntries, direction, sequenceIds: currentSequenceIds }) => {
+      const appended = readerNavigation.appendReaderPageEntries({
+        currentEntries: sharedEntries,
+        pageEntries,
+        sequenceIds: currentSequenceIds,
+        direction,
+        source: "feed",
+        removeDuplicates,
+      })
+      pageTwoRetainedIds.push(
+        ...appended.entries
+          .filter(({ id }) => pageTwoEntries.some((pageEntry) => pageEntry.id === id))
+          .map(({ id }) => id),
+      )
+      sharedEntries = appended.entries
+      sharedSequenceIds = appended.sequenceIds
+      return appended
+    },
+    isCurrent: () => true,
+    getNextSources: () => [],
+    fetchSourceEntries: async () => ({ entries: [] }),
+  }
+
+  return {
+    input,
+    fetchCursors,
+    initialCursor,
+    advancedCursor,
+    pageTwoEntries,
+    pageThreeEntry,
+    pageTwoRetainedIds,
+    get entries() {
+      return sharedEntries
+    },
+    get sequenceIds() {
+      return sharedSequenceIds
+    },
+  }
 }
 
 test("NAV01_PREVIOUS_LOADED_NEIGHBOR", async () => {
@@ -448,6 +559,73 @@ test("NAV01_OVERLAPPING_PAGE_IDS_DO_NOT_DUPLICATE_NAVIGATION", async () => {
     [1, 2, 3],
   )
   assert.deepEqual(sharedSequenceIds, [1, 2, 3])
+})
+
+for (const mode of ["hash", "title", "url"]) {
+  const testName =
+    mode === "hash"
+      ? "NAV01_DEDUP_ONLY_PAGE_ADVANCES_TO_NEXT_CANONICAL_PAGE"
+      : `NAV01_DEDUP_ONLY_PAGE_ADVANCES_${mode.toUpperCase()}`
+  test(testName, async () => {
+    const scenario = makeDedupOnlyPageResolver(mode)
+    const result = await resolveReaderNavigation(scenario.input)
+
+    assert.equal(result.status, "found")
+    assert.equal(result.entry.id, scenario.pageThreeEntry.id)
+    assert.deepEqual(scenario.fetchCursors, [scenario.initialCursor, scenario.advancedCursor])
+    assert.equal(
+      scenario.fetchCursors.filter((cursor) => cursor === scenario.initialCursor).length,
+      1,
+    )
+    assert.deepEqual(scenario.pageTwoRetainedIds, [])
+  })
+}
+
+test("NAV01_DEDUP_ONLY_FINAL_PAGE_TERMINATES", async () => {
+  const scenario = makeDedupOnlyPageResolver("hash", { finalPage: true })
+  const result = await resolveReaderNavigation(scenario.input)
+
+  assert.equal(result.status, "end")
+  assert.deepEqual(scenario.fetchCursors, [scenario.initialCursor])
+  assert.deepEqual(scenario.pageTwoRetainedIds, [])
+  assert.deepEqual(
+    scenario.entries.map(({ id }) => id),
+    [1, 2, 3],
+  )
+  assert.deepEqual(scenario.sequenceIds, [1, 2, 3])
+})
+
+test("NAV01_DEDUP_ONLY_PAGE_NO_PROVIDER_WRITE", async () => {
+  const scenario = makeDedupOnlyPageResolver("hash")
+  const originalFetch = globalThis.fetch
+  const providerWrites = []
+  globalThis.fetch = async (...args) => {
+    providerWrites.push(args)
+    return new Response(null, { status: 204 })
+  }
+  try {
+    const result = await resolveReaderNavigation(scenario.input)
+    assert.equal(result.status, "found")
+    assert.equal(result.entry?.id, scenario.pageThreeEntry.id)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+
+  assert.equal(providerWrites.length, 0)
+})
+
+test("NAV01_DEDUP_ONLY_PAGE_SEQUENCE_REMAINS_PRESENTATION_ALIGNED", async () => {
+  const scenario = makeDedupOnlyPageResolver("hash")
+  const result = await resolveReaderNavigation(scenario.input)
+  const retainedIds = scenario.entries.map(({ id }) => id)
+
+  assert.equal(result.status, "found")
+  assert.equal(result.entry?.id, scenario.pageThreeEntry.id)
+  assert.deepEqual(scenario.sequenceIds, retainedIds)
+  assert.equal(
+    scenario.pageTwoRetainedIds.some((id) => scenario.sequenceIds.includes(id)),
+    false,
+  )
 })
 
 test("NAV01_PREVIOUS_TEMPORAL_CURSOR_OVERLAPS_CANONICAL_START_BOUNDARY", () => {
