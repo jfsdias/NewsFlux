@@ -12,6 +12,7 @@ import { getEntry } from "@/apis"
 import ArticleList from "@/components/Article/ArticleList"
 import SearchAndSortBar from "@/components/Article/SearchAndSortBar"
 import FadeTransition from "@/components/ui/FadeTransition"
+import ReaderCommandsContext from "@/contexts/reader-commands-context"
 import useAppData from "@/hooks/useAppData"
 import useArticleList from "@/hooks/useArticleList"
 import useArticleSelection from "@/hooks/useArticleSelection"
@@ -41,6 +42,11 @@ import prepareEntry from "@/utils/entry-presentation"
 import "./Content.css"
 
 const ArticleDetail = lazy(() => import("@/components/Article/ArticleDetail"))
+
+const ContentHotkeyRegistration = ({ handleRefreshArticleList }) => {
+  useContentHotkeys({ handleRefreshArticleList })
+  return null
+}
 
 const isInHorizontalScrollable = (element) => {
   let el = element
@@ -120,7 +126,14 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
     getEntries,
     homeProjection,
   })
-  const { navigateToNextArticle, navigateToPreviousArticle } = useKeyHandlers({ readerNavigation })
+  const readerCommandHandlers = useKeyHandlers({ readerNavigation })
+  const readerCommands = {
+    ...readerCommandHandlers,
+    canNavigateNext: readerNavigation.canNavigateNext,
+    canNavigatePrevious: readerNavigation.canNavigatePrevious,
+    isResolving: readerNavigation.isResolving,
+  }
+  const { navigateToNextArticle, navigateToPreviousArticle } = readerCommands
 
   const { refreshFeedData } = useAppData()
   const { isBelowMedium } = useScreenWidth()
@@ -195,11 +208,6 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
     },
     [handleEntryUnavailable],
   )
-
-  useContentHotkeys({
-    handleRefreshArticleList: fetchArticleListWithRelatedData,
-    readerNavigation,
-  })
 
   const handleSwiping = (eventData) => {
     if (swipeDirectionRef.current === eventData.dir) {
@@ -294,91 +302,94 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
   const isEntryColFullWidth = isFullWidthLayout || !isDetailLayerActive
 
   return (
-    <>
-      {!activeContent && <h1 className="a11y-visually-hidden">{pageTitle}</h1>}
-      <div
-        aria-hidden={isDetailLayerActive || undefined}
-        className={classNames("entry-col", { "entry-col-full-width": isEntryColFullWidth })}
-        inert={isDetailLayerActive || undefined}
-        style={{
-          opacity: isBelowMedium && isArticleLoading ? 0 : 1,
-        }}
-      >
-        {ListContent ? (
-          <ListContent
-            cardsRef={cardsRef}
-            entryListRef={entryListRef}
-            getEntries={getEntries}
-            handleEntryClick={handleEntryClick}
-            refreshArticleList={fetchArticleListWithRelatedData}
-            retryArticleList={fetchArticleList}
-            onReaderProjectionChange={handleHomeProjectionChange}
-          />
-        ) : (
-          <>
-            <SearchAndSortBar
-              fullWidth={isFullWidthLayout}
-              selectedCount={selection.selectedCount}
-              selectionAvailable={selection.isAvailable}
-              selectionBusy={isMarkingSelectedRead}
-              selectionMode={selection.isSelectionMode}
-              selectionTriggerRef={selection.selectionTriggerRef}
-              onCancelSelection={selection.exitSelectionMode}
-              onEnterSelectionMode={selection.enterSelectionMode}
-              onMarkSelectedRead={markSelectedRead}
-            />
-            <ArticleList
-              ref={entryListRef}
+    <ReaderCommandsContext.Provider value={readerCommands}>
+      <>
+        <ContentHotkeyRegistration handleRefreshArticleList={fetchArticleListWithRelatedData} />
+        {!activeContent && <h1 className="a11y-visually-hidden">{pageTitle}</h1>}
+        <div
+          aria-hidden={isDetailLayerActive || undefined}
+          className={classNames("entry-col", { "entry-col-full-width": isEntryColFullWidth })}
+          inert={isDetailLayerActive || undefined}
+          style={{
+            opacity: isBelowMedium && isArticleLoading ? 0 : 1,
+          }}
+        >
+          {ListContent ? (
+            <ListContent
               cardsRef={cardsRef}
+              entryListRef={entryListRef}
               getEntries={getEntries}
               handleEntryClick={handleEntryClick}
-              retryArticleList={fetchArticleList}
-              selectedEntryIds={selection.selectedIds}
-              selectionBusy={isMarkingSelectedRead}
-              selectionMode={selection.isSelectionMode}
-              suppressEmptyState={isMarkAllReadJumpPending}
-              onSelectionCheckboxFocus={selection.noteCheckboxFocus}
-              onToggleSelection={selection.toggleEntry}
-            />
-            <FooterPanel
-              bulkOperationsDisabled={isMarkingSelectedRead}
-              getEntries={getEntries}
-              info={info}
               refreshArticleList={fetchArticleListWithRelatedData}
-              onMarkAllReadJumpPendingChange={setMarkAllReadJumpRequestKey}
+              retryArticleList={fetchArticleList}
+              onReaderProjectionChange={handleHomeProjectionChange}
             />
-          </>
-        )}
-      </div>
-      {activeContent ? (
-        <div
-          className="article-container article-container-full-size content-wrapper"
-          {...handlers}
-        >
-          {isArticleLoading ? (
-            <div style={{ flex: 1 }} />
           ) : (
             <>
-              <AnimatePresence>
-                {isSwipingRight && (
-                  <FadeTransition key="swipe-hint-left" className="swipe-hint left">
-                    <IconLeft style={{ fontSize: 24 }} />
-                  </FadeTransition>
-                )}
-                {isSwipingLeft && (
-                  <FadeTransition key="swipe-hint-right" className="swipe-hint right">
-                    <IconRight style={{ fontSize: 24 }} />
-                  </FadeTransition>
-                )}
-              </AnimatePresence>
-              <Suspense fallback={<div aria-busy="true" style={{ flex: 1 }} />}>
-                <ArticleDetail ref={entryDetailRef} readerNavigation={readerNavigation} />
-              </Suspense>
+              <SearchAndSortBar
+                fullWidth={isFullWidthLayout}
+                selectedCount={selection.selectedCount}
+                selectionAvailable={selection.isAvailable}
+                selectionBusy={isMarkingSelectedRead}
+                selectionMode={selection.isSelectionMode}
+                selectionTriggerRef={selection.selectionTriggerRef}
+                onCancelSelection={selection.exitSelectionMode}
+                onEnterSelectionMode={selection.enterSelectionMode}
+                onMarkSelectedRead={markSelectedRead}
+              />
+              <ArticleList
+                ref={entryListRef}
+                cardsRef={cardsRef}
+                getEntries={getEntries}
+                handleEntryClick={handleEntryClick}
+                retryArticleList={fetchArticleList}
+                selectedEntryIds={selection.selectedIds}
+                selectionBusy={isMarkingSelectedRead}
+                selectionMode={selection.isSelectionMode}
+                suppressEmptyState={isMarkAllReadJumpPending}
+                onSelectionCheckboxFocus={selection.noteCheckboxFocus}
+                onToggleSelection={selection.toggleEntry}
+              />
+              <FooterPanel
+                bulkOperationsDisabled={isMarkingSelectedRead}
+                getEntries={getEntries}
+                info={info}
+                refreshArticleList={fetchArticleListWithRelatedData}
+                onMarkAllReadJumpPendingChange={setMarkAllReadJumpRequestKey}
+              />
             </>
           )}
         </div>
-      ) : null}
-    </>
+        {activeContent ? (
+          <div
+            className="article-container article-container-full-size content-wrapper"
+            {...handlers}
+          >
+            {isArticleLoading ? (
+              <div style={{ flex: 1 }} />
+            ) : (
+              <>
+                <AnimatePresence>
+                  {isSwipingRight && (
+                    <FadeTransition key="swipe-hint-left" className="swipe-hint left">
+                      <IconLeft style={{ fontSize: 24 }} />
+                    </FadeTransition>
+                  )}
+                  {isSwipingLeft && (
+                    <FadeTransition key="swipe-hint-right" className="swipe-hint right">
+                      <IconRight style={{ fontSize: 24 }} />
+                    </FadeTransition>
+                  )}
+                </AnimatePresence>
+                <Suspense fallback={<div aria-busy="true" style={{ flex: 1 }} />}>
+                  <ArticleDetail ref={entryDetailRef} />
+                </Suspense>
+              </>
+            )}
+          </div>
+        ) : null}
+      </>
+    </ReaderCommandsContext.Provider>
   )
 }
 

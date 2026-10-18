@@ -26,15 +26,13 @@ import ArticleTOC, { ArticleTOCPanel } from "./ArticleTOC"
 import CustomTooltip from "@/components/ui/CustomTooltip"
 import useDesktopSidebar from "@/hooks/useDesktopSidebar"
 import useEntryActions from "@/hooks/useEntryActions"
-import useKeyHandlers from "@/hooks/useKeyHandlers"
 import { polyglotState } from "@/hooks/useLanguage"
+import useReaderCommands from "@/hooks/useReaderCommands"
 import useScreenWidth from "@/hooks/useScreenWidth"
 import {
   articleHeadingsState,
   contentState,
   isOriginalContentLoadingState,
-  nextContentState,
-  prevContentState,
 } from "@/store/contentState"
 import { dataState } from "@/store/dataState"
 import { settingsState, updateSettings } from "@/store/settingsState"
@@ -101,7 +99,7 @@ const MobileButtons = memo(({ commonButtons, hasHeadings, moveContextActionToMen
 ))
 MobileButtons.displayName = "MobileButtons"
 
-const ActionButtons = ({ readerNavigation }) => {
+const ActionButtons = () => {
   const { detailCloseButtonRef } = useDesktopSidebar()
   const { activeContent, isOriginalContentFetched } = useStore(contentState, {
     keys: ["activeContent", "isOriginalContentFetched"],
@@ -131,9 +129,6 @@ const ActionButtons = ({ readerNavigation }) => {
     ],
   })
 
-  const nextContent = useStore(nextContentState)
-  const prevContent = useStore(prevContentState)
-
   const [dropdownVisible, setDropdownVisible] = useState(false)
   const [fontSubmenuVisible, setFontSubmenuVisible] = useState(false)
   const [isCompactTocVisible, setIsCompactTocVisible] = useState(false)
@@ -150,9 +145,14 @@ const ActionButtons = ({ readerNavigation }) => {
     handleOpenLinkExternally,
   } = useEntryActions()
 
-  const { exitDetailView, navigateToNextArticle, navigateToPreviousArticle } = useKeyHandlers({
-    readerNavigation,
-  })
+  const {
+    canNavigateNext,
+    canNavigatePrevious,
+    exitDetailView,
+    isResolving,
+    navigateToNextArticle,
+    navigateToPreviousArticle,
+  } = useReaderCommands()
 
   const { isBelowCompact, isBelowMedium } = useScreenWidth()
 
@@ -258,12 +258,12 @@ const ActionButtons = ({ readerNavigation }) => {
   }
 
   const previousNavigation = {
-    content: readerNavigation ? readerNavigation.canNavigatePrevious : prevContent,
+    content: canNavigatePrevious,
     label: actionLabels.previous,
     navigate: navigateToPreviousArticle,
   }
   const nextNavigation = {
-    content: readerNavigation ? readerNavigation.canNavigateNext : nextContent,
+    content: canNavigateNext,
     label: actionLabels.next,
     navigate: navigateToNextArticle,
   }
@@ -276,9 +276,9 @@ const ActionButtons = ({ readerNavigation }) => {
         <CustomTooltip mini content={leftNavigation.label}>
           <Button
             aria-label={leftNavigation.label}
-            disabled={!leftNavigation.content || readerNavigation?.isResolving}
+            disabled={!leftNavigation.content || isResolving}
             icon={<IconArrowLeft aria-hidden="true" />}
-            loading={readerNavigation?.isResolving}
+            loading={isResolving}
             shape="circle"
             onClick={leftNavigation.navigate}
           />
@@ -289,9 +289,9 @@ const ActionButtons = ({ readerNavigation }) => {
         <CustomTooltip mini content={rightNavigation.label}>
           <Button
             aria-label={rightNavigation.label}
-            disabled={!rightNavigation.content || readerNavigation?.isResolving}
+            disabled={!rightNavigation.content || isResolving}
             icon={<IconArrowRight aria-hidden="true" />}
-            loading={readerNavigation?.isResolving}
+            loading={isResolving}
             shape="circle"
             onClick={rightNavigation.navigate}
           />
