@@ -2,16 +2,16 @@
 
 - **Purpose:** concise operational state for PM handoffs and future sessions. The roadmap remains the source for sequencing and product/architecture detail.
 - **Last reconciled:** 2026-10-17.
-- **Documented main/product baseline:** `046cd647c65583cdfdc7ab282701be79d4b34294`.
+- **Documented main/product baseline:** `1021cd5746eba2b3b90b1a863bada9043f126be1`.
 
 ## Current state
 
-Live GitHub and OMV inspection on 2026-10-17 found `main` at `046cd647c65583cdfdc7ab282701be79d4b34294`, zero open PRs before this docs PR, and production container `newsflux` running image `newsflux-local:118ecb2c63f7` (source SHA `118ecb2c63f7df3583d0f2524b5cc8c62bd518c1`), image ID `sha256:a8c7e764d0cf5ef333da113fc9e46a15dde043297a9b65122498aebba4d65499`, and restart count 0. Main and production are not at parity; PRs #52 and #53 were merged without production promotion.
+Live GitHub and OMV inspection on 2026-10-17 found `main` at `1021cd5746eba2b3b90b1a863bada9043f126be1`, zero open PRs before this docs PR, and production container `newsflux` running image `newsflux-local:118ecb2c63f7` (source SHA `118ecb2c63f7df3583d0f2524b5cc8c62bd518c1`), image ID `sha256:a8c7e764d0cf5ef333da113fc9e46a15dde043297a9b65122498aebba4d65499`, and restart count 0. Main and production are not at parity; PRs #52, #53, and #55 were merged without production promotion.
 
 ```text
-CURRENT_MAIN=046cd647c65583cdfdc7ab282701be79d4b34294
-DOCUMENTED_MAIN_BASE_SHA=046cd647c65583cdfdc7ab282701be79d4b34294
-PRODUCT_BASELINE_SHA=046cd647c65583cdfdc7ab282701be79d4b34294
+CURRENT_MAIN=1021cd5746eba2b3b90b1a863bada9043f126be1
+DOCUMENTED_MAIN_BASE_SHA=1021cd5746eba2b3b90b1a863bada9043f126be1
+PRODUCT_BASELINE_SHA=1021cd5746eba2b3b90b1a863bada9043f126be1
 PRODUCTION_CONTAINER=newsflux
 PRODUCTION_CONTAINER_ID=5c1882d2792a48a894c0806231bbb371f97b60d49b6922f5b9218a1c905bf8ef
 PRODUCTION_CONTAINER_STATUS=running (observed 2026-10-17)
@@ -19,17 +19,33 @@ PRODUCTION_RESTART_COUNT=0
 PRODUCTION_IMAGE=newsflux-local:118ecb2c63f7
 PRODUCTION_SHA=118ecb2c63f7df3583d0f2524b5cc8c62bd518c1
 PRODUCTION_IMAGE_ID=sha256:a8c7e764d0cf5ef333da113fc9e46a15dde043297a9b65122498aebba4d65499
+PRODUCTION_REVISION_LABEL=118ecb2c63f7df3583d0f2524b5cc8c62bd518c1
+PRODUCTION_SOURCE_LABEL=https://github.com/jfsdias/NewsFlux
 MAIN_PRODUCTION_PARITY=NO
 RUNTIME_PRODUCT_BASELINE_EQUALS_PRODUCTION=NO
 OPEN_PRS_BEFORE_THIS_DOCS_PR=0
 
-CURRENT_PHASE=POST_FEED_HEALTH_01B_AND_SELECTIVE_UPSTREAM_SYNC
-CURRENT_TRACK=FILTER_RULES_01_DISCOVERY_DESIGN
+CURRENT_PHASE=POST_FILTER_RULES_01
+CURRENT_TRACK=BULK_02_DISCOVERY_DESIGN
 CURRENT_PRODUCT_PR=NONE
 OPEN_RUNTIME_PR=NONE
 
-LAST_COMPLETED_FUNCTIONAL=FEED-HEALTH-01B / PR #52
+LAST_COMPLETED_FUNCTIONAL=FILTER-RULES-01 / PR #55
 LAST_COMPLETED_MAINTENANCE=SELECTIVE_UPSTREAM_SYNC / PR #53
+FILTER_RULES_01_STATUS=COMPLETED
+FILTER_RULES_01_PR=55
+FILTER_RULES_01_FEATURE_HEAD=5b6abe28ae5e6b52f02461c4e3601165056900b1
+FILTER_RULES_01_MERGE_SHA=1021cd5746eba2b3b90b1a863bada9043f126be1
+FEED_ERROR_RESET_DECISION=ACCEPT_PROVIDER_BEHAVIOR_WITH_EXPLICIT_DISCLOSURE
+FILTER_RULES_API_TESTS=5/5 PASS
+FILTER_RULES_BROWSER_HARNESS=21/21 PASS
+FULL_NODE=276/276 PASS
+FEED_HEALTH_UNIT_REGRESSION=4/4 PASS
+FEED_HEALTH_01A_BASE_HEAD_PARITY=PASS
+FEED_HEALTH_01B_BASE_HEAD_PARITY=PASS
+PR55_REGRESSION_EVIDENCE=NO
+LIVE_MINIFLUX_WRITES=0
+LIVE_NONEMPTY_RULE_ROUND_TRIP_CANARY=NOT_EXECUTED
 LAST_PRODUCTION_PROMOTION=READER-MEASURE-01 / PR #44 / 118ecb2c63f7df3583d0f2524b5cc8c62bd518c1
 READER_VISUAL_02A_STATUS=COMPLETED (02A1 + Measure + 02A2 / Quiet Column)
 BULK_03_STATUS=COMPLETED (03A + 03B)
@@ -46,16 +62,19 @@ UPSTREAM_HOLD_FRAMER_MOTION=ed0be6db9a8126d8bfdfc5afe41d2e058b7e5036 (14.0.0 to 
 FEED_HEALTH_01A=COMPLETED
 FEED_HEALTH_01B=COMPLETED
 FEED_HEALTH_01_STATUS=COMPLETED
+UPSTREAM_CURRENT_HEAD=ed0be6db9a8126d8bfdfc5afe41d2e058b7e5036
+UPSTREAM_UNREVIEWED_CHANGES=NO
 
-NEXT_RECOMMENDED_ACTION=FILTER_RULES_01_READ_ONLY_DISCOVERY_AND_BOUNDED_DESIGN
-NEXT_ENGINEERING_TRACK=FILTER-RULES-01
+NEXT_RECOMMENDED_ACTION=BULK_02_READ_ONLY_DISCOVERY_AND_BOUNDED_DESIGN
+NEXT_ENGINEERING_TRACK=BULK-02
 NEXT_AUTHORIZED_ACTION=DISCOVERY_AND_DESIGN_ONLY
-FILTER_RULES_01_IMPLEMENTATION_AUTHORIZED=NO
+BULK_02_STATUS=NEXT — DISCOVERY/DESIGN
+BULK_02_IMPLEMENTATION_AUTHORIZED=NO
 IMPLEMENTATION_AUTHORIZED=NO
 
 ROLLBACK_BASELINE=NOT_REVALIDATED
-DOCUMENTATION_RECONCILIATION_BRANCH=codex/docs-post-feed-health-upstream-sync
-DOCUMENTATION_RECONCILIATION_BASE_SHA=046cd647c65583cdfdc7ab282701be79d4b34294
+DOCUMENTATION_RECONCILIATION_BRANCH=codex/docs-post-filter-rules-01
+DOCUMENTATION_RECONCILIATION_BASE_SHA=1021cd5746eba2b3b90b1a863bada9043f126be1
 DOCUMENTATION_SCOPE=DOCUMENTATION_ONLY
 DEPLOY_PERFORMED=NO
 MERGE_AUTHORIZED=NO
@@ -96,6 +115,15 @@ A docs-only branch does not alter production. Any later deployment decision must
 - **PR #51 / documentation:** reconciled project state and roadmap after BULK-03B; merged as `0d3b1e9648d59018cdd1f9f17948c7d34b19924b`.
 - **PR #52 / FEED-HEALTH-01B:** provider-reported error detail, provider-owned `checked_at`/`parsing_error_count`, accessible details and Retry, stale-session fencing, and one final metadata reconciliation after bulk refresh; feature head `1b03865311993f7e72df0632ea662bbe94e926e9`, merged as `051e461d1d1eb4408e15a0ebcd4e1331b546de7a`. No production promotion.
 - **PR #53 / selective upstream maintenance:** integrated pnpm build-script hardening and adapted setup-node pins; feature head `f4db01106ca28fca3b7340be45cb87fa4059845d`, merged as `046cd647c65583cdfdc7ab282701be79d4b34294`. No production promotion.
+- **PR #55 / FILTER-RULES-01:** provider-backed per-feed raw Miniflux `blocklist_rules` / `keeplist_rules` editor; feature head `5b6abe28ae5e6b52f02461c4e3601165056900b1`, merge `1021cd5746eba2b3b90b1a863bada9043f126be1`; no NewsFlux rule persistence.
+
+## FILTER-RULES-01 closure
+
+- Miniflux remains the source of truth. The per-feed editor round-trips raw `blocklist_rules` and `keeplist_rules`; explicit empty strings clear a rule, while absent fields preserve provider values. Advanced entry-filter fields remain untouched, and provider responses are authoritative; stale-session fencing and bounded ambiguous-failure reconciliation protect edits.
+- Miniflux 2.3.3 clears its recorded feed error when a feed is updated. NewsFlux accepts that provider behavior and discloses it when filter rules are dirty; a successful rule save does not mean the feed is healthy. `FEED_ERROR_RESET_DECISION=ACCEPT_PROVIDER_BEHAVIOR_WITH_EXPLICIT_DISCLOSURE`.
+- Validation: API tests 5/5; FILTER-RULES-01 browser harness 21/21; full Node 276/276; Feed Health unit regression 4/4. FEED-HEALTH-01A base/head parity: 16/16 each at 1280×720, 390×844 and 884×1104. FEED-HEALTH-01B base/head results matched: desktop 42/42; mobile/tablet 41/41 plus a native-input-only focus gate. `PR55_REGRESSION_EVIDENCE=NO`.
+- Live Miniflux writes were 0; a live non-empty rule round-trip canary was not executed. `FILTER_RULES_NATIVE_MOBILE_FOCUS_RETURN=NOT_PHYSICALLY_VALIDATED`; no physical gate is claimed. `MUTATION_OBSERVER_INITIAL_FAILURE=NOT_REPRODUCED`. `REACT_19_ELEMENT_REF_WARNING=PREEXISTING_NON_BLOCKING`.
+- **Open, non-blocking finding — `FEED_EDIT_ERROR_RESET_DISCLOSURE`:** ordinary feed edits can also clear provider-recorded errors; FILTER-RULES-01 discloses this only on its own surface. Track a separate maintenance/UX decision. This is not a confirmed FILTER-RULES-01 defect and does not reopen FEED-HEALTH-01.
 
 ## A11Y-01 closure
 
@@ -168,14 +196,14 @@ Not authorized by package completion:
 
 ### Next track
 
-- **FILTER-RULES-01 discovery/design:** read-only, bounded discovery of Miniflux `blocklist_rules` / `keeplist_rules`, available API scopes, UX entry point, validation and failure semantics. Miniflux remains source of truth; no NewsFlux rule database. Implementation is not authorized before design approval.
+- **BULK-02 discovery/design:** visible/session multi-select, mark selected articles as read, and always-available Undo. Discovery and bounded design only; implementation is not authorized.
 
 ## Planned functional tracks
 
 - BULK-01C — scoped Undo copy.
 - BULK-03 — **COMPLETED** in PRs #43 and #50; above/below and 1/7/30-day age-based read actions are merged.
-- BULK-02 — multi-select; BULK-01B and FILTER-01A are complete prerequisites. Remaining sequencing/product gates must be reviewed before authorization.
-- FILTER-RULES-01; FILTER-01B was completed in PR #39.
+- BULK-02 — **NEXT: DISCOVERY/DESIGN**; visible/session multi-select, mark selected read, and Undo always available. Implementation remains unauthorized.
+- FILTER-01B was completed in PR #39; FILTER-RULES-01 was completed in PR #55.
 - HOME-01 — refresh/focus/reconnect semantics.
 - NAV01 — previous/next + next unread source flow.
 - NAV-02F — navigation follow-ups including human-readable unread-count labels.
@@ -246,7 +274,6 @@ The specialized upstream monitor must live-check the current upstream head befor
 
 ## Product decisions pending
 
-- FILTER-RULES-01 simple vs advanced Miniflux rule editor.
 - HOME-VISUAL-02 composition.
 - SAVE-EXT-01 wording/placement.
 - NAV-02F grouping/mode persistence/count presentation.
@@ -256,7 +283,7 @@ The specialized upstream monitor must live-check the current upstream head befor
 
 ## Next recommended action
 
-**FILTER-RULES-01 read-only discovery and bounded design.** Confirm Miniflux support for `blocklist_rules` and `keeplist_rules`, available feed/category API scopes, UX entry point, validation and failure semantics. Keep Miniflux as source of truth; do not create a NewsFlux rule database. Stop before implementation; this reconciliation does not authorize implementation.
+**BULK-02 read-only discovery and bounded design.** Preserve visible/session-only multi-select, mark-selected-as-read, and always-available Undo as the known contract. Determine detailed behavior and gates before implementation; this reconciliation authorizes discovery/design only.
 
 ## Deployment governance
 
@@ -264,11 +291,11 @@ The specialized upstream monitor must live-check the current upstream head befor
 - Never deploy `latest` or a moving branch implicitly.
 - Live production container: `newsflux`, ID `5c1882d2792a48a894c0806231bbb371f97b60d49b6922f5b9218a1c905bf8ef`, status `running`, restart count `0` at the 2026-10-17 read-only SSH inspection.
 - Live production image tag: `newsflux-local:118ecb2c63f7`; its prefix resolves to full source SHA `118ecb2c63f7df3583d0f2524b5cc8c62bd518c1`. Image ID observed: `sha256:a8c7e764d0cf5ef333da113fc9e46a15dde043297a9b65122498aebba4d65499`.
-- `MAIN_PRODUCTION_PARITY=NO`; current main is `046cd647c65583cdfdc7ab282701be79d4b34294`.
+- `MAIN_PRODUCTION_PARITY=NO`; current main is `1021cd5746eba2b3b90b1a863bada9043f126be1`.
 - The READER-MEASURE-01 promotion backup is `/dockerdata/compose/newsflux/compose.yaml.pre-reader-measure-01-20261016T201834Z.bak` (SHA-256 `94ffebe7ff81f95e02fe3bf93cf56844e8a95eacac45d43b10e5b4942a603351`).
 - PR #30 and PR #32 exact merge-SHA deployments passed; their deployment history remains recorded above.
 - PR #34 / A11Y-01 exact merge-SHA deployment and authenticated post-merge browser smoke passed. The exact merge image passed internal HTTP and provenance checks, remained stable after restart and had restart count `0`.
-- PR #44 / READER-MEASURE-01 is the last confirmed production promotion. PRs #46–#50, #52 and #53 were merged without production promotion; production remains at the #44 baseline. `PRODUCTION_CHANGED_BY_PR52=NO` and `PRODUCTION_CHANGED_BY_PR53=NO`. PR #49's real-element geometry gate passed; `REAL_DEVICE_GATE=NOT_REQUIRED` for that geometry-only change.
+- PR #44 / READER-MEASURE-01 is the last confirmed production promotion. PRs #46–#50, #52, #53 and #55 were merged without production promotion; production remains at the #44 baseline. `PRODUCTION_CHANGED_BY_PR52=NO`, `PRODUCTION_CHANGED_BY_PR53=NO` and `PRODUCTION_CHANGED_BY_PR55=NO`. PR #49's real-element geometry gate passed; `REAL_DEVICE_GATE=NOT_REQUIRED` for that geometry-only change.
 - Docs-only commits do not require production deployment merely to force SHA equality; classify their runtime delta as none.
 - Do not delete rollback images/backups incidentally.
 
