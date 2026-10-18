@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MARK-ALL-REFRESH-01 Jump Transition Harness</title>
+    <link rel="stylesheet" href="/node_modules/@arco-design/web-react/dist/css/arco.css" />
+    <style>
+      .bulk02-harness-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px;
+        box-sizing: border-box;
+        min-height: 52px;
+        padding: 4px;
+        background: var(--nf-surface-elevated, var(--color-bg-2));
+      }
+      .bulk02-harness-controls button {
+        min-height: 32px;
+      }
+      .bulk02-harness-controls output {
+        max-width: 100%;
+        overflow-wrap: anywhere;
+        color: var(--nf-text-secondary, var(--color-text-2));
+        font-size: 10px;
+      }
+      .bulk02-content-frame {
+        position: relative;
+        display: flex;
+        width: 100%;
+        height: calc(100% - 52px);
+        min-height: 0;
+        overflow: hidden;
+      }
+      [data-testid="home-scope"] {
+        padding: 24px;
+      }
+      [data-testid="mark-all-refresh-summary"] {
+        position: fixed;
+        z-index: 10000;
+        right: 8px;
+        bottom: 8px;
+        max-width: min(560px, calc(100vw - 16px));
+        padding: 6px;
+        background: #fff;
+        color: #111;
+        font: 11px/1.3 monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <output data-testid="mark-all-refresh-summary">WAITING</output>
+    <script type="module" src="./bulk02-multiselect.jsx"></script>
+  </body>
+</html>

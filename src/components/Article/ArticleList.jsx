@@ -70,6 +70,7 @@ const ArticleList = forwardRef(
       selectionMode = false,
       selectedEntryIds = new Set(),
       selectionBusy = false,
+      suppressEmptyState = false,
       onToggleSelection,
       onSelectionCheckboxFocus,
     },
@@ -124,7 +125,7 @@ const ArticleList = forwardRef(
             </Button>
           </div>
         )}
-        {canRenderResults && showEmptyState && (
+        {canRenderResults && showEmptyState && !suppressEmptyState && (
           <div className="article-list-state" role="status">
             <IconEmpty aria-hidden="true" className="article-list-state-icon" />
             <div className="article-list-state-copy">

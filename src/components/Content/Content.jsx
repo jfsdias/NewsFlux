@@ -27,7 +27,13 @@ import {
   setArticleListSource,
   setIsArticleLoading,
 } from "@/store/contentState"
-import { articleListLayoutState, contentGestureSettingsState } from "@/store/settingsState"
+import { dataState } from "@/store/dataState"
+import {
+  articleListLayoutState,
+  articleListRequestSettingsState,
+  contentGestureSettingsState,
+} from "@/store/settingsState"
+import createArticleListRequestKey from "@/utils/article-list-request-key"
 import { isRightToLeftBrowsing } from "@/utils/content-browsing-direction"
 import prepareEntry from "@/utils/entry-presentation"
 
@@ -52,9 +58,21 @@ const shouldIgnoreSwipe = (element) =>
 
 const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }) => {
   const { from: source, id: sourceId } = info
-  const { activeContent, isArticleLoading } = useStore(contentState, {
-    keys: ["activeContent", "isArticleLoading"],
+  const contentSnapshot = useStore(contentState, {
+    keys: [
+      "activeContent",
+      "articleListRevision",
+      "filterDate",
+      "filterString",
+      "infoFrom",
+      "infoId",
+      "isArticleLoading",
+    ],
   })
+  const { activeContent, isArticleLoading } = contentSnapshot
+  const requestSettings = useStore(articleListRequestSettingsState)
+  const { sessionRevision } = useStore(dataState, { keys: ["sessionRevision"] })
+  const [markAllReadJumpRequestKey, setMarkAllReadJumpRequestKey] = useState(null)
   const { contentBrowsingDirection, enableSwipeGesture, swipeSensitivity } = useStore(
     contentGestureSettingsState,
   )
@@ -86,6 +104,14 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
 
   const { refreshFeedData } = useAppData()
   const { isBelowMedium } = useScreenWidth()
+  const currentArticleListRequestKey = createArticleListRequestKey({
+    content: contentSnapshot,
+    settings: requestSettings,
+    info: { from: source, id: sourceId },
+    sessionRevision,
+  })
+  const isMarkAllReadJumpPending = markAllReadJumpRequestKey === currentArticleListRequestKey
+
   const selection = useArticleSelection({
     from: source,
     id: sourceId,
@@ -285,6 +311,7 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
               selectedEntryIds={selection.selectedIds}
               selectionBusy={isMarkingSelectedRead}
               selectionMode={selection.isSelectionMode}
+              suppressEmptyState={isMarkAllReadJumpPending}
               onSelectionCheckboxFocus={selection.noteCheckboxFocus}
               onToggleSelection={selection.toggleEntry}
             />
@@ -293,6 +320,7 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
               getEntries={getEntries}
               info={info}
               refreshArticleList={fetchArticleListWithRelatedData}
+              onMarkAllReadJumpPendingChange={setMarkAllReadJumpRequestKey}
             />
           </>
         )}

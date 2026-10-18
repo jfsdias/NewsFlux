@@ -166,7 +166,13 @@ const MarkAllReadButton = ({ disabled, from, id, loading, onConfirm }) => {
   )
 }
 
-const FooterPanel = ({ getEntries, info, refreshArticleList, bulkOperationsDisabled = false }) => {
+const FooterPanel = ({
+  getEntries,
+  info,
+  refreshArticleList,
+  bulkOperationsDisabled = false,
+  onMarkAllReadJumpPendingChange,
+}) => {
   const { from: source, id: sourceId } = info
   const { isArticleListReady } = useStore(contentState, { keys: ["isArticleListReady"] })
   const [markingAllRead, setMarkingAllRead] = useState(false)
@@ -177,8 +183,14 @@ const FooterPanel = ({ getEntries, info, refreshArticleList, bulkOperationsDisab
   const [agePresetDays, setAgePresetDays] = useState(null)
   const listScopeRef = useRef({ from: source, id: sourceId })
   useEffect(() => {
+    if (
+      listScopeRef.current.from !== source ||
+      String(listScopeRef.current.id ?? "") !== String(sourceId ?? "")
+    ) {
+      onMarkAllReadJumpPendingChange?.(null)
+    }
     listScopeRef.current = { from: source, id: sourceId }
-  }, [source, sourceId])
+  }, [onMarkAllReadJumpPendingChange, source, sourceId])
   const { markAllReadJumpToNext, showStatus } = useStore(settingsState, {
     keys: ["markAllReadJumpToNext", "showStatus"],
   })
@@ -244,6 +256,7 @@ const FooterPanel = ({ getEntries, info, refreshArticleList, bulkOperationsDisab
       })
       if (next) {
         navigate(`/category/${next.id}`)
+        return true
       }
     } else if (source === "feed") {
       const orderedFeeds = categories.flatMap((category) =>
@@ -256,8 +269,10 @@ const FooterPanel = ({ getEntries, info, refreshArticleList, bulkOperationsDisab
       })
       if (next) {
         navigate(`/feed/${next.id}`)
+        return true
       }
     }
+    return false
   }
 
   const handleMarkAllAsRead = async () => {
@@ -274,6 +289,7 @@ const FooterPanel = ({ getEntries, info, refreshArticleList, bulkOperationsDisab
     const sessionRevision = getDataSessionRevision()
     const markedEntryIds = new Set()
     const requestKey = createArticleListRequestKey({ content, settings })
+    let jumpedToNext = false
     const isCurrentSession = () => sessionRevision === getDataSessionRevision()
     const isCurrentList = () =>
       isCurrentSession() &&
@@ -300,6 +316,14 @@ const FooterPanel = ({ getEntries, info, refreshArticleList, bulkOperationsDisab
 
     markingAllReadRef.current = true
     setMarkingAllRead(true)
+    if (
+      markAllReadJumpToNext &&
+      ["feed", "category"].includes(source) &&
+      settings.showStatus === "unread" &&
+      content.entries.length > 0
+    ) {
+      onMarkAllReadJumpPendingChange?.(getCurrentListIdentity())
+    }
     try {
       await runEntryMutation(() => {
         return markEntriesAsReadInBatches(
@@ -358,9 +382,10 @@ const FooterPanel = ({ getEntries, info, refreshArticleList, bulkOperationsDisab
         })
       }
       if (markAllReadJumpToNext && isCurrentList()) {
-        jumpToNext()
+        jumpedToNext = jumpToNext()
       }
     } catch (error) {
+      onMarkAllReadJumpPendingChange?.(null)
       if (!isCurrentSession()) {
         return
       }
@@ -376,6 +401,9 @@ const FooterPanel = ({ getEntries, info, refreshArticleList, bulkOperationsDisab
         })
       }
     } finally {
+      if (!jumpedToNext) {
+        onMarkAllReadJumpPendingChange?.(null)
+      }
       markAllReadOperationCoordinator.release(operationLease)
       markingAllReadRef.current = false
       setMarkingAllRead(false)
