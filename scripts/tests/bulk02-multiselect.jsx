@@ -9,7 +9,7 @@ import "@/theme.css"
 import "@/liquid-glass.css"
 import { useStore } from "@nanostores/react"
 import Polyglot from "node-polyglot"
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { createRoot } from "react-dom/client"
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router"
 
@@ -37,9 +37,29 @@ const initialLayout = ["card", "column", "list"].includes(params.get("layout"))
   ? params.get("layout")
   : "card"
 const initialTheme = params.get("theme") === "light" ? "light" : "dark"
-const entryCount = Math.max(12, Math.min(Number(params.get("count") || 80), 2500))
+const markAllCase = params.get("markAllCase")
+const markAllJumpEnabled = ["jump-on", "no-next", "failure", "stale", "multi-batch"].includes(
+  markAllCase,
+)
+const markAllHasNextTarget = ["jump-on", "failure", "stale", "multi-batch"].includes(markAllCase)
+const markAllAllUnread = Boolean(markAllCase) || params.get("allUnread") === "1"
+const entryCount = Math.max(
+  12,
+  Math.min(Number(params.get("count") || (markAllCase === "multi-batch" ? 2500 : 80)), 2500),
+)
 const failAtCall = Number(params.get("failAt") || 0)
+const failAfterFirstAck = markAllCase === "failure"
+const staleAfterFirstAck = markAllCase === "stale"
 const deepLinkId = params.get("deepLink")
+const markAllProbe = {
+  case: markAllCase,
+  done: false,
+  emptyStateEvents: [],
+  loadingCardsEvents: [],
+  routeChanges: [],
+  started: false,
+}
+let currentHarnessRoute = "/feed/11"
 
 const feed = {
   id: 11,
@@ -50,6 +70,12 @@ const feed = {
   hide_globally: false,
   category: { id: 5 },
 }
+const nextFeed = {
+  ...feed,
+  id: 12,
+  title: "BULK-02 Next Fixture Feed",
+  unreadCount: 1,
+}
 const category = { id: 5, title: "BULK-02 Fixture Category", hide_globally: false }
 const makeEntry = (id) => {
   const title = `Fixture article ${id}${id === 1 ? " — a deliberately long headline for wrapping and selection layout checks" : ""}`
@@ -57,7 +83,7 @@ const makeEntry = (id) => {
   return {
     id,
     title,
-    status: id % 4 === 0 ? "read" : "unread",
+    status: markAllAllUnread ? "unread" : id % 4 === 0 ? "read" : "unread",
     starred: id % 7 === 0,
     feed,
     published_at: publishedAt,
@@ -68,7 +94,16 @@ const makeEntry = (id) => {
 }
 
 let fixtureEntries = Array.from({ length: entryCount }, (_, index) => makeEntry(index + 1))
+if (markAllHasNextTarget) {
+  fixtureEntries.push({ ...makeEntry(entryCount + 1), feed: nextFeed })
+}
+const fixtureFeeds = [
+  { ...feed, unreadCount: fixtureEntries.filter(({ status }) => status === "unread").length },
+  ...(markAllHasNextTarget ? [nextFeed] : []),
+]
 let putCallCount = 0
+let failAfterAckPending = failAfterFirstAck
+let staleAfterAckPending = staleAfterFirstAck
 const apiLog = []
 const unexpectedRequests = []
 const report = { countsRefreshes: 0, listReads: 0 }
@@ -146,9 +181,11 @@ replaceSettings({
   ...getDefaultSettings(),
   articleListLayout: initialLayout,
   enableContextMenu: true,
+  markAllReadJumpToNext: markAllJumpEnabled,
   markReadBy: "manual",
   markReadOnScroll: false,
-  showStatus: params.get("status") === "unread" ? "unread" : "all",
+  showStatus: markAllCase || params.get("status") === "unread" ? "unread" : "all",
+  skipMarkAllReadConfirmation: Boolean(markAllCase),
   themeMode: initialTheme,
 })
 contentState.set({
@@ -169,9 +206,12 @@ contentState.set({
 dataState.set({
   ...dataState.get(),
   currentUser: { id: 1 },
-  feedsData: [feed],
+  feedsData: fixtureFeeds,
   categoriesData: [category],
-  unreadInfo: { [feed.id]: fixtureEntries.filter(({ status }) => status === "unread").length },
+  unreadInfo: {
+    [feed.id]: fixtureEntries.filter(({ status }) => status === "unread").length,
+    ...(markAllHasNextTarget ? { [nextFeed.id]: nextFeed.unreadCount } : {}),
+  },
   loadState: {
     ...dataState.get().loadState,
     catalog: { ...dataState.get().loadState.catalog, hasSnapshot: true },
@@ -182,6 +222,14 @@ feedIconsState.set({ 0: defaultIcon, 1: defaultIcon })
 
 const getEntries = async (statusOrOptions, starred = false, options = {}) => {
   report.listReads += 1
+  if (putCallCount > 0 && failAfterAckPending) {
+    failAfterAckPending = false
+    throw new Error("Fixture failure after acknowledged batch")
+  }
+  if (putCallCount > 0 && staleAfterAckPending) {
+    staleAfterAckPending = false
+    dataState.setKey("sessionRevision", dataState.get().sessionRevision + 1)
+  }
   if (typeof statusOrOptions === "object" && statusOrOptions !== null) {
     options = statusOrOptions
     statusOrOptions = null
@@ -190,6 +238,12 @@ const getEntries = async (statusOrOptions, starred = false, options = {}) => {
   const activeFilterDate = contentState.get().filterDate
   const search = options.search?.toLocaleLowerCase() ?? ""
   let entries = [...fixtureEntries]
+  const { infoFrom, infoId } = contentState.get()
+  if (infoFrom === "feed") {
+    entries = entries.filter(({ feed: entryFeed }) => entryFeed.id === Number(infoId))
+  } else if (infoFrom === "category") {
+    entries = entries.filter(({ feed: entryFeed }) => entryFeed.category.id === Number(infoId))
+  }
   if (statusOrOptions === "unread") {
     entries = entries.filter(({ status }) => status === "unread")
   }
@@ -230,7 +284,8 @@ const HarnessRoute = () => {
         : location.pathname.startsWith("/today")
           ? "today"
           : "feed"
-  const info = { from: source, id: source === "feed" ? 11 : null }
+  const feedId = Number(location.pathname.match(/^\/feed\/(\d+)/)?.[1] ?? 11)
+  const info = { from: source, id: source === "feed" ? feedId : null }
   const entryIdOverride = location.pathname.match(/\/entry\/(\d+)/)?.[1]
 
   return (
@@ -257,8 +312,14 @@ const HarnessPage = ({ currentPath, entryIdOverride, info, listContent }) => {
   const refreshCounts = useCallback(async () => {
     setRefreshCount((current) => current + 1)
     record({ countsRefreshes: report.countsRefreshes + 1 })
-    const unreadCount = fixtureEntries.filter(({ status }) => status === "unread").length
-    setUnreadInfo((previous) => ({ ...previous, [feed.id]: unreadCount }))
+    const unreadCount = fixtureEntries.filter(
+      (entry) => entry.feed.id === feed.id && entry.status === "unread",
+    ).length
+    setUnreadInfo((previous) => ({
+      ...previous,
+      [feed.id]: unreadCount,
+      ...(markAllHasNextTarget ? { [nextFeed.id]: nextFeed.unreadCount } : {}),
+    }))
     return {}
   }, [])
   const refreshFeedData = useCallback(async () => {}, [])
@@ -285,7 +346,10 @@ const HarnessPage = ({ currentPath, entryIdOverride, info, listContent }) => {
           ? { from: "all", id: null }
           : currentPath.startsWith("/today")
             ? { from: "today", id: null }
-            : { from: "feed", id: 11 }
+            : {
+                from: "feed",
+                id: Number(currentPath.match(/^\/feed\/(\d+)/)?.[1] ?? 11),
+              }
     contentState.setKey("infoFrom", nextInfo.from)
     contentState.setKey("infoId", nextInfo.id)
   }, [currentPath])
@@ -297,6 +361,7 @@ const HarnessPage = ({ currentPath, entryIdOverride, info, listContent }) => {
   useEffect(() => {
     globalThis.__bulk02 = {
       apiLog,
+      markAllProbe,
       clearApiLog: () => {
         apiLog.length = 0
         putCallCount = 0
@@ -354,6 +419,155 @@ const HarnessPage = ({ currentPath, entryIdOverride, info, listContent }) => {
       undoToken: () => markAllReadUndoActions.getCurrentToken(),
     }
   }, [content.activeContent, currentPath, navigate, settings, theme])
+
+  useLayoutEffect(() => {
+    if (!markAllProbe.started || markAllProbe.done) {
+      currentHarnessRoute = location.pathname
+      return
+    }
+    if (markAllProbe.routeChanges.at(-1) !== location.pathname) {
+      markAllProbe.routeChanges.push(location.pathname)
+      markAllProbe.routeEvents.push({
+        path: location.pathname,
+        countsRefreshes: report.countsRefreshes,
+      })
+    }
+    currentHarnessRoute = location.pathname
+  }, [location.pathname])
+
+  useEffect(() => {
+    if (!markAllCase) {
+      return
+    }
+
+    let startPollId
+    let observer
+    let pollId
+    // Start once the initial list has loaded. Keeping the observer and polling
+    // alive across route/readiness changes is essential to catch the transition.
+    startPollId = globalThis.setInterval(() => {
+      if (
+        markAllProbe.started ||
+        !contentState.get().isArticleListReady ||
+        contentState.get().entries.length === 0
+      ) {
+        return
+      }
+
+      const initialRoute = currentHarnessRoute
+      const label = englishPhrases.article_list.mark_all_as_read_tooltip
+      const button = [...document.querySelectorAll(".entry-panel button[aria-label]")].find(
+        (candidate) => candidate.getAttribute("aria-label") === label,
+      )
+      if (!button) {
+        return
+      }
+
+      markAllProbe.started = true
+      markAllProbe.startRoute = initialRoute
+      markAllProbe.routeChanges = [initialRoute]
+      markAllProbe.routeEvents = [{ path: initialRoute, countsRefreshes: report.countsRefreshes }]
+      markAllProbe.initialEntryCount = contentState.get().entries.length
+      markAllProbe.initialEmptyStateVisible = Boolean(
+        document.querySelector(".entry-list .article-list-state[role='status']"),
+      )
+      observer = new MutationObserver(() => {
+        if (
+          currentHarnessRoute === markAllProbe.startRoute &&
+          contentState.get().entries.length === 0 &&
+          document.querySelector(".entry-list .article-list-state[role='status']")
+        ) {
+          markAllProbe.emptyStateEvents.push(currentHarnessRoute)
+        }
+        if (
+          currentHarnessRoute === markAllProbe.startRoute &&
+          document.querySelector(
+            ".entry-list > .grid-card-loading-grid, .entry-list > .list-loading-rows, .entry-list > .card-style",
+          )
+        ) {
+          markAllProbe.loadingCardsEvents.push(currentHarnessRoute)
+        }
+      })
+      observer.observe(document.body, { childList: true, subtree: true })
+      globalThis.clearInterval(startPollId)
+      button.click()
+
+      const startedAt = Date.now()
+      pollId = globalThis.setInterval(() => {
+        const currentRoute = currentHarnessRoute
+        const currentButton = [
+          ...document.querySelectorAll(".entry-panel button[aria-label]"),
+        ].find((candidate) => candidate.getAttribute("aria-label") === label)
+        const busy = Boolean(currentButton?.disabled)
+        const finalEmptyVisible = Boolean(
+          document.querySelector(".entry-list .article-list-state[role='status']"),
+        )
+        const failureNotificationVisible = Boolean(
+          document.querySelector(".arco-notification-error .arco-notification-title"),
+        )
+        const routeTransitionCount = Math.max(
+          markAllProbe.routeChanges.length - 1,
+          currentRoute === markAllProbe.startRoute ? 0 : 1,
+        )
+        const isJumpCase = ["jump-on", "multi-batch"].includes(markAllCase)
+        const reachedTerminalState = isJumpCase
+          ? currentRoute !== markAllProbe.startRoute && !busy
+          : !busy && finalEmptyVisible
+
+        if (reachedTerminalState || Date.now() - startedAt > 10_000) {
+          const result = {
+            case: markAllCase,
+            done: true,
+            emptyStateVisibleBeforeRoute: markAllProbe.emptyStateEvents.length > 0,
+            emptyStateEvents: markAllProbe.emptyStateEvents,
+            initialEmptyStateVisible: markAllProbe.initialEmptyStateVisible,
+            finalEmptyStateVisible: finalEmptyVisible,
+            finalEntryCount: document.querySelectorAll("[data-entry-id]").length,
+            failureNotificationVisible,
+            loadingCardsFlash: markAllProbe.loadingCardsEvents.length > 0,
+            mutationRequestCount: apiLog.length,
+            initialEntryCount: markAllProbe.initialEntryCount,
+            route: currentRoute,
+            routeTransitionCount,
+            countsRefreshedBeforeRoute: markAllProbe.routeEvents[1]?.countsRefreshes > 0,
+            timedOut: !reachedTerminalState,
+            countsRefreshes: report.countsRefreshes,
+          }
+          result.pass =
+            !result.timedOut &&
+            !result.initialEmptyStateVisible &&
+            result.initialEntryCount > 0 &&
+            (isJumpCase
+              ? routeTransitionCount === 1 &&
+                !result.emptyStateVisibleBeforeRoute &&
+                !result.loadingCardsFlash &&
+                result.countsRefreshedBeforeRoute &&
+                result.finalEntryCount > 0 &&
+                (markAllCase !== "multi-batch" || result.mutationRequestCount > 1)
+              : routeTransitionCount === 0 &&
+                result.finalEmptyStateVisible &&
+                (markAllCase === "failure"
+                  ? result.failureNotificationVisible
+                  : !result.failureNotificationVisible) &&
+                (markAllCase !== "stale" || report.countsRefreshes === 0))
+          markAllProbe.result = result
+          markAllProbe.done = true
+          observer.disconnect()
+          globalThis.clearInterval(pollId)
+          const summary = document.querySelector("[data-testid='mark-all-refresh-summary']")
+          if (summary) {
+            summary.textContent = JSON.stringify(result)
+          }
+        }
+      }, 25)
+    }, 25)
+
+    return () => {
+      globalThis.clearInterval(startPollId)
+      observer?.disconnect()
+      globalThis.clearInterval(pollId)
+    }
+  }, [])
 
   const applySource = (path) => navigate(path)
   const setHarnessTheme = () => {
