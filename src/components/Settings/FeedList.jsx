@@ -77,6 +77,8 @@ const tableDataState = computed(filteredFeedsState, (filteredFeeds) => {
     disabled: feed.disabled,
     feed_url: feed.feed_url,
     hidden: feed.hide_globally,
+    blocklist_rules: feed.blocklist_rules,
+    keeplist_rules: feed.keeplist_rules,
     key: feed.id,
     parsing_error_count: feed.parsing_error_count,
     site_url: feed.site_url,
@@ -542,6 +544,8 @@ const FeedList = () => {
       hidden: feed.hidden,
       disabled: feed.disabled,
       crawler: feed.crawler,
+      blocklistRules: feed.blocklist_rules ?? "",
+      keeplistRules: feed.keeplist_rules ?? "",
     })
   }
 
