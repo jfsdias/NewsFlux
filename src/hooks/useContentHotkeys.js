@@ -3,7 +3,7 @@ import { useMemo } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 
 import useEntryActions from "@/hooks/useEntryActions"
-import useKeyHandlers from "@/hooks/useKeyHandlers"
+import useReaderCommands from "@/hooks/useReaderCommands"
 import { duplicateHotkeysState, hotkeysState } from "@/store/hotkeysState"
 import shouldDeferReaderEscape from "@/utils/reader-escape"
 
@@ -28,7 +28,7 @@ const SCROLL_HOTKEY_OPTIONS = {
   ignoreEventWhen: ({ target }) => Boolean(target?.closest?.(SCROLL_HOTKEY_IGNORE_SELECTOR)),
 }
 
-const useContentHotkeys = ({ handleRefreshArticleList, readerNavigation }) => {
+const useContentHotkeys = ({ handleRefreshArticleList }) => {
   const duplicateHotkeys = useStore(duplicateHotkeysState)
   const hotkeys = useStore(hotkeysState)
 
@@ -60,7 +60,7 @@ const useContentHotkeys = ({ handleRefreshArticleList, readerNavigation }) => {
     showHotkeysSettings,
     toggleReadStatus,
     toggleStarStatus,
-  } = useKeyHandlers({ readerNavigation })
+  } = useReaderCommands()
 
   const {
     handleFetchContent,

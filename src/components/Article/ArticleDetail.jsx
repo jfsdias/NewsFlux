@@ -352,7 +352,7 @@ const getHtmlParserOptions = (getImageIndex, togglePhotoSlider) => {
   return options
 }
 
-const ArticleDetail = forwardRef(({ readerNavigation }, ref) => {
+const ArticleDetail = forwardRef((_, ref) => {
   const navigate = useNavigate()
   const { isBelowMedium } = useScreenWidth()
   const prefersReducedMotion = useStore(prefersReducedMotionState)
@@ -594,7 +594,7 @@ const ArticleDetail = forwardRef(({ readerNavigation }, ref) => {
         className="scroll-container"
         scrollableNodeProps={{ tabIndex: -1 }}
       >
-        <ActionButtons readerNavigation={readerNavigation} />
+        <ActionButtons />
         <FadeTransition>
           <div
             className="article-header"
