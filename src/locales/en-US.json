@@ -169,6 +169,19 @@
     "share_tooltip": "Share",
     "view_comments_tooltip": "View comments"
   },
+  "article_selection": {
+    "select_articles": "Select",
+    "selected_count": "%{smart_count} selected",
+    "select_article": "Select %{title}",
+    "deselect_article": "Deselect %{title}",
+    "mark_as_read": "Mark as read",
+    "cancel": "Cancel",
+    "read_success": "Marked %{smart_count} selected articles as read",
+    "partial_result": "Only %{marked} of %{total} selected articles were confirmed as read",
+    "read_error": "Could not mark selected articles as read",
+    "counts_refresh_error": "Articles were marked, but unread counts may be out of date",
+    "undo_error": "Failed to undo the selected read operation"
+  },
   "article_list": {
     "sort_direction_desc": "Newest first",
     "sort_direction_asc": "Oldest first",

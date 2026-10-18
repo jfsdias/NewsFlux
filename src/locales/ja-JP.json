@@ -169,6 +169,19 @@
     "share_tooltip": "共有",
     "view_comments_tooltip": "コメントを表示"
   },
+  "article_selection": {
+    "select_articles": "選択",
+    "selected_count": "%{smart_count} 件選択中",
+    "select_article": "%{title} を選択",
+    "deselect_article": "%{title} の選択を解除",
+    "mark_as_read": "既読にする",
+    "cancel": "キャンセル",
+    "read_success": "選択した %{smart_count} 件の記事を既読にしました",
+    "partial_result": "選択した記事 %{total} 件のうち %{marked} 件のみ既読を確認しました",
+    "read_error": "選択した記事を既読にできませんでした",
+    "counts_refresh_error": "記事を既読にしましたが、未読件数が最新でない可能性があります",
+    "undo_error": "選択した記事の既読を元に戻せませんでした"
+  },
   "article_list": {
     "sort_direction_desc": "新しい順",
     "sort_direction_asc": "古い順",

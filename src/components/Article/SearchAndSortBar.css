@@ -48,6 +48,33 @@
   background-color: transparent;
 }
 
+.search-and-sort-bar-selection .page-info {
+  display: none;
+}
+
+.article-selection-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.article-selection-count {
+  color: var(--nf-text-secondary, var(--color-text-2));
+  font-size: 13px;
+}
+
+.article-selection-mark-read.arco-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+}
+
+.article-selection-trigger.arco-btn {
+  min-height: 36px;
+}
+
 .calendar-actions {
   display: flex;
   justify-content: space-between;
@@ -146,6 +173,24 @@
   .search-and-sort-bar .button-group {
     gap: var(--mobile-navigation-spacing);
     margin: 0 var(--mobile-navigation-spacing);
+  }
+
+  .article-selection-controls {
+    gap: 4px;
+  }
+
+  .article-selection-count {
+    font-size: var(--mobile-navigation-font-size);
+  }
+
+  .article-selection-mark-read.arco-btn {
+    min-height: var(--mobile-navigation-control-size);
+    padding-inline: 8px;
+    font-size: 12px;
+  }
+
+  .article-selection-controls > .arco-btn {
+    min-height: var(--mobile-navigation-control-size);
   }
 
   .search-and-sort-bar .arco-btn-shape-circle {
@@ -287,5 +332,59 @@
 @media screen and (max-width: 359px) {
   .search-and-sort-bar .page-info .count-label {
     display: none;
+  }
+}
+
+.article-selection-controls {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.article-selection-count {
+  flex: 0 1 auto;
+  min-width: 0;
+  color: var(--nf-text-primary, var(--color-text-1));
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.article-selection-controls .arco-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.article-selection-trigger {
+  white-space: nowrap;
+}
+
+.search-and-sort-bar-selection .page-info {
+  display: none;
+}
+
+.search-and-sort-bar-selection .button-group {
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+@media screen and (max-width: 768px) {
+  .article-selection-controls {
+    gap: 4px;
+  }
+
+  .article-selection-count {
+    font-size: 0.8125rem;
+  }
+
+  .article-selection-controls .arco-btn {
+    min-height: var(--mobile-navigation-control-size);
+    padding-inline: 8px;
+    font-size: 0.8125rem;
   }
 }

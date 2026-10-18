@@ -169,6 +169,19 @@
     "share_tooltip": "Partager",
     "view_comments_tooltip": "Voir les commentaires"
   },
+  "article_selection": {
+    "select_articles": "Sélectionner",
+    "selected_count": "%{smart_count} sélectionnés",
+    "select_article": "Sélectionner %{title}",
+    "deselect_article": "Désélectionner %{title}",
+    "mark_as_read": "Marquer comme lu",
+    "cancel": "Annuler",
+    "read_success": "%{smart_count} articles sélectionnés marqués comme lus",
+    "partial_result": "Seuls %{marked} articles sur %{total} ont été confirmés comme lus",
+    "read_error": "Impossible de marquer les articles sélectionnés comme lus",
+    "counts_refresh_error": "Les articles ont été marqués, mais le nombre d’articles non lus peut être obsolète",
+    "undo_error": "Impossible d’annuler la lecture des articles sélectionnés"
+  },
   "article_list": {
     "sort_direction_desc": "Les plus récents en premier",
     "sort_direction_asc": "Les plus anciens en premier",

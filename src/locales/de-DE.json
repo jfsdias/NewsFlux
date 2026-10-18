@@ -169,6 +169,19 @@
     "share_tooltip": "Teilen",
     "view_comments_tooltip": "Kommentare anzeigen"
   },
+  "article_selection": {
+    "select_articles": "Auswählen",
+    "selected_count": "%{smart_count} ausgewählt",
+    "select_article": "%{title} auswählen",
+    "deselect_article": "%{title} abwählen",
+    "mark_as_read": "Als gelesen markieren",
+    "cancel": "Abbrechen",
+    "read_success": "%{smart_count} ausgewählte Artikel als gelesen markiert",
+    "partial_result": "Nur %{marked} von %{total} ausgewählten Artikeln wurden als gelesen bestätigt",
+    "read_error": "Ausgewählte Artikel konnten nicht als gelesen markiert werden",
+    "counts_refresh_error": "Artikel wurden markiert, aber die Anzahl ungelesener Artikel ist möglicherweise veraltet",
+    "undo_error": "Die ausgewählte Lesemarkierung konnte nicht rückgängig gemacht werden"
+  },
   "article_list": {
     "sort_direction_desc": "Neueste zuerst",
     "sort_direction_asc": "Älteste zuerst",

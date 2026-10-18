@@ -11,6 +11,7 @@ import { Fragment, memo, useMemo, useRef, useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 import { useNavigate, useParams } from "react-router"
 
+import ArticleSelectionControls from "./ArticleSelectionControls.jsx"
 import SidebarTrigger from "./SidebarTrigger.jsx"
 
 import AccessibleModal from "@/components/ui/AccessibleModal"
@@ -183,7 +184,18 @@ const DateFilter = ({ filterDate, from, polyglot }) => {
   )
 }
 
-const SearchAndSortBar = ({ fullWidth = false, homeMode = false }) => {
+const SearchAndSortBar = ({
+  fullWidth = false,
+  homeMode = false,
+  selectionAvailable = false,
+  selectionMode = false,
+  selectedCount = 0,
+  selectionBusy = false,
+  selectionTriggerRef,
+  onEnterSelectionMode,
+  onCancelSelection,
+  onMarkSelectedRead,
+}) => {
   const { articleListError, filterDate, filterString, infoFrom, infoId, isArticleListReady } =
     useStore(contentState, {
       keys: [
@@ -298,7 +310,7 @@ const SearchAndSortBar = ({ fullWidth = false, homeMode = false }) => {
 
   return (
     <div
-      className={`search-and-sort-bar${homeMode ? " search-and-sort-bar-home" : ""}`}
+      className={`search-and-sort-bar${homeMode ? " search-and-sort-bar-home" : ""}${selectionMode ? " search-and-sort-bar-selection" : ""}`}
       style={{ width: isBelowMedium || fullWidth ? "100%" : 370 }}
     >
       <SidebarTrigger />
@@ -323,33 +335,48 @@ const SearchAndSortBar = ({ fullWidth = false, homeMode = false }) => {
         </div>
       )}
       <div className="button-group">
-        <ActiveButton
-          active={!!filterString}
-          expanded={searchModalVisible}
-          icon={<IconSearch aria-hidden="true" />}
-          tooltip={searchLabel}
-          onClick={openSearchModal}
+        <ArticleSelectionControls
+          available={selectionAvailable}
+          busy={selectionBusy}
+          disabled={!isArticleListReady || articleListError}
+          mode={selectionMode}
+          selectTriggerRef={selectionTriggerRef}
+          selectedCount={selectedCount}
+          onCancel={onCancelSelection}
+          onEnter={onEnterSelectionMode}
+          onMarkAsRead={onMarkSelectedRead}
         />
-        {showDateFilter && (
-          <DateFilter filterDate={filterDate} from={infoFrom} polyglot={polyglot} />
-        )}
-        {!homeMode && (
-          <CustomTooltip mini content={sortLabel}>
-            <Button
-              aria-label={sortLabel}
-              className="nf-glass-control"
-              shape="circle"
-              size="small"
-              icon={
-                orderDirection === "desc" ? (
-                  <IconSortDescending aria-hidden="true" />
-                ) : (
-                  <IconSortAscending aria-hidden="true" />
-                )
-              }
-              onClick={toggleOrderDirection}
+        {!selectionMode && (
+          <>
+            <ActiveButton
+              active={!!filterString}
+              expanded={searchModalVisible}
+              icon={<IconSearch aria-hidden="true" />}
+              tooltip={searchLabel}
+              onClick={openSearchModal}
             />
-          </CustomTooltip>
+            {showDateFilter && (
+              <DateFilter filterDate={filterDate} from={infoFrom} polyglot={polyglot} />
+            )}
+            {!homeMode && (
+              <CustomTooltip mini content={sortLabel}>
+                <Button
+                  aria-label={sortLabel}
+                  className="nf-glass-control"
+                  shape="circle"
+                  size="small"
+                  icon={
+                    orderDirection === "desc" ? (
+                      <IconSortDescending aria-hidden="true" />
+                    ) : (
+                      <IconSortAscending aria-hidden="true" />
+                    )
+                  }
+                  onClick={toggleOrderDirection}
+                />
+              </CustomTooltip>
+            )}
+          </>
         )}
       </div>
       <SearchModal

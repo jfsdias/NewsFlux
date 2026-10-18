@@ -61,6 +61,11 @@ const ArticleEntry = ({
   presentationClassName,
   presenter: Presenter,
   feedIconMonogramFallback = false,
+  selectionMode = false,
+  bulkSelected = false,
+  selectionDisabled = false,
+  onToggleSelection,
+  onSelectionCheckboxFocus,
 }) => {
   const { enableContextMenu, markReadOnScroll } = useStore(articleEntryInteractionSettingsState)
   const { infoFrom } = useStore(contentState, { keys: ["infoFrom"] })
@@ -121,6 +126,10 @@ const ArticleEntry = ({
   const accessibleLabel = isUnread
     ? polyglot.t("article_card.unread_article_aria_label", { title: displayTitle })
     : displayTitle
+  const selectionCheckboxLabel = polyglot.t(
+    bulkSelected ? "article_selection.deselect_article" : "article_selection.select_article",
+    { title: displayTitle },
+  )
   const menuOpenAction = opensSourceOnCardClick
     ? {
         icon: <IconBook aria-hidden="true" />,
@@ -134,6 +143,29 @@ const ArticleEntry = ({
         label: polyglot.t("article_card.open_link_externally_tooltip"),
         onClick: () => handleOpenLinkExternally(entry),
       }
+  const articleLink = (
+    <a
+      {...primaryLinkProps}
+      ref={entryRef}
+      {...longPressProps}
+      aria-label={accessibleLabel}
+      data-entry-id={entry.id}
+      className={classNames("article-entry", ENTRY_CLASS_NAMES[layout], presentationClassName, {
+        "bulk-selection-selected": bulkSelected,
+        "context-menu-enabled": enableContextMenu,
+        read: !isUnread,
+        selected: isSelected,
+        unread: isUnread,
+      })}
+    >
+      <Presenter
+        displayTitle={displayTitle}
+        entry={entry}
+        feedIconMonogramFallback={feedIconMonogramFallback}
+        previewContent={previewContent}
+      />
+    </a>
+  )
 
   return (
     <Dropdown
@@ -222,26 +254,28 @@ const ArticleEntry = ({
         </Menu>
       }
     >
-      <a
-        {...primaryLinkProps}
-        ref={entryRef}
-        {...longPressProps}
-        aria-label={accessibleLabel}
-        data-entry-id={entry.id}
-        className={classNames("article-entry", ENTRY_CLASS_NAMES[layout], presentationClassName, {
-          "context-menu-enabled": enableContextMenu,
-          read: !isUnread,
-          selected: isSelected,
-          unread: isUnread,
-        })}
-      >
-        <Presenter
-          displayTitle={displayTitle}
-          entry={entry}
-          feedIconMonogramFallback={feedIconMonogramFallback}
-          previewContent={previewContent}
-        />
-      </a>
+      {selectionMode ? (
+        <div className="article-entry-shell article-entry-shell-selection-mode">
+          <label className="article-selection-checkbox-target">
+            <input
+              data-bulk-entry-checkbox
+              aria-label={selectionCheckboxLabel}
+              checked={bulkSelected}
+              className="article-selection-checkbox"
+              data-bulk-entry-id={entry.id}
+              disabled={!isUnread || selectionDisabled}
+              type="checkbox"
+              onChange={() => onToggleSelection?.(entry.id)}
+              onClick={(event) => event.stopPropagation()}
+              onFocus={() => onSelectionCheckboxFocus?.(entry.id)}
+            />
+            <span className="a11y-visually-hidden">{selectionCheckboxLabel}</span>
+          </label>
+          {articleLink}
+        </div>
+      ) : (
+        articleLink
+      )}
     </Dropdown>
   )
 }
