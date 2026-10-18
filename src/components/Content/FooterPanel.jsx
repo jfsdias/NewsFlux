@@ -166,7 +166,7 @@ const MarkAllReadButton = ({ disabled, from, id, loading, onConfirm }) => {
   )
 }
 
-const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
+const FooterPanel = ({ getEntries, info, refreshArticleList, bulkOperationsDisabled = false }) => {
   const { from: source, id: sourceId } = info
   const { isArticleListReady } = useStore(contentState, { keys: ["isArticleListReady"] })
   const [markingAllRead, setMarkingAllRead] = useState(false)
@@ -586,7 +586,7 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
   return (
     <div className="entry-panel">
       <MarkAllReadButton
-        disabled={!isArticleListReady}
+        disabled={!isArticleListReady || bulkOperationsDisabled}
         from={source}
         id={sourceId}
         loading={markingAllRead}
@@ -605,11 +605,13 @@ const FooterPanel = ({ getEntries, info, refreshArticleList }) => {
               aria-haspopup="menu"
               aria-label={markOlderReadLabel}
               className="nf-glass-control mark-older-read-trigger"
-              disabled={!isArticleListReady || markingAllRead || markingOlderRead}
               icon={<IconClockCircle aria-hidden="true" />}
               loading={markingOlderRead}
               shape="circle"
               size="small"
+              disabled={
+                !isArticleListReady || markingAllRead || markingOlderRead || bulkOperationsDisabled
+              }
             />
           </CustomTooltip>
         </Dropdown>

@@ -169,6 +169,19 @@
     "share_tooltip": "分享",
     "view_comments_tooltip": "查看评论"
   },
+  "article_selection": {
+    "select_articles": "选择",
+    "selected_count": "已选择 %{smart_count} 篇",
+    "select_article": "选择 %{title}",
+    "deselect_article": "取消选择 %{title}",
+    "mark_as_read": "标记为已读",
+    "cancel": "取消",
+    "read_success": "已将所选 %{smart_count} 篇文章标记为已读",
+    "partial_result": "所选 %{total} 篇文章中仅确认 %{marked} 篇已读",
+    "read_error": "无法将所选文章标记为已读",
+    "counts_refresh_error": "文章已标记，但未读计数可能不是最新的",
+    "undo_error": "无法撤销所选文章的已读状态"
+  },
   "article_list": {
     "sort_direction_desc": "最新优先",
     "sort_direction_asc": "最旧优先",

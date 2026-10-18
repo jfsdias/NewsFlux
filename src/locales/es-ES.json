@@ -169,6 +169,19 @@
     "share_tooltip": "Compartir",
     "view_comments_tooltip": "Ver comentarios"
   },
+  "article_selection": {
+    "select_articles": "Seleccionar",
+    "selected_count": "%{smart_count} seleccionados",
+    "select_article": "Seleccionar %{title}",
+    "deselect_article": "Quitar %{title} de la selección",
+    "mark_as_read": "Marcar como leído",
+    "cancel": "Cancelar",
+    "read_success": "%{smart_count} artículos seleccionados marcados como leídos",
+    "partial_result": "Solo se confirmó como leídos %{marked} de %{total} artículos seleccionados",
+    "read_error": "No se pudieron marcar los artículos seleccionados como leídos",
+    "counts_refresh_error": "Se marcaron los artículos, pero el contador de no leídos podría estar desactualizado",
+    "undo_error": "No se pudo deshacer la lectura de los artículos seleccionados"
+  },
   "article_list": {
     "sort_direction_desc": "Las más recientes primero",
     "sort_direction_asc": "Las más antiguas primero",

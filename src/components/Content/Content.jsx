@@ -14,10 +14,12 @@ import SearchAndSortBar from "@/components/Article/SearchAndSortBar"
 import FadeTransition from "@/components/ui/FadeTransition"
 import useAppData from "@/hooks/useAppData"
 import useArticleList from "@/hooks/useArticleList"
+import useArticleSelection from "@/hooks/useArticleSelection"
 import useContentContext from "@/hooks/useContentContext"
 import useContentHotkeys from "@/hooks/useContentHotkeys"
 import useDocumentTitle from "@/hooks/useDocumentTitle"
 import useKeyHandlers from "@/hooks/useKeyHandlers"
+import useMarkSelectedRead from "@/hooks/useMarkSelectedRead"
 import useScreenWidth from "@/hooks/useScreenWidth"
 import {
   contentState,
@@ -84,6 +86,12 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
 
   const { refreshFeedData } = useAppData()
   const { isBelowMedium } = useScreenWidth()
+  const selection = useArticleSelection({
+    from: source,
+    id: sourceId,
+    homeMode: Boolean(ListContent),
+  })
+  const { isBusy: isMarkingSelectedRead, markSelectedRead } = useMarkSelectedRead(selection)
 
   useEffect(() => {
     const { activeContent: storedActiveContent, infoFrom, infoId } = contentState.get()
@@ -257,15 +265,31 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
           />
         ) : (
           <>
-            <SearchAndSortBar fullWidth={isFullWidthLayout} />
+            <SearchAndSortBar
+              fullWidth={isFullWidthLayout}
+              selectedCount={selection.selectedCount}
+              selectionAvailable={selection.isAvailable}
+              selectionBusy={isMarkingSelectedRead}
+              selectionMode={selection.isSelectionMode}
+              selectionTriggerRef={selection.selectionTriggerRef}
+              onCancelSelection={selection.exitSelectionMode}
+              onEnterSelectionMode={selection.enterSelectionMode}
+              onMarkSelectedRead={markSelectedRead}
+            />
             <ArticleList
               ref={entryListRef}
               cardsRef={cardsRef}
               getEntries={getEntries}
               handleEntryClick={handleEntryClick}
               retryArticleList={fetchArticleList}
+              selectedEntryIds={selection.selectedIds}
+              selectionBusy={isMarkingSelectedRead}
+              selectionMode={selection.isSelectionMode}
+              onSelectionCheckboxFocus={selection.noteCheckboxFocus}
+              onToggleSelection={selection.toggleEntry}
             />
             <FooterPanel
+              bulkOperationsDisabled={isMarkingSelectedRead}
               getEntries={getEntries}
               info={info}
               refreshArticleList={fetchArticleListWithRelatedData}

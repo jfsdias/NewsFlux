@@ -61,7 +61,20 @@ const getEmptyStateSummary = ({ date, query, status }, polyglot) => {
 }
 
 const ArticleList = forwardRef(
-  ({ getEntries, handleEntryClick, cardsRef, retryArticleList }, ref) => {
+  (
+    {
+      getEntries,
+      handleEntryClick,
+      cardsRef,
+      retryArticleList,
+      selectionMode = false,
+      selectedEntryIds = new Set(),
+      selectionBusy = false,
+      onToggleSelection,
+      onSelectionCheckboxFocus,
+    },
+    ref,
+  ) => {
     const { articleListError, isArticleListReady } = useStore(contentState, {
       keys: ["articleListError", "isArticleListReady"],
     })
@@ -150,10 +163,15 @@ const ArticleList = forwardRef(
                           <ArticleEntry
                             feedIconMonogramFallback
                             articleActivation={articleActivation}
+                            bulkSelected={selectedEntryIds.has(entry.id)}
                             entry={entry}
                             layout={articleListLayout}
                             observeRead={observeRead}
                             presenter={EntryPresenter}
+                            selectionDisabled={selectionBusy}
+                            selectionMode={selectionMode}
+                            onSelectionCheckboxFocus={onSelectionCheckboxFocus}
+                            onToggleSelection={onToggleSelection}
                           />
                         </div>
                       ))}
@@ -166,10 +184,15 @@ const ArticleList = forwardRef(
                     <ArticleEntry
                       feedIconMonogramFallback
                       articleActivation={articleActivation}
+                      bulkSelected={selectedEntryIds.has(item.id)}
                       entry={item}
                       layout={articleListLayout}
                       observeRead={observeRead}
                       presenter={EntryPresenter}
+                      selectionDisabled={selectionBusy}
+                      selectionMode={selectionMode}
+                      onSelectionCheckboxFocus={onSelectionCheckboxFocus}
+                      onToggleSelection={onToggleSelection}
                     />
                     {index < virtualItems.length - 1 && (
                       <Divider className="article-list-divider" />
