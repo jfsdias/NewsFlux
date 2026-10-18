@@ -22,6 +22,33 @@ const uniqueById = (entries) => {
 export const createHomeSessionKey = ({ identityKey, showHiddenFeeds, pageSize, sessionRevision }) =>
   JSON.stringify({ identityKey, showHiddenFeeds, pageSize, sessionRevision })
 
+// A canonical refresh updates entries returned by Miniflux while retaining older members
+// of the committed Home session that fell outside the refreshed page.
+export const mergeHomeSessionEntries = (previousEntries, refreshedEntries) => {
+  const merged = uniqueById(refreshedEntries)
+  const seen = new Set(merged.map(({ id }) => id))
+  for (const entry of uniqueById(previousEntries)) {
+    if (!seen.has(entry.id)) {
+      merged.push(entry)
+      seen.add(entry.id)
+    }
+  }
+  return merged
+}
+
+// Keep the canonical page boundary separate from older retained Home session entries.
+export const getHomePaginationBoundary = (entries) => {
+  const timestamps = [
+    ...new Set(entries.map(({ published_at }) => Math.floor(Date.parse(published_at) / 1000))),
+  ].toSorted((left, right) => right - left)
+
+  if (timestamps.length === 0) {
+    return null
+  }
+
+  return timestamps[timestamps.length > 1 ? timestamps.length - 2 : 0]
+}
+
 export const createHomeEditorialSession = ({
   requestKey,
   sessionRevision,

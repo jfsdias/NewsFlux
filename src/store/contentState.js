@@ -23,6 +23,7 @@ const defaultValue = {
   entries: [], // 接口返回的所有文章
   filterDate: null, // 搜索日期
   filterString: "", // 搜索文本
+  homePaginationBoundary: null,
   infoFrom: "all", // all | today | starred | history | feed | category
   infoId: null, // feed 或 category 的 id
   isArticleListReady: false, // 文章列表是否加载完成
@@ -154,6 +155,7 @@ export const incrementArticleListSnapshotRevision = () =>
     (contentState.get().articleListSnapshotRevision ?? 0) + 1,
   )
 export const setEntries = createSetter(contentState, "entries")
+export const setHomePaginationBoundary = createSetter(contentState, "homePaginationBoundary")
 export const reconcileArticleListFilters = ({ filterDate, filterString }) => {
   const current = contentState.get()
   const nextFilterDate = filterDate ?? null
@@ -211,6 +213,10 @@ export const setArticleListSource = ({ from, id }) => {
     ...current,
     infoFrom: nextScope.from,
     infoId: nextScope.id,
+    homePaginationBoundary:
+      current.infoFrom === "home" && nextScope.from === "home"
+        ? current.homePaginationBoundary
+        : null,
     filterDate: filters.filterDate,
     filterString: filters.filterString,
   })

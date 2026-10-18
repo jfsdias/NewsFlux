@@ -9,6 +9,7 @@ import {
   setArticleListError,
   setEntries,
   setEntriesWithDeduplication,
+  setHomePaginationBoundary,
   setIsArticleListReady,
   setLoadMoreError,
   setLoadMoreVisible,
@@ -35,32 +36,37 @@ import {
   waitForEntryMutations,
 } from "@/utils/entry-mutation-state"
 import prepareEntry from "@/utils/entry-presentation"
+import { getHomePaginationBoundary, mergeHomeSessionEntries } from "@/utils/home-editorial-session"
 
-const handleResponses = (response, isHome) => {
+const handleResponses = (
+  response,
+  isHome,
+  preserveHomeSession = false,
+  homePaginationSession = null,
+) => {
   const isValidResponse =
     Array.isArray(response?.entries) && Number.isFinite(response?.total) && response.total >= 0
   if (!isValidResponse) {
     throw new TypeError("Invalid entries response")
   }
 
-  const preparedEntries = response.entries.map((entry) => prepareEntry(entry))
+  const canonicalEntries = response.entries.map((entry) => prepareEntry(entry))
+  const preparedEntries =
+    isHome && preserveHomeSession
+      ? mergeHomeSessionEntries(contentState.get().entries, canonicalEntries)
+      : canonicalEntries
   if (isHome) {
-    const seenEntryIds = new Set()
-    setEntries(
-      preparedEntries.filter(({ id }) => {
-        if (seenEntryIds.has(id)) {
-          return false
-        }
-        seenEntryIds.add(id)
-        return true
-      }),
-    )
+    setEntries(preparedEntries)
+    setHomePaginationBoundary({
+      ...homePaginationSession,
+      cursor: getHomePaginationBoundary(canonicalEntries),
+    })
   } else {
     const duplicateEntries = setEntriesWithDeduplication(preparedEntries)
     markDuplicatesAsRead(duplicateEntries)
   }
   setTotal(response.total)
-  setLoadMoreVisible(preparedEntries.length < response.total)
+  setLoadMoreVisible(canonicalEntries.length < response.total)
   incrementArticleListSnapshotRevision()
 }
 
@@ -202,9 +208,20 @@ const useArticleList = (source, sourceId, getEntries) => {
         }
       } while (shouldRetry)
 
-      handleResponses(response, source === "home")
+      const previousHomeSnapshot = committedHomeSnapshot.current
+      const preservesHomeSession =
+        source === "home" &&
+        previousHomeSnapshot?.requestKey === requestKey &&
+        previousHomeSnapshot.sessionRevision === requestSessionRevision &&
+        previousHomeSnapshot.pageSize === settings.pageSize &&
+        previousHomeSnapshot.showHiddenFeeds === settings.showHiddenFeeds
+      handleResponses(response, source === "home", preservesHomeSession, {
+        requestKey,
+        sessionRevision: requestSessionRevision,
+      })
       if (source === "home") {
         committedHomeSnapshot.current = {
+          requestKey,
           sessionRevision: requestSessionRevision,
           pageSize: settings.pageSize,
           showHiddenFeeds: settings.showHiddenFeeds,

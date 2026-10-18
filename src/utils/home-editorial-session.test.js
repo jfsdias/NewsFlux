@@ -5,6 +5,8 @@ const {
   appendHomeSessionEntries,
   createHomeEditorialSession,
   createHomeSessionKey,
+  getHomePaginationBoundary,
+  mergeHomeSessionEntries,
   projectHomeSession,
   transitionHomeSession,
 } = await import(new URL("home-editorial-session.js", import.meta.url))
@@ -179,16 +181,46 @@ test("NEW_SESSION_REBUILDS_FROM_CURRENT_UNREAD", () => {
   assert.deepEqual(projection(nextSession, currentUnread).highlightIds, [2, 3, 4])
 })
 
-test("EXPLICIT_REFRESH_REBUILDS_FROM_CURRENT_UNREAD", () => {
-  const currentUnread = setStatus(loaded, [1, 2], "read")
-  const refreshedSession = createHomeEditorialSession({
-    requestKey: key,
-    sessionRevision: 2,
-    entries: currentUnread,
-  })
+test("MANUAL_REFRESH_PRESERVES_PROJECTION_AND_APPENDS_NEW_UNREAD_TO_RECENT", () => {
+  const initial = start(loaded, { highlightIds: [1, 3, 2], recentIds: [5, 4] })
+  const refreshedEntries = [...setStatus(loaded, [1], "read"), entry(6, 13)]
+  const refreshedSession = appendHomeSessionEntries(initial, refreshedEntries)
 
-  assert.equal(projection(refreshedSession, currentUnread).highlightIds.includes(1), false)
-  assert.equal(projection(refreshedSession, currentUnread).highlightIds.includes(2), false)
+  assert.deepEqual(refreshedSession.highlightIds, [1, 3, 2])
+  assert.deepEqual(refreshedSession.recentIds, [5, 4, 6])
+  assert.deepEqual(projection(refreshedSession, refreshedEntries), {
+    highlightIds: [1, 3, 2],
+    recentIds: [5, 4, 6],
+  })
+  assert.equal(refreshedEntries.find(({ id }) => id === 1).status, "read")
+})
+
+test("REFRESH_MERGE_PRESERVES_SESSION_MEMBERS_AND_USES_CANONICAL_ENTRY_OBJECTS", () => {
+  const canonicalUpdate = { ...loaded[0], title: "Fresh title", status: "read" }
+  const merged = mergeHomeSessionEntries(loaded, [canonicalUpdate, entry(6, 13)])
+
+  assert.deepEqual(
+    merged.map(({ id }) => id),
+    [1, 6, 2, 3, 4, 5],
+  )
+  assert.equal(merged[0], canonicalUpdate)
+  assert.equal(
+    merged.find(({ id }) => id === 2),
+    loaded[1],
+  )
+})
+
+test("Home pagination boundary uses the second-oldest canonical timestamp for overlap", () => {
+  const canonicalPage = Array.from({ length: 20 }, (_, index) => ({
+    id: index + 1,
+    published_at: new Date(Date.UTC(2026, 9, 18, 12, -index)).toISOString(),
+  }))
+
+  assert.equal(
+    getHomePaginationBoundary(canonicalPage),
+    Math.floor(Date.parse(canonicalPage[18].published_at) / 1000),
+  )
+  assert.equal(getHomePaginationBoundary([]), null)
 })
 
 test("session identity or visibility change discards old Highlights", () => {

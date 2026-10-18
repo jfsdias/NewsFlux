@@ -52,11 +52,15 @@ const currentHomeSessionKey = () => {
   })
 }
 
+const HOME_RESUME_COALESCE_MS = 250
+const HOME_RESUME_DUPLICATE_WINDOW_MS = 1200
+
 const HomeEditorial = ({
   cardsRef,
   entryListRef,
   getEntries,
   handleEntryClick,
+  refreshArticleList,
   retryArticleList,
 }) => {
   const { articleListError, entries, isArticleListReady, loadMoreVisible, total } = useStore(
@@ -215,11 +219,17 @@ const HomeEditorial = ({
         return
       }
       setSession((previous) => {
-        if (
-          previous?.requestKey !== requestKey ||
-          previous.snapshotRevision !== content.articleListSnapshotRevision
-        ) {
+        if (previous?.requestKey !== requestKey) {
           return previous
+        }
+        if (previous.snapshotRevision !== content.articleListSnapshotRevision) {
+          if (!content.isArticleListReady || content.articleListError) {
+            return previous
+          }
+          return {
+            ...appendHomeSessionEntries(previous, content.entries),
+            snapshotRevision: content.articleListSnapshotRevision,
+          }
         }
         return appendHomeSessionEntries(previous, content.entries)
       })
@@ -234,19 +244,28 @@ const HomeEditorial = ({
         generation = generationRef.current
       }
 
+      const generationMatchesSession =
+        generation?.requestKey === requestKey &&
+        generation.canonicalRequestKey === canonicalRequestKey &&
+        generation.identityKey === getHomeIdentityKey(homeIdentityState.get()) &&
+        generation.sessionRevision === getDataSessionRevision()
+      const hasCommittedHomeSession =
+        generationMatchesSession &&
+        generation.status === "committed" &&
+        committedProjectionRef.current != null
+
       if (
         !content.isArticleListReady &&
-        (!generation || generation.status !== "pending" || requestChanged)
+        (!generation ||
+          (generation.status !== "pending" && !hasCommittedHomeSession) ||
+          requestChanged)
       ) {
         generation = startGeneration(content, canonicalRequestKey)
       } else if (
         content.isArticleListReady &&
         !content.articleListError &&
         content.articleListSnapshotRevision > 0 &&
-        (!generation ||
-          (generation.status !== "pending" &&
-            (generation.canonicalRequestKey !== canonicalRequestKey ||
-              generation.targetSnapshotRevision !== content.articleListSnapshotRevision)))
+        (!generation || (generation.status !== "pending" && !generationMatchesSession))
       ) {
         generation = startGeneration(content, canonicalRequestKey)
       }
@@ -275,6 +294,82 @@ const HomeEditorial = ({
       }
     }
   }, [entryListRef, requestKey])
+
+  useEffect(() => {
+    let wasBlurred = false
+    let wasHidden = document.visibilityState === "hidden"
+    let wasOffline = navigator.onLine === false
+    let refreshTimer = null
+    let lastRefreshAt = Number.NEGATIVE_INFINITY
+
+    const canRefreshHome = () => {
+      const content = contentState.get()
+      return content.infoFrom === "home" && !content.activeContent && content.isArticleListReady
+    }
+    const scheduleRefresh = () => {
+      if (refreshTimer !== null) {
+        globalThis.clearTimeout(refreshTimer)
+      }
+      refreshTimer = globalThis.setTimeout(() => {
+        refreshTimer = null
+        const now = Date.now()
+        if (
+          !canRefreshHome() ||
+          navigator.onLine === false ||
+          now - lastRefreshAt < HOME_RESUME_DUPLICATE_WINDOW_MS
+        ) {
+          return
+        }
+        lastRefreshAt = now
+        void refreshArticleList?.()
+      }, HOME_RESUME_COALESCE_MS)
+    }
+    const handleResume = () => {
+      if (document.visibilityState === "hidden" || (!wasBlurred && !wasHidden)) {
+        return
+      }
+      wasBlurred = false
+      wasHidden = false
+      scheduleRefresh()
+    }
+    const handleBlur = () => {
+      wasBlurred = true
+    }
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        wasHidden = true
+        return
+      }
+      handleResume()
+    }
+    const handleOffline = () => {
+      wasOffline = true
+    }
+    const handleOnline = () => {
+      if (!wasOffline) {
+        return
+      }
+      wasOffline = false
+      scheduleRefresh()
+    }
+
+    globalThis.addEventListener("blur", handleBlur)
+    globalThis.addEventListener("focus", handleResume)
+    globalThis.addEventListener("offline", handleOffline)
+    globalThis.addEventListener("online", handleOnline)
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    return () => {
+      if (refreshTimer !== null) {
+        globalThis.clearTimeout(refreshTimer)
+      }
+      globalThis.removeEventListener("blur", handleBlur)
+      globalThis.removeEventListener("focus", handleResume)
+      globalThis.removeEventListener("offline", handleOffline)
+      globalThis.removeEventListener("online", handleOnline)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
+  }, [refreshArticleList])
 
   useEffect(
     () =>
