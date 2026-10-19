@@ -9,9 +9,11 @@ FROM --platform=$BUILDPLATFORM node:24.22.0-alpine3.24@sha256:44fce696f38ba8c987
 ARG SOURCE_COMMIT
 ARG SOURCE_COMMIT_DATE
 ARG VITE_BASE_PATH
+ARG NEWSFLUX_REQUIRE_BUILD_REVISION=1
 
 ENV PNPM_HOME=/pnpm \
-    PATH=/pnpm:$PATH
+    PATH=/pnpm:$PATH \
+    NEWSFLUX_REQUIRE_BUILD_REVISION=$NEWSFLUX_REQUIRE_BUILD_REVISION
 
 # enable corepack to use pnpm
 RUN corepack enable
@@ -36,8 +38,11 @@ RUN pnpm run build
 # Specify the version for consistency
 FROM caddy:2.11.7@sha256:685ae3d7c34d9b5f8caeddc5d14051db7bbd88ff1f5a2fa0c16bd8ca328fb7af
 
+ARG SOURCE_COMMIT
 ARG VITE_BASE_PATH
 ENV REACTFLUX_BASE_PATH=$VITE_BASE_PATH
+LABEL org.opencontainers.image.revision=$SOURCE_COMMIT \
+    org.opencontainers.image.source="https://github.com/jfsdias/NewsFlux"
 
 # Copy built assets to the URL path embedded in the frontend bundle
 COPY --from=build /app/build /srv${REACTFLUX_BASE_PATH}
