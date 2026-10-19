@@ -243,7 +243,6 @@ const clickUndo = () => {
   assert(undoButton?.props?.onClick, "Undo action is missing from the successful mark-all notice")
   undoButton.props.onClick()
 }
-
 const Harness = () => {
   const [probe, setProbe] = useState(null)
   const [results, setResults] = useState([])
@@ -315,6 +314,40 @@ const Harness = () => {
     await waitFor(() => contentState.get().isArticleListReady && controls.current)
     await settle()
   }
+  const runMarkAllControl = async ({
+    source,
+    entries,
+    expectedIds,
+    expectedPath,
+    matchesRequest,
+  }) => {
+    await mount(source, { showStatus: "unread", markAllReadJumpToNext: false }, {}, entries, {
+      respondWithFilters: true,
+    })
+    assertIds(expectedIds)
+    respond = serverRespond
+    clickMarkAll()
+    await waitFor(() => mutationRequests === 1 && countRefreshes === 1)
+    assertIds([])
+    assert(controls.current.path === expectedPath, `${source} Mark All changed the route`)
+    assert(matchesRequest(requests), `${source} Mark All did not preserve the source query scope`)
+    assert(
+      JSON.stringify(mutationBodies[0]?.body?.entry_ids?.toSorted()) ===
+        JSON.stringify(expectedIds.toSorted()),
+      `${source} Mark All acknowledged IDs outside its source scope`,
+    )
+    assert(undoNotification(), `${source} Mark All did not expose Undo`)
+    clickUndo()
+    await waitFor(() => mutationRequests === 2 && countRefreshes === 2)
+    assert(
+      JSON.stringify(mutationBodies[1]?.body?.entry_ids?.toSorted()) ===
+        JSON.stringify(expectedIds.toSorted()) &&
+        serverEntries.every(({ status }) => status === "unread"),
+      `${source} Undo did not restore exactly the acknowledged entries`,
+    )
+    assert(controls.current.path === expectedPath, `${source} Undo changed the route`)
+    assert(!undoNotification(), `${source} Undo left a duplicate notice`)
+  }
   const requiredListRegressionGates = [
     "NO_ALL_RANKING",
     "NO_UNREAD_RANKING",
@@ -325,6 +358,9 @@ const Harness = () => {
     "MARK_ALL_COLD_DIRECT_ALL_RECONCILIATION",
     "MARK_ALL_COLD_DIRECT_ALL_JUMP_ENABLED",
     "MARK_ALL_COLD_DIRECT_ALL_SEARCH_SCOPE",
+    "MARK_ALL_TODAY_CONTROL",
+    "MARK_ALL_CATEGORY_CONTROL",
+    "MARK_ALL_STARRED_CONTROL",
     "MARK_ALL_READ_FILTER_SCOPE",
     "MARK_ALL_READ_NO_JUMP_ON_FAILURE",
     "MARK_ALL_READ_JUMP_TO_NEXT",
@@ -722,6 +758,64 @@ const Harness = () => {
         )
         assert(controls.current.path === "/all", "Cold /all search Undo changed the route")
         assert(!undoNotification(), "Cold /all search Undo left a duplicate notice")
+      },
+    ],
+    [
+      "MARK_ALL_TODAY_CONTROL",
+      async () => {
+        const todayEntries = [
+          entry(61, new Date(fixtureNow - 60_000).toISOString()),
+          entry(62, "2026-10-10T10:00:00Z"),
+        ]
+        await runMarkAllControl({
+          source: "today",
+          entries: todayEntries,
+          expectedIds: [61],
+          expectedPath: "/today",
+          matchesRequest: (observedRequests) =>
+            observedRequests.some(
+              (url) => url.includes("/v1/entries?") && url.includes("published_after="),
+            ),
+        })
+      },
+    ],
+    [
+      "MARK_ALL_CATEGORY_CONTROL",
+      async () => {
+        const categoryEntries = [
+          entry(71, "2026-10-10T10:00:00Z"),
+          entry(72, "2026-10-11T10:00:00Z", {
+            feed: { ...feed, id: 2, category: { id: 2, title: "Other category" } },
+          }),
+        ]
+        await runMarkAllControl({
+          source: "category",
+          entries: categoryEntries,
+          expectedIds: [71],
+          expectedPath: "/category/1",
+          matchesRequest: (observedRequests) =>
+            observedRequests.some((url) => url.startsWith("/v1/categories/1/entries?")),
+        })
+      },
+    ],
+    [
+      "MARK_ALL_STARRED_CONTROL",
+      async () => {
+        const starredEntries = [
+          entry(81, "2026-10-10T10:00:00Z", { starred: true }),
+          entry(82, "2026-10-11T10:00:00Z", { starred: true }),
+          entry(83, "2026-10-12T10:00:00Z", { starred: false }),
+        ]
+        await runMarkAllControl({
+          source: "starred",
+          entries: starredEntries,
+          expectedIds: [81, 82],
+          expectedPath: "/starred",
+          matchesRequest: (observedRequests) =>
+            observedRequests.some(
+              (url) => url.includes("/v1/entries?") && url.includes("starred=true"),
+            ),
+        })
       },
     ],
     [
