@@ -24,6 +24,20 @@ test("exposes separate NewsFlux product and ReactFlux upstream identities", () =
   assert.equal(UPSTREAM_GITHUB_REPO_PATH, "electh/ReactFlux")
 })
 
+test("About's accessible GitHub label names the NewsFlux product in every locale", () => {
+  for (const locale of ["de-DE", "en-US", "es-ES", "fr-FR", "ja-JP", "zh-CN"]) {
+    const phrases = JSON.parse(
+      readFileSync(new URL(`../locales/${locale}.json`, import.meta.url), "utf8"),
+    )
+    assert.match(phrases.about.github_link_label, /NewsFlux/, `${locale} should name NewsFlux`)
+    assert.doesNotMatch(
+      phrases.about.github_link_label,
+      /ReactFlux/,
+      `${locale} should not label the NewsFlux link as ReactFlux`,
+    )
+  }
+})
+
 test("brands nested runtime phrases without mutating the locale source", () => {
   const source = {
     compatibility: {
