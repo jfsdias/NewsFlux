@@ -1,14 +1,14 @@
 # NewsFlux Roadmap
 
-- **Status:** canonical roadmap reconciled after FILTER-RULES-01 / PR #55.
+- **Status:** canonical roadmap reconciled after INPUT-PARITY-ESCAPE-FOCUS / PR #64 and ABOUT-ACCESSIBLE-BRAND-01 / PR #65.
 - **Created:** 2026-10-15.
-- **Last reconciled:** 2026-10-17.
-- **Reconciled against:** live `main` at `1021cd5746eba2b3b90b1a863bada9043f126be1`; no open PRs before this docs PR; OMV container `newsflux` running `newsflux-local:118ecb2c63f7` (source SHA `118ecb2c63f7df3583d0f2524b5cc8c62bd518c1`, image ID `sha256:a8c7e764d0cf5ef333da113fc9e46a15dde043297a9b65122498aebba4d65499`, restart count 0). Main and production are not at parity.
+- **Last reconciled:** 2026-10-19.
+- **Reconciled against:** live `main` and production at `405e9d7b1a3097dacef50c7908abf83d480d64dd`; PRs #64 and #65 merged and permanently promoted; PR #62 remains open/draft; production image `newsflux-local:405e9d7b1a30` (source SHA `405e9d7b1a3097dacef50c7908abf83d480d64dd`, image ID `sha256:59ac4220570d13598a909b8edda1d3e3b372b803547a461407dc37272853327c`, HTTP 200, running, restart count 0). Main and production are at parity.
 - **Purpose:** preserve completed work, accepted findings, sequencing, architecture/product gates, upstream baseline, and the next recommended action without turning the roadmap into implementation authorization.
 
 This document is the canonical **roadmap**, not an implementation authorization. Detailed design decisions remain in the dedicated design documents and implementation plans remain in `docs/superpowers/plans/` where present.
 
-No roadmap item may bypass project governance: one identifiable purpose per PR, no merge without explicit user authorization, no implicit upstream sync, no redesign mixed with functional work, no new persistent NewsFlux state without an explicit source-of-truth decision, and no incidental scope expansion.
+No roadmap item may bypass project governance: one identifiable purpose per PR; no merge without explicit user authorization; no blind upstream sync; upstream sync, redesign and functional changes stay isolated; incidental findings are reported, classified and routed to backlog; no new persistent NewsFlux state without an explicit architecture decision; and no incidental scope expansion.
 
 ---
 
@@ -55,7 +55,7 @@ Current reference decisions:
 
 - **ADOPT:** multi-select; mark-selected-as-read; keyboard navigation expansion; provider-backed range mark-as-read; visible feed-health signaling; stronger list/read-state redundancy; editorial typography/details that do not alter behavior.
 - **ADAPT:** Favorites as Miniflux `starred`; density control using existing local settings; Miniflux block/keep rules; external-save/read-later handoff through Miniflux integrations; category rhythm on Home; Material-style confirmations/snackbars only where they preserve NewsFlux scope semantics.
-- **PLANNED WITH PRODUCT DECISION:** HOME-VISUAL-02 composition; NAV-VISUAL-01 adaptive navigation; contextual chrome consolidation.
+- **PLANNED WITH PRODUCT DECISION:** HOME-VISUAL-02 composition and contextual chrome consolidation. NAV-VISUAL-01 has an approved design contract; implementation and real-device validation remain pending.
 - **HOLD:** NewsFlux-owned Saved umbrella, internal Read Later queue, internal Bookmarks, Boards, Tags, Smart folders, per-feed layout sync, swipe-save to an undefined target, story clustering, ML.
 - **DO NOT COPY:** Apple News ad-like blocks/oversized imagery; Feedly/Inoreader toolbar density; NewsBlur visual density; glass over content; permanent three-pane UI; algorithmic For You outside Home.
 
@@ -93,91 +93,104 @@ Current reference decisions:
 | READER-VISUAL-01       | **COMPLETED** | Reading ergonomics refinement                         |
 | UX/UI red-team round 2 | **COMPLETED** | `GOOD_WITH_DEBT`: 0 P0, 3 P1, 13 P2, 8 P3             |
 
-### 3.2 Recently completed PRs
+### 3.2 Recent PR history (completed and active)
 
-| PR  | Track                            | Status        | Notes                                                                                                                                                                                                        |
-| --- | -------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| #20 | BULK-01                          | **COMPLETED** | Footer Mark All Read Undo; generation-scoped notification IDs; acknowledged-ID undo                                                                                                                          |
-| #21 | ID-01R                           | **COMPLETED** | Repository/document provenance and translated README reconciliation                                                                                                                                          |
-| #22 | Documentation                    | **COMPLETED** | Canonical roadmap red-team R2 reconciliation                                                                                                                                                                 |
-| #23 | A11Y-RT-01                       | **COMPLETED** | Reduced-transparency dark/OLED specificity fix                                                                                                                                                               |
-| #24 | LIST-VISUAL-01 / monogram subset | **COMPLETED** | Deterministic favicon monogram fallback                                                                                                                                                                      |
-| #25 | CHROME-01A / DatePicker subset   | **COMPLETED** | NewsFlux token styling for DatePicker                                                                                                                                                                        |
-| #26 | Upstream sync                    | **COMPLETED** | Adapted upstream article code-block experience through `3045a5f8...`                                                                                                                                         |
-| #27 | BULK-01F                         | **COMPLETED** | Footer Mark All Read focus restoration                                                                                                                                                                       |
-| #28 | LIST-VISUAL-01A                  | **COMPLETED** | Read-state + metadata/source hierarchy cohesion across Column/Card/List                                                                                                                                      |
-| #29 | Documentation                    | **COMPLETED** | Roadmap/project-state reconciliation after PR #28 production promotion                                                                                                                                       |
-| #30 | BULK-01B                         | **COMPLETED** | Sidebar Feed/Category Mark All confirmation + safe shared Undo; race hardening; exact merge-SHA deployed                                                                                                     |
-| #32 | ID-RUNTIME-01                    | **COMPLETED** | Approved head `1237f77ff2566015ef50939e268c4ec19f66fe88`; merged/deployed as `099bdcb0483ef516f6c325e67eefb41b618a4713`; post-merge browser smoke passed                                                     |
-| #34 | A11Y-01                          | **COMPLETED** | Approved head `c62ce9160c928eedcdb09d25a1271253c8baf91c`; merged/deployed as `7b0a7e04d1e1052c33ccb23559467f1ed2dc9ac0`; tree parity, exact-SHA promotion and authenticated post-merge smoke passed          |
-| #36 | HARNESS-UNDO-ID-01               | **COMPLETED** | Feature head `ef90eb733dbc6a26c0b85bcf33a9a866569a92b7`; merge `b65f6f88b0c27f049723714a5338527ffc92fa1a`; repaired all nine stale fixed-notice-ID assertions (29/29)                                        |
-| #38 | RUNTIME-BASE-01                  | **COMPLETED** | Feature head `07237ba7e8c773e9de88e9c533296b9700dde287`; merge `1af58a53c6fd85bcca95ec44a56e23c7c02b6145`; pins Node 24.22.0 Alpine 3.24 and Caddy 2.11.7 by digest                                          |
-| #39 | FILTER-01B                       | **COMPLETED** | Date/status filter transition behavior; merged as `cfef27e50fae9a153151cfc91bd0bf92c1270a37`                                                                                                                 |
-| #40 | FEED-HEALTH-01A                  | **COMPLETED** | Miniflux-reported feed update error indicator; merged as `2947169a68e5193f4cd9273d0bb7ed0faef00623`                                                                                                          |
-| #41 | READER-VISUAL-02A1               | **COMPLETED** | Editorial typography foundation; merged as `3f72d554177c10c9eee16649ea7297495b4f6977`                                                                                                                        |
-| #42 | NAV-02 harness maintenance       | **COMPLETED** | Mark-All expectation aligned with current batching; merged as `a21726365ce80b3f7883907228e27d9c5f693a87`                                                                                                     |
-| #43 | BULK-03A                         | **COMPLETED** | Mark articles above/below as read; merged as `978d7b009755ae6750ce84b1e172792703e98e4f`                                                                                                                      |
-| #44 | READER-MEASURE-01                | **COMPLETED** | Bounded responsive prose measure; merge and production promotion at `118ecb2c63f7df3583d0f2524b5cc8c62bd518c1`                                                                                               |
-| #45 | Documentation                    | **COMPLETED** | Prior post-Reader Measure reconciliation, merge `c062a4ee9f7967ef254fde2cb2ed1ca2207735e9`; superseded by this post-BULK-03B reconciliation                                                                  |
-| #46 | READER-KEY-01                    | **COMPLETED** | Feature head `bbcbc3f51e66793e617d7286d4785a5eb5611091`; merge `3e21cbb197efbca0b577e06c705a1ef9997cb597`; layered Escape complete                                                                           |
-| #47 | STATE-ERR-01                     | **COMPLETED** | Feature head `379fa241d8fa1a4d6d9e216c374b6409322a573d`; merge `e59295501cc51a6df2b64a435c0c32eb5431aed5`; unavailable-entry 404 behavior complete                                                           |
-| #48 | CONTENT-01                       | **COMPLETED** | Feature head `1032b5409298629382685a85935b85fdc2292f85`; merge `9f521edfd5f031e8e833a4854d896acc42a22fae`; deterministic untitled fallback complete                                                          |
-| #49 | READER-VISUAL-02A2               | **COMPLETED** | Feature head `cafe47e1ae19b6a203e8aef35339931015614c7c`; merge `e4752d290bdfb4961d379dd05548ef3da5da42ba`; quiet header aligned to prose column                                                              |
-| #50 | BULK-03B                         | **COMPLETED** | Feature head `dd9e68650f3f40080199b90107c2b35722166697`; merge `a8dbe15497f7d526298f223188955b82589a84a4`; 1/7/30-day age presets, strict cutoff, full discovery, scoped writes, acknowledged-only Undo      |
-| #51 | Documentation                    | **COMPLETED** | Project-state and roadmap reconciliation after BULK-03B; merge `0d3b1e9648d59018cdd1f9f17948c7d34b19924b`                                                                                                    |
-| #52 | FEED-HEALTH-01B                  | **COMPLETED** | Feature head `1b03865311993f7e72df0632ea662bbe94e926e9`; merge `051e461d1d1eb4408e15a0ebcd4e1331b546de7a`; provider-backed details/Retry and one final metadata reconciliation after bulk refresh            |
-| #53 | Selective upstream maintenance   | **COMPLETED** | Feature head `f4db01106ca28fca3b7340be45cb87fa4059845d`; merge `046cd647c65583cdfdc7ab282701be79d4b34294`; pnpm hardening integrated, setup-node pin adapted                                                 |
-| #55 | FILTER-RULES-01                  | **COMPLETED** | Feature head `5b6abe28ae5e6b52f02461c4e3601165056900b1`; merge/current main `1021cd5746eba2b3b90b1a863bada9043f126be1`; provider-backed per-feed raw Miniflux block/keep rules, no NewsFlux rule persistence |
+| PR  | Track                            | Status           | Notes                                                                                                                                                                                                   |
+| --- | -------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #20 | BULK-01                          | **COMPLETED**    | Footer Mark All Read Undo; generation-scoped notification IDs; acknowledged-ID undo                                                                                                                     |
+| #21 | ID-01R                           | **COMPLETED**    | Repository/document provenance and translated README reconciliation                                                                                                                                     |
+| #22 | Documentation                    | **COMPLETED**    | Canonical roadmap red-team R2 reconciliation                                                                                                                                                            |
+| #23 | A11Y-RT-01                       | **COMPLETED**    | Reduced-transparency dark/OLED specificity fix                                                                                                                                                          |
+| #24 | LIST-VISUAL-01 / monogram subset | **COMPLETED**    | Deterministic favicon monogram fallback                                                                                                                                                                 |
+| #25 | CHROME-01A / DatePicker subset   | **COMPLETED**    | NewsFlux token styling for DatePicker                                                                                                                                                                   |
+| #26 | Upstream sync                    | **COMPLETED**    | Adapted upstream article code-block experience through `3045a5f8...`                                                                                                                                    |
+| #27 | BULK-01F                         | **COMPLETED**    | Footer Mark All Read focus restoration                                                                                                                                                                  |
+| #28 | LIST-VISUAL-01A                  | **COMPLETED**    | Read-state + metadata/source hierarchy cohesion across Column/Card/List                                                                                                                                 |
+| #29 | Documentation                    | **COMPLETED**    | Roadmap/project-state reconciliation after PR #28 production promotion                                                                                                                                  |
+| #30 | BULK-01B                         | **COMPLETED**    | Sidebar Feed/Category Mark All confirmation + safe shared Undo; race hardening; exact merge-SHA deployed                                                                                                |
+| #32 | ID-RUNTIME-01                    | **COMPLETED**    | Approved head `1237f77ff2566015ef50939e268c4ec19f66fe88`; merged/deployed as `099bdcb0483ef516f6c325e67eefb41b618a4713`; post-merge browser smoke passed                                                |
+| #34 | A11Y-01                          | **COMPLETED**    | Approved head `c62ce9160c928eedcdb09d25a1271253c8baf91c`; merged/deployed as `7b0a7e04d1e1052c33ccb23559467f1ed2dc9ac0`; tree parity, exact-SHA promotion and authenticated post-merge smoke passed     |
+| #36 | HARNESS-UNDO-ID-01               | **COMPLETED**    | Feature head `ef90eb733dbc6a26c0b85bcf33a9a866569a92b7`; merge `b65f6f88b0c27f049723714a5338527ffc92fa1a`; repaired all nine stale fixed-notice-ID assertions (29/29)                                   |
+| #38 | RUNTIME-BASE-01                  | **COMPLETED**    | Feature head `07237ba7e8c773e9de88e9c533296b9700dde287`; merge `1af58a53c6fd85bcca95ec44a56e23c7c02b6145`; pins Node 24.22.0 Alpine 3.24 and Caddy 2.11.7 by digest                                     |
+| #39 | FILTER-01B                       | **COMPLETED**    | Date/status filter transition behavior; merged as `cfef27e50fae9a153151cfc91bd0bf92c1270a37`                                                                                                            |
+| #40 | FEED-HEALTH-01A                  | **COMPLETED**    | Miniflux-reported feed update error indicator; merged as `2947169a68e5193f4cd9273d0bb7ed0faef00623`                                                                                                     |
+| #41 | READER-VISUAL-02A1               | **COMPLETED**    | Editorial typography foundation; merged as `3f72d554177c10c9eee16649ea7297495b4f6977`                                                                                                                   |
+| #42 | NAV-02 harness maintenance       | **COMPLETED**    | Mark-All expectation aligned with current batching; merged as `a21726365ce80b3f7883907228e27d9c5f693a87`                                                                                                |
+| #43 | BULK-03A                         | **COMPLETED**    | Mark articles above/below as read; merged as `978d7b009755ae6750ce84b1e172792703e98e4f`                                                                                                                 |
+| #44 | READER-MEASURE-01                | **COMPLETED**    | Bounded responsive prose measure; merge and production promotion at `118ecb2c63f7df3583d0f2524b5cc8c62bd518c1`                                                                                          |
+| #45 | Documentation                    | **COMPLETED**    | Prior post-Reader Measure reconciliation, merge `c062a4ee9f7967ef254fde2cb2ed1ca2207735e9`; superseded by this post-BULK-03B reconciliation                                                             |
+| #46 | READER-KEY-01                    | **COMPLETED**    | Feature head `bbcbc3f51e66793e617d7286d4785a5eb5611091`; merge `3e21cbb197efbca0b577e06c705a1ef9997cb597`; layered Escape complete                                                                      |
+| #47 | STATE-ERR-01                     | **COMPLETED**    | Feature head `379fa241d8fa1a4d6d9e216c374b6409322a573d`; merge `e59295501cc51a6df2b64a435c0c32eb5431aed5`; unavailable-entry 404 behavior complete                                                      |
+| #48 | CONTENT-01                       | **COMPLETED**    | Feature head `1032b5409298629382685a85935b85fdc2292f85`; merge `9f521edfd5f031e8e833a4854d896acc42a22fae`; deterministic untitled fallback complete                                                     |
+| #49 | READER-VISUAL-02A2               | **COMPLETED**    | Feature head `cafe47e1ae19b6a203e8aef35339931015614c7c`; merge `e4752d290bdfb4961d379dd05548ef3da5da42ba`; quiet header aligned to prose column                                                         |
+| #50 | BULK-03B                         | **COMPLETED**    | Feature head `dd9e68650f3f40080199b90107c2b35722166697`; merge `a8dbe15497f7d526298f223188955b82589a84a4`; 1/7/30-day age presets, strict cutoff, full discovery, scoped writes, acknowledged-only Undo |
+| #51 | Documentation                    | **COMPLETED**    | Project-state and roadmap reconciliation after BULK-03B; merge `0d3b1e9648d59018cdd1f9f17948c7d34b19924b`                                                                                               |
+| #52 | FEED-HEALTH-01B                  | **COMPLETED**    | Feature head `1b03865311993f7e72df0632ea662bbe94e926e9`; merge `051e461d1d1eb4408e15a0ebcd4e1331b546de7a`; provider-backed details/Retry and one final metadata reconciliation after bulk refresh       |
+| #53 | Selective upstream maintenance   | **COMPLETED**    | Feature head `f4db01106ca28fca3b7340be45cb87fa4059845d`; merge `046cd647c65583cdfdc7ab282701be79d4b34294`; pnpm hardening integrated, setup-node pin adapted                                            |
+| #55 | FILTER-RULES-01                  | **COMPLETED**    | Feature head `5b6abe28ae5e6b52f02461c4e3601165056900b1`; merge `1021cd5746eba2b3b90b1a863bada9043f126be1`; provider-backed per-feed raw Miniflux block/keep rules, no NewsFlux rule persistence         |
+| #57 | BULK-02                          | **COMPLETED**    | Session multi-select; merge `85b9590bbc9f4d3488fd30694b0b45553fefda5b`                                                                                                                                  |
+| #58 | MARK-ALL-REFRESH-01              | **COMPLETED**    | Suppresses transient empty state during the next-unread jump; merge `df4bea4dde5cca86a4b822d2e82f01156bb96f1a`; Undo-after-jump concern later investigated with no current defect reproduced            |
+| #59 | HOME-01                          | **COMPLETED**    | Refresh, focus, reconnect and editorial-session continuity; merge `114eed13c5f66cd57a4448ece935de6cb5f4a11e`                                                                                            |
+| #60 | NAV01                            | **COMPLETED**    | Canonical reader previous/next and next-unread continuity; merge `31c95ff835da3e716acfd6eb115db5c3b68dd71c`                                                                                             |
+| #61 | INPUT-01a                        | **COMPLETED**    | Shared reader-command ownership; head `e2cbab710f00eb84c77b3df4ddc9701839a677d9`, merge `194a1db007902411abe91459b45a19b10c76e701`                                                                      |
+| #62 | Documentation                    | **OPEN / DRAFT** | R2 reconciliation on base `405e9d7b1a3097dacef50c7908abf83d480d64dd`; three documentation targets only; merge not authorized                                                                            |
+| #63 | ABOUT-RUNTIME-REVISION-01        | **COMPLETED**    | Feature head `9a64e9b45c6c76e6765fdaf82ee02c30f3bc57c8`; merge `723bdbb96e4445d267b443422a0be7a83e5b4f8a`; exact build identity, live About validation and production promotion passed                  |
+| #64 | INPUT-PARITY-ESCAPE-FOCUS        | **COMPLETED**    | Feature head `ee412912ad43d4902459b12151bad81c570d58cf`; merge `23474d3f83c01c4355c892f46c77d2f66b046af0`; FooterPanel Escape/focus live canary passed at 390×844, 884×1104 and 1280×800                |
+| #65 | ABOUT-ACCESSIBLE-BRAND-01        | **COMPLETED**    | Feature head `8a4d1cf358d39524e95027b13e10c0205b9aea27`; merge `405e9d7b1a3097dacef50c7908abf83d480d64dd`; six-locale accessible NewsFlux GitHub label correction; exact merge-SHA promotion passed     |
 
 ### 3.3 Functional behavior and defect tracks
 
-| Item                                       | Status                      | Priority / dependency                                                        | Notes                                                                                                                                                                        |
-| ------------------------------------------ | --------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| BULK-01 — Footer Mark All Read Undo        | **COMPLETED**               | PR #20                                                                       | One-shot 8 s undo; repeated-operation behavior validated                                                                                                                     |
-| BULK-01F — footer focus return             | **COMPLETED**               | PR #27                                                                       | Focus returns deterministically without stale-list refocus                                                                                                                   |
-| BULK-01B — Sidebar context Mark All        | **COMPLETED**               | PR #30, R2-01                                                                | Feed/Category confirmation + acknowledged-ID Undo; shared Mark-All/Undo coordinator; no Sidebar jump; physical touch gate waived by owner, physical PASS not claimed         |
-| BULK-01C — scoped undo copy                | **PLANNED**                 | R2-09, product copy decision                                                 | Name affected scope/count; remain separate from BULK-01B                                                                                                                     |
-| BULK-03 — range/age mark-as-read           | **COMPLETED**               | PRs #43 and #50                                                              | Above/below actions plus 1/7/30-day presets; full scoped discovery before mutation, strict `published_at` cutoff, acknowledged-only Undo, and shared Today time snapshot     |
-| FILTER-01A — search scope rules            | **COMPLETED**               | PR #37; merged as `73f793f51ba3f81e04c2fbaaf3093fc6c5983078`                 | Search is source-scoped; changing source clears it, same-scope reader return/refresh/pagination preserve it; no global search or new persistence                             |
-| FILTER-01B — date/status filter behavior   | **COMPLETED**               | PR #39                                                                       | Date/status transitions and scoped search behavior; merged before the Reader Measure production baseline                                                                     |
-| FILTER-RULES-01                            | **COMPLETED**               | PR #55; merged as `1021cd5746eba2b3b90b1a863bada9043f126be1`                 | Provider-backed per-feed raw Miniflux `blocklist_rules` / `keeplist_rules`; no NewsFlux rule persistence                                                                     |
-| BULK-02 — Multi-select                     | **NEXT — DISCOVERY/DESIGN** | Next engineering track; discovery/design only, implementation not authorized | Visible/session selection only; mark selected read; Undo always                                                                                                              |
-| READER-KEY-01 — layered Escape             | **COMPLETED**               | PR #46                                                                       | Escape closes the topmost menu/popover before the reader                                                                                                                     |
-| STATE-ERR-01 — unavailable entry route     | **COMPLETED**               | PR #47                                                                       | Unavailable entry routes present the explicit 404 behavior                                                                                                                   |
-| CONTENT-01 — untitled entry fallback       | **COMPLETED**               | PR #48                                                                       | Deterministic accessible untitled-entry fallback; unread cue remains non-empty                                                                                               |
-| HOME-01 — refresh/focus/reconnect          | **PLANNED**                 | R2-12                                                                        | Refresh must not unexpectedly reshuffle an active Phase 2D session                                                                                                           |
-| NAV01 — reader previous/next + next unread | **PLANNED**                 | R2-14                                                                        | Preserve canonical originating-scope order and next-unread-source flow                                                                                                       |
-| NAV-02F — navigation follow-ups            | **PLANNED**                 | R2-13/R2-17/R2-18                                                            | Long source names, unread grouping/mode persistence decisions, and human-readable unread labels                                                                              |
-| FEED-HEALTH-01                             | **COMPLETED**               | 01A / PR #40 and 01B / PR #52 complete                                       | Provider-owned error details, checked time and failure count; disabled feeds remain suppressed; Retry is provider-backed; bulk refresh has one final metadata reconciliation |
+| Item                                         | Status        | Priority / dependency                                        | Notes                                                                                                                                                                        |
+| -------------------------------------------- | ------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| BULK-01 — Footer Mark All Read Undo          | **COMPLETED** | PR #20                                                       | One-shot 8 s undo; repeated-operation behavior validated                                                                                                                     |
+| BULK-01F — footer focus return               | **COMPLETED** | PR #27                                                       | Focus returns deterministically without stale-list refocus                                                                                                                   |
+| BULK-01B — Sidebar context Mark All          | **COMPLETED** | PR #30, R2-01                                                | Feed/Category confirmation + acknowledged-ID Undo; shared Mark-All/Undo coordinator; no Sidebar jump; physical touch gate waived by owner, physical PASS not claimed         |
+| BULK-01C — scoped undo copy                  | **PLANNED**   | R2-09, product copy decision                                 | Name affected scope/count; remain separate from BULK-01B                                                                                                                     |
+| BULK-03 — range/age mark-as-read             | **COMPLETED** | PRs #43 and #50                                              | Above/below actions plus 1/7/30-day presets; full scoped discovery before mutation, strict `published_at` cutoff, acknowledged-only Undo, and shared Today time snapshot     |
+| FILTER-01A — search scope rules              | **COMPLETED** | PR #37; merged as `73f793f51ba3f81e04c2fbaaf3093fc6c5983078` | Search is source-scoped; changing source clears it, same-scope reader return/refresh/pagination preserve it; no global search or new persistence                             |
+| FILTER-01B — date/status filter behavior     | **COMPLETED** | PR #39                                                       | Date/status transitions and scoped search behavior; merged before the Reader Measure production baseline                                                                     |
+| FILTER-RULES-01                              | **COMPLETED** | PR #55; merged as `1021cd5746eba2b3b90b1a863bada9043f126be1` | Provider-backed per-feed raw Miniflux `blocklist_rules` / `keeplist_rules`; no NewsFlux rule persistence                                                                     |
+| BULK-02 — Multi-select                       | **COMPLETED** | PR #57                                                       | Session-scoped multi-select and selected-read behavior completed                                                                                                             |
+| MARK-ALL-REFRESH-01 — next-unread transition | **COMPLETED** | PR #58                                                       | Suppresses the transient empty state during an eligible next-unread jump                                                                                                     |
+| MARK-ALL-UNDO-JUMP-01                        | **HOLD**      | Reopen only with real reproduction evidence                  | Current-base repro passed at 1280, 390 and 884; no current defect proven                                                                                                     |
+| INPUT-PARITY-ESCAPE-FOCUS                    | **COMPLETED** | PR #64                                                       | Escape closes the age-based FooterPanel menu and restores focus to its trigger at compact, medium and desktop viewports                                                      |
+| INPUT-PARITY-TOUCH-TARGET-01                 | **NEXT**      | Keyboard/touch parity; implementation not yet authorized     | Some FooterPanel controls observed around 26–32 px; interaction target requirement is `>=44px`                                                                               |
+| READER-KEY-01 — layered Escape               | **COMPLETED** | PR #46                                                       | Escape closes the topmost menu/popover before the reader                                                                                                                     |
+| STATE-ERR-01 — unavailable entry route       | **COMPLETED** | PR #47                                                       | Unavailable entry routes present the explicit 404 behavior                                                                                                                   |
+| CONTENT-01 — untitled entry fallback         | **COMPLETED** | PR #48                                                       | Deterministic accessible untitled-entry fallback; unread cue remains non-empty                                                                                               |
+| HOME-01 — refresh/focus/reconnect            | **COMPLETED** | PR #59                                                       | Refresh, focus, reconnect and editorial-session continuity completed                                                                                                         |
+| NAV01 — reader previous/next + next unread   | **COMPLETED** | PR #60                                                       | Canonical reader continuity and next-unread-source flow completed                                                                                                            |
+| NAV-02F — navigation follow-ups              | **PLANNED**   | R2-13/R2-17/R2-18                                            | Long source names, unread grouping/mode persistence decisions, and human-readable unread labels                                                                              |
+| FEED-HEALTH-01                               | **COMPLETED** | 01A / PR #40 and 01B / PR #52 complete                       | Provider-owned error details, checked time and failure count; disabled feeds remain suppressed; Retry is provider-backed; bulk refresh has one final metadata reconciliation |
 
 ### 3.4 Accessibility and interaction foundation
 
-| Item                                            | Status        | Notes                                                                                                                                                                             |
-| ----------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A11Y-RT-01                                      | **COMPLETED** | PR #23                                                                                                                                                                            |
-| A11Y-01 — landmarks / heading / skip navigation | **COMPLETED** | PR #34; `<main>`, named navigation, one h1 per view, reader hierarchy and skip link; exact merge-SHA deploy + authenticated post-merge smoke passed                               |
-| Keyboard/touch parity                           | **PLANNED**   | R2-05/R2-11/R2-16; touch hit areas >=44 px while visual icons may remain smaller                                                                                                  |
-| SWIPE-ENTRY-01                                  | **BACKLOG**   | Miniflux-backed; real-device gate mandatory because Fold/back gestures may conflict                                                                                               |
-| READER-MEDIA-01                                 | **PLANNED**   | R2-15/R2-19; edge-to-edge media requires real-device gate                                                                                                                         |
-| READER-MEASURE-01                               | **COMPLETED** | PR #44 merged and promoted at `118ecb2c63f7df3583d0f2524b5cc8c62bd518c1`; bounded 40–58ch prose measure; width 75 visually unchanged; real-device gate not executed (nonblocking) |
-| READER-PROGRESS-01                              | **BACKLOG**   | Stateless progress only; persisted reading position remains architecture-gated                                                                                                    |
-| READER-PRESETS-01                               | **BACKLOG**   | Group existing local typography/width/theme settings after READER-MEASURE-01                                                                                                      |
+| Item                                            | Status          | Notes                                                                                                                                                                             |
+| ----------------------------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A11Y-RT-01                                      | **COMPLETED**   | PR #23                                                                                                                                                                            |
+| A11Y-01 — landmarks / heading / skip navigation | **COMPLETED**   | PR #34; `<main>`, named navigation, one h1 per view, reader hierarchy and skip link; exact merge-SHA deploy + authenticated post-merge smoke passed                               |
+| Keyboard/touch parity                           | **IN PROGRESS** | INPUT-01a and PR #64 are complete; next bounded unit is INPUT-PARITY-TOUCH-TARGET-01. Keep interaction targets at least 44 px while visual icons may remain smaller               |
+| SWIPE-ENTRY-01                                  | **BACKLOG**     | Miniflux-backed; real-device gate mandatory because Fold/back gestures may conflict                                                                                               |
+| READER-MEDIA-01                                 | **PLANNED**     | Architecture gate after input parity; native basic media is feasible, HLS/cross-browser behavior still requires an explicit decision; real-device gate required when implemented  |
+| READER-MEASURE-01                               | **COMPLETED**   | PR #44 merged and promoted at `118ecb2c63f7df3583d0f2524b5cc8c62bd518c1`; bounded 40–58ch prose measure; width 75 visually unchanged; real-device gate not executed (nonblocking) |
+| READER-PROGRESS-01                              | **BACKLOG**     | Stateless progress only; persisted reading position remains architecture-gated                                                                                                    |
+| READER-PRESETS-01                               | **BACKLOG**     | Group existing local typography/width/theme settings after READER-MEASURE-01                                                                                                      |
 
 ### 3.5 Visual-cohesion packages
 
-| Package           | Status             | Scope / remainder                                                                                                                                                                        |
-| ----------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| LIST-VISUAL-01    | **COMPLETED**      | Monogram fallback (#24) + read-state/source/metadata cohesion (#28). Human-readable unread-count labels were rehomed to NAV-02F. No thumbnail redesign is authorized by this completion. |
-| CHROME-01         | **PLANNED**        | DatePicker token subset completed in #25; verb-first confirmations, snackbar placement and remaining raw-Arco styling remain separate scoped work                                        |
-| HOME-VISUAL-02    | **HOLD — PRODUCT** | Edition/category composition requires explicit editorial decision and HOME-01 dependency resolution                                                                                      |
-| READER-VISUAL-02A | **COMPLETED**      | 02A1 in PR #41, Reader Measure in PR #44, and 02A2 / Quiet Column in PR #49; real header/prose alignment validated on the production element                                             |
-| READER-VISUAL-02B | **PLANNED**        | Auto-hide + Next only after interaction/NAV dependencies                                                                                                                                 |
-| NAV-VISUAL-01     | **HOLD — PRODUCT** | Adaptive bottom bar/rail/drawer requires explicit decision + real Fold gate                                                                                                              |
-| READER-COVER-01   | **HOLD — PRODUCT** | Preserve the design-handoff hold; no implementation authorization                                                                                                                        |
-| READER-FONT-01    | **HOLD — PRODUCT** | Preserve the design-handoff hold; no implementation authorization                                                                                                                        |
-| HARNESS-VIS-01    | **BACKLOG**        | Test debt; not ordered                                                                                                                                                                   |
-| TEST-ENV-01       | **BACKLOG**        | Verification required; not ordered                                                                                                                                                       |
-| MOTION-01         | **BACKLOG**        | View Transition/container transform after main interaction architecture stabilizes                                                                                                       |
+| Package           | Status                       | Scope / remainder                                                                                                                                                                        |
+| ----------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| LIST-VISUAL-01    | **COMPLETED**                | Monogram fallback (#24) + read-state/source/metadata cohesion (#28). Human-readable unread-count labels were rehomed to NAV-02F. No thumbnail redesign is authorized by this completion. |
+| CHROME-01         | **PLANNED**                  | DatePicker token subset completed in #25; verb-first confirmations, snackbar placement and remaining raw-Arco styling remain separate scoped work                                        |
+| HOME-VISUAL-02    | **HOLD — PRODUCT**           | Edition/category composition requires explicit editorial decision and HOME-01 dependency resolution                                                                                      |
+| READER-VISUAL-02A | **COMPLETED**                | 02A1 in PR #41, Reader Measure in PR #44, and 02A2 / Quiet Column in PR #49; real header/prose alignment validated on the production element                                             |
+| READER-VISUAL-02B | **PLANNED**                  | Auto-hide + Next only after interaction/NAV dependencies                                                                                                                                 |
+| NAV-VISUAL-01     | **DESIGN CONTRACT APPROVED** | Shared model with compact bottom navigation, medium rail and existing desktop Sider; implementation not started; real-device gate remains required                                       |
+| READER-COVER-01   | **HOLD — PRODUCT**           | Preserve the design-handoff hold; no implementation authorization                                                                                                                        |
+| READER-FONT-01    | **HOLD — PRODUCT**           | Preserve the design-handoff hold; no implementation authorization                                                                                                                        |
+| HARNESS-VIS-01    | **BACKLOG**                  | Test debt; not ordered                                                                                                                                                                   |
+| TEST-ENV-01       | **BACKLOG**                  | Verification required; not ordered                                                                                                                                                       |
+| MOTION-01         | **BACKLOG**                  | View Transition/container transform after main interaction architecture stabilizes                                                                                                       |
 
 #### LIST-VISUAL-01 closure notes
 
@@ -350,17 +363,17 @@ P1 findings:
 P2 disposition:
 
 - R2-04 reduced-transparency dark-mode specificity — **COMPLETED** in PR #23.
-- R2-05 layered Escape — **COMPLETED** as READER-KEY-01 / PR #46.
+- R2-05 layered Escape — **COMPLETED** as READER-KEY-01 / PR #46; PR #64 later completed the bounded FooterPanel Escape/focus-return slice without reopening reader Escape semantics.
 - R2-06 dead entry route — **COMPLETED** as STATE-ERR-01 / PR #47.
 - R2-07 untitled entry fallback — **COMPLETED** as CONTENT-01 / PR #48.
 - R2-08 mark-all focus return — **COMPLETED** in PR #27.
 - R2-09 scoped undo wording — **PLANNED** as BULK-01C.
 - R2-10 runtime identity — **COMPLETED** as ID-RUNTIME-01 / PR #32; exact merge-SHA deployment and post-merge browser smoke passed.
-- R2-11 touch target size — **PLANNED** under keyboard/touch parity.
-- R2-12 Home refresh — **PLANNED** as HOME-01.
+- R2-11 touch target size — **IN PROGRESS** under keyboard/touch parity; next bounded unit is INPUT-PARITY-TOUCH-TARGET-01 with `>=44px` interaction targets.
+- R2-12 Home refresh — **COMPLETED** as HOME-01 / PR #59.
 - R2-13 source-name truncation — partially improved in article Column via #28; navigation-specific source-name work remains NAV-02F.
-- R2-14 next-unread flow — **PLANNED** as NAV01.
-- R2-15 reader edge-to-edge media — **PLANNED** as READER-MEDIA-01.
+- R2-14 next-unread flow — **COMPLETED** as NAV01 / PR #60.
+- R2-15 reader edge-to-edge media — **PLANNED** as READER-MEDIA-01; architecture gate follows input parity.
 - R2-16 category keyboard tab-stop — re-check before fixing under keyboard/touch parity.
 
 P3 debt remains under NAV-02F and HOME-SKEL-01 rather than being fixed incidentally. READER-VISUAL-02A, including 02A2 / Quiet Column, is complete in PR #49.
@@ -369,9 +382,9 @@ P3 debt remains under NAV-02F and HOME-SKEL-01 rather than being fixed incidenta
 
 ## 5. Product decisions required before implementation
 
-### FILTER-RULES-01
+### FILTER-RULES-01 — completed in PR #55
 
-Choose simple common keyword UI versus advanced Miniflux rule syntax. Miniflux remains the rule source of truth.
+The shipped per-feed raw Miniflux rules editor retains Miniflux as source of truth; no NewsFlux rule database was added.
 
 ### HOME-VISUAL-02
 
@@ -387,7 +400,7 @@ Decide optional Unread grouping, desktop sidebar width, `showUnreadFeedsOnly` pe
 
 ### NAV-VISUAL-01
 
-Decide drawer/sidebar-only versus adaptive bottom bar/rail. Real-device validation is mandatory.
+Design contract approved: shared model with compact bottom navigation, medium rail (including 884×1104) and existing desktop Sider. FooterPanel remains owned by Content, portals are prohibited, and window-class changes must not remount the main tree. Implementation is not started or authorized; real-device validation remains mandatory.
 
 ### CHROME-01 contextual consolidation
 
@@ -421,30 +434,23 @@ Offline reading, feed notifications, third-party AI summaries and other new pers
 
 ## 7. Recommended execution order from the current baseline
 
-FEED-HEALTH-01 is complete in PRs #40 and #52, and FILTER-RULES-01 was completed in PR #55. The next engineering track is BULK-02 discovery and bounded design only. The known contract is visible/session multi-select, mark selected articles as read, and keep Undo always available; detailed design and gates must be agreed before implementation. PRs #38, #46–#50, #52, #53 and #55 are complete and removed from the remaining order.
+PRs #57–#61 and #63–#65 are complete. PR #62 remains an open draft documentation reconciliation and does not block the next functional work. `INPUT-PARITY-TOUCH-TARGET-01` is the next primary functional unit. `MARK-ALL-UNDO-JUMP-01` is held for real reproduction evidence. This documentation PR does not authorize implementation.
 
-1. **BULK-02 discovery/design** — preserve visible/session multi-select, mark selected read, and always-available Undo; stop before implementation authorization.
-2. **HOME-01** — refresh/focus/reconnect semantics.
-3. **NAV01** — reader previous/next and next unread source flow.
-4. **Keyboard/touch parity** — preserve accessible focus and touch targets.
-5. **READER-MEDIA-01** — edge-to-edge media; real-device gate remains required.
-6. **CHROME-01 remaining subsets** — keep behavior, token styling, and glass/context consolidation isolated.
-7. **NAV-02F** and **HOME-SKEL-01**.
-8. **SAVE-EXT-01** after wording and placement are specified.
-9. **HOME-VISUAL-02** after explicit editorial decision and HOME-01.
-10. **READER-VISUAL-02B** after reduced-motion/focus contract and NAV01.
-11. **NAV-VISUAL-01** after explicit adaptive-navigation decision and real-device plan.
-12. **ID-DEPLOY-01** after distribution architecture decision.
-13. **First-party saved-state work** only after storage/sync/privacy/source-of-truth decisions.
-14. **Personalization V2**.
-15. **MOTION-01** after interaction architecture stabilizes.
-16. **ML ranking** last.
+1. **INPUT-PARITY-TOUCH-TARGET-01** — next primary functional unit; audit/correct bounded FooterPanel hit areas to `>=44px`. Product implementation still requires its own authorization.
+2. **READER-MEDIA-01 architecture gate** — after input parity; decide native/HLS/cross-browser ownership before implementation and retain a real-device gate.
+3. **CHROME-01 remaining subsets** — keep behavior, token styling and glass/context consolidation isolated.
+4. **NAV-02F** and **HOME-SKEL-01**.
+5. **SAVE-EXT-01** after wording and placement are specified.
+6. **HOME-VISUAL-02** after an explicit editorial decision.
+7. **READER-VISUAL-02B** after reduced-motion/focus contract and NAV01.
+8. **NAV-VISUAL-01 implementation** after the approved contract receives its real-device validation plan and explicit implementation authorization. Tablet-header correction belongs to PR4 MEDIUM-RAIL; optional glass PR6 remains blocked by MOBILE-SCROLL-FLICKER-01.
+9. **ID-DEPLOY-01** after distribution architecture decision.
+10. **First-party saved-state work** only after storage/sync/privacy/source-of-truth decisions.
+11. **Personalization V2**.
+12. **MOTION-01** after interaction architecture stabilizes.
+13. **ML ranking** last.
 
-`BULK-01C` may be scheduled once copy is decided, but it remains separate from the completed BULK-01B implementation.
-
-Read-only upstream auditing can run in parallel, but no sync follows automatically.
-
----
+`BULK-01C` may be scheduled once copy is decided, but it remains separate from completed BULK-01B. `MARK-ALL-UNDO-JUMP-01` is not ordered while no current defect is reproduced. Read-only upstream auditing can run in parallel; no sync follows automatically.
 
 ## 8. BULK safety contracts
 
@@ -477,7 +483,7 @@ Any future mutation/sync touching mark-all-read must preserve:
 - `PARTIAL_FAILURE_RECONCILIATION`;
 - `COUNTS_REFRESH`.
 
-The existing `markAllReadJumpToNext` behavior remains intentional.
+The existing `markAllReadJumpToNext` behavior remains intentional. `MARK-ALL-UNDO-JUMP-01` may be reopened only with concrete current-runtime reproduction evidence.
 
 ---
 
@@ -486,8 +492,27 @@ The existing `markAllReadJumpToNext` behavior remains intentional.
 - `HARNESS-UNDO-ID-01` was resolved by test-maintenance PR #36 (feature head `ef90eb733dbc6a26c0b85bcf33a9a866569a92b7`, merge `b65f6f88b0c27f049723714a5338527ffc92fa1a`); its focused list regression passed 29/29.
 - `HARNESS-CODEBLOCK-SSR-01` is no longer open: PR #38 reports `CODEBLOCK_SSR_GATE=PASS` within the full Node suite on both main and candidate.
 - The React 19 `element.ref` warning remains an incidental harness warning. Classify it as non-blocking backlog; no fix is claimed in this reconciliation.
+- **MOBILE-SCROLL-FLICKER-01 — OPEN:** replay is blocked by `MISSING_GENERATED_VERSION_INFO`; no physical iPhone gate was run and root cause remains unknown. Optional NAV-VISUAL PR6 glass remains blocked.
+- **TABLET-HEADER-WIDTH-01 — CONFIRMED:** approximately 370 px header width with unused space was confirmed at 768×1024, 884×1104, 900×1100 and 992×1104 without overflow. Fix now: NO. Target: NAV-VISUAL-01 / PR4 MEDIUM-RAIL.
+- **DOCS-LINT-01 — OPEN:** retain existing documentation/superpowers formatting debt; this reconciliation does not fix unrelated files.
+- **ABOUT-ACCESSIBLE-BRAND-01 — COMPLETED:** PR #65 corrected the accessible NewsFlux GitHub link label in all six shipped locales; no longer an open finding.
+- **HOME-HARNESS-STABILITY-01 — OPEN:** deterministic baseline failures and intermittent stability failures remain separate. Deterministic 10/10: `LIST_SEARCH_DATE_SORT_PRESERVED`, `READER_MEASURE_01_CPL`. Intermittent 6/10: `READER_VISUAL_01_WIDE_IMAGE`, `READER_MEASURE_01_DEFAULT_75_PARITY`, `READER_MEASURE_01_MEDIA_PROTECTION`. Root cause remains unknown.
 
 Do not fix incidental findings in unrelated work.
+
+### Completed finding — ABOUT-RUNTIME-REVISION-01
+
+```text
+STATUS=COMPLETED / RESOLVED
+PR=63
+FEATURE_HEAD=9a64e9b45c6c76e6765fdaf82ee02c30f3bc57c8
+MERGE_SHA=723bdbb96e4445d267b443422a0be7a83e5b4f8a
+RESULT=PASS
+RESOLUTION=Exact SOURCE_COMMIT is the deterministic build identity embedded in frontend metadata and the OCI org.opencontainers.image.revision label.
+LIVE_VALIDATION=PASS
+ABOUT_COMMIT=exact promoted merge SHA, displayed in shortened form
+UNKNOWN_COMMIT=RESOLVED
+```
 
 ---
 
@@ -558,70 +583,112 @@ When a completed task changes roadmap status, sequencing, architectural/product 
 
 ## 13. Current main and production state
 
-Live snapshot checked on 2026-10-17, immediately after PR #55 merged and before this docs-only PR:
+The R2 live precheck on 2026-10-19 confirmed `main` and production at `405e9d7b1a3097dacef50c7908abf83d480d64dd`, PRs #64 and #65 complete, and PR #62 open on its documentation branch. PR #62 remains a draft.
 
-- `CURRENT_MAIN=1021cd5746eba2b3b90b1a863bada9043f126be1`
-- `DOCUMENTED_MAIN_BASE_SHA=1021cd5746eba2b3b90b1a863bada9043f126be1`
-- `PRODUCT_BASELINE_SHA=1021cd5746eba2b3b90b1a863bada9043f126be1`
-- `PRODUCTION_CONTAINER=newsflux`
-- `PRODUCTION_CONTAINER_ID=5c1882d2792a48a894c0806231bbb371f97b60d49b6922f5b9218a1c905bf8ef`
-- `PRODUCTION_CONTAINER_STATUS=running` (read-only SSH inspection)
-- `PRODUCTION_RESTART_COUNT=0`
-- `PRODUCTION_IMAGE=newsflux-local:118ecb2c63f7`
-- `PRODUCTION_SHA=118ecb2c63f7df3583d0f2524b5cc8c62bd518c1` (image tag prefix resolved to this exact GitHub commit)
-- `PRODUCTION_IMAGE_ID=sha256:a8c7e764d0cf5ef333da113fc9e46a15dde043297a9b65122498aebba4d65499`
-- `PRODUCTION_REVISION_LABEL=118ecb2c63f7df3583d0f2524b5cc8c62bd518c1`
-- `PRODUCTION_SOURCE_LABEL=https://github.com/jfsdias/NewsFlux`
-- `MAIN_PRODUCTION_PARITY=NO`
-- `RUNTIME_PRODUCT_BASELINE_EQUALS_PRODUCTION=NO`
-- `PR38=MERGED (1af58a53c6fd85bcca95ec44a56e23c7c02b6145); not a current open PR`
-- `PR45=MERGED (c062a4ee9f7967ef254fde2cb2ed1ca2207735e9); prior documentation reconciliation, superseded by later updates`
-- `PR46=MERGED (3e21cbb197efbca0b577e06c705a1ef9997cb597)`
-- `PR47=MERGED (e59295501cc51a6df2b64a435c0c32eb5431aed5)`
-- `PR48=MERGED (9f521edfd5f031e8e833a4854d896acc42a22fae)`
-- `PR49=MERGED (e4752d290bdfb4961d379dd05548ef3da5da42ba)`
-- `PR50=MERGED (a8dbe15497f7d526298f223188955b82589a84a4)`
-- `PR51=MERGED (0d3b1e9648d59018cdd1f9f17948c7d34b19924b)`
-- `PR52=MERGED (051e461d1d1eb4408e15a0ebcd4e1331b546de7a)`
-- `PR53=MERGED (046cd647c65583cdfdc7ab282701be79d4b34294)`
-- `PR55=MERGED (1021cd5746eba2b3b90b1a863bada9043f126be1)`
-- `OPEN_PRS_BEFORE_THIS_DOCS_PR=0`
-- `LAST_COMPLETED_FEATURE=FILTER-RULES-01 / PR #55`
-- `LAST_COMPLETED_MAINTENANCE=SELECTIVE_UPSTREAM_SYNC / PR #53`
-- `LAST_KNOWN_PRODUCTION_PROMOTION=READER-MEASURE-01 / PR #44 / 118ecb2c63f7df3583d0f2524b5cc8c62bd518c1`
-- `PRODUCTION_CHANGED_BY_PR52=NO`
-- `PRODUCTION_CHANGED_BY_PR53=NO`
-- `PRODUCTION_CHANGED_BY_PR55=NO`
-- `UPSTREAM_INTEGRATION_MODE=SELECTIVE_NON_LINEAR`
-- `UPSTREAM_CURRENT_HEAD=ed0be6db9a8126d8bfdfc5afe41d2e058b7e5036`
-- `UPSTREAM_UNREVIEWED_CHANGES=NO`
-- `LAST_FORMALLY_REVIEWED_UPSTREAM_SHA=ed0be6db9a8126d8bfdfc5afe41d2e058b7e5036`
-- `LAST_INTEGRATED_UPSTREAM_SHA=3045a5f8f69ffd7f571f73540031efa8b4ff6e6d` (last linear baseline)
-- `SELECTIVELY_INTEGRATED=e46d92ab64adcbd0bb8ac2caf6048fa37f527939`
-- `SELECTIVELY_ADAPTED=0c28762de6987c980306b8553753e549e753b4e0`
-- `NEXT_UPSTREAM_AUDIT_FROM=ed0be6db9a8126d8bfdfc5afe41d2e058b7e5036`
-- `HOLD=4a2d4ce540cc0e3dd88bfd8d386e4c6645c47abe (Vite 8.3.1 to 8.3.4; dedicated bundler/lockfile/harness regression gate required)`
-- `HOLD=ed0be6db9a8126d8bfdfc5afe41d2e058b7e5036 (Framer Motion 14.0.0 to 14.2.0; dedicated production visual/motion regression gate required)`
-- `READER_VISUAL_02A=COMPLETED (02A1 + Measure + 02A2 / Quiet Column)`
-- `BULK_03=COMPLETED (03A + 03B)`
-- `FEED_HEALTH_01_STATUS=COMPLETED`
-- `CURRENT_PHASE=POST_FILTER_RULES_01`
-- `CURRENT_TRACK=BULK_02_DISCOVERY_DESIGN`
-- `CURRENT_PRODUCT_PR=NONE`
-- `OPEN_RUNTIME_PR=NONE`
-- `NEXT_ENGINEERING_TRACK=BULK-02`
-- `BULK_02_STATUS=NEXT — DISCOVERY/DESIGN`
-- `NEXT_RECOMMENDED_ACTION=BULK_02_READ_ONLY_DISCOVERY_AND_BOUNDED_DESIGN`
-- `NEXT_AUTHORIZED_ACTION=DISCOVERY_AND_DESIGN_ONLY`
-- `BULK_02_IMPLEMENTATION_AUTHORIZED=NO`
-- `IMPLEMENTATION_AUTHORIZED=NO`
-- `FILTER_RULES_01_STATUS=COMPLETED`
-- `FILTER_RULES_01_PR=55`
-- `FILTER_RULES_01_FEATURE_HEAD=5b6abe28ae5e6b52f02461c4e3601165056900b1`
-- `FILTER_RULES_01_MERGE_SHA=1021cd5746eba2b3b90b1a863bada9043f126be1`
-- `FEED_ERROR_RESET_DECISION=ACCEPT_PROVIDER_BEHAVIOR_WITH_EXPLICIT_DISCLOSURE`
-- `PRODUCTION_CHANGED_BY_PR55=NO`
-- `DEPLOY_PERFORMED=NO`
-- `MERGE_AUTHORIZED=NO`
+```text
+DOCS_DATE=2026-10-19
+CURRENT_MAIN=405e9d7b1a3097dacef50c7908abf83d480d64dd
+DOCUMENTED_MAIN_BASE_SHA=405e9d7b1a3097dacef50c7908abf83d480d64dd
+PRODUCT_BASELINE_SHA=405e9d7b1a3097dacef50c7908abf83d480d64dd
+PR62_STATUS=OPEN
+PR62_DRAFT=YES
+PR62_BASE_SHA=405e9d7b1a3097dacef50c7908abf83d480d64dd
 
-Production was inspected live over read-only SSH on 2026-10-17; container identity, running status, image tag and provenance labels were confirmed. Application HTTP health was not rechecked in this reconciliation. PR #52, #53 and #55 were merged without production promotion; current main is ahead of production. No production files, containers, images or routes were changed. Recheck production identity and application health before any future deployment decision.
+PR57_STATUS=COMPLETED
+PR57_MERGE_SHA=85b9590bbc9f4d3488fd30694b0b45553fefda5b
+PR58_STATUS=COMPLETED
+PR58_MERGE_SHA=df4bea4dde5cca86a4b822d2e82f01156bb96f1a
+PR59_STATUS=COMPLETED
+PR59_MERGE_SHA=114eed13c5f66cd57a4448ece935de6cb5f4a11e
+PR60_STATUS=COMPLETED
+PR60_MERGE_SHA=31c95ff835da3e716acfd6eb115db5c3b68dd71c
+PR61_STATUS=COMPLETED
+PR61_MERGED=YES
+PR61_DRAFT=NO
+PR61_BASE_SHA=31c95ff835da3e716acfd6eb115db5c3b68dd71c
+PR61_HEAD_SHA=e2cbab710f00eb84c77b3df4ddc9701839a677d9
+PR61_MERGE_SHA=194a1db007902411abe91459b45a19b10c76e701
+
+PR63_STATUS=COMPLETED
+PR63=ABOUT-RUNTIME-REVISION-01
+PR63_FEATURE_HEAD=9a64e9b45c6c76e6765fdaf82ee02c30f3bc57c8
+PR63_MERGE_SHA=723bdbb96e4445d267b443422a0be7a83e5b4f8a
+PR63_PERMANENT_PROMOTION=PASS
+ABOUT-RUNTIME-REVISION-01_STATUS=COMPLETED / RESOLVED
+PR64_STATUS=COMPLETED
+PR64=INPUT-PARITY-ESCAPE-FOCUS
+PR64_FEATURE_HEAD=ee412912ad43d4902459b12151bad81c570d58cf
+PR64_MERGE_SHA=23474d3f83c01c4355c892f46c77d2f66b046af0
+PR64_PERMANENT_PROMOTION=PASS
+INPUT_PARITY_ESCAPE_FOCUS_STATUS=COMPLETED
+PR65_STATUS=COMPLETED
+PR65=ABOUT-ACCESSIBLE-BRAND-01
+PR65_FEATURE_HEAD=8a4d1cf358d39524e95027b13e10c0205b9aea27
+PR65_MERGE_SHA=405e9d7b1a3097dacef50c7908abf83d480d64dd
+PR65_PERMANENT_PROMOTION=PASS
+ABOUT_ACCESSIBLE_BRAND_01_STATUS=COMPLETED / RESOLVED
+
+PRODUCTION_SHA=405e9d7b1a3097dacef50c7908abf83d480d64dd
+PRODUCTION_IMAGE=newsflux-local:405e9d7b1a30
+PRODUCTION_IMAGE_ID=sha256:59ac4220570d13598a909b8edda1d3e3b372b803547a461407dc37272853327c
+PRODUCTION_REVISION_LABEL=405e9d7b1a3097dacef50c7908abf83d480d64dd
+PRODUCTION_SOURCE_LABEL=https://github.com/jfsdias/NewsFlux
+PRODUCTION_STATUS=running
+PRODUCTION_RESTART_COUNT=0
+HTTP_GATE=200
+CANONICAL_COMPOSE_IMAGE=newsflux-local:405e9d7b1a30
+CANDIDATE_OVERRIDE_PRESENT=NO
+PERMANENT_PROMOTION=PASS
+ROLLBACK_USED=NO
+MAIN_PRODUCTION_PARITY=YES
+CANONICAL_RUNTIME_PARITY=YES
+RUNTIME_CANONICAL_PARITY=YES
+
+CURRENT_PRIMARY_TRACK=INPUT-PARITY-TOUCH-TARGET-01
+CURRENT_PHASE=POST_PR65_RECONCILIATION
+CURRENT_TRACK=KEYBOARD_TOUCH_PARITY
+KEYBOARD_TOUCH_PARITY_STATUS=IN_PROGRESS
+INPUT_01A_STATUS=COMPLETED
+INPUT_PARITY_ESCAPE_FOCUS_STATUS=COMPLETED
+NEXT_FUNCTIONAL_CANDIDATE=INPUT-PARITY-TOUCH-TARGET-01
+NEXT_PRIMARY_FUNCTIONAL=INPUT-PARITY-TOUCH-TARGET-01
+TOUCH_TARGET_REQUIREMENT=>=44px interaction target
+MARK_ALL_UNDO_JUMP_01_STATUS=INVESTIGATED_NO_REPRODUCTION_ON_CURRENT_BASE
+MARK_ALL_UNDO_JUMP_01_DISPOSITION=HOLD_FOR_REAL_REPRO_EVIDENCE
+DOCUMENTATION_BLOCKS_NEXT=NO
+CURRENT_PRODUCT_PR=NONE
+OPEN_RUNTIME_PR=NONE
+OPEN_DOCUMENTATION_PR=DRAFT
+
+LAST_COMPLETED_FUNCTIONAL=INPUT-PARITY-ESCAPE-FOCUS / PR #64
+LAST_COMPLETED_MAINTENANCE=ABOUT-ACCESSIBLE-BRAND-01 / PR #65
+LAST_PRODUCTION_PROMOTION=ABOUT-ACCESSIBLE-BRAND-01 / PR #65 / 405e9d7b1a3097dacef50c7908abf83d480d64dd
+
+UPSTREAM_REPOSITORY=electh/ReactFlux
+UPSTREAM_INTEGRATION_MODE=SELECTIVE_NON_LINEAR
+LAST_FORMALLY_REVIEWED_UPSTREAM_SHA=ed0be6db9a8126d8bfdfc5afe41d2e058b7e5036
+LAST_INTEGRATED_UPSTREAM_SHA=3045a5f8f69ffd7f571f73540031efa8b4ff6e6d
+LAST_LINEAR_INTEGRATED_UPSTREAM_BASELINE=3045a5f8f69ffd7f571f73540031efa8b4ff6e6d
+NEXT_UPSTREAM_AUDIT_FROM=ed0be6db9a8126d8bfdfc5afe41d2e058b7e5036
+SELECTIVELY_INTEGRATED=e46d92ab64adcbd0bb8ac2caf6048fa37f527939
+SELECTIVELY_ADAPTED=0c28762de6987c980306b8553753e549e753b4e0
+UPSTREAM_HOLD_VITE=4a2d4ce540cc0e3dd88bfd8d386e4c6645c47abe (8.3.1 to 8.3.4; dedicated bundler/lockfile/harness regression gate required)
+UPSTREAM_HOLD_FRAMER_MOTION=ed0be6db9a8126d8bfdfc5afe41d2e058b7e5036 (14.0.0 to 14.2.0; dedicated production visual/motion regression gate required)
+
+NAV_VISUAL_01_STATUS=DESIGN_CONTRACT_APPROVED
+NAV_VISUAL_01_IMPLEMENTATION=NOT_STARTED
+NAV_VISUAL_01_IMPLEMENTATION_AUTHORIZED=NO
+NAV_VISUAL_STATUS=DESIGN_CONTRACT_APPROVED
+NAV_VISUAL_IMPLEMENTATION=NOT_STARTED
+NAV_VISUAL_IMPLEMENTATION_AUTHORIZED=NO
+IMPLEMENTATION_AUTHORIZED=NO
+MERGE_AUTHORIZED=NO
+PERMANENT_PROMOTION_AUTHORIZED=NO
+
+NEXT_RECOMMENDED_ACTION=INPUT-PARITY-TOUCH-TARGET-01
+PRODUCT_IMPLEMENTATION_AUTHORIZED=NO
+DOCUMENTATION_RECONCILIATION_BRANCH=docs/post-input01a-nav-visual-contract
+DOCUMENTATION_RECONCILIATION_BASE_SHA=405e9d7b1a3097dacef50c7908abf83d480d64dd
+```
+
+The production runtime is recorded at the same exact SHA as `main`; no candidate/canonical split is active. The supplied navigation contract is recorded in `docs/NEWSFLUX_NAV_VISUAL_01.md`; implementation remains unauthorized.
