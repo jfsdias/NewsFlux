@@ -180,8 +180,29 @@ const FooterPanel = ({
   const [markingOlderRead, setMarkingOlderRead] = useState(false)
   const markingOlderReadRef = useRef(false)
   const [ageMenuVisible, setAgeMenuVisible] = useState(false)
+  const ageMenuTriggerRef = useRef(null)
   const [agePresetDays, setAgePresetDays] = useState(null)
   const listScopeRef = useRef({ from: source, id: sourceId })
+
+  useEffect(() => {
+    if (!ageMenuVisible) {
+      return
+    }
+
+    const handleAgeMenuEscape = (event) => {
+      if (event.key !== "Escape" || event.defaultPrevented) {
+        return
+      }
+
+      event.preventDefault()
+      setAgeMenuVisible(false)
+      requestAnimationFrame(() => ageMenuTriggerRef.current?.focus({ preventScroll: true }))
+    }
+
+    document.addEventListener("keydown", handleAgeMenuEscape)
+    return () => document.removeEventListener("keydown", handleAgeMenuEscape)
+  }, [ageMenuVisible])
+
   useEffect(() => {
     if (
       listScopeRef.current.from !== source ||
@@ -610,6 +631,7 @@ const FooterPanel = ({
         >
           <CustomTooltip mini content={markOlderReadLabel}>
             <Button
+              ref={ageMenuTriggerRef}
               aria-expanded={ageMenuVisible}
               aria-haspopup="menu"
               aria-label={markOlderReadLabel}
