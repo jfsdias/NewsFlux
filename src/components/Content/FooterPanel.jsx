@@ -290,16 +290,10 @@ const FooterPanel = ({
     const settings = settingsState.get()
     const sessionRevision = getDataSessionRevision()
     const markedEntryIds = new Set()
-    const requestKey = createArticleListRequestKey({ content, settings })
+    const requestKey = getCurrentListIdentity()
     let jumpedToNext = false
     const isCurrentSession = () => sessionRevision === getDataSessionRevision()
-    const isCurrentList = () =>
-      isCurrentSession() &&
-      requestKey ===
-        createArticleListRequestKey({
-          content: contentState.get(),
-          settings: settingsState.get(),
-        })
+    const isCurrentList = () => isCurrentSession() && requestKey === getCurrentListIdentity()
     const starred = ["feed", "category"].includes(source) && settings.showStatus === "starred"
     const scope = ["feed", "category"].includes(source) ? source : "global"
     const filterParams = {
