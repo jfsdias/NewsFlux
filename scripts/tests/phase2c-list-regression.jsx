@@ -17,7 +17,7 @@ import useArticleList from "@/hooks/useArticleList"
 import { polyglotState } from "@/hooks/useLanguage"
 import useLoadMore from "@/hooks/useLoadMore"
 import englishPhrases from "@/locales/en-US.json"
-import { contentState } from "@/store/contentState"
+import { contentState, setArticleListSource } from "@/store/contentState"
 import { dataState } from "@/store/dataState"
 import { getDefaultSettings, settingsState } from "@/store/settingsState"
 import { MARK_ALL_READ_UNDO_DURATION_MS } from "@/utils/mark-all-read-undo"
@@ -119,7 +119,7 @@ const ListProbe = ({ source }) => {
       today: todayAdapter,
       starred: starredAdapter,
     }[source] ?? allAdapter
-  const sourceId = ["feed", "category"].includes(source) ? 1 : null
+  const sourceId = ["feed", "category"].includes(source) ? 1 : source === "all" ? "" : null
   const list = useArticleList(source, sourceId, adapter)
   const pagination = useLoadMore()
   const content = useStore(contentState)
@@ -152,14 +152,14 @@ const ListProbe = ({ source }) => {
 }
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 40))
-const waitFor = async (predicate) => {
+const waitFor = async (predicate, message = "Fixture timed out") => {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if (predicate()) {
       return
     }
     await settle()
   }
-  throw new Error("Fixture timed out")
+  throw new Error(message)
 }
 const assert = (condition, message) => {
   if (!condition) {
@@ -167,9 +167,10 @@ const assert = (condition, message) => {
   }
 }
 const assertIds = (ids) => {
+  const actualIds = contentState.get().entries.map(({ id }) => id)
   assert(
-    JSON.stringify(contentState.get().entries.map(({ id }) => id)) === JSON.stringify(ids),
-    "Committed server order/IDs changed",
+    JSON.stringify(actualIds) === JSON.stringify(ids),
+    `Committed server order/IDs changed: expected ${JSON.stringify(ids)}, received ${JSON.stringify(actualIds)}`,
   )
   assert(
     JSON.stringify(
@@ -242,7 +243,6 @@ const clickUndo = () => {
   assert(undoButton?.props?.onClick, "Undo action is missing from the successful mark-all notice")
   undoButton.props.onClick()
 }
-
 const Harness = () => {
   const [probe, setProbe] = useState(null)
   const [results, setResults] = useState([])
@@ -252,6 +252,7 @@ const Harness = () => {
     settingChanges = {},
     contentChanges = {},
     entries = ordinaryEntries,
+    { coldDirectAll = false, respondWithFilters = false } = {},
   ) => {
     setProbe(null)
     await settle()
@@ -269,7 +270,7 @@ const Harness = () => {
     countRefreshes = 0
     deferredMutation = null
     serverEntries = entries.map((item) => ({ ...item }))
-    respond = () => ({ entries, total: 8 })
+    respond = respondWithFilters ? serverRespond : () => ({ entries, total: 8 })
     dataState.setKey("sessionRevision", dataState.get().sessionRevision + 1)
     settingsState.set({
       ...getDefaultSettings(),
@@ -291,11 +292,18 @@ const Harness = () => {
       filterString: "",
       filterDate: null,
       infoFrom: source,
-      infoId: ["feed", "category"].includes(source) ? 1 : null,
+      infoId: ["feed", "category"].includes(source)
+        ? 1
+        : source === "all" && !coldDirectAll
+          ? ""
+          : null,
       isArticleListReady: false,
       loadMoreVisible: false,
       ...contentChanges,
     })
+    if (source === "all") {
+      setArticleListSource({ from: "all", id: "" })
+    }
     dataState.setKey("feedsData", [
       feed,
       { ...feed, id: 2, title: "Next fixture feed", category: { id: 2, title: "Next category" } },
@@ -306,12 +314,57 @@ const Harness = () => {
     await waitFor(() => contentState.get().isArticleListReady && controls.current)
     await settle()
   }
+  const runMarkAllControl = async ({
+    source,
+    entries,
+    expectedIds,
+    expectedPath,
+    matchesRequest,
+  }) => {
+    await mount(source, { showStatus: "unread", markAllReadJumpToNext: false }, {}, entries, {
+      respondWithFilters: true,
+    })
+    assertIds(expectedIds)
+    respond = serverRespond
+    clickMarkAll()
+    await waitFor(() => mutationRequests === 1 && countRefreshes === 1)
+    assertIds([])
+    assert(controls.current.path === expectedPath, `${source} Mark All changed the route`)
+    assert(matchesRequest(requests), `${source} Mark All did not preserve the source query scope`)
+    assert(
+      JSON.stringify(mutationBodies[0]?.body?.entry_ids?.toSorted()) ===
+        JSON.stringify(expectedIds.toSorted()),
+      `${source} Mark All acknowledged IDs outside its source scope`,
+    )
+    assert(undoNotification(), `${source} Mark All did not expose Undo`)
+    clickUndo()
+    await waitFor(() => mutationRequests === 2 && countRefreshes === 2)
+    assert(
+      JSON.stringify(mutationBodies[1]?.body?.entry_ids?.toSorted()) ===
+        JSON.stringify(expectedIds.toSorted()) &&
+        serverEntries.every(({ status }) => status === "unread"),
+      `${source} Undo did not restore exactly the acknowledged entries`,
+    )
+    assert(controls.current.path === expectedPath, `${source} Undo changed the route`)
+    assert(!undoNotification(), `${source} Undo left a duplicate notice`)
+  }
   const requiredListRegressionGates = [
     "NO_ALL_RANKING",
     "NO_UNREAD_RANKING",
     "ALL_SORT_PREFERENCE_PRESERVED",
     "UNREAD_FILTER_PRESERVED",
     "MARK_ALL_READ_SUCCESS",
+    "MARK_ALL_NAVIGATED_TO_ALL_CONTROL",
+    "MARK_ALL_COLD_DIRECT_ALL_RECONCILIATION",
+    "MARK_ALL_COLD_DIRECT_ALL_JUMP_ENABLED",
+    "MARK_ALL_COLD_DIRECT_ALL_SEARCH_SCOPE",
+    "MARK_ALL_FILTERED_QUERY_TOTAL_RECONCILIATION",
+    "MARK_ALL_FILTERED_ALL_TOTAL_UNCHANGED",
+    "MARK_ALL_FILTERED_STARRED_TOTAL_UNCHANGED",
+    "STALE_LIST_QUERY_TOTAL_PROTECTION",
+    "MARK_ALL_TODAY_CONTROL",
+    "MARK_ALL_CATEGORY_CONTROL",
+    "MARK_ALL_STARRED_CONTROL",
     "MARK_ALL_READ_FILTER_SCOPE",
     "MARK_ALL_READ_NO_JUMP_ON_FAILURE",
     "MARK_ALL_READ_JUMP_TO_NEXT",
@@ -564,7 +617,10 @@ const Harness = () => {
         await mount("all", { showStatus: "unread" }, {}, ordinaryEntries)
         respond = serverRespond
         clickMarkAll()
-        await waitFor(() => mutationRequests === 1 && countRefreshes === 1)
+        await waitFor(
+          () => mutationRequests === 1 && countRefreshes === 1,
+          "Mark All mutation and counts did not complete",
+        )
         assertIds([])
         assert(
           serverEntries.every(({ status }) => status === "read"),
@@ -576,6 +632,318 @@ const Harness = () => {
               JSON.stringify([12, 24, 31]),
           "Footer did not use the acknowledged ID batch path",
         )
+      },
+    ],
+    [
+      "MARK_ALL_NAVIGATED_TO_ALL_CONTROL",
+      async () => {
+        await mount("all", { showStatus: "unread" }, {}, ordinaryEntries)
+        assert(contentState.get().infoId === "", "Navigated All fixture lost its normalized ID")
+        respond = serverRespond
+        clickMarkAll()
+        await waitFor(() => mutationRequests === 1 && countRefreshes === 1)
+        assertIds([])
+        assert(contentState.get().total === 8, "Unfiltered Mark All changed the query total")
+        assert(controls.current.path === "/all", "All control unexpectedly changed route")
+      },
+    ],
+    [
+      "MARK_ALL_COLD_DIRECT_ALL_RECONCILIATION",
+      async () => {
+        await mount(
+          "all",
+          { showStatus: "unread", markAllReadJumpToNext: false },
+          {},
+          ordinaryEntries,
+          { coldDirectAll: true },
+        )
+        assert(contentState.get().infoId === null, "Cold /all fixture did not retain null infoId")
+        respond = serverRespond
+        clickMarkAll()
+        await waitFor(
+          () => mutationRequests === 1 && countRefreshes === 1,
+          `Cold /all Mark All mutation/counts timed out (${mutationRequests}, ${countRefreshes})`,
+        )
+        assertIds([])
+        assert(controls.current.path === "/all", "Cold /all Mark All unexpectedly changed route")
+        assert(
+          JSON.stringify(mutationBodies[0]?.body?.entry_ids?.toSorted()) ===
+            JSON.stringify([12, 24, 31]),
+          "Cold /all did not acknowledge the exact scoped IDs",
+        )
+        assert(undoNotification(), "Cold /all successful Mark All did not expose Undo")
+        clickUndo()
+        await waitFor(
+          () => mutationRequests === 2 && countRefreshes === 2,
+          `Cold /all Undo mutation/counts timed out (${mutationRequests}, ${countRefreshes})`,
+        )
+        assert(
+          JSON.stringify(mutationBodies[1]?.body?.entry_ids?.toSorted()) ===
+            JSON.stringify([12, 24, 31]),
+          "Cold /all Undo changed the exact acknowledged IDs",
+        )
+        assert(
+          serverEntries.every(({ status }) => status === "unread"),
+          "Cold /all Undo did not restore the acknowledged entries",
+        )
+        assert(controls.current.path === "/all", "Cold /all Undo changed the route")
+        assert(!undoNotification(), "Cold /all Undo left a duplicate Undo notice")
+      },
+    ],
+    [
+      "MARK_ALL_COLD_DIRECT_ALL_JUMP_ENABLED",
+      async () => {
+        await mount(
+          "all",
+          { showStatus: "unread", markAllReadJumpToNext: true },
+          {},
+          ordinaryEntries,
+          { coldDirectAll: true },
+        )
+        assert(contentState.get().infoId === null, "Cold /all jump fixture lost its null infoId")
+        respond = serverRespond
+        clickMarkAll()
+        await waitFor(() => mutationRequests === 1 && countRefreshes === 1)
+        assertIds([])
+        assert(controls.current.path === "/all", "Cold /all jumped to another route")
+        assert(undoNotification(), "Cold /all jump-enabled Mark All did not expose Undo")
+        clickUndo()
+        await waitFor(() => mutationRequests === 2 && countRefreshes === 2)
+        assert(
+          JSON.stringify(mutationBodies[0]?.body?.entry_ids?.toSorted()) ===
+            JSON.stringify([12, 24, 31]) &&
+            JSON.stringify(mutationBodies[1]?.body?.entry_ids?.toSorted()) ===
+              JSON.stringify([12, 24, 31]),
+          "Cold /all jump-enabled Undo changed the acknowledged IDs",
+        )
+        assert(
+          serverEntries.every(({ status }) => status === "unread"),
+          "Cold /all jump-enabled Undo did not restore the entries",
+        )
+        assert(controls.current.path === "/all", "Cold /all Undo changed the route")
+        assert(!undoNotification(), "Cold /all jump-enabled Undo left a duplicate notice")
+      },
+    ],
+    [
+      "MARK_ALL_COLD_DIRECT_ALL_SEARCH_SCOPE",
+      async () => {
+        const scopedEntries = [
+          entry(51, "2026-10-10T10:00:00Z", { title: "climate match A" }),
+          entry(52, "2026-10-10T11:00:00Z", { title: "climate match B" }),
+          entry(53, "2026-10-11T10:00:00Z", { title: "outside scope" }),
+        ]
+        await mount(
+          "all",
+          { showStatus: "unread", markAllReadJumpToNext: false },
+          { filterString: "climate" },
+          scopedEntries,
+          { coldDirectAll: true, respondWithFilters: true },
+        )
+        assert(contentState.get().infoId === null, "Cold /all search fixture lost its null infoId")
+        assert(query(0).get("search") === "climate", "Cold /all search was not in the list query")
+        assertIds([51, 52])
+        respond = serverRespond
+        clickMarkAll()
+        await waitFor(() => mutationRequests === 1 && countRefreshes === 1)
+        assertIds([])
+        assert(controls.current.path === "/all", "Cold /all search Mark All changed the route")
+        assert(
+          JSON.stringify(mutationBodies[0]?.body?.entry_ids?.toSorted()) ===
+            JSON.stringify([51, 52]) &&
+            serverEntries.find(({ id }) => id === 53)?.status === "unread",
+          "Cold /all search Mark All escaped the active filter scope",
+        )
+        assert(undoNotification(), "Cold /all search Mark All did not expose Undo")
+        clickUndo()
+        await waitFor(() => mutationRequests === 2 && countRefreshes === 2)
+        assert(
+          JSON.stringify(mutationBodies[1]?.body?.entry_ids?.toSorted()) ===
+            JSON.stringify([51, 52]) && serverEntries.every(({ status }) => status === "unread"),
+          "Cold /all search Undo did not restore exactly the acknowledged IDs",
+        )
+        assert(controls.current.path === "/all", "Cold /all search Undo changed the route")
+        assert(!undoNotification(), "Cold /all search Undo left a duplicate notice")
+      },
+    ],
+    [
+      "MARK_ALL_FILTERED_QUERY_TOTAL_RECONCILIATION",
+      async () => {
+        const scopedEntries = [
+          entry(151, "2026-10-10T10:00:00Z", { title: "climate match A" }),
+          entry(152, "2026-10-10T11:00:00Z", { title: "climate match B" }),
+          entry(153, "2026-10-11T10:00:00Z", { title: "outside scope" }),
+        ]
+        await mount(
+          "all",
+          { showStatus: "unread", markAllReadJumpToNext: false },
+          { filterString: "climate" },
+          scopedEntries,
+          { coldDirectAll: true, respondWithFilters: true },
+        )
+        assert(contentState.get().total === 2, "Filtered unread query did not start at total 2")
+        assertIds([151, 152])
+        respond = serverRespond
+        clickMarkAll()
+        await waitFor(() => mutationRequests === 1 && countRefreshes === 1)
+        assertIds([])
+        assert(
+          contentState.get().total === 0,
+          `Filtered unread query total did not reconcile to zero: ${contentState.get().total}`,
+        )
+        assert(
+          serverEntries.find(({ id }) => id === 153)?.status === "unread",
+          "Filtered unread Mark All mutated the out-of-scope entry",
+        )
+        assert(controls.current.path === "/all", "Filtered unread Mark All changed the route")
+        assert(undoNotification(), "Filtered unread Mark All did not expose Undo")
+        clickUndo()
+        await waitFor(
+          () =>
+            mutationRequests === 2 &&
+            countRefreshes === 2 &&
+            contentState.get().total === 2 &&
+            JSON.stringify(contentState.get().entries.map(({ id }) => id)) ===
+              JSON.stringify([151, 152]),
+          "Filtered unread Undo did not restore the server-backed query total and entries",
+        )
+        assert(
+          JSON.stringify(mutationBodies[1]?.body?.entry_ids?.toSorted()) ===
+            JSON.stringify([151, 152]),
+          "Filtered unread Undo did not restore exactly the acknowledged IDs",
+        )
+        assert(controls.current.path === "/all", "Filtered unread Undo changed the route")
+        assert(!undoNotification(), "Filtered unread Undo left a duplicate notice")
+      },
+    ],
+    [
+      "MARK_ALL_FILTERED_ALL_TOTAL_UNCHANGED",
+      async () => {
+        const scopedEntries = [
+          entry(161, "2026-10-10T10:00:00Z", { title: "climate match A" }),
+          entry(162, "2026-10-10T11:00:00Z", { title: "climate match B" }),
+          entry(163, "2026-10-11T10:00:00Z", { title: "outside scope" }),
+        ]
+        await mount(
+          "all",
+          { showStatus: "all", markAllReadJumpToNext: false },
+          { filterString: "climate" },
+          scopedEntries,
+          { coldDirectAll: true, respondWithFilters: true },
+        )
+        assert(contentState.get().total === 2, "Filtered All query did not start at total 2")
+        assertIds([161, 162])
+        respond = serverRespond
+        clickMarkAll()
+        await waitFor(() => mutationRequests === 1 && countRefreshes === 1)
+        assert(contentState.get().total === 2, "Mark All decremented a filtered All query total")
+        assertIds([161, 162])
+        assert(undoNotification(), "Filtered All Mark All did not expose Undo")
+        clickUndo()
+        await waitFor(() => mutationRequests === 2 && countRefreshes === 2)
+        await waitFor(
+          () => contentState.get().total === 2 && contentState.get().entries.length === 2,
+          "Filtered All Undo did not preserve the query total",
+        )
+      },
+    ],
+    [
+      "MARK_ALL_FILTERED_STARRED_TOTAL_UNCHANGED",
+      async () => {
+        const scopedEntries = [
+          entry(171, "2026-10-10T10:00:00Z", { title: "climate match unread", starred: true }),
+          entry(172, "2026-10-10T11:00:00Z", {
+            title: "climate match read",
+            status: "read",
+            starred: true,
+          }),
+          entry(173, "2026-10-11T10:00:00Z", { title: "outside scope", starred: false }),
+        ]
+        await mount(
+          "feed",
+          { showStatus: "starred", markAllReadJumpToNext: false },
+          { filterString: "climate" },
+          scopedEntries,
+          { respondWithFilters: true },
+        )
+        assert(contentState.get().total === 2, "Filtered Starred query did not start at total 2")
+        assertIds([171, 172])
+        respond = serverRespond
+        clickMarkAll()
+        await waitFor(() => mutationRequests === 1 && countRefreshes === 1)
+        assert(
+          contentState.get().total === 2,
+          "Mark All decremented a filtered Starred query total",
+        )
+        assertIds([171, 172])
+        assert(
+          JSON.stringify(mutationBodies[0]?.body?.entry_ids) === JSON.stringify([171]),
+          "Filtered Starred Mark All mutated an entry outside unread-starred scope",
+        )
+        assert(undoNotification(), "Filtered Starred Mark All did not expose Undo")
+        clickUndo()
+        await waitFor(() => mutationRequests === 2 && countRefreshes === 2)
+        await waitFor(
+          () => contentState.get().total === 2 && contentState.get().entries.length === 2,
+          "Filtered Starred Undo did not preserve the query total",
+        )
+      },
+    ],
+    [
+      "MARK_ALL_TODAY_CONTROL",
+      async () => {
+        const todayEntries = [
+          entry(61, new Date(fixtureNow - 60_000).toISOString()),
+          entry(62, "2026-10-10T10:00:00Z"),
+        ]
+        await runMarkAllControl({
+          source: "today",
+          entries: todayEntries,
+          expectedIds: [61],
+          expectedPath: "/today",
+          matchesRequest: (observedRequests) =>
+            observedRequests.some(
+              (url) => url.includes("/v1/entries?") && url.includes("published_after="),
+            ),
+        })
+      },
+    ],
+    [
+      "MARK_ALL_CATEGORY_CONTROL",
+      async () => {
+        const categoryEntries = [
+          entry(71, "2026-10-10T10:00:00Z"),
+          entry(72, "2026-10-11T10:00:00Z", {
+            feed: { ...feed, id: 2, category: { id: 2, title: "Other category" } },
+          }),
+        ]
+        await runMarkAllControl({
+          source: "category",
+          entries: categoryEntries,
+          expectedIds: [71],
+          expectedPath: "/category/1",
+          matchesRequest: (observedRequests) =>
+            observedRequests.some((url) => url.startsWith("/v1/categories/1/entries?")),
+        })
+      },
+    ],
+    [
+      "MARK_ALL_STARRED_CONTROL",
+      async () => {
+        const starredEntries = [
+          entry(81, "2026-10-10T10:00:00Z", { starred: true }),
+          entry(82, "2026-10-11T10:00:00Z", { starred: true }),
+          entry(83, "2026-10-12T10:00:00Z", { starred: false }),
+        ]
+        await runMarkAllControl({
+          source: "starred",
+          entries: starredEntries,
+          expectedIds: [81, 82],
+          expectedPath: "/starred",
+          matchesRequest: (observedRequests) =>
+            observedRequests.some(
+              (url) => url.includes("/v1/entries?") && url.includes("starred=true"),
+            ),
+        })
       },
     ],
     [
@@ -695,10 +1063,61 @@ const Harness = () => {
       },
     ],
     [
+      "STALE_LIST_QUERY_TOTAL_PROTECTION",
+      async () => {
+        const scopedEntries = [
+          entry(181, "2026-10-10T10:00:00Z", { title: "climate match A" }),
+          entry(182, "2026-10-10T11:00:00Z", { title: "climate match B" }),
+          entry(183, "2026-10-11T10:00:00Z", { title: "other current query" }),
+        ]
+        await mount(
+          "all",
+          { showStatus: "unread", markAllReadJumpToNext: false },
+          { filterString: "climate" },
+          scopedEntries,
+          { coldDirectAll: true, respondWithFilters: true },
+        )
+        assert(contentState.get().total === 2, "Old query total did not start at 2")
+        respond = serverRespond
+        let resolveMutation
+        deferredMutation = {
+          promise: new Promise((resolve) => {
+            resolveMutation = resolve
+          }),
+        }
+        clickMarkAll()
+        await waitFor(() => mutationRequests === 1)
+        contentState.set({
+          ...contentState.get(),
+          entries: [scopedEntries[2]],
+          filterString: "other",
+          isArticleListReady: true,
+          total: 1,
+        })
+        await settle()
+        assertIds([183])
+        resolveMutation()
+        await waitFor(() => countRefreshes === 1)
+        assert(
+          contentState.get().total === 1 &&
+            JSON.stringify(contentState.get().entries.map(({ id }) => id)) ===
+              JSON.stringify([183]),
+          "Stale Mark All callback changed the active query total or membership",
+        )
+      },
+    ],
+    [
       "PARTIAL_FAILURE_RECONCILIATION",
       async () => {
         const scoped = ordinaryEntries.map((item) => ({ ...item, title: `scope ${item.id}` }))
-        await mount("all", { showStatus: "unread" }, { filterString: "scope" }, scoped)
+        await mount("all", { showStatus: "unread" }, { filterString: "scope" }, scoped, {
+          coldDirectAll: true,
+          respondWithFilters: true,
+        })
+        assert(
+          contentState.get().total === 3,
+          "Partial failure filtered query did not start at total 3",
+        )
         respond = (url) => {
           const response = serverRespond(url)
           const params = new URL(url, "https://fixture.invalid").searchParams
@@ -710,6 +1129,10 @@ const Harness = () => {
         clickMarkAll()
         await waitFor(() => mutationRequests === 2 && countRefreshes === 1)
         assertIds([24])
+        assert(
+          contentState.get().total === 1,
+          `Partial failure did not reconcile query total to server truth: ${contentState.get().total}`,
+        )
         assert(
           serverEntries.filter(({ status }) => status === "read").length === 2,
           "Failed later batch lost confirmed work",
