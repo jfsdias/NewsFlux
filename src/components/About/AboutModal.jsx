@@ -65,7 +65,12 @@ const AboutModal = ({ visible, onClose }) => {
             <div className="about-build-row">
               <dt>{polyglot.t("about.commit")}</dt>
               <dd>
-                <code>{commitHash}</code>
+                <code
+                  aria-label={`${polyglot.t("about.commit")}: ${buildInfo.gitFullHash}`}
+                  title={buildInfo.gitFullHash}
+                >
+                  {commitHash}
+                </code>
               </dd>
             </div>
             <div className="about-build-row">

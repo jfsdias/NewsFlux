@@ -2,6 +2,8 @@ import { execFileSync } from "node:child_process"
 import { writeFileSync } from "node:fs"
 import process from "node:process"
 
+const FULL_COMMIT_SHA_PATTERN = /^[a-f\d]{40}$/i
+
 const readGitValue = (...args) => {
   try {
     return execFileSync("git", args, {
@@ -22,6 +24,17 @@ const firstEnvironmentValue = (...names) => {
   }
 
   return null
+}
+
+const buildRevisionRequired = ["1", "true", "yes"].includes(
+  process.env.NEWSFLUX_REQUIRE_BUILD_REVISION?.trim().toLowerCase(),
+)
+const sourceCommit = firstEnvironmentValue("SOURCE_COMMIT")
+
+if (buildRevisionRequired && !FULL_COMMIT_SHA_PATTERN.test(sourceCommit ?? "")) {
+  throw new Error(
+    "SOURCE_COMMIT must be a full 40-character Git SHA when NEWSFLUX_REQUIRE_BUILD_REVISION is enabled.",
+  )
 }
 
 const normalizeDate = (value) => {
@@ -49,14 +62,9 @@ const dateFromSourceEpoch = () => {
 }
 
 const gitFullHash =
+  sourceCommit ??
   readGitValue("rev-parse", "HEAD") ??
-  firstEnvironmentValue(
-    "SOURCE_COMMIT",
-    "GITHUB_SHA",
-    "CF_PAGES_COMMIT_SHA",
-    "VERCEL_GIT_COMMIT_SHA",
-    "COMMIT",
-  ) ??
+  firstEnvironmentValue("GITHUB_SHA", "CF_PAGES_COMMIT_SHA", "VERCEL_GIT_COMMIT_SHA", "COMMIT") ??
   "unknown"
 const gitHash = gitFullHash === "unknown" ? "unknown" : gitFullHash.slice(0, 8)
 
