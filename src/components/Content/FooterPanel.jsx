@@ -21,6 +21,7 @@ import {
   invalidateArticleList,
   setActiveContent,
   setEntries,
+  setTotal,
 } from "@/store/contentState"
 import {
   getDataSessionRevision,
@@ -34,6 +35,7 @@ import {
   getAgeReadConfirmationBoundaries,
   markAgeBasedUnreadEntriesAsRead,
 } from "@/utils/age-based-mark-read"
+import { hasArticleListFilters } from "@/utils/article-list-filters"
 import createArticleListRequestKey from "@/utils/article-list-request-key"
 import { get24HoursAgoTimestamp } from "@/utils/date"
 import { runEntryMutation } from "@/utils/entry-mutation-state"
@@ -291,6 +293,7 @@ const FooterPanel = ({
     const sessionRevision = getDataSessionRevision()
     const markedEntryIds = new Set()
     const requestKey = getCurrentListIdentity()
+    const filteredUnreadQuery = settings.showStatus === "unread" && hasArticleListFilters(content)
     let jumpedToNext = false
     const isCurrentSession = () => sessionRevision === getDataSessionRevision()
     const isCurrentList = () => isCurrentSession() && requestKey === getCurrentListIdentity()
@@ -327,11 +330,18 @@ const FooterPanel = ({
           {
             filterParams,
             onBatchMarkedRead: (entryIds) => {
+              const newlyAcknowledgedIds = new Set()
               for (const entryId of entryIds) {
+                if (!markedEntryIds.has(entryId)) {
+                  newlyAcknowledgedIds.add(entryId)
+                }
                 markedEntryIds.add(entryId)
               }
               if (isCurrentList()) {
                 updateEntriesAsRead(entryIds)
+                if (filteredUnreadQuery && newlyAcknowledgedIds.size > 0) {
+                  setTotal((total) => Math.max(0, total - newlyAcknowledgedIds.size))
+                }
               }
             },
           },
