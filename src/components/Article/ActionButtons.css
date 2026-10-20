@@ -70,6 +70,24 @@
   pointer-events: auto;
 }
 
+@media screen and (min-width: 769px) and (max-width: 992px) {
+  /* Absolute insets start at the button's padding box, inside its 1px border. */
+  .action-buttons:not(.mobile) :is(.left-side, .right-side) {
+    gap: 12px;
+  }
+
+  .action-buttons:not(.mobile) :is(.left-side, .right-side) .arco-btn-shape-circle {
+    position: relative;
+  }
+
+  .action-buttons:not(.mobile) :is(.left-side, .right-side) .arco-btn-shape-circle::after {
+    position: absolute;
+    inset: -7px;
+    content: "";
+    pointer-events: auto;
+  }
+}
+
 .settings-menu-item {
   display: flex;
   justify-content: space-between;

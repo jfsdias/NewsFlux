@@ -160,3 +160,43 @@
     font-size: var(--mobile-form-font-size);
   }
 }
+
+@media screen and (min-width: 769px) and (max-width: 992px) {
+  /* Absolute insets start at the button's padding box, inside its 1px border. */
+  .entry-panel .arco-btn-shape-circle {
+    position: relative;
+  }
+
+  .entry-panel .arco-btn-shape-circle::after {
+    position: absolute;
+    inset: -7px;
+    content: "";
+    pointer-events: auto;
+  }
+
+  .entry-panel .mark-older-read-trigger.arco-btn-shape-circle::after {
+    inset: -9px;
+  }
+
+  .entry-panel .arco-radio-group-type-button {
+    display: flex;
+    gap: 6px;
+    padding: 0;
+    line-height: 26px;
+  }
+
+  .entry-panel .arco-radio-button {
+    margin: 0;
+  }
+
+  .entry-panel .arco-radio-button-inner {
+    position: relative;
+  }
+
+  .entry-panel .arco-radio-button-inner::before {
+    position: absolute;
+    inset: -9px -3px;
+    content: "";
+    pointer-events: auto;
+  }
+}
