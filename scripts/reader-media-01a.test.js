@@ -22,6 +22,34 @@ test("browser report exposes unambiguous deferred-init and lifecycle counts", ()
   assert.match(harness, /playerCleanupCount/)
 })
 
+test("video geometry harness uses real local metadata and checks geometry sensitivity", () => {
+  const harness = readSource("scripts/tests/reader-media-01a.jsx")
+
+  assert.match(harness, /const width = 600\s+const height = 300/)
+  assert.match(harness, /canvas\.captureStream\(30\)/)
+  assert.match(harness, /new MediaRecorder\(stream, \{ mimeType \}\)/)
+  assert.match(harness, /videoWidth: event\.target\.videoWidth/)
+  assert.match(harness, /videoHeight: event\.target\.videoHeight/)
+  assert.match(harness, /near-video loadedmetadata/)
+  assert.match(harness, /INTENTIONAL_GEOMETRY_MISMATCH_PX = VIDEO_GEOMETRY_TOLERANCE_PX \+ 2/)
+  assert.match(
+    harness,
+    /nearFrameElement\.style\.height = `\$\{intentionallyMismatchedFrameHeight\}px`/,
+  )
+  assert.match(harness, /geometryAssertionSensitivityPass/)
+  assert.doesNotMatch(harness, /stubMediaSourceAssignments/)
+})
+
+test("Plyr audio harness uses a valid local WAV fixture", () => {
+  const harness = readSource("scripts/tests/reader-media-01a.jsx")
+
+  assert.match(harness, /const createAudioFixture = \(\) =>/)
+  assert.match(harness, /audio\/wav/)
+  assert.match(harness, /audioFixture\.src/)
+  assert.match(harness, /audioFixture\.revoke\(\)/)
+  assert.doesNotMatch(harness, /data:audio\/mpeg;base64,AAAA/)
+})
+
 test("inline video and enclosure media retain their existing Plyr routes", () => {
   const article = readSource("src/components/Article/ArticleDetail.jsx")
   const enclosure = readSource("src/components/Article/EnclosurePlayer.jsx")

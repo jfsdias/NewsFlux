@@ -5,10 +5,130 @@ import { createRoot } from "react-dom/client"
 
 import LazyPlyrPlayer from "@/components/ui/LazyPlyrPlayer"
 
-const VIDEO_SOURCE = "data:video/mp4;base64,AAAA"
-const AUDIO_SOURCE = "data:audio/mpeg;base64,AAAA"
-const enclosureVideo = { kind: "video", mime_type: "video/mp4", url: VIDEO_SOURCE }
-const enclosureAudio = { kind: "audio", mime_type: "audio/mpeg", url: AUDIO_SOURCE }
+const VIDEO_GEOMETRY_TOLERANCE_PX = 2
+const INTENTIONAL_GEOMETRY_MISMATCH_PX = VIDEO_GEOMETRY_TOLERANCE_PX + 2
+
+const createAudioFixture = () => {
+  const sampleRate = 8000
+  const sampleCount = 2000
+  const dataSize = sampleCount
+  const buffer = new ArrayBuffer(44 + dataSize)
+  const view = new DataView(buffer)
+  const writeAscii = (offset, value) => {
+    for (let index = 0; index < value.length; index += 1) {
+      view.setUint8(offset + index, value.codePointAt(index))
+    }
+  }
+
+  writeAscii(0, "RIFF")
+  view.setUint32(4, 36 + dataSize, true)
+  writeAscii(8, "WAVE")
+  writeAscii(12, "fmt ")
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true)
+  view.setUint16(22, 1, true)
+  view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate, true)
+  view.setUint16(32, 1, true)
+  view.setUint16(34, 8, true)
+  writeAscii(36, "data")
+  view.setUint32(40, dataSize, true)
+  new Uint8Array(buffer, 44).fill(128)
+
+  const blob = new Blob([buffer], { type: "audio/wav" })
+  const src = URL.createObjectURL(blob)
+
+  return {
+    src,
+    mimeType: blob.type,
+    size: blob.size,
+    revoke: () => URL.revokeObjectURL(src),
+  }
+}
+
+const createVideoFixture = async () => {
+  // A real 2:1 WebM makes source metadata available while matching the reserved fallback ratio.
+  const width = 600
+  const height = 300
+  const canvas = document.createElement("canvas")
+  canvas.width = width
+  canvas.height = height
+  const context = canvas.getContext("2d")
+
+  if (!context || typeof canvas.captureStream !== "function" || !globalThis.MediaRecorder) {
+    throw new Error("A local canvas MediaRecorder fixture is required for video geometry")
+  }
+
+  context.fillStyle = "#18344f"
+  context.fillRect(0, 0, width, height)
+  context.fillStyle = "#e9b949"
+  context.fillRect(0, 0, width / 2, height)
+
+  const mimeType = ["video/webm;codecs=vp8", "video/webm;codecs=vp9", "video/webm"].find(
+    (candidate) => MediaRecorder.isTypeSupported(candidate),
+  )
+
+  if (!mimeType) {
+    throw new Error("No supported local WebM codec is available for video geometry")
+  }
+
+  const stream = canvas.captureStream(30)
+  const recorder = new MediaRecorder(stream, { mimeType })
+  const chunks = []
+
+  try {
+    const recordedBlob = new Promise((resolve, reject) => {
+      recorder.addEventListener("dataavailable", (event) => {
+        if (event.data.size > 0) {
+          chunks.push(event.data)
+        }
+      })
+      recorder.addEventListener(
+        "error",
+        (event) => reject(event.error || new Error("Local video recording failed")),
+        { once: true },
+      )
+      recorder.addEventListener(
+        "stop",
+        () => resolve(new Blob(chunks, { type: recorder.mimeType })),
+        { once: true },
+      )
+    })
+
+    recorder.start()
+    await new Promise((resolve) => setTimeout(resolve, 250))
+    if (recorder.state === "recording") {
+      recorder.stop()
+    }
+
+    const blob = await recordedBlob
+    if (blob.size === 0) {
+      throw new Error("Local video fixture recording was empty")
+    }
+
+    const src = URL.createObjectURL(blob)
+    return {
+      src,
+      mimeType: recorder.mimeType,
+      width,
+      height,
+      size: blob.size,
+      revoke: () => URL.revokeObjectURL(src),
+    }
+  } finally {
+    if (recorder.state === "recording") {
+      recorder.stop()
+    }
+    for (const track of stream.getTracks()) {
+      track.stop()
+    }
+  }
+}
+
+const isVideoGeometryStable = (placeholderHeight, playerHeight) =>
+  Number.isFinite(placeholderHeight) &&
+  Number.isFinite(playerHeight) &&
+  Math.abs(placeholderHeight - playerHeight) <= VIDEO_GEOMETRY_TOLERANCE_PX
 
 const waitFor = async (predicate, label, timeoutMs = 8000) => {
   const startedAt = performance.now()
@@ -27,51 +147,6 @@ const getRelativeTop = (element, scrollRoot) =>
   scrollRoot.getBoundingClientRect().top +
   scrollRoot.scrollTop
 
-const noop = () => {}
-
-/* eslint-disable unicorn/no-this-outside-of-class -- The media property accessor needs its element receiver. */
-const stubMediaSourceAssignments = () => {
-  let sourceDescriptor
-  let installed = false
-  let restored = false
-
-  try {
-    sourceDescriptor = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "src")
-    if (!sourceDescriptor?.configurable || !sourceDescriptor.get || !sourceDescriptor.set) {
-      return noop
-    }
-
-    Object.defineProperty(HTMLMediaElement.prototype, "src", {
-      ...sourceDescriptor,
-      get() {
-        return this.dataset.readerMediaTestSource ?? sourceDescriptor.get.call(this)
-      },
-      set(value) {
-        this.dataset.readerMediaTestSource = value
-      },
-    })
-    installed = true
-  } catch {
-    if (installed && sourceDescriptor) {
-      try {
-        Object.defineProperty(HTMLMediaElement.prototype, "src", sourceDescriptor)
-      } catch {
-        // Best effort: keep harness setup errors from preventing cleanup/reporting.
-      }
-    }
-    return noop
-  }
-
-  return () => {
-    if (restored) {
-      return
-    }
-    Object.defineProperty(HTMLMediaElement.prototype, "src", sourceDescriptor)
-    restored = true
-  }
-}
-/* eslint-enable unicorn/no-this-outside-of-class */
-
 const PlayerCase = ({ enclosure, label, onPlayerInit, src, style, type }) => {
   const reportInit = useCallback((player) => onPlayerInit(type, player), [onPlayerInit, type])
 
@@ -83,55 +158,68 @@ const PlayerCase = ({ enclosure, label, onPlayerInit, src, style, type }) => {
   )
 }
 
-const ReaderMediaFixture = ({ onPlayerInit }) => (
-  <article>
-    <PlayerCase
-      label="Inline video already in view"
-      src={VIDEO_SOURCE}
-      type="inline-video"
-      onPlayerInit={onPlayerInit}
-    />
-    <div aria-hidden="true" className="media-spacer" />
-    <PlayerCase
-      label="Inline video reached by scrolling"
-      src={VIDEO_SOURCE}
-      type="near-video"
-      onPlayerInit={onPlayerInit}
-    />
-    <div aria-hidden="true" className="media-spacer" />
-    <PlayerCase
-      enclosure={enclosureVideo}
-      label="Enclosure video reached by scrolling"
-      src={VIDEO_SOURCE}
-      style={{ maxWidth: "100%" }}
-      type="enclosure-video"
-      onPlayerInit={onPlayerInit}
-    />
-    <div aria-hidden="true" className="media-spacer" />
-    <PlayerCase
-      enclosure={enclosureAudio}
-      label="Enclosure audio reached by scrolling"
-      src={AUDIO_SOURCE}
-      style={{ maxWidth: "400px" }}
-      type="enclosure-audio"
-      onPlayerInit={onPlayerInit}
-    />
-    <div aria-hidden="true" className="media-spacer" />
-    <PlayerCase
-      label="Far inline video remains deferred"
-      src={VIDEO_SOURCE}
-      type="far-video"
-      onPlayerInit={onPlayerInit}
-    />
-    <audio controls aria-label="Native inline audio remains native" data-testid="inline-audio" />
-    <iframe
-      aria-label="Embedded content remains an iframe"
-      loading="lazy"
-      src="about:blank"
-      title="Existing iframe path"
-    />
-  </article>
-)
+const ReaderMediaFixture = ({ audioFixture, onPlayerInit, videoFixture }) => {
+  const enclosureVideo = {
+    kind: "video",
+    mime_type: videoFixture.mimeType,
+    url: videoFixture.src,
+  }
+  const enclosureAudio = {
+    kind: "audio",
+    mime_type: audioFixture.mimeType,
+    url: audioFixture.src,
+  }
+
+  return (
+    <article>
+      <PlayerCase
+        label="Inline video already in view"
+        src={videoFixture.src}
+        type="inline-video"
+        onPlayerInit={onPlayerInit}
+      />
+      <div aria-hidden="true" className="media-spacer" />
+      <PlayerCase
+        label="Inline video reached by scrolling"
+        src={videoFixture.src}
+        type="near-video"
+        onPlayerInit={onPlayerInit}
+      />
+      <div aria-hidden="true" className="media-spacer" />
+      <PlayerCase
+        enclosure={enclosureVideo}
+        label="Enclosure video reached by scrolling"
+        src={videoFixture.src}
+        style={{ maxWidth: "100%" }}
+        type="enclosure-video"
+        onPlayerInit={onPlayerInit}
+      />
+      <div aria-hidden="true" className="media-spacer" />
+      <PlayerCase
+        enclosure={enclosureAudio}
+        label="Enclosure audio reached by scrolling"
+        src={audioFixture.src}
+        style={{ maxWidth: "400px" }}
+        type="enclosure-audio"
+        onPlayerInit={onPlayerInit}
+      />
+      <div aria-hidden="true" className="media-spacer" />
+      <PlayerCase
+        label="Far inline video remains deferred"
+        src={videoFixture.src}
+        type="far-video"
+        onPlayerInit={onPlayerInit}
+      />
+      <audio controls aria-label="Native inline audio remains native" data-testid="inline-audio" />
+      <iframe
+        aria-label="Embedded content remains an iframe"
+        loading="lazy"
+        src="about:blank"
+        title="Existing iframe path"
+      />
+    </article>
+  )
+}
 
 const reportElement = document.querySelector("#report")
 const runButton = document.querySelector("#run-reader-media")
@@ -158,6 +246,14 @@ const publishReport = (report) => {
       report.inlineVideoPass && report.enclosureVideoPass && report.enclosureAudioPass,
     inlineAudioPreserved: report.inlineAudioPreserved,
     iframePreserved: report.iframePreserved,
+    videoMetadataLoadedPass: report.videoMetadataLoadedPass,
+    videoFixtureDimensionsPass: report.videoFixtureDimensionsPass,
+    geometryAssertionSensitivityPass: report.geometryAssertionSensitivityPass,
+    geometryMismatchProbe: report.geometryMismatchProbe,
+    videoFixture: report.videoFixture,
+    videoMetadataEvents: report.videoMetadataEvents,
+    playerInitTimings: report.playerInitTimings,
+    placeholderStyles: report.placeholderStyles,
     geometry: report.geometry,
     audioGeometry: report.audioGeometry,
     errors: report.errors,
@@ -167,10 +263,14 @@ const publishReport = (report) => {
 }
 
 const runHarness = async () => {
+  const runStartedAt = performance.now()
   const playerInits = []
   const playerCleanups = []
+  const playerInitTimings = []
+  const metadataEvents = []
   const failures = []
-  let restoreMediaSource = noop
+  let videoFixture = null
+  let audioFixture = null
   let report = {
     viewport: null,
     observerSupported: false,
@@ -189,11 +289,15 @@ const runHarness = async () => {
     enclosureAudioPass: null,
     inlineAudioPreserved: null,
     iframePreserved: null,
+    videoMetadataLoadedPass: null,
+    videoFixtureDimensionsPass: null,
+    geometryAssertionSensitivityPass: null,
     playerTypes: null,
     errors: failures,
   }
   const onPlayerInit = (type, player) => {
     playerInits.push(type)
+    playerInitTimings.push({ type, elapsedMs: performance.now() - runStartedAt })
     const destroy = player.destroy.bind(player)
     let destroyed = false
     player.destroy = (...args) => {
@@ -204,9 +308,20 @@ const runHarness = async () => {
       return destroy(...args)
     }
   }
+  const onLoadedMetadata = (event) => {
+    if (event.target instanceof HTMLVideoElement) {
+      metadataEvents.push({
+        mediaCase: event.target.closest("[data-media-case]")?.dataset.mediaCase ?? null,
+        readyState: event.target.readyState,
+        videoWidth: event.target.videoWidth,
+        videoHeight: event.target.videoHeight,
+        currentSrc: event.target.currentSrc,
+        elapsedMs: performance.now() - runStartedAt,
+      })
+    }
+  }
 
   try {
-    restoreMediaSource = stubMediaSourceAssignments()
     if (activeRoot) {
       const previousRoot = activeRoot
       activeRoot = null
@@ -214,10 +329,21 @@ const runHarness = async () => {
     }
     scrollRoot.scrollTop = 0
 
+    videoFixture = await createVideoFixture()
+    audioFixture = createAudioFixture()
+    document.addEventListener("loadedmetadata", onLoadedMetadata, true)
     report.viewport = `${window.innerWidth}x${window.innerHeight}`
     report.observerSupported = typeof IntersectionObserver === "function"
     activeRoot = createRoot(articleRoot)
-    flushSync(() => activeRoot.render(<ReaderMediaFixture onPlayerInit={onPlayerInit} />))
+    flushSync(() =>
+      activeRoot.render(
+        <ReaderMediaFixture
+          audioFixture={audioFixture}
+          videoFixture={videoFixture}
+          onPlayerInit={onPlayerInit}
+        />,
+      ),
+    )
     publishReport(report)
 
     await waitFor(() => playerInits.includes("inline-video"), "visible inline video initialization")
@@ -231,13 +357,41 @@ const runHarness = async () => {
     const nearInitialBox = nearPlaceholder?.getBoundingClientRect()
     const nearInitialHeight = nearInitialBox?.height ?? 0
     const nearInitialWidth = nearInitialBox?.width ?? 0
+    const nearLazyPlayer = nearCase.querySelector(".lazy-plyr-player")
+    const getStyleSummary = (element) => {
+      if (!element) {
+        return null
+      }
+      const computed = getComputedStyle(element)
+      const box = element.getBoundingClientRect()
+      return {
+        width: box.width,
+        height: box.height,
+        display: computed.display,
+        computedWidth: computed.width,
+        computedHeight: computed.height,
+        aspectRatio: computed.aspectRatio,
+        maxWidth: computed.maxWidth,
+        objectFit: computed.objectFit,
+      }
+    }
+    report.placeholderStyles = {
+      lazyPlayer: getStyleSummary(nearLazyPlayer),
+      placeholder: getStyleSummary(nearPlaceholder),
+    }
     const nearTop = getRelativeTop(nearCase, scrollRoot)
     scrollRoot.scrollTop = Math.max(0, nearTop - scrollRoot.clientHeight - 200)
     await waitFor(() => playerInits.includes("near-video"), "near-video activation")
+    await waitFor(
+      () => metadataEvents.some((event) => event.mediaCase === "near-video"),
+      "near-video loadedmetadata",
+    )
     report.playerInitCountAfterNearScroll = playerInits.length
     const nearPlayerElement = nearCase.querySelector(".plyr--video")
+    const nearVideoElement = nearCase.querySelector("video")
+    const nearFrameElement = nearCase.querySelector(".plyr__video-wrapper")
     const nearPlayerRect = nearPlayerElement?.getBoundingClientRect()
-    const playerFrameRect = nearCase.querySelector(".plyr__video-wrapper")?.getBoundingClientRect()
+    const playerFrameRect = nearFrameElement?.getBoundingClientRect()
     report.geometry = {
       placeholderHeight: nearInitialHeight,
       placeholderWidth: nearInitialWidth,
@@ -247,10 +401,56 @@ const runHarness = async () => {
       playerFrameWidth: playerFrameRect?.width ?? 0,
       playerTop: nearPlayerRect?.top ?? null,
       scrollRootBottom: scrollRoot.getBoundingClientRect().bottom,
+      playerStyles: getStyleSummary(nearPlayerElement),
+      frameStyles: getStyleSummary(nearFrameElement),
+      videoStyles: getStyleSummary(nearVideoElement),
+      video: {
+        src: nearVideoElement?.src ?? null,
+        currentSrc: nearVideoElement?.currentSrc ?? null,
+        readyState: nearVideoElement?.readyState ?? null,
+        videoWidth: nearVideoElement?.videoWidth ?? null,
+        videoHeight: nearVideoElement?.videoHeight ?? null,
+      },
     }
     report.nearMediaActivatedBeforeVisible =
       (nearPlayerRect?.top ?? -Infinity) >= scrollRoot.getBoundingClientRect().bottom
-    report.videoLayoutStable = Math.abs(nearInitialHeight - (playerFrameRect?.height ?? 0)) <= 2
+    report.videoLayoutStable = isVideoGeometryStable(nearInitialHeight, playerFrameRect?.height)
+    const originalFrameInlineHeight = nearFrameElement?.style.height ?? ""
+    const intentionallyMismatchedFrameHeight =
+      (playerFrameRect?.height ?? 0) + INTENTIONAL_GEOMETRY_MISMATCH_PX
+    let measuredMismatchedFrameHeight = 0
+    try {
+      if (nearFrameElement) {
+        nearFrameElement.style.height = `${intentionallyMismatchedFrameHeight}px`
+        measuredMismatchedFrameHeight = nearFrameElement.getBoundingClientRect().height
+      }
+    } finally {
+      if (nearFrameElement) {
+        nearFrameElement.style.height = originalFrameInlineHeight
+      }
+    }
+    report.geometryMismatchProbe = {
+      requestedDeltaPx: INTENTIONAL_GEOMETRY_MISMATCH_PX,
+      measuredFrameHeight: measuredMismatchedFrameHeight,
+      detected: !isVideoGeometryStable(nearInitialHeight, measuredMismatchedFrameHeight),
+    }
+    report.videoMetadataLoadedPass =
+      nearVideoElement?.readyState >= HTMLMediaElement.HAVE_METADATA &&
+      metadataEvents.some((event) => event.mediaCase === "near-video")
+    report.videoFixtureDimensionsPass =
+      nearVideoElement?.videoWidth === videoFixture.width &&
+      nearVideoElement?.videoHeight === videoFixture.height
+    report.geometryAssertionSensitivityPass = report.geometryMismatchProbe.detected
+    report.videoFixture = {
+      sourceType: "local canvas MediaRecorder WebM",
+      mimeType: videoFixture.mimeType,
+      width: videoFixture.width,
+      height: videoFixture.height,
+      aspectRatio: `${videoFixture.width} / ${videoFixture.height}`,
+      size: videoFixture.size,
+    }
+    report.videoMetadataEvents = metadataEvents
+    report.playerInitTimings = playerInitTimings
 
     const afterNearCount = playerInits.length
     scrollRoot.scrollTop = 0
@@ -309,10 +509,12 @@ const runHarness = async () => {
       failures.push(error instanceof Error ? error.message : String(error))
     } finally {
       activeRoot = null
-      try {
-        restoreMediaSource()
-      } catch (error) {
-        failures.push(error instanceof Error ? error.message : String(error))
+      document.removeEventListener("loadedmetadata", onLoadedMetadata, true)
+      if (videoFixture) {
+        videoFixture.revoke()
+      }
+      if (audioFixture) {
+        audioFixture.revoke()
       }
     }
     report.cleanupPass = playerCleanups.length === playerInits.length
