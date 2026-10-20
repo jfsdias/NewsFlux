@@ -51,7 +51,7 @@ PR65_PERMANENT_PROMOTION=PASS
 ABOUT-ACCESSIBLE-BRAND-01_STATUS=COMPLETED / RESOLVED
 PR66_STATUS=COMPLETED
 PR66_FEATURE_HEAD=1b6449597179ab3c832d0c658048d46f8bddda93
-PR66_MERGE_SHA=0553119de95ab5b9c2e131bbb2b4ef1d0ef58456
+PR66_MERGE_SHA=0553119de95ab5b9c2e131bbb4b2ef1d0ef58456
 PR67_STATUS=COMPLETED
 PR67_FEATURE_HEAD=ec15233215043d6a054cb6fb5eb43eebe8b1442e
 PR67_MERGE_SHA=7b6e474fcd50bb891e429a632849da371e126590
@@ -85,7 +85,8 @@ PRODUCTION_STATUS=running
 PRODUCTION_RESTART_COUNT=0
 HTTP_GATE=200
 CANONICAL_COMPOSE_IMAGE=newsflux-local:d01e34fc2eb7
-CANDIDATE_OVERRIDE_PRESENT=NO
+CANDIDATE_OVERRIDE_ACTIVE=NO
+CANDIDATE_OVERRIDE_PRESERVED=YES
 PERMANENT_PROMOTION=PASS
 ROLLBACK_USED=NO
 MAIN_PRODUCTION_PARITY=PASS
@@ -114,10 +115,11 @@ NAV_VISUAL_01_IMPLEMENTATION_AUTHORIZED=NO_FOR_REMAINING_SLICES
 NAV_VISUAL_PR0=COMPLETED / PR #69 / cf37807a4d3b9da39d3c438861fac358d936fdaa
 NAV_VISUAL_PR1=COMPLETED / PR #71 / d01e34fc2eb76da39467d1de9799b12194faec9c
 NAV_VISUAL_NEXT_SLICE=MEDIUM_RAIL / PR4 / AFTER_PR70
-NAV_CONTRACT_DRIFT_01=OPEN_PM_DESIGN_DECISION
+NAV_CONTRACT_DRIFT_01=RESOLVED_ACCEPTED_CURRENT_BASELINE_EXCEPTION
 NAV-PR1-HARNESS-DESKTOP-MODEL-01=OPEN_P3
 NAV-PR1-ROUTE-FOCUS-01=OPEN_P3
-MOBILE_SCROLL_FLICKER_01=OPEN / SEPARATE_FUTURE_GLASS_GATE
+MOBILE_SCROLL_FLICKER_01=OPEN
+MOBILE_SCROLL_FLICKER_01_SCOPE=SEPARATE_FUTURE_GLASS_GATE
 TABLET_HEADER_WIDTH_01=CONFIRMED / TARGET_MEDIUM_RAIL
 
 RUNTIME_IDENTITY_02_STATUS=CLOSED_NON_PRODUCT
@@ -130,7 +132,12 @@ DOCUMENTATION_SCOPE=DOCUMENTATION_ONLY
 DOCUMENTATION_ACTION=POST_PR71_CANONICAL_RECONCILIATION
 DOCUMENTATION_TARGETS=docs/NEWSFLUX_PROJECT_STATE.md, docs/NEWSFLUX_ROADMAP.md, docs/NEWSFLUX_NAV_VISUAL_01.md
 DOCUMENTATION_RECONCILIATION_STATUS=PENDING_PR_REVIEW
-NAV_CONTRACT_DRIFT_01_DISPOSITION=RECORD_FACTS_AND_RETURN_TO_PM
+NAV_CONTRACT_DRIFT_01_DISPOSITION=RESOLVED_ACCEPTED_CURRENT_BASELINE_EXCEPTION
+HISTORICAL_APPROVED_COMPACT_NAV_V1=SOLID
+CURRENT_PR71_COMPACT_BASELINE=GLASS_TOKENS_AND_BACKDROP_FILTER
+HISTORICAL_CONTRACT_PRESERVED=YES
+CURRENT_PR71_BASELINE_ACCEPTED=YES
+FUTURE_GLASS_GATES_WAIVED=NO
 DOCS_LINT_01=SEPARATE_FORMATTING_ONLY_PR
 PR70_SEQUENCE=REFRESH_AFTER_DOCUMENTATION_AND_DOCS_LINT_01
 MEDIUM_RAIL_SEQUENCE=AFTER_PR70_CLOSE
@@ -182,7 +189,7 @@ This documentation-only proposal is based on the verified post-PR71 main and pro
 - **PR #63 / ABOUT-RUNTIME-REVISION-01:** deterministic build revision identity; feature head `9a64e9b45c6c76e6765fdaf82ee02c30f3bc57c8`, merge `723bdbb96e4445d267b443422a0be7a83e5b4f8a`; exact `SOURCE_COMMIT` is embedded in frontend metadata and the OCI revision label. Live About validation and permanent promotion passed.
 - **PR #64 / INPUT-PARITY-ESCAPE-FOCUS:** FooterPanel “Mark older articles as read” Escape now closes the menu and restores focus to the trigger; feature head `ee412912ad43d4902459b12151bad81c570d58cf`, merge `23474d3f83c01c4355c892f46c77d2f66b046af0`; live canary passed at 390×844, 884×1104 and 1280×800 and exact merge-SHA promotion passed.
 - **PR #65 / ABOUT-ACCESSIBLE-BRAND-01:** the NewsFlux GitHub link accessible name now names NewsFlux in all six shipped locales; feature head `8a4d1cf358d39524e95027b13e10c0205b9aea27`, merge `405e9d7b1a3097dacef50c7908abf83d480d64dd`; runtime-identity gates and exact merge-SHA production promotion passed.
-- **PR #66 / Mark All cold-loaded All:** current-list identity and filtered unread total reconciliation; feature head `1b6449597179ab3c832d0c658048d46f8bddda93`, merge `0553119de95ab5b9c2e131bbb2b4ef1d0ef58456`.
+- **PR #66 / Mark All cold-loaded All:** current-list identity and filtered unread total reconciliation; feature head `1b6449597179ab3c832d0c658048d46f8bddda93`, merge `0553119de95ab5b9c2e131bbb4b2ef1d0ef58456`.
 - **PR #67 / INPUT-PARITY-TOUCH-TARGET-01:** compact interaction targets corrected while preserving inert gaps; feature head `ec15233215043d6a054cb6fb5eb43eebe8b1442e`, merge `7b6e474fcd50bb891e429a632849da371e126590`.
 - **PR #68 / harness maintenance:** stale provider and button assumptions corrected in browser harnesses; feature head `104671b51f99d0ad7c33d3514f8d4b2ad3558aee`, merge `b6b814c77160c2e61dedc7c10958f0712f59d728`.
 - **PR #69 / NAV-VISUAL PR0:** window-class foundation; feature head `b550634066ed129e4bb0e9b3ca18842469cb493e`, merge `cf37807a4d3b9da39d3c438861fac358d936fdaa`.
@@ -347,7 +354,7 @@ The specialized upstream monitor must live-check the current upstream head befor
 - PR #30 completed with `REAL_DEVICE_GATE=WAIVED_BY_OWNER`; physical touch PASS is not claimed for the exact PR #30 head. Full automated/browser coverage and authenticated `884×1104` evidence passed where tooling was deterministic. This is an accepted residual validation limitation, not an open product defect.
 - Global formatting historically reported four out-of-scope documentation files; do not conflate pre-existing formatting debt with product regressions. Re-check when documentation tooling is next touched.
 - Repository Prettier hooks normalized Markdown table alignment in this PR; PM accepted the formatting. This creates a residual auditability limitation when comparing prior table edits; no formatter bypass or manual reversal was used.
-- **MOBILE-SCROLL-FLICKER-01 — OPEN:** reproduction is currently blocked by the harness precondition `MISSING_GENERATED_VERSION_INFO`; a physical iPhone gate was not run and root cause remains unknown. This continues to block optional NAV-VISUAL PR6 glass.
+- **MOBILE-SCROLL-FLICKER-01 — OPEN:** reproduction is currently blocked by the harness precondition `MISSING_GENERATED_VERSION_INFO`; a physical iPhone gate was not run and root cause remains unknown. This continues to block future optional NAV-VISUAL PR6 glass expansion.
 - **TABLET-HEADER-WIDTH-01 — CONFIRMED:** at 768×1024, 884×1104, 900×1100 and 992×1104 the header is approximately 370 px wide with unused space and no overflow. Fix now: NO. Target: NAV-VISUAL-01 / PR4 MEDIUM-RAIL.
 - **DOCS-LINT-01 — OPEN:** preserve the existing documentation/superpowers formatting debt; do not expand this reconciliation to unrelated files.
 - **HOME-HARNESS-STABILITY-01 — OPEN:** keep deterministic baseline failures separate from intermittent stability failures. Deterministic 10/10 failures: `LIST_SEARCH_DATE_SORT_PRESERVED`, `READER_MEASURE_01_CPL`. Intermittent 6/10 failures: `READER_VISUAL_01_WIDE_IMAGE`, `READER_MEASURE_01_DEFAULT_75_PARITY`, `READER_MEASURE_01_MEDIA_PROTECTION`. Root cause remains unknown; no product fix is claimed here.
@@ -355,7 +362,7 @@ The specialized upstream monitor must live-check the current upstream head befor
 - **ABOUT-ACCESSIBLE-BRAND-01 — COMPLETED:** resolved by PR #65; it is no longer an open finding.
 - **RUNTIME-IDENTITY-02 — CLOSED / NON-PRODUCT:** classified as `OLD_DOCUMENT_SESSION`; fresh-document validation showed the prior tab retained old JavaScript while new requests served the R5 asset. Server, asset, Service Worker and Cache Storage were not the cause; no product or deployment defect was found.
 
-## Product decisions pending
+## Product decisions and accepted baseline exceptions
 
 - HOME-VISUAL-02 composition.
 - SAVE-EXT-01 wording and placement.
@@ -363,7 +370,7 @@ The specialized upstream monitor must live-check the current upstream head befor
 - CHROME-01 contextual control consolidation.
 - ID-DEPLOY-01 local-build versus registry/deployer architecture.
 - NAV-VISUAL-01 has an approved design contract. PR0 and PR1 are complete; PR #71 establishes the current compact-navigation product baseline. Remaining slices, including Medium Rail, are deferred and retain their real-device gates.
-- `NAV_CONTRACT_DRIFT_01` is an open PM/design decision: the approved historical contract specifies a solid compact bar, while merged PR #71 uses NewsFlux glass tokens and `backdrop-filter`. Preserve both facts; do not infer that future glass gates are waived.
+- `NAV_CONTRACT_DRIFT_01` is resolved as an accepted current-baseline exception. The historical approved contract specifies a solid compact bar; merged PR #71 uses NewsFlux glass tokens and `backdrop-filter`, and this current baseline is accepted. Preserve both facts; future glass gates are not waived, and `MOBILE-SCROLL-FLICKER-01` remains open.
 
 ## Completed finding — ABOUT-RUNTIME-REVISION-01
 
@@ -389,7 +396,7 @@ Current sequence: finish this post-PR71 documentation reconciliation, close `DOC
 - Deploy only an exact approved product/runtime SHA.
 - Never deploy `latest` or a moving branch implicitly.
 - Live production state reconciled on 2026-10-20: image `newsflux-local:d01e34fc2eb7`, image ID `sha256:d52df4be8afa1f39b79cd53f2e84466482fec3d3962fd8102d71e77e54427c`, revision label `d01e34fc2eb76da39467d1de9799b12194faec9c`, source label `https://github.com/jfsdias/NewsFlux`, status `running`, restart count `0`.
-- Internal HTTP gate returned `200`. The canonical Compose image is `newsflux-local:d01e34fc2eb7`; no candidate override is present.
+- Internal HTTP gate returned `200`. The canonical Compose image is `newsflux-local:d01e34fc2eb7`; no candidate override is active, and the archived candidate override remains preserved.
 - `MAIN_PRODUCTION_PARITY=PASS` and `CANONICAL_RUNTIME_PARITY=PASS`. PR #71 merge SHA `d01e34fc2eb76da39467d1de9799b12194faec9c` is the current main and production SHA.
 - `PERMANENT_PROMOTION=PASS`; `ROLLBACK_USED=NO`.
 - The historical PR #44 promotion remains in the completion history. Current production state is recorded above.

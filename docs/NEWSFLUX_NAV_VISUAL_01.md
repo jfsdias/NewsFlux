@@ -8,7 +8,7 @@
 - **Production deployment authorization:** NO for future changes; PR #71 is already promoted.
 - **Real-device gates:** required where specified below; the critical 884×1104 viewport remains mandatory.
 
-This document preserves the approved historical design contract and separately records the post-PR71 implementation baseline. PR #71 was accepted and merged as the current compact-navigation product baseline. `NAV_CONTRACT_DRIFT_01` remains an explicit PM/design decision: the historical compact contract is solid, while merged PR #71 uses NewsFlux glass tokens and `backdrop-filter`. Do not rewrite the historical contract or infer that future glass eligibility gates have been waived.
+This document preserves the approved historical design contract and separately records the post-PR71 implementation baseline. PR #71 was accepted and merged as the current compact-navigation product baseline. `NAV_CONTRACT_DRIFT_01` is resolved as `RESOLVED_ACCEPTED_CURRENT_BASELINE_EXCEPTION`: the historical compact contract is solid, while PR #71 uses NewsFlux glass tokens and `backdrop-filter`, accepted as the current baseline. Preserve both facts; future glass eligibility gates are not waived.
 
 ## Post-PR71 implementation state
 
@@ -21,9 +21,13 @@ This document preserves the approved historical design contract and separately r
 - `MOBILE-SCROLL-FLICKER-01` remains a distinct open finding. It and future glass-expansion gates are not waived by PR #71 acceptance.
 
 ```text
-NAV_CONTRACT_DRIFT_01=OPEN_PM_DESIGN_DECISION
+NAV_CONTRACT_DRIFT_01=RESOLVED_ACCEPTED_CURRENT_BASELINE_EXCEPTION
 HISTORICAL_APPROVED_COMPACT_NAV_V1=SOLID
-CURRENT_COMPACT_IMPLEMENTATION=GLASS_TOKENS_AND_BACKDROP_FILTER
+CURRENT_PR71_COMPACT_BASELINE=GLASS_TOKENS_AND_BACKDROP_FILTER
+HISTORICAL_CONTRACT_PRESERVED=YES
+CURRENT_PR71_BASELINE_ACCEPTED=YES
+FUTURE_GLASS_GATES_WAIVED=NO
+MOBILE_SCROLL_FLICKER_01=OPEN
 PR0_STATUS=COMPLETED / PR #69
 PR1_STATUS=COMPLETED / PR #71
 MEDIUM_RAIL_STATUS=DEFERRED / PR4 / AFTER_PR70
@@ -200,7 +204,7 @@ All nine remain `OPEN`; the approved contract records boundaries without decidin
 
 ## Open findings retained
 
-- `MOBILE-SCROLL-FLICKER-01` — OPEN. Reproduction is blocked by the harness precondition `MISSING_GENERATED_VERSION_INFO`; a physical iPhone gate was not run and root cause remains unknown. Optional PR6 glass stays blocked.
+- `MOBILE-SCROLL-FLICKER-01` — OPEN. Reproduction is blocked by the harness precondition `MISSING_GENERATED_VERSION_INFO`; a physical iPhone gate was not run and root cause remains unknown. Future optional PR6 glass expansion remains blocked.
 - `TABLET-HEADER-WIDTH-01` — CONFIRMED. The narrow header was observed without overflow at 768×1024, 884×1104, 900×1100 and 992×1104. Fix now: NO; target: PR4 MEDIUM-RAIL.
 - `DOCS-LINT-01` — OPEN; preserve unrelated documentation/superpowers formatting debt.
 - `HOME-HARNESS-STABILITY-01` — OPEN; deterministic baseline failures must remain separate from intermittent stability failures and are not part of NAV-VISUAL implementation.
