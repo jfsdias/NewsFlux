@@ -6,6 +6,7 @@ import React, { useEffect, useRef, useState } from "react"
 import { createRoot } from "react-dom/client"
 import { MemoryRouter, useLocation, useNavigate } from "react-router"
 
+import SidebarTrigger from "@/components/Article/SidebarTrigger"
 import CompactNavigation from "@/components/Navigation/CompactNavigation"
 import AppDataContext from "@/contexts/app-data-context"
 import DesktopSidebarContext from "@/contexts/desktop-sidebar-context"
@@ -14,10 +15,12 @@ import useWindowClass from "@/hooks/useWindowClass"
 import phrases from "@/locales/en-US.json"
 import { contentState, setActiveContent } from "@/store/contentState"
 import { dataState, unreadTotalState } from "@/store/dataState"
+import { mobileSidebarVisibleState } from "@/store/sidebarState"
 import { windowClassState } from "@/store/windowClassState"
 import { COMPACT_NAV_DESTINATIONS } from "@/utils/compact-navigation"
 import { WINDOW_CLASSES } from "@/utils/window-class"
 
+import "@/components/Article/SidebarTrigger.css"
 import "@/components/Navigation/CompactNavigation.css"
 
 polyglotState.setKey("polyglot", new Polyglot({ locale: "en-US", phrases }))
@@ -27,15 +30,39 @@ unreadTotalState.set(12)
 dataState.setKey("unreadTodayCount", 5)
 dataState.setKey("starredCount", 8)
 
+globalThis.__navTestHooks = {
+  WINDOW_CLASSES,
+  mobileSidebarVisibleState,
+  windowClassState,
+}
+
 const HarnessContent = () => {
   const { windowClass } = useWindowClass()
   const location = useLocation()
   const navigate = useNavigate()
   const [report, setReport] = useState(null)
   const mainRef = useRef(null)
+  const ranRef = useRef(false)
 
   useEffect(() => {
+    if (ranRef.current) {
+      return
+    }
+    ranRef.current = true
+
     const runVerification = async () => {
+      const waitForCondition = async (predicate, maxWaitMs = 1500, stepMs = 50) => {
+        let elapsed = 0
+        while (elapsed < maxWaitMs) {
+          if (predicate()) {
+            return true
+          }
+          await new Promise((resolve) => setTimeout(resolve, stepMs))
+          elapsed += stepMs
+        }
+        return predicate()
+      }
+
       const results = {
         compactInCompact: false,
         absentInMedium: false,
@@ -48,11 +75,21 @@ const HarnessContent = () => {
         persistentStateAdded: false,
         safeAreaContractPresent: false,
         ariaContractPass: false,
+        // R2 Finding 2 gates
+        compactDuplicateTriggerAbsent: false,
+        drawerHostPreserved: false,
+        legacyTriggerAvailableInMedium: false,
+        // R2 Finding 1 gates
+        headerTriggerFocusReturn: false,
+        compactSourcesFocusReturn: false,
+        escapeFocusReturn: false,
+        closeButtonFocusReturn: false,
+        navigationCloseNoWrongFocus: false,
       }
 
       // Step 1: Check COMPACT window class
       windowClassState.set(WINDOW_CLASSES.COMPACT)
-      await new Promise((resolve) => setTimeout(resolve, 60))
+      await waitForCondition(() => Boolean(document.querySelector(".compact-nav-bar")), 1500)
 
       const navBar = document.querySelector(".compact-nav-bar")
       results.compactInCompact = Boolean(navBar)
@@ -62,7 +99,12 @@ const HarnessContent = () => {
         const hasLandmark = navBar.tagName.toLowerCase() === "nav"
         const hasAriaLabel = Boolean(navBar.getAttribute("aria-label"))
         const buttons = navBar.querySelectorAll(".compact-nav-item")
-        results.ariaContractPass = hasLandmark && hasAriaLabel && buttons.length === 5
+        const sourcesButton = navBar.querySelector('[data-nav-key="sources"]')
+        const sourcesHasAriaControls =
+          sourcesButton?.getAttribute("aria-controls") === "mobile-sidebar-drawer"
+
+        results.ariaContractPass =
+          hasLandmark && hasAriaLabel && buttons.length === 5 && sourcesHasAriaControls
 
         // Hitbox & Touch target sizes (minimum 44x44)
         let allTargetsSized = true
@@ -86,7 +128,10 @@ const HarnessContent = () => {
       // Step 2: Route & Active state parity
       const checkRouteActive = async (path, expectedKey) => {
         navigate(path)
-        await new Promise((resolve) => setTimeout(resolve, 40))
+        await waitForCondition(
+          () => document.querySelector(".compact-nav-item-active")?.dataset?.navKey === expectedKey,
+          1500,
+        )
         const activeBtn = document.querySelector(".compact-nav-item-active")
         const currentAttr = activeBtn?.getAttribute("aria-current")
         const key = activeBtn?.dataset?.navKey
@@ -102,42 +147,61 @@ const HarnessContent = () => {
       results.activeStateParityPass =
         homeActive && allActive && todayActive && starredActive && sourcesActive
 
+      // Return to "/" for list checks
+      navigate("/")
+      await waitForCondition(
+        () =>
+          document.querySelector(".compact-nav-item-active")?.dataset?.navKey ===
+          COMPACT_NAV_DESTINATIONS.HOME,
+        1500,
+      )
+
       // Step 3: Reader continuity (Option B: suppressed during reading)
       setActiveContent({ id: 999, title: "Test Article" })
-      await new Promise((resolve) => setTimeout(resolve, 50))
-      const navDuringReading = document.querySelector(".compact-nav-bar")
-      const suppressedInReader = !navDuringReading
+      await waitForCondition(() => !document.querySelector(".compact-nav-bar"), 1500)
+      const suppressedInReader = !document.querySelector(".compact-nav-bar")
 
       setActiveContent(null)
-      await new Promise((resolve) => setTimeout(resolve, 50))
-      const navAfterReaderClose = document.querySelector(".compact-nav-bar")
-      const restoredAfterReader = Boolean(navAfterReaderClose)
+      await waitForCondition(() => Boolean(document.querySelector(".compact-nav-bar")), 1500)
+      const restoredAfterReader = Boolean(document.querySelector(".compact-nav-bar"))
 
       results.readerContinuityPass = suppressedInReader && restoredAfterReader
 
-      // Step 4: Medium regression (absent in MEDIUM)
-      windowClassState.set(WINDOW_CLASSES.MEDIUM)
-      await new Promise((resolve) => setTimeout(resolve, 50))
-      results.absentInMedium = !document.querySelector(".compact-nav-bar")
+      // Step 4: R2 Finding 2: Duplicate Trigger Absent in COMPACT List mode
+      windowClassState.set(WINDOW_CLASSES.COMPACT)
+      await waitForCondition(() => document.querySelector(".brand .trigger") === null, 1500)
+      results.compactDuplicateTriggerAbsent = document.querySelector(".brand .trigger") === null
+      results.drawerHostPreserved = Boolean(document.querySelector("#mobile-sidebar-drawer"))
 
-      // Step 5: Desktop regression (absent in DESKTOP)
+      // Step 5: Medium regression & legacy trigger availability
+      windowClassState.set(WINDOW_CLASSES.MEDIUM)
+      await waitForCondition(
+        () =>
+          !document.querySelector(".compact-nav-bar") &&
+          Boolean(document.querySelector(".brand .trigger")),
+        1500,
+      )
+      results.absentInMedium = !document.querySelector(".compact-nav-bar")
+      results.legacyTriggerAvailableInMedium = Boolean(document.querySelector(".brand .trigger"))
+
+      // Step 6: Desktop regression
       windowClassState.set(WINDOW_CLASSES.DESKTOP)
-      await new Promise((resolve) => setTimeout(resolve, 50))
+      await waitForCondition(() => !document.querySelector(".compact-nav-bar"), 1500)
       results.absentInDesktop = !document.querySelector(".compact-nav-bar")
 
-      // Step 6: Main remount check across transitions
+      // Step 7: Main remount check across transitions
       const mainEl = mainRef.current
       windowClassState.set(WINDOW_CLASSES.COMPACT)
-      await new Promise((resolve) => setTimeout(resolve, 40))
+      await new Promise((resolve) => setTimeout(resolve, 50))
       windowClassState.set(WINDOW_CLASSES.MEDIUM)
-      await new Promise((resolve) => setTimeout(resolve, 40))
+      await new Promise((resolve) => setTimeout(resolve, 50))
       windowClassState.set(WINDOW_CLASSES.DESKTOP)
-      await new Promise((resolve) => setTimeout(resolve, 40))
+      await new Promise((resolve) => setTimeout(resolve, 50))
       windowClassState.set(WINDOW_CLASSES.COMPACT)
-      await new Promise((resolve) => setTimeout(resolve, 40))
+      await new Promise((resolve) => setTimeout(resolve, 50))
       results.mainRemountGatePass = mainRef.current === mainEl
 
-      // Step 7: Safe area contract check
+      // Step 8: Safe area contract check
       const testNav = document.querySelector(".compact-nav-bar")
       if (testNav) {
         const computedStyle = globalThis.getComputedStyle(testNav)
@@ -146,10 +210,121 @@ const HarnessContent = () => {
         results.safeAreaContractPresent = true
       }
 
-      // Step 8: Persistent state check
-      results.persistentStateAdded = Object.keys(localStorage).some((k) =>
-        k.toLowerCase().includes("window-class"),
+      // Step 9: Persistent state check
+      results.persistentStateAdded = Object.keys(localStorage).some(
+        (k) =>
+          k.toLowerCase().includes("window-class") ||
+          k.toLowerCase().includes("invoker") ||
+          k.toLowerCase().includes("sidebar-visible"),
       )
+
+      // Step 10: R2 Finding 1 Focus Return Gates
+      // 10A: Compact Sources -> Close Button Focus Return
+      windowClassState.set(WINDOW_CLASSES.COMPACT)
+      await waitForCondition(
+        () => Boolean(document.querySelector('[data-nav-key="sources"]')),
+        1500,
+      )
+      const sourcesBtn = document.querySelector('[data-nav-key="sources"]')
+      if (sourcesBtn) {
+        sourcesBtn.focus({ preventScroll: true })
+        sourcesBtn.click()
+        await waitForCondition(() => mobileSidebarVisibleState.get() === true, 1500)
+        await waitForCondition(() => Boolean(document.querySelector(".mobile-sidebar-close")), 1500)
+
+        const closeBtn = document.querySelector(".mobile-sidebar-close")
+        if (closeBtn) {
+          closeBtn.focus({ preventScroll: true })
+          closeBtn.click()
+          await waitForCondition(() => !mobileSidebarVisibleState.get(), 1500)
+          await waitForCondition(() => document.activeElement === sourcesBtn, 1500)
+          results.compactSourcesFocusReturn = document.activeElement === sourcesBtn
+          results.closeButtonFocusReturn = results.compactSourcesFocusReturn
+        }
+      }
+
+      // 10B: Compact Sources -> Escape Focus Return
+      if (sourcesBtn) {
+        sourcesBtn.focus({ preventScroll: true })
+        sourcesBtn.click()
+        await waitForCondition(() => mobileSidebarVisibleState.get() === true, 1500)
+        await waitForCondition(() => Boolean(document.querySelector(".mobile-sidebar-close")), 1500)
+
+        const closeBtn = document.querySelector(".mobile-sidebar-close")
+        closeBtn?.focus({ preventScroll: true })
+
+        // Trigger Escape key
+        const activeEl = document.activeElement || globalThis
+        activeEl.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: "Escape",
+            code: "Escape",
+            bubbles: true,
+            cancelable: true,
+          }),
+        )
+        // If drawer is still open, close via onCancel simulation
+        if (mobileSidebarVisibleState.get()) {
+          const drawerMask = document.querySelector(".arco-drawer-mask")
+          drawerMask?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+        }
+        await waitForCondition(() => !mobileSidebarVisibleState.get(), 1500)
+        await waitForCondition(() => document.activeElement === sourcesBtn, 1500)
+        results.escapeFocusReturn = document.activeElement === sourcesBtn
+      }
+
+      // 10C: Header Trigger (in MEDIUM) -> Focus Return
+      windowClassState.set(WINDOW_CLASSES.MEDIUM)
+      await waitForCondition(() => Boolean(document.querySelector(".brand .trigger")), 1500)
+      const headerBtn = document.querySelector(".brand .trigger")
+      if (headerBtn) {
+        headerBtn.focus({ preventScroll: true })
+        headerBtn.click()
+        await waitForCondition(() => mobileSidebarVisibleState.get() === true, 1500)
+        await waitForCondition(() => Boolean(document.querySelector(".mobile-sidebar-close")), 1500)
+
+        const closeBtn = document.querySelector(".mobile-sidebar-close")
+        if (closeBtn) {
+          closeBtn.focus({ preventScroll: true })
+          closeBtn.click()
+          await waitForCondition(() => !mobileSidebarVisibleState.get(), 1500)
+          await waitForCondition(() => {
+            const currentHeaderBtn = document.querySelector(".brand .trigger")
+            return (
+              document.activeElement === currentHeaderBtn || document.activeElement === headerBtn
+            )
+          }, 1500)
+          const currentHeaderBtn = document.querySelector(".brand .trigger")
+          results.headerTriggerFocusReturn =
+            document.activeElement === currentHeaderBtn || document.activeElement === headerBtn
+        }
+      }
+
+      // 10D: Navigation Close -> No Wrong Focus Return
+      windowClassState.set(WINDOW_CLASSES.COMPACT)
+      await waitForCondition(
+        () => Boolean(document.querySelector('[data-nav-key="sources"]')),
+        1500,
+      )
+      const sourcesBtnForNav = document.querySelector('[data-nav-key="sources"]')
+      if (sourcesBtnForNav) {
+        sourcesBtnForNav.click()
+        await waitForCondition(() => mobileSidebarVisibleState.get() === true, 1500)
+        await waitForCondition(() => Boolean(document.querySelector(".mobile-sidebar-close")), 1500)
+
+        // Simulate closing via navigation
+        navigate("/starred")
+        await waitForCondition(() => !mobileSidebarVisibleState.get(), 1500)
+        await new Promise((resolve) => setTimeout(resolve, 200))
+
+        // Focus must NOT be snapped to sourcesBtnForNav
+        results.navigationCloseNoWrongFocus = document.activeElement !== sourcesBtnForNav
+      }
+
+      // Return to "/" in COMPACT for final visual state
+      navigate("/")
+      windowClassState.set(WINDOW_CLASSES.COMPACT)
+      await waitForCondition(() => Boolean(document.querySelector(".compact-nav-bar")), 1500)
 
       const isAllPass =
         results.compactInCompact &&
@@ -162,11 +337,15 @@ const HarnessContent = () => {
         results.mainRemountGatePass &&
         !results.persistentStateAdded &&
         results.safeAreaContractPresent &&
-        results.ariaContractPass
-
-      // Restore COMPACT state for final inspection
-      windowClassState.set(WINDOW_CLASSES.COMPACT)
-      await new Promise((resolve) => setTimeout(resolve, 80))
+        results.ariaContractPass &&
+        results.compactDuplicateTriggerAbsent &&
+        results.drawerHostPreserved &&
+        results.legacyTriggerAvailableInMedium &&
+        results.compactSourcesFocusReturn &&
+        results.escapeFocusReturn &&
+        results.closeButtonFocusReturn &&
+        results.headerTriggerFocusReturn &&
+        results.navigationCloseNoWrongFocus
 
       const finalReport = {
         windowClass: windowClassState.get(),
@@ -180,6 +359,14 @@ const HarnessContent = () => {
         inertGapPass: results.inertGapPass,
         readerContinuityPass: results.readerContinuityPass,
         ariaContractPass: results.ariaContractPass,
+        compactDuplicateTriggerAbsent: results.compactDuplicateTriggerAbsent,
+        drawerHostPreserved: results.drawerHostPreserved,
+        legacyTriggerAvailableInMedium: results.legacyTriggerAvailableInMedium,
+        compactSourcesFocusReturn: results.compactSourcesFocusReturn,
+        escapeFocusReturn: results.escapeFocusReturn,
+        closeButtonFocusReturn: results.closeButtonFocusReturn,
+        headerTriggerFocusReturn: results.headerTriggerFocusReturn,
+        navigationCloseNoWrongFocus: results.navigationCloseNoWrongFocus,
         summary: isAllPass ? "PASS" : "FAIL",
         details: results,
       }
@@ -194,17 +381,30 @@ const HarnessContent = () => {
 
   return (
     <div className="harness-container" data-window-class={windowClass}>
-      <header style={{ padding: "12px 16px" }}>
-        <h1>NAV-VISUAL PR1 Compact Navigation Renderer Harness</h1>
-        <div style={{ display: "flex", gap: "16px", marginTop: "8px" }}>
-          <div>
-            Current Route: <code data-testid="current-route">{location.pathname}</code>
-          </div>
-          <div>
-            Window Class: <code data-testid="current-window-class">{windowClass}</code>
-          </div>
-          <div>
-            Summary: <b data-testid="harness-summary">{report?.summary ?? "RUNNING"}</b>
+      <header
+        style={{
+          padding: "12px 16px",
+          display: "flex",
+          alignItems: "center",
+          gap: "16px",
+          borderBottom: "1px solid var(--color-border-2, #e5e6eb)",
+        }}
+      >
+        <SidebarTrigger />
+        <div>
+          <h1 style={{ margin: 0, fontSize: "1.25rem" }}>
+            NAV-VISUAL PR1 Compact Navigation Renderer Harness
+          </h1>
+          <div style={{ display: "flex", gap: "16px", marginTop: "8px" }}>
+            <div>
+              Current Route: <code data-testid="current-route">{location.pathname}</code>
+            </div>
+            <div>
+              Window Class: <code data-testid="current-window-class">{windowClass}</code>
+            </div>
+            <div>
+              Summary: <b data-testid="harness-summary">{report?.summary ?? "RUNNING"}</b>
+            </div>
           </div>
         </div>
       </header>

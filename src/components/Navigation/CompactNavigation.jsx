@@ -14,7 +14,12 @@ import { polyglotState } from "@/hooks/useLanguage"
 import useWindowClass from "@/hooks/useWindowClass"
 import { contentState, setActiveContent } from "@/store/contentState"
 import { dataState, unreadTotalState } from "@/store/dataState"
-import { mobileSidebarVisibleState, setMobileSidebarVisible } from "@/store/sidebarState"
+import {
+  mobileSidebarInvokerState,
+  mobileSidebarVisibleState,
+  setMobileSidebarInvoker,
+  setMobileSidebarVisible,
+} from "@/store/sidebarState"
 import {
   COMPACT_NAV_DESTINATIONS,
   resolveCompactNavActiveKey,
@@ -61,7 +66,11 @@ const CompactNavigation = () => {
   )
 
   const handleToggleSources = useCallback(() => {
-    setMobileSidebarVisible(!mobileSidebarVisibleState.get())
+    const nextVisible = !mobileSidebarVisibleState.get()
+    if (nextVisible) {
+      setMobileSidebarInvoker("compact-sources")
+    }
+    setMobileSidebarVisible(nextVisible)
   }, [])
 
   if (!isVisible || !polyglot) {
@@ -129,6 +138,7 @@ const CompactNavigation = () => {
           return (
             <button
               key={key}
+              aria-controls={isDialogTrigger ? "mobile-sidebar-drawer" : undefined}
               aria-current={isActive ? "page" : undefined}
               aria-expanded={isDialogTrigger ? sidebarVisible : undefined}
               aria-haspopup={isDialogTrigger ? "dialog" : undefined}

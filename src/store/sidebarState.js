@@ -34,3 +34,6 @@ export const replaceExpandedCategories = (keys) => {
 
 export const mobileSidebarVisibleState = atom(false)
 export const setMobileSidebarVisible = createSetter(mobileSidebarVisibleState)
+
+export const mobileSidebarInvokerState = atom(null)
+export const setMobileSidebarInvoker = createSetter(mobileSidebarInvokerState)

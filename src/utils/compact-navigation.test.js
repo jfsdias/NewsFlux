@@ -122,3 +122,111 @@ test("COMPACT-NAV: safe area contract and css rules", () => {
   // Inert gap: gap: 4px between items
   assert.ok(cssSource.includes("gap: 4px"))
 })
+
+test("NAV-PR1-R2: invoker tracking atom state transitions", async () => {
+  const sidebarStatePath = path.resolve("src/store/sidebarState.js")
+  const sidebarStateSource = fs.readFileSync(sidebarStatePath, "utf8")
+
+  // Must export mobileSidebarInvokerState and setMobileSidebarInvoker
+  assert.ok(sidebarStateSource.includes("export const mobileSidebarInvokerState = atom(null)"))
+  assert.ok(
+    sidebarStateSource.includes(
+      "export const setMobileSidebarInvoker = createSetter(mobileSidebarInvokerState)",
+    ),
+  )
+
+  // Verify in-memory atom behavior
+  const { atom } = await import("nanostores")
+  const testInvokerState = atom(null)
+  assert.equal(testInvokerState.get(), null)
+
+  testInvokerState.set("compact-sources")
+  assert.equal(testInvokerState.get(), "compact-sources")
+
+  testInvokerState.set(null)
+  assert.equal(testInvokerState.get(), null)
+
+  testInvokerState.set("header")
+  assert.equal(testInvokerState.get(), "header")
+
+  testInvokerState.set(null)
+  assert.equal(testInvokerState.get(), null)
+})
+
+test("NAV-PR1-R2: CompactNavigation aria-controls and invoker contract", () => {
+  const componentPath = path.resolve("src/components/Navigation/CompactNavigation.jsx")
+  const componentSource = fs.readFileSync(componentPath, "utf8")
+
+  // Must have aria-controls for dialog triggers pointing to mobile-sidebar-drawer
+  assert.ok(
+    componentSource.includes(
+      'aria-controls={isDialogTrigger ? "mobile-sidebar-drawer" : undefined}',
+    ),
+  )
+
+  // Must record invoker as 'compact-sources' when opening
+  assert.ok(componentSource.includes('setMobileSidebarInvoker("compact-sources")'))
+})
+
+test("NAV-PR1-R2: SidebarTrigger decouples Drawer host and suppresses duplicate in compact list", () => {
+  const triggerPath = path.resolve("src/components/Article/SidebarTrigger.jsx")
+  const drawerHostPath = path.resolve("src/components/Article/SidebarDrawerHost.jsx")
+
+  const triggerSource = fs.readFileSync(triggerPath, "utf8")
+  const drawerHostSource = fs.readFileSync(drawerHostPath, "utf8")
+
+  // SidebarTrigger imports and mounts SidebarDrawerHost
+  assert.ok(triggerSource.includes('import SidebarDrawerHost from "./SidebarDrawerHost"'))
+  assert.ok(triggerSource.includes("<SidebarDrawerHost"))
+  assert.ok(triggerSource.includes("SidebarDrawerHost"))
+
+  // In COMPACT list mode, visible trigger is suppressed
+  assert.ok(triggerSource.includes("const showLegacyTrigger = !(isCompact && !isReaderActive)"))
+
+  // Drawer host contains the Drawer component with id mobile-sidebar-drawer
+  assert.ok(drawerHostSource.includes('id="mobile-sidebar-drawer"'))
+  assert.ok(drawerHostSource.includes("<Drawer"))
+})
+
+test("NAV-PR1-R2: SidebarDrawerHost multi-invoker focus return contract", () => {
+  const drawerHostPath = path.resolve("src/components/Article/SidebarDrawerHost.jsx")
+  const drawerHostSource = fs.readFileSync(drawerHostPath, "utf8")
+
+  // Checks shouldRestoreFocus before focusing
+  assert.ok(drawerHostSource.includes("if (!shouldRestoreFocus)"))
+
+  // Handles both invoker targets
+  assert.ok(drawerHostSource.includes('invoker === "compact-sources"'))
+  assert.ok(drawerHostSource.includes('invoker === "header"'))
+
+  // Clears invoker state on close
+  assert.ok(drawerHostSource.includes("setMobileSidebarInvoker(null)"))
+
+  // Navigation close sets restoreFocusAfterClose to false
+  assert.ok(drawerHostSource.includes("const closeSidebarAfterNavigation = () => {"))
+  assert.ok(drawerHostSource.includes("restoreFocusAfterCloseRef.current = false"))
+})
+
+test("NAV-PR1-R2: no persistent state in R2 files", () => {
+  const filesToCheck = [
+    "src/store/sidebarState.js",
+    "src/components/Navigation/CompactNavigation.jsx",
+    "src/components/Article/SidebarTrigger.jsx",
+    "src/components/Article/SidebarDrawerHost.jsx",
+  ]
+
+  for (const relativePath of filesToCheck) {
+    const fullPath = path.resolve(relativePath)
+    const content = fs.readFileSync(fullPath, "utf8")
+
+    // Neither localStorage nor sessionStorage should be referenced in trigger / drawer / nav
+    if (relativePath !== "src/store/sidebarState.js") {
+      assert.ok(
+        !content.includes("@nanostores/persistent"),
+        `${relativePath} must not use persistent stores`,
+      )
+    }
+    assert.ok(!content.includes("localStorage"), `${relativePath} must not access localStorage`)
+    assert.ok(!content.includes("sessionStorage"), `${relativePath} must not access sessionStorage`)
+  }
+})

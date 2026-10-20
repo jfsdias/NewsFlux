@@ -1,72 +1,36 @@
-import { Button, Drawer } from "@arco-design/web-react"
-import { IconClose, IconMenuUnfold } from "@arco-design/web-react/icon"
+import { Button } from "@arco-design/web-react"
+import { IconMenuUnfold } from "@arco-design/web-react/icon"
 import { useStore } from "@nanostores/react"
-import { useEffect, useRef } from "react"
-import { useLocation } from "react-router"
+import { useRef } from "react"
 
-import Sidebar from "@/components/Sidebar/Sidebar"
+import SidebarDrawerHost from "./SidebarDrawerHost"
+
 import CustomTooltip from "@/components/ui/CustomTooltip"
 import useDesktopSidebar from "@/hooks/useDesktopSidebar"
 import { polyglotState } from "@/hooks/useLanguage"
 import useScreenWidth from "@/hooks/useScreenWidth"
-import { mobileSidebarVisibleState, setMobileSidebarVisible } from "@/store/sidebarState"
+import useWindowClass from "@/hooks/useWindowClass"
+import { contentState } from "@/store/contentState"
+import {
+  mobileSidebarVisibleState,
+  setMobileSidebarInvoker,
+  setMobileSidebarVisible,
+} from "@/store/sidebarState"
 import "./SidebarTrigger.css"
 
 export default function SidebarTrigger() {
-  const currentPath = useLocation().pathname
   const { isBelowLarge } = useScreenWidth()
+  const { isCompact } = useWindowClass()
+  const { activeContent } = useStore(contentState, { keys: ["activeContent"] })
+  const isReaderActive = Boolean(activeContent)
 
   const sidebarVisible = useStore(mobileSidebarVisibleState)
   const { polyglot } = useStore(polyglotState)
   const { expandDesktopSidebar, isDesktopSidebarCollapsed, reopenButtonRef } = useDesktopSidebar()
 
-  const closeButtonRef = useRef(null)
-  const restoreFocusAfterCloseRef = useRef(false)
   const triggerButtonRef = useRef(null)
 
-  const closeSidebarLabel = polyglot.t("actions.close_dialog", {
-    name: polyglot.t("sidebar.navigation_menu"),
-  })
-  const sidebarTriggerLabel = polyglot.t(isBelowLarge ? "sidebar.open" : "sidebar.expand")
-
-  const closeSidebar = () => {
-    restoreFocusAfterCloseRef.current = true
-    setMobileSidebarVisible(false)
-  }
-
-  const closeSidebarAfterNavigation = () => {
-    restoreFocusAfterCloseRef.current = false
-    setMobileSidebarVisible(false)
-  }
-
-  const handleAfterClose = () => {
-    const shouldRestoreFocus = restoreFocusAfterCloseRef.current
-    restoreFocusAfterCloseRef.current = false
-
-    const triggerButton = triggerButtonRef.current
-    if (
-      shouldRestoreFocus &&
-      triggerButton?.isConnected &&
-      !triggerButton.disabled &&
-      triggerButton.getClientRects().length > 0
-    ) {
-      triggerButton.focus({ preventScroll: true })
-    }
-  }
-
-  useEffect(() => {
-    if (!isBelowLarge) {
-      restoreFocusAfterCloseRef.current = false
-      setMobileSidebarVisible(false)
-    }
-  }, [isBelowLarge])
-
-  useEffect(() => {
-    if (currentPath) {
-      restoreFocusAfterCloseRef.current = false
-      setMobileSidebarVisible(false)
-    }
-  }, [currentPath])
+  const sidebarTriggerLabel = polyglot?.t(isBelowLarge ? "sidebar.open" : "sidebar.expand")
 
   if (!isBelowLarge) {
     if (!isDesktopSidebarCollapsed) {
@@ -93,57 +57,40 @@ export default function SidebarTrigger() {
     )
   }
 
+  // In COMPACT + LIST/HOME, CompactNavigation has Sources as the primary drawer trigger.
+  // Suppress the redundant visible hamburger in the header while keeping Drawer host mounted.
+  // In MEDIUM, DESKTOP, or COMPACT reader mode, legacy trigger remains available where required.
+  const showLegacyTrigger = !(isCompact && !isReaderActive)
+
   return (
-    <div>
-      <div className="brand">
-        <CustomTooltip mini content={sidebarTriggerLabel}>
-          <Button
-            ref={triggerButtonRef}
-            aria-controls="mobile-sidebar-drawer"
-            aria-expanded={sidebarVisible}
-            aria-haspopup="dialog"
-            aria-label={sidebarTriggerLabel}
-            className="trigger"
-            icon={<IconMenuUnfold aria-hidden="true" />}
-            shape="circle"
-            size="small"
-            onClick={() => {
-              restoreFocusAfterCloseRef.current = false
-              setMobileSidebarVisible(!sidebarVisible)
-            }}
-          />
-        </CustomTooltip>
-      </div>
-      <Drawer
-        focusLock
-        afterClose={handleAfterClose}
-        afterOpen={() => closeButtonRef.current?.focus({ preventScroll: true })}
-        autoFocus={false}
-        className="sidebar-drawer"
-        closable={false}
-        footer={null}
-        id="mobile-sidebar-drawer"
-        placement="left"
-        title={null}
-        visible={sidebarVisible}
-        width="min(80vw, 360px)"
-        onCancel={closeSidebar}
-      >
-        <Sidebar
-          headerAction={
+    <>
+      {showLegacyTrigger && (
+        <div className="brand">
+          <CustomTooltip mini content={sidebarTriggerLabel}>
             <Button
-              ref={closeButtonRef}
-              aria-label={closeSidebarLabel}
-              className="mobile-sidebar-close"
-              icon={<IconClose aria-hidden="true" />}
+              ref={triggerButtonRef}
+              aria-controls="mobile-sidebar-drawer"
+              aria-expanded={sidebarVisible}
+              aria-haspopup="dialog"
+              aria-label={sidebarTriggerLabel}
+              className="trigger"
+              icon={<IconMenuUnfold aria-hidden="true" />}
               shape="circle"
               size="small"
-              onClick={closeSidebar}
+              onClick={() => {
+                const nextVisible = !mobileSidebarVisibleState.get()
+                if (nextVisible) {
+                  setMobileSidebarInvoker("header")
+                }
+                setMobileSidebarVisible(nextVisible)
+              }}
             />
-          }
-          onNavigate={closeSidebarAfterNavigation}
-        />
-      </Drawer>
-    </div>
+          </CustomTooltip>
+        </div>
+      )}
+      <SidebarDrawerHost headerTriggerRef={triggerButtonRef} />
+    </>
   )
 }
+
+export { default as SidebarDrawerHost } from "./SidebarDrawerHost"
