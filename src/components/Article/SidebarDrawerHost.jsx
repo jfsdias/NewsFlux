@@ -13,7 +13,7 @@ import {
   setMobileSidebarInvoker,
   setMobileSidebarVisible,
 } from "@/store/sidebarState"
-import { restoreDrawerFocus } from "@/utils/drawer-focus"
+import { handoffRouteFocus, restoreDrawerFocus } from "@/utils/drawer-focus"
 
 export default function SidebarDrawerHost({ headerTriggerRef = null } = {}) {
   const currentPath = useLocation().pathname
@@ -23,6 +23,7 @@ export default function SidebarDrawerHost({ headerTriggerRef = null } = {}) {
 
   const closeButtonRef = useRef(null)
   const restoreFocusAfterCloseRef = useRef(false)
+  const focusDestinationAfterCloseRef = useRef(false)
   const cancelPendingFocusRef = useRef(null)
 
   const closeSidebarLabel = polyglot?.t("actions.close_dialog", {
@@ -31,17 +32,21 @@ export default function SidebarDrawerHost({ headerTriggerRef = null } = {}) {
 
   const closeSidebar = () => {
     restoreFocusAfterCloseRef.current = true
+    focusDestinationAfterCloseRef.current = false
     setMobileSidebarVisible(false)
   }
 
   const closeSidebarAfterNavigation = () => {
     restoreFocusAfterCloseRef.current = false
+    focusDestinationAfterCloseRef.current = true
     setMobileSidebarVisible(false)
   }
 
   const handleAfterClose = () => {
     const shouldRestoreFocus = restoreFocusAfterCloseRef.current
+    const shouldFocusDestination = focusDestinationAfterCloseRef.current
     restoreFocusAfterCloseRef.current = false
+    focusDestinationAfterCloseRef.current = false
 
     const invoker = mobileSidebarInvokerState.get()
     setMobileSidebarInvoker(null)
@@ -52,6 +57,16 @@ export default function SidebarDrawerHost({ headerTriggerRef = null } = {}) {
     }
 
     if (!shouldRestoreFocus) {
+      if (shouldFocusDestination) {
+        cancelPendingFocusRef.current = handoffRouteFocus({
+          onFocusSuccess: () => {
+            cancelPendingFocusRef.current = null
+          },
+          onFocusFallback: () => {
+            cancelPendingFocusRef.current = null
+          },
+        })
+      }
       return
     }
 
@@ -78,14 +93,17 @@ export default function SidebarDrawerHost({ headerTriggerRef = null } = {}) {
 
   useEffect(() => {
     if (!isBelowLarge) {
+      const shouldFocusDestination = mobileSidebarVisibleState.get()
       restoreFocusAfterCloseRef.current = false
+      focusDestinationAfterCloseRef.current = shouldFocusDestination
       setMobileSidebarVisible(false)
     }
   }, [isBelowLarge])
 
   useEffect(() => {
-    if (currentPath) {
+    if (currentPath && mobileSidebarVisibleState.get()) {
       restoreFocusAfterCloseRef.current = false
+      focusDestinationAfterCloseRef.current = true
       setMobileSidebarVisible(false)
     }
   }, [currentPath])

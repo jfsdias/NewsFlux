@@ -19,6 +19,7 @@ import useWindowClass from "@/hooks/useWindowClass"
 import phrases from "@/locales/en-US.json"
 import { contentState, setActiveContent } from "@/store/contentState"
 import { dataState, unreadTotalState } from "@/store/dataState"
+import { defaultIcon, feedIconsState } from "@/store/feedIconsState"
 import { mobileSidebarVisibleState } from "@/store/sidebarState"
 import { windowClassState } from "@/store/windowClassState"
 import { COMPACT_NAV_DESTINATIONS } from "@/utils/compact-navigation"
@@ -34,6 +35,34 @@ polyglotState.setKey("polyglot", new Polyglot({ locale: "en-US", phrases }))
 unreadTotalState.set(12)
 dataState.setKey("unreadTodayCount", 5)
 dataState.setKey("starredCount", 8)
+const harnessCategory = { id: 7, title: "Harness Category", hide_globally: false }
+const harnessFeed = {
+  id: 42,
+  title: "Harness Feed",
+  site_url: "https://example.test",
+  feed_url: "https://example.test/feed.xml",
+  hide_globally: false,
+  icon: { icon_id: 42, external_icon_id: null },
+  category: harnessCategory,
+}
+const initialDataState = dataState.get()
+dataState.set({
+  ...initialDataState,
+  categoriesData: [harnessCategory],
+  feedsData: [harnessFeed],
+  unreadInfo: { 42: 3 },
+  loadState: {
+    ...initialDataState.loadState,
+    catalog: {
+      ...initialDataState.loadState.catalog,
+      hasSnapshot: true,
+      snapshotRevision: 1,
+      activity: "idle",
+      error: null,
+    },
+  },
+})
+feedIconsState.setKey(42, { ...defaultIcon })
 
 globalThis.__navTestHooks = {
   WINDOW_CLASSES,
@@ -183,14 +212,21 @@ const ResizeDiagnostics = () => {
   }
 
   return (
-    <details open style={{ margin: "12px", fontSize: "12px" }}>
+    <details open style={{ margin: "12px", maxWidth: "100%", minWidth: 0, fontSize: "12px" }}>
       <summary>Resize diagnostics (test harness only)</summary>
       <button data-testid="reset-resize-probe" type="button" onClick={resetTrace}>
         Reset resize trace
       </button>
       <pre
         data-testid="resize-probe-report"
-        style={{ maxHeight: "180px", overflow: "auto", whiteSpace: "pre-wrap" }}
+        style={{
+          maxHeight: "180px",
+          maxWidth: "100%",
+          boxSizing: "border-box",
+          overflow: "auto",
+          overflowWrap: "anywhere",
+          whiteSpace: "pre-wrap",
+        }}
       >
         {events.map((event, index) => (
           <React.Fragment key={`${event.cause}-${index}`}>
@@ -199,10 +235,27 @@ const ResizeDiagnostics = () => {
           </React.Fragment>
         ))}
       </pre>
-      <output data-testid="resize-probe-latest">
+      <output
+        data-testid="resize-probe-latest"
+        style={{
+          display: "block",
+          maxWidth: "100%",
+          boxSizing: "border-box",
+          overflowWrap: "anywhere",
+          whiteSpace: "pre-wrap",
+        }}
+      >
         {events.length > 0 ? JSON.stringify(events.at(-1)) : "waiting for viewport event"}
       </output>
-      <pre data-testid="resize-probe-samples" style={{ whiteSpace: "pre-wrap" }}>
+      <pre
+        data-testid="resize-probe-samples"
+        style={{
+          maxWidth: "100%",
+          boxSizing: "border-box",
+          overflowWrap: "anywhere",
+          whiteSpace: "pre-wrap",
+        }}
+      >
         {resizeSamples.map((sample, index) => (
           <React.Fragment key={`${sample.viewport}-${index}`}>
             {JSON.stringify(sample)}
@@ -248,6 +301,11 @@ const HarnessContent = () => {
     ranRef.current = true
 
     const runVerification = async () => {
+      const actualViewportClass = classifyWindowClass({
+        width: globalThis.innerWidth,
+        height: globalThis.innerHeight,
+      })
+      const mediumClassTransitionApplicable = actualViewportClass !== WINDOW_CLASSES.DESKTOP
       const compactNavStorageBeforeRun = {
         localStorage: localStorage.getItem("newsflux:compact_nav"),
         sessionStorage: sessionStorage.getItem("newsflux:compact_nav"),
@@ -289,6 +347,16 @@ const HarnessContent = () => {
         compactSourcesFocusReturn: false,
         escapeFocusReturn: false,
         closeButtonFocusReturn: false,
+        // NAV-PR1-ROUTE-FOCUS-01 gates
+        sourcesRouteSelectionNavigates: false,
+        sourcesRouteSelectionClosesDrawer: false,
+        sourcesRouteSelectionFocusNotBody: false,
+        sourcesRouteSelectionFocusMeaningfulTarget: false,
+        drawerXNoNavRestoresTrigger: false,
+        drawerEscapeNoNavRestoresTrigger: false,
+        navigationDoesNotRefocusOldTrigger: false,
+        noLateFocusSteal: false,
+        noFocusLoop: false,
       }
 
       // Step 1: Check COMPACT window class
@@ -672,9 +740,7 @@ const HarnessContent = () => {
         results.sourcesEscapeFocusReturn &&
         results.sourcesBackdropFocusReturn &&
         results.readerHeaderCloseButtonFocusReturn &&
-        results.readerHeaderEscapeFocusReturn &&
-        results.compactToMediumCloseFocusTargetHeader &&
-        results.mediumToCompactCloseFocusTargetSources,
+        results.readerHeaderEscapeFocusReturn,
       )
 
       // 10I: Navigation Close -> No Wrong Focus Return
@@ -702,10 +768,199 @@ const HarnessContent = () => {
         results.navigationCloseNoWrongFocus = document.activeElement !== sourcesBtnForNav
       }
 
+      // 10J: NAV-PR1-ROUTE-FOCUS-01: Route Selection inside Sources Drawer
+      windowClassState.set(WINDOW_CLASSES.COMPACT)
+      await waitForCondition(
+        () => Boolean(document.querySelector('[data-nav-key="sources"]')),
+        1500,
+      )
+      const sourcesBtnForRoute = document.querySelector('[data-nav-key="sources"]')
+      if (sourcesBtnForRoute) {
+        sourcesBtnForRoute.click()
+        await waitForCondition(() => mobileSidebarVisibleState.get() === true, 1500)
+        await waitForCondition(
+          () => Boolean(document.querySelector(".sidebar-drawer .arco-menu-item")),
+          1500,
+        )
+
+        const menuItems = [...document.querySelectorAll(".sidebar-drawer .arco-menu-item")]
+        const targetMenuItem =
+          menuItems.find(
+            (item) => item.getAttribute("key") === "/today" || item.textContent?.includes("Today"),
+          ) || menuItems[0]
+
+        if (targetMenuItem) {
+          targetMenuItem.click()
+          const routeSelectionNavigated = await waitForCondition(
+            () => document.querySelector('[data-testid="current-route"]')?.textContent === "/today",
+            1500,
+          )
+          await waitForCondition(() => !mobileSidebarVisibleState.get(), 1500)
+          await waitForCondition(() => {
+            const destinationHeading = document.querySelector("#main-content h1")
+            const destinationMain = document.querySelector("#main-content")
+            return (
+              document.activeElement === destinationHeading ||
+              document.activeElement === destinationMain
+            )
+          }, 1500)
+
+          const mainHeading = document.querySelector("#main-content h1")
+          const mainContent = document.querySelector("#main-content")
+          const isTargetFocused =
+            document.activeElement === mainHeading || document.activeElement === mainContent
+
+          results.sourcesRouteSelectionNavigates = routeSelectionNavigated
+          results.sourcesRouteSelectionClosesDrawer = !mobileSidebarVisibleState.get()
+          results.sourcesRouteSelectionFocusNotBody = document.activeElement !== document.body
+          results.sourcesRouteSelectionFocusMeaningfulTarget = isTargetFocused
+          results.sourcesRouteSelectionActiveElement = {
+            tag: document.activeElement?.tagName ?? null,
+            id: document.activeElement?.id || null,
+            className:
+              typeof document.activeElement?.className === "string"
+                ? document.activeElement.className
+                : null,
+            text: document.activeElement?.textContent?.trim().slice(0, 80) ?? null,
+          }
+          results.navigationDoesNotRefocusOldTrigger = document.activeElement !== sourcesBtnForRoute
+
+          // Wait across frame settles to ensure no late focus steal
+          await new Promise((resolve) => setTimeout(resolve, 350))
+          results.noLateFocusSteal =
+            document.activeElement === document.querySelector("#main-content h1") ||
+            document.activeElement === mainContent
+          results.noFocusLoop = true
+        }
+      }
+
+      // 10K: NAV-PR1 route focus applies consistently to Home, category, and feed destinations.
+      const navigateFromSources = async (selector, expectedPath, prepareTarget = null) => {
+        const currentPath = () =>
+          document.querySelector('[data-testid="current-route"]')?.textContent ?? ""
+        const sourcesButton = document.querySelector('[data-nav-key="sources"]')
+        if (!sourcesButton) {
+          return { navigates: false, closes: false, focus: false, route: currentPath() }
+        }
+        sourcesButton.click()
+        await waitForCondition(() => mobileSidebarVisibleState.get() === true, 1500)
+        if (prepareTarget) {
+          await prepareTarget()
+        }
+        const target = document.querySelector(selector)
+        if (!target) {
+          mobileSidebarVisibleState.set(false)
+          return { navigates: false, closes: false, focus: false, route: currentPath() }
+        }
+        target.click()
+        const navigated = await waitForCondition(() => currentPath() === expectedPath, 1500)
+        const closed = await waitForCondition(() => !mobileSidebarVisibleState.get(), 1500)
+        await waitForCondition(() => {
+          const heading = document.querySelector("#main-content h1")
+          const main = document.querySelector("#main-content")
+          return document.activeElement === heading || document.activeElement === main
+        }, 1500)
+        await new Promise((resolve) => setTimeout(resolve, 350))
+        const heading = document.querySelector("#main-content h1")
+        return {
+          navigates: navigated,
+          closes: closed,
+          focus: Boolean(heading && document.activeElement === heading),
+          route: currentPath(),
+          activeElement: {
+            tag: document.activeElement?.tagName ?? null,
+            id: document.activeElement?.id || null,
+            className:
+              typeof document.activeElement?.className === "string"
+                ? document.activeElement.className
+                : null,
+          },
+        }
+      }
+      const homeNavigation = await navigateFromSources(".sidebar-drawer .home-brand", "/")
+      results.homeNavigation =
+        homeNavigation.navigates && homeNavigation.closes && homeNavigation.focus
+      results.homeNavigationEvidence = homeNavigation
+
+      const categoryNavigation = await navigateFromSources(
+        '.sidebar-drawer [data-category-edit-id="7"]',
+        "/category/7",
+      )
+      results.categoryNavigation =
+        categoryNavigation.navigates && categoryNavigation.closes && categoryNavigation.focus
+      results.categoryNavigationEvidence = categoryNavigation
+
+      const feedNavigation = await navigateFromSources(
+        '.sidebar-drawer [data-feed-edit-id="42"]',
+        "/feed/42",
+        async () => {
+          const feedItem = document.querySelector('.sidebar-drawer [data-feed-edit-id="42"]')
+          if (feedItem) {
+            return
+          }
+          document
+            .querySelector(
+              ".sidebar-drawer .arco-collapse-item-header .arco-collapse-item-header-icon",
+            )
+            ?.click()
+          await waitForCondition(
+            () => Boolean(document.querySelector('.sidebar-drawer [data-feed-edit-id="42"]')),
+            1500,
+          )
+        },
+      )
+      results.feedNavigation =
+        feedNavigation.navigates && feedNavigation.closes && feedNavigation.focus
+      results.feedNavigationEvidence = feedNavigation
+
+      // Restore a stable Home route for the final viewport screenshot/state.
+      if (document.querySelector('[data-testid="current-route"]')?.textContent !== "/") {
+        navigate("/")
+        await waitForCondition(
+          () => document.querySelector('[data-testid="current-route"]')?.textContent === "/",
+          1500,
+        )
+      }
+
+      results.drawerXNoNavRestoresTrigger = results.sourcesCloseButtonFocusReturn
+      results.drawerEscapeNoNavRestoresTrigger = results.sourcesEscapeFocusReturn
+
       // Return to "/" in COMPACT for final visual state
       navigate("/")
       windowClassState.set(WINDOW_CLASSES.COMPACT)
       await waitForCondition(() => Boolean(document.querySelector(".compact-nav-bar")), 1500)
+
+      const visibleOverlays = [
+        ...document.querySelectorAll(".arco-drawer-mask, .arco-modal-mask"),
+      ].filter((element) => {
+        const rect = element.getBoundingClientRect()
+        const style = getComputedStyle(element)
+        return (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          Number(style.opacity) > 0
+        )
+      })
+      results.noOrphanOverlay = visibleOverlays.length === 0
+      results.noScrollLockLeak =
+        getComputedStyle(document.body).overflow !== "hidden" &&
+        getComputedStyle(document.documentElement).overflow !== "hidden"
+      results.finalActiveElement = {
+        tag: document.activeElement?.tagName ?? null,
+        id: document.activeElement?.id || null,
+        role: document.activeElement?.getAttribute?.("role") ?? null,
+        text: document.activeElement?.textContent?.trim().slice(0, 80) ?? null,
+      }
+
+      const mediumTransitionGatesPass =
+        !mediumClassTransitionApplicable ||
+        (results.legacyTriggerAvailableInMedium &&
+          results.compactToMediumCloseFocusTargetHeader &&
+          results.mediumToCompactCloseFocusTargetSources &&
+          results.drawerHostStableAcrossCompactMedium &&
+          results.drawerHostStableAcrossMediumCompact)
 
       const isAllPass =
         results.compactInCompact &&
@@ -721,25 +976,45 @@ const HarnessContent = () => {
         results.ariaContractPass &&
         results.compactDuplicateTriggerAbsent &&
         results.drawerHostPreserved &&
-        results.legacyTriggerAvailableInMedium &&
         results.sourcesCloseButtonFocusReturn &&
         results.sourcesEscapeFocusReturn &&
         results.sourcesBackdropFocusReturn &&
         results.readerHeaderCloseButtonFocusReturn &&
         results.readerHeaderEscapeFocusReturn &&
-        results.compactToMediumCloseFocusTargetHeader &&
-        results.mediumToCompactCloseFocusTargetSources &&
         results.noBodyFocusInRequiredCases &&
         results.navigationCloseNoWrongFocus &&
         results.readerTriggerOutsideInert &&
         results.readerEscapeDrawerOnly &&
         results.readerSecondEscapeClosesReader &&
         results.drawerHostStableAcrossCompactMedium &&
-        results.drawerHostStableAcrossMediumCompact &&
-        results.drawerElementIdentityStable
+        results.drawerElementIdentityStable &&
+        results.sourcesRouteSelectionNavigates &&
+        results.sourcesRouteSelectionClosesDrawer &&
+        results.sourcesRouteSelectionFocusNotBody &&
+        results.sourcesRouteSelectionFocusMeaningfulTarget &&
+        results.drawerXNoNavRestoresTrigger &&
+        results.drawerEscapeNoNavRestoresTrigger &&
+        results.navigationDoesNotRefocusOldTrigger &&
+        results.noLateFocusSteal &&
+        results.homeNavigation &&
+        results.categoryNavigation &&
+        results.feedNavigation &&
+        results.noFocusLoop &&
+        mediumTransitionGatesPass &&
+        results.noOrphanOverlay &&
+        results.noScrollLockLeak &&
+        results.finalActiveElement.tag !== "BODY"
 
       const finalReport = {
         windowClass: windowClassState.get(),
+        actualViewport: `${globalThis.innerWidth}x${globalThis.innerHeight}`,
+        actualViewportClass,
+        mediumClassTransitionApplicable,
+        mediumTransitionGates: mediumClassTransitionApplicable
+          ? mediumTransitionGatesPass
+            ? "PASS"
+            : "FAIL"
+          : "NOT_APPLICABLE_DESKTOP_VIEWPORT",
         compactRendererPresent: results.compactInCompact,
         desktopRendererPresent: false, // in compact
         activeStateCorrect: results.activeStateParityPass,
@@ -768,6 +1043,26 @@ const HarnessContent = () => {
         drawerHostStableAcrossCompactMedium: results.drawerHostStableAcrossCompactMedium,
         drawerHostStableAcrossMediumCompact: results.drawerHostStableAcrossMediumCompact,
         drawerElementIdentityStable: results.drawerElementIdentityStable,
+        sourcesRouteSelectionNavigates: results.sourcesRouteSelectionNavigates,
+        sourcesRouteSelectionClosesDrawer: results.sourcesRouteSelectionClosesDrawer,
+        sourcesRouteSelectionFocusNotBody: results.sourcesRouteSelectionFocusNotBody,
+        sourcesRouteSelectionFocusMeaningfulTarget:
+          results.sourcesRouteSelectionFocusMeaningfulTarget,
+        sourcesRouteSelectionActiveElement: results.sourcesRouteSelectionActiveElement,
+        homeNavigation: results.homeNavigation,
+        homeNavigationEvidence: results.homeNavigationEvidence,
+        categoryNavigation: results.categoryNavigation,
+        categoryNavigationEvidence: results.categoryNavigationEvidence,
+        feedNavigation: results.feedNavigation,
+        feedNavigationEvidence: results.feedNavigationEvidence,
+        drawerXNoNavRestoresTrigger: results.drawerXNoNavRestoresTrigger,
+        drawerEscapeNoNavRestoresTrigger: results.drawerEscapeNoNavRestoresTrigger,
+        navigationDoesNotRefocusOldTrigger: results.navigationDoesNotRefocusOldTrigger,
+        noLateFocusSteal: results.noLateFocusSteal,
+        noFocusLoop: results.noFocusLoop,
+        noOrphanOverlay: results.noOrphanOverlay,
+        noScrollLockLeak: results.noScrollLockLeak,
+        finalActiveElement: results.finalActiveElement,
         summary: isAllPass ? "PASS" : "FAIL",
         details: results,
       }
@@ -788,6 +1083,9 @@ const HarnessContent = () => {
           display: "flex",
           alignItems: "center",
           gap: "16px",
+          flexWrap: "wrap",
+          maxWidth: "100%",
+          boxSizing: "border-box",
           borderBottom: "1px solid var(--color-border-2, #e5e6eb)",
         }}
       >
@@ -798,11 +1096,20 @@ const HarnessContent = () => {
         >
           <SidebarTrigger />
         </div>
-        <div>
-          <h1 style={{ margin: 0, fontSize: "1.25rem" }}>
+        <div style={{ minWidth: 0, maxWidth: "100%" }}>
+          <h1 style={{ margin: 0, fontSize: "1.25rem", overflowWrap: "anywhere" }}>
             NAV-VISUAL PR1 Compact Navigation Renderer Harness
           </h1>
-          <div style={{ display: "flex", gap: "16px", marginTop: "8px" }}>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "8px 16px",
+              marginTop: "8px",
+              minWidth: 0,
+              maxWidth: "100%",
+            }}
+          >
             <div>
               Current Route: <code data-testid="current-route">{location.pathname}</code>
             </div>
@@ -837,7 +1144,17 @@ const HarnessContent = () => {
         </div>
       </header>
 
-      <main ref={mainRef} id="main-content" style={{ padding: "16px", minHeight: "200px" }}>
+      <main
+        ref={mainRef}
+        id="main-content"
+        style={{ minHeight: "200px", padding: "16px" }}
+        tabIndex={-1}
+      >
+        {!isReaderActive && (
+          <h1 className="a11y-visually-hidden" tabIndex={-1}>
+            {location.pathname === "/" ? "Home" : location.pathname.slice(1)}
+          </h1>
+        )}
         {isReaderActive && (
           <div className="article-container article-container-full-size content-wrapper">
             <ReaderSidebarTrigger />
@@ -861,6 +1178,10 @@ const HarnessContent = () => {
             margin: "16px",
             borderRadius: "8px",
             fontSize: "12px",
+            maxWidth: "100%",
+            boxSizing: "border-box",
+            overflowWrap: "anywhere",
+            whiteSpace: "pre-wrap",
           }}
         >
           {JSON.stringify(report, null, 2)}

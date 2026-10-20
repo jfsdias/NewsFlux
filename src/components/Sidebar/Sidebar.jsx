@@ -31,9 +31,11 @@ import {
 } from "@arco-design/web-react/icon"
 import { useStore } from "@nanostores/react"
 import classNames from "classnames"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react"
 import { useLocation, useNavigate } from "react-router"
 import { Virtualizer } from "virtua"
+
+const SidebarNavigationContext = createContext(null)
 
 import AddFeed from "./AddFeed.jsx"
 import Profile from "./Profile.jsx"
@@ -132,11 +134,13 @@ const CategoryTitle = ({
   const { polyglot } = useStore(polyglotState)
 
   const navigate = useNavigate()
+  const onNavigate = useContext(SidebarNavigationContext)
   const { dropdownProps, longPressProps } = useLongPressContextMenu()
 
   const handleNavigation = () => {
     navigate(`/category/${category.id}`)
     setActiveContent(null)
+    onNavigate?.()
   }
 
   const canDelete = !feedsGroupedById[category.id] || feedsGroupedById[category.id].length === 0
@@ -371,11 +375,13 @@ const SourceNavigationControls = ({ polyglot, query, setQuery, showUnreadFeedsOn
 const CustomMenuItem = ({ path, Icon, label, count }) => {
   const location = useLocation()
   const navigate = useNavigate()
+  const onNavigate = useContext(SidebarNavigationContext)
   const isSelected = location.pathname === path || location.pathname.startsWith(`${path}/`)
 
   const handleNavigation = () => {
     navigate(path)
     setActiveContent(null)
+    onNavigate?.()
   }
 
   return (
@@ -455,6 +461,7 @@ const FeedMenuItem = ({
   const { isBelowMedium } = useScreenWidth()
 
   const navigate = useNavigate()
+  const onNavigate = useContext(SidebarNavigationContext)
   const location = useLocation()
   const { dropdownProps, longPressProps } = useLongPressContextMenu()
   const navigationRef = useRef(null)
@@ -566,6 +573,7 @@ const FeedMenuItem = ({
             e.stopPropagation()
             navigate(`/feed/${feed.id}`)
             setActiveContent(null)
+            onNavigate?.()
           }}
         >
           <div className="custom-menu-item">
@@ -1214,92 +1222,130 @@ const Sidebar = ({ headerAction, onNavigate }) => {
   }
 
   return (
-    <nav aria-label={PRODUCT_NAME} className="sidebar-container">
-      <AdaptiveScrollArea style={{ maxHeight: "100%" }}>
-        <Menu hasCollapseButton={false} selectedKeys={selectedKeys}>
-          <div className="menu-header">
-            <CustomTooltip content={homePageActionLabel} position="bottom">
-              <span className="home-brand-tooltip-anchor">
-                <button
-                  aria-label={homePageActionLabel}
-                  className="home-brand"
-                  type="button"
-                  onClick={handleHomeNavigation}
-                >
-                  <img
-                    alt=""
-                    className="home-brand-logo"
-                    decoding="async"
-                    height="32"
-                    src={LOGO_URL}
-                    width="32"
-                  />
-                  <span className="home-brand-title">{PRODUCT_NAME}</span>
-                </button>
-              </span>
-            </CustomTooltip>
-            <div className="menu-header-actions">
-              <Profile />
-              {headerAction}
-            </div>
-          </div>
-          <Typography.Title className="section-title" heading={6} style={{ paddingLeft: "12px" }}>
-            {polyglot.t("sidebar.articles")}
-          </Typography.Title>
-          <SidebarMenuItems />
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <Typography.Title className="section-title" heading={6} style={{ paddingLeft: "12px" }}>
-              {polyglot.t("sidebar.feeds")}
-            </Typography.Title>
-            <div style={{ display: "flex", gap: "8px", marginRight: "8px" }}>
-              <AddFeed />
-              <MoreOptionsDropdown />
-            </div>
-          </div>
-          <SourceNavigationControls
-            polyglot={polyglot}
-            query={sourceQuery}
-            setQuery={setSourceQuery}
-            showUnreadFeedsOnly={showUnreadFeedsOnly}
-          />
-          <Skeleton
-            animation
-            loading={!catalogLoadState.hasSnapshot && !catalogLoadState.error}
-            text={{ rows: 6 }}
-          />
-          {!catalogLoadState.hasSnapshot && catalogLoadState.error && (
-            <div className="sidebar-load-error" role="alert">
-              <Typography.Text>{polyglot.t("sidebar.load_error")}</Typography.Text>
-              <Button
-                icon={<IconRefresh aria-hidden="true" />}
-                size="small"
-                onClick={() => refreshFeedData().catch(() => null)}
-              >
-                {polyglot.t("actions.retry")}
-              </Button>
-            </div>
-          )}
-          {catalogLoadState.hasSnapshot &&
-            (showUnreadFeedsOnly ? (
-              <div aria-busy={catalogLoadState.activity === "refreshing"}>
-                {unreadNavigationFeeds.length > 0 ? (
-                  <section
-                    aria-label={polyglot.t("sidebar.unread_sources")}
-                    className="source-navigation-list"
+    <SidebarNavigationContext.Provider value={onNavigate}>
+      <nav aria-label={PRODUCT_NAME} className="sidebar-container">
+        <AdaptiveScrollArea style={{ maxHeight: "100%" }}>
+          <Menu hasCollapseButton={false} selectedKeys={selectedKeys}>
+            <div className="menu-header">
+              <CustomTooltip content={homePageActionLabel} position="bottom">
+                <span className="home-brand-tooltip-anchor">
+                  <button
+                    aria-label={homePageActionLabel}
+                    className="home-brand"
+                    type="button"
+                    onClick={handleHomeNavigation}
                   >
-                    <Typography.Title className="section-title source-list-title" heading={6}>
-                      {polyglot.t("sidebar.unread_sources")}
-                    </Typography.Title>
-                    {unreadNavigationFeeds.map((feed) => (
+                    <img
+                      alt=""
+                      className="home-brand-logo"
+                      decoding="async"
+                      height="32"
+                      src={LOGO_URL}
+                      width="32"
+                    />
+                    <span className="home-brand-title">{PRODUCT_NAME}</span>
+                  </button>
+                </span>
+              </CustomTooltip>
+              <div className="menu-header-actions">
+                <Profile />
+                {headerAction}
+              </div>
+            </div>
+            <Typography.Title className="section-title" heading={6} style={{ paddingLeft: "12px" }}>
+              {polyglot.t("sidebar.articles")}
+            </Typography.Title>
+            <SidebarMenuItems />
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <Typography.Title
+                className="section-title"
+                heading={6}
+                style={{ paddingLeft: "12px" }}
+              >
+                {polyglot.t("sidebar.feeds")}
+              </Typography.Title>
+              <div style={{ display: "flex", gap: "8px", marginRight: "8px" }}>
+                <AddFeed />
+                <MoreOptionsDropdown />
+              </div>
+            </div>
+            <SourceNavigationControls
+              polyglot={polyglot}
+              query={sourceQuery}
+              setQuery={setSourceQuery}
+              showUnreadFeedsOnly={showUnreadFeedsOnly}
+            />
+            <Skeleton
+              animation
+              loading={!catalogLoadState.hasSnapshot && !catalogLoadState.error}
+              text={{ rows: 6 }}
+            />
+            {!catalogLoadState.hasSnapshot && catalogLoadState.error && (
+              <div className="sidebar-load-error" role="alert">
+                <Typography.Text>{polyglot.t("sidebar.load_error")}</Typography.Text>
+                <Button
+                  icon={<IconRefresh aria-hidden="true" />}
+                  size="small"
+                  onClick={() => refreshFeedData().catch(() => null)}
+                >
+                  {polyglot.t("actions.retry")}
+                </Button>
+              </div>
+            )}
+            {catalogLoadState.hasSnapshot &&
+              (showUnreadFeedsOnly ? (
+                <div aria-busy={catalogLoadState.activity === "refreshing"}>
+                  {unreadNavigationFeeds.length > 0 ? (
+                    <section
+                      aria-label={polyglot.t("sidebar.unread_sources")}
+                      className="source-navigation-list"
+                    >
+                      <Typography.Title className="section-title source-list-title" heading={6}>
+                        {polyglot.t("sidebar.unread_sources")}
+                      </Typography.Title>
+                      {unreadNavigationFeeds.map((feed) => (
+                        <FeedMenuItem
+                          key={feed.id}
+                          feed={feed}
+                          homePageReady={homePageReady}
+                          homeTarget={homeTarget}
+                          retryingFeedIds={retryingFeedIds}
+                          onDeleteFeed={handleDeleteFeed}
+                          onEditFeed={handleEditFeed}
+                          onMarkAllAsRead={handleMarkAllAsReadFeed}
+                          onRefreshFeed={handleRefreshFeed}
+                          onRetryFeedHealth={retryFeedHealth}
+                          onSetHomePage={handleSetHomePage}
+                        />
+                      ))}
+                    </section>
+                  ) : (
+                    <div className="source-navigation-empty" role="status">
+                      {polyglot.t(
+                        hasVisibleUnreadFeeds
+                          ? "sidebar.no_matching_sources"
+                          : "sidebar.no_unread_sources",
+                      )}
+                    </div>
+                  )}
+                  {currentZeroUnreadSource && (
+                    <section
+                      aria-label={polyglot.t("sidebar.current_source")}
+                      className="current-source-section"
+                    >
+                      <Typography.Title className="section-title source-list-title" heading={6}>
+                        {polyglot.t("sidebar.current_source")}
+                      </Typography.Title>
                       <FeedMenuItem
-                        key={feed.id}
-                        feed={feed}
+                        showZeroCount
+                        className="current-source-feed"
+                        feed={currentZeroUnreadSource}
                         homePageReady={homePageReady}
                         homeTarget={homeTarget}
                         retryingFeedIds={retryingFeedIds}
@@ -1310,98 +1356,66 @@ const Sidebar = ({ headerAction, onNavigate }) => {
                         onRetryFeedHealth={retryFeedHealth}
                         onSetHomePage={handleSetHomePage}
                       />
-                    ))}
-                  </section>
-                ) : (
-                  <div className="source-navigation-empty" role="status">
-                    {polyglot.t(
-                      hasVisibleUnreadFeeds
-                        ? "sidebar.no_matching_sources"
-                        : "sidebar.no_unread_sources",
-                    )}
-                  </div>
-                )}
-                {currentZeroUnreadSource && (
-                  <section
-                    aria-label={polyglot.t("sidebar.current_source")}
-                    className="current-source-section"
+                    </section>
+                  )}
+                </div>
+              ) : (
+                <div aria-busy={catalogLoadState.activity === "refreshing"}>
+                  <Collapse
+                    activeKey={displayedExpandedCategories}
+                    bordered={false}
+                    triggerRegion="icon"
+                    onChange={(_key, keys) => {
+                      if (!sourceQuery.trim()) {
+                        setExpandedCategories(keys)
+                      }
+                    }}
                   >
-                    <Typography.Title className="section-title source-list-title" heading={6}>
-                      {polyglot.t("sidebar.current_source")}
-                    </Typography.Title>
-                    <FeedMenuItem
-                      showZeroCount
-                      className="current-source-feed"
-                      feed={currentZeroUnreadSource}
+                    <CategoryGroup
                       homePageReady={homePageReady}
                       homeTarget={homeTarget}
                       retryingFeedIds={retryingFeedIds}
+                      sourceQuery={sourceQuery}
+                      onDeleteCategory={handleDeleteCategory}
                       onDeleteFeed={handleDeleteFeed}
+                      onEditCategory={handleEditCategory}
                       onEditFeed={handleEditFeed}
-                      onMarkAllAsRead={handleMarkAllAsReadFeed}
+                      onMarkAllAsReadCategory={handleMarkAllAsReadCategory}
+                      onMarkAllAsReadFeed={handleMarkAllAsReadFeed}
+                      onRefreshCategory={handleRefreshCategory}
                       onRefreshFeed={handleRefreshFeed}
                       onRetryFeedHealth={retryFeedHealth}
                       onSetHomePage={handleSetHomePage}
                     />
-                  </section>
-                )}
-              </div>
-            ) : (
-              <div aria-busy={catalogLoadState.activity === "refreshing"}>
-                <Collapse
-                  activeKey={displayedExpandedCategories}
-                  bordered={false}
-                  triggerRegion="icon"
-                  onChange={(_key, keys) => {
-                    if (!sourceQuery.trim()) {
-                      setExpandedCategories(keys)
-                    }
-                  }}
-                >
-                  <CategoryGroup
-                    homePageReady={homePageReady}
-                    homeTarget={homeTarget}
-                    retryingFeedIds={retryingFeedIds}
-                    sourceQuery={sourceQuery}
-                    onDeleteCategory={handleDeleteCategory}
-                    onDeleteFeed={handleDeleteFeed}
-                    onEditCategory={handleEditCategory}
-                    onEditFeed={handleEditFeed}
-                    onMarkAllAsReadCategory={handleMarkAllAsReadCategory}
-                    onMarkAllAsReadFeed={handleMarkAllAsReadFeed}
-                    onRefreshCategory={handleRefreshCategory}
-                    onRefreshFeed={handleRefreshFeed}
-                    onRetryFeedHealth={retryFeedHealth}
-                    onSetHomePage={handleSetHomePage}
-                  />
-                </Collapse>
-              </div>
-            ))}
-        </Menu>
-      </AdaptiveScrollArea>
+                  </Collapse>
+                </div>
+              ))}
+          </Menu>
+        </AdaptiveScrollArea>
 
-      {selectedCategory && (
-        <EditCategoryModal
-          categoryForm={categoryForm}
-          fallbackFocusSelector={`.sidebar-container [data-category-edit-id="${selectedCategory.id}"], .sidebar-profile-trigger`}
-          selectedCategory={selectedCategory}
-          setVisible={setCategoryModalVisible}
-          useNotification={true}
-          visible={categoryModalVisible}
-        />
-      )}
+        {selectedCategory && (
+          <EditCategoryModal
+            categoryForm={categoryForm}
+            fallbackFocusSelector={`.sidebar-container [data-category-edit-id="${selectedCategory.id}"], .sidebar-profile-trigger`}
+            selectedCategory={selectedCategory}
+            setVisible={setCategoryModalVisible}
+            useNotification={true}
+            visible={categoryModalVisible}
+          />
+        )}
 
-      {selectedFeed && (
-        <EditFeedModal
-          fallbackFocusSelector={`.sidebar-container [data-feed-edit-id="${selectedFeed.id}"], .sidebar-profile-trigger`}
-          feedForm={feedForm}
-          selectedFeed={selectedFeed}
-          setVisible={setFeedModalVisible}
-          useNotification={true}
-          visible={feedModalVisible}
-        />
-      )}
-    </nav>
+        {selectedFeed && (
+          <EditFeedModal
+            fallbackFocusSelector={`.sidebar-container [data-feed-edit-id="${selectedFeed.id}"], .sidebar-profile-trigger`}
+            feedForm={feedForm}
+            selectedFeed={selectedFeed}
+            setVisible={setFeedModalVisible}
+            useNotification={true}
+            visible={feedModalVisible}
+          />
+        )}
+      </nav>
+    </SidebarNavigationContext.Provider>
   )
 }
 
