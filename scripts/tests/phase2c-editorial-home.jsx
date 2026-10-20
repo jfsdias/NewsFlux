@@ -3665,17 +3665,21 @@ const Harness = () => {
       async () => {
         await mount("/all")
         const bar = document.querySelector(".entry-col .search-and-sort-bar")
-        const buttons = [...bar.querySelectorAll(".button-group button")]
-        assert(buttons.length === 3, "Ordinary list lost Search, Date, or Sort")
+        const searchButton = bar?.querySelector(".arco-icon-search")?.closest("button")
+        const dateButton = bar?.querySelector(".arco-icon-calendar")?.closest("button")
+        const sortButton = bar
+          ?.querySelector(".arco-icon-sort-descending, .arco-icon-sort-ascending")
+          ?.closest("button")
+        assert(searchButton && dateButton && sortButton, "Ordinary list lost Search, Date, or Sort")
         const initialDirection = settingsState.get().orderDirection
-        buttons[2].click()
+        sortButton.click()
         await waitFor(
           () => settingsState.get().orderDirection !== initialDirection,
           "Ordinary Sort no longer updates the existing order preference",
         )
         assert(router.state.location.pathname === "/all", "Ordinary Sort changed routes")
 
-        buttons[0].click()
+        searchButton.click()
         await waitFor(
           () => document.querySelector(".search-modal input"),
           "List Search modal missing",
@@ -3695,9 +3699,6 @@ const Harness = () => {
         )
         assert(router.state.location.pathname === "/all", "Ordinary Search added Home navigation")
 
-        const dateButton = [...document.querySelectorAll(".entry-col .button-group button")].find(
-          (button) => button.getAttribute("aria-label") === englishPhrases.search.select_date,
-        )
         assert(dateButton, "Ordinary Date control missing")
         dateButton.click()
         await waitFor(

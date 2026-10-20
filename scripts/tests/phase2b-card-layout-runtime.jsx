@@ -11,6 +11,7 @@ import "simplebar-react/dist/simplebar.min.css"
 import ArticleList from "@/components/Article/ArticleList"
 import "@/components/Content/Content.css"
 import "@/index.css"
+import AppDataContext from "@/contexts/app-data-context"
 import { polyglotState } from "@/hooks/useLanguage"
 import englishPhrases from "@/locales/en-US.json"
 import { contentState } from "@/store/contentState"
@@ -254,36 +255,40 @@ const TestHarness = () => {
 
   return (
     <MemoryRouter>
-      <div className="layout-test-shell">
-        <header className="layout-test-toolbar">
-          <strong>ReactFlux card runtime regression</strong>
-          <span>Layout: {currentLayout}</span>
-          <button onClick={() => setFixtureLayout("column")}>Column</button>
-          <button onClick={() => setFixtureLayout("list")}>List</button>
-          <button onClick={() => setFixtureLayout("card")}>Card</button>
-          <button disabled={testState.running} onClick={() => void runSuite()}>
-            {testState.running ? "Running suite…" : "Run transition suite"}
-          </button>
-          {!testState.running && testState.results.length > 0 && (
-            <span data-testid="suite-summary">
-              {passCount}/{testState.results.length} transition cases passed
-            </span>
-          )}
-        </header>
-        <main className="layout-test-content entry-col entry-col-full-width">
-          <div className="layout-test-search-bar" />
-          <ArticleList
-            ref={entryListRef}
-            cardsRef={cardsRef}
-            getEntries={() => Promise.resolve([])}
-            handleEntryClick={() => {}}
-            retryArticleList={() => Promise.resolve()}
-          />
-        </main>
-        <pre className="layout-test-results" data-testid="suite-results">
-          {JSON.stringify(testState.results, null, 2)}
-        </pre>
-      </div>
+      <AppDataContext.Provider
+        value={{ refreshCounts: async () => ({}), refreshFeedData: async () => ({}) }}
+      >
+        <div className="layout-test-shell">
+          <header className="layout-test-toolbar">
+            <strong>ReactFlux card runtime regression</strong>
+            <span>Layout: {currentLayout}</span>
+            <button onClick={() => setFixtureLayout("column")}>Column</button>
+            <button onClick={() => setFixtureLayout("list")}>List</button>
+            <button onClick={() => setFixtureLayout("card")}>Card</button>
+            <button disabled={testState.running} onClick={() => void runSuite()}>
+              {testState.running ? "Running suite…" : "Run transition suite"}
+            </button>
+            {!testState.running && testState.results.length > 0 && (
+              <span data-testid="suite-summary">
+                {passCount}/{testState.results.length} transition cases passed
+              </span>
+            )}
+          </header>
+          <main className="layout-test-content entry-col entry-col-full-width">
+            <div className="layout-test-search-bar" />
+            <ArticleList
+              ref={entryListRef}
+              cardsRef={cardsRef}
+              getEntries={() => Promise.resolve([])}
+              handleEntryClick={() => {}}
+              retryArticleList={() => Promise.resolve()}
+            />
+          </main>
+          <pre className="layout-test-results" data-testid="suite-results">
+            {JSON.stringify(testState.results, null, 2)}
+          </pre>
+        </div>
+      </AppDataContext.Provider>
     </MemoryRouter>
   )
 }
