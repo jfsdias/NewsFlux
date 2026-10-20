@@ -1,7 +1,6 @@
 import { Button, Drawer } from "@arco-design/web-react"
 import { IconClose, IconMenuUnfold } from "@arco-design/web-react/icon"
 import { useStore } from "@nanostores/react"
-import { atom } from "nanostores"
 import { useEffect, useRef } from "react"
 import { useLocation } from "react-router"
 
@@ -10,17 +9,14 @@ import CustomTooltip from "@/components/ui/CustomTooltip"
 import useDesktopSidebar from "@/hooks/useDesktopSidebar"
 import { polyglotState } from "@/hooks/useLanguage"
 import useScreenWidth from "@/hooks/useScreenWidth"
+import { mobileSidebarVisibleState, setMobileSidebarVisible } from "@/store/sidebarState"
 import "./SidebarTrigger.css"
-import createSetter from "@/utils/nanostores"
-
-const sidebarVisibleState = atom(false)
-const setSidebarVisible = createSetter(sidebarVisibleState)
 
 export default function SidebarTrigger() {
   const currentPath = useLocation().pathname
   const { isBelowLarge } = useScreenWidth()
 
-  const sidebarVisible = useStore(sidebarVisibleState)
+  const sidebarVisible = useStore(mobileSidebarVisibleState)
   const { polyglot } = useStore(polyglotState)
   const { expandDesktopSidebar, isDesktopSidebarCollapsed, reopenButtonRef } = useDesktopSidebar()
 
@@ -35,12 +31,12 @@ export default function SidebarTrigger() {
 
   const closeSidebar = () => {
     restoreFocusAfterCloseRef.current = true
-    setSidebarVisible(false)
+    setMobileSidebarVisible(false)
   }
 
   const closeSidebarAfterNavigation = () => {
     restoreFocusAfterCloseRef.current = false
-    setSidebarVisible(false)
+    setMobileSidebarVisible(false)
   }
 
   const handleAfterClose = () => {
@@ -61,14 +57,14 @@ export default function SidebarTrigger() {
   useEffect(() => {
     if (!isBelowLarge) {
       restoreFocusAfterCloseRef.current = false
-      setSidebarVisible(false)
+      setMobileSidebarVisible(false)
     }
   }, [isBelowLarge])
 
   useEffect(() => {
     if (currentPath) {
       restoreFocusAfterCloseRef.current = false
-      setSidebarVisible(false)
+      setMobileSidebarVisible(false)
     }
   }, [currentPath])
 
@@ -113,7 +109,7 @@ export default function SidebarTrigger() {
             size="small"
             onClick={() => {
               restoreFocusAfterCloseRef.current = false
-              setSidebarVisible(!sidebarVisible)
+              setMobileSidebarVisible(!sidebarVisible)
             }}
           />
         </CustomTooltip>
