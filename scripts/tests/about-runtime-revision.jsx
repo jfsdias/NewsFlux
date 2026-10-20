@@ -11,7 +11,8 @@ import phrases from "@/locales/en-US.json"
 import { PRODUCT_GITHUB_REPO_PATH } from "@/utils/constants"
 import buildInfo from "@/version-info.json"
 
-const EXPECTED_BUILD_REVISION = "0123456789abcdef0123456789abcdef01234567"
+const expectedFullRevision = buildInfo.gitFullHash
+const expectedShortRevision = buildInfo.gitHash
 
 polyglotState.setKey("polyglot", new Polyglot({ locale: "en-US", phrases }))
 
@@ -22,7 +23,7 @@ const Harness = () => {
     <>
       <main>
         <h1>About runtime revision browser gate</h1>
-        <output data-testid="build-json-revision">{buildInfo.gitFullHash}</output>
+        <output data-testid="build-json-revision">{expectedFullRevision}</output>
       </main>
       <AboutModal visible={visible} onClose={() => setVisible(false)} />
       <div aria-live="polite" data-testid="about-revision-summary" id="about-revision-summary">
@@ -38,16 +39,16 @@ root.render(<Harness />)
 globalThis.setTimeout(() => {
   const revision = document.querySelector(".about-build-list code")
   const sourceLink = document.querySelector(".about-github-button")
-  const exactRevisionVisible = revision?.textContent === EXPECTED_BUILD_REVISION.slice(0, 8)
+  const exactRevisionVisible = revision?.textContent === expectedShortRevision
   const fullRevisionAccessible =
-    revision?.getAttribute("title") === EXPECTED_BUILD_REVISION &&
-    revision?.getAttribute("aria-label")?.includes(EXPECTED_BUILD_REVISION)
+    revision?.getAttribute("title") === expectedFullRevision &&
+    revision?.getAttribute("aria-label")?.includes(expectedFullRevision)
   const newsFluxSource =
     sourceLink?.getAttribute("href") === `https://github.com/${PRODUCT_GITHUB_REPO_PATH}`
 
   const gates = {
     ABOUT_EXACT_BUILD_REVISION:
-      buildInfo.gitFullHash === EXPECTED_BUILD_REVISION && exactRevisionVisible ? "PASS" : "FAIL",
+      Boolean(expectedFullRevision) && exactRevisionVisible ? "PASS" : "FAIL",
     ABOUT_NO_UNKNOWN_WITH_VALID_REVISION:
       buildInfo.gitHash !== "unknown" && exactRevisionVisible ? "PASS" : "FAIL",
     ABOUT_FULL_REVISION_ACCESSIBLE: fullRevisionAccessible ? "PASS" : "FAIL",

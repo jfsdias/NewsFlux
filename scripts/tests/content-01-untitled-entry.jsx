@@ -14,6 +14,7 @@ import ArticleListItem from "@/components/Article/ArticleListItem"
 import { ContextProvider } from "@/components/Content/ContentContext"
 import AppDataContext from "@/contexts/app-data-context"
 import DesktopSidebarContext from "@/contexts/desktop-sidebar-context"
+import ReaderCommandsContext from "@/contexts/reader-commands-context"
 import useDocumentTitle from "@/hooks/useDocumentTitle"
 import { polyglotState } from "@/hooks/useLanguage"
 import phrases from "@/locales/en-US.json"
@@ -199,57 +200,68 @@ const AccessibilityStatus = () => {
   )
 }
 
+const stubReaderCommands = {
+  canNavigateNext: false,
+  canNavigatePrevious: false,
+  exitDetailView: () => {},
+  isResolving: false,
+  navigateToNextArticle: () => {},
+  navigateToPreviousArticle: () => {},
+}
+
 const HarnessPage = () => (
   <AppDataContext.Provider
     value={{ refreshCounts: async () => ({}), refreshFeedData: async () => ({}) }}
   >
     <DesktopSidebarContext.Provider value={{ detailCloseButtonRef: { current: null } }}>
-      <ContextProvider>
-        <main
-          style={{
-            display: "grid",
-            gap: 16,
-            gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
-          }}
-        >
-          <DocumentTitleProbe />
-          <EntryFixture
-            entry={untitledUnreadEntry}
-            layout="column"
-            presenter={ArticleCard}
-            testId="column-unread"
-          />
-          <section data-testid="card-title">
-            <ArticleCard displayTitle={FALLBACK_TITLE} entry={untitledUnreadEntry} />
-          </section>
-          <EntryFixture
-            entry={untitledUnreadEntry}
-            layout="card"
-            presenter={ArticleGridCard}
-            testId="grid-unread"
-          />
-          <EntryFixture
-            entry={untitledUnreadEntry}
-            layout="list"
-            presenter={ArticleListItem}
-            testId="list-unread"
-          />
-          <EntryFixture
-            entry={untitledReadEntry}
-            layout="column"
-            presenter={ArticleCard}
-            testId="read-entry"
-          />
-          <EntryFixture
-            entry={titledEntry}
-            layout="column"
-            presenter={ArticleCard}
-            testId="valid-title"
-          />
-          <ArticleDetail />
-          <AccessibilityStatus />
-        </main>
-      </ContextProvider>
+      <ReaderCommandsContext.Provider value={stubReaderCommands}>
+        <ContextProvider>
+          <main
+            style={{
+              display: "grid",
+              gap: 16,
+              gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+            }}
+          >
+            <DocumentTitleProbe />
+            <EntryFixture
+              entry={untitledUnreadEntry}
+              layout="column"
+              presenter={ArticleCard}
+              testId="column-unread"
+            />
+            <section data-testid="card-title">
+              <ArticleCard displayTitle={FALLBACK_TITLE} entry={untitledUnreadEntry} />
+            </section>
+            <EntryFixture
+              entry={untitledUnreadEntry}
+              layout="card"
+              presenter={ArticleGridCard}
+              testId="grid-unread"
+            />
+            <EntryFixture
+              entry={untitledUnreadEntry}
+              layout="list"
+              presenter={ArticleListItem}
+              testId="list-unread"
+            />
+            <EntryFixture
+              entry={untitledReadEntry}
+              layout="column"
+              presenter={ArticleCard}
+              testId="read-entry"
+            />
+            <EntryFixture
+              entry={titledEntry}
+              layout="column"
+              presenter={ArticleCard}
+              testId="valid-title"
+            />
+            <ArticleDetail />
+            <AccessibilityStatus />
+          </main>
+        </ContextProvider>
+      </ReaderCommandsContext.Provider>
     </DesktopSidebarContext.Provider>
   </AppDataContext.Provider>
 )
