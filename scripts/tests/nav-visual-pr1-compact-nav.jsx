@@ -79,12 +79,21 @@ const HarnessContent = () => {
         compactDuplicateTriggerAbsent: false,
         drawerHostPreserved: false,
         legacyTriggerAvailableInMedium: false,
-        // R2 Finding 1 gates
+        // R3 Robust Drawer Focus Restoration Gates
+        sourcesCloseButtonFocusReturn: false,
+        sourcesEscapeFocusReturn: false,
+        sourcesBackdropFocusReturn: false,
+        readerHeaderCloseButtonFocusReturn: false,
+        readerHeaderEscapeFocusReturn: false,
+        compactToMediumCloseFocusTargetHeader: false,
+        mediumToCompactCloseFocusTargetSources: false,
+        noBodyFocusInRequiredCases: false,
+        navigationCloseNoWrongFocus: false,
+        // Backward-compatible gate aliases
         headerTriggerFocusReturn: false,
         compactSourcesFocusReturn: false,
         escapeFocusReturn: false,
         closeButtonFocusReturn: false,
-        navigationCloseNoWrongFocus: false,
       }
 
       // Step 1: Check COMPACT window class
@@ -218,9 +227,10 @@ const HarnessContent = () => {
           k.toLowerCase().includes("sidebar-visible"),
       )
 
-      // Step 10: R2 Finding 1 Focus Return Gates
+      // Step 10: R3 Robust Drawer Focus Restoration Gates
       // 10A: Compact Sources -> Close Button Focus Return
       windowClassState.set(WINDOW_CLASSES.COMPACT)
+      setActiveContent(null)
       await waitForCondition(
         () => Boolean(document.querySelector('[data-nav-key="sources"]')),
         1500,
@@ -238,8 +248,9 @@ const HarnessContent = () => {
           closeBtn.click()
           await waitForCondition(() => !mobileSidebarVisibleState.get(), 1500)
           await waitForCondition(() => document.activeElement === sourcesBtn, 1500)
-          results.compactSourcesFocusReturn = document.activeElement === sourcesBtn
-          results.closeButtonFocusReturn = results.compactSourcesFocusReturn
+          results.sourcesCloseButtonFocusReturn = document.activeElement === sourcesBtn
+          results.compactSourcesFocusReturn = results.sourcesCloseButtonFocusReturn
+          results.closeButtonFocusReturn = results.sourcesCloseButtonFocusReturn
         }
       }
 
@@ -270,16 +281,34 @@ const HarnessContent = () => {
         }
         await waitForCondition(() => !mobileSidebarVisibleState.get(), 1500)
         await waitForCondition(() => document.activeElement === sourcesBtn, 1500)
-        results.escapeFocusReturn = document.activeElement === sourcesBtn
+        results.sourcesEscapeFocusReturn = document.activeElement === sourcesBtn
+        results.escapeFocusReturn = results.sourcesEscapeFocusReturn
       }
 
-      // 10C: Header Trigger (in MEDIUM) -> Focus Return
-      windowClassState.set(WINDOW_CLASSES.MEDIUM)
+      // 10C: Compact Sources -> Backdrop Focus Return
+      if (sourcesBtn) {
+        sourcesBtn.focus({ preventScroll: true })
+        sourcesBtn.click()
+        await waitForCondition(() => mobileSidebarVisibleState.get() === true, 1500)
+        await waitForCondition(() => Boolean(document.querySelector(".arco-drawer-mask")), 1500)
+
+        const drawerMask = document.querySelector(".arco-drawer-mask")
+        if (drawerMask) {
+          drawerMask.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+          await waitForCondition(() => !mobileSidebarVisibleState.get(), 1500)
+          await waitForCondition(() => document.activeElement === sourcesBtn, 1500)
+          results.sourcesBackdropFocusReturn = document.activeElement === sourcesBtn
+        }
+      }
+
+      // 10D: Reader Header -> Close Button Focus Return (COMPACT)
+      windowClassState.set(WINDOW_CLASSES.COMPACT)
+      setActiveContent({ id: 101, title: "Test Article" })
       await waitForCondition(() => Boolean(document.querySelector(".brand .trigger")), 1500)
-      const headerBtn = document.querySelector(".brand .trigger")
-      if (headerBtn) {
-        headerBtn.focus({ preventScroll: true })
-        headerBtn.click()
+      const readerHeaderBtn = document.querySelector(".brand .trigger")
+      if (readerHeaderBtn) {
+        readerHeaderBtn.focus({ preventScroll: true })
+        readerHeaderBtn.click()
         await waitForCondition(() => mobileSidebarVisibleState.get() === true, 1500)
         await waitForCondition(() => Boolean(document.querySelector(".mobile-sidebar-close")), 1500)
 
@@ -289,18 +318,127 @@ const HarnessContent = () => {
           closeBtn.click()
           await waitForCondition(() => !mobileSidebarVisibleState.get(), 1500)
           await waitForCondition(() => {
-            const currentHeaderBtn = document.querySelector(".brand .trigger")
+            const currentTrigger = document.querySelector(".brand .trigger")
             return (
-              document.activeElement === currentHeaderBtn || document.activeElement === headerBtn
+              document.activeElement === currentTrigger ||
+              document.activeElement === readerHeaderBtn
             )
           }, 1500)
-          const currentHeaderBtn = document.querySelector(".brand .trigger")
-          results.headerTriggerFocusReturn =
-            document.activeElement === currentHeaderBtn || document.activeElement === headerBtn
+          const currentTrigger = document.querySelector(".brand .trigger")
+          results.readerHeaderCloseButtonFocusReturn =
+            document.activeElement === currentTrigger || document.activeElement === readerHeaderBtn
+          results.headerTriggerFocusReturn = results.readerHeaderCloseButtonFocusReturn
         }
       }
 
-      // 10D: Navigation Close -> No Wrong Focus Return
+      // 10E: Reader Header -> Escape Focus Return (COMPACT)
+      if (readerHeaderBtn) {
+        readerHeaderBtn.focus({ preventScroll: true })
+        readerHeaderBtn.click()
+        await waitForCondition(() => mobileSidebarVisibleState.get() === true, 1500)
+        await waitForCondition(() => Boolean(document.querySelector(".mobile-sidebar-close")), 1500)
+
+        const activeEl = document.activeElement || globalThis
+        activeEl.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: "Escape",
+            code: "Escape",
+            bubbles: true,
+            cancelable: true,
+          }),
+        )
+        if (mobileSidebarVisibleState.get()) {
+          const drawerMask = document.querySelector(".arco-drawer-mask")
+          drawerMask?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+        }
+        await waitForCondition(() => !mobileSidebarVisibleState.get(), 1500)
+        await waitForCondition(() => {
+          const currentTrigger = document.querySelector(".brand .trigger")
+          return (
+            document.activeElement === currentTrigger || document.activeElement === readerHeaderBtn
+          )
+        }, 1500)
+        const currentTrigger = document.querySelector(".brand .trigger")
+        results.readerHeaderEscapeFocusReturn =
+          document.activeElement === currentTrigger || document.activeElement === readerHeaderBtn
+      }
+      setActiveContent(null)
+
+      // 10F: Compact to Medium Resize while Drawer Open -> Focus Target Header
+      windowClassState.set(WINDOW_CLASSES.COMPACT)
+      await waitForCondition(
+        () => Boolean(document.querySelector('[data-nav-key="sources"]')),
+        1500,
+      )
+      const sourcesForFold = document.querySelector('[data-nav-key="sources"]')
+      if (sourcesForFold) {
+        sourcesForFold.focus({ preventScroll: true })
+        sourcesForFold.click()
+        await waitForCondition(() => mobileSidebarVisibleState.get() === true, 1500)
+        await waitForCondition(() => Boolean(document.querySelector(".mobile-sidebar-close")), 1500)
+
+        // Resize across breakpoint while drawer is open
+        windowClassState.set(WINDOW_CLASSES.MEDIUM)
+        await waitForCondition(() => Boolean(document.querySelector(".brand .trigger")), 1500)
+
+        const closeBtn = document.querySelector(".mobile-sidebar-close")
+        if (closeBtn) {
+          closeBtn.focus({ preventScroll: true })
+          closeBtn.click()
+          await waitForCondition(() => !mobileSidebarVisibleState.get(), 1500)
+          await waitForCondition(() => {
+            const headerTrigger = document.querySelector(".brand .trigger")
+            return document.activeElement === headerTrigger
+          }, 1500)
+          const headerTrigger = document.querySelector(".brand .trigger")
+          results.compactToMediumCloseFocusTargetHeader = document.activeElement === headerTrigger
+        }
+      }
+
+      // 10G: Medium to Compact Resize while Drawer Open -> Focus Target Sources
+      windowClassState.set(WINDOW_CLASSES.MEDIUM)
+      await waitForCondition(() => Boolean(document.querySelector(".brand .trigger")), 1500)
+      const mediumHeaderBtn = document.querySelector(".brand .trigger")
+      if (mediumHeaderBtn) {
+        mediumHeaderBtn.focus({ preventScroll: true })
+        mediumHeaderBtn.click()
+        await waitForCondition(() => mobileSidebarVisibleState.get() === true, 1500)
+        await waitForCondition(() => Boolean(document.querySelector(".mobile-sidebar-close")), 1500)
+
+        // Resize to COMPACT while drawer is open
+        windowClassState.set(WINDOW_CLASSES.COMPACT)
+        await waitForCondition(
+          () => Boolean(document.querySelector('[data-nav-key="sources"]')),
+          1500,
+        )
+
+        const closeBtn = document.querySelector(".mobile-sidebar-close")
+        if (closeBtn) {
+          closeBtn.focus({ preventScroll: true })
+          closeBtn.click()
+          await waitForCondition(() => !mobileSidebarVisibleState.get(), 1500)
+          await waitForCondition(() => {
+            const sourcesBtnAfterFold = document.querySelector('[data-nav-key="sources"]')
+            return document.activeElement === sourcesBtnAfterFold
+          }, 1500)
+          const sourcesBtnAfterFold = document.querySelector('[data-nav-key="sources"]')
+          results.mediumToCompactCloseFocusTargetSources =
+            document.activeElement === sourcesBtnAfterFold
+        }
+      }
+
+      // 10H: No Body Focus In Required Cases
+      results.noBodyFocusInRequiredCases = Boolean(
+        results.sourcesCloseButtonFocusReturn &&
+        results.sourcesEscapeFocusReturn &&
+        results.sourcesBackdropFocusReturn &&
+        results.readerHeaderCloseButtonFocusReturn &&
+        results.readerHeaderEscapeFocusReturn &&
+        results.compactToMediumCloseFocusTargetHeader &&
+        results.mediumToCompactCloseFocusTargetSources,
+      )
+
+      // 10I: Navigation Close -> No Wrong Focus Return
       windowClassState.set(WINDOW_CLASSES.COMPACT)
       await waitForCondition(
         () => Boolean(document.querySelector('[data-nav-key="sources"]')),
@@ -341,10 +479,14 @@ const HarnessContent = () => {
         results.compactDuplicateTriggerAbsent &&
         results.drawerHostPreserved &&
         results.legacyTriggerAvailableInMedium &&
-        results.compactSourcesFocusReturn &&
-        results.escapeFocusReturn &&
-        results.closeButtonFocusReturn &&
-        results.headerTriggerFocusReturn &&
+        results.sourcesCloseButtonFocusReturn &&
+        results.sourcesEscapeFocusReturn &&
+        results.sourcesBackdropFocusReturn &&
+        results.readerHeaderCloseButtonFocusReturn &&
+        results.readerHeaderEscapeFocusReturn &&
+        results.compactToMediumCloseFocusTargetHeader &&
+        results.mediumToCompactCloseFocusTargetSources &&
+        results.noBodyFocusInRequiredCases &&
         results.navigationCloseNoWrongFocus
 
       const finalReport = {
@@ -362,10 +504,14 @@ const HarnessContent = () => {
         compactDuplicateTriggerAbsent: results.compactDuplicateTriggerAbsent,
         drawerHostPreserved: results.drawerHostPreserved,
         legacyTriggerAvailableInMedium: results.legacyTriggerAvailableInMedium,
-        compactSourcesFocusReturn: results.compactSourcesFocusReturn,
-        escapeFocusReturn: results.escapeFocusReturn,
-        closeButtonFocusReturn: results.closeButtonFocusReturn,
-        headerTriggerFocusReturn: results.headerTriggerFocusReturn,
+        sourcesCloseButtonFocusReturn: results.sourcesCloseButtonFocusReturn,
+        sourcesEscapeFocusReturn: results.sourcesEscapeFocusReturn,
+        sourcesBackdropFocusReturn: results.sourcesBackdropFocusReturn,
+        readerHeaderCloseButtonFocusReturn: results.readerHeaderCloseButtonFocusReturn,
+        readerHeaderEscapeFocusReturn: results.readerHeaderEscapeFocusReturn,
+        compactToMediumCloseFocusTargetHeader: results.compactToMediumCloseFocusTargetHeader,
+        mediumToCompactCloseFocusTargetSources: results.mediumToCompactCloseFocusTargetSources,
+        noBodyFocusInRequiredCases: results.noBodyFocusInRequiredCases,
         navigationCloseNoWrongFocus: results.navigationCloseNoWrongFocus,
         summary: isAllPass ? "PASS" : "FAIL",
         details: results,

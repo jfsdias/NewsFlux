@@ -188,16 +188,21 @@ test("NAV-PR1-R2: SidebarTrigger decouples Drawer host and suppresses duplicate 
   assert.ok(drawerHostSource.includes("<Drawer"))
 })
 
-test("NAV-PR1-R2: SidebarDrawerHost multi-invoker focus return contract", () => {
+test("NAV-PR1-R3: SidebarDrawerHost multi-invoker focus return contract", () => {
   const drawerHostPath = path.resolve("src/components/Article/SidebarDrawerHost.jsx")
+  const drawerFocusPath = path.resolve("src/utils/drawer-focus.js")
   const drawerHostSource = fs.readFileSync(drawerHostPath, "utf8")
+  const drawerFocusSource = fs.readFileSync(drawerFocusPath, "utf8")
 
   // Checks shouldRestoreFocus before focusing
   assert.ok(drawerHostSource.includes("if (!shouldRestoreFocus)"))
 
-  // Handles both invoker targets
-  assert.ok(drawerHostSource.includes('invoker === "compact-sources"'))
-  assert.ok(drawerHostSource.includes('invoker === "header"'))
+  // Delegates focus restoration to restoreDrawerFocus
+  assert.ok(drawerHostSource.includes("restoreDrawerFocus({"))
+
+  // Handles both invoker targets in drawer-focus
+  assert.ok(drawerFocusSource.includes('invoker === "compact-sources"'))
+  assert.ok(drawerFocusSource.includes("resolveCurrentDrawerFocusTarget"))
 
   // Clears invoker state on close
   assert.ok(drawerHostSource.includes("setMobileSidebarInvoker(null)"))
@@ -207,19 +212,20 @@ test("NAV-PR1-R2: SidebarDrawerHost multi-invoker focus return contract", () => 
   assert.ok(drawerHostSource.includes("restoreFocusAfterCloseRef.current = false"))
 })
 
-test("NAV-PR1-R2: no persistent state in R2 files", () => {
+test("NAV-PR1-R3: no persistent state in R2 and R3 files", () => {
   const filesToCheck = [
     "src/store/sidebarState.js",
     "src/components/Navigation/CompactNavigation.jsx",
     "src/components/Article/SidebarTrigger.jsx",
     "src/components/Article/SidebarDrawerHost.jsx",
+    "src/utils/drawer-focus.js",
   ]
 
   for (const relativePath of filesToCheck) {
     const fullPath = path.resolve(relativePath)
     const content = fs.readFileSync(fullPath, "utf8")
 
-    // Neither localStorage nor sessionStorage should be referenced in trigger / drawer / nav
+    // Neither localStorage nor sessionStorage should be referenced
     if (relativePath !== "src/store/sidebarState.js") {
       assert.ok(
         !content.includes("@nanostores/persistent"),

@@ -13,6 +13,7 @@ import {
   setMobileSidebarInvoker,
   setMobileSidebarVisible,
 } from "@/store/sidebarState"
+import { restoreDrawerFocus } from "@/utils/drawer-focus"
 
 export default function SidebarDrawerHost({ headerTriggerRef }) {
   const currentPath = useLocation().pathname
@@ -22,6 +23,7 @@ export default function SidebarDrawerHost({ headerTriggerRef }) {
 
   const closeButtonRef = useRef(null)
   const restoreFocusAfterCloseRef = useRef(false)
+  const cancelPendingFocusRef = useRef(null)
 
   const closeSidebarLabel = polyglot?.t("actions.close_dialog", {
     name: polyglot?.t("sidebar.navigation_menu"),
@@ -44,42 +46,35 @@ export default function SidebarDrawerHost({ headerTriggerRef }) {
     const invoker = mobileSidebarInvokerState.get()
     setMobileSidebarInvoker(null)
 
+    if (cancelPendingFocusRef.current) {
+      cancelPendingFocusRef.current()
+      cancelPendingFocusRef.current = null
+    }
+
     if (!shouldRestoreFocus) {
       return
     }
 
-    let targetElement = null
-    if (invoker === "compact-sources") {
-      targetElement = document.querySelector(
-        '[data-nav-key="sources"], [data-testid="compact-nav-sources"]',
-      )
-    } else if (invoker === "header") {
-      targetElement = headerTriggerRef?.current?.isConnected
-        ? headerTriggerRef.current
-        : document.querySelector(".brand .trigger, .brand .desktop-sidebar-reopen")
-    } else {
-      targetElement =
-        document.querySelector('[data-nav-key="sources"]') ||
-        (headerTriggerRef?.current?.isConnected ? headerTriggerRef.current : null) ||
-        document.querySelector(".brand .trigger")
-    }
+    cancelPendingFocusRef.current = restoreDrawerFocus({
+      invoker,
+      headerTriggerRef,
+      onFocusSuccess: () => {
+        cancelPendingFocusRef.current = null
+      },
+      onFocusFallback: () => {
+        cancelPendingFocusRef.current = null
+      },
+    })
+  }
 
-    if (
-      targetElement?.isConnected &&
-      !targetElement.disabled &&
-      targetElement.getClientRects().length > 0 &&
-      !targetElement.closest('[inert], [aria-hidden="true"]')
-    ) {
-      targetElement.focus({ preventScroll: true })
-      if (typeof globalThis.requestAnimationFrame === "function") {
-        globalThis.requestAnimationFrame(() => {
-          if (document.activeElement !== targetElement && targetElement?.isConnected) {
-            targetElement.focus({ preventScroll: true })
-          }
-        })
+  useEffect(() => {
+    return () => {
+      if (cancelPendingFocusRef.current) {
+        cancelPendingFocusRef.current()
+        cancelPendingFocusRef.current = null
       }
     }
-  }
+  }, [])
 
   useEffect(() => {
     if (!isBelowLarge) {
