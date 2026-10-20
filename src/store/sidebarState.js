@@ -1,5 +1,7 @@
 import { persistentAtom } from "@nanostores/persistent"
+import { atom } from "nanostores"
 
+import createSetter from "@/utils/nanostores"
 import {
   decodeDesktopSidebarCollapsed,
   decodeExpandedCategories,
@@ -29,3 +31,9 @@ export const setExpandedCategories = (keys) => {
 export const replaceExpandedCategories = (keys) => {
   setExpandedCategories(keys)
 }
+
+export const mobileSidebarVisibleState = atom(false)
+export const setMobileSidebarVisible = createSetter(mobileSidebarVisibleState)
+
+export const mobileSidebarInvokerState = atom(null)
+export const setMobileSidebarInvoker = createSetter(mobileSidebarInvokerState)

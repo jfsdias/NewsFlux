@@ -19,6 +19,7 @@ import {
 } from "@/store/contentState"
 import { visibleCategoriesState } from "@/store/dataState"
 import { getDefaultSettings, settingsState } from "@/store/settingsState"
+import { mobileSidebarVisibleState } from "@/store/sidebarState"
 import { ANIMATION_DURATION_MS } from "@/utils/constants"
 import { getPreferredScrollBehavior } from "@/utils/dom"
 import buildArticleImageModel from "@/utils/images"
@@ -145,7 +146,14 @@ const useKeyHandlers = ({ readerNavigation } = {}) => {
       return fn(...args)
     }
 
-  const exitDetailView = withActiveContent(withPhotoSliderCheck(closeActiveContent))
+  const exitDetailView = withActiveContent(
+    withPhotoSliderCheck((...args) => {
+      if (mobileSidebarVisibleState.get()) {
+        return
+      }
+      return closeActiveContent(...args)
+    }),
+  )
 
   // eslint-disable-next-line react-hooks/refs
   const legacyNavigateToPreviousArticle = withPhotoSliderCheck(() => {

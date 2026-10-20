@@ -89,3 +89,7 @@
     width: 100%;
   }
 }
+
+.app[data-window-class="COMPACT"] .entry-col {
+  padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+}

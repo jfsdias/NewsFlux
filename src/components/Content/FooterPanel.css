@@ -42,6 +42,10 @@
     padding-bottom: calc(var(--mobile-edge-spacing) + env(safe-area-inset-bottom, 0px));
   }
 
+  .app[data-window-class="COMPACT"] .entry-panel {
+    padding-bottom: var(--mobile-edge-spacing);
+  }
+
   .entry-panel .arco-btn-shape-circle {
     display: inline-flex;
     flex: 0 0 var(--mobile-edge-control-size);

@@ -11,8 +11,10 @@ import { useCallback, useEffect, useMemo, useRef } from "react"
 
 import "./App.css"
 import AppNotifications from "./AppNotifications"
+import SidebarDrawerHost from "./components/Article/SidebarDrawerHost"
 import HomePageManager from "./components/HomePageManager"
 import Main from "./components/Main/Main"
+import CompactNavigation from "./components/Navigation/CompactNavigation"
 import Sidebar from "./components/Sidebar/Sidebar"
 import DesktopSidebarContext from "./contexts/desktop-sidebar-context"
 import useArticleFontStylesheet from "./hooks/useArticleFontStylesheet"
@@ -20,6 +22,7 @@ import useFeedIconsSync from "./hooks/useFeedIconsSync"
 import useLanguage, { polyglotState } from "./hooks/useLanguage"
 import useScreenWidth from "./hooks/useScreenWidth"
 import useTheme from "./hooks/useTheme"
+import useWindowClass from "./hooks/useWindowClass"
 import { settingsState } from "./store/settingsState"
 import { desktopSidebarCollapsedState, toggleDesktopSidebar } from "./store/sidebarState"
 import hideSpinner from "./utils/loading"
@@ -61,6 +64,7 @@ const App = () => {
   useFeedIconsSync()
 
   const { isBelowLarge } = useScreenWidth()
+  const { windowClass } = useWindowClass()
 
   const { polyglot } = useStore(polyglotState)
   const { language } = useStore(settingsState, { keys: ["language"] })
@@ -138,7 +142,11 @@ const App = () => {
           <a className="skip-link" href="#main-content">
             {polyglot.t("actions.skip_to_main_content")}
           </a>
-          <div className="app" style={{ "--desktop-sidebar-width": `${sidebarWidth}px` }}>
+          <div
+            className="app"
+            data-window-class={windowClass}
+            style={{ "--desktop-sidebar-width": `${sidebarWidth}px` }}
+          >
             {!isBelowLarge && (
               <Layout.Sider
                 breakpoint="lg"
@@ -175,6 +183,8 @@ const App = () => {
               </Layout.Sider>
             )}
             <Main />
+            <CompactNavigation />
+            <SidebarDrawerHost />
           </div>
         </DesktopSidebarContext.Provider>
       </ConfigProvider>
