@@ -189,6 +189,17 @@
     font-size: 12px;
   }
 
+  .search-and-sort-bar .article-selection-trigger.arco-btn {
+    position: relative;
+  }
+
+  .search-and-sort-bar .article-selection-trigger.arco-btn::after {
+    position: absolute;
+    inset: -5px 0;
+    content: "";
+    pointer-events: auto;
+  }
+
   .article-selection-controls > .arco-btn {
     min-height: var(--mobile-navigation-control-size);
   }
@@ -326,6 +337,43 @@
     height: var(--mobile-calendar-control-size);
     padding: 0 12px;
     font-size: 14px;
+  }
+}
+
+@media screen and (min-width: 769px) and (max-width: 992px) {
+  /* Absolute insets start at the button's padding box, inside its 1px border. */
+  .search-and-sort-bar .button-group {
+    gap: 20px;
+  }
+
+  .search-and-sort-bar .arco-btn-shape-circle {
+    position: relative;
+  }
+
+  .search-and-sort-bar .arco-btn-shape-circle::after {
+    position: absolute;
+    inset: -9px;
+    content: "";
+    pointer-events: auto;
+  }
+
+  .search-and-sort-bar .article-selection-trigger.arco-btn,
+  .search-and-sort-bar .article-selection-controls > .arco-btn {
+    position: relative;
+  }
+
+  .search-and-sort-bar .article-selection-trigger.arco-btn::after {
+    position: absolute;
+    inset: -5px 0;
+    content: "";
+    pointer-events: auto;
+  }
+
+  .search-and-sort-bar .article-selection-controls > .arco-btn::after {
+    position: absolute;
+    inset: -7px 0;
+    content: "";
+    pointer-events: auto;
   }
 }
 
