@@ -1,22 +1,24 @@
 # NewsFlux Project State
 
 - **Purpose:** concise operational state for PM handoffs and future sessions. The roadmap remains the source for sequencing and product/architecture detail.
-- **Last reconciled:** 2026-10-19.
-- **Documented main/product baseline:** `405e9d7b1a3097dacef50c7908abf83d480d64dd`.
+- **Last reconciled:** 2026-10-20.
+- **Documented main/product baseline:** `d01e34fc2eb76da39467d1de9799b12194faec9c`.
 
 ## Current state
 
-After PRs #64 and #65 merged and were permanently promoted on 2026-10-19, GitHub `main` and production are at `405e9d7b1a3097dacef50c7908abf83d480d64dd`. INPUT-PARITY-ESCAPE-FOCUS and ABOUT-ACCESSIBLE-BRAND-01 are complete. PR #62 remains the only open PR and stays in draft for this documentation reconciliation.
+After PR #71 merged and was permanently promoted on 2026-10-20, GitHub `main` and production are at `d01e34fc2eb76da39467d1de9799b12194faec9c`. NAV-VISUAL PR0 and PR1 are complete. PR #62 was merged as `389ed58731c38ffff8ceda0d0347222336960f3a`; PR #70 is the open draft functional candidate and still needs refresh onto current `main`.
 
 ```text
-DOCS_DATE=2026-10-19
-CURRENT_MAIN=405e9d7b1a3097dacef50c7908abf83d480d64dd
-DOCUMENTED_MAIN_BASE_SHA=405e9d7b1a3097dacef50c7908abf83d480d64dd
-PRODUCT_BASELINE_SHA=405e9d7b1a3097dacef50c7908abf83d480d64dd
-PR62_STATUS=OPEN
-PR62_DRAFT=YES
-PR62_BRANCH=docs/post-input01a-nav-visual-contract
+DOCS_DATE=2026-10-20
+CURRENT_MAIN=d01e34fc2eb76da39467d1de9799b12194faec9c
+DOCUMENTED_MAIN_BASE_SHA=d01e34fc2eb76da39467d1de9799b12194faec9c
+PRODUCT_BASELINE_SHA=d01e34fc2eb76da39467d1de9799b12194faec9c
+
+PR62_STATUS=COMPLETED
+PR62_HEAD_SHA=f6d25046ec455eb2b9be664394e14d7e83a36d73
 PR62_BASE_SHA=405e9d7b1a3097dacef50c7908abf83d480d64dd
+PR62_BRANCH=docs/post-input01a-nav-visual-contract
+PR62_MERGE_SHA=389ed58731c38ffff8ceda0d0347222336960f3a
 
 PR57_STATUS=COMPLETED
 PR57_MERGE_SHA=85b9590bbc9f4d3488fd30694b0b45553fefda5b
@@ -46,64 +48,104 @@ PR65_STATUS=COMPLETED
 PR65_FEATURE_HEAD=8a4d1cf358d39524e95027b13e10c0205b9aea27
 PR65_MERGE_SHA=405e9d7b1a3097dacef50c7908abf83d480d64dd
 PR65_PERMANENT_PROMOTION=PASS
-ABOUT_ACCESSIBLE_BRAND_01_STATUS=COMPLETED / RESOLVED
+ABOUT-ACCESSIBLE-BRAND-01_STATUS=COMPLETED / RESOLVED
+PR66_STATUS=COMPLETED
+PR66_FEATURE_HEAD=1b6449597179ab3c832d0c658048d46f8bddda93
+PR66_MERGE_SHA=0553119de95ab5b9c2e131bbb4b2ef1d0ef58456
+PR67_STATUS=COMPLETED
+PR67_FEATURE_HEAD=ec15233215043d6a054cb6fb5eb43eebe8b1442e
+PR67_MERGE_SHA=7b6e474fcd50bb891e429a632849da371e126590
+INPUT_PARITY_TOUCH_TARGET_01_STATUS=COMPLETED
+PR68_STATUS=COMPLETED
+PR68_FEATURE_HEAD=104671b51f99d0ad7c33d3514f8d4b2ad3558aee
+PR68_MERGE_SHA=b6b814c77160c2e61dedc7c10958f0712f59d728
+PR69_STATUS=COMPLETED
+PR69_FEATURE_HEAD=b550634066ed129e4bb0e9b3ca18842469cb493e
+PR69_MERGE_SHA=cf37807a4d3b9da39d3c438861fac358d936fdaa
+NAV_VISUAL_PR0_STATUS=COMPLETED
+PR70_STATUS=OPEN_DRAFT
+PR70_BRANCH=codex/reader-media-01a-lazy-player-lifecycle
+PR70_HEAD_SHA=0cda102f4e57e2beddfec8d4517fd9b8b4893fb2
+PR70_BASE_SHA=cf37807a4d3b9da39d3c438861fac358d936fdaa
+PR70_BASE_STALE=YES
+PR70_TRACK=READER-MEDIA-01A
+PR70_NEXT_FUNCTIONAL_CANDIDATE=YES
+PR71_STATUS=COMPLETED
+PR71_FEATURE_HEAD=4712b3e49c94f560c0e83ce7c8519eb6bda9cba0
+PR71_MERGE_SHA=d01e34fc2eb76da39467d1de9799b12194faec9c
+PR71_PERMANENT_PROMOTION=PASS
+NAV_VISUAL_PR1_STATUS=COMPLETED
 
-PRODUCTION_SHA=405e9d7b1a3097dacef50c7908abf83d480d64dd
-PRODUCTION_IMAGE=newsflux-local:405e9d7b1a30
-PRODUCTION_IMAGE_ID=sha256:59ac4220570d13598a909b8edda1d3e3b372b803547a461407dc37272853327c
-PRODUCTION_REVISION_LABEL=405e9d7b1a3097dacef50c7908abf83d480d64dd
+PRODUCTION_SHA=d01e34fc2eb76da39467d1de9799b12194faec9c
+PRODUCTION_IMAGE=newsflux-local:d01e34fc2eb7
+PRODUCTION_IMAGE_ID=sha256:d52df4be8afa1f39b79cd53f2e84466482fec3d3962fd8102d71e77e54427c
+PRODUCTION_REVISION_LABEL=d01e34fc2eb76da39467d1de9799b12194faec9c
 PRODUCTION_SOURCE_LABEL=https://github.com/jfsdias/NewsFlux
 PRODUCTION_STATUS=running
 PRODUCTION_RESTART_COUNT=0
 HTTP_GATE=200
-CANONICAL_COMPOSE_IMAGE=newsflux-local:405e9d7b1a30
-CANDIDATE_OVERRIDE_PRESENT=NO
+CANONICAL_COMPOSE_IMAGE=newsflux-local:d01e34fc2eb7
+CANDIDATE_OVERRIDE_ACTIVE=NO
+CANDIDATE_OVERRIDE_PRESERVED=YES
 PERMANENT_PROMOTION=PASS
 ROLLBACK_USED=NO
-MAIN_PRODUCTION_PARITY=YES
-CANONICAL_RUNTIME_PARITY=YES
-RUNTIME_CANONICAL_PARITY=YES
+MAIN_PRODUCTION_PARITY=PASS
+CANONICAL_RUNTIME_PARITY=PASS
+RUNTIME_CANONICAL_PARITY=PASS
 
-CURRENT_PRIMARY_TRACK=INPUT-PARITY-TOUCH-TARGET-01
-CURRENT_PHASE=POST_PR65_RECONCILIATION
-CURRENT_TRACK=KEYBOARD_TOUCH_PARITY
+CURRENT_PRIMARY_TRACK=POST_PR71_DOCUMENTATION_RECONCILIATION
+CURRENT_PHASE=POST_PR71_RECONCILIATION
+CURRENT_TRACK=DOCUMENTATION_AND_NAV_CONTRACT_REVIEW
 INPUT_01A_STATUS=COMPLETED
 INPUT_PARITY_ESCAPE_FOCUS_STATUS=COMPLETED
-KEYBOARD_TOUCH_PARITY_STATUS=IN_PROGRESS
-NEXT_FUNCTIONAL_CANDIDATE=INPUT-PARITY-TOUCH-TARGET-01
-NEXT_PRIMARY_FUNCTIONAL=INPUT-PARITY-TOUCH-TARGET-01
-TOUCH_TARGET_REQUIREMENT=>=44px interaction target
+INPUT_PARITY_TOUCH_TARGET_01_STATUS=COMPLETED
+KEYBOARD_TOUCH_PARITY_STATUS=COMPLETED
+NEXT_FUNCTIONAL_CANDIDATE=READER-MEDIA-01A / PR #70
+NEXT_FUNCTIONAL_CANDIDATE_STATUS=OPEN_DRAFT_REQUIRES_REFRESH
+PR70_BASE_REFRESH_REQUIRED=YES
 MARK_ALL_UNDO_JUMP_01_STATUS=INVESTIGATED_NO_REPRODUCTION_ON_CURRENT_BASE
 MARK_ALL_UNDO_JUMP_01_DISPOSITION=HOLD_FOR_REAL_REPRO_EVIDENCE
-LAST_COMPLETED_FUNCTIONAL=INPUT-PARITY-ESCAPE-FOCUS / PR #64
-LAST_COMPLETED_MAINTENANCE=ABOUT-ACCESSIBLE-BRAND-01 / PR #65
-LAST_PRODUCTION_PROMOTION=ABOUT-ACCESSIBLE-BRAND-01 / PR #65 / 405e9d7b1a3097dacef50c7908abf83d480d64dd
+LAST_COMPLETED_FUNCTIONAL=INPUT-PARITY-TOUCH-TARGET-01 / PR #67
+LAST_COMPLETED_NAVIGATION=COMPACT_NAVIGATION / NAV-VISUAL PR1 / PR #71
+LAST_PRODUCTION_PROMOTION=NAV-VISUAL PR1 / PR #71 / d01e34fc2eb76da39467d1de9799b12194faec9c
 
-NAV_VISUAL_01_STATUS=DESIGN_CONTRACT_APPROVED
-NAV_VISUAL_01_IMPLEMENTATION=NOT_STARTED
-NAV_VISUAL_01_IMPLEMENTATION_AUTHORIZED=NO
-NAV_VISUAL_STATUS=DESIGN_CONTRACT_APPROVED
-NAV_VISUAL_IMPLEMENTATION=NOT_STARTED
-NAV_VISUAL_IMPLEMENTATION_AUTHORIZED=NO
+NAV_VISUAL_01_STATUS=IN_PROGRESS
+NAV_VISUAL_01_IMPLEMENTATION=PARTIALLY_IMPLEMENTED
+NAV_VISUAL_01_IMPLEMENTATION_AUTHORIZED=NO_FOR_REMAINING_SLICES
+NAV_VISUAL_PR0=COMPLETED / PR #69 / cf37807a4d3b9da39d3c438861fac358d936fdaa
+NAV_VISUAL_PR1=COMPLETED / PR #71 / d01e34fc2eb76da39467d1de9799b12194faec9c
+NAV_VISUAL_NEXT_SLICE=MEDIUM_RAIL / PR4 / AFTER_PR70
+NAV_CONTRACT_DRIFT_01=RESOLVED_ACCEPTED_CURRENT_BASELINE_EXCEPTION
+NAV-PR1-HARNESS-DESKTOP-MODEL-01=OPEN_P3
+NAV-PR1-ROUTE-FOCUS-01=OPEN_P3
+MOBILE_SCROLL_FLICKER_01=OPEN
+MOBILE_SCROLL_FLICKER_01_SCOPE=SEPARATE_FUTURE_GLASS_GATE
+TABLET_HEADER_WIDTH_01=CONFIRMED / TARGET_MEDIUM_RAIL
 
-DOCUMENTATION_RECONCILIATION_BASE_SHA=405e9d7b1a3097dacef50c7908abf83d480d64dd
+RUNTIME_IDENTITY_02_STATUS=CLOSED_NON_PRODUCT
+RUNTIME_IDENTITY_02_CLASSIFICATION=OLD_DOCUMENT_SESSION
+RUNTIME_IDENTITY_02_PRODUCT_DEFECT=NO
+DOCS_LINT_01_STATUS=OPEN_BASELINE_DEBT
+
+DOCUMENTATION_RECONCILIATION_BASE_SHA=d01e34fc2eb76da39467d1de9799b12194faec9c
 DOCUMENTATION_SCOPE=DOCUMENTATION_ONLY
-DOCUMENTATION_ACTION=FOLLOW_UP_DOCS_PR
-DOCUMENTATION_REASON=Reconcile canonical state after PRs #64 and #65 and their production promotions; preserve the complete approved NAV-VISUAL-01 contract and current finding disposition.
+DOCUMENTATION_ACTION=POST_PR71_CANONICAL_RECONCILIATION
 DOCUMENTATION_TARGETS=docs/NEWSFLUX_PROJECT_STATE.md, docs/NEWSFLUX_ROADMAP.md, docs/NEWSFLUX_NAV_VISUAL_01.md
-DOCUMENTATION_CHANGES_REQUIRED=YES
-DOCUMENTATION_BLOCKS_NEXT=NO
-PROJECT_STATE_RECONCILED=YES
-ROADMAP_RECONCILED=YES
-NAV_VISUAL_CONTRACT_RECORDED=YES
-
-IMPLEMENTATION_AUTHORIZED=NO
-PRODUCT_IMPLEMENTATION_AUTHORIZED=NO
+DOCUMENTATION_RECONCILIATION_STATUS=PENDING_PR_REVIEW
+NAV_CONTRACT_DRIFT_01_DISPOSITION=RESOLVED_ACCEPTED_CURRENT_BASELINE_EXCEPTION
+HISTORICAL_APPROVED_COMPACT_NAV_V1=SOLID
+CURRENT_PR71_COMPACT_BASELINE=GLASS_TOKENS_AND_BACKDROP_FILTER
+HISTORICAL_CONTRACT_PRESERVED=YES
+CURRENT_PR71_BASELINE_ACCEPTED=YES
+FUTURE_GLASS_GATES_WAIVED=NO
+DOCS_LINT_01=SEPARATE_FORMATTING_ONLY_PR
+PR70_SEQUENCE=REFRESH_AFTER_DOCUMENTATION_AND_DOCS_LINT_01
+MEDIUM_RAIL_SEQUENCE=AFTER_PR70_CLOSE
 MERGE_AUTHORIZED=NO
 PERMANENT_PROMOTION_AUTHORIZED=NO
 ```
 
-This reconciliation remains a documentation-only draft PR from the verified base SHA. It does not authorize implementation, merge, or permanent promotion, and it does not block the next functional work.
+This documentation-only proposal is based on the verified post-PR71 main and production SHA. It records the current product facts and NAV contract drift without resolving the design decision. It does not authorize future product implementation, merge, or promotion. PR #70 remains the next active functional candidate after this reconciliation and the separate DOCS-LINT-01 step.
 
 ## Recently completed
 
@@ -147,6 +189,12 @@ This reconciliation remains a documentation-only draft PR from the verified base
 - **PR #63 / ABOUT-RUNTIME-REVISION-01:** deterministic build revision identity; feature head `9a64e9b45c6c76e6765fdaf82ee02c30f3bc57c8`, merge `723bdbb96e4445d267b443422a0be7a83e5b4f8a`; exact `SOURCE_COMMIT` is embedded in frontend metadata and the OCI revision label. Live About validation and permanent promotion passed.
 - **PR #64 / INPUT-PARITY-ESCAPE-FOCUS:** FooterPanel “Mark older articles as read” Escape now closes the menu and restores focus to the trigger; feature head `ee412912ad43d4902459b12151bad81c570d58cf`, merge `23474d3f83c01c4355c892f46c77d2f66b046af0`; live canary passed at 390×844, 884×1104 and 1280×800 and exact merge-SHA promotion passed.
 - **PR #65 / ABOUT-ACCESSIBLE-BRAND-01:** the NewsFlux GitHub link accessible name now names NewsFlux in all six shipped locales; feature head `8a4d1cf358d39524e95027b13e10c0205b9aea27`, merge `405e9d7b1a3097dacef50c7908abf83d480d64dd`; runtime-identity gates and exact merge-SHA production promotion passed.
+- **PR #66 / Mark All cold-loaded All:** current-list identity and filtered unread total reconciliation; feature head `1b6449597179ab3c832d0c658048d46f8bddda93`, merge `0553119de95ab5b9c2e131bbb4b2ef1d0ef58456`.
+- **PR #67 / INPUT-PARITY-TOUCH-TARGET-01:** compact interaction targets corrected while preserving inert gaps; feature head `ec15233215043d6a054cb6fb5eb43eebe8b1442e`, merge `7b6e474fcd50bb891e429a632849da371e126590`.
+- **PR #68 / harness maintenance:** stale provider and button assumptions corrected in browser harnesses; feature head `104671b51f99d0ad7c33d3514f8d4b2ad3558aee`, merge `b6b814c77160c2e61dedc7c10958f0712f59d728`.
+- **PR #69 / NAV-VISUAL PR0:** window-class foundation; feature head `b550634066ed129e4bb0e9b3ca18842469cb493e`, merge `cf37807a4d3b9da39d3c438861fac358d936fdaa`.
+- **PR #70 / READER-MEDIA-01A:** open draft at head `0cda102f4e57e2beddfec8d4517fd9b8b4893fb2`, on stale base `cf37807a4d3b9da39d3c438861fac358d936fdaa`; next active functional candidate, refresh required.
+- **PR #71 / NAV-VISUAL PR1:** compact navigation renderer plus Reader/Drawer focus and resize hardening; feature head `4712b3e49c94f560c0e83ce7c8519eb6bda9cba0`, merge and exact production promotion `d01e34fc2eb76da39467d1de9799b12194faec9c`.
 
 ## FILTER-RULES-01 closure
 
@@ -227,17 +275,18 @@ Not authorized by package completion:
 
 ### Current track
 
-- **Keyboard/touch parity — IN PROGRESS.** PR #64 completed the bounded FooterPanel Escape/focus-return slice. The next dedicated unit is `INPUT-PARITY-TOUCH-TARGET-01`; interaction targets must be at least 44 px while visual icons may remain smaller.
+- **Keyboard/touch parity — COMPLETED.** PR #64 completed Escape/focus return and PR #67 completed the bounded `INPUT-PARITY-TOUCH-TARGET-01` interaction-target correction.
 
 ### Next functional candidate
 
-- **INPUT-PARITY-TOUCH-TARGET-01 — NEXT / NOT YET AUTHORIZED.** Audit and correct bounded FooterPanel interaction targets that were observed around 26–32 px at tablet/desktop widths. Requirement: `>=44px` interaction target. Keep this separate from Reader Media and NAV-VISUAL work.
+- **INPUT-PARITY-TOUCH-TARGET-01 — COMPLETED / PR #67.** Effective interaction-target corrections are merged; visual icon dimensions remain independent from target size.
 - **MARK-ALL-UNDO-JUMP-01 — HOLD.** Current-base reproduction passed at 1280, 390 and 884; no current defect was proven. Reopen only with real reproduction evidence including runtime SHA, viewport/device, originating scope, setting, sequence, expected and actual behavior.
 
 ## Planned functional tracks
 
 - BULK-01C — scoped Undo copy.
-- INPUT-PARITY-TOUCH-TARGET-01 — next primary functional; implementation authorization is NO.
+- INPUT-PARITY-TOUCH-TARGET-01 — completed in PR #67.
+- READER-MEDIA-01A / PR #70 — active open draft functional candidate; refresh onto current main after documentation and DOCS-LINT-01.
 - MARK-ALL-UNDO-JUMP-01 — HOLD for real reproduction evidence; not the next functional unit.
 - NAV-02F — navigation follow-ups including human-readable unread-count labels.
 - READER-MEDIA-01 — architecture gate after input parity; real-device gate remains required when implementation is later authorized.
@@ -249,7 +298,7 @@ Not authorized by package completion:
 - **READER-VISUAL-02A — COMPLETED:** 02A1 in PR #41, Measure in PR #44 and 02A2 / Quiet Column in PR #49.
 - **READER-VISUAL-02B — PLANNED:** auto-hide + Next only after interaction/NAV dependencies.
 - **HOME-VISUAL-02 — HOLD — PRODUCT.**
-- **NAV-VISUAL-01 — DESIGN CONTRACT APPROVED; IMPLEMENTATION NOT STARTED.** Implementation authorization is NO; preserve the real-device gate.
+- **NAV-VISUAL-01 — IN PROGRESS.** PR0 / #69 and PR1 / #71 are complete; compact navigation is implemented. Medium Rail and remaining slices are deferred; each future slice retains its own authorization and real-device gates.
 - **READER-COVER-01 — HOLD — PRODUCT.**
 - **READER-FONT-01 — HOLD — PRODUCT.**
 - **HOME-SKEL-01 — BACKLOG.**
@@ -305,21 +354,23 @@ The specialized upstream monitor must live-check the current upstream head befor
 - PR #30 completed with `REAL_DEVICE_GATE=WAIVED_BY_OWNER`; physical touch PASS is not claimed for the exact PR #30 head. Full automated/browser coverage and authenticated `884×1104` evidence passed where tooling was deterministic. This is an accepted residual validation limitation, not an open product defect.
 - Global formatting historically reported four out-of-scope documentation files; do not conflate pre-existing formatting debt with product regressions. Re-check when documentation tooling is next touched.
 - Repository Prettier hooks normalized Markdown table alignment in this PR; PM accepted the formatting. This creates a residual auditability limitation when comparing prior table edits; no formatter bypass or manual reversal was used.
-- **MOBILE-SCROLL-FLICKER-01 — OPEN:** reproduction is currently blocked by the harness precondition `MISSING_GENERATED_VERSION_INFO`; a physical iPhone gate was not run and root cause remains unknown. This continues to block optional NAV-VISUAL PR6 glass.
+- **MOBILE-SCROLL-FLICKER-01 — OPEN:** reproduction is currently blocked by the harness precondition `MISSING_GENERATED_VERSION_INFO`; a physical iPhone gate was not run and root cause remains unknown. This continues to block future optional NAV-VISUAL PR6 glass expansion.
 - **TABLET-HEADER-WIDTH-01 — CONFIRMED:** at 768×1024, 884×1104, 900×1100 and 992×1104 the header is approximately 370 px wide with unused space and no overflow. Fix now: NO. Target: NAV-VISUAL-01 / PR4 MEDIUM-RAIL.
 - **DOCS-LINT-01 — OPEN:** preserve the existing documentation/superpowers formatting debt; do not expand this reconciliation to unrelated files.
 - **HOME-HARNESS-STABILITY-01 — OPEN:** keep deterministic baseline failures separate from intermittent stability failures. Deterministic 10/10 failures: `LIST_SEARCH_DATE_SORT_PRESERVED`, `READER_MEASURE_01_CPL`. Intermittent 6/10 failures: `READER_VISUAL_01_WIDE_IMAGE`, `READER_MEASURE_01_DEFAULT_75_PARITY`, `READER_MEASURE_01_MEDIA_PROTECTION`. Root cause remains unknown; no product fix is claimed here.
-- **READER-MEDIA-01 — PLANNED / ARCHITECTURE GATE:** native basic media is feasible, but HLS/cross-browser behavior requires an explicit architecture decision. Run this gate after INPUT-PARITY-TOUCH-TARGET-01 unless severity changes priority.
+- **READER-MEDIA-01A — OPEN / DRAFT PR #70:** next active functional candidate; its base is stale and must be refreshed onto current main before candidate and authenticated Reader/media gates.
 - **ABOUT-ACCESSIBLE-BRAND-01 — COMPLETED:** resolved by PR #65; it is no longer an open finding.
+- **RUNTIME-IDENTITY-02 — CLOSED / NON-PRODUCT:** classified as `OLD_DOCUMENT_SESSION`; fresh-document validation showed the prior tab retained old JavaScript while new requests served the R5 asset. Server, asset, Service Worker and Cache Storage were not the cause; no product or deployment defect was found.
 
-## Product decisions pending
+## Product decisions and accepted baseline exceptions
 
 - HOME-VISUAL-02 composition.
 - SAVE-EXT-01 wording and placement.
 - NAV-02F grouping, mode persistence and count presentation.
 - CHROME-01 contextual control consolidation.
 - ID-DEPLOY-01 local-build versus registry/deployer architecture.
-- NAV-VISUAL-01 has an approved design contract; its implementation and real-device validation remain unstarted and unauthorized.
+- NAV-VISUAL-01 has an approved design contract. PR0 and PR1 are complete; PR #71 establishes the current compact-navigation product baseline. Remaining slices, including Medium Rail, are deferred and retain their real-device gates.
+- `NAV_CONTRACT_DRIFT_01` is resolved as an accepted current-baseline exception. The historical approved contract specifies a solid compact bar; merged PR #71 uses NewsFlux glass tokens and `backdrop-filter`, and this current baseline is accepted. Preserve both facts; future glass gates are not waived, and `MOBILE-SCROLL-FLICKER-01` remains open.
 
 ## Completed finding — ABOUT-RUNTIME-REVISION-01
 
@@ -338,15 +389,15 @@ UNKNOWN_COMMIT=RESOLVED
 
 ## Next recommended action
 
-`INPUT-PARITY-TOUCH-TARGET-01` is the next primary functional unit. Keyboard/touch parity remains the umbrella validation track in progress. `MARK-ALL-UNDO-JUMP-01` is held for real reproduction evidence. READER-MEDIA-01 follows the input-parity architecture/interaction work unless new severity changes priority. PR #62 does not authorize product implementation, merge, or promotion.
+Current sequence: finish this post-PR71 documentation reconciliation, close `DOCS-LINT-01` in its separate formatting-only PR, then refresh open draft PR #70 / `READER-MEDIA-01A` onto current main and run its candidate/authenticated media gates. After PR #70 closes, resume NAV-VISUAL with Medium Rail / PR4; `TABLET-HEADER-WIDTH-01` remains targeted there. `MARK-ALL-UNDO-JUMP-01` remains held for real reproduction evidence. This documentation reconciliation does not authorize product implementation, merge or promotion.
 
 ## Deployment governance
 
 - Deploy only an exact approved product/runtime SHA.
 - Never deploy `latest` or a moving branch implicitly.
-- Live production state reconciled on 2026-10-19: image `newsflux-local:405e9d7b1a30`, image ID `sha256:59ac4220570d13598a909b8edda1d3e3b372b803547a461407dc37272853327c`, revision label `405e9d7b1a3097dacef50c7908abf83d480d64dd`, source label `https://github.com/jfsdias/NewsFlux`, status `running`, restart count `0`.
-- Internal HTTP gate returned `200`. The canonical Compose image is `newsflux-local:405e9d7b1a30`; no candidate override is present.
-- `MAIN_PRODUCTION_PARITY=YES` and `CANONICAL_RUNTIME_PARITY=YES`. PR #65 merge SHA `405e9d7b1a3097dacef50c7908abf83d480d64dd` is the current main and production SHA.
+- Live production state reconciled on 2026-10-20: image `newsflux-local:d01e34fc2eb7`, image ID `sha256:d52df4be8afa1f39b79cd53f2e84466482fec3d3962fd8102d71e77e54427c`, revision label `d01e34fc2eb76da39467d1de9799b12194faec9c`, source label `https://github.com/jfsdias/NewsFlux`, status `running`, restart count `0`.
+- Internal HTTP gate returned `200`. The canonical Compose image is `newsflux-local:d01e34fc2eb7`; no candidate override is active, and the archived candidate override remains preserved.
+- `MAIN_PRODUCTION_PARITY=PASS` and `CANONICAL_RUNTIME_PARITY=PASS`. PR #71 merge SHA `d01e34fc2eb76da39467d1de9799b12194faec9c` is the current main and production SHA.
 - `PERMANENT_PROMOTION=PASS`; `ROLLBACK_USED=NO`.
 - The historical PR #44 promotion remains in the completion history. Current production state is recorded above.
 - Docs-only work does not need a production deployment.
