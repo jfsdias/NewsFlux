@@ -27,6 +27,51 @@ const getRelativeTop = (element, scrollRoot) =>
   scrollRoot.getBoundingClientRect().top +
   scrollRoot.scrollTop
 
+const noop = () => {}
+
+/* eslint-disable unicorn/no-this-outside-of-class -- The media property accessor needs its element receiver. */
+const stubMediaSourceAssignments = () => {
+  let sourceDescriptor
+  let installed = false
+  let restored = false
+
+  try {
+    sourceDescriptor = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "src")
+    if (!sourceDescriptor?.configurable || !sourceDescriptor.get || !sourceDescriptor.set) {
+      return noop
+    }
+
+    Object.defineProperty(HTMLMediaElement.prototype, "src", {
+      ...sourceDescriptor,
+      get() {
+        return this.dataset.readerMediaTestSource ?? sourceDescriptor.get.call(this)
+      },
+      set(value) {
+        this.dataset.readerMediaTestSource = value
+      },
+    })
+    installed = true
+  } catch {
+    if (installed && sourceDescriptor) {
+      try {
+        Object.defineProperty(HTMLMediaElement.prototype, "src", sourceDescriptor)
+      } catch {
+        // Best effort: keep harness setup errors from preventing cleanup/reporting.
+      }
+    }
+    return noop
+  }
+
+  return () => {
+    if (restored) {
+      return
+    }
+    Object.defineProperty(HTMLMediaElement.prototype, "src", sourceDescriptor)
+    restored = true
+  }
+}
+/* eslint-enable unicorn/no-this-outside-of-class */
+
 const PlayerCase = ({ enclosure, label, onPlayerInit, src, style, type }) => {
   const reportInit = useCallback((player) => onPlayerInit(type, player), [onPlayerInit, type])
 
@@ -122,33 +167,13 @@ const publishReport = (report) => {
 }
 
 const runHarness = async () => {
-  if (activeRoot) {
-    activeRoot.unmount()
-  }
-  scrollRoot.scrollTop = 0
-
   const playerInits = []
   const playerCleanups = []
   const failures = []
-  const onPlayerInit = (type, player) => {
-    playerInits.push(type)
-    const destroy = player.destroy.bind(player)
-    let destroyed = false
-    player.destroy = (...args) => {
-      if (!destroyed) {
-        destroyed = true
-        playerCleanups.push(type)
-      }
-      return destroy(...args)
-    }
-  }
-
-  activeRoot = createRoot(articleRoot)
-  flushSync(() => activeRoot.render(<ReaderMediaFixture onPlayerInit={onPlayerInit} />))
-
-  const report = {
-    viewport: `${window.innerWidth}x${window.innerHeight}`,
-    observerSupported: typeof IntersectionObserver === "function",
+  let restoreMediaSource = noop
+  let report = {
+    viewport: null,
+    observerSupported: false,
     playerInitCountBeforeScroll: null,
     farMediaDeferred: null,
     nearMediaActivatedBeforeVisible: null,
@@ -167,9 +192,34 @@ const runHarness = async () => {
     playerTypes: null,
     errors: failures,
   }
-  publishReport(report)
+  const onPlayerInit = (type, player) => {
+    playerInits.push(type)
+    const destroy = player.destroy.bind(player)
+    let destroyed = false
+    player.destroy = (...args) => {
+      if (!destroyed) {
+        destroyed = true
+        playerCleanups.push(type)
+      }
+      return destroy(...args)
+    }
+  }
 
   try {
+    restoreMediaSource = stubMediaSourceAssignments()
+    if (activeRoot) {
+      const previousRoot = activeRoot
+      activeRoot = null
+      previousRoot.unmount()
+    }
+    scrollRoot.scrollTop = 0
+
+    report.viewport = `${window.innerWidth}x${window.innerHeight}`
+    report.observerSupported = typeof IntersectionObserver === "function"
+    activeRoot = createRoot(articleRoot)
+    flushSync(() => activeRoot.render(<ReaderMediaFixture onPlayerInit={onPlayerInit} />))
+    publishReport(report)
+
     await waitFor(() => playerInits.includes("inline-video"), "visible inline video initialization")
     report.playerInitCountBeforeScroll = playerInits.length
     report.farMediaDeferred =
@@ -253,8 +303,18 @@ const runHarness = async () => {
   } catch (error) {
     failures.push(error instanceof Error ? error.message : String(error))
   } finally {
-    activeRoot?.unmount()
-    activeRoot = null
+    try {
+      activeRoot?.unmount()
+    } catch (error) {
+      failures.push(error instanceof Error ? error.message : String(error))
+    } finally {
+      activeRoot = null
+      try {
+        restoreMediaSource()
+      } catch (error) {
+        failures.push(error instanceof Error ? error.message : String(error))
+      }
+    }
     report.cleanupPass = playerCleanups.length === playerInits.length
     report.playerCleanupCount = playerCleanups.length
     report.summary =
@@ -270,7 +330,13 @@ const runHarness = async () => {
         .every(([, value]) => value === true) && failures.length === 0
         ? "PASS"
         : "FAIL"
-    publishReport(report)
+    try {
+      publishReport(report)
+    } catch (error) {
+      failures.push(error instanceof Error ? error.message : String(error))
+      report.summary = "FAIL"
+      globalThis.__readerMedia01aReport = report
+    }
   }
 }
 
