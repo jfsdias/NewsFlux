@@ -130,10 +130,12 @@
 ### Task 1: Deterministic editorial projection
 
 **Files:**
+
 - Create: src/utils/home-editorial-projection.js
 - Test: src/utils/home-editorial-projection.test.js
 
 **Interfaces:**
+
 - Consumes: prepared entries with id, status, published_at, optional feed, optional feed.category, and existing cover candidate fields.
 - Produces: selectInitialHighlightIds(entries, { maxHighlights = 3 }), selectBackfillCandidate(recentEntries, survivingHighlights), and projectRecentEntries(entries, highlightIds); IDs are unique and Recent excludes every Highlight ID.
 
@@ -145,9 +147,10 @@ Fixtures must include mixed read/unread records, equal timestamps, equal source/
 - [ ] **Step 2: Run the targeted test and verify failure**
 
 Run:
-~~~bash
+
+```bash
 node --test src/utils/home-editorial-projection.test.js
-~~~
+```
 
 Expected: module-not-found or missing-export failures for the new selector interfaces.
 
@@ -169,14 +172,15 @@ Expected: existing filter and mark-read reconciliation behavior PASS unchanged.
 
 - [ ] **Step 6: Commit**
 
-~~~bash
+```bash
 git add src/utils/home-editorial-projection.js src/utils/home-editorial-projection.test.js
 git commit -m "feat: add deterministic Home editorial projection"
-~~~
+```
 
 ### Task 2: Canonical Home query and shared request guards
 
 **Files:**
+
 - Create: src/utils/home-entry-request.js
 - Create: src/utils/home-entry-request.test.js
 - Create: src/utils/article-list-request-key.test.js
@@ -188,6 +192,7 @@ git commit -m "feat: add deterministic Home editorial projection"
 - Modify: src/hooks/useLoadMore.js
 
 **Interfaces:**
+
 - Consumes: current page size, showHiddenFeeds, dataState.sessionRevision, contentState.articleListRevision, and a Home cursor derived from loaded published_at.
 - Produces: buildHomeEntryRequest({ pageSize, showHiddenFeeds, cursor }) and exported API adapter getHomeEntries({ pageSize, cursor } = {}); the adapter defaults pageSize to the existing setting and builds a count-only request with pageSize=1 and no cursor through the same helper. This shares status, order, direction, and visibility policy without creating a second editorial cursor. createArticleListRequestKey accepts optional sessionRevision and includes it in the Home request key. The canonical Home session key is created in Task 5 and omits articleListRevision so a pending refresh does not discard the visible projection. useArticleList/useLoadMore recognize only infoFrom/source === home as the fixed query policy. Existing callers keep their current signatures and behavior.
 
@@ -199,9 +204,10 @@ Assert the exact Home query object: status unread, order published_at, direction
 - [ ] **Step 2: Run the targeted test and verify failure**
 
 Run:
-~~~bash
+
+```bash
 node --test src/utils/home-entry-request.test.js src/utils/article-list-request-key.test.js
-~~~
+```
 
 Open scripts/tests/phase2c-list-regression.html.
 
@@ -229,14 +235,15 @@ Expected: existing filtered-list request/reconciliation tests PASS; the runtime 
 
 - [ ] **Step 6: Commit**
 
-~~~bash
+```bash
 git add src/apis/entries.js src/utils/home-entry-request.js src/utils/home-entry-request.test.js src/utils/article-list-request-key.js src/utils/article-list-request-key.test.js src/hooks/useArticleList.js src/hooks/useLoadMore.js scripts/tests/phase2c-list-regression.html scripts/tests/phase2c-list-regression.jsx
 git commit -m "feat: add canonical Home article request"
-~~~
+```
 
 ### Task 3: Post-login preference migration and destination choice
 
 **Files:**
+
 - Modify: src/utils/home-page.js
 - Modify: src/store/homePageState.js
 - Modify: src/utils/settings-schema.js
@@ -248,6 +255,7 @@ git commit -m "feat: add canonical Home article request"
 - Test: src/utils/home-page.test.js
 
 **Interfaces:**
+
 - Consumes: existing settings.homePages, legacy settings.homePage, authenticated server/user identity, and optional location.state.from.
 - Produces: account-scoped { type: "view", id: "home" } target mapping to /, a one-time migration marker inside homePages, and getPostLoginPath({ homePages, identity, legacyHomePage, explicitFrom }).
 
@@ -280,14 +288,15 @@ Expected: formatting and lint PASS; preference persistence remains under the exi
 
 - [ ] **Step 6: Commit**
 
-~~~bash
+```bash
 git add src/utils/home-page.js src/utils/home-page.test.js src/store/homePageState.js src/utils/settings-schema.js src/hooks/useHomePage.js src/components/Settings/General.jsx src/components/Settings/HomePagePicker.jsx src/pages/Login.jsx src/locales
 git commit -m "feat: repurpose home target as post-login preference"
-~~~
+```
 
 ### Task 4: Root Home route and mounted reader integration
 
 **Files:**
+
 - Create: src/pages/Home.jsx
 - Create: src/components/Home/HomeEditorial.jsx
 - Create: scripts/tests/phase2c-editorial-home.html
@@ -306,6 +315,7 @@ git commit -m "feat: repurpose home target as post-login preference"
 - Harness: scripts/tests/phase2c-editorial-home.jsx (route scenario)
 
 **Interfaces:**
+
 - Consumes: Content current getEntries, info, activeContent, route params, reader refs, and a new listContent slot.
 - Produces: / parent Home route with / index and /entry/:entryId child. HomePage calls useMatch("/entry/:entryId") and passes `entryIdOverride={match?.params.entryId}` to Content. Content resolves `entryIdOverride ?? useParams().entryId`, preserving route-param behavior for /all, feed, category, and other existing routes. The same Home parent/session instance stays mounted through / → /entry/101 → /. HomePageManager owns root Home identity failure recovery; Home waits during identity loading, the manager keeps retry and logout available on / and root detail URLs, and it preserves the current path for login return. HomeStates owns article-query failures separately. Catalog errors do not block Home's canonical query, which does not require feed/category catalog data. Root Home action always navigates to /.
 
@@ -339,14 +349,15 @@ Expected: all existing routes build; Content receives the explicit Home child ID
 
 - [ ] **Step 6: Commit**
 
-~~~bash
+```bash
 git add src/pages/Home.jsx src/components/Home/HomeEditorial.jsx src/routes.jsx src/components/Content/Content.jsx src/components/Content/ContentContext.jsx src/components/HomePageManager.jsx src/utils/url.js src/utils/url.test.js src/components/Sidebar/Sidebar.jsx src/components/HomeRedirect.jsx src/components/HomeRedirect.css scripts/tests/phase2c-editorial-home.html scripts/tests/phase2c-editorial-home.jsx scripts/tests/phase2c-editorial-home.css scripts/tests/fixtures/phase2c-editorial-home.js
 git commit -m "feat: route root to editorial Home"
-~~~
+```
 
 ### Task 5: Stable Home session and confirmed mutation projection
 
 **Files:**
+
 - Create: src/utils/home-editorial-session.js
 - Create: src/utils/home-editorial-session.test.js
 - Create: src/utils/entry-status-mutation-events.js
@@ -359,6 +370,7 @@ git commit -m "feat: route root to editorial Home"
 - Modify: scripts/tests/phase2c-list-regression.jsx
 
 **Interfaces:**
+
 - Consumes: existing status mutation calls for card actions, mark-read-on-view, mark-read-on-scroll, and ArticleDetail; existing getDataSessionRevision; projection selectors from Task 1.
 - Produces: an ephemeral Home session { requestKey, sessionRevision, highlightIds, scrollRoot, pendingStatusById } and status events { entryIds, previousStatuses, targetStatus, outcome, sessionRevision }. `subscribeArticleListTotalRefresh` consumes those settlement events and only on confirmed Home read/unread schedules `getHomeEntries({ pageSize: 1 })` after mutation idle. Its canonical count response updates both contentState.total and loadMoreVisible under the active query/session/snapshot guards. Failed mutations leave the last valid total and pagination visibility intact. Entries continue to come from contentState.entries.
 
@@ -391,14 +403,15 @@ Expected: existing reconciliation remains unchanged; Home total/visibility only 
 
 - [ ] **Step 6: Commit**
 
-~~~bash
+```bash
 git add src/utils/home-editorial-session.js src/utils/home-editorial-session.test.js src/utils/entry-status-mutation-events.js src/utils/entry-status-mutation-events.test.js src/hooks/useEntryActions.js src/utils/article-list-total-refresh.js src/components/Content/ContentContext.jsx src/components/Home/HomeEditorial.jsx scripts/tests/phase2c-editorial-home.jsx scripts/tests/phase2c-list-regression.jsx
 git commit -m "feat: reconcile Home projection after status mutations"
-~~~
+```
 
 ### Task 6: Highlights and behavior-preserving card reuse
 
 **Files:**
+
 - Create: src/components/Home/HomeHighlights.jsx
 - Create: src/components/Home/HomeHighlightCard.jsx
 - Modify: src/components/Home/HomeEditorial.jsx
@@ -409,6 +422,7 @@ git commit -m "feat: reconcile Home projection after status mutations"
 - Modify: scripts/tests/fixtures/phase2c-editorial-home.js
 
 **Interfaces:**
+
 - Consumes: Task 1 highlightIds, contentState.entries, existing ArticleEntry, useArticleCardActivation, useReadOnScroll, image/deck fields from prepareEntry.
 - Produces: DOM order Primary, Secondary 1, Secondary 2; at most three ArticleEntry instances with existing open/read/star/menu behavior. Primary can render intentional text-only content without media placeholder or reserved empty image space.
 
@@ -440,14 +454,15 @@ Expected: approved Phase 2B.2C card/read-state behavior remains intact.
 
 - [ ] **Step 6: Commit**
 
-~~~bash
+```bash
 git add src/components/Home/HomeHighlights.jsx src/components/Home/HomeHighlightCard.jsx src/components/Home/HomeEditorial.jsx src/components/Article/ArticleEntry.jsx scripts/tests/phase2c-editorial-home.html scripts/tests/phase2c-editorial-home.jsx scripts/tests/phase2c-editorial-home.css scripts/tests/fixtures/phase2c-editorial-home.js
 git commit -m "feat: add editorial Home Highlights"
-~~~
+```
 
 ### Task 7: Recent Grid and one shared pagination sentinel
 
 **Files:**
+
 - Create: src/components/Home/HomeRecent.jsx
 - Create: src/components/Article/LoadMoreSentinel.jsx
 - Modify: src/components/Article/ArticleList.jsx
@@ -456,6 +471,7 @@ git commit -m "feat: add editorial Home Highlights"
 - Modify: scripts/tests/fixtures/phase2c-editorial-home.js
 
 **Interfaces:**
+
 - Consumes: loaded Home entries, projectRecentEntries, loadMoreVisible, Task 2 Home request adapter, existing ArticleGridCard, and one AdaptiveScrollArea scroll root.
 - Produces: Recent in canonical published_at descending order with entry-ID exclusion from Highlights, plus one shared sentinel after Highlights and Recent whether or not Recent has rows.
 
@@ -487,14 +503,15 @@ Expected: current list virtualization/load-more behavior remains intact; Home ap
 
 - [ ] **Step 6: Commit**
 
-~~~bash
+```bash
 git add src/components/Home/HomeRecent.jsx src/components/Article/LoadMoreSentinel.jsx src/components/Article/ArticleList.jsx src/components/Home/HomeEditorial.jsx scripts/tests/phase2c-editorial-home.jsx scripts/tests/fixtures/phase2c-editorial-home.js
 git commit -m "feat: reuse one pagination sentinel for Home"
-~~~
+```
 
 ### Task 8: Loading, low-count, empty, and error states
 
 **Files:**
+
 - Create: src/components/Home/HomeStates.jsx
 - Modify: src/components/Home/HomeEditorial.jsx
 - Modify: src/hooks/useArticleList.js
@@ -502,6 +519,7 @@ git commit -m "feat: reuse one pagination sentinel for Home"
 - Modify: scripts/tests/fixtures/phase2c-editorial-home.js
 
 **Interfaces:**
+
 - Consumes: isArticleListReady, articleListError, loadMoreError, total, loaded entries, explicit refresh lifecycle, and the canonical request key.
 - Produces: Home-specific initial skeleton/error/zero-unread states; optional Highlights for one/two entries; omitted Recent heading/container/message when Recent is empty; retained valid projection on failed explicit refresh; local retry at the shared sentinel for load-more failure. `total === 0` is usable only from a successful current canonical Home response or completed count reconciliation; identity recovery remains owned by HomePageManager, not the article-query error surface.
 
@@ -533,14 +551,15 @@ Expected: projection is replaced only after a successful explicit refresh, and s
 
 - [ ] **Step 6: Commit**
 
-~~~bash
+```bash
 git add src/components/Home/HomeStates.jsx src/components/Home/HomeEditorial.jsx scripts/tests/phase2c-editorial-home.jsx scripts/tests/fixtures/phase2c-editorial-home.js
 git commit -m "feat: add Home loading and recovery states"
-~~~
+```
 
 ### Task 9: Responsive editorial composition, search-only action, and themes
 
 **Files:**
+
 - Create: src/components/Home/HomeEditorial.css
 - Modify: src/components/Home/HomeEditorial.jsx
 - Modify: src/components/Home/HomeHighlights.jsx
@@ -551,6 +570,7 @@ git commit -m "feat: add Home loading and recovery states"
 - Modify: scripts/tests/phase2c-editorial-home.css
 
 **Interfaces:**
+
 - Consumes: Home sections and existing Grid maximum-column behavior, SearchAndSortBar, current CSS tokens, and the fixed viewport/theme matrix.
 - Produces: mobile/Fold single-column order, 884×1104 Primary full module width + two Secondary/Recent columns, desktop Recent using existing maximum columns, search-only global action routed to /all, and light/dark opaque content surfaces.
 
@@ -582,20 +602,22 @@ Expected: Home-only styling does not recalibrate chrome or change existing list 
 
 - [ ] **Step 6: Commit**
 
-~~~bash
+```bash
 git add src/components/Home/HomeEditorial.css src/components/Home/HomeEditorial.jsx src/components/Home/HomeHighlights.jsx src/components/Home/HomeRecent.jsx src/components/Content/Content.jsx src/components/Article/SearchAndSortBar.jsx scripts/tests/phase2c-editorial-home.jsx scripts/tests/phase2c-editorial-home.css
 git commit -m "feat: style responsive editorial Home"
-~~~
+```
 
 ### Task 10: Complete the dedicated Phase 2C visual/runtime harness
 
 **Files:**
+
 - Modify: scripts/tests/phase2c-editorial-home.html
 - Modify: scripts/tests/phase2c-editorial-home.jsx
 - Modify: scripts/tests/phase2c-editorial-home.css
 - Modify: scripts/tests/fixtures/phase2c-editorial-home.js
 
 **Interfaces:**
+
 - Consumes: real Home components/styles, deterministic fixture scenarios, and the exact six viewport sizes/two themes.
 - Produces: browser-visible gate report for all visual/runtime states, Home identity recovery and total reconciliation scenarios, scenario reset controls, and captured dimensions/DOM counts; no production code path or live Miniflux/network dependency.
 
@@ -627,19 +649,21 @@ Expected: approved Phase 2B.2C card/read-state and image/excerpt contracts remai
 
 - [ ] **Step 6: Commit**
 
-~~~bash
+```bash
 git add scripts/tests/phase2c-editorial-home.html scripts/tests/phase2c-editorial-home.jsx scripts/tests/phase2c-editorial-home.css scripts/tests/fixtures/phase2c-editorial-home.js
 git commit -m "test: add Phase 2C editorial Home harness"
-~~~
+```
 
 ### Task 11: Final regression orchestration and implementation branch verification
 
 **Files:**
+
 - Modify: scripts/tests/phase2c-list-regression.jsx (gate registry/report only; behavior scenarios are owned by Tasks 2 and 5)
 - Test: all new pure tests, the Phase 2C Home harness, and the focused list regression harness
 - Harness: existing Phase 2B.2C card/read-state harnesses
 
 **Interfaces:**
+
 - Consumes: named gates and exact owners from the Existing List Regression Ownership table, plus Home gates introduced in Tasks 2–10.
 - Produces: one explicit regression matrix report; no miscellaneous product behavior assertions and no production changes.
 
@@ -671,44 +695,44 @@ Expected: all repository code gates PASS and the Phase 2B.2C design contract rem
 
 - [ ] **Step 6: Commit**
 
-~~~bash
+```bash
 git add scripts/tests/phase2c-list-regression.jsx
 git commit -m "test: verify Phase 2C regression matrix ownership"
-~~~
+```
 
 ## Gate-to-Task Map
 
-| Gate | Owning task(s) |
-| --- | --- |
-| HOME_ROUTE_ROOT, HOME_LOGO_ROOT, HOME_POST_LOGIN_PREFERENCE, HOME_DEEP_LINK_NOT_INTERCEPTED, HOME_READER_PARAM_BRIDGE, HOME_PARENT_MOUNT_PRESERVATION, HOME_IDENTITY_FAILURE_RECOVERY | 3–4, 10 |
-| HOME_UNREAD_ONLY, HOME_PUBLISHED_AT_DESC, HOME_FEED_VISIBILITY_INHERITED, HOME_ONE_QUERY, HOME_ONE_CURSOR | 2, 7, 11 |
-| HOME_MAX_THREE_HIGHLIGHTS, HOME_PRIMARY_NEWEST, HOME_SECONDARY_SOURCE_DIVERSITY, HOME_SECONDARY_CATEGORY_DIVERSITY, HOME_IMAGE_ONLY_TIEBREAK, HOME_DEDUPE_BY_ENTRY_ID, HOME_NO_EXTRA_HIGHLIGHT_FETCH | 1, 6–7 |
-| HOME_LOAD_MORE_STABLE, HOME_REFRESH_RECOMPOSES | 2, 5, 7–8 |
-| HOME_READ_SUCCESS_REMOVES, HOME_READ_BACKFILL, HOME_READ_FAILURE_RECONCILES, HOME_MARK_UNREAD_RECENT, HOME_STAR_POSITION_STABLE | 5, 6, 11 |
-| HOME_READER_ORIGIN, HOME_READER_RETURN, HOME_SCROLL_RESTORE | 4–5 |
-| HOME_ZERO_UNREAD, HOME_INITIAL_ERROR, HOME_REFRESH_ERROR_PRESERVES_CONTENT, HOME_LOAD_MORE_ERROR | 2, 8 |
-| HOME_LAST_READ_TRANSITIONS_TO_TUDO_EM_DIA, HOME_READ_FAILURE_DOES_NOT_ZERO_TOTAL, HOME_MARK_UNREAD_RECONCILES_TOTAL, HOME_UNLOADED_MARK_UNREAD_REENABLES_PAGINATION, HOME_TOTAL_RECONCILIATION_STALE_SESSION_PROTECTED | 2 (canonical query), 5 (settlement/reconciliation), 8 (zero state), 10 (harness matrix) |
-| HOME_TOTAL_VISIBILITY_POLICY_MATCHES_QUERY | 2 (`home-entry-request.test.js`) |
-| NO_ALL_RANKING, NO_UNREAD_RANKING, ALL_SORT_PREFERENCE_PRESERVED, UNREAD_FILTER_PRESERVED | 2, 11 (`phase2c-list-regression.jsx`; key assertions in `article-list-request-key.test.js`) |
-| MARK_ALL_READ_SUCCESS, MARK_ALL_READ_FILTER_SCOPE, MARK_ALL_READ_NO_JUMP_ON_FAILURE, MARK_ALL_READ_JUMP_TO_NEXT, STALE_SESSION_PROTECTION, PARTIAL_FAILURE_RECONCILIATION, COUNTS_REFRESH | 5, 11 (`phase2c-list-regression.jsx`; helper assertions remain in existing utility tests) |
+| Gate                                                                                                                                                                                                                   | Owning task(s)                                                                              |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| HOME_ROUTE_ROOT, HOME_LOGO_ROOT, HOME_POST_LOGIN_PREFERENCE, HOME_DEEP_LINK_NOT_INTERCEPTED, HOME_READER_PARAM_BRIDGE, HOME_PARENT_MOUNT_PRESERVATION, HOME_IDENTITY_FAILURE_RECOVERY                                  | 3–4, 10                                                                                     |
+| HOME_UNREAD_ONLY, HOME_PUBLISHED_AT_DESC, HOME_FEED_VISIBILITY_INHERITED, HOME_ONE_QUERY, HOME_ONE_CURSOR                                                                                                              | 2, 7, 11                                                                                    |
+| HOME_MAX_THREE_HIGHLIGHTS, HOME_PRIMARY_NEWEST, HOME_SECONDARY_SOURCE_DIVERSITY, HOME_SECONDARY_CATEGORY_DIVERSITY, HOME_IMAGE_ONLY_TIEBREAK, HOME_DEDUPE_BY_ENTRY_ID, HOME_NO_EXTRA_HIGHLIGHT_FETCH                   | 1, 6–7                                                                                      |
+| HOME_LOAD_MORE_STABLE, HOME_REFRESH_RECOMPOSES                                                                                                                                                                         | 2, 5, 7–8                                                                                   |
+| HOME_READ_SUCCESS_REMOVES, HOME_READ_BACKFILL, HOME_READ_FAILURE_RECONCILES, HOME_MARK_UNREAD_RECENT, HOME_STAR_POSITION_STABLE                                                                                        | 5, 6, 11                                                                                    |
+| HOME_READER_ORIGIN, HOME_READER_RETURN, HOME_SCROLL_RESTORE                                                                                                                                                            | 4–5                                                                                         |
+| HOME_ZERO_UNREAD, HOME_INITIAL_ERROR, HOME_REFRESH_ERROR_PRESERVES_CONTENT, HOME_LOAD_MORE_ERROR                                                                                                                       | 2, 8                                                                                        |
+| HOME_LAST_READ_TRANSITIONS_TO_TUDO_EM_DIA, HOME_READ_FAILURE_DOES_NOT_ZERO_TOTAL, HOME_MARK_UNREAD_RECONCILES_TOTAL, HOME_UNLOADED_MARK_UNREAD_REENABLES_PAGINATION, HOME_TOTAL_RECONCILIATION_STALE_SESSION_PROTECTED | 2 (canonical query), 5 (settlement/reconciliation), 8 (zero state), 10 (harness matrix)     |
+| HOME_TOTAL_VISIBILITY_POLICY_MATCHES_QUERY                                                                                                                                                                             | 2 (`home-entry-request.test.js`)                                                            |
+| NO_ALL_RANKING, NO_UNREAD_RANKING, ALL_SORT_PREFERENCE_PRESERVED, UNREAD_FILTER_PRESERVED                                                                                                                              | 2, 11 (`phase2c-list-regression.jsx`; key assertions in `article-list-request-key.test.js`) |
+| MARK_ALL_READ_SUCCESS, MARK_ALL_READ_FILTER_SCOPE, MARK_ALL_READ_NO_JUMP_ON_FAILURE, MARK_ALL_READ_JUMP_TO_NEXT, STALE_SESSION_PROTECTION, PARTIAL_FAILURE_RECONCILIATION, COUNTS_REFRESH                              | 5, 11 (`phase2c-list-regression.jsx`; helper assertions remain in existing utility tests)   |
 
 ## Existing List Regression Ownership
 
 The current repository has helper-level tests for filtered totals and successful list reconciliation, but no automated behavior harness for the complete PR #11 Mark All Read flow. The dedicated `scripts/tests/phase2c-list-regression.jsx` harness is the exact runtime owner for the named integration gates; Task 11 only verifies its gate registry and runs it.
 
-| Gate | Existing repository coverage | Exact focused owner after implementation |
-| --- | --- | --- |
-| NO_ALL_RANKING | No runtime assertion currently proves ordinary All order is unaffected by Home projection. | `scripts/tests/phase2c-list-regression.jsx` scenario `NO_ALL_RANKING` (Task 2); suite registry (Task 11). |
-| NO_UNREAD_RANKING | No runtime assertion currently proves ordinary Unread order is unaffected by Home projection. | `scripts/tests/phase2c-list-regression.jsx` scenario `NO_UNREAD_RANKING` (Task 2); suite registry (Task 11). |
-| ALL_SORT_PREFERENCE_PRESERVED | No current regression test covers the end-to-end list request; the planned request-key test covers only key invalidation. | `src/utils/article-list-request-key.test.js` plus runtime scenario `ALL_SORT_PREFERENCE_PRESERVED` in `scripts/tests/phase2c-list-regression.jsx` (Task 2). |
-| UNREAD_FILTER_PRESERVED | `src/utils/article-list-request-key.test.js` will cover key inclusion, not rendered/request behavior alone. | That unit suite plus runtime scenario `UNREAD_FILTER_PRESERVED` in `scripts/tests/phase2c-list-regression.jsx` (Task 2). |
-| MARK_ALL_READ_SUCCESS | No current automated component/runtime test covers FooterPanel success and completion. | `scripts/tests/phase2c-list-regression.jsx` scenario `MARK_ALL_READ_SUCCESS` (Task 5). |
-| MARK_ALL_READ_FILTER_SCOPE | `src/utils/reconcile-entries-after-mark-read.test.js` covers a supplied ID subset, not search/date API scope. | Runtime scenario `MARK_ALL_READ_FILTER_SCOPE` in `scripts/tests/phase2c-list-regression.jsx` with deterministic search/date fixture (Task 5). |
-| MARK_ALL_READ_NO_JUMP_ON_FAILURE | No current automated test covers the failed mutation navigation path. | Runtime scenario `MARK_ALL_READ_NO_JUMP_ON_FAILURE` in `scripts/tests/phase2c-list-regression.jsx` (Task 5). |
-| MARK_ALL_READ_JUMP_TO_NEXT | No current automated test covers successful next-unread feed selection. | Runtime scenario `MARK_ALL_READ_JUMP_TO_NEXT` in `scripts/tests/phase2c-list-regression.jsx` (Task 5). |
-| STALE_SESSION_PROTECTION | Production mutation/request guards exist, but this cross-session behavior has no dedicated test. | Deferred settlement scenario `STALE_SESSION_PROTECTION` in `scripts/tests/phase2c-list-regression.jsx`; Home count stale guard is separately tested in `scripts/tests/phase2c-editorial-home.jsx` (Tasks 5 and 10). |
-| PARTIAL_FAILURE_RECONCILIATION | `src/utils/reconcile-entries-after-mark-read.test.js` proves pure successful subset/batch reconciliation, not failure in a later API batch. | Runtime scenario `PARTIAL_FAILURE_RECONCILIATION` in `scripts/tests/phase2c-list-regression.jsx`, failing a later batch and verifying only confirmed results remain reconciled (Task 5). |
-| COUNTS_REFRESH | `src/utils/article-list-filters.test.js` covers the total-refresh predicate; it does not prove refreshed feed/global counts. | Runtime scenario `COUNTS_REFRESH` in `scripts/tests/phase2c-list-regression.jsx`, verifying source/global count refresh after success and failure (Task 5). |
+| Gate                             | Existing repository coverage                                                                                                                | Exact focused owner after implementation                                                                                                                                                                            |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| NO_ALL_RANKING                   | No runtime assertion currently proves ordinary All order is unaffected by Home projection.                                                  | `scripts/tests/phase2c-list-regression.jsx` scenario `NO_ALL_RANKING` (Task 2); suite registry (Task 11).                                                                                                           |
+| NO_UNREAD_RANKING                | No runtime assertion currently proves ordinary Unread order is unaffected by Home projection.                                               | `scripts/tests/phase2c-list-regression.jsx` scenario `NO_UNREAD_RANKING` (Task 2); suite registry (Task 11).                                                                                                        |
+| ALL_SORT_PREFERENCE_PRESERVED    | No current regression test covers the end-to-end list request; the planned request-key test covers only key invalidation.                   | `src/utils/article-list-request-key.test.js` plus runtime scenario `ALL_SORT_PREFERENCE_PRESERVED` in `scripts/tests/phase2c-list-regression.jsx` (Task 2).                                                         |
+| UNREAD_FILTER_PRESERVED          | `src/utils/article-list-request-key.test.js` will cover key inclusion, not rendered/request behavior alone.                                 | That unit suite plus runtime scenario `UNREAD_FILTER_PRESERVED` in `scripts/tests/phase2c-list-regression.jsx` (Task 2).                                                                                            |
+| MARK_ALL_READ_SUCCESS            | No current automated component/runtime test covers FooterPanel success and completion.                                                      | `scripts/tests/phase2c-list-regression.jsx` scenario `MARK_ALL_READ_SUCCESS` (Task 5).                                                                                                                              |
+| MARK_ALL_READ_FILTER_SCOPE       | `src/utils/reconcile-entries-after-mark-read.test.js` covers a supplied ID subset, not search/date API scope.                               | Runtime scenario `MARK_ALL_READ_FILTER_SCOPE` in `scripts/tests/phase2c-list-regression.jsx` with deterministic search/date fixture (Task 5).                                                                       |
+| MARK_ALL_READ_NO_JUMP_ON_FAILURE | No current automated test covers the failed mutation navigation path.                                                                       | Runtime scenario `MARK_ALL_READ_NO_JUMP_ON_FAILURE` in `scripts/tests/phase2c-list-regression.jsx` (Task 5).                                                                                                        |
+| MARK_ALL_READ_JUMP_TO_NEXT       | No current automated test covers successful next-unread feed selection.                                                                     | Runtime scenario `MARK_ALL_READ_JUMP_TO_NEXT` in `scripts/tests/phase2c-list-regression.jsx` (Task 5).                                                                                                              |
+| STALE_SESSION_PROTECTION         | Production mutation/request guards exist, but this cross-session behavior has no dedicated test.                                            | Deferred settlement scenario `STALE_SESSION_PROTECTION` in `scripts/tests/phase2c-list-regression.jsx`; Home count stale guard is separately tested in `scripts/tests/phase2c-editorial-home.jsx` (Tasks 5 and 10). |
+| PARTIAL_FAILURE_RECONCILIATION   | `src/utils/reconcile-entries-after-mark-read.test.js` proves pure successful subset/batch reconciliation, not failure in a later API batch. | Runtime scenario `PARTIAL_FAILURE_RECONCILIATION` in `scripts/tests/phase2c-list-regression.jsx`, failing a later batch and verifying only confirmed results remain reconciled (Task 5).                            |
+| COUNTS_REFRESH                   | `src/utils/article-list-filters.test.js` covers the total-refresh predicate; it does not prove refreshed feed/global counts.                | Runtime scenario `COUNTS_REFRESH` in `scripts/tests/phase2c-list-regression.jsx`, verifying source/global count refresh after success and failure (Task 5).                                                         |
 
 ## Visual Harness and Device Validation
 
@@ -753,50 +777,50 @@ Do not include upstream sync; NAV-01 swipe-to-open-feed selector; NAV-02 unread-
 
 All numbered spec sections are assigned below; the implementation worker must keep this map current if task boundaries change:
 
-| Spec section | Task or gate |
-| --- | --- |
-| 1 Purpose and product intent | Tasks 1–11; Home is deterministic and unread-oriented |
-| 2 Routing and startup contract | Tasks 3–4; explicit `useMatch` → `entryIdOverride` bridge and parent-instance runtime gate |
-| 3 Canonical Home data contract | Task 2; page and count requests share the canonical query builder |
-| 4 One loaded set and presentation projection | Tasks 1–2, 7 |
-| 5 Initial Highlight selection | Task 1 |
-| 6 Highlight stability | Tasks 5, 7–8 |
-| 7 Successful read mutation and one-slot backfill | Tasks 1, 5; successful status settlement also triggers guarded Home total reconciliation in Task 2 |
-| 8 Mark unread | Task 5 |
-| 9 Star and unstar | Task 5 |
-| 10 Pagination | Task 7 |
-| 11 Ephemeral Home session state | Tasks 4–5 |
-| 12 Session invalidation and stale responses | Tasks 2, 4–5; stale total/count response gate in Task 5 |
-| 13 Reader origin and return | Tasks 4–5 |
-| 14 Counts and Mark All Read | Tasks 2, 5, 11; Home count reconciliation and focused existing-list harness |
-| 15 Visual structure | Tasks 6–9 |
-| 16 Primary Highlight | Tasks 1, 6, 9–10 |
-| 17 Secondary Highlights | Tasks 1, 6, 9–10 |
-| 18 Recent | Tasks 7, 9–10 |
-| 19 Section headers and controls | Tasks 4, 9 |
-| 20 Responsive contract | Tasks 9–10 |
-| 21 Density | Tasks 9–10 and real-device gate |
-| 22 Initial loading | Task 8 |
-| 23 Low unread counts | Tasks 1, 8 |
-| 24 Empty Recent | Tasks 7–8 |
-| 25 Zero unread | Tasks 2, 5, 8; only a successful current page/count response can set canonical total to zero |
-| 26 Initial and explicit refresh errors | Task 8 |
-| 27 Load-more error | Tasks 7–8 |
-| 28 Interactions and accessibility | Tasks 4, 6, 9–11 |
-| 29 Themes and design contract | Tasks 9–10 |
-| 30 Component and architectural boundaries | Tasks 4–9 |
-| 31 Projection layer | Task 1 |
-| 32 Card reuse | Tasks 6–7 |
-| 33 Content.jsx boundary | Task 4 |
-| 34 Pure-logic test strategy | Tasks 1, 5, 7, 11 |
-| 35 Home functional gates | Tasks 2–8, 10–11; includes total reconciliation, pagination visibility, and identity recovery |
-| 36 Existing regression gates | Tasks 2, 5, 11; exact owners are enumerated in Existing List Regression Ownership |
-| 37 Visual harness | Tasks 4, 10; the separate focused list regression harness is created in Task 2 and extended in Task 5 |
-| 38 Real-device gate | Pre-merge checklist above |
-| 39 Deployment governance | Exact-SHA Deployment Gate above |
-| 40 Out of scope | Global Constraints and Out of Scope above |
-| 41 Residual risks | Review Focus and Tasks 2, 4, 5, 7, 8 |
-| 42 Definition of done | Task 11 and pre-merge/device/deployment gates |
+| Spec section                                     | Task or gate                                                                                          |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| 1 Purpose and product intent                     | Tasks 1–11; Home is deterministic and unread-oriented                                                 |
+| 2 Routing and startup contract                   | Tasks 3–4; explicit `useMatch` → `entryIdOverride` bridge and parent-instance runtime gate            |
+| 3 Canonical Home data contract                   | Task 2; page and count requests share the canonical query builder                                     |
+| 4 One loaded set and presentation projection     | Tasks 1–2, 7                                                                                          |
+| 5 Initial Highlight selection                    | Task 1                                                                                                |
+| 6 Highlight stability                            | Tasks 5, 7–8                                                                                          |
+| 7 Successful read mutation and one-slot backfill | Tasks 1, 5; successful status settlement also triggers guarded Home total reconciliation in Task 2    |
+| 8 Mark unread                                    | Task 5                                                                                                |
+| 9 Star and unstar                                | Task 5                                                                                                |
+| 10 Pagination                                    | Task 7                                                                                                |
+| 11 Ephemeral Home session state                  | Tasks 4–5                                                                                             |
+| 12 Session invalidation and stale responses      | Tasks 2, 4–5; stale total/count response gate in Task 5                                               |
+| 13 Reader origin and return                      | Tasks 4–5                                                                                             |
+| 14 Counts and Mark All Read                      | Tasks 2, 5, 11; Home count reconciliation and focused existing-list harness                           |
+| 15 Visual structure                              | Tasks 6–9                                                                                             |
+| 16 Primary Highlight                             | Tasks 1, 6, 9–10                                                                                      |
+| 17 Secondary Highlights                          | Tasks 1, 6, 9–10                                                                                      |
+| 18 Recent                                        | Tasks 7, 9–10                                                                                         |
+| 19 Section headers and controls                  | Tasks 4, 9                                                                                            |
+| 20 Responsive contract                           | Tasks 9–10                                                                                            |
+| 21 Density                                       | Tasks 9–10 and real-device gate                                                                       |
+| 22 Initial loading                               | Task 8                                                                                                |
+| 23 Low unread counts                             | Tasks 1, 8                                                                                            |
+| 24 Empty Recent                                  | Tasks 7–8                                                                                             |
+| 25 Zero unread                                   | Tasks 2, 5, 8; only a successful current page/count response can set canonical total to zero          |
+| 26 Initial and explicit refresh errors           | Task 8                                                                                                |
+| 27 Load-more error                               | Tasks 7–8                                                                                             |
+| 28 Interactions and accessibility                | Tasks 4, 6, 9–11                                                                                      |
+| 29 Themes and design contract                    | Tasks 9–10                                                                                            |
+| 30 Component and architectural boundaries        | Tasks 4–9                                                                                             |
+| 31 Projection layer                              | Task 1                                                                                                |
+| 32 Card reuse                                    | Tasks 6–7                                                                                             |
+| 33 Content.jsx boundary                          | Task 4                                                                                                |
+| 34 Pure-logic test strategy                      | Tasks 1, 5, 7, 11                                                                                     |
+| 35 Home functional gates                         | Tasks 2–8, 10–11; includes total reconciliation, pagination visibility, and identity recovery         |
+| 36 Existing regression gates                     | Tasks 2, 5, 11; exact owners are enumerated in Existing List Regression Ownership                     |
+| 37 Visual harness                                | Tasks 4, 10; the separate focused list regression harness is created in Task 2 and extended in Task 5 |
+| 38 Real-device gate                              | Pre-merge checklist above                                                                             |
+| 39 Deployment governance                         | Exact-SHA Deployment Gate above                                                                       |
+| 40 Out of scope                                  | Global Constraints and Out of Scope above                                                             |
+| 41 Residual risks                                | Review Focus and Tasks 2, 4, 5, 7, 8                                                                  |
+| 42 Definition of done                            | Task 11 and pre-merge/device/deployment gates                                                         |
 
 ### Technical decision verification
 

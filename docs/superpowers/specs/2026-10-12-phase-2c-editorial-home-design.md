@@ -68,6 +68,7 @@ On initial composition and explicit refresh:
 **Primary:** choose the newest eligible entry by published_at. Image availability does not affect Primary selection.
 
 **Secondary 1:** compare eligible entries in this priority order:
+
 1. source differs from Primary;
 2. category differs from Primary;
 3. newer published_at;
@@ -75,6 +76,7 @@ On initial composition and explicit refresh:
 5. stable entry.id tie-break.
 
 **Secondary 2:** compare remaining eligible entries in this priority order:
+
 1. prefer a source not yet represented, when possible;
 2. prefer a category not yet represented, when possible;
 3. newer published_at;
@@ -86,6 +88,7 @@ Source/category diversity is preferred but is not an eligibility requirement. Wh
 For Secondary selection, an image tie-break means preferring an entry with an eligible, usable image under the existing article presentation/image semantics only after source diversity, category diversity, and recency tie. Image presence never overrides any of those higher-priority criteria, never affects Primary selection, and lack of an image never makes an entry ineligible.
 
 Initial counts:
+
 - at least three eligible entries: three Highlights;
 - two eligible entries: two Highlights;
 - one eligible entry: one Highlight;
@@ -106,6 +109,7 @@ On successful explicit refresh, fetch canonical Home data, discard the previous 
 Reuse the existing functional mutation pipeline; do not create a separate mutation system. On successful mark-read, the article is ineligible and is removed from Home.
 
 If the read article occupied a Highlight:
+
 - vacate exactly that slot;
 - choose a backfill candidate only from currently loaded, eligible entries in Recent;
 - rank candidates relative to the Highlights that survive in their existing slots, preferring in order: a source not already represented by those surviving Highlights, a category not already represented, newer published_at, an eligible/usable image, then the stable entry.id tie-break;
