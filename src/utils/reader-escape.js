@@ -4,12 +4,14 @@ const DRAWER_ACTIVE_SELECTOR =
 
 const shouldDeferReaderEscape = (event, context = globalThis.document) => {
   let isDrawerVisible = false
+  let hasExplicitDrawerState = false
   let documentRef = globalThis.document
 
   if (context && typeof context.querySelector === "function") {
     documentRef = context
   } else if (context && typeof context === "object") {
-    if ("isDrawerVisible" in context) {
+    hasExplicitDrawerState = "isDrawerVisible" in context
+    if (hasExplicitDrawerState) {
       isDrawerVisible = Boolean(context.isDrawerVisible)
     }
     if (context.documentRef) {
@@ -17,11 +19,14 @@ const shouldDeferReaderEscape = (event, context = globalThis.document) => {
     }
   }
 
+  const drawerVisible = hasExplicitDrawerState
+    ? isDrawerVisible
+    : Boolean(documentRef?.querySelector?.(DRAWER_ACTIVE_SELECTOR))
+
   return Boolean(
     event?.defaultPrevented ||
-    isDrawerVisible ||
-    documentRef?.querySelector?.(READER_TRANSIENT_SELECTOR) ||
-    documentRef?.querySelector?.(DRAWER_ACTIVE_SELECTOR),
+    drawerVisible ||
+    documentRef?.querySelector?.(READER_TRANSIENT_SELECTOR),
   )
 }
 

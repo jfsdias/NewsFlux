@@ -25,10 +25,6 @@ export default function SidebarDrawerHost({ headerTriggerRef = null } = {}) {
   const restoreFocusAfterCloseRef = useRef(false)
   const cancelPendingFocusRef = useRef(null)
 
-  useEffect(() => {
-    globalThis.__drawerHostMountCount = (globalThis.__drawerHostMountCount || 0) + 1
-  }, [])
-
   const closeSidebarLabel = polyglot?.t("actions.close_dialog", {
     name: polyglot?.t("sidebar.navigation_menu"),
   })

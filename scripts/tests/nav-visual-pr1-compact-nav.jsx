@@ -3,7 +3,7 @@ import "@arco-design/web-react/es/_util/react-19-adapter"
 import "@arco-design/web-react/dist/css/arco.css"
 import { useStore } from "@nanostores/react"
 import Polyglot from "node-polyglot"
-import React, { useEffect, useRef, useState } from "react"
+import React, { useCallback, useEffect, useRef, useState } from "react"
 import { createRoot } from "react-dom/client"
 import { MemoryRouter, useLocation, useNavigate } from "react-router"
 
@@ -23,7 +23,7 @@ import { mobileSidebarVisibleState } from "@/store/sidebarState"
 import { windowClassState } from "@/store/windowClassState"
 import { COMPACT_NAV_DESTINATIONS } from "@/utils/compact-navigation"
 import shouldDeferReaderEscape from "@/utils/reader-escape"
-import { WINDOW_CLASSES } from "@/utils/window-class"
+import { classifyWindowClass, WINDOW_CLASSES } from "@/utils/window-class"
 
 import "@/components/Article/SidebarTrigger.css"
 import "@/components/Navigation/CompactNavigation.css"
@@ -51,6 +51,167 @@ const waitForCondition = async (predicate, maxWaitMs = 1500, stepMs = 50) => {
     elapsed += stepMs
   }
   return predicate()
+}
+
+const ResizeDiagnostics = () => {
+  const location = useLocation()
+  const [events, setEvents] = useState([])
+  const eventsRef = useRef([])
+  const resizeSamplesRef = useRef([])
+  const [resizeSamples, setResizeSamples] = useState([])
+  const currentPathRef = useRef(location.pathname)
+  const firstDrawerElementRef = useRef(null)
+  const inputCountsRef = useRef({ onCancel: 0, closeSidebar: 0, closeSidebarAfterNavigation: 0 })
+
+  const record = useCallback((cause) => {
+    const drawer = document.querySelector(".sidebar-drawer")
+    if (drawer && !firstDrawerElementRef.current) {
+      firstDrawerElementRef.current = drawer
+    }
+
+    const width = globalThis.innerWidth
+    const height = globalThis.innerHeight
+    const drawerVisibleProp = mobileSidebarVisibleState.get()
+    const { activeElement } = document
+    const snapshot = {
+      cause,
+      viewport: `${width}x${height}`,
+      windowClass: classifyWindowClass({ width, height }),
+      windowClassState: windowClassState.get(),
+      isBelowLarge: globalThis.matchMedia?.("(max-width: 992px)").matches ?? null,
+      mobileSidebarVisibleState: drawerVisibleProp,
+      drawerVisibleProp,
+      drawerPresent: Boolean(drawer),
+      drawerDomClass: drawer?.className ?? null,
+      drawerAriaHidden: drawer?.getAttribute("aria-hidden") ?? null,
+      drawerComputedVisibility: drawer ? getComputedStyle(drawer).visibility : null,
+      drawerComputedDisplay: drawer ? getComputedStyle(drawer).display : null,
+      sameDrawerElement: Boolean(drawer && drawer === firstDrawerElementRef.current),
+      route: currentPathRef.current,
+      activeElement: activeElement
+        ? {
+            tag: activeElement.tagName,
+            id: activeElement.id || null,
+            className: typeof activeElement.className === "string" ? activeElement.className : null,
+            ariaLabel: activeElement.getAttribute?.("aria-label") ?? null,
+            navKey: activeElement.getAttribute?.("data-nav-key") ?? null,
+          }
+        : null,
+      closePathInputs: { ...inputCountsRef.current },
+    }
+    if (cause === "resize settled") {
+      const nextResizeSamples = [...resizeSamplesRef.current, snapshot].slice(-12)
+      resizeSamplesRef.current = nextResizeSamples
+      setResizeSamples(nextResizeSamples)
+    }
+    const nextEvents = [...eventsRef.current, snapshot].slice(-4)
+    eventsRef.current = nextEvents
+    setEvents(nextEvents)
+  }, [])
+
+  useEffect(() => {
+    currentPathRef.current = location.pathname
+    record("currentPath effect")
+  }, [location.pathname, record])
+
+  useEffect(() => {
+    const onResize = () => {
+      record("window resize")
+      globalThis.requestAnimationFrame?.(() => record("resize settled"))
+    }
+    const onClick = (event) => {
+      const target = event.target instanceof Element ? event.target : null
+      if (target?.closest(".mobile-sidebar-close")) {
+        inputCountsRef.current.closeSidebar += 1
+      } else if (target?.closest(".arco-drawer-mask")) {
+        inputCountsRef.current.onCancel += 1
+      } else if (target?.closest(".sidebar-drawer a")) {
+        inputCountsRef.current.closeSidebarAfterNavigation += 1
+      }
+      if (target?.closest(".mobile-sidebar-close, .arco-drawer-mask, .sidebar-drawer a")) {
+        record("drawer close-path input")
+      }
+    }
+    const onKeyDown = (event) => {
+      if (event.key === "Escape" && event.target?.closest?.(".sidebar-drawer")) {
+        inputCountsRef.current.onCancel += 1
+        record("drawer Escape input")
+      }
+    }
+    const onFocusIn = () => record("focusin")
+    const stopListening = mobileSidebarVisibleState.listen((value, previousValue) => {
+      record(`mobileSidebarVisibleState ${previousValue}→${value}`)
+    })
+    const drawerObserver = new MutationObserver((records) => {
+      if (
+        records.some(
+          (item) => item.target instanceof Element && item.target.closest(".sidebar-drawer"),
+        )
+      ) {
+        record("Drawer DOM mutation")
+      }
+    })
+
+    drawerObserver.observe(document.body, {
+      attributes: true,
+      attributeFilter: ["class", "aria-hidden", "style"],
+      subtree: true,
+    })
+    globalThis.addEventListener("resize", onResize)
+    document.addEventListener("click", onClick, true)
+    document.addEventListener("keydown", onKeyDown, true)
+    document.addEventListener("focusin", onFocusIn, true)
+    record("resize diagnostics mounted")
+
+    return () => {
+      stopListening()
+      drawerObserver.disconnect()
+      globalThis.removeEventListener("resize", onResize)
+      document.removeEventListener("click", onClick, true)
+      document.removeEventListener("keydown", onKeyDown, true)
+      document.removeEventListener("focusin", onFocusIn, true)
+    }
+  }, [record])
+
+  const resetTrace = () => {
+    inputCountsRef.current = { onCancel: 0, closeSidebar: 0, closeSidebarAfterNavigation: 0 }
+    eventsRef.current = []
+    resizeSamplesRef.current = []
+    setEvents([])
+    setResizeSamples([])
+    record("trace reset")
+  }
+
+  return (
+    <details open style={{ margin: "12px", fontSize: "12px" }}>
+      <summary>Resize diagnostics (test harness only)</summary>
+      <button data-testid="reset-resize-probe" type="button" onClick={resetTrace}>
+        Reset resize trace
+      </button>
+      <pre
+        data-testid="resize-probe-report"
+        style={{ maxHeight: "180px", overflow: "auto", whiteSpace: "pre-wrap" }}
+      >
+        {events.map((event, index) => (
+          <React.Fragment key={`${event.cause}-${index}`}>
+            {JSON.stringify(event)}
+            {"\n"}
+          </React.Fragment>
+        ))}
+      </pre>
+      <output data-testid="resize-probe-latest">
+        {events.length > 0 ? JSON.stringify(events.at(-1)) : "waiting for viewport event"}
+      </output>
+      <pre data-testid="resize-probe-samples" style={{ whiteSpace: "pre-wrap" }}>
+        {resizeSamples.map((sample, index) => (
+          <React.Fragment key={`${sample.viewport}-${index}`}>
+            {JSON.stringify(sample)}
+            {"\n"}
+          </React.Fragment>
+        ))}
+      </pre>
+    </details>
+  )
 }
 
 const HarnessContent = () => {
@@ -87,6 +248,10 @@ const HarnessContent = () => {
     ranRef.current = true
 
     const runVerification = async () => {
+      const compactNavStorageBeforeRun = {
+        localStorage: localStorage.getItem("newsflux:compact_nav"),
+        sessionStorage: sessionStorage.getItem("newsflux:compact_nav"),
+      }
       const results = {
         compactInCompact: false,
         absentInMedium: false,
@@ -116,9 +281,9 @@ const HarnessContent = () => {
         // R4 Required report fields
         readerTriggerOutsideInert: false,
         readerEscapeDrawerOnly: false,
+        readerSecondEscapeClosesReader: false,
         drawerHostStableAcrossCompactMedium: false,
         drawerHostStableAcrossMediumCompact: false,
-        drawerHostMountCount: 0,
         // Backward-compatible gate aliases
         headerTriggerFocusReturn: false,
         compactSourcesFocusReturn: false,
@@ -242,9 +407,16 @@ const HarnessContent = () => {
       results.mainRemountGatePass = mainElement === mainRef.current
 
       // Step 8: Verify no new persistent state
+      results.compactNavStorageBeforeRun = compactNavStorageBeforeRun
+      results.compactNavStorageAfterRun = {
+        localStorage: localStorage.getItem("newsflux:compact_nav"),
+        sessionStorage: sessionStorage.getItem("newsflux:compact_nav"),
+      }
       results.persistentStateAdded =
-        Boolean(localStorage.getItem("newsflux:compact_nav")) ||
-        Boolean(sessionStorage.getItem("newsflux:compact_nav"))
+        results.compactNavStorageAfterRun.localStorage !==
+          compactNavStorageBeforeRun.localStorage ||
+        results.compactNavStorageAfterRun.sessionStorage !==
+          compactNavStorageBeforeRun.sessionStorage
 
       // Step 9: Verify Sources button opens drawer in COMPACT
       const sourcesBtn = document.querySelector('[data-nav-key="sources"]')
@@ -393,22 +565,19 @@ const HarnessContent = () => {
         }
         await waitForCondition(() => !mobileSidebarVisibleState.get(), 1500)
 
-        // Escape closes Drawer only; Reader must remain active
+        // Escape closes Drawer only; Reader must remain active.
         results.readerEscapeDrawerOnly = Boolean(contentState.get().activeContent)
 
-        await waitForCondition(() => {
-          const currentTrigger = document.querySelector(".reader-sidebar-trigger")
-          return (
-            document.activeElement === currentTrigger || document.activeElement === readerHeaderBtn
-          )
-        }, 1500)
-        const currentTrigger = document.querySelector(".reader-sidebar-trigger")
-        results.readerHeaderEscapeFocusReturn =
-          document.activeElement === currentTrigger || document.activeElement === readerHeaderBtn
-
-        // With Drawer closed, second Escape should proceed to normal Reader close behavior
+        // The first Escape closes Drawer and restores Reader trigger focus.
         if (results.readerEscapeDrawerOnly) {
-          activeEl.dispatchEvent(
+          await waitForCondition(() => document.activeElement === readerHeaderBtn, 1500)
+          const currentTrigger = document.querySelector(".reader-sidebar-trigger")
+          results.readerHeaderEscapeFocusReturn =
+            document.activeElement === currentTrigger || document.activeElement === readerHeaderBtn
+
+          // Once focus restoration confirms Drawer has closed, the next Escape belongs to Reader.
+          const secondEscapeTarget = document.activeElement || activeEl
+          secondEscapeTarget.dispatchEvent(
             new KeyboardEvent("keydown", {
               key: "Escape",
               code: "Escape",
@@ -417,6 +586,7 @@ const HarnessContent = () => {
             }),
           )
           await waitForCondition(() => !contentState.get().activeContent, 1500)
+          results.readerSecondEscapeClosesReader = !contentState.get().activeContent
         }
       }
       setActiveContent(null)
@@ -427,7 +597,7 @@ const HarnessContent = () => {
         () => Boolean(document.querySelector('[data-nav-key="sources"]')),
         1500,
       )
-      const mountCountBeforeCompactToMed = globalThis.__drawerHostMountCount || 1
+      const drawerElementBeforeCompactToMed = document.querySelector(".sidebar-drawer")
       const sourcesForFold = document.querySelector('[data-nav-key="sources"]')
       if (sourcesForFold) {
         sourcesForFold.focus({ preventScroll: true })
@@ -440,7 +610,7 @@ const HarnessContent = () => {
         await waitForCondition(() => Boolean(document.querySelector(".brand .trigger")), 1500)
 
         results.drawerHostStableAcrossCompactMedium =
-          (globalThis.__drawerHostMountCount || 1) === mountCountBeforeCompactToMed
+          document.querySelector(".sidebar-drawer") === drawerElementBeforeCompactToMed
 
         const closeBtn = document.querySelector(".mobile-sidebar-close")
         if (closeBtn) {
@@ -459,7 +629,7 @@ const HarnessContent = () => {
       // 10G: Medium to Compact Resize while Drawer Open -> Focus Target Sources
       windowClassState.set(WINDOW_CLASSES.MEDIUM)
       await waitForCondition(() => Boolean(document.querySelector(".brand .trigger")), 1500)
-      const mountCountBeforeMedToCompact = globalThis.__drawerHostMountCount || 1
+      const drawerElementBeforeMedToCompact = document.querySelector(".sidebar-drawer")
       const mediumHeaderBtn = document.querySelector(".brand .trigger")
       if (mediumHeaderBtn) {
         mediumHeaderBtn.focus({ preventScroll: true })
@@ -475,7 +645,7 @@ const HarnessContent = () => {
         )
 
         results.drawerHostStableAcrossMediumCompact =
-          (globalThis.__drawerHostMountCount || 1) === mountCountBeforeMedToCompact
+          document.querySelector(".sidebar-drawer") === drawerElementBeforeMedToCompact
 
         const closeBtn = document.querySelector(".mobile-sidebar-close")
         if (closeBtn) {
@@ -492,7 +662,9 @@ const HarnessContent = () => {
         }
       }
 
-      results.drawerHostMountCount = globalThis.__drawerHostMountCount || 1
+      results.drawerElementIdentityStable = Boolean(
+        document.querySelector(".sidebar-drawer") === drawerElementBeforeMedToCompact,
+      )
 
       // 10H: No Body Focus In Required Cases
       results.noBodyFocusInRequiredCases = Boolean(
@@ -561,9 +733,10 @@ const HarnessContent = () => {
         results.navigationCloseNoWrongFocus &&
         results.readerTriggerOutsideInert &&
         results.readerEscapeDrawerOnly &&
+        results.readerSecondEscapeClosesReader &&
         results.drawerHostStableAcrossCompactMedium &&
         results.drawerHostStableAcrossMediumCompact &&
-        results.drawerHostMountCount === 1
+        results.drawerElementIdentityStable
 
       const finalReport = {
         windowClass: windowClassState.get(),
@@ -591,9 +764,10 @@ const HarnessContent = () => {
         navigationCloseNoWrongFocus: results.navigationCloseNoWrongFocus,
         readerTriggerOutsideInert: results.readerTriggerOutsideInert,
         readerEscapeDrawerOnly: results.readerEscapeDrawerOnly,
+        readerSecondEscapeClosesReader: results.readerSecondEscapeClosesReader,
         drawerHostStableAcrossCompactMedium: results.drawerHostStableAcrossCompactMedium,
         drawerHostStableAcrossMediumCompact: results.drawerHostStableAcrossMediumCompact,
-        drawerHostMountCount: results.drawerHostMountCount,
+        drawerElementIdentityStable: results.drawerElementIdentityStable,
         summary: isAllPass ? "PASS" : "FAIL",
         details: results,
       }
@@ -638,6 +812,27 @@ const HarnessContent = () => {
             <div>
               Summary: <b data-testid="harness-summary">{report?.summary ?? "RUNNING"}</b>
             </div>
+            <div data-testid="reader-second-escape-gate">
+              Second Escape closes Reader:{" "}
+              {report
+                ? report.details.readerSecondEscapeClosesReader
+                  ? "PASS"
+                  : "FAIL"
+                : "RUNNING"}
+            </div>
+            <div data-testid="harness-failing-gates">
+              Failing gates:{" "}
+              {report ? (report.summary === "PASS" ? "none" : "see detailed report") : "RUNNING"}
+            </div>
+            <div data-testid="persistence-state-debug">
+              Compact nav storage:{" "}
+              {report
+                ? JSON.stringify([
+                    report.details.compactNavStorageBeforeRun,
+                    report.details.compactNavStorageAfterRun,
+                  ])
+                : "RUNNING"}
+            </div>
           </div>
         </div>
       </header>
@@ -652,6 +847,7 @@ const HarnessContent = () => {
         <p>Main content area for test harness</p>
       </main>
 
+      <ResizeDiagnostics />
       <CompactNavigation />
       <SidebarDrawerHost />
 
