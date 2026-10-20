@@ -168,20 +168,24 @@ test("NAV-PR1-R2: CompactNavigation aria-controls and invoker contract", () => {
   assert.ok(componentSource.includes('setMobileSidebarInvoker("compact-sources")'))
 })
 
-test("NAV-PR1-R2: SidebarTrigger decouples Drawer host and suppresses duplicate in compact list", () => {
+test("NAV-PR1-R4: stable Drawer host decoupled from trigger and owned by App shell", () => {
+  const appPath = path.resolve("src/App.jsx")
   const triggerPath = path.resolve("src/components/Article/SidebarTrigger.jsx")
   const drawerHostPath = path.resolve("src/components/Article/SidebarDrawerHost.jsx")
 
+  const appSource = fs.readFileSync(appPath, "utf8")
   const triggerSource = fs.readFileSync(triggerPath, "utf8")
   const drawerHostSource = fs.readFileSync(drawerHostPath, "utf8")
 
-  // SidebarTrigger imports and mounts SidebarDrawerHost
-  assert.ok(triggerSource.includes('import SidebarDrawerHost from "./SidebarDrawerHost"'))
-  assert.ok(triggerSource.includes("<SidebarDrawerHost"))
-  assert.ok(triggerSource.includes("SidebarDrawerHost"))
+  // App imports and mounts SidebarDrawerHost stably at root
+  assert.ok(appSource.includes("SidebarDrawerHost"), "App.jsx must mount SidebarDrawerHost")
+  assert.ok(appSource.includes("<SidebarDrawerHost"), "App.jsx must render <SidebarDrawerHost />")
 
-  // In COMPACT list mode, visible trigger is suppressed
-  assert.ok(triggerSource.includes("const showLegacyTrigger = !(isCompact && !isReaderActive)"))
+  // SidebarTrigger does NOT mount SidebarDrawerHost (decoupled)
+  assert.ok(
+    !triggerSource.includes("<SidebarDrawerHost"),
+    "SidebarTrigger must not mount SidebarDrawerHost",
+  )
 
   // Drawer host contains the Drawer component with id mobile-sidebar-drawer
   assert.ok(drawerHostSource.includes('id="mobile-sidebar-drawer"'))

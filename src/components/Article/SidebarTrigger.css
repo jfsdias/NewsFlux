@@ -42,7 +42,20 @@
   }
 }
 
+.reader-sidebar-trigger-wrapper {
+  position: absolute;
+  top: calc(8px + env(safe-area-inset-top, 0px));
+  left: calc(var(--mobile-edge-spacing, 10px) + env(safe-area-inset-left, 0px));
+  z-index: 5;
+  margin-left: 0;
+}
+
+.reader-sidebar-trigger.arco-btn {
+  display: inline-flex;
+}
+
 .desktop-sidebar-reopen.arco-btn:focus-visible,
+.reader-sidebar-trigger.arco-btn:focus-visible,
 .trigger.arco-btn:focus-visible {
   outline: 2px solid var(--nf-focus-ring, rgb(var(--primary-6)));
   outline-offset: 1px;

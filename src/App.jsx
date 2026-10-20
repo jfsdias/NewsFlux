@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react"
 
 import "./App.css"
 import AppNotifications from "./AppNotifications"
+import SidebarDrawerHost from "./components/Article/SidebarDrawerHost"
 import HomePageManager from "./components/HomePageManager"
 import Main from "./components/Main/Main"
 import CompactNavigation from "./components/Navigation/CompactNavigation"
@@ -183,6 +184,7 @@ const App = () => {
             )}
             <Main />
             <CompactNavigation />
+            <SidebarDrawerHost />
           </div>
         </DesktopSidebarContext.Provider>
       </ConfigProvider>

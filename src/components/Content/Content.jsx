@@ -11,6 +11,7 @@ import FooterPanel from "./FooterPanel"
 import { getEntry } from "@/apis"
 import ArticleList from "@/components/Article/ArticleList"
 import SearchAndSortBar from "@/components/Article/SearchAndSortBar"
+import { ReaderSidebarTrigger } from "@/components/Article/SidebarTrigger"
 import FadeTransition from "@/components/ui/FadeTransition"
 import ReaderCommandsContext from "@/contexts/reader-commands-context"
 import useAppData from "@/hooks/useAppData"
@@ -365,6 +366,7 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
             className="article-container article-container-full-size content-wrapper"
             {...handlers}
           >
+            <ReaderSidebarTrigger />
             {isArticleLoading ? (
               <div style={{ flex: 1 }} />
             ) : (

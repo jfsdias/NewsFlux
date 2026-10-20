@@ -229,3 +229,96 @@ test("NAVIGATION_CLOSE_NO_FORCED_RETURN: navigation close does not invoke focus 
 
   assert.equal(focusCalled, false)
 })
+
+test("READER_TRIGGER_NOT_IN_INERT_SUBTREE: inert entry-col rejects focus while legal reader trigger accepts focus", () => {
+  // Inactive trigger trapped inside inert entry-col
+  const trappedTrigger = createMockElement({
+    id: "trapped-trigger",
+    inert: true,
+    ariaHidden: true,
+  })
+  // Legal trigger rendered outside entry-col in reader container
+  const legalReaderTrigger = createMockElement({
+    id: "reader-sidebar-trigger",
+    inert: false,
+    ariaHidden: false,
+  })
+
+  assert.equal(canElementReceiveFocus(trappedTrigger), false)
+  assert.equal(canElementReceiveFocus(legalReaderTrigger), true)
+
+  const documentRef = {
+    querySelector: (sel) => {
+      if (sel.includes("reader-sidebar-trigger")) {
+        return legalReaderTrigger
+      }
+      if (sel.includes("trigger")) {
+        return trappedTrigger
+      }
+      return null
+    },
+  }
+
+  const resolved = resolveCurrentDrawerFocusTarget("header", { documentRef })
+  assert.equal(resolved, legalReaderTrigger)
+})
+
+test("READER_X_RETURNS_TO_HEADER: reader header close restores focus to legal reader trigger", async () => {
+  const legalReaderTrigger = createMockElement({
+    id: "reader-sidebar-trigger",
+    inert: false,
+    ariaHidden: false,
+  })
+  const documentRef = {
+    activeElement: null,
+    querySelector: (sel) => (sel.includes("reader-sidebar-trigger") ? legalReaderTrigger : null),
+  }
+  globalThis.document = documentRef
+
+  let focusedElement = null
+  await new Promise((resolve) => {
+    restoreDrawerFocus({
+      invoker: "header",
+      documentRef,
+      requestFrame: (cb) => setTimeout(cb, 5),
+      cancelFrame: fakeCancelFrame,
+      onFocusSuccess: (el) => {
+        focusedElement = el
+        resolve()
+      },
+    })
+  })
+
+  assert.equal(focusedElement, legalReaderTrigger)
+  assert.equal(documentRef.activeElement, legalReaderTrigger)
+})
+
+test("READER_DRAWER_ESCAPE_RETURNS_TO_HEADER: reader escape restores focus to legal reader trigger", async () => {
+  const legalReaderTrigger = createMockElement({
+    id: "reader-sidebar-trigger",
+    inert: false,
+    ariaHidden: false,
+  })
+  const documentRef = {
+    activeElement: null,
+    querySelector: (sel) => (sel.includes("reader-sidebar-trigger") ? legalReaderTrigger : null),
+  }
+  globalThis.document = documentRef
+
+  let focusedElement = null
+  await new Promise((resolve) => {
+    restoreDrawerFocus({
+      invoker: "header",
+      documentRef,
+      requestFrame: (cb) => setTimeout(cb, 5),
+      cancelFrame: fakeCancelFrame,
+      onFocusSuccess: (el) => {
+        focusedElement = el
+        resolve()
+      },
+    })
+  })
+
+  assert.equal(focusedElement, legalReaderTrigger)
+  assert.equal(documentRef.activeElement, legalReaderTrigger)
+})

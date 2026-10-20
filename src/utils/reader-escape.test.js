@@ -30,3 +30,30 @@ test("reader Escape is not deferred for a dropdown outside the reader", () => {
 test("reader Escape is deferred when an earlier handler consumed the event", () => {
   assert.equal(shouldDeferReaderEscape({ defaultPrevented: true }, createDocument()), true)
 })
+
+test("READER_DRAWER_ESCAPE_DOES_NOT_CLOSE_ARTICLE: reader Escape is deferred when mobile drawer is visible", () => {
+  // Option flag
+  assert.equal(
+    shouldDeferReaderEscape({ defaultPrevented: false }, { isDrawerVisible: true }),
+    true,
+  )
+
+  // DOM selector
+  const drawerDocument = {
+    querySelector: (sel) =>
+      sel.includes(".sidebar-drawer") || sel.includes("#mobile-sidebar-drawer") ? {} : null,
+  }
+  assert.equal(shouldDeferReaderEscape({ defaultPrevented: false }, drawerDocument), true)
+
+  // When drawer is closed, reader escape proceeds normally
+  const closedDocument = {
+    querySelector: () => null,
+  }
+  assert.equal(
+    shouldDeferReaderEscape(
+      { defaultPrevented: false },
+      { isDrawerVisible: false, documentRef: closedDocument },
+    ),
+    false,
+  )
+})

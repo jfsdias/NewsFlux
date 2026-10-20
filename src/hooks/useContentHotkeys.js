@@ -5,6 +5,7 @@ import { useHotkeys } from "react-hotkeys-hook"
 import useEntryActions from "@/hooks/useEntryActions"
 import useReaderCommands from "@/hooks/useReaderCommands"
 import { duplicateHotkeysState, hotkeysState } from "@/store/hotkeysState"
+import { mobileSidebarVisibleState } from "@/store/sidebarState"
 import shouldDeferReaderEscape from "@/utils/reader-escape"
 
 const SCROLL_HOTKEY_IGNORE_SELECTOR = [
@@ -71,7 +72,8 @@ const useContentHotkeys = ({ handleRefreshArticleList }) => {
 
   useHotkeys(filteredHotkeys.exitDetailView, exitDetailView, {
     eventListenerOptions: { capture: true },
-    ignoreEventWhen: shouldDeferReaderEscape,
+    ignoreEventWhen: (event) =>
+      shouldDeferReaderEscape(event, { isDrawerVisible: mobileSidebarVisibleState.get() }),
   })
 
   useHotkeys(filteredHotkeys.fetchOriginalArticle, () => fetchOriginalArticle(handleFetchContent))

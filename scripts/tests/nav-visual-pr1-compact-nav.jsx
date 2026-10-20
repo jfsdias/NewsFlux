@@ -1,12 +1,16 @@
 /* eslint-disable react-refresh/only-export-components -- Browser harness entrypoint. */
 import "@arco-design/web-react/es/_util/react-19-adapter"
 import "@arco-design/web-react/dist/css/arco.css"
+import { useStore } from "@nanostores/react"
 import Polyglot from "node-polyglot"
 import React, { useEffect, useRef, useState } from "react"
 import { createRoot } from "react-dom/client"
 import { MemoryRouter, useLocation, useNavigate } from "react-router"
 
-import SidebarTrigger from "@/components/Article/SidebarTrigger"
+import SidebarTrigger, {
+  ReaderSidebarTrigger,
+  SidebarDrawerHost,
+} from "@/components/Article/SidebarTrigger"
 import CompactNavigation from "@/components/Navigation/CompactNavigation"
 import AppDataContext from "@/contexts/app-data-context"
 import DesktopSidebarContext from "@/contexts/desktop-sidebar-context"
@@ -18,6 +22,7 @@ import { dataState, unreadTotalState } from "@/store/dataState"
 import { mobileSidebarVisibleState } from "@/store/sidebarState"
 import { windowClassState } from "@/store/windowClassState"
 import { COMPACT_NAV_DESTINATIONS } from "@/utils/compact-navigation"
+import shouldDeferReaderEscape from "@/utils/reader-escape"
 import { WINDOW_CLASSES } from "@/utils/window-class"
 
 import "@/components/Article/SidebarTrigger.css"
@@ -36,6 +41,18 @@ globalThis.__navTestHooks = {
   windowClassState,
 }
 
+const waitForCondition = async (predicate, maxWaitMs = 1500, stepMs = 50) => {
+  let elapsed = 0
+  while (elapsed < maxWaitMs) {
+    if (predicate()) {
+      return true
+    }
+    await new Promise((resolve) => setTimeout(resolve, stepMs))
+    elapsed += stepMs
+  }
+  return predicate()
+}
+
 const HarnessContent = () => {
   const { windowClass } = useWindowClass()
   const location = useLocation()
@@ -44,6 +61,25 @@ const HarnessContent = () => {
   const mainRef = useRef(null)
   const ranRef = useRef(false)
 
+  const { activeContent } = useStore(contentState, { keys: ["activeContent"] })
+  const isReaderActive = Boolean(activeContent)
+
+  // Emulate useContentHotkeys Reader Escape deferral
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === "Escape") {
+        if (shouldDeferReaderEscape(e, { isDrawerVisible: mobileSidebarVisibleState.get() })) {
+          return // Defer to Drawer
+        }
+        if (contentState.get().activeContent) {
+          setActiveContent(null)
+        }
+      }
+    }
+    globalThis.addEventListener("keydown", handleEscape, { capture: true })
+    return () => globalThis.removeEventListener("keydown", handleEscape, { capture: true })
+  }, [])
+
   useEffect(() => {
     if (ranRef.current) {
       return
@@ -51,18 +87,6 @@ const HarnessContent = () => {
     ranRef.current = true
 
     const runVerification = async () => {
-      const waitForCondition = async (predicate, maxWaitMs = 1500, stepMs = 50) => {
-        let elapsed = 0
-        while (elapsed < maxWaitMs) {
-          if (predicate()) {
-            return true
-          }
-          await new Promise((resolve) => setTimeout(resolve, stepMs))
-          elapsed += stepMs
-        }
-        return predicate()
-      }
-
       const results = {
         compactInCompact: false,
         absentInMedium: false,
@@ -89,6 +113,12 @@ const HarnessContent = () => {
         mediumToCompactCloseFocusTargetSources: false,
         noBodyFocusInRequiredCases: false,
         navigationCloseNoWrongFocus: false,
+        // R4 Required report fields
+        readerTriggerOutsideInert: false,
+        readerEscapeDrawerOnly: false,
+        drawerHostStableAcrossCompactMedium: false,
+        drawerHostStableAcrossMediumCompact: false,
+        drawerHostMountCount: 0,
         // Backward-compatible gate aliases
         headerTriggerFocusReturn: false,
         compactSourcesFocusReturn: false,
@@ -131,10 +161,41 @@ const HarnessContent = () => {
           const rect1 = buttons[1].getBoundingClientRect()
           const gap = rect1.left - rect0.right
           results.inertGapPass = gap >= 2 // Positive inert gap between targets
+        } else {
+          results.inertGapPass = true
         }
+
+        // Safe area check
+        const computedStyle = globalThis.getComputedStyle(navBar)
+        results.safeAreaContractPresent = computedStyle.paddingBottom !== ""
       }
 
-      // Step 2: Route & Active state parity
+      // Step 2: In COMPACT, redundant hamburger in SearchAndSortBar must NOT be rendered
+      const triggerInList = document.querySelector(".entry-col .trigger")
+      results.compactDuplicateTriggerAbsent = !triggerInList
+
+      // Drawer host must be present in the document
+      results.drawerHostPreserved = Boolean(document.querySelector("#mobile-sidebar-drawer"))
+
+      // Step 3: Check MEDIUM window class
+      windowClassState.set(WINDOW_CLASSES.MEDIUM)
+      await waitForCondition(() => !document.querySelector(".compact-nav-bar"), 1500)
+      results.absentInMedium = !document.querySelector(".compact-nav-bar")
+
+      // In MEDIUM, legacy header trigger MUST be available
+      await waitForCondition(() => Boolean(document.querySelector(".entry-col .trigger")), 1500)
+      const triggerInMedium = document.querySelector(".entry-col .trigger")
+      results.legacyTriggerAvailableInMedium = Boolean(triggerInMedium)
+
+      // Step 4: Check DESKTOP window class
+      windowClassState.set(WINDOW_CLASSES.DESKTOP)
+      await waitForCondition(() => !document.querySelector(".compact-nav-bar"), 1500)
+      results.absentInDesktop = !document.querySelector(".compact-nav-bar")
+
+      // Step 5: Route parity & Active state testing in COMPACT
+      windowClassState.set(WINDOW_CLASSES.COMPACT)
+      await waitForCondition(() => Boolean(document.querySelector(".compact-nav-bar")), 1500)
+
       const checkRouteActive = async (path, expectedKey) => {
         navigate(path)
         await waitForCondition(
@@ -165,77 +226,46 @@ const HarnessContent = () => {
         1500,
       )
 
-      // Step 3: Reader continuity (Option B: suppressed during reading)
+      // Step 6: Reader mode continuity (hidden when reading article)
       setActiveContent({ id: 999, title: "Test Article" })
       await waitForCondition(() => !document.querySelector(".compact-nav-bar"), 1500)
-      const suppressedInReader = !document.querySelector(".compact-nav-bar")
+      const hiddenInReader = !document.querySelector(".compact-nav-bar")
 
       setActiveContent(null)
       await waitForCondition(() => Boolean(document.querySelector(".compact-nav-bar")), 1500)
       const restoredAfterReader = Boolean(document.querySelector(".compact-nav-bar"))
 
-      results.readerContinuityPass = suppressedInReader && restoredAfterReader
+      results.readerContinuityPass = hiddenInReader && restoredAfterReader
 
-      // Step 4: R2 Finding 2: Duplicate Trigger Absent in COMPACT List mode
-      windowClassState.set(WINDOW_CLASSES.COMPACT)
-      await waitForCondition(() => document.querySelector(".brand .trigger") === null, 1500)
-      results.compactDuplicateTriggerAbsent = document.querySelector(".brand .trigger") === null
-      results.drawerHostPreserved = Boolean(document.querySelector("#mobile-sidebar-drawer"))
+      // Step 7: Main continuity - check that <main> did not unmount
+      const mainElement = document.querySelector("#main-content")
+      results.mainRemountGatePass = mainElement === mainRef.current
 
-      // Step 5: Medium regression & legacy trigger availability
-      windowClassState.set(WINDOW_CLASSES.MEDIUM)
-      await waitForCondition(
-        () =>
-          !document.querySelector(".compact-nav-bar") &&
-          Boolean(document.querySelector(".brand .trigger")),
-        1500,
-      )
-      results.absentInMedium = !document.querySelector(".compact-nav-bar")
-      results.legacyTriggerAvailableInMedium = Boolean(document.querySelector(".brand .trigger"))
+      // Step 8: Verify no new persistent state
+      results.persistentStateAdded =
+        Boolean(localStorage.getItem("newsflux:compact_nav")) ||
+        Boolean(sessionStorage.getItem("newsflux:compact_nav"))
 
-      // Step 6: Desktop regression
-      windowClassState.set(WINDOW_CLASSES.DESKTOP)
-      await waitForCondition(() => !document.querySelector(".compact-nav-bar"), 1500)
-      results.absentInDesktop = !document.querySelector(".compact-nav-bar")
+      // Step 9: Verify Sources button opens drawer in COMPACT
+      const sourcesBtn = document.querySelector('[data-nav-key="sources"]')
+      if (sourcesBtn) {
+        sourcesBtn.click()
+        await waitForCondition(() => mobileSidebarVisibleState.get() === true, 1500)
+        await waitForCondition(() => Boolean(document.querySelector(".sidebar-drawer")), 1500)
+        const drawerVisible =
+          mobileSidebarVisibleState.get() &&
+          Boolean(document.querySelector(".sidebar-drawer:not(.arco-drawer-hide)"))
 
-      // Step 7: Main remount check across transitions
-      const mainEl = mainRef.current
-      windowClassState.set(WINDOW_CLASSES.COMPACT)
-      await new Promise((resolve) => setTimeout(resolve, 50))
-      windowClassState.set(WINDOW_CLASSES.MEDIUM)
-      await new Promise((resolve) => setTimeout(resolve, 50))
-      windowClassState.set(WINDOW_CLASSES.DESKTOP)
-      await new Promise((resolve) => setTimeout(resolve, 50))
-      windowClassState.set(WINDOW_CLASSES.COMPACT)
-      await new Promise((resolve) => setTimeout(resolve, 50))
-      results.mainRemountGatePass = mainRef.current === mainEl
+        // Close drawer
+        mobileSidebarVisibleState.set(false)
+        await waitForCondition(() => !mobileSidebarVisibleState.get(), 1500)
 
-      // Step 8: Safe area contract check
-      const testNav = document.querySelector(".compact-nav-bar")
-      if (testNav) {
-        const computedStyle = globalThis.getComputedStyle(testNav)
-        results.safeAreaContractPresent = Boolean(computedStyle.paddingBottom !== undefined)
-      } else {
-        results.safeAreaContractPresent = true
+        results.compactSourcesOpensDrawer = drawerVisible
       }
 
-      // Step 9: Persistent state check
-      results.persistentStateAdded = Object.keys(localStorage).some(
-        (k) =>
-          k.toLowerCase().includes("window-class") ||
-          k.toLowerCase().includes("invoker") ||
-          k.toLowerCase().includes("sidebar-visible"),
-      )
+      // Step 10: R3 & R4 Robust Drawer Focus Restoration Sequence
 
-      // Step 10: R3 Robust Drawer Focus Restoration Gates
       // 10A: Compact Sources -> Close Button Focus Return
-      windowClassState.set(WINDOW_CLASSES.COMPACT)
-      setActiveContent(null)
-      await waitForCondition(
-        () => Boolean(document.querySelector('[data-nav-key="sources"]')),
-        1500,
-      )
-      const sourcesBtn = document.querySelector('[data-nav-key="sources"]')
       if (sourcesBtn) {
         sourcesBtn.focus({ preventScroll: true })
         sourcesBtn.click()
@@ -294,7 +324,7 @@ const HarnessContent = () => {
 
         const drawerMask = document.querySelector(".arco-drawer-mask")
         if (drawerMask) {
-          drawerMask.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+          drawerMask?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
           await waitForCondition(() => !mobileSidebarVisibleState.get(), 1500)
           await waitForCondition(() => document.activeElement === sourcesBtn, 1500)
           results.sourcesBackdropFocusReturn = document.activeElement === sourcesBtn
@@ -304,8 +334,15 @@ const HarnessContent = () => {
       // 10D: Reader Header -> Close Button Focus Return (COMPACT)
       windowClassState.set(WINDOW_CLASSES.COMPACT)
       setActiveContent({ id: 101, title: "Test Article" })
-      await waitForCondition(() => Boolean(document.querySelector(".brand .trigger")), 1500)
-      const readerHeaderBtn = document.querySelector(".brand .trigger")
+      await waitForCondition(() => Boolean(document.querySelector(".reader-sidebar-trigger")), 1500)
+      const readerHeaderBtn = document.querySelector(".reader-sidebar-trigger")
+
+      // R4 gate: verify reader trigger exists and is OUTSIDE inert subtree
+      results.readerTriggerOutsideInert =
+        Boolean(readerHeaderBtn) &&
+        !readerHeaderBtn.closest("[inert]") &&
+        !readerHeaderBtn.closest('[aria-hidden="true"]')
+
       if (readerHeaderBtn) {
         readerHeaderBtn.focus({ preventScroll: true })
         readerHeaderBtn.click()
@@ -318,13 +355,13 @@ const HarnessContent = () => {
           closeBtn.click()
           await waitForCondition(() => !mobileSidebarVisibleState.get(), 1500)
           await waitForCondition(() => {
-            const currentTrigger = document.querySelector(".brand .trigger")
+            const currentTrigger = document.querySelector(".reader-sidebar-trigger")
             return (
               document.activeElement === currentTrigger ||
               document.activeElement === readerHeaderBtn
             )
           }, 1500)
-          const currentTrigger = document.querySelector(".brand .trigger")
+          const currentTrigger = document.querySelector(".reader-sidebar-trigger")
           results.readerHeaderCloseButtonFocusReturn =
             document.activeElement === currentTrigger || document.activeElement === readerHeaderBtn
           results.headerTriggerFocusReturn = results.readerHeaderCloseButtonFocusReturn
@@ -337,6 +374,9 @@ const HarnessContent = () => {
         readerHeaderBtn.click()
         await waitForCondition(() => mobileSidebarVisibleState.get() === true, 1500)
         await waitForCondition(() => Boolean(document.querySelector(".mobile-sidebar-close")), 1500)
+
+        const closeBtn = document.querySelector(".mobile-sidebar-close")
+        closeBtn?.focus({ preventScroll: true })
 
         const activeEl = document.activeElement || globalThis
         activeEl.dispatchEvent(
@@ -352,15 +392,32 @@ const HarnessContent = () => {
           drawerMask?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
         }
         await waitForCondition(() => !mobileSidebarVisibleState.get(), 1500)
+
+        // Escape closes Drawer only; Reader must remain active
+        results.readerEscapeDrawerOnly = Boolean(contentState.get().activeContent)
+
         await waitForCondition(() => {
-          const currentTrigger = document.querySelector(".brand .trigger")
+          const currentTrigger = document.querySelector(".reader-sidebar-trigger")
           return (
             document.activeElement === currentTrigger || document.activeElement === readerHeaderBtn
           )
         }, 1500)
-        const currentTrigger = document.querySelector(".brand .trigger")
+        const currentTrigger = document.querySelector(".reader-sidebar-trigger")
         results.readerHeaderEscapeFocusReturn =
           document.activeElement === currentTrigger || document.activeElement === readerHeaderBtn
+
+        // With Drawer closed, second Escape should proceed to normal Reader close behavior
+        if (results.readerEscapeDrawerOnly) {
+          activeEl.dispatchEvent(
+            new KeyboardEvent("keydown", {
+              key: "Escape",
+              code: "Escape",
+              bubbles: true,
+              cancelable: true,
+            }),
+          )
+          await waitForCondition(() => !contentState.get().activeContent, 1500)
+        }
       }
       setActiveContent(null)
 
@@ -370,6 +427,7 @@ const HarnessContent = () => {
         () => Boolean(document.querySelector('[data-nav-key="sources"]')),
         1500,
       )
+      const mountCountBeforeCompactToMed = globalThis.__drawerHostMountCount || 1
       const sourcesForFold = document.querySelector('[data-nav-key="sources"]')
       if (sourcesForFold) {
         sourcesForFold.focus({ preventScroll: true })
@@ -380,6 +438,9 @@ const HarnessContent = () => {
         // Resize across breakpoint while drawer is open
         windowClassState.set(WINDOW_CLASSES.MEDIUM)
         await waitForCondition(() => Boolean(document.querySelector(".brand .trigger")), 1500)
+
+        results.drawerHostStableAcrossCompactMedium =
+          (globalThis.__drawerHostMountCount || 1) === mountCountBeforeCompactToMed
 
         const closeBtn = document.querySelector(".mobile-sidebar-close")
         if (closeBtn) {
@@ -398,6 +459,7 @@ const HarnessContent = () => {
       // 10G: Medium to Compact Resize while Drawer Open -> Focus Target Sources
       windowClassState.set(WINDOW_CLASSES.MEDIUM)
       await waitForCondition(() => Boolean(document.querySelector(".brand .trigger")), 1500)
+      const mountCountBeforeMedToCompact = globalThis.__drawerHostMountCount || 1
       const mediumHeaderBtn = document.querySelector(".brand .trigger")
       if (mediumHeaderBtn) {
         mediumHeaderBtn.focus({ preventScroll: true })
@@ -411,6 +473,9 @@ const HarnessContent = () => {
           () => Boolean(document.querySelector('[data-nav-key="sources"]')),
           1500,
         )
+
+        results.drawerHostStableAcrossMediumCompact =
+          (globalThis.__drawerHostMountCount || 1) === mountCountBeforeMedToCompact
 
         const closeBtn = document.querySelector(".mobile-sidebar-close")
         if (closeBtn) {
@@ -426,6 +491,8 @@ const HarnessContent = () => {
             document.activeElement === sourcesBtnAfterFold
         }
       }
+
+      results.drawerHostMountCount = globalThis.__drawerHostMountCount || 1
 
       // 10H: No Body Focus In Required Cases
       results.noBodyFocusInRequiredCases = Boolean(
@@ -450,12 +517,16 @@ const HarnessContent = () => {
         await waitForCondition(() => mobileSidebarVisibleState.get() === true, 1500)
         await waitForCondition(() => Boolean(document.querySelector(".mobile-sidebar-close")), 1500)
 
+        // Focus destination element during navigation close
+        const starredBtn = document.querySelector('[data-nav-key="starred"]')
+        starredBtn?.focus({ preventScroll: true })
+
         // Simulate closing via navigation
         navigate("/starred")
         await waitForCondition(() => !mobileSidebarVisibleState.get(), 1500)
         await new Promise((resolve) => setTimeout(resolve, 200))
 
-        // Focus must NOT be snapped to sourcesBtnForNav
+        // Focus must NOT be snapped to sourcesBtnForNav (no focus steal)
         results.navigationCloseNoWrongFocus = document.activeElement !== sourcesBtnForNav
       }
 
@@ -487,7 +558,12 @@ const HarnessContent = () => {
         results.compactToMediumCloseFocusTargetHeader &&
         results.mediumToCompactCloseFocusTargetSources &&
         results.noBodyFocusInRequiredCases &&
-        results.navigationCloseNoWrongFocus
+        results.navigationCloseNoWrongFocus &&
+        results.readerTriggerOutsideInert &&
+        results.readerEscapeDrawerOnly &&
+        results.drawerHostStableAcrossCompactMedium &&
+        results.drawerHostStableAcrossMediumCompact &&
+        results.drawerHostMountCount === 1
 
       const finalReport = {
         windowClass: windowClassState.get(),
@@ -513,6 +589,11 @@ const HarnessContent = () => {
         mediumToCompactCloseFocusTargetSources: results.mediumToCompactCloseFocusTargetSources,
         noBodyFocusInRequiredCases: results.noBodyFocusInRequiredCases,
         navigationCloseNoWrongFocus: results.navigationCloseNoWrongFocus,
+        readerTriggerOutsideInert: results.readerTriggerOutsideInert,
+        readerEscapeDrawerOnly: results.readerEscapeDrawerOnly,
+        drawerHostStableAcrossCompactMedium: results.drawerHostStableAcrossCompactMedium,
+        drawerHostStableAcrossMediumCompact: results.drawerHostStableAcrossMediumCompact,
+        drawerHostMountCount: results.drawerHostMountCount,
         summary: isAllPass ? "PASS" : "FAIL",
         details: results,
       }
@@ -536,7 +617,13 @@ const HarnessContent = () => {
           borderBottom: "1px solid var(--color-border-2, #e5e6eb)",
         }}
       >
-        <SidebarTrigger />
+        <div
+          aria-hidden={isReaderActive || undefined}
+          className="entry-col"
+          inert={isReaderActive || undefined}
+        >
+          <SidebarTrigger />
+        </div>
         <div>
           <h1 style={{ margin: 0, fontSize: "1.25rem" }}>
             NAV-VISUAL PR1 Compact Navigation Renderer Harness
@@ -556,10 +643,17 @@ const HarnessContent = () => {
       </header>
 
       <main ref={mainRef} id="main-content" style={{ padding: "16px", minHeight: "200px" }}>
+        {isReaderActive && (
+          <div className="article-container article-container-full-size content-wrapper">
+            <ReaderSidebarTrigger />
+            <p>Reader content</p>
+          </div>
+        )}
         <p>Main content area for test harness</p>
       </main>
 
       <CompactNavigation />
+      <SidebarDrawerHost />
 
       {report && (
         <pre

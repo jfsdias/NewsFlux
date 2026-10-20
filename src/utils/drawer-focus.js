@@ -42,12 +42,33 @@ export const resolveCurrentDrawerFocusTarget = (invoker, options = {}) => {
     return null
   }
 
-  const getCompactSources = () =>
-    documentRef.querySelector('[data-nav-key="sources"], [data-testid="compact-nav-sources"]')
+  const queryCandidates = (selector) => {
+    if (typeof documentRef.querySelectorAll === "function") {
+      const elements = documentRef.querySelectorAll(selector)
+      for (const el of elements) {
+        if (canElementReceiveFocus(el)) {
+          return el
+        }
+      }
+    }
+    const single = documentRef.querySelector(selector)
+    return canElementReceiveFocus(single) ? single : null
+  }
 
-  const getHeaderTrigger = () =>
-    (headerTriggerRef?.current?.isConnected ? headerTriggerRef.current : null) ||
-    documentRef.querySelector(".brand .trigger, .brand .desktop-sidebar-reopen")
+  const getCompactSources = () =>
+    queryCandidates('[data-nav-key="sources"], [data-testid="compact-nav-sources"]')
+
+  const getHeaderTrigger = () => {
+    if (
+      headerTriggerRef?.current?.isConnected &&
+      canElementReceiveFocus(headerTriggerRef.current)
+    ) {
+      return headerTriggerRef.current
+    }
+    return queryCandidates(
+      ".reader-sidebar-trigger, .brand .trigger, .brand .desktop-sidebar-reopen",
+    )
+  }
 
   const candidateResolvers =
     invoker === "compact-sources"
