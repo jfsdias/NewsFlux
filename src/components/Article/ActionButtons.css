@@ -73,7 +73,7 @@
 @media screen and (min-width: 769px) and (max-width: 992px) {
   /* Absolute insets start at the button's padding box, inside its 1px border. */
   .action-buttons:not(.mobile) :is(.left-side, .right-side) {
-    gap: 12px;
+    gap: 16px;
   }
 
   .action-buttons:not(.mobile) :is(.left-side, .right-side) .arco-btn-shape-circle {

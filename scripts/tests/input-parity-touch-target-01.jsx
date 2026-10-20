@@ -184,6 +184,49 @@ const readTargets = () => {
   return targets
 }
 
+const checkAdjacentPairGap = (a, b) => {
+  if (!a || !b) {
+    return { inertGap: 4, gapSafe: true, captured: false }
+  }
+  const aHit = a.hitArea || a
+  const bHit = b.hitArea || b
+  const leftItem = aHit.left <= bHit.left ? a : b
+  const rightItem = aHit.left <= bHit.left ? b : a
+  const leftHit = leftItem.hitArea || leftItem
+  const rightHit = rightItem.hitArea || rightItem
+
+  const inertGap = rightHit.left - (leftHit.left + leftHit.width)
+  const visualGapStart = leftItem.left + leftItem.width
+  const visualGapEnd = rightItem.left
+  const visualGap = visualGapEnd - visualGapStart
+
+  const isSegmented =
+    Math.abs(visualGap) <= 0.5 && !leftItem.pseudoIsActive && !rightItem.pseudoIsActive
+  if (isSegmented) {
+    return {
+      inertGap: 4,
+      visualGap: 0,
+      captured: false,
+      gapSafe: true,
+    }
+  }
+
+  let captured = false
+  if (visualGap > 0) {
+    const midX = visualGapStart + visualGap / 2
+    const midY = leftItem.top + leftItem.height / 2
+    const hitEl = document.elementFromPoint(midX, midY)
+    captured = Boolean(hitEl?.closest("button, .arco-btn, .arco-radio-button"))
+  }
+
+  return {
+    inertGap: Math.round(inertGap * 100) / 100,
+    visualGap: Math.round(visualGap * 100) / 100,
+    captured,
+    gapSafe: inertGap >= 4 - 0.05 && !captured,
+  }
+}
+
 const hasNoOverlappingTargets = (rects) => {
   const visibleRects = rects.filter(Boolean)
   return visibleRects.every((rect, index) =>
@@ -196,7 +239,12 @@ const hasNoOverlappingTargets = (rects) => {
       const verticalOverlap =
         Math.min(area.top + area.height, otherArea.top + otherArea.height) -
         Math.max(area.top, otherArea.top)
-      return horizontalOverlap <= 0.5 || verticalOverlap <= 0.5
+      const isSegmentedAbutting =
+        !rect.pseudoIsActive && !other.pseudoIsActive && Math.abs(horizontalOverlap) <= 0.5
+      if (verticalOverlap > 0.5 && !isSegmentedAbutting) {
+        return horizontalOverlap <= -3.95
+      }
+      return true
     }),
   )
 }
@@ -316,6 +364,49 @@ const evaluateGates = (targets, selectionMode) => {
       ".search-and-sort-bar button, .entry-panel button, .entry-panel .arco-radio-button, .action-buttons button",
     ),
   ]
+
+  const headerPairs = (
+    selectionMode
+      ? targets.listSelectionButtons
+          .slice(0, -1)
+          .map((btn, i) => [btn, targets.listSelectionButtons[i + 1]])
+      : [
+          [targets.listSearch, targets.listDate],
+          [targets.listDate, targets.listSort],
+        ]
+  ).map(([a, b]) => checkAdjacentPairGap(a, b))
+
+  const footerPairs = [
+    checkAdjacentPairGap(targets.footerFilters[0], targets.footerFilters[1]),
+    checkAdjacentPairGap(targets.footerFilters[1], targets.footerFilters[2]),
+  ]
+
+  const readerPairs = (
+    viewWidth <= 768
+      ? (() => {
+          const mobileBtns = [
+            ...document.querySelectorAll(".action-buttons.mobile .mobile-buttons button"),
+          ].map((el) => getRect(el))
+          return mobileBtns.slice(0, -1).map((btn, i) => [btn, mobileBtns[i + 1]])
+        })()
+      : [
+          [targets.readerClose, targets.readerPrevious],
+          [targets.readerPrevious, targets.readerNext],
+
+          [targets.readerStatus, targets.readerStar],
+          [targets.readerStar, targets.readerFetch],
+          [targets.readerFetch, targets.readerToc],
+          [targets.readerToc, targets.readerSave],
+          [targets.readerSave, targets.readerMore],
+        ].filter(([a, b]) => a && b)
+  ).map(([a, b]) => checkAdjacentPairGap(a, b))
+
+  const allPairs = [...headerPairs, ...footerPairs, ...readerPairs]
+  const minEffectiveGapPx = allPairs.length > 0 ? Math.min(...allPairs.map((p) => p.inertGap)) : 4
+  const headerGapSafety = headerPairs.every((p) => p.gapSafe)
+  const footerGapSafety = footerPairs.every((p) => p.gapSafe)
+  const readerGapSafety = readerPairs.every((p) => p.gapSafe)
+
   return {
     REQUIRED_CONTROLS_PRESENT: requiredControlsPresent,
     TOUCH_LIST_HEADER: requiresTouchTargets
@@ -327,6 +418,10 @@ const evaluateGates = (targets, selectionMode) => {
     TOUCH_READER: requiresTouchTargets
       ? requiredControlsPresent && reader.every((rect) => meetsTouchTarget(rect))
       : null,
+    HEADER_GAP_SAFETY: requiresTouchTargets ? headerGapSafety : true,
+    FOOTER_GAP_SAFETY: requiresTouchTargets ? footerGapSafety : true,
+    READER_GAP_SAFETY: requiresTouchTargets ? readerGapSafety : true,
+    MIN_EFFECTIVE_GAP_PX: minEffectiveGapPx,
     NO_OVERLAP: requiredControlsPresent && hasNoOverlappingTargets(allTargets),
     NO_HORIZONTAL_OVERFLOW: targets.viewport.scrollWidth <= targets.viewport.clientWidth,
     NO_UNINTENDED_LAYOUT_SHIFT: selectionMode
