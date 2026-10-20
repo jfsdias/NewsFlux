@@ -1,14 +1,36 @@
 # NAV-VISUAL-01 — Adaptive navigation contract
 
-- **Status:** design contract approved; implementation not started.
-- **Reconciled:** 2026-10-19, against `main` / production SHA `405e9d7b1a3097dacef50c7908abf83d480d64dd`.
-- **Implementation authorization:** NO.
-- **Product implementation authorization:** NO.
+- **Status:** approved contract; PR0 and PR1 implemented; remaining NAV-VISUAL slices are deferred.
+- **Reconciled:** 2026-10-20, against `main` / production SHA `d01e34fc2eb76da39467d1de9799b12194faec9c`.
+- **Implementation authorization:** PR0 / PR1 are completed; future slices remain unauthorized by this document.
+- **Product implementation authorization:** NO for remaining slices.
 - **Merge authorization:** NO.
-- **Production deployment authorization:** NO.
-- **Real-device gates:** required where specified below; the critical 884×1104 viewport is mandatory.
+- **Production deployment authorization:** NO for future changes; PR #71 is already promoted.
+- **Real-device gates:** required where specified below; the critical 884×1104 viewport remains mandatory.
 
-This is the complete approved design contract. Recording it does not authorize implementation, resolve open decisions, or change navigation behavior.
+This document preserves the approved historical design contract and separately records the post-PR71 implementation baseline. PR #71 was accepted and merged as the current compact-navigation product baseline. `NAV_CONTRACT_DRIFT_01` remains an explicit PM/design decision: the historical compact contract is solid, while merged PR #71 uses NewsFlux glass tokens and `backdrop-filter`. Do not rewrite the historical contract or infer that future glass eligibility gates have been waived.
+
+## Post-PR71 implementation state
+
+- PR0 / #69 completed the window-class foundation (`cf37807a4d3b9da39d3c438861fac358d936fdaa`).
+- PR1 / #71 completed the compact-navigation renderer and Reader/Drawer focus and resize hardening; merge and current production baseline are `d01e34fc2eb76da39467d1de9799b12194faec9c`.
+- The compact bar currently uses `--nf-glass-*` tokens and `backdrop-filter`.
+- Medium Rail / PR4, including the 884×1104 slice and `TABLET-HEADER-WIDTH-01`, remains deferred until PR #70 closes.
+- `NAV-PR1-HARNESS-DESKTOP-MODEL-01` remains a P3 finding.
+- `NAV-PR1-ROUTE-FOCUS-01` remains a P3 finding.
+- `MOBILE-SCROLL-FLICKER-01` remains a distinct open finding. It and future glass-expansion gates are not waived by PR #71 acceptance.
+
+```text
+NAV_CONTRACT_DRIFT_01=OPEN_PM_DESIGN_DECISION
+HISTORICAL_APPROVED_COMPACT_NAV_V1=SOLID
+CURRENT_COMPACT_IMPLEMENTATION=GLASS_TOKENS_AND_BACKDROP_FILTER
+PR0_STATUS=COMPLETED / PR #69
+PR1_STATUS=COMPLETED / PR #71
+MEDIUM_RAIL_STATUS=DEFERRED / PR4 / AFTER_PR70
+NAV-PR1-HARNESS-DESKTOP-MODEL-01=OPEN_P3
+NAV-PR1-ROUTE-FOCUS-01=OPEN_P3
+FUTURE_SLICES_AUTHORIZED=NO
+```
 
 ## Window classes and architecture
 
@@ -29,6 +51,8 @@ DESKTOP=existing Sider
 The 768px content-density axis remains independent of these navigation classes. Do not infer a navigation class from `EXPANDED` or migrate the legacy axis in this work.
 
 ## Compact contract
+
+This is the **historical approved contract** as of 2026-10-19. Its solid-surface requirement remains in the design record and does not describe the merged PR #71 implementation.
 
 Reference viewport: **390×844**.
 
@@ -112,9 +136,11 @@ POST_NAV_VISIBLE_LIST_HEIGHT / BASELINE_VISIBLE_LIST_HEIGHT >= 0.90
 
 If the ratio fails, stop and return to PM/Design. Do not automatically relocate or remove controls to pass the gate.
 
-## Glass eligibility gate
+## Historical glass eligibility gate and future glass expansion
 
-Compact V1 remains solid. PR6 glass is eligible only after every gate passes:
+The approved historical contract specified a solid compact V1. PR #71 nevertheless merged the compact bar with NewsFlux glass tokens and `backdrop-filter`; this is `NAV_CONTRACT_DRIFT_01`, and PR #71 establishes the current product baseline. This does not imply that every glass eligibility gate passed or that future glass expansion is approved. `MOBILE-SCROLL-FLICKER-01` and future expansion gates remain distinct.
+
+The original PR6 glass eligibility gate remains:
 
 ```text
 MOBILE-SCROLL-FLICKER-01_ROOT_CAUSE=KNOWN_OR_CLEARED
@@ -124,7 +150,7 @@ SAFE_AREA=PASS
 VIRTUALIZATION_SENTINEL=PASS
 ```
 
-Until then, glass is not eligible for this navigation surface. Content surfaces remain opaque; glass is chrome-only.
+The original PR6 proposal considered glass ineligible until these gates passed. PR #71 establishes the current implementation baseline but does not provide evidence that these independent future-expansion gates passed. Content surfaces remain opaque; glass remains chrome-only.
 
 ## Accessibility contract
 
@@ -138,6 +164,8 @@ Until then, glass is not eligible for this navigation surface. Content surfaces 
 
 ## PR0–PR7 decomposition
 
+The following is the **historical approved plan snapshot from 2026-10-19**. PR0 and PR1 are now complete; the remaining entries preserve the planned scope and gates.
+
 ```text
 PR0=WINDOW-CLASS-FOUNDATION
 PR1=NAVIGATION-MODEL
@@ -147,12 +175,12 @@ PR4=MEDIUM-RAIL / 884×1104 mandatory
 PR5=RESIZE-FOLD-FOCUS-POLISH
 PR6=OPTIONAL GLASS UNDERLAY / blocked by MOBILE-SCROLL-FLICKER-01
 PR7=OPTIONAL SIDEBAR MODEL ALIGNMENT
-PR0–PR7=PLANNED
-PR0–PR7_IN_PROGRESS=NONE
-NAV_VISUAL_IMPLEMENTATION=NOT_STARTED
+PR0–PR7=PLANNED (HISTORICAL SNAPSHOT)
+PR0–PR7_IN_PROGRESS=NONE (HISTORICAL SNAPSHOT)
+NAV_VISUAL_IMPLEMENTATION=NOT_STARTED (HISTORICAL SNAPSHOT)
 ```
 
-Each slice keeps one purpose per PR and follows the governance gates in the roadmap. This plan does not authorize any slice.
+Current implementation status is recorded above. PR #71 acceptance/merge establishes the current compact-navigation baseline; remaining slices continue to require their own scope, authorization and gates.
 
 ## Nine open design decisions
 
@@ -186,4 +214,4 @@ All nine remain `OPEN`; the approved contract records boundaries without decidin
 - Keep All/Unread chronological and predictable.
 - Mobile, tablet, and Fold remain single-pane-first.
 - Deploy only an exact approved SHA; this documentation change does not authorize deployment.
-- PR #62 is documentation-only, remains draft, and does not authorize NAV-VISUAL implementation or merge.
+- PR #62 was documentation-only and is merged; its completion does not authorize NAV-VISUAL implementation or merge.
