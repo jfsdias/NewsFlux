@@ -1,9 +1,9 @@
 # NewsFlux Roadmap
 
-- **Status:** canonical roadmap reconciled after NAV-VISUAL PR1 / PR #71 exact merge-SHA production promotion.
+- **Status:** canonical roadmap reconciled by PR #73 after the PR #72 docs-only merge, with GitHub main and product/production baselines recorded separately.
 - **Created:** 2026-10-15.
 - **Last reconciled:** 2026-10-20.
-- **Reconciled against:** `main` and production at `d01e34fc2eb76da39467d1de9799b12194faec9c`; PR #71 is merged and permanently promoted; PR #62 is merged; PR #70 remains open/draft on stale base `cf37807a4d3b9da39d3c438861fac358d936fdaa`; production image `newsflux-local:d01e34fc2eb7` (source SHA `d01e34fc2eb76da39467d1de9799b12194faec9c`, image ID `sha256:d52df4be8afa1f39b79cd53f2e84466482fec3d3962fd8102d71e77e54427c`, HTTP 200, running, restart count 0). Main and production are at parity.
+- **Reconciled against:** reconciliation snapshot on 2026-10-20: GitHub `main` at `32244fa07b57c8bb3f5682f27b4d94917384ce63`; product and production at `d01e34fc2eb76da39467d1de9799b12194faec9c`. PR #72 and PR #73 are docs-only and do not require deployment. PR #71 remains the exact product/production baseline; PR #62 is merged; PR #70 remains open/draft on stale base `cf37807a4d3b9da39d3c438861fac358d936fdaa`. Production image `newsflux-local:d01e34fc2eb7` (source SHA `d01e34fc2eb76da39467d1de9799b12194faec9c`, image ID `sha256:d52df4be8afa1f39b79cd53f2e84466482fec3d3962fd8102d71e77e54427c`, HTTP 200, running, restart count 0). Product/production parity remains intact.
 - **Purpose:** preserve completed work, accepted findings, sequencing, architecture/product gates, upstream baseline, and the next recommended action without turning the roadmap into implementation authorization.
 
 This document is the canonical **roadmap**, not an implementation authorization. Detailed design decisions remain in the dedicated design documents and implementation plans remain in `docs/superpowers/plans/` where present.
@@ -142,7 +142,8 @@ Current reference decisions:
 | #68 | Harness maintenance              | **COMPLETED**    | Feature head `104671b51f99d0ad7c33d3514f8d4b2ad3558aee`; merge `b6b814c77160c2e61dedc7c10958f0712f59d728`; stale provider/button assumptions corrected                                                  |
 | #69 | NAV-VISUAL PR0                   | **COMPLETED**    | Feature head `b550634066ed129e4bb0e9b3ca18842469cb493e`; merge `cf37807a4d3b9da39d3c438861fac358d936fdaa`; window-class foundation                                                                      |
 | #70 | READER-MEDIA-01A                 | **OPEN / DRAFT** | Head `0cda102f4e57e2beddfec8d4517fd9b8b4893fb2` on stale base `cf37807a4d3b9da39d3c438861fac358d936fdaa`; next functional candidate, refresh required                                                   |
-| #71 | NAV-VISUAL PR1                   | **COMPLETED**    | Feature head `4712b3e49c94f560c0e83ce7c8519eb6bda9cba0`; merge and production promotion `d01e34fc2eb76da39467d1de9799b12194faec9c`; compact navigation and Reader/Drawer focus/resize hardening         |
+| #71 | NAV-VISUAL PR1                   | **COMPLETED**    | Feature head `4712b3e49c94f560c0e83ce7c8519eb6bda9cba0`; merge and product/production promotion `d01e34fc2eb76da39467d1de9799b12194faec9c`; compact navigation and Reader/Drawer focus/resize hardening |
+| #72 | Documentation                    | **COMPLETED**    | Post-PR71 state reconciliation; docs-only merge `32244fa07b57c8bb3f5682f27b4d94917384ce63`; no deployment required                                                                                      |
 
 ### 3.3 Functional behavior and defect tracks
 
@@ -440,15 +441,14 @@ Offline reading, feed notifications, third-party AI summaries and other new pers
 
 ## 7. Recommended execution order from the current baseline
 
-PRs #57–#71 are complete except the open draft PR #70; PR #62 is merged. The next active functional candidate is PR #70 / `READER-MEDIA-01A`, whose base is stale and must be refreshed after this documentation reconciliation and the separate DOCS-LINT-01 formatting-only PR. `MARK-ALL-UNDO-JUMP-01` remains held for real reproduction evidence. This documentation PR does not authorize implementation.
+PRs #57–#73 are complete in the reconciled state except the open draft PR #70; PR #62 is merged. The next recommended action is the separate DOCS-LINT-01 formatting-only PR. After it closes, refresh PR #70 / `READER-MEDIA-01A` onto the current `main` and rerun its candidate gates. `MARK-ALL-UNDO-JUMP-01` remains held for real reproduction evidence. This documentation PR does not authorize product implementation.
 
-1. **POST-PR71 documentation reconciliation** — record the merged implementation and exact current production baseline.
-2. **DOCS-LINT-01** — separate formatting-only PR for the three existing baseline Markdown failures.
-3. **PR #70 / READER-MEDIA-01A refresh** — refresh onto exact current main and rerun automated gates.
-4. **PR #70 candidate and authenticated Reader/media gates** — do not deploy a candidate without separate PM authorization.
-5. **Close PR #70** after required gates and review.
-6. **Resume NAV-VISUAL with Medium Rail / PR4**, including 884×1104 and `TABLET-HEADER-WIDTH-01`; preserve the current compact implementation and keep future glass gates distinct.
-7. **CHROME-01 remaining subsets**, NAV-02F, HOME-SKEL-01, SAVE-EXT-01, HOME-VISUAL-02, READER-VISUAL-02B, ID-DEPLOY-01, first-party saved-state work, Personalization V2, MOTION-01 and ML ranking, subject to their existing gates.
+1. **DOCS-LINT-01** — separate formatting-only PR for the three existing baseline Markdown failures.
+2. **PR #70 / READER-MEDIA-01A refresh** — after DOCS-LINT-01, refresh onto exact current `main` and rerun automated gates.
+3. **PR #70 candidate and authenticated Reader/media gates** — do not deploy a candidate without separate PM authorization.
+4. **Close PR #70** after required gates and review.
+5. **Resume NAV-VISUAL with Medium Rail / PR4**, including 884×1104 and `TABLET-HEADER-WIDTH-01`; preserve the current compact implementation and keep future glass gates distinct.
+6. **CHROME-01 remaining subsets**, NAV-02F, HOME-SKEL-01, SAVE-EXT-01, HOME-VISUAL-02, READER-VISUAL-02B, ID-DEPLOY-01, first-party saved-state work, Personalization V2, MOTION-01 and ML ranking, subject to their existing gates.
 
 `BULK-01C` may be scheduled once copy is decided, but it remains separate from completed BULK-01B. `MARK-ALL-UNDO-JUMP-01` is not ordered while no current defect is reproduced. Read-only upstream auditing can run in parallel; no sync follows automatically.
 
@@ -582,15 +582,19 @@ When a completed task changes roadmap status, sequencing, architectural/product 
 
 ---
 
-## 13. Current main and production state
+## 13. Reconciliation snapshot: GitHub main and product/production state
 
-The post-PR71 reconciliation on 2026-10-20 confirms `main` and production at `d01e34fc2eb76da39467d1de9799b12194faec9c`; PR #71 is complete and promoted, PR #62 is merged, and PR #70 remains open/draft on stale base `cf37807a4d3b9da39d3c438861fac358d936fdaa`.
+At the PR #73 reconciliation snapshot on 2026-10-20, GitHub `main` was `32244fa07b57c8bb3f5682f27b4d94917384ce63`, and the product/production baseline was `d01e34fc2eb76da39467d1de9799b12194faec9c`. PR #72 and PR #73 are documentation-only; such merges may advance `main` without changing the product/runtime baseline or requiring deployment. Product/production parity remains intact. PR #71 remains the promoted product baseline; PR #62 is merged; PR #70 remains open/draft and is sequenced after DOCS-LINT-01.
 
 ```text
 DOCS_DATE=2026-10-20
-CURRENT_MAIN=d01e34fc2eb76da39467d1de9799b12194faec9c
-DOCUMENTED_MAIN_BASE_SHA=d01e34fc2eb76da39467d1de9799b12194faec9c
-PRODUCT_BASELINE_SHA=d01e34fc2eb76da39467d1de9799b12194faec9c
+DOCUMENTATION_SNAPSHOT_BASE_SHA=32244fa07b57c8bb3f5682f27b4d94917384ce63
+GITHUB_MAIN_AT_RECONCILIATION=32244fa07b57c8bb3f5682f27b4d94917384ce63
+CURRENT_PRODUCT_BASELINE=d01e34fc2eb76da39467d1de9799b12194faec9c
+PRODUCTION_SHA=d01e34fc2eb76da39467d1de9799b12194faec9c
+PRODUCT_PRODUCTION_PARITY=PASS
+MAIN_MAY_ADVANCE_WITH_DOCS_ONLY_COMMITS=YES
+DEPLOY_REQUIRED_FOR_DOCS_ONLY_COMMITS=NO
 PR62_STATUS=COMPLETED
 PR62_DRAFT=NO
 PR62_BASE_SHA=405e9d7b1a3097dacef50c7908abf83d480d64dd
@@ -631,6 +635,7 @@ PR65_PERMANENT_PROMOTION=PASS
 ABOUT_ACCESSIBLE_BRAND_01_STATUS=COMPLETED / RESOLVED
 
 PR70_STATUS=OPEN_DRAFT
+PR70_SEQUENCE=AFTER_DOCS_LINT_01
 PR70_BRANCH=codex/reader-media-01a-lazy-player-lifecycle
 PR70_HEAD_SHA=0cda102f4e57e2beddfec8d4517fd9b8b4893fb2
 PR70_BASE_SHA=cf37807a4d3b9da39d3c438861fac358d936fdaa
@@ -641,6 +646,11 @@ PR71_STATUS=COMPLETED
 PR71_FEATURE_HEAD=4712b3e49c94f560c0e83ce7c8519eb6bda9cba0
 PR71_MERGE_SHA=d01e34fc2eb76da39467d1de9799b12194faec9c
 PR71_PERMANENT_PROMOTION=PASS
+PR72_STATUS=COMPLETED
+PR72_MERGE_SHA=32244fa07b57c8bb3f5682f27b4d94917384ce63
+PR72_SCOPE=DOCUMENTATION_ONLY
+PR73_SCOPE=DOCUMENTATION_ONLY
+POST_PR72_MAIN_PRODUCT_BASELINE_RECONCILIATION=COMPLETED_BY_PR73
 
 PRODUCTION_SHA=d01e34fc2eb76da39467d1de9799b12194faec9c
 PRODUCTION_IMAGE=newsflux-local:d01e34fc2eb7
@@ -655,26 +665,23 @@ CANDIDATE_OVERRIDE_ACTIVE=NO
 CANDIDATE_OVERRIDE_PRESERVED=YES
 PERMANENT_PROMOTION=PASS
 ROLLBACK_USED=NO
-MAIN_PRODUCTION_PARITY=PASS
+PRODUCT_PRODUCTION_PARITY=PASS
 CANONICAL_RUNTIME_PARITY=PASS
 RUNTIME_CANONICAL_PARITY=PASS
 
-CURRENT_PRIMARY_TRACK=POST_PR71_DOCUMENTATION_RECONCILIATION
-CURRENT_PHASE=POST_PR71_RECONCILIATION
-CURRENT_TRACK=DOCUMENTATION_AND_NAV_CONTRACT_REVIEW
+CURRENT_PRIMARY_TRACK=DOCS_LINT_01
+CURRENT_PHASE=DOCUMENTATION_MAINTENANCE
+CURRENT_TRACK=DOCS_LINT_01_FORMATTING_ONLY
 KEYBOARD_TOUCH_PARITY_STATUS=COMPLETED
 INPUT_01A_STATUS=COMPLETED
 INPUT_PARITY_ESCAPE_FOCUS_STATUS=COMPLETED
 INPUT_PARITY_TOUCH_TARGET_01_STATUS=COMPLETED
-NEXT_FUNCTIONAL_CANDIDATE=READER-MEDIA-01A / PR #70
-NEXT_PRIMARY_FUNCTIONAL=READER-MEDIA-01A / PR #70
+NEXT_FUNCTIONAL_CANDIDATE=READER-MEDIA-01A / PR #70 (AFTER_DOCS_LINT_01)
 TOUCH_TARGET_REQUIREMENT=>=44px interaction target
 MARK_ALL_UNDO_JUMP_01_STATUS=INVESTIGATED_NO_REPRODUCTION_ON_CURRENT_BASE
 MARK_ALL_UNDO_JUMP_01_DISPOSITION=HOLD_FOR_REAL_REPRO_EVIDENCE
-DOCUMENTATION_BLOCKS_NEXT=NO
 CURRENT_PRODUCT_PR=NONE
 OPEN_RUNTIME_PR=NONE
-OPEN_DOCUMENTATION_PR=DRAFT
 
 LAST_COMPLETED_FUNCTIONAL=INPUT-PARITY-TOUCH-TARGET-01 / PR #67
 LAST_COMPLETED_MAINTENANCE=HARNESS_MAINTENANCE / PR #68
@@ -718,8 +725,6 @@ PERMANENT_PROMOTION_AUTHORIZED=NO
 
 NEXT_RECOMMENDED_ACTION=DOCS_LINT_01_FORMATTING_ONLY_PR
 PRODUCT_IMPLEMENTATION_AUTHORIZED=NO
-DOCUMENTATION_RECONCILIATION_BRANCH=docs/post-pr71-documentation-reconciliation
-DOCUMENTATION_RECONCILIATION_BASE_SHA=d01e34fc2eb76da39467d1de9799b12194faec9c
 ```
 
-The production runtime is recorded at the same exact SHA as `main`; no candidate override is active, the archived candidate override remains preserved, and no candidate/canonical runtime split is active. NAV-VISUAL PR0/PR1 are complete, and remaining slices retain their separate authorization gates. `NAV_CONTRACT_DRIFT_01` is resolved as an accepted current-baseline exception; future glass gates remain separate and `MOBILE-SCROLL-FLICKER-01` remains open.
+At the reconciliation snapshot, GitHub `main` was `32244fa07b57c8bb3f5682f27b4d94917384ce63`, while the product and production baseline was `d01e34fc2eb76da39467d1de9799b12194faec9c`. Documentation-only merges may advance `main` without changing the product/runtime baseline or requiring deployment. No candidate override is active, the archived candidate override remains preserved, and product/production parity remains intact. NAV-VISUAL PR0/PR1 are complete, and remaining slices retain their separate authorization gates. `NAV_CONTRACT_DRIFT_01` is resolved as an accepted current-baseline exception; future glass gates remain separate and `MOBILE-SCROLL-FLICKER-01` remains open.

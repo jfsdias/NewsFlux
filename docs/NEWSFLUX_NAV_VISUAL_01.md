@@ -1,7 +1,7 @@
 # NAV-VISUAL-01 — Adaptive navigation contract
 
 - **Status:** approved contract; PR0 and PR1 implemented; remaining NAV-VISUAL slices are deferred.
-- **Reconciled:** 2026-10-20, against `main` / production SHA `d01e34fc2eb76da39467d1de9799b12194faec9c`.
+- **Reconciled:** 2026-10-20, against GitHub `main` at `32244fa07b57c8bb3f5682f27b4d94917384ce63` and product/production at `d01e34fc2eb76da39467d1de9799b12194faec9c`; PR #72 was docs-only and did not require deployment.
 - **Implementation authorization:** PR0 / PR1 are completed; future slices remain unauthorized by this document.
 - **Product implementation authorization:** NO for remaining slices.
 - **Merge authorization:** NO.

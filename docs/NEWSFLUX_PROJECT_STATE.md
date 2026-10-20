@@ -2,17 +2,27 @@
 
 - **Purpose:** concise operational state for PM handoffs and future sessions. The roadmap remains the source for sequencing and product/architecture detail.
 - **Last reconciled:** 2026-10-20.
-- **Documented main/product baseline:** `d01e34fc2eb76da39467d1de9799b12194faec9c`.
+- **Reconciliation snapshot:** GitHub `main` at `32244fa07b57c8bb3f5682f27b4d94917384ce63` on 2026-10-20.
+- **Current product/production baseline at that snapshot:** `d01e34fc2eb76da39467d1de9799b12194faec9c`.
 
 ## Current state
 
-After PR #71 merged and was permanently promoted on 2026-10-20, GitHub `main` and production are at `d01e34fc2eb76da39467d1de9799b12194faec9c`. NAV-VISUAL PR0 and PR1 are complete. PR #62 was merged as `389ed58731c38ffff8ceda0d0347222336960f3a`; PR #70 is the open draft functional candidate and still needs refresh onto current `main`.
+At the PR #73 reconciliation snapshot on 2026-10-20, GitHub `main` was `32244fa07b57c8bb3f5682f27b4d94917384ce63`, while the product and production baseline was `d01e34fc2eb76da39467d1de9799b12194faec9c`. PR #72 and PR #73 are documentation-only; such merges may advance GitHub `main` without changing the product/runtime baseline or requiring deployment. Product/production parity remains intact. PR #73 completes the post-PR72 reconciliation. PR #70 remains the open draft functional candidate, sequenced after the separate DOCS-LINT-01 PR.
 
 ```text
 DOCS_DATE=2026-10-20
-CURRENT_MAIN=d01e34fc2eb76da39467d1de9799b12194faec9c
-DOCUMENTED_MAIN_BASE_SHA=d01e34fc2eb76da39467d1de9799b12194faec9c
-PRODUCT_BASELINE_SHA=d01e34fc2eb76da39467d1de9799b12194faec9c
+DOCUMENTATION_SNAPSHOT_BASE_SHA=32244fa07b57c8bb3f5682f27b4d94917384ce63
+GITHUB_MAIN_AT_RECONCILIATION=32244fa07b57c8bb3f5682f27b4d94917384ce63
+CURRENT_PRODUCT_BASELINE=d01e34fc2eb76da39467d1de9799b12194faec9c
+PRODUCTION_SHA=d01e34fc2eb76da39467d1de9799b12194faec9c
+PRODUCT_PRODUCTION_PARITY=PASS
+MAIN_MAY_ADVANCE_WITH_DOCS_ONLY_COMMITS=YES
+DEPLOY_REQUIRED_FOR_DOCS_ONLY_COMMITS=NO
+PR72_STATUS=COMPLETED
+PR72_MERGE_SHA=32244fa07b57c8bb3f5682f27b4d94917384ce63
+PR72_SCOPE=DOCUMENTATION_ONLY
+PR73_SCOPE=DOCUMENTATION_ONLY
+POST_PR72_MAIN_PRODUCT_BASELINE_RECONCILIATION=COMPLETED_BY_PR73
 
 PR62_STATUS=COMPLETED
 PR62_HEAD_SHA=f6d25046ec455eb2b9be664394e14d7e83a36d73
@@ -89,13 +99,13 @@ CANDIDATE_OVERRIDE_ACTIVE=NO
 CANDIDATE_OVERRIDE_PRESERVED=YES
 PERMANENT_PROMOTION=PASS
 ROLLBACK_USED=NO
-MAIN_PRODUCTION_PARITY=PASS
+PRODUCT_PRODUCTION_PARITY=PASS
 CANONICAL_RUNTIME_PARITY=PASS
 RUNTIME_CANONICAL_PARITY=PASS
 
-CURRENT_PRIMARY_TRACK=POST_PR71_DOCUMENTATION_RECONCILIATION
-CURRENT_PHASE=POST_PR71_RECONCILIATION
-CURRENT_TRACK=DOCUMENTATION_AND_NAV_CONTRACT_REVIEW
+CURRENT_PRIMARY_TRACK=DOCS_LINT_01
+CURRENT_PHASE=DOCUMENTATION_MAINTENANCE
+CURRENT_TRACK=DOCS_LINT_01_FORMATTING_ONLY
 INPUT_01A_STATUS=COMPLETED
 INPUT_PARITY_ESCAPE_FOCUS_STATUS=COMPLETED
 INPUT_PARITY_TOUCH_TARGET_01_STATUS=COMPLETED
@@ -127,25 +137,21 @@ RUNTIME_IDENTITY_02_CLASSIFICATION=OLD_DOCUMENT_SESSION
 RUNTIME_IDENTITY_02_PRODUCT_DEFECT=NO
 DOCS_LINT_01_STATUS=OPEN_BASELINE_DEBT
 
-DOCUMENTATION_RECONCILIATION_BASE_SHA=d01e34fc2eb76da39467d1de9799b12194faec9c
 DOCUMENTATION_SCOPE=DOCUMENTATION_ONLY
-DOCUMENTATION_ACTION=POST_PR71_CANONICAL_RECONCILIATION
-DOCUMENTATION_TARGETS=docs/NEWSFLUX_PROJECT_STATE.md, docs/NEWSFLUX_ROADMAP.md, docs/NEWSFLUX_NAV_VISUAL_01.md
-DOCUMENTATION_RECONCILIATION_STATUS=PENDING_PR_REVIEW
 NAV_CONTRACT_DRIFT_01_DISPOSITION=RESOLVED_ACCEPTED_CURRENT_BASELINE_EXCEPTION
 HISTORICAL_APPROVED_COMPACT_NAV_V1=SOLID
 CURRENT_PR71_COMPACT_BASELINE=GLASS_TOKENS_AND_BACKDROP_FILTER
 HISTORICAL_CONTRACT_PRESERVED=YES
 CURRENT_PR71_BASELINE_ACCEPTED=YES
 FUTURE_GLASS_GATES_WAIVED=NO
-DOCS_LINT_01=SEPARATE_FORMATTING_ONLY_PR
-PR70_SEQUENCE=REFRESH_AFTER_DOCUMENTATION_AND_DOCS_LINT_01
+NEXT_RECOMMENDED_ACTION=DOCS_LINT_01_FORMATTING_ONLY_PR
+PR70_SEQUENCE=AFTER_DOCS_LINT_01
 MEDIUM_RAIL_SEQUENCE=AFTER_PR70_CLOSE
 MERGE_AUTHORIZED=NO
 PERMANENT_PROMOTION_AUTHORIZED=NO
 ```
 
-This documentation-only proposal is based on the verified post-PR71 main and production SHA. It records the current product facts and NAV contract drift without resolving the design decision. It does not authorize future product implementation, merge, or promotion. PR #70 remains the next active functional candidate after this reconciliation and the separate DOCS-LINT-01 step.
+PR #73 records the post-PR72 snapshot distinction: documentation-only merges can advance GitHub `main` without changing the product/runtime baseline, so they do not require deployment. The reconciliation preserves the accepted NAV contract disposition without reopening the design decision. It does not authorize future product implementation, merge, or promotion. DOCS-LINT-01 is the next recommended action; PR #70 remains sequenced after that separate formatting-only step.
 
 ## Recently completed
 
@@ -194,7 +200,8 @@ This documentation-only proposal is based on the verified post-PR71 main and pro
 - **PR #68 / harness maintenance:** stale provider and button assumptions corrected in browser harnesses; feature head `104671b51f99d0ad7c33d3514f8d4b2ad3558aee`, merge `b6b814c77160c2e61dedc7c10958f0712f59d728`.
 - **PR #69 / NAV-VISUAL PR0:** window-class foundation; feature head `b550634066ed129e4bb0e9b3ca18842469cb493e`, merge `cf37807a4d3b9da39d3c438861fac358d936fdaa`.
 - **PR #70 / READER-MEDIA-01A:** open draft at head `0cda102f4e57e2beddfec8d4517fd9b8b4893fb2`, on stale base `cf37807a4d3b9da39d3c438861fac358d936fdaa`; next active functional candidate, refresh required.
-- **PR #71 / NAV-VISUAL PR1:** compact navigation renderer plus Reader/Drawer focus and resize hardening; feature head `4712b3e49c94f560c0e83ce7c8519eb6bda9cba0`, merge and exact production promotion `d01e34fc2eb76da39467d1de9799b12194faec9c`.
+- **PR #71 / NAV-VISUAL PR1:** compact navigation renderer plus Reader/Drawer focus and resize hardening; feature head `4712b3e49c94f560c0e83ce7c8519eb6bda9cba0`, merge and exact product/production promotion `d01e34fc2eb76da39467d1de9799b12194faec9c`.
+- **PR #72 / documentation:** post-PR71 canonical reconciliation; docs-only merge `32244fa07b57c8bb3f5682f27b4d94917384ce63`; no production deployment was required.
 
 ## FILTER-RULES-01 closure
 
@@ -389,7 +396,7 @@ UNKNOWN_COMMIT=RESOLVED
 
 ## Next recommended action
 
-Current sequence: finish this post-PR71 documentation reconciliation, close `DOCS-LINT-01` in its separate formatting-only PR, then refresh open draft PR #70 / `READER-MEDIA-01A` onto current main and run its candidate/authenticated media gates. After PR #70 closes, resume NAV-VISUAL with Medium Rail / PR4; `TABLET-HEADER-WIDTH-01` remains targeted there. `MARK-ALL-UNDO-JUMP-01` remains held for real reproduction evidence. This documentation reconciliation does not authorize product implementation, merge or promotion.
+Current sequence: complete the separate `DOCS-LINT-01` formatting-only PR, then refresh open draft PR #70 / `READER-MEDIA-01A` onto the exact current `main` and run its candidate/authenticated media gates. After PR #70 closes, resume NAV-VISUAL with Medium Rail / PR4; `TABLET-HEADER-WIDTH-01` remains targeted there. `MARK-ALL-UNDO-JUMP-01` remains held for real reproduction evidence. This documentation reconciliation does not authorize product implementation, merge or promotion.
 
 ## Deployment governance
 
@@ -397,7 +404,7 @@ Current sequence: finish this post-PR71 documentation reconciliation, close `DOC
 - Never deploy `latest` or a moving branch implicitly.
 - Live production state reconciled on 2026-10-20: image `newsflux-local:d01e34fc2eb7`, image ID `sha256:d52df4be8afa1f39b79cd53f2e84466482fec3d3962fd8102d71e77e54427c`, revision label `d01e34fc2eb76da39467d1de9799b12194faec9c`, source label `https://github.com/jfsdias/NewsFlux`, status `running`, restart count `0`.
 - Internal HTTP gate returned `200`. The canonical Compose image is `newsflux-local:d01e34fc2eb7`; no candidate override is active, and the archived candidate override remains preserved.
-- `MAIN_PRODUCTION_PARITY=PASS` and `CANONICAL_RUNTIME_PARITY=PASS`. PR #71 merge SHA `d01e34fc2eb76da39467d1de9799b12194faec9c` is the current main and production SHA.
+- `PRODUCT_PRODUCTION_PARITY=PASS` and `CANONICAL_RUNTIME_PARITY=PASS`. PR #71 merge SHA `d01e34fc2eb76da39467d1de9799b12194faec9c` remains the current product and production SHA; PR #72 advanced GitHub `main` only because it was docs-only.
 - `PERMANENT_PROMOTION=PASS`; `ROLLBACK_USED=NO`.
 - The historical PR #44 promotion remains in the completion history. Current production state is recorded above.
 - Docs-only work does not need a production deployment.
