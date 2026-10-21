@@ -103,6 +103,10 @@ const AddFeedModal = () => {
   const modalTitle = polyglot.t("main.add_feed_modal_title")
 
   const handleAfterOpen = () => feedUrlInputRef.current?.focus()
+  const handleDiscoveryPromptAfterClose = () => {
+    setDiscoveryPrompt(null)
+    setSelectedDiscoveryUrl("")
+  }
 
   const handleAddFeed = async (url, categoryId, isFullText) => {
     setFeedModalLoading(true)
@@ -138,14 +142,17 @@ const AddFeedModal = () => {
     new Promise((resolve) => {
       discoveryResolverRef.current = resolve
       setSelectedDiscoveryUrl(candidates.length === 1 ? candidates[0].url : "")
-      setDiscoveryPrompt({ candidates, mode: candidates.length === 1 ? "confirm" : "choose" })
+      setDiscoveryPrompt({
+        candidates,
+        mode: candidates.length === 1 ? "confirm" : "choose",
+        visible: true,
+      })
     })
 
   const finishDiscoveryPrompt = (candidate = null) => {
     const resolve = discoveryResolverRef.current
     discoveryResolverRef.current = null
-    setDiscoveryPrompt(null)
-    setSelectedDiscoveryUrl("")
+    setDiscoveryPrompt((current) => (current ? { ...current, visible: false } : current))
     resolve?.(candidate)
   }
 
@@ -309,13 +316,14 @@ const AddFeedModal = () => {
         </Form>
       </AccessibleModal>
       <AccessibleModal
+        afterClose={handleDiscoveryPromptAfterClose}
         className="add-feed-discovery-modal"
         closeLabel={polyglot.t("actions.close_dialog", { name: discoveryTitle })}
         dialogLabel={discoveryTitle}
         fallbackFocusSelector=".add-feed-discover-trigger"
         maskStyle={{ zIndex: 1010 }}
         title={discoveryTitle}
-        visible={Boolean(discoveryPrompt)}
+        visible={Boolean(discoveryPrompt?.visible)}
         wrapStyle={{ zIndex: 1011 }}
         footer={
           <>

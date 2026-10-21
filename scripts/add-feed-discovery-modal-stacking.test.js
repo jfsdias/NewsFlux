@@ -165,3 +165,109 @@ test("discovery trigger is focused before the child modal opens", () => {
     "the child dialog restores focus to the discovery trigger",
   )
 })
+
+test("discovery prompt content stays intact until the child modal finishes closing", () => {
+  let resolveCandidate
+  let finishPrompt
+  let afterClose
+  let discoveryModal
+  let discoveryTrigger
+
+  walk(ast, (node) => {
+    if (node.type === "VariableDeclarator") {
+      switch (node.id?.name) {
+        case "resolveDiscoveryCandidate": {
+          resolveCandidate = node.init
+          break
+        }
+        case "finishDiscoveryPrompt": {
+          finishPrompt = node.init
+          break
+        }
+        case "handleDiscoveryPromptAfterClose": {
+          afterClose = node.init
+          break
+        }
+        default: {
+          break
+        }
+      }
+    }
+
+    if (
+      node.type === "JSXElement" &&
+      jsxName(node.openingElement.name) === "AccessibleModal" &&
+      getAttribute(node, "className")?.value?.value === "add-feed-discovery-modal"
+    ) {
+      discoveryModal = node
+    }
+
+    if (
+      node.type === "JSXElement" &&
+      jsxName(node.openingElement.name) === "Button" &&
+      getAttribute(node, "className")?.value?.value === "add-feed-discover-trigger"
+    ) {
+      discoveryTrigger = node
+    }
+  })
+
+  assert.ok(resolveCandidate, "discovery candidates create a prompt for the child modal")
+  assert.match(
+    source.slice(resolveCandidate.start, resolveCandidate.end),
+    /setDiscoveryPrompt\(\{[^}]*candidates,[^}]*mode:[^}]*visible:\s*true/s,
+    "the prompt stores its mode, candidates, and visible state together",
+  )
+
+  assert.ok(finishPrompt, "the prompt has a single close handler")
+  const finishSource = source.slice(finishPrompt.start, finishPrompt.end)
+  assert.match(
+    finishSource,
+    /setDiscoveryPrompt\(\(current\)\s*=>\s*\(current\s*\?\s*\{\s*\.\.\.current,\s*visible:\s*false\s*\}\s*:\s*current\)\)/,
+    "closing hides the prompt while retaining its original content",
+  )
+  assert.doesNotMatch(
+    finishSource,
+    /setDiscoveryPrompt\(null\)|setSelectedDiscoveryUrl\(""\)/,
+    "prompt data and selection are not cleared during the exit transition",
+  )
+  assert.ok(
+    finishSource.indexOf("resolve?.(candidate)") > finishSource.indexOf("setDiscoveryPrompt"),
+    "the pending discovery resolves immediately without waiting for afterClose",
+  )
+  assert.doesNotMatch(finishSource, /await|afterClose/)
+
+  assert.ok(afterClose, "the child modal cleans up after its close transition")
+  const afterCloseSource = source.slice(afterClose.start, afterClose.end)
+  assert.match(afterCloseSource, /setDiscoveryPrompt\(null\)/)
+  assert.match(afterCloseSource, /setSelectedDiscoveryUrl\(""\)/)
+
+  assert.ok(discoveryModal, "the candidate prompt remains an AccessibleModal")
+  assert.equal(
+    getAttribute(discoveryModal, "visible")?.value?.expression?.callee?.name,
+    "Boolean",
+    "the child modal visibility is separate from prompt existence",
+  )
+  assert.equal(
+    getAttribute(discoveryModal, "afterClose")?.value?.expression?.name,
+    "handleDiscoveryPromptAfterClose",
+    "cleanup runs only after AccessibleModal completes its exit",
+  )
+  assert.match(source, /discoveryPrompt\?\.mode === "confirm"/)
+  assert.match(source, /discoveryPrompt\.candidates\.map\(/)
+  assert.match(
+    source,
+    /discoveryPrompt\?\.mode === "confirm"\s*\?\s*"main\.add_feed_discover_single_title"/,
+  )
+
+  assert.ok(discoveryTrigger, "the existing discovery trigger remains available")
+  assert.equal(
+    getAttribute(discoveryTrigger, "loading")?.value?.expression?.name,
+    "discoveryLoading",
+    "the existing loading guard continues to prevent a second discovery click",
+  )
+  assert.equal(
+    getAttribute(discoveryTrigger, "disabled")?.value?.expression?.name,
+    "feedModalLoading",
+    "the trigger remains focusable while discovery itself is loading",
+  )
+})
