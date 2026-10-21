@@ -306,7 +306,11 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
     <ReaderCommandsContext.Provider value={readerCommands}>
       <>
         <ContentHotkeyRegistration handleRefreshArticleList={fetchArticleListWithRelatedData} />
-        {!activeContent && <h1 className="a11y-visually-hidden">{pageTitle}</h1>}
+        {!activeContent && (
+          <h1 className="a11y-visually-hidden" tabIndex={-1}>
+            {pageTitle}
+          </h1>
+        )}
         <div
           aria-hidden={isDetailLayerActive || undefined}
           className={classNames("entry-col", { "entry-col-full-width": isEntryColFullWidth })}

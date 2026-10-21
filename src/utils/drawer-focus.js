@@ -156,3 +156,111 @@ export const restoreDrawerFocus = ({
     }
   }
 }
+
+/**
+ * Resolves the appropriate destination focus target element after route navigation.
+ * Preference order:
+ * 1. Main page heading (h1)
+ * 2. Main content container (#main-content, main)
+ *
+ * @param {object} [options]
+ * @param {Document} [options.documentRef=globalThis.document]
+ * @returns {Element | null}
+ */
+export const resolveDestinationFocusTarget = (options = {}) => {
+  const { documentRef = globalThis.document } = options
+  if (!documentRef || typeof documentRef.querySelector !== "function") {
+    return null
+  }
+
+  const queryCandidates = (selector) => {
+    if (typeof documentRef.querySelectorAll === "function") {
+      const elements = documentRef.querySelectorAll(selector)
+      for (const el of elements) {
+        if (canElementReceiveFocus(el)) {
+          return el
+        }
+      }
+    }
+    const single = documentRef.querySelector(selector)
+    return canElementReceiveFocus(single) ? single : null
+  }
+
+  // Preference 1: Main page heading
+  const headingCandidate = queryCandidates("#main-content h1")
+  if (headingCandidate) {
+    return headingCandidate
+  }
+
+  // Preference 2: Main content container
+  const mainCandidate = queryCandidates("#main-content, main")
+  if (mainCandidate) {
+    return mainCandidate
+  }
+
+  return null
+}
+
+/**
+ * Transfers focus to the destination route target after drawer closure resulting from navigation.
+ * Re-attempts over bounded animation frames to accommodate React route transitions and layout shifts.
+ *
+ * @param {object} [options]
+ * @param {number} [options.maxRetries=MAX_DRAWER_FOCUS_RETRIES]
+ * @param {Document} [options.documentRef=globalThis.document]
+ * @param {Function} [options.onFocusSuccess]
+ * @param {Function} [options.onFocusFallback]
+ * @param {Function} [options.requestFrame]
+ * @param {Function} [options.cancelFrame]
+ * @returns {() => void} Cleanup function to cancel pending retries
+ */
+export const handoffRouteFocus = ({
+  maxRetries = MAX_DRAWER_FOCUS_RETRIES,
+  documentRef = globalThis.document,
+  onFocusSuccess,
+  onFocusFallback,
+  requestFrame = typeof globalThis.requestAnimationFrame === "function"
+    ? globalThis.requestAnimationFrame
+    : (cb) => globalThis.setTimeout(cb, 16),
+  cancelFrame = typeof globalThis.cancelAnimationFrame === "function"
+    ? globalThis.cancelAnimationFrame
+    : globalThis.clearTimeout,
+} = {}) => {
+  let retryCount = 0
+  let isCancelled = false
+  let pendingHandle = null
+
+  const attempt = () => {
+    if (isCancelled) {
+      return
+    }
+
+    const targetElement = resolveDestinationFocusTarget({ documentRef })
+
+    if (targetElement) {
+      targetElement.focus({ preventScroll: true })
+      const doc = documentRef || globalThis.document
+      if (doc?.activeElement === targetElement) {
+        onFocusSuccess?.(targetElement)
+        return
+      }
+    }
+
+    retryCount += 1
+    if (retryCount <= maxRetries) {
+      pendingHandle = requestFrame(attempt)
+    } else {
+      onFocusFallback?.()
+    }
+  }
+
+  pendingHandle = requestFrame(attempt)
+
+  return () => {
+    isCancelled = true
+    if (pendingHandle !== null) {
+      cancelFrame(pendingHandle)
+      pendingHandle = null
+    }
+  }
+}

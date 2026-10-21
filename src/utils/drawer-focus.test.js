@@ -4,7 +4,9 @@ import test from "node:test"
 
 import {
   canElementReceiveFocus,
+  handoffRouteFocus,
   resolveCurrentDrawerFocusTarget,
+  resolveDestinationFocusTarget,
   restoreDrawerFocus,
 } from "./drawer-focus.js"
 
@@ -321,4 +323,194 @@ test("READER_DRAWER_ESCAPE_RETURNS_TO_HEADER: reader escape restores focus to le
 
   assert.equal(focusedElement, legalReaderTrigger)
   assert.equal(documentRef.activeElement, legalReaderTrigger)
+})
+
+test("ROUTE_FOCUS: resolveDestinationFocusTarget prioritizes main heading over container", () => {
+  const heading = createMockElement({ id: "page-heading" })
+  const main = createMockElement({ id: "main-content" })
+
+  const documentRef = {
+    querySelector: (sel) => {
+      if (sel.includes("h1")) {
+        return heading
+      }
+      if (sel.includes("main")) {
+        return main
+      }
+      return null
+    },
+    querySelectorAll: (sel) => {
+      if (sel.includes("h1")) {
+        return [heading]
+      }
+      if (sel.includes("main")) {
+        return [main]
+      }
+      return []
+    },
+  }
+
+  const target = resolveDestinationFocusTarget({ documentRef })
+  assert.equal(target, heading, "heading should be preference 1")
+})
+
+test("ROUTE_FOCUS: ignores headings outside the destination main landmark", () => {
+  const unrelatedHeading = createMockElement({ id: "site-heading" })
+  const pageHeading = createMockElement({ id: "page-heading" })
+  const main = createMockElement({ id: "main-content" })
+
+  const documentRef = {
+    querySelector: (selector) => {
+      if (selector === "#main-content h1") {
+        return pageHeading
+      }
+      if (selector.includes("h1")) {
+        return unrelatedHeading
+      }
+      if (selector.includes("main")) {
+        return main
+      }
+      return null
+    },
+    querySelectorAll: (selector) => {
+      if (selector === "#main-content h1") {
+        return [pageHeading]
+      }
+      if (selector.includes("h1")) {
+        return [unrelatedHeading, pageHeading]
+      }
+      if (selector.includes("main")) {
+        return [main]
+      }
+      return []
+    },
+  }
+
+  const target = resolveDestinationFocusTarget({ documentRef })
+  assert.equal(target, pageHeading, "destination heading should beat unrelated page headings")
+})
+
+test("ROUTE_FOCUS: resolveDestinationFocusTarget falls back to main container when heading is unavailable or inert", () => {
+  const trappedHeading = createMockElement({ id: "page-heading", inert: true })
+  const main = createMockElement({ id: "main-content" })
+
+  const documentRef = {
+    querySelector: (sel) => {
+      if (sel.includes("h1")) {
+        return trappedHeading
+      }
+      if (sel.includes("main")) {
+        return main
+      }
+      return null
+    },
+    querySelectorAll: (sel) => {
+      if (sel.includes("h1")) {
+        return [trappedHeading]
+      }
+      if (sel.includes("main")) {
+        return [main]
+      }
+      return []
+    },
+  }
+
+  const target = resolveDestinationFocusTarget({ documentRef })
+  assert.equal(target, main, "main container should be fallback preference 2")
+})
+
+test("ROUTE_FOCUS: handoffRouteFocus transfers focus to heading and does not leave focus on body", async () => {
+  const heading = createMockElement({ id: "page-heading" })
+  const body = createMockElement({ id: "body" })
+
+  const documentRef = {
+    activeElement: body,
+    querySelector: (sel) => (sel.includes("h1") ? heading : null),
+    querySelectorAll: (sel) => (sel.includes("h1") ? [heading] : []),
+  }
+  globalThis.document = documentRef
+
+  let focusedElement = null
+  await new Promise((resolve) => {
+    handoffRouteFocus({
+      documentRef,
+      requestFrame: (cb) => setTimeout(cb, 5),
+      cancelFrame: fakeCancelFrame,
+      onFocusSuccess: (el) => {
+        focusedElement = el
+        resolve()
+      },
+    })
+  })
+
+  assert.equal(focusedElement, heading)
+  assert.equal(documentRef.activeElement, heading)
+  assert.notEqual(documentRef.activeElement, body)
+})
+
+test("ROUTE_FOCUS: handoffRouteFocus retries across animation frames if destination mounts asynchronously", async () => {
+  let isMounted = false
+  const heading = createMockElement({ id: "page-heading" })
+  const body = createMockElement({ id: "body" })
+
+  const documentRef = {
+    activeElement: body,
+    querySelector: (sel) => {
+      if (sel.includes("h1") && isMounted) {
+        return heading
+      }
+      return null
+    },
+    querySelectorAll: (sel) => {
+      if (sel.includes("h1") && isMounted) {
+        return [heading]
+      }
+      return []
+    },
+  }
+  globalThis.document = documentRef
+
+  setTimeout(() => {
+    isMounted = true
+  }, 10)
+
+  let focusedElement = null
+  await new Promise((resolve) => {
+    handoffRouteFocus({
+      documentRef,
+      requestFrame: (cb) => setTimeout(cb, 5),
+      cancelFrame: fakeCancelFrame,
+      onFocusSuccess: (el) => {
+        focusedElement = el
+        resolve()
+      },
+    })
+  })
+
+  assert.equal(focusedElement, heading)
+  assert.equal(documentRef.activeElement, heading)
+})
+
+test("ROUTE_FOCUS: handoffRouteFocus cancellation stops pending retries", async () => {
+  let attempts = 0
+  const documentRef = {
+    activeElement: null,
+    querySelector: () => null,
+    querySelectorAll: () => [],
+  }
+
+  const cancel = handoffRouteFocus({
+    documentRef,
+    requestFrame: (cb) => {
+      attempts += 1
+      return setTimeout(cb, 10)
+    },
+    cancelFrame: fakeCancelFrame,
+  })
+
+  assert.equal(attempts, 1)
+  cancel()
+
+  await new Promise((resolve) => setTimeout(resolve, 30))
+  assert.equal(attempts, 1, "no more frames should be requested after cancellation")
 })
