@@ -74,3 +74,94 @@ test("discovery modal stacks both mask and wrapper above Add Feed", () => {
     "the discovery modal must fit the narrow viewport without clipping its actions",
   )
 })
+
+test("discovery trigger is focused before the child modal opens", () => {
+  let triggerRef
+  let triggerButton
+  let discoverHandler
+
+  walk(ast, (node) => {
+    if (node.type === "VariableDeclarator" && node.id?.name === "discoveryTriggerRef") {
+      triggerRef = node
+    }
+
+    if (node.type === "VariableDeclarator" && node.id?.name === "handleDiscoverFromWebsite") {
+      discoverHandler = node.init
+    }
+
+    if (node.type !== "JSXElement" || jsxName(node.openingElement.name) !== "Button") {
+      return
+    }
+
+    if (getAttribute(node, "className")?.value?.value === "add-feed-discover-trigger") {
+      triggerButton = node
+    }
+  })
+
+  assert.ok(triggerRef, "Add Feed keeps a ref to the discovery trigger")
+  assert.equal(triggerRef.init?.callee?.name, "useRef")
+  assert.ok(triggerButton, "the Find feeds from website button exists")
+  assert.equal(
+    getAttribute(triggerButton, "ref")?.value?.expression?.name,
+    "discoveryTriggerRef",
+    "the trigger ref is attached to Find feeds from website",
+  )
+  assert.equal(
+    getAttribute(triggerButton, "disabled")?.value?.expression?.name,
+    "feedModalLoading",
+    "discovery loading must not natively disable the focus restoration target",
+  )
+  assert.ok(discoverHandler, "the discovery handler exists")
+
+  const handlerSource = source.slice(discoverHandler.start, discoverHandler.end)
+  const earlyFocusIndex = handlerSource.indexOf(
+    "discoveryTriggerRef.current?.focus({ preventScroll: true })",
+  )
+  const loadingIndex = handlerSource.indexOf("setDiscoveryLoading(true)")
+  assert.ok(earlyFocusIndex !== -1, "the validated trigger receives focus before discovery starts")
+  assert.ok(loadingIndex > earlyFocusIndex, "the trigger focus precedes the loading state")
+  assert.match(
+    handlerSource,
+    /discoveryTriggerRef\.current\?\.focus\(\{\s*preventScroll:\s*true\s*\}\)\s*return resolveDiscoveryCandidate\(candidates\)/,
+    "the trigger is focused immediately before opening the child modal",
+  )
+  assert.doesNotMatch(
+    handlerSource,
+    /discoveryModalOwnsFocus|requestAnimationFrame/,
+    "focus restoration uses the existing AccessibleModal mechanism without a parallel focus lifecycle",
+  )
+
+  let addFeedModal
+  let discoveryModal
+  walk(ast, (node) => {
+    if (node.type !== "JSXElement" || jsxName(node.openingElement.name) !== "AccessibleModal") {
+      return
+    }
+
+    const className = getAttribute(node, "className")?.value?.value
+    if (className === "add-feed-modal") {
+      addFeedModal = node
+    }
+    if (className === "add-feed-discovery-modal") {
+      discoveryModal = node
+    }
+  })
+
+  assert.ok(addFeedModal, "the Add Feed dialog uses AccessibleModal")
+  assert.equal(
+    getAttribute(addFeedModal, "autoFocus"),
+    undefined,
+    "the parent modal keeps its existing focus policy",
+  )
+  assert.equal(
+    getAttribute(addFeedModal, "focusLock"),
+    undefined,
+    "the parent modal keeps its existing focus-lock policy",
+  )
+  assert.ok(discoveryModal, "the candidate dialog uses AccessibleModal")
+  assert.equal(
+    getAttribute(discoveryModal, "fallbackFocusSelector")?.value?.value,
+    ".add-feed-discover-trigger",
+    "the child dialog restores focus to the discovery trigger",
+  )
+})

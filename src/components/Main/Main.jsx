@@ -92,6 +92,7 @@ const AddFeedModal = () => {
   const [selectedDiscoveryUrl, setSelectedDiscoveryUrl] = useState("")
   const [feedForm] = Form.useForm()
   const feedUrlInputRef = useRef(null)
+  const discoveryTriggerRef = useRef(null)
   const discoveryResolverRef = useRef(null)
   const discoveryRequestIdRef = useRef(0)
 
@@ -162,6 +163,7 @@ const AddFeedModal = () => {
       return
     }
 
+    discoveryTriggerRef.current?.focus({ preventScroll: true })
     const requestId = ++discoveryRequestIdRef.current
     setDiscoveryLoading(true)
     try {
@@ -173,10 +175,13 @@ const AddFeedModal = () => {
           const candidates = await discoverFeeds(websiteUrl)
           return requestId === discoveryRequestIdRef.current ? candidates : []
         },
-        resolveCandidate: (candidates) =>
-          requestId === discoveryRequestIdRef.current
-            ? resolveDiscoveryCandidate(candidates)
-            : null,
+        resolveCandidate: (candidates) => {
+          if (requestId !== discoveryRequestIdRef.current) {
+            return null
+          }
+          discoveryTriggerRef.current?.focus({ preventScroll: true })
+          return resolveDiscoveryCandidate(candidates)
+        },
         subscribe: handleAddFeed,
       })
 
@@ -256,8 +261,9 @@ const AddFeedModal = () => {
               />
             </Form.Item>
             <Button
+              ref={discoveryTriggerRef}
               className="add-feed-discover-trigger"
-              disabled={discoveryLoading || feedModalLoading}
+              disabled={feedModalLoading}
               loading={discoveryLoading}
               type="secondary"
               onClick={handleDiscoverFromWebsite}
