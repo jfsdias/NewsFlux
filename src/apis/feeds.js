@@ -17,6 +17,18 @@ export const addFeed = async (url, categoryId, isFullText) =>
     crawler: isFullText,
   })
 
+export const discoverFeeds = async (url) => {
+  try {
+    return await apiClient.post("/v1/discover", { url })
+  } catch (error) {
+    if (error?.status === 404) {
+      return []
+    }
+
+    throw error
+  }
+}
+
 export const deleteFeed = async (id) => apiClient.raw(`/v1/feeds/${id}`, { method: "DELETE" })
 
 export const updateFeed = async (id, newDetails) => {

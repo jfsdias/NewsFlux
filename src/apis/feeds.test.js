@@ -59,10 +59,57 @@ Object.defineProperty(globalThis, "localStorage", {
   },
 })
 
-const [{ default: apiClient }, { updateFeed }] = await Promise.all([
+const [{ default: apiClient }, { discoverFeeds, updateFeed }] = await Promise.all([
   import("./ofetch"),
   import("./feeds"),
 ])
+
+test("discoverFeeds calls the Miniflux discovery endpoint with the website URL", async () => {
+  let request
+  const originalPost = apiClient.post
+  apiClient.post = async (url, body) => {
+    request = { url, body }
+    return [{ url: "https://example.test/feed.xml", title: "Example", type: "rss" }]
+  }
+
+  try {
+    const response = await discoverFeeds("https://example.test")
+    assert.equal(request.url, "/v1/discover")
+    assert.deepEqual(request.body, { url: "https://example.test" })
+    assert.equal(response[0].url, "https://example.test/feed.xml")
+  } finally {
+    apiClient.post = originalPost
+  }
+})
+
+test("discoverFeeds treats Miniflux 404 as no discovered feeds", async () => {
+  const originalPost = apiClient.post
+  apiClient.post = async () => {
+    const error = new Error("Not Found")
+    error.status = 404
+    throw error
+  }
+
+  try {
+    assert.deepEqual(await discoverFeeds("https://example.test"), [])
+  } finally {
+    apiClient.post = originalPost
+  }
+})
+
+test("discoverFeeds rethrows errors other than Miniflux 404", async () => {
+  const originalPost = apiClient.post
+  const expectedError = Object.assign(new Error("Service unavailable"), { status: 503 })
+  apiClient.post = async () => {
+    throw expectedError
+  }
+
+  try {
+    await assert.rejects(discoverFeeds("https://example.test"), (error) => error === expectedError)
+  } finally {
+    apiClient.post = originalPost
+  }
+})
 
 const captureUpdatePayload = async (newDetails) => {
   let request

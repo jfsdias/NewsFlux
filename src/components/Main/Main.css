@@ -118,6 +118,11 @@
     max-height: calc(100dvh - 16px);
   }
 
+  .add-feed-discovery-modal {
+    width: calc(100% - 16px);
+    max-width: 400px;
+  }
+
   .add-feed-modal .arco-modal-header,
   .add-feed-modal .arco-modal-footer {
     flex: 0 0 auto;
