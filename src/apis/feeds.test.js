@@ -59,10 +59,28 @@ Object.defineProperty(globalThis, "localStorage", {
   },
 })
 
-const [{ default: apiClient }, { updateFeed }] = await Promise.all([
+const [{ default: apiClient }, { discoverFeeds, updateFeed }] = await Promise.all([
   import("./ofetch"),
   import("./feeds"),
 ])
+
+test("discoverFeeds calls the Miniflux discovery endpoint with the website URL", async () => {
+  let request
+  const originalPost = apiClient.post
+  apiClient.post = async (url, body) => {
+    request = { url, body }
+    return [{ url: "https://example.test/feed.xml", title: "Example", type: "rss" }]
+  }
+
+  try {
+    const response = await discoverFeeds("https://example.test")
+    assert.equal(request.url, "/v1/discover")
+    assert.deepEqual(request.body, { url: "https://example.test" })
+    assert.equal(response[0].url, "https://example.test/feed.xml")
+  } finally {
+    apiClient.post = originalPost
+  }
+})
 
 const captureUpdatePayload = async (newDetails) => {
   let request
