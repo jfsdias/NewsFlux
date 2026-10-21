@@ -332,7 +332,7 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
           ) : (
             <>
               <SearchAndSortBar
-                fullWidth={isFullWidthLayout}
+                fullWidth={isEntryColFullWidth}
                 selectedCount={selection.selectedCount}
                 selectionAvailable={selection.isAvailable}
                 selectionBusy={isMarkingSelectedRead}
