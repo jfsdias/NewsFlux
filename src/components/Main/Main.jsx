@@ -307,8 +307,10 @@ const AddFeedModal = () => {
         closeLabel={polyglot.t("actions.close_dialog", { name: discoveryTitle })}
         dialogLabel={discoveryTitle}
         fallbackFocusSelector=".add-feed-discover-trigger"
+        maskStyle={{ zIndex: 1010 }}
         title={discoveryTitle}
         visible={Boolean(discoveryPrompt)}
+        wrapStyle={{ zIndex: 1011 }}
         footer={
           <>
             <Button onClick={() => finishDiscoveryPrompt(null)}>
