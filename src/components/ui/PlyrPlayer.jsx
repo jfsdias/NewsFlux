@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react"
 
 import { saveEnclosureProgression } from "@/apis"
 import { authState } from "@/store/authState"
+import { importWhileMounted } from "@/utils/near-viewport-activation"
 import "plyr/dist/plyr.css"
 import "./PlyrPlayer.css"
 
@@ -80,8 +81,13 @@ const getMediaType = (src, sourceType, elementType) => {
   return elementType === "audio" ? MEDIA_TYPES.AUDIO : MEDIA_TYPES.VIDEO
 }
 
-const initHls = async (mediaElement, src, onError) => {
-  const { default: Hls } = await import("hls.js")
+const initHls = async (mediaElement, src, onError, isCancelled) => {
+  const hlsModule = await importWhileMounted(() => import("hls.js"), isCancelled)
+  if (!hlsModule) {
+    return null
+  }
+
+  const { default: Hls } = hlsModule
 
   if (!Hls.isSupported()) {
     if (mediaElement.canPlayType("application/vnd.apple.mpegurl")) {
@@ -95,7 +101,7 @@ const initHls = async (mediaElement, src, onError) => {
   hls.loadSource(src)
   hls.attachMedia(mediaElement)
   hls.on(Hls.Events.ERROR, (event, data) => {
-    if (data.fatal) {
+    if (data.fatal && !isCancelled()) {
       onError({ type: "hls", event, data })
     }
   })
@@ -148,11 +154,15 @@ const PlyrPlayer = ({
 
     const initPlayer = async () => {
       try {
-        const { default: Plyr } = await import("plyr")
-        if (isCancelled) {
+        const plyrModule = await importWhileMounted(
+          () => import("plyr"),
+          () => isCancelled,
+        )
+        if (!plyrModule) {
           return
         }
 
+        const { default: Plyr } = plyrModule
         const player = new Plyr(mediaElement, {
           controls: DEFAULT_CONTROLS,
           loadSprite: true,
@@ -195,7 +205,7 @@ const PlyrPlayer = ({
         }
 
         if (mediaType === MEDIA_TYPES.HLS) {
-          const hls = await initHls(mediaElement, src, onError)
+          const hls = await initHls(mediaElement, src, onError, () => isCancelled)
           if (isCancelled) {
             hls?.destroy()
             return
@@ -207,7 +217,9 @@ const PlyrPlayer = ({
 
         onPlayerInit(player)
       } catch (error) {
-        onError({ type: "init", error })
+        if (!isCancelled) {
+          onError({ type: "init", error })
+        }
       }
     }
 

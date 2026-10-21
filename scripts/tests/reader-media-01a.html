@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Reader Media 01A Harness</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        color: #20242a;
+        font:
+          14px/1.5 system-ui,
+          sans-serif;
+      }
+
+      #harness {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+      }
+
+      #toolbar {
+        align-items: center;
+        border-bottom: 1px solid #cbd0d5;
+        display: flex;
+        gap: 12px;
+        min-height: 48px;
+        padding: 6px 12px;
+      }
+
+      #reader-scroll {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        overscroll-behavior: contain;
+        padding: 12px;
+      }
+
+      #article-content {
+        margin: 0 auto;
+        max-width: 760px;
+      }
+
+      .media-case {
+        margin: 0 auto 24px;
+        max-width: 760px;
+        width: 100%;
+      }
+
+      .media-case-label {
+        color: #47505a;
+        display: block;
+        margin-bottom: 4px;
+      }
+
+      .media-spacer {
+        height: 1700px;
+      }
+
+      #report {
+        max-height: 160px;
+        overflow: auto;
+        white-space: pre-wrap;
+      }
+
+      .lazy-plyr-player-placeholder {
+        background: #e7e9ec;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="harness">
+      <header id="toolbar">
+        <strong>READER-MEDIA-01A</strong>
+        <button id="run-reader-media" type="button">Run browser lifecycle harness</button>
+        <pre id="report">Ready</pre>
+      </header>
+      <section id="reader-scroll" aria-label="Article reader test scroll area">
+        <div id="article-content"></div>
+      </section>
+    </main>
+    <script type="module" src="/scripts/tests/reader-media-01a.jsx"></script>
+  </body>
+</html>
