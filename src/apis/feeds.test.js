@@ -82,6 +82,35 @@ test("discoverFeeds calls the Miniflux discovery endpoint with the website URL",
   }
 })
 
+test("discoverFeeds treats Miniflux 404 as no discovered feeds", async () => {
+  const originalPost = apiClient.post
+  apiClient.post = async () => {
+    const error = new Error("Not Found")
+    error.status = 404
+    throw error
+  }
+
+  try {
+    assert.deepEqual(await discoverFeeds("https://example.test"), [])
+  } finally {
+    apiClient.post = originalPost
+  }
+})
+
+test("discoverFeeds rethrows errors other than Miniflux 404", async () => {
+  const originalPost = apiClient.post
+  const expectedError = Object.assign(new Error("Service unavailable"), { status: 503 })
+  apiClient.post = async () => {
+    throw expectedError
+  }
+
+  try {
+    await assert.rejects(discoverFeeds("https://example.test"), (error) => error === expectedError)
+  } finally {
+    apiClient.post = originalPost
+  }
+})
+
 const captureUpdatePayload = async (newDetails) => {
   let request
   const originalPut = apiClient.put
