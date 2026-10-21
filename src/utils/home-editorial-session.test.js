@@ -5,6 +5,7 @@ const {
   appendHomeSessionEntries,
   createHomeEditorialSession,
   createHomeSessionKey,
+  deduplicateHomeEntriesById,
   getHomePaginationBoundary,
   mergeHomeSessionEntries,
   projectHomeSession,
@@ -208,6 +209,16 @@ test("REFRESH_MERGE_PRESERVES_SESSION_MEMBERS_AND_USES_CANONICAL_ENTRY_OBJECTS",
     merged.find(({ id }) => id === 2),
     loaded[1],
   )
+})
+
+test("HOME_CANONICAL_ENTRIES_DEDUPLICATE_IDS_WITHOUT_REPLACING_THE_FIRST_ENTRY", () => {
+  const first = entry(1, 13)
+  const duplicate = { ...first, title: "Duplicate response" }
+
+  assert.deepEqual(deduplicateHomeEntriesById([first, entry(2, 12), duplicate]), [
+    first,
+    entry(2, 12),
+  ])
 })
 
 test("Home pagination boundary uses the second-oldest canonical timestamp for overlap", () => {

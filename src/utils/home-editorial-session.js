@@ -6,7 +6,7 @@ const byPublishedAt = (left, right) =>
   Date.parse(right.published_at) - Date.parse(left.published_at) ||
   Number(left.id) - Number(right.id)
 
-const uniqueById = (entries) => {
+export const deduplicateHomeEntriesById = (entries) => {
   const seen = new Set()
   return entries.filter((entry) => {
     if (entry?.id === undefined || entry?.id === null || seen.has(entry.id)) {
@@ -25,9 +25,9 @@ export const createHomeSessionKey = ({ identityKey, showHiddenFeeds, pageSize, s
 // A canonical refresh updates entries returned by Miniflux while retaining older members
 // of the committed Home session that fell outside the refreshed page.
 export const mergeHomeSessionEntries = (previousEntries, refreshedEntries) => {
-  const merged = uniqueById(refreshedEntries)
+  const merged = deduplicateHomeEntriesById(refreshedEntries)
   const seen = new Set(merged.map(({ id }) => id))
-  for (const entry of uniqueById(previousEntries)) {
+  for (const entry of deduplicateHomeEntriesById(previousEntries)) {
     if (!seen.has(entry.id)) {
       merged.push(entry)
       seen.add(entry.id)
@@ -60,7 +60,7 @@ export const createHomeEditorialSession = ({
   const highlighted = new Set(highlightIds)
   const recentIds =
     initialProjection?.recentIds ??
-    uniqueById(entries)
+    deduplicateHomeEntriesById(entries)
       .filter((entry) => entry.status === "unread" && !highlighted.has(entry.id))
       .toSorted(byPublishedAt)
       .map((entry) => entry.id)
@@ -71,7 +71,7 @@ export const createHomeEditorialSession = ({
     highlightIds: [...highlightIds],
     recentIds: [...recentIds],
     // IDs in the initial canonical page cannot be inserted later by status settlement.
-    observedEntryIds: uniqueById(entries).map(({ id }) => id),
+    observedEntryIds: deduplicateHomeEntriesById(entries).map(({ id }) => id),
     pendingStatusById: {},
     scrollRoot,
   }
@@ -80,7 +80,7 @@ export const createHomeEditorialSession = ({
 const appendableRecentEntries = (session, entries) => {
   const observed = new Set(session.observedEntryIds)
   const highlighted = new Set(session.highlightIds)
-  return uniqueById(entries)
+  return deduplicateHomeEntriesById(entries)
     .filter(
       (entry) => entry.status === "unread" && !observed.has(entry.id) && !highlighted.has(entry.id),
     )
@@ -89,7 +89,7 @@ const appendableRecentEntries = (session, entries) => {
 
 // Load-more extends the committed Recent tail with new canonical unread entries only.
 export const appendHomeSessionEntries = (session, entries) => {
-  const currentIds = uniqueById(entries).map(({ id }) => id)
+  const currentIds = deduplicateHomeEntriesById(entries).map(({ id }) => id)
   const observed = new Set(session.observedEntryIds)
   const unseenIds = currentIds.filter((id) => !observed.has(id))
   if (unseenIds.length === 0) {
