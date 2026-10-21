@@ -1,15 +1,22 @@
 import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
 import test from "node:test"
 
 const {
   appendHomeSessionEntries,
   createHomeEditorialSession,
   createHomeSessionKey,
+  deduplicateHomeEntriesById,
   getHomePaginationBoundary,
   mergeHomeSessionEntries,
   projectHomeSession,
   transitionHomeSession,
 } = await import(new URL("home-editorial-session.js", import.meta.url))
+
+const useArticleListSource = readFileSync(
+  new URL("../hooks/useArticleList.js", import.meta.url),
+  "utf8",
+)
 
 const entry = (id, time, feedId = id, status = "unread") => ({
   id,
@@ -207,6 +214,87 @@ test("REFRESH_MERGE_PRESERVES_SESSION_MEMBERS_AND_USES_CANONICAL_ENTRY_OBJECTS",
   assert.equal(
     merged.find(({ id }) => id === 2),
     loaded[1],
+  )
+})
+
+test("HOME_CANONICAL_ENTRIES_DEDUPLICATE_IDS_WITHOUT_REPLACING_THE_FIRST_ENTRY", () => {
+  const first = entry(1, 13)
+  const duplicate = { ...first, title: "Duplicate response" }
+
+  assert.deepEqual(deduplicateHomeEntriesById([first, entry(2, 12), duplicate]), [
+    first,
+    entry(2, 12),
+  ])
+})
+
+test("HOME_INITIAL_DUPLICATES_KEEP_RAW_CURSOR_AND_LOAD_MORE_SEMANTICS", () => {
+  const first = {
+    ...entry(101, 18),
+    published_at: "2026-10-18T12:00:00Z",
+  }
+  const second = {
+    ...entry(102, 18),
+    published_at: "2026-10-18T11:00:00Z",
+  }
+  const repeatedFirst = {
+    ...entry(101, 18),
+    published_at: "2026-10-18T10:00:00Z",
+    title: "Repeated provider ID with a later boundary timestamp",
+  }
+  const response = { entries: [first, second, repeatedFirst], total: 3 }
+  const visibleEntries = deduplicateHomeEntriesById(response.entries)
+
+  assert.deepEqual(
+    visibleEntries.map(({ id }) => id),
+    [101, 102],
+  )
+  assert.equal(visibleEntries[0], first)
+  assert.equal(getHomePaginationBoundary(response.entries), Date.parse(second.published_at) / 1000)
+  assert.notEqual(
+    getHomePaginationBoundary(response.entries),
+    getHomePaginationBoundary(visibleEntries),
+  )
+
+  const handleResponsesSource = useArticleListSource.slice(
+    useArticleListSource.indexOf("const handleResponses = ("),
+    useArticleListSource.indexOf(
+      "\nconst useArticleList =",
+      useArticleListSource.indexOf("const handleResponses = ("),
+    ),
+  )
+
+  assert.match(
+    handleResponsesSource,
+    /const homeEntries = isHome \? deduplicateHomeEntriesById\(canonicalEntries\) : canonicalEntries/,
+  )
+  assert.match(
+    handleResponsesSource,
+    /isHome && preserveHomeSession\s*\? mergeHomeSessionEntries\(contentState\.get\(\)\.entries, homeEntries\)\s*:\s*homeEntries/,
+  )
+  assert.match(handleResponsesSource, /setEntries\(preparedEntries\)/)
+  assert.match(handleResponsesSource, /cursor: getHomePaginationBoundary\(canonicalEntries\)/)
+  assert.match(
+    handleResponsesSource,
+    /setLoadMoreVisible\(canonicalEntries\.length < response\.total\)/,
+  )
+  assert.equal(response.entries.length < response.total, false)
+  assert.equal(visibleEntries.length < response.total, true)
+})
+
+test("HOME_INITIAL_TRIPLE_DUPLICATE_PAGE_USES_RAW_TOTAL_FOR_LOAD_MORE", () => {
+  const rawPage = [entry(101, 18), entry(101, 17), entry(101, 16)]
+  const providerTotal = 3
+  const visibleEntries = deduplicateHomeEntriesById(rawPage)
+
+  assert.deepEqual(
+    visibleEntries.map(({ id }) => id),
+    [101],
+  )
+  assert.equal(rawPage.length < providerTotal, false)
+  assert.equal(visibleEntries.length < providerTotal, true)
+  assert.match(
+    useArticleListSource,
+    /setLoadMoreVisible\(canonicalEntries\.length < response\.total\)/,
   )
 })
 

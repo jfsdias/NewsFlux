@@ -36,7 +36,11 @@ import {
   waitForEntryMutations,
 } from "@/utils/entry-mutation-state"
 import prepareEntry from "@/utils/entry-presentation"
-import { getHomePaginationBoundary, mergeHomeSessionEntries } from "@/utils/home-editorial-session"
+import {
+  deduplicateHomeEntriesById,
+  getHomePaginationBoundary,
+  mergeHomeSessionEntries,
+} from "@/utils/home-editorial-session"
 
 const handleResponses = (
   response,
@@ -51,10 +55,11 @@ const handleResponses = (
   }
 
   const canonicalEntries = response.entries.map((entry) => prepareEntry(entry))
+  const homeEntries = isHome ? deduplicateHomeEntriesById(canonicalEntries) : canonicalEntries
   const preparedEntries =
     isHome && preserveHomeSession
-      ? mergeHomeSessionEntries(contentState.get().entries, canonicalEntries)
-      : canonicalEntries
+      ? mergeHomeSessionEntries(contentState.get().entries, homeEntries)
+      : homeEntries
   if (isHome) {
     setEntries(preparedEntries)
     setHomePaginationBoundary({
