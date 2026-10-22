@@ -7,6 +7,11 @@ import { visualizer } from "rollup-plugin-visualizer"
 import { defineConfig, loadEnv } from "vite"
 import { VitePWA } from "vite-plugin-pwa"
 
+import {
+  RUNTIME_BUILD_ASSET_CACHE_NAME,
+  runtimeBuildAssetCachePlugin,
+} from "./src/utils/pwa-runtime-asset-cache.js" // eslint-disable-line import/extensions
+
 const { dirname, resolve } = path
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -84,7 +89,8 @@ export default defineConfig(({ mode }) => ({
             urlPattern: /\/assets\/.*\.(?:css|js)$/,
             handler: "CacheFirst",
             options: {
-              cacheName: "runtime-build-assets",
+              cacheName: RUNTIME_BUILD_ASSET_CACHE_NAME,
+              plugins: [runtimeBuildAssetCachePlugin],
               expiration: {
                 maxAgeSeconds: 60 * 60 * 24 * 30,
                 maxEntries: 80,
