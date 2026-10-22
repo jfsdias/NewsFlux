@@ -2,6 +2,8 @@
   "app": {
     "new_version_available": "Nueva versión disponible",
     "new_version_available_description": "Por favor, compruebe la última versión en GitHub",
+    "update_ready_title": "Actualización lista",
+    "update_ready_description": "Recargue para cambiar a la nueva versión. Nada cambia hasta que usted lo decida.",
     "counts_refresh_error": "No se pudieron actualizar algunos contadores y pueden estar temporalmente desactualizados"
   },
   "login": {
@@ -112,6 +114,7 @@
     "skip_to_main_content": "Saltar al contenido principal",
     "check": "Comprobar",
     "dismiss": "Descartar",
+    "update_now": "Actualizar ahora",
     "retry": "Reintentar",
     "undo": "Deshacer",
     "close_dialog": "Cerrar %{name}",

@@ -2,6 +2,8 @@
   "app": {
     "new_version_available": "New version available",
     "new_version_available_description": "Please check the latest version on GitHub",
+    "update_ready_title": "Update ready",
+    "update_ready_description": "Reload to switch to the new version. Nothing changes until you choose.",
     "counts_refresh_error": "Some counts could not be refreshed and may be temporarily out of date"
   },
   "login": {
@@ -112,6 +114,7 @@
     "skip_to_main_content": "Skip to main content",
     "check": "Check",
     "dismiss": "Dismiss",
+    "update_now": "Update now",
     "retry": "Retry",
     "undo": "Undo",
     "close_dialog": "Close %{name}",
