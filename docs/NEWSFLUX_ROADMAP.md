@@ -1,9 +1,9 @@
 # NewsFlux Roadmap
 
-- **Status:** canonical roadmap reconciled after PR #81 and the PR #79 research archive, with GitHub `main` and product/production baselines recorded separately.
+- **Status:** canonical roadmap reconciled after PR #81, the PR #79 research archive, and the 2026-10-22 active-candidate review; GitHub `main` and product/production baselines remain recorded separately.
 - **Created:** 2026-10-15.
-- **Last reconciled:** 2026-10-21.
-- **Reconciled against:** GitHub `main` at `313991e80c2b54a99819c2e267ef90a35a959752`; product and production at `dc72a6ed0069b539877f5b2b1f1327d66ad7d0a8`. PR #79 is docs-only and explains the main/runtime SHA difference; no deployment is required for that documentation merge. Production image `newsflux-local:dc72a6ed0069`, image ID `sha256:3ada4fb3ef18c3fd1398a67aa6ce5118c8cb88c6533775e534779cb820bde83b`, runtime running, internal HTTP PASS, public HTTP 200 and exact image/revision PASS. Restart count was not included in the supplied receipt. PR #80 is closed without merge; PR #81 is merged, deployed and validated. No PRs were open before this reconciliation PR.
+- **Last reconciled:** 2026-10-22.
+- **Reconciled against:** GitHub `main` at `313991e80c2b54a99819c2e267ef90a35a959752`; product and production at `dc72a6ed0069b539877f5b2b1f1327d66ad7d0a8`. PR #79 is docs-only and explains the main/runtime SHA difference; no deployment is required for that documentation merge. Production image `newsflux-local:dc72a6ed0069`, image ID `sha256:3ada4fb3ef18c3fd1398a67aa6ce5118c8cb88c6533775e534779cb820bde83b`, runtime running, internal HTTP PASS, public HTTP 200 and exact image/revision PASS. Restart count was not included in the supplied receipt. PR #80 is closed without merge; PR #81 is merged, deployed and validated. No PRs were open at the original 2026-10-21 pre-reconciliation snapshot.
 - **Purpose:** preserve completed work, accepted findings, sequencing, architecture/product gates, upstream baseline, and the next recommended action without turning the roadmap into implementation authorization.
 
 This document is the canonical **roadmap**, not an implementation authorization. Detailed design decisions remain in the dedicated design documents and implementation plans remain in `docs/superpowers/plans/` where present.
@@ -148,6 +148,9 @@ Current reference decisions:
 | #79 | Research archive                 | **COMPLETED**        | Durable research archive and post-PR81 reconciliation; docs-only merge `313991e80c2b54a99819c2e267ef90a35a959752`                                                                                       |
 | #80 | Discovery Benchmark V1           | **CLOSED, NO MERGE** | Research-only harness; no product authority. G1 remained a limited research signal, G2 had no useful signal; broad discovery remains HOLD.                                                              |
 | #81 | ADD-FEED-DISCOVER-01             | **COMPLETED**        | Merged, deployed and validated as `dc72a6ed0069b539877f5b2b1f1327d66ad7d0a8`; website discovery requires explicit confirmation/selection before subscription.                                           |
+| #82 | Documentation                    | **OPEN DRAFT**       | Current documentation-only reconciliation; preserves the 2026-10-21 snapshot and records active PR #83/#84 candidates and their integration order.                                                      |
+| #83 | ADD-FEED-DISCOVERY-UX-01         | **OPEN DRAFT**       | PM review PASS; active isolated candidate for duplicate-URL presentation polish; not merged or deployed.                                                                                                |
+| #84 | MINIFLUX-DELETE-CONTRACT-01      | **OPEN DRAFT**       | PM review PASS; active isolated backend candidate; DELETE retry hazard confirmed, while historical 404 causation remains high-confidence but unproven; not merged or deployed.                          |
 
 ### 3.3 Functional behavior and defect tracks
 
@@ -368,8 +371,8 @@ The following opportunities do not require new persistent NewsFlux state:
 
 - **PR #81 / ADD-FEED-DISCOVER-01 — COMPLETED, MERGED, DEPLOYED, VALIDATED** at `dc72a6ed0069b539877f5b2b1f1327d66ad7d0a8`. A normal website URL is sent to Miniflux `POST /v1/discover`; zero candidates produce explicit no-results feedback, one candidate requires confirmation, and multiple candidates require explicit selection and confirmation. `POST /v1/feeds` occurs only after that confirmation. Direct valid feed URL behavior, selected category and Fetch original content/crawler are preserved. Automated, Safari/browser, focus-lock, focus-return, controlled canary and cleanup reconciliation gates passed.
 - **PR #80 / Discovery Benchmark V1 — CLOSED WITHOUT MERGE; RESEARCH ONLY.** Corpus sufficiency passed for continued research. G1 candidate generation is a limited signal (Recall@5 0.075, Recall@10 0.125, MRR 0.057); G2 produced no useful signal. No product ranking was adopted; broad source discovery remains HOLD. No raw/private benchmark artifacts were committed.
-- **ADD_FEED_DISCOVERY_DUPLICATE_URL_01 — BACKLOG, LOW, NON-BLOCKING:** candidate title can fall back to its URL and then show the URL twice; visual polish only.
-- **MINIFLUX_DELETE_STATUS_01 — BACKLOG, NEEDS REPRO, NON-BLOCKING:** the canary DELETE returned HTTP 404 after pre-delete identity passed; absence by ID and URL and restoration of baseline count were confirmed. Do not investigate in unrelated work.
+- **ADD_FEED_DISCOVERY_DUPLICATE_URL_01 — ACTIVE CANDIDATE, PR #83:** low, non-blocking presentation polish; candidate title can fall back to its URL and then show the URL twice. PR #83 is an isolated PM-reviewed Draft, not merged or deployed.
+- **MINIFLUX_DELETE_STATUS_01 — ACTIVE CANDIDATE, PR #84:** the DELETE retry hazard is confirmed and is being hardened in an isolated PM-reviewed Draft; the historical 404 cause remains high-confidence but unproven. PR #84 is not merged or deployed, and this finding is not backlog-only or resolved in main.
 - **Miniflux fetch security migration — PASS:** global private-network fetch allowance is disabled; RSS-Bridge private access is restricted through the dedicated proxy to the intended `rss-bridge:80` target.
 
 ---
@@ -456,11 +459,13 @@ Offline reading, feed notifications, third-party AI summaries and other new pers
 
 ## 7. Recommended execution order from the current baseline
 
-At the 2026-10-21 reconciliation snapshot, PRs #79 and #81 are complete, PR #80 closed without merge, and PR #70 and DOCS-LINT-01 are complete. The next functional maintenance track is a dedicated upstream-sync PR for the queued low-risk ADAPT item `3b2b08fb`; this is a recommendation, not implementation or merge authorization. `MARK-ALL-UNDO-JUMP-01` remains held for real reproduction evidence. No broad discovery ranking or personalization expansion is authorized.
+The 2026-10-21 reconciliation snapshot remains historical: it recorded PRs #79/#81 complete, PR #80 closed without merge, and no open PRs before that reconciliation. The live 2026-10-22 order is PR #82 documentation, PR #84 backend, PR #83 design after refresh, then the dedicated upstream sync for `3b2b08fb`. PRs #83 and #84 are isolated, PM-reviewed Draft candidates; neither is merged or deployed. This sequence does not cancel or permanently deprioritize upstream work. `MARK-ALL-UNDO-JUMP-01` remains held for real reproduction evidence. No broad discovery ranking or personalization expansion is authorized.
 
-1. **Dedicated upstream sync** — review and adapt the empty-caption rendering change from `3b2b08fb` against the current fork; preserve selective integration and run conflict-surface regressions.
-2. **NAV-VISUAL Medium Rail / PR4** — remains deferred, including 884×1104 and `TABLET-HEADER-WIDTH-01`; preserve the compact implementation and its separate glass gates.
-3. **Other planned/backlog tracks** — CHROME-01 remaining subsets, NAV-02F, HOME-SKEL-01, SAVE-EXT-01, HOME-VISUAL-02, READER-VISUAL-02B, ID-DEPLOY-01, first-party saved-state work, Personalization V2, MOTION-01 and ML ranking remain subject to their existing gates.
+1. **PR #82 documentation reconciliation** — preserve the original snapshot and record the active candidate state; docs-only and no deployment required.
+2. **PR #84 / MINIFLUX-DELETE-CONTRACT-01** — backend delete-contract hardening; isolated candidate, PM review passed, not merged/deployed.
+3. **PR #83 / ADD-FEED-DISCOVERY-UX-01** — duplicate-URL presentation polish after the backend refresh; isolated candidate, PM review passed, not merged/deployed.
+4. **Dedicated upstream sync** — review and adapt the empty-caption rendering change from `3b2b08fb` against the current fork; it remains queued, not integrated, and follows the active isolated candidates.
+5. **Other planned/backlog tracks** — CHROME-01 remaining subsets, NAV-02F, HOME-SKEL-01, SAVE-EXT-01, HOME-VISUAL-02, READER-VISUAL-02B, ID-DEPLOY-01, first-party saved-state work, Personalization V2, MOTION-01 and ML ranking remain subject to their existing gates.
 
 ## 8. BULK safety contracts
 
@@ -508,8 +513,8 @@ The existing `markAllReadJumpToNext` behavior remains intentional. `MARK-ALL-UND
 - **ABOUT-ACCESSIBLE-BRAND-01 — COMPLETED:** PR #65 corrected the accessible NewsFlux GitHub link label in all six shipped locales; no longer an open finding.
 - **RUNTIME-IDENTITY-02 — CLOSED / NON-PRODUCT:** `OLD_DOCUMENT_SESSION`; the old loaded document continued running old JavaScript while fresh asset requests returned the R5 asset. Server, asset, Service Worker and Cache Storage were not the cause.
 - **HOME-HARNESS-STABILITY-01 — OPEN:** deterministic baseline failures and intermittent stability failures remain separate. Deterministic 10/10: `LIST_SEARCH_DATE_SORT_PRESERVED`, `READER_MEASURE_01_CPL`. Intermittent 6/10: `READER_VISUAL_01_WIDE_IMAGE`, `READER_MEASURE_01_DEFAULT_75_PARITY`, `READER_MEASURE_01_MEDIA_PROTECTION`. Root cause remains unknown.
-- **ADD_FEED_DISCOVERY_DUPLICATE_URL_01 — LOW / NON-BLOCKING:** when the candidate title falls back to its URL, the URL may appear twice; visual polish only.
-- **MINIFLUX_DELETE_STATUS_01 — NEEDS REPRO / NON-BLOCKING:** canary DELETE returned HTTP 404 after pre-delete identity passed; post-delete absence by ID/URL and baseline count restoration were confirmed. Do not investigate in unrelated work.
+- **ADD_FEED_DISCOVERY_DUPLICATE_URL_01 — ACTIVE CANDIDATE, PR #83; LOW / NON-BLOCKING:** when the candidate title falls back to its URL, the URL may appear twice; isolated PM-reviewed Draft, not merged/deployed.
+- **MINIFLUX_DELETE_STATUS_01 — ACTIVE CANDIDATE, PR #84; NON-BLOCKING:** DELETE retry hazard confirmed; historical HTTP 404 causation remains high-confidence but unproven. Isolated PM-reviewed Draft, not merged/deployed, and unresolved in main.
 - **HOME_PAGINATION_CURSOR_STALL_01 — BACKLOG.**
 - **HOME_DUP_ROOT_CAUSE_01 — BACKLOG.**
 - **FOOTERPANEL_CLIPPING — NEEDS REPRODUCTION.**
@@ -749,7 +754,7 @@ PRODUCT_IMPLEMENTATION_AUTHORIZED=NO
 
 At the reconciliation snapshot, GitHub `main` was `32244fa07b57c8bb3f5682f27b4d94917384ce63`, while the product and production baseline was `d01e34fc2eb76da39467d1de9799b12194faec9c`. Documentation-only merges may advance `main` without changing the product/runtime baseline or requiring deployment. No candidate override is active, the archived candidate override remains preserved, and product/production parity remains intact. NAV-VISUAL PR0/PR1 are complete, and remaining slices retain their separate authorization gates. `NAV_CONTRACT_DRIFT_01` is resolved as an accepted current-baseline exception; future glass gates remain separate and `MOBILE-SCROLL-FLICKER-01` remains open.
 
-## 14. Current reconciliation snapshot: GitHub main and product/production state (2026-10-21)
+## 14. Original pre-reconciliation snapshot: GitHub main and product/production state (2026-10-21)
 
 ```text
 GITHUB_MAIN=313991e80c2b54a99819c2e267ef90a35a959752
@@ -814,4 +819,35 @@ BROAD_SOURCE_DISCOVERY=HOLD
 PERSONALIZED_RANKING=NO_BROADENING_WITHOUT_EXPLICIT_AUTHORIZATION
 ```
 
-The current snapshot above supersedes the historical PR #73 snapshot in Section 13. PR #79 advances GitHub `main` without changing the product/runtime baseline; no deployment is required for docs-only advancement. The dedicated upstream-sync item remains queued, not integrated. This reconciliation PR is documentation-only and does not authorize a merge or deploy.
+This original 2026-10-21 pre-reconciliation snapshot preserves `OPEN_PRS_AT_SNAPSHOT=NONE` as observed before that reconciliation began; it is not the live candidate state. PR #79 advanced GitHub `main` without changing the product/runtime baseline, and no deployment was required for docs-only advancement. The live PR #82/#83/#84 state and current integration order are recorded separately in Section 15. The dedicated upstream-sync item remains queued, not integrated. This documentation-only reconciliation does not authorize a merge or deploy.
+
+## 15. Active parallel candidates and current integration order (2026-10-22)
+
+The 2026-10-21 snapshot above is retained as the original pre-reconciliation record. Live GitHub state checked on 2026-10-22 shows PR #82 open as a Draft documentation reconciliation, with two isolated, PM-reviewed Draft candidates behind it. PR #84 handles backend delete-contract hardening; PR #83 handles duplicate-URL presentation polish after the backend refresh. Neither is merged or deployed.
+
+```text
+LIVE_GITHUB_MAIN=313991e80c2b54a99819c2e267ef90a35a959752
+PR82_STATUS=OPEN_DRAFT
+PR83_STATUS=OPEN_DRAFT
+PR83_TRACK=ADD-FEED-DISCOVERY-UX-01
+PR83_HEAD=07883336becf7f16855af5736da4dafb33a34146
+PR83_PM_REVIEW=PASS
+PR83_MERGED=NO
+PR83_DEPLOYED=NO
+ADD_FEED_DISCOVERY_DUPLICATE_URL_01=ACTIVE_CANDIDATE_PR83_NOT_YET_RESOLVED_IN_MAIN
+PR84_STATUS=OPEN_DRAFT
+PR84_TRACK=MINIFLUX-DELETE-CONTRACT-01
+PR84_HEAD=1328e5f469b322c6059e7e998a1dff9aa8eb4f00
+PR84_PM_REVIEW=PASS
+PR84_MERGED=NO
+PR84_DEPLOYED=NO
+MINIFLUX_DELETE_STATUS_01=ACTIVE_CANDIDATE_PR84_NOT_YET_RESOLVED_IN_MAIN
+MINIFLUX_DELETE_RETRY_HAZARD_CONFIRMED=YES
+HISTORICAL_404_CAUSATION=HIGH_CONFIDENCE_NOT_PROVEN
+ACTIVE_PARALLEL_CANDIDATES=PR83_ADD_FEED_DISCOVERY_UX_01;PR84_MINIFLUX_DELETE_CONTRACT_01
+CURRENT_INTEGRATION_ORDER=PR82_DOCUMENTATION;PR84_BACKEND;PR83_DESIGN_AFTER_REFRESH;DEDICATED_UPSTREAM_SYNC_3b2b08fb
+NEXT_ORDERED_MAINTENANCE_AFTER_ACTIVE_CANDIDATES=DEDICATED_UPSTREAM_SYNC_3b2b08fb
+UPSTREAM_3b2b08fb_STATUS=QUEUED_NOT_INTEGRATED
+```
+
+The dedicated upstream sync for `3b2b08fb` remains queued after the active candidates; it is not cancelled or permanently deprioritized. The order is a sequencing record, not authorization to merge or deploy any candidate.

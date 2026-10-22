@@ -1,13 +1,13 @@
 # NewsFlux Project State
 
 - **Purpose:** concise operational state for PM handoffs and future sessions. The roadmap remains the source for sequencing and product/architecture detail.
-- **Last reconciled:** 2026-10-21.
+- **Last reconciled:** 2026-10-22.
 - **Reconciliation snapshot:** GitHub `main` at `313991e80c2b54a99819c2e267ef90a35a959752` on 2026-10-21.
 - **Current product/production baseline at that snapshot:** `dc72a6ed0069b539877f5b2b1f1327d66ad7d0a8`.
 
 ## Current state
 
-As of the 2026-10-21 pre-reconciliation snapshot, GitHub `main` is `313991e80c2b54a99819c2e267ef90a35a959752`. Product and production are at the PR #81 merge SHA `dc72a6ed0069b539877f5b2b1f1327d66ad7d0a8`; the runtime is running, internal HTTP passed, public HTTP returned 200, and exact image/revision identity passed. No restart count was included in the deployment receipt. Main is ahead of that runtime only because PR #79 is documentation-only. PR #79 is merged, PR #80 closed without merge, and PR #81 is merged, deployed and validated. GitHub reported no open PRs before this reconciliation PR was opened.
+The GitHub, product and production values in the original 2026-10-21 pre-reconciliation snapshot below remain an immutable historical record. At that snapshot, GitHub `main` was `313991e80c2b54a99819c2e267ef90a35a959752`; product and production were at PR #81 merge SHA `dc72a6ed0069b539877f5b2b1f1327d66ad7d0a8`; runtime, HTTP and exact image/revision checks passed; no restart count was included in the receipt; and GitHub had no open PRs before that reconciliation began. The live candidate state checked on 2026-10-22 is recorded separately below.
 
 ```text
 DOCS_DATE=2026-10-21
@@ -102,7 +102,36 @@ MERGE_AUTHORIZED=NO
 DEPLOY_AUTHORIZED=NO
 ```
 
-Main may advance through documentation-only merges without changing the product/runtime baseline or requiring deployment. The next functional maintenance track is a dedicated upstream-sync PR for the queued ADAPT item; this reconciliation does not claim it is integrated or authorize a merge.
+## Active parallel candidates (live state checked 2026-10-22)
+
+PR #82 remains the open Draft documentation reconciliation. Two isolated, PM-reviewed Draft candidates are active behind it: PR #84 for backend delete-contract hardening and PR #83 for duplicate-URL discovery presentation polish after the backend refresh. Neither candidate is merged or deployed.
+
+```text
+LIVE_GITHUB_MAIN=313991e80c2b54a99819c2e267ef90a35a959752
+PR82_STATUS=OPEN_DRAFT
+PR83_STATUS=OPEN_DRAFT
+PR83_TRACK=ADD-FEED-DISCOVERY-UX-01
+PR83_HEAD=07883336becf7f16855af5736da4dafb33a34146
+PR83_PM_REVIEW=PASS
+PR83_MERGED=NO
+PR83_DEPLOYED=NO
+ADD_FEED_DISCOVERY_DUPLICATE_URL_01=ACTIVE_CANDIDATE_PR83_NOT_YET_RESOLVED_IN_MAIN
+PR84_STATUS=OPEN_DRAFT
+PR84_TRACK=MINIFLUX-DELETE-CONTRACT-01
+PR84_HEAD=1328e5f469b322c6059e7e998a1dff9aa8eb4f00
+PR84_PM_REVIEW=PASS
+PR84_MERGED=NO
+PR84_DEPLOYED=NO
+MINIFLUX_DELETE_STATUS_01=ACTIVE_CANDIDATE_PR84_NOT_YET_RESOLVED_IN_MAIN
+MINIFLUX_DELETE_RETRY_HAZARD_CONFIRMED=YES
+HISTORICAL_404_CAUSATION=HIGH_CONFIDENCE_NOT_PROVEN
+ACTIVE_PARALLEL_CANDIDATES=PR83_ADD_FEED_DISCOVERY_UX_01;PR84_MINIFLUX_DELETE_CONTRACT_01
+CURRENT_INTEGRATION_ORDER=PR82_DOCUMENTATION;PR84_BACKEND;PR83_DESIGN_AFTER_REFRESH;DEDICATED_UPSTREAM_SYNC_3b2b08fb
+NEXT_ORDERED_MAINTENANCE_AFTER_ACTIVE_CANDIDATES=DEDICATED_UPSTREAM_SYNC_3b2b08fb
+UPSTREAM_3b2b08fb_STATUS=QUEUED_NOT_INTEGRATED
+```
+
+Main may advance through documentation-only merges without changing the product/runtime baseline or requiring deployment. The 2026-10-21 snapshot remains historical. As of the live 2026-10-22 check, PR #83 and PR #84 are active, isolated Draft candidates and neither is merged or deployed. The current integration order is PR #82 documentation, PR #84 backend, PR #83 design after refresh, then the dedicated upstream sync for `3b2b08fb`. That upstream item remains queued, not integrated, and is sequenced after the active candidates rather than cancelled or permanently deprioritized.
 
 ## Historical snapshot: PR #73 reconciliation (2026-10-20)
 
