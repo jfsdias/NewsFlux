@@ -390,7 +390,7 @@ Two planning tracks were added after the upstream cycle closed. They are documen
 
 | Item                                                                                            | Status                       | Dependency / gate                                                                                                                        | Notes                                                                                                                                          |
 | ----------------------------------------------------------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| PWA-00 baseline audit                                                                           | **NEXT**                     | PM review of PR #86: the next authorized planning/validation candidate after the documentation PR; D4 partially resolved (`PM_REPORTED`) | Evidence-only measurement of the existing PWA on real devices, including whether the Miniflux origin is same- or cross-origin; no product code |
+| PWA-00 baseline audit                                                                           | **EXECUTED (PARTIAL)**       | PM review of PR #86: the next authorized planning/validation candidate after the documentation PR; D4 partially resolved (`PM_REPORTED`) | Evidence-only measurement of the existing PWA on real devices, including whether the Miniflux origin is same- or cross-origin; no product code |
 | PWA-01A manifest and icons                                                                      | **PLANNED (NOT AUTHORIZED)** | Separate PM authorization; PWA-00 evidence; D1 (`id`), D3 (maskable art); waits behind PWA-03A if PWA-00 confirms a mid-reading reload   | `PWA_01A_AUTHORIZED=NO`; not the authorized first implementation PR                                                                            |
 | PWA-01B theme and display-mode                                                                  | **PLANNED**                  | PWA-01A; D2; absorbs `THEME-CHROME-01`                                                                                                   | Must not combine with visual redesign                                                                                                          |
 | PWA-01C serving contract                                                                        | **HOLD — ARCHITECTURE**      | `ID-DEPLOY-01` or an explicit PM waiver (D5)                                                                                             | `Caddyfile` headers and real 404 for missing assets; own PR and deployment window                                                              |
@@ -410,6 +410,8 @@ Two planning tracks were added after the upstream cycle closed. They are documen
 | NNW-05 multi-pane reference                                                                     | **PLANNED**                  | REA research only                                                                                                                        | Single-pane contract unchanged; evidence only                                                                                                  |
 
 Refined order versus the original request (reasons in `PWA_ARCHITECTURE.md` §8): PWA-00 is added first; PWA-01 is split and absorbs `THEME-CHROME-01`; PWA-03A outranks PWA-01A/01B if PWA-00 confirms a mid-reading reload or update disruption (PM rule); NNW-04 precedes NNW-02/03; PWA-01C and NNW-05 run off the main line. **`PWA-00` is the next authorized planning/validation candidate; `PWA-01A` is not yet authorized.**
+
+**PWA-00 result (2026-10-22, [`PWA_00_BASELINE.md`](./PWA_00_BASELINE.md)):** executed against `main` `68b39798fa6d823b2e5b1286aa42d4309c21c2ca` (the PWA-00 row above keeps its original gate and scope wording; its status is now `EXECUTED (PARTIAL)`). A service worker update reloads the reading page automatically and loses scroll, in-memory state and typed dialog text (`LOCAL_EXPERIMENT`, on metadata-verified builds and on builds without a commit date; production frequency `NOT_MEASURED`). `MID_READING_UPDATE_DISRUPTION=CONFIRMED`, so under the PM rule `PWA-03A` is the recommended next candidate and outranks icon/manifest polish. This is a **recommendation**: `PWA-01A` stays not authorized and no implementation PR is authorized. The public origin, Nginx Proxy Manager headers and the real Miniflux origin remain `NOT_MEASURED`; iOS and Android gates are `NOT_RUN`. `UPDATE_CHECK_BUILD_METADATA_01` and `REACT_HYDRATION_WARNING` are held for diagnosis and are not PWA work.
 
 ---
 
@@ -506,10 +508,10 @@ Offline reading, feed notifications, third-party AI summaries and other new pers
 The 2026-10-21 and 2026-10-22 (morning) snapshots remain historical. After the post-PR #85 reconciliation, PRs #82, #83, #84 and #85 are merged, no PRs were open before the planning documentation PR, and the upstream cycle is closed. `MARK-ALL-UNDO-JUMP-01` remains held for real reproduction evidence. No broad discovery ranking or personalization expansion is authorized. The sequence below is a sequencing record, **not** authorization to implement, merge or deploy anything.
 
 1. **Planning documentation PR** — this reconciliation plus `PWA_ARCHITECTURE.md` and `DESIGN_REFERENCES.md`; docs-only, no deployment required.
-2. **PWA-00 baseline audit** — evidence-only measurement of the PWA that already exists; the next authorized planning/validation candidate (PM review of PR #86).
+2. **PWA-00 baseline audit** — evidence-only measurement of the PWA that already exists; the next authorized planning/validation candidate (PM review of PR #86). **Executed 2026-10-22** (`PWA_00_BASELINE.md`): local baseline recorded, public origin not measured.
 3. **PWA-01A manifest and icons** (**not yet authorized**), then **PWA-01B theme and display-mode** (absorbs `THEME-CHROME-01`).
 4. **PWA-VAL-01 runtime/device validation** on the installed/browser matrix.
-5. **PWA-03A update safety** — **outranks PWA-01A/01B** if PWA-00 confirms a mid-reading reload or update disruption (correctness before cosmetic installability hardening); otherwise it follows PWA-VAL-01. The shipped service worker is update-aggressive.
+5. **PWA-03A update safety** — **outranks PWA-01A/01B** if PWA-00 confirms a mid-reading reload or update disruption (correctness before cosmetic installability hardening); otherwise it follows PWA-VAL-01. The shipped service worker is update-aggressive. PWA-00 confirmed the mid-reading reload locally, so `PWA-03A` is the recommended next candidate (not authorized).
 6. **PWA-02A / PWA-02B platform adaptation** — defect-driven from the validation results.
 7. **NNW-01A source identity foundation**, then **NNW-04 reader source header**; **NNW-02** and **NNW-03** only after `NAV-02F` / `NAV-VISUAL-01` and `CHROME-01` decisions.
 8. **PWA-03B/03C**, then **PWA-04** capabilities one at a time.
@@ -946,6 +948,11 @@ PWA_00_AUTHORIZED_PLANNING_VALIDATION_CANDIDATE=YES
 PWA_01A_AUTHORIZED=NO
 PWA_03A_OUTRANKS_PWA_01A_IF_PWA_00_CONFIRMS_MIDREAD_RELOAD=YES
 RECOMMENDED_FIRST_IMPLEMENTATION_PR=NONE_AUTHORIZED
+PWA_00_STARTED=YES
+PWA_00_RESULT=LOCAL_AND_REPO_BASELINE_RECORDED__PUBLIC_ORIGIN_NOT_MEASURED
+PWA_00_MEASURED_AGAINST_MAIN=68b39798fa6d823b2e5b1286aa42d4309c21c2ca
+MID_READING_UPDATE_DISRUPTION=CONFIRMED_LOCAL_EXPERIMENT
+PWA_03A_PRIORITY_RECOMMENDATION=YES
 SOURCE_IDENTITY_DEFINITION=CONFIRMED_PUBLISHER_FEED_SOURCE_LEVEL_VISUAL_IDENTITY
 STORY_IDENTITY_IN_NNW01=NO
 

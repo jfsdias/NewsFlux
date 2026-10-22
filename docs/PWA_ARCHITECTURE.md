@@ -4,13 +4,16 @@
 - **Created:** 2026-10-22, against GitHub `main` at `d7c0fc8e4ab7b5f0d959bea96cc04b086deb36fc`.
 - **Track:** `PWA_FOUNDATION=PLANNED`.
 - **Amended:** 2026-10-22, after the PM review of PR #86 (PASS WITH DOCUMENTATION AMENDMENTS): the production topology is partially recorded (D4, `PM_REPORTED`), the authorization state of PWA-00 and PWA-01A is recorded, and a priority rule for PWA-03A is added. No product code changed.
-- **Companion documents:** [`NEWSFLUX_ROADMAP.md`](./NEWSFLUX_ROADMAP.md) (sequencing), [`NEWSFLUX_PROJECT_STATE.md`](./NEWSFLUX_PROJECT_STATE.md) (operational state), [`DESIGN_REFERENCES.md`](./DESIGN_REFERENCES.md) (NetNewsWire UX research track), [`NEWSFLUX_NAV_VISUAL_01.md`](./NEWSFLUX_NAV_VISUAL_01.md) (window classes and navigation contract).
+- **Companion documents:** [`NEWSFLUX_ROADMAP.md`](./NEWSFLUX_ROADMAP.md) (sequencing), [`NEWSFLUX_PROJECT_STATE.md`](./NEWSFLUX_PROJECT_STATE.md) (operational state), [`DESIGN_REFERENCES.md`](./DESIGN_REFERENCES.md) (NetNewsWire UX research track), [`NEWSFLUX_NAV_VISUAL_01.md`](./NEWSFLUX_NAV_VISUAL_01.md) (window classes and navigation contract), [`PWA_00_BASELINE.md`](./PWA_00_BASELINE.md) (PWA-00 measurement record).
 
 ```text
 PWA_FOUNDATION=PLANNED
 PWA_IMPLEMENTATION_AUTHORIZED=NO
 PWA_00_AUTHORIZED_PLANNING_VALIDATION_CANDIDATE=YES
-PWA_00_STARTED=NO
+PWA_00_STARTED=YES
+PWA_00_RESULT=LOCAL_AND_REPO_BASELINE_RECORDED__PUBLIC_ORIGIN_NOT_MEASURED
+MID_READING_UPDATE_DISRUPTION=CONFIRMED_LOCAL_EXPERIMENT
+PWA_03A_PRIORITY_RECOMMENDATION=YES
 PWA_01A_AUTHORIZED=NO
 PWA_03A_OUTRANKS_PWA_01A_IF_PWA_00_CONFIRMS_MIDREAD_RELOAD=YES
 PRODUCTION_TOPOLOGY=PARTIALLY_RESOLVED_PM_REPORTED
@@ -49,6 +52,8 @@ Claims below carry one of these labels so reviewers can tell what was verified f
 | `PLATFORM_KNOWLEDGE` | General browser/OS behavior that is **not** verified on devices here; must be re-checked in PWA-00.            |
 | `INFERENCE`          | Reasoned from the above; flagged so it is not mistaken for a measurement.                                      |
 | `PM_REPORTED`        | Stated by the PM (for example production state); not independently verifiable from the repository.             |
+
+PWA-00 ([`PWA_00_BASELINE.md`](./PWA_00_BASELINE.md) §2.1) adds `LIVE_OBSERVED` (seen on the real production runtime), `LOCAL_EXPERIMENT` (seen in a controlled local experiment, never a statement about production) and `NOT_MEASURED`; its `REPO_VERIFIED` covers `CODE_VERIFIED` and `BUILD_VERIFIED`.
 
 ## 2. Principles (invariants for every PWA PR)
 
@@ -138,6 +143,23 @@ Reported, classified and **not fixed** in this PR.
 | F10 | `docs/UPSTREAM_TRACKING.md` does not exist; upstream state lives only in the project-state and roadmap documents.                                                                                                                                                                                                                                                                                                                                                 | `DOCS`              | Info       | Recorded; no file created.                        |
 | F11 | `PROJECT_STATE`/`ROADMAP` on `main` described PRs #82/#83/#84 as open and omitted merged PRs #74, #76 and #77. Reconciled in this PR (see the drift register in `NEWSFLUX_PROJECT_STATE.md`).                                                                                                                                                                                                                                                                     | `DOCS_DRIFT`        | Info       | Resolved by this documentation PR.                |
 
+### 4.1 PWA-00 status of these findings
+
+Measured 2026-10-22 ([`PWA_00_BASELINE.md`](./PWA_00_BASELINE.md) §10). Where the table above says a runtime effect is "not measured" (F4, F5), this section supersedes it. Identifiers are unchanged.
+
+```text
+F2=CONFIRMED            # manifest colors disagree with the runtime palette (values observed)
+F3=CONFIRMED            # no maskable icon, no purpose on any icon
+F4=CONFIRMED            # a service worker update reloads the reading page: scroll, in-memory state and typed dialog text are lost (LOCAL_EXPERIMENT; production frequency NOT_MEASURED)
+F5=PARTIALLY_CONFIRMED  # missing asset answered with HTML 200 and no Cache-Control on internal Caddy (LOCAL_EXPERIMENT); through NPM NOT_MEASURED
+F6=NOT_MEASURED         # live origin topology; the public origin was not reachable from the measurement environment
+F7=CONFIRMED            # plaintext password in localStorage after a username/password login
+F8=CONFIRMED            # icon fallback requested https://icons.duckduckgo.com/ip3/co.uk.ico for a bbc.co.uk feed
+F9=PARTIALLY_CONFIRMED  # localStorage and caches observed; the iOS storage container split is PLATFORM_KNOWLEDGE
+```
+
+New incidental findings `I1`–`I9` (for example the runtime cache keeping HTML under `.js` URLs, and two reload paths that can fire back to back) are in `PWA_00_BASELINE.md` §11.
+
 ## 5. Architecture decisions
 
 ### 5.1 Allowed without a new architecture decision
@@ -187,6 +209,7 @@ Each phase card states goal, non-goals, candidate files (indicative, not authori
 - **NON_GOALS:** any product-code, manifest, icon, CSS or service-worker change; fixing findings.
 - **CANDIDATE_FILES:** none in product code. Evidence recorded in a docs-only update to this file and `NEWSFLUX_PROJECT_STATE.md`.
 - **AUTHORIZATION:** the PM review of PR #86 names PWA-00 as the next authorized planning/validation candidate after this documentation PR. It is evidence-only and contains no product code.
+- **STATUS (2026-10-22):** executed and recorded in [`PWA_00_BASELINE.md`](./PWA_00_BASELINE.md). Local and repository baseline recorded against `main` `68b39798`; the public origin, Nginx Proxy Manager headers and the real Miniflux origin are `NOT_MEASURED` (egress denied); real-device gates are `NOT_RUN`. `PWA_SW_NO_MIDSESSION_RELOAD` fails locally, so the priority rule below applies.
 - **ARCHITECTURE_ASSUMPTIONS:** the public origin is `https://news.jfsdias.ddns.net/` behind Nginx Proxy Manager (`PM_REPORTED`, §3.4); installability and service workers require a secure context (`PLATFORM_KNOWLEDGE`), which PWA-00 verifies. The Miniflux origin is **not** assumed to be same-origin.
 - **PREREQUISITES:** access to the production URL, an Android phone with Chrome, an iPhone and an iPad (Safari), the `884×1104` foldable/tablet, and a desktop browser with DevTools.
 - **GATES:** `PWA_MANIFEST_VALID`, `PWA_INSTALL_ANDROID`, `PWA_INSTALL_IOS`, `PWA_INSTALL_IPADOS`, `PWA_STANDALONE_LAUNCH`, `PWA_SPLASH_NO_FLASH` (record), `PWA_SW_SCOPE`, `PWA_SW_NO_MIDSESSION_RELOAD` (record), `PWA_STALE_ASSET_RECOVERY` (record), `PWA_AUTH_PERSISTENCE` (record), `PWA_SERVING_HEADERS` (record, through NPM), `PWA_TOPOLOGY_MEASURED` (record), baseline performance numbers (§9.2).
@@ -368,9 +391,10 @@ PWA_00_AUTHORIZED_PLANNING_VALIDATION_CANDIDATE=YES
 PWA_01A_AUTHORIZED=NO
 FIRST_IMPLEMENTATION_PR_IF_PWA_00_CONFIRMS_MIDREAD_RELOAD=PWA-03A
 FIRST_IMPLEMENTATION_PR_OTHERWISE=PWA-01A_SUBJECT_TO_SEPARATE_PM_AUTHORIZATION
+PWA_00_RECOMMENDS=PWA-03A   # MID_READING_UPDATE_DISRUPTION=CONFIRMED; a recommendation, not an authorization
 ```
 
-Per the PM review of PR #86: **`PWA-00` is the next authorized planning/validation candidate** after this documentation PR (evidence-only, no product code) and **`PWA-01A` is not yet authorized**. If PWA-00 confirms a mid-reading reload or update disruption, **`PWA-03A` outranks icon/manifest polish** and becomes the first implementation candidate; otherwise `PWA-01A` is the first candidate, still requiring its own PM authorization and decisions D1/D3.
+Per the PM review of PR #86: **`PWA-00` is the next authorized planning/validation candidate** after this documentation PR (evidence-only, no product code) and **`PWA-01A` is not yet authorized**. If PWA-00 confirms a mid-reading reload or update disruption, **`PWA-03A` outranks icon/manifest polish** and becomes the first implementation candidate; otherwise `PWA-01A` is the first candidate, still requiring its own PM authorization and decisions D1/D3. **PWA-00 result (2026-10-22):** the mid-reading reload was confirmed locally ([`PWA_00_BASELINE.md`](./PWA_00_BASELINE.md) §6), so `PWA-03A` is the **recommended** next candidate; it is not authorized until the PM says so, and `PWA-01A` remains not authorized.
 
 ## 9. Gates
 

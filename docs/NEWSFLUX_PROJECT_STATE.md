@@ -56,6 +56,14 @@ PWA_00_AUTHORIZED_PLANNING_VALIDATION_CANDIDATE=YES
 PWA_01A_AUTHORIZED=NO
 PWA_03A_OUTRANKS_PWA_01A_IF_PWA_00_CONFIRMS_MIDREAD_RELOAD=YES
 RECOMMENDED_FIRST_IMPLEMENTATION_PR=NONE_AUTHORIZED
+PWA_00_STARTED=YES
+PWA_00_RESULT=LOCAL_AND_REPO_BASELINE_RECORDED__PUBLIC_ORIGIN_NOT_MEASURED
+PWA_00_BASELINE_DOC=docs/PWA_00_BASELINE.md
+PWA_00_MEASURED_AGAINST_MAIN=68b39798fa6d823b2e5b1286aa42d4309c21c2ca
+MID_READING_UPDATE_DISRUPTION=CONFIRMED_LOCAL_EXPERIMENT
+PWA_03A_PRIORITY_RECOMMENDATION=YES
+UPDATE_CHECK_BUILD_METADATA_01=NEEDS_DIAGNOSTIC
+REACT_HYDRATION_WARNING=HOLD_NEEDS_DIAGNOSTIC
 SOURCE_IDENTITY_DEFINITION=CONFIRMED_PUBLISHER_FEED_SOURCE_LEVEL_VISUAL_IDENTITY
 STORY_IDENTITY_IN_NNW01=NO
 
@@ -85,7 +93,7 @@ PROJECT_STATE_RECONCILED=YES
 
 ### Production topology (D4 — partially resolved, `PM_REPORTED`)
 
-Operational evidence supplied by the PM; **not** verified from the repository. PWA-00 re-measures it. Details and consequences: `PWA_ARCHITECTURE.md` §3.4.
+Operational evidence supplied by the PM; **not** verified from the repository. PWA-00 (2026-10-22) could not reach the public origin from its environment (egress policy), so this block stays `PM_REPORTED`; the runbook that closes it is `PWA_00_BASELINE.md` §4.4. Details and consequences: `PWA_ARCHITECTURE.md` §3.4.
 
 - Public NewsFlux origin: `https://news.jfsdias.ddns.net/`.
 - TLS / reverse proxy: Nginx Proxy Manager; Docker network `npm-proxyyml_default`; internal NewsFlux service `http://newsflux:2000`.
@@ -545,6 +553,7 @@ Documented in [`PWA_ARCHITECTURE.md`](./PWA_ARCHITECTURE.md) and [`DESIGN_REFERE
 - **NetNewsWire UX tracks:** `NNW-01` source identity, `NNW-02` navigation density, `NNW-03` contextual toolbar, `NNW-04` reader source header, `NNW-05` multi-pane reference (research only). Each separates `REFERENCE_PATTERN` from `NEWSFLUX_PRODUCT_DECISION`; the single-pane, opaque-content, glass-as-chrome and `884×1104` contracts are unchanged.
 - **Pending PM inputs:** `D1`–`D9` in `PWA_ARCHITECTURE.md` §12. `D4` (production topology) is **partially resolved** (`PM_REPORTED`; see the topology subsection above); the Miniflux origin is not assumed same-origin. Still open: `D1` manifest `id`, `D2` theme/background color policy, `D3` maskable icon art, `D5` `ID-DEPLOY-01` or waiver, `D6` update policy, `D7` third-party icon fallback, `D8` token-only auth guidance, `D9` offline reading. `SOURCE_IDENTITY` is **confirmed** as publisher/feed/source-level visual identity; `STORY_IDENTITY` stays out of `NNW-01`.
 - **Authorization state (PM review of PR #86):** `PWA-00` is the next authorized planning/validation candidate (evidence-only, no product code); **`PWA-01A` is not yet authorized**; no implementation PR is currently authorized. **Priority rule:** if `PWA-00` confirms a mid-reading reload or update disruption, `PWA-03A` outranks icon/manifest polish — correctness before cosmetic installability hardening.
+- **PWA-00 result (2026-10-22; [`PWA_00_BASELINE.md`](./PWA_00_BASELINE.md)):** measured against `main` `68b39798fa6d823b2e5b1286aa42d4309c21c2ca` (PR #87 merged; production is `PM_REPORTED`; the post-#85 `CURRENT_MAIN` values above are not updated by PWA-00). A service worker update **reloads the reading page automatically**, losing scroll, in-memory state and an open dialog with typed text (`LOCAL_EXPERIMENT` on metadata-verified builds and on builds without a commit date; production frequency `NOT_MEASURED`), so `MID_READING_UPDATE_DISRUPTION=CONFIRMED` and `PWA_03A_PRIORITY_RECOMMENDATION=YES` — a recommendation only: `PWA-01A` remains **not authorized** and no implementation PR is authorized. New finding `I1`: the runtime cache stores HTML under `.js` URLs after a missing-asset fallback. `UPDATE_CHECK_BUILD_METADATA_01` (`PM_REPORTED`, `NEEDS_DIAGNOSTIC`): a missing commit date does **not** disable the in-app update check or the service worker update; the build warning has been stale since commit `07989972`. The public origin, NPM headers and the real Miniflux origin are `NOT_MEASURED` (egress denied); iOS and Android gates are `NOT_RUN`.
 
 ## Personalization / saved-state architecture
 
