@@ -2,6 +2,8 @@
   "app": {
     "new_version_available": "Nouvelle version disponible",
     "new_version_available_description": "Veuillez vérifier la dernière version sur GitHub",
+    "update_ready_title": "Mise à jour prête",
+    "update_ready_description": "Rechargez pour passer à la nouvelle version. Rien ne change tant que vous n'avez pas choisi.",
     "counts_refresh_error": "Certains compteurs n’ont pas pu être actualisés et peuvent être temporairement obsolètes"
   },
   "login": {
@@ -112,6 +114,7 @@
     "skip_to_main_content": "Aller au contenu principal",
     "check": "Vérifier",
     "dismiss": "Ignorer",
+    "update_now": "Mettre à jour",
     "retry": "Réessayer",
     "undo": "Annuler",
     "close_dialog": "Fermer %{name}",

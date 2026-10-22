@@ -7,6 +7,7 @@ import useModalToggle from "@/hooks/useModalToggle"
 import useScreenWidth from "@/hooks/useScreenWidth"
 import useVersionCheck from "@/hooks/useVersionCheck"
 import { duplicateHotkeysState } from "@/store/hotkeysState"
+import pwaUpdateState from "@/store/pwaUpdateState"
 import { PRODUCT_GITHUB_REPO_PATH } from "@/utils/constants"
 import { isSettingsTabAvailable, SETTINGS_TAB_KEYS } from "@/utils/settings-navigation"
 
@@ -14,15 +15,16 @@ import "./AppNotifications.css"
 
 const NEW_VERSION_NOTIFICATION_ID = "new-version-available"
 const DUPLICATE_HOTKEYS_NOTIFICATION_ID = "duplicate-hotkeys"
+const PWA_UPDATE_NOTIFICATION_ID = "pwa-update-ready"
 
-const NotificationActions = ({ polyglot, onCheck, onDismiss }) => (
+const NotificationActions = ({ polyglot, onCheck, onDismiss, checkLabelKey = "actions.check" }) => (
   <div className="notification-actions">
     <Button size="small" type="secondary" onClick={onDismiss}>
       {polyglot.t("actions.dismiss")}
     </Button>
     {onCheck && (
       <Button size="small" type="primary" onClick={onCheck}>
-        {polyglot.t("actions.check")}
+        {polyglot.t(checkLabelKey)}
       </Button>
     )}
   </div>
@@ -32,6 +34,11 @@ const AppNotifications = () => {
   const { polyglot } = useStore(polyglotState)
   const duplicateHotkeys = useStore(duplicateHotkeysState)
   const { hasUpdate, dismissUpdate } = useVersionCheck()
+  const {
+    available: hasPwaUpdate,
+    accept: acceptPwaUpdate,
+    dismiss: dismissPwaUpdate,
+  } = useStore(pwaUpdateState)
   const { isBelowMedium } = useScreenWidth()
   const { setSettingsModalVisible, setSettingsTabsActiveTab } = useModalToggle()
 
@@ -69,6 +76,34 @@ const AppNotifications = () => {
       ),
     })
   }, [dismissUpdate, hasUpdate, polyglot])
+
+  // The installed build has a newer one waiting. The page keeps running until the user chooses.
+  useEffect(() => {
+    // Removing first keeps a single notice even if the position below changes while it is open.
+    Notification.remove(PWA_UPDATE_NOTIFICATION_ID)
+    if (!hasPwaUpdate) {
+      return
+    }
+
+    Notification.info({
+      id: PWA_UPDATE_NOTIFICATION_ID,
+      title: polyglot.t("app.update_ready_title"),
+      closable: false,
+      content: polyglot.t("app.update_ready_description"),
+      duration: 0,
+      // Top-right sits over the reader and list toolbars from the medium breakpoint up. Below it,
+      // index.css already places notifications under the mobile navigation controls.
+      position: isBelowMedium ? "topRight" : "bottomRight",
+      btn: (
+        <NotificationActions
+          checkLabelKey="actions.update_now"
+          polyglot={polyglot}
+          onCheck={acceptPwaUpdate}
+          onDismiss={dismissPwaUpdate}
+        />
+      ),
+    })
+  }, [acceptPwaUpdate, dismissPwaUpdate, hasPwaUpdate, isBelowMedium, polyglot])
 
   useEffect(() => {
     if (previousDuplicateHotkeysSignatureRef.current !== duplicateHotkeysSignature) {
@@ -127,6 +162,7 @@ const AppNotifications = () => {
     return () => {
       Notification.remove(NEW_VERSION_NOTIFICATION_ID)
       Notification.remove(DUPLICATE_HOTKEYS_NOTIFICATION_ID)
+      Notification.remove(PWA_UPDATE_NOTIFICATION_ID)
     }
   }, [])
 

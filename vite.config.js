@@ -37,7 +37,7 @@ export default defineConfig(({ mode }) => ({
       presets: [reactCompilerPreset()],
     }),
     VitePWA({
-      registerType: "autoUpdate",
+      registerType: "prompt",
       devOptions: {
         enabled: false,
       },
@@ -68,6 +68,9 @@ export default defineConfig(({ mode }) => ({
       },
       workbox: {
         cleanupOutdatedCaches: true,
+        // A new worker waits for the user (see src/utils/pwa-update.js), so there is no skipWaiting.
+        // Claiming clients keeps a first install in control of the page without a reload.
+        clientsClaim: true,
         globPatterns: [
           "**/*.html",
           "styles/*.css",
@@ -100,7 +103,6 @@ export default defineConfig(({ mode }) => ({
             },
           },
         ],
-        skipWaiting: true,
       },
     }),
     mode === "analyze" &&

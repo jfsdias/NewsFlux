@@ -2,6 +2,8 @@
   "app": {
     "new_version_available": "新版本可用",
     "new_version_available_description": "请检查最新版本在 GitHub 上的发布",
+    "update_ready_title": "更新已就绪",
+    "update_ready_description": "重新加载即可切换到新版本。在您选择之前不会有任何变化。",
     "counts_refresh_error": "部分计数刷新失败，显示的数字可能暂时不是最新值"
   },
   "login": {
@@ -112,6 +114,7 @@
     "skip_to_main_content": "跳转到主要内容",
     "check": "查看",
     "dismiss": "关闭",
+    "update_now": "立即更新",
     "retry": "重试",
     "undo": "撤销",
     "close_dialog": "关闭%{name}",

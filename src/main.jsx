@@ -8,8 +8,10 @@ import "simplebar-react/dist/simplebar.min.css"
 
 import "./index.css"
 import router from "./routes"
+import pwaUpdateState from "./store/pwaUpdateState"
 import "./theme.css"
 import "./liquid-glass.css"
+import createPwaUpdateController from "./utils/pwa-update"
 
 const PRELOAD_ERROR_RELOAD_KEY = "reactflux:preload-error-reload"
 const PRELOAD_ERROR_RELOAD_COOLDOWN_MS = 10_000
@@ -111,7 +113,12 @@ const warmLoadedRuntimeAssets = async () => {
 }
 
 const register = () => {
-  registerSW({ immediate: false })
+  createPwaUpdateController({
+    registerSW,
+    reload: () => globalThis.location.reload(),
+    serviceWorker: globalThis.navigator.serviceWorker,
+    state: pwaUpdateState,
+  })
   void warmLoadedRuntimeAssets().catch(() => null)
 }
 

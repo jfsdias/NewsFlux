@@ -2,6 +2,8 @@
   "app": {
     "new_version_available": "Neue Version verfügbar",
     "new_version_available_description": "Über die neueste Version auf GitHub informieren",
+    "update_ready_title": "Update bereit",
+    "update_ready_description": "Zum Wechseln auf die neue Version neu laden. Bis zu Ihrer Entscheidung ändert sich nichts.",
     "counts_refresh_error": "Einige Zähler konnten nicht aktualisiert werden und sind möglicherweise vorübergehend veraltet"
   },
   "login": {
@@ -112,6 +114,7 @@
     "skip_to_main_content": "Zum Hauptinhalt springen",
     "check": "Ansehen",
     "dismiss": "Verwerfen",
+    "update_now": "Jetzt aktualisieren",
     "retry": "Erneut versuchen",
     "undo": "Rückgängig",
     "close_dialog": "%{name} schließen",
