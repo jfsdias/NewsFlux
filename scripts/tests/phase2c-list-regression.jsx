@@ -20,6 +20,7 @@ import englishPhrases from "@/locales/en-US.json"
 import { contentState, setArticleListSource } from "@/store/contentState"
 import { dataState } from "@/store/dataState"
 import { getDefaultSettings, settingsState } from "@/store/settingsState"
+import { runEntryMutation } from "@/utils/entry-mutation-state"
 import { MARK_ALL_READ_UNDO_DURATION_MS } from "@/utils/mark-all-read-undo"
 
 const feed = {
@@ -77,8 +78,14 @@ let mutationFailureAfter = Infinity
 let countRefreshes = 0
 let serverEntries = []
 let deferredMutation = null
+let deferredGetResponse = null
 apiClient.get = async (url) => {
   requests.push(url)
+  if (deferredGetResponse) {
+    const pendingResponse = deferredGetResponse
+    deferredGetResponse = null
+    return pendingResponse.promise
+  }
   return respond(url)
 }
 apiClient.put = async (url, body, options) => {
@@ -154,6 +161,13 @@ const ListProbe = ({ source }) => {
 }
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 40))
+const createDeferred = () => {
+  let settleDeferred
+  const promise = new Promise((resolve) => {
+    settleDeferred = resolve
+  })
+  return { promise, resolve: settleDeferred }
+}
 const waitFor = async (predicate, message = "Fixture timed out") => {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if (predicate()) {
@@ -289,6 +303,7 @@ const Harness = () => {
     mutationFailureAfter = Infinity
     countRefreshes = 0
     deferredMutation = null
+    deferredGetResponse = null
     serverEntries = entries.map((item) => ({ ...item }))
     respond = respondWithFilters ? serverRespond : () => ({ entries, total: 8 })
     dataState.setKey("sessionRevision", dataState.get().sessionRevision + 1)
@@ -374,6 +389,13 @@ const Harness = () => {
     "CHANGED_DESC_TIE_RECOVERY",
     "CHANGED_ASC_TIE_RECOVERY",
     "MIXED_PAGE_TRANSITIONS_TO_TIE_DRAIN",
+    "CREATED_AT_ID_CURSOR_UNCHANGED",
+    "LOAD_MORE_VISIBILITY_RECONCILIATION",
+    "TOTAL_RECONCILIATION",
+    "STALE_SESSION_TIE_DRAIN_IGNORED",
+    "SNAPSHOT_REVISION_PROTECTION",
+    "REQUEST_KEY_PROTECTION",
+    "MUTATION_DURING_TIE_DRAIN_RECONCILES",
     "ALL_SCOPE_PASS",
     "UNREAD_SCOPE_PASS",
     "STARRED_SCOPE_PASS",
@@ -540,6 +562,10 @@ const Harness = () => {
       contentState.get().loadMoreVisible === false,
       `${sortProperty} ${direction} did not reconcile Load More after all entries loaded`,
     )
+    assert(
+      mutationRequests === 0,
+      `${sortProperty} ${direction} pagination issued a provider write`,
+    )
   }
   const runTieDrainScope = async ({
     source,
@@ -684,6 +710,200 @@ const Harness = () => {
       async () => runTemporalTieRecovery("changed_at", "asc", "starred"),
     ],
     ["MIXED_PAGE_TRANSITIONS_TO_TIE_DRAIN", runMixedPageTieTransition],
+    [
+      "CREATED_AT_ID_CURSOR_UNCHANGED",
+      async () => {
+        const fixtures = [
+          entry(205, "2026-10-20T12:00:00Z"),
+          entry(204, "2026-10-20T12:00:00Z"),
+          entry(203, "2026-10-20T12:00:00Z"),
+        ]
+        await mount(
+          "all",
+          { showStatus: "all", orderBy: "created_at", orderDirection: "desc", pageSize: 2 },
+          {},
+          fixtures,
+          { respondWithFilters: true },
+        )
+        await controls.current.loadMore()
+        await settle()
+        assert(
+          query(1).get("before_entry_id") === "204" &&
+            query(1).get("order") === "created_at" &&
+            !query(1).has("published_before") &&
+            !query(1).has("changed_before"),
+          `created_at pagination changed from its entry-ID cursor: ${query(1)}`,
+        )
+        assertIds(fixtures.map(({ id }) => id))
+      },
+    ],
+    [
+      "LOAD_MORE_VISIBILITY_RECONCILIATION",
+      async () => runTemporalTieRecovery("published_at", "desc", "all"),
+    ],
+    ["TOTAL_RECONCILIATION", async () => runTemporalTieRecovery("changed_at", "asc", "starred")],
+    [
+      "STALE_SESSION_TIE_DRAIN_IGNORED",
+      async () => {
+        const timestamp = "2026-10-20T12:00:00Z"
+        const fixtures = [905, 904, 903].map((id) => entry(id, timestamp))
+        await mount(
+          "all",
+          { showStatus: "all", orderBy: "published_at", orderDirection: "desc", pageSize: 2 },
+          {},
+          fixtures,
+          { respondWithFilters: true },
+        )
+        const initialIds = contentState.get().entries.map(({ id }) => id)
+        const pendingResponse = createDeferred()
+        deferredGetResponse = pendingResponse
+        const loadMore = controls.current.loadMore()
+        await waitFor(
+          () => requests.some((url) => query(requests.indexOf(url)).get("order") === "id"),
+          "Stale-session tie-drain request did not start",
+        )
+        dataState.setKey("sessionRevision", dataState.get().sessionRevision + 1)
+        pendingResponse.resolve({ entries: [fixtures[2]], total: fixtures.length })
+        await loadMore
+        assertIds(initialIds)
+        assert(
+          !contentState.get().entries.some(({ id }) => id === fixtures[2].id),
+          "A stale-session tie-drain response entered the committed list",
+        )
+      },
+    ],
+    [
+      "SNAPSHOT_REVISION_PROTECTION",
+      async () => {
+        const timestamp = "2026-10-20T12:00:00Z"
+        const fixtures = [905, 904, 903].map((id) => entry(id, timestamp))
+        await mount(
+          "all",
+          { showStatus: "all", orderBy: "published_at", orderDirection: "desc", pageSize: 2 },
+          {},
+          fixtures,
+          { respondWithFilters: true },
+        )
+        const initialIds = contentState.get().entries.map(({ id }) => id)
+        const initialSnapshotRevision = contentState.get().articleListSnapshotRevision
+        const pendingResponse = createDeferred()
+        deferredGetResponse = pendingResponse
+        const loadMore = controls.current.loadMore()
+        await waitFor(
+          () =>
+            requests.some(
+              (url) => new URL(url, "https://fixture.invalid").searchParams.get("order") === "id",
+            ),
+          "Snapshot-fenced tie-drain request did not start",
+        )
+        await controls.current.fetchArticleList()
+        assert(
+          contentState.get().articleListSnapshotRevision > initialSnapshotRevision,
+          "The replacement list response did not advance its snapshot revision",
+        )
+        pendingResponse.resolve({ entries: [fixtures[2]], total: fixtures.length })
+        await loadMore
+        assertIds(initialIds)
+        assert(
+          !contentState.get().entries.some(({ id }) => id === fixtures[2].id),
+          "A stale snapshot tie-drain response entered the replacement list",
+        )
+      },
+    ],
+    [
+      "REQUEST_KEY_PROTECTION",
+      async () => {
+        const timestamp = "2026-10-20T12:00:00Z"
+        const fixtures = [
+          entry(905, timestamp, { title: "Other first" }),
+          entry(904, timestamp, { title: "Other second" }),
+          entry(903, timestamp, { title: "Target article" }),
+        ]
+        await mount(
+          "all",
+          { showStatus: "all", orderBy: "published_at", orderDirection: "desc", pageSize: 2 },
+          {},
+          fixtures,
+          { respondWithFilters: true },
+        )
+        const pendingResponse = createDeferred()
+        deferredGetResponse = pendingResponse
+        const loadMore = controls.current.loadMore()
+        await waitFor(
+          () =>
+            requests.some(
+              (url) => new URL(url, "https://fixture.invalid").searchParams.get("order") === "id",
+            ),
+          "Request-key-fenced tie-drain request did not start",
+        )
+        contentState.setKey("filterString", "Target")
+        await waitFor(
+          () =>
+            contentState.get().isArticleListReady &&
+            contentState.get().entries.some(({ id }) => id === fixtures[2].id),
+          "New search scope did not replace the committed entries",
+        )
+        pendingResponse.resolve({ entries: [entry(902, timestamp)], total: fixtures.length })
+        await loadMore
+        assertIds([fixtures[2].id])
+        assert(
+          query(requests.length - 1).get("search") === "Target" &&
+            !contentState.get().entries.some(({ id }) => id === 902),
+          "A response from the old request key changed the new search scope",
+        )
+      },
+    ],
+    [
+      "MUTATION_DURING_TIE_DRAIN_RECONCILES",
+      async () => {
+        const timestamp = "2026-10-20T12:00:00Z"
+        const fixtures = [905, 904, 903].map((id) => entry(id, timestamp))
+        await mount(
+          "all",
+          { showStatus: "all", orderBy: "published_at", orderDirection: "desc", pageSize: 2 },
+          {},
+          fixtures,
+          { respondWithFilters: true },
+        )
+        const initialIds = contentState.get().entries.map(({ id }) => id)
+        const staleResponse = createDeferred()
+        deferredGetResponse = staleResponse
+        const loadMore = controls.current.loadMore()
+        await waitFor(
+          () =>
+            requests.some(
+              (url) => new URL(url, "https://fixture.invalid").searchParams.get("order") === "id",
+            ),
+          "Mutation-coordinated tie-drain request did not start",
+        )
+
+        const pendingMutation = createDeferred()
+        deferredMutation = pendingMutation
+        const mutation = runEntryMutation(() => entriesApi.updateEntriesStatus([905], "read"))
+        await waitFor(() => mutationRequests === 1, "Concurrent provider mutation did not start")
+        staleResponse.resolve({ entries: [entry(902, timestamp)], total: fixtures.length })
+        await settle()
+        assertIds(initialIds)
+
+        respond = async () => ({ entries: [fixtures[2]], total: fixtures.length })
+        pendingMutation.resolve()
+        await mutation
+        await loadMore
+        assert(
+          requests.filter(
+            (url) => new URL(url, "https://fixture.invalid").searchParams.get("order") === "id",
+          ).length === 2,
+          "Tie-drain did not re-query after the concurrent mutation settled",
+        )
+        assert(
+          contentState.get().entries.some(({ id }) => id === fixtures[2].id) &&
+            !contentState.get().entries.some(({ id }) => id === 902) &&
+            new Set(contentState.get().entries.map(({ id }) => id)).size ===
+              contentState.get().entries.length,
+          "Mutation reconciliation committed stale or duplicate tie-drain entries",
+        )
+      },
+    ],
     [
       "ALL_SCOPE_PASS",
       async () =>
