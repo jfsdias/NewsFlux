@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PWA runtime asset cache integrity</title>
+  </head>
+  <body>
+    <h1>PWA runtime asset cache integrity</h1>
+    <button id="run" type="button">Run cache integrity checks</button>
+    <button id="cleanup" type="button">Clean disposable origin</button>
+    <pre id="results" aria-live="polite">Waiting</pre>
+    <script type="module">
+      const basePath = location.pathname.startsWith("/newsflux/") ? "/newsflux/" : "/"
+      const baseUrl = (path) => `${basePath}${path.replace(/^\//, "")}`
+      const assetUrl = (name) => new URL(baseUrl(`assets/${name}`), location.origin)
+      const results = []
+      const resultNode = document.querySelector("#results")
+
+      const record = (gate, passed, detail = "") => {
+        results.push({ gate, result: passed ? "PASS" : "FAIL", detail })
+        resultNode.textContent = JSON.stringify(results, null, 2)
+      }
+
+      const waitForController = () => {
+        if (navigator.serviceWorker.controller) return Promise.resolve()
+
+        return new Promise((resolve, reject) => {
+          const timeout = setTimeout(
+            () => reject(new Error("Timed out waiting for service worker control")),
+            5000,
+          )
+          navigator.serviceWorker.addEventListener(
+            "controllerchange",
+            () => {
+              clearTimeout(timeout)
+              resolve()
+            },
+            { once: true },
+          )
+        })
+      }
+
+      const setAssetAvailable = async (name, available) => {
+        const endpoint = new URL(baseUrl("__pwa03a__/asset"), location.origin)
+        endpoint.searchParams.set("name", name)
+        endpoint.searchParams.set("available", String(available))
+        const response = await fetch(endpoint, { cache: "no-store" })
+        if (!response.ok) throw new Error(`Fixture control failed: ${response.status}`)
+      }
+
+      const readRuntimeResponses = async (url) => {
+        const names = await caches.keys()
+        const matches = []
+
+        for (const name of names.filter((item) => item.startsWith("runtime-build-assets"))) {
+          const response = await (await caches.open(name)).match(url)
+          if (response) {
+            matches.push({
+              cacheName: name,
+              status: response.status,
+              contentType: response.headers.get("content-type"),
+              body: await response.clone().text(),
+            })
+          }
+        }
+
+        return { names, matches }
+      }
+
+      const requestAsset = async (name) => {
+        const response = await fetch(assetUrl(name), { cache: "no-store" })
+        return {
+          status: response.status,
+          contentType: response.headers.get("content-type"),
+          body: await response.text(),
+        }
+      }
+
+      const waitForCacheWrite = () => new Promise((resolve) => setTimeout(resolve, 100))
+
+      const cleanup = async () => {
+        const registrations = await navigator.serviceWorker.getRegistrations()
+        const ownedRegistrations = registrations.filter((registration) =>
+          new URL(registration.scope).pathname.startsWith(basePath),
+        )
+        await Promise.all(ownedRegistrations.map((registration) => registration.unregister()))
+        await Promise.all((await caches.keys()).map((cacheName) => caches.delete(cacheName)))
+        resultNode.textContent = "Disposable service worker and caches removed."
+        resultNode.dataset.cleaned = "true"
+      }
+
+      const seedCacheFixtures = async () => {
+        const legacyPoison = await caches.open("runtime-build-assets")
+        await legacyPoison.put(
+          assetUrl("pwa03a-legacy.js"),
+          new Response("<!doctype html><title>stale fallback</title>", {
+            status: 200,
+            headers: { "content-type": "text/html; charset=utf-8" },
+          }),
+        )
+
+        const unrelated = await caches.open("pwa03a-unrelated-sentinel")
+        await unrelated.put(
+          new URL(baseUrl("__pwa03a__/sentinel"), location.origin),
+          new Response("preserve-this-cache"),
+        )
+      }
+
+      const run = async () => {
+        resultNode.textContent = "Preparing isolated origin fixtures…"
+
+        try {
+          await seedCacheFixtures()
+          const registration = await navigator.serviceWorker.register(baseUrl("sw.js"), {
+            scope: basePath,
+          })
+          await navigator.serviceWorker.ready
+          await waitForController()
+
+          record("SERVICE_WORKER_CONTROLS_HARNESS", true, registration.active?.state)
+
+          const jsFallbackName = "pwa03a-html-fallback.js"
+          const jsFallbackUrl = assetUrl(jsFallbackName)
+          const jsFallback = await requestAsset(jsFallbackName)
+          await waitForCacheWrite()
+          const jsFallbackCache = await readRuntimeResponses(jsFallbackUrl)
+          record(
+            "JS_HTML_200_REJECTED",
+            jsFallback.status === 200 &&
+              jsFallback.contentType?.startsWith("text/html") &&
+              jsFallbackCache.matches.length === 0,
+            JSON.stringify({ response: jsFallback, cacheMatches: jsFallbackCache.matches }),
+          )
+
+          const cssFallbackName = "pwa03a-html-fallback.css"
+          const cssFallbackUrl = assetUrl(cssFallbackName)
+          const cssFallback = await requestAsset(cssFallbackName)
+          await waitForCacheWrite()
+          const cssFallbackCache = await readRuntimeResponses(cssFallbackUrl)
+          record(
+            "CSS_HTML_200_REJECTED",
+            cssFallback.status === 200 &&
+              cssFallback.contentType?.startsWith("text/html") &&
+              cssFallbackCache.matches.length === 0,
+            JSON.stringify({ response: cssFallback, cacheMatches: cssFallbackCache.matches }),
+          )
+
+          const invalidStatusName = "pwa03a-invalid-status.js"
+          const invalidStatusUrl = assetUrl(invalidStatusName)
+          const invalidStatus = await requestAsset(invalidStatusName)
+          await waitForCacheWrite()
+          const invalidStatusCache = await readRuntimeResponses(invalidStatusUrl)
+          record(
+            "INVALID_STATUS_REJECTED",
+            invalidStatus.status === 503 && invalidStatusCache.matches.length === 0,
+            JSON.stringify({ response: invalidStatus, cacheMatches: invalidStatusCache.matches }),
+          )
+
+          const recoveryName = "pwa03a-recovery.js"
+          const recoveryUrl = assetUrl(recoveryName)
+          const recoveryFallback = await requestAsset(recoveryName)
+          await waitForCacheWrite()
+          const recoveryFallbackCache = await readRuntimeResponses(recoveryUrl)
+          await setAssetAvailable(recoveryName, true)
+          const realJs = await requestAsset(recoveryName)
+          await waitForCacheWrite()
+          const realJsCache = await readRuntimeResponses(recoveryUrl)
+          const validJsType =
+            realJs.contentType?.split(";", 1)[0].trim().toLowerCase() === "text/javascript"
+          record(
+            "REAL_ASSET_RECOVERY",
+            recoveryFallback.status === 200 &&
+              recoveryFallbackCache.matches.length === 0 &&
+              realJs.status === 200 &&
+              validJsType &&
+              realJs.body.includes("pwa03a-real-javascript") &&
+              realJsCache.matches.some(
+                (item) =>
+                  item.contentType?.startsWith("text/javascript") &&
+                  item.body.includes("pwa03a-real-javascript"),
+              ),
+            JSON.stringify({
+              initialFallback: recoveryFallback,
+              initialCacheMatches: recoveryFallbackCache.matches,
+              recoveredResponse: realJs,
+              recoveredCacheMatches: realJsCache.matches,
+            }),
+          )
+
+          const validJsName = "pwa03a-valid.js"
+          await setAssetAvailable(validJsName, true)
+          const validJs = await requestAsset(validJsName)
+          await waitForCacheWrite()
+          const validJsCache = await readRuntimeResponses(assetUrl(validJsName))
+          record(
+            "VALID_JS_ACCEPTED",
+            validJs.status === 200 &&
+              validJs.contentType?.split(";", 1)[0].trim().toLowerCase() === "text/javascript" &&
+              validJsCache.matches.some((item) => item.contentType?.startsWith("text/javascript")),
+            JSON.stringify({ response: validJs, cacheMatches: validJsCache.matches }),
+          )
+
+          const cssName = "pwa03a-valid.css"
+          await setAssetAvailable(cssName, true)
+          const validCss = await requestAsset(cssName)
+          await waitForCacheWrite()
+          const validCssCache = await readRuntimeResponses(assetUrl(cssName))
+          record(
+            "VALID_CSS_ACCEPTED",
+            validCss.status === 200 &&
+              validCss.contentType?.split(";", 1)[0].trim().toLowerCase() === "text/css" &&
+              validCssCache.matches.some((item) => item.contentType?.startsWith("text/css")),
+            JSON.stringify({ response: validCss, cacheMatches: validCssCache.matches }),
+          )
+
+          const legacyName = "pwa03a-legacy.js"
+          await setAssetAvailable(legacyName, true)
+          const legacyResponse = await requestAsset(legacyName)
+          await waitForCacheWrite()
+          const legacyMatches = await readRuntimeResponses(assetUrl(legacyName))
+          const legacyCache = await caches.open("runtime-build-assets")
+          const legacyPoison = await legacyCache.match(assetUrl(legacyName))
+          const activeAssetCacheNames = legacyMatches.names.filter(
+            (name) => name.startsWith("runtime-build-assets") && name !== "runtime-build-assets",
+          )
+          record(
+            "LEGACY_POISONED_CACHE_ISOLATED",
+            legacyResponse.contentType?.startsWith("text/javascript") &&
+              legacyResponse.body.includes("pwa03a-real-javascript") &&
+              legacyPoison?.headers.get("content-type")?.startsWith("text/html") &&
+              activeAssetCacheNames.length > 0,
+            JSON.stringify({
+              response: legacyResponse,
+              legacyPoisonType: legacyPoison?.headers.get("content-type"),
+              runtimeCacheNames: activeAssetCacheNames,
+            }),
+          )
+
+          const unrelated = await caches.open("pwa03a-unrelated-sentinel")
+          const unrelatedResponse = await unrelated.match(
+            new URL(baseUrl("__pwa03a__/sentinel"), location.origin),
+          )
+          record(
+            "UNRELATED_CACHE_PRESERVED",
+            (await caches.keys()).includes("pwa03a-unrelated-sentinel") &&
+              (await unrelatedResponse?.text()) === "preserve-this-cache",
+          )
+
+          record("ROOT_OR_BASE_PATH", basePath === "/" || basePath === "/newsflux/", basePath)
+          const runtimeCacheNames = (await caches.keys()).filter((name) =>
+            name.startsWith("runtime-build-assets"),
+          )
+          record(
+            "CACHE_NAMESPACE_CHANGE",
+            runtimeCacheNames.includes("runtime-build-assets-v2"),
+            JSON.stringify(runtimeCacheNames),
+          )
+
+          window.__pwa03aResult = results
+          resultNode.dataset.complete = "true"
+        } catch (error) {
+          record("HARNESS_RUNTIME", false, String(error?.stack || error))
+          window.__pwa03aResult = results
+          resultNode.dataset.complete = "true"
+        }
+      }
+
+      document.querySelector("#run").addEventListener("click", run, { once: true })
+      document.querySelector("#cleanup").addEventListener("click", cleanup)
+      window.__pwa03aRun = run
+      window.__pwa03aCleanup = cleanup
+    </script>
+  </body>
+</html>
