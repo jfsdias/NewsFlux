@@ -8,7 +8,7 @@
 
 ## Current state (post-PR #85, 2026-10-22)
 
-Merge facts below are verified from git history. Production and runtime values are `PM_REPORTED`: they are recorded as stated by the PM and cannot be independently verified from the repository.
+Merge facts below are verified from git history. Production and runtime values are `PM_REPORTED`: they are recorded as stated by the PM and cannot be independently verified from the repository. The PM review of PR #86 (PASS WITH DOCUMENTATION AMENDMENTS) additionally confirmed the drift closures, the `SOURCE_IDENTITY` definition and the partial production topology below; those are `PM_REPORTED` too.
 
 ```text
 DOCS_DATE=2026-10-22
@@ -34,12 +34,16 @@ PR84_STATUS=MERGED
 PR84_MERGE_SHA=9b6f98cee745c2fed8dbe73cee2b1f2e4ad29ac7
 ADD_FEED_DISCOVERY_DUPLICATE_URL_01=RESOLVED_BY_PR83
 MINIFLUX_DELETE_STATUS_01=PR84_MERGED_HISTORICAL_404_CAUSATION_UNPROVEN
-PR74_STATUS=MERGED_IN_GIT_PM_CLOSURE_CONFIRMATION_PENDING
+PR74_STATUS=COMPLETED_HISTORICAL_NAV_ROUTE_FOCUS_SLICE
 PR74_MERGE_SHA=b6b7246642aa5ff15f3f8e7015d2efbd83a47be5
-PR76_STATUS=MERGED_IN_GIT_PM_CLOSURE_CONFIRMATION_PENDING
+PR76_STATUS=COMPLETED_CLOSES_TABLET_HEADER_WIDTH_01
 PR76_MERGE_SHA=831ff514c3a572a41cd857dd51ffd4f5c87663c1
-PR77_STATUS=MERGED_IN_GIT_PM_CLOSURE_CONFIRMATION_PENDING
+PR77_STATUS=COMPLETED_CLOSES_INITIAL_CANONICAL_HOME_DUPLICATE_IDS
 PR77_MERGE_SHA=e1c1285e717e626fc759b0bb52431cd9321df334
+TABLET_HEADER_WIDTH_01=CLOSED_BY_PR76
+HOME_DUP_ROOT_CAUSE_01=CLOSED_INITIAL_CANONICAL_HOME_DUPLICATE_IDS_BY_PR77
+HOME_PAGINATION_CURSOR_STALL_01=BACKLOG_NOT_CLOSED_BY_PR77
+ARTICLE_CODE_BLOCK_CONTROLS_HISTORICAL_FAILURE=NOT_REPRODUCED_CURRENTLY
 OPEN_PRS_BEFORE_PLANNING_DOCS_PR=NONE
 
 PWA_FOUNDATION=PLANNED
@@ -47,7 +51,21 @@ NETNEWSWIRE_UX_REFERENCE=ACCEPTED_AS_DESIGN_INPUT
 PWA_PARTIALLY_EXISTS_IN_MAIN=YES
 PWA_IMPLEMENTATION_AUTHORIZED=NO
 NNW_IMPLEMENTATION_AUTHORIZED=NO
-RECOMMENDED_FIRST_IMPLEMENTATION_PR=PWA-01A_AFTER_PWA-00_EVIDENCE
+PM_REVIEW_PR86=PASS_WITH_DOCUMENTATION_AMENDMENTS
+PWA_00_AUTHORIZED_PLANNING_VALIDATION_CANDIDATE=YES
+PWA_01A_AUTHORIZED=NO
+PWA_03A_OUTRANKS_PWA_01A_IF_PWA_00_CONFIRMS_MIDREAD_RELOAD=YES
+RECOMMENDED_FIRST_IMPLEMENTATION_PR=NONE_AUTHORIZED
+SOURCE_IDENTITY_DEFINITION=CONFIRMED_PUBLISHER_FEED_SOURCE_LEVEL_VISUAL_IDENTITY
+STORY_IDENTITY_IN_NNW01=NO
+
+PRODUCTION_TOPOLOGY=PARTIALLY_RESOLVED_PM_REPORTED
+PUBLIC_ORIGIN=https://news.jfsdias.ddns.net/
+TLS_REVERSE_PROXY=NGINX_PROXY_MANAGER
+DOCKER_NETWORK=npm-proxyyml_default
+INTERNAL_SERVICE=http://newsflux:2000
+PRODUCTION_IMAGE_CONTRACT=EXACT_newsflux-local_SHORTCOMMIT_NEVER_LATEST_OR_BRANCH
+MINIFLUX_SAME_ORIGIN_AS_NEWSFLUX_ASSUMED=NO
 
 CURRENT_PHASE=PLANNING_AND_DOCUMENTATION
 CURRENT_PRIMARY_TRACK=PWA_FOUNDATION_AND_NNW_PLANNING
@@ -64,6 +82,15 @@ PROJECT_STATE_RECONCILED=YES
 ```
 
 `PWA_FOUNDATION=PLANNED` and `NETNEWSWIRE_UX_REFERENCE=ACCEPTED_AS_DESIGN_INPUT` mean accepted for planning and design input **only**; neither authorizes implementation, merge or deployment. The sections below that carry the 2026-10-21 and 2026-10-22 (morning) values are retained as historical records and are superseded by this section.
+
+### Production topology (D4 — partially resolved, `PM_REPORTED`)
+
+Operational evidence supplied by the PM; **not** verified from the repository. PWA-00 re-measures it. Details and consequences: `PWA_ARCHITECTURE.md` §3.4.
+
+- Public NewsFlux origin: `https://news.jfsdias.ddns.net/`.
+- TLS / reverse proxy: Nginx Proxy Manager; Docker network `npm-proxyyml_default`; internal NewsFlux service `http://newsflux:2000`.
+- Production image contract: the exact `newsflux-local:<shortcommit>` SHA, never an implicit `latest` or a moving branch.
+- The Miniflux API origin remains user-configurable and is treated as potentially cross-origin. **NewsFlux and Miniflux are not assumed to share an origin** unless PWA-00 measures it.
 
 ## Historical state (2026-10-21 snapshot; superseded by the section above)
 
@@ -516,8 +543,8 @@ Documented in [`PWA_ARCHITECTURE.md`](./PWA_ARCHITECTURE.md) and [`DESIGN_REFERE
 - **Principles:** `CORRECT_FRESH_RUNTIME > AGGRESSIVE_OFFLINE_CACHING`; `PWA installability != offline data architecture`; Miniflux remains the source of truth; no authenticated-response caching; no new persistent NewsFlux state without an architecture decision; no essential feature depends on one ecosystem's API.
 - **Phases:** `PWA-00` baseline audit; `PWA-01A/B/C` manifest and icons, theme and display-mode, serving contract (01C gated by `ID-DEPLOY-01`); `PWA-VAL-01` device validation; `PWA-02A/B` Android and Apple adaptation (defect-driven); `PWA-03A/B/C/D` update safety, offline/error states, kill switch, controlled cache (03D held); `PWA-04A–E` optional capabilities (04E held).
 - **NetNewsWire UX tracks:** `NNW-01` source identity, `NNW-02` navigation density, `NNW-03` contextual toolbar, `NNW-04` reader source header, `NNW-05` multi-pane reference (research only). Each separates `REFERENCE_PATTERN` from `NEWSFLUX_PRODUCT_DECISION`; the single-pane, opaque-content, glass-as-chrome and `884×1104` contracts are unchanged.
-- **Pending PM inputs:** `D1`–`D9` in `PWA_ARCHITECTURE.md` §12 (manifest `id`, theme/background color policy, maskable icon art, production topology, `ID-DEPLOY-01` or waiver, update policy, third-party icon fallback, token-only auth guidance, offline reading).
-- **Recommended first implementation PR:** `PWA-01A`, after `PWA-00` evidence. The first authorized work item would be `PWA-00`, which contains no product code.
+- **Pending PM inputs:** `D1`–`D9` in `PWA_ARCHITECTURE.md` §12. `D4` (production topology) is **partially resolved** (`PM_REPORTED`; see the topology subsection above); the Miniflux origin is not assumed same-origin. Still open: `D1` manifest `id`, `D2` theme/background color policy, `D3` maskable icon art, `D5` `ID-DEPLOY-01` or waiver, `D6` update policy, `D7` third-party icon fallback, `D8` token-only auth guidance, `D9` offline reading. `SOURCE_IDENTITY` is **confirmed** as publisher/feed/source-level visual identity; `STORY_IDENTITY` stays out of `NNW-01`.
+- **Authorization state (PM review of PR #86):** `PWA-00` is the next authorized planning/validation candidate (evidence-only, no product code); **`PWA-01A` is not yet authorized**; no implementation PR is currently authorized. **Priority rule:** if `PWA-00` confirms a mid-reading reload or update disruption, `PWA-03A` outranks icon/manifest polish — correctness before cosmetic installability hardening.
 
 ## Personalization / saved-state architecture
 
@@ -567,6 +594,7 @@ The specialized upstream monitor must live-check the current upstream head befor
 - **Workflow repository guard finding:** existing `github.repository == 'electh/ReactFlux'` guards remain an open, non-blocking finding. Track a separate maintenance decision; do not change them as part of upstream reconciliation.
 - `HARNESS-UNDO-ID-01` was resolved by PR #36; the nine stale fixed-ID assertions were repaired and the focused list gate passed 29/29.
 - `HARNESS-CODEBLOCK-SSR-01` is not open on the current runtime baseline; PR #38 reports `CODEBLOCK_SSR_GATE=PASS` in the full Node suite on both main and candidate.
+- **`ARTICLE_CODE_BLOCK_CONTROLS_HISTORICAL_FAILURE=NOT_REPRODUCED_CURRENTLY`** (`PM_REPORTED`): on the exact current baseline `d7c0fc8e…` the focused `scripts/article-code-block-controls.test.js` passes 3/3 and `node --test scripts/*.test.js` passes 48/48 in the latest backend diagnostic; it is **not** a known failing test. Historical note preserved: in a cloud-container session (Node v22.22.0, pnpm 11.21.0) the same test failed on pristine `16311d0d…` and still failed on the `d7c0fc8e…` code with a Vite SSR error resolving the named export `Select` from `@arco-design/web-react` inside `CodeBlock.jsx`. The 46-vs-48 counts differ only because a file that fails to load counts as one failure instead of its three tests (45 + 3 = 48). Environment/toolchain sensitivity therefore remains possible; the cause is not established.
 - The React 19 `element.ref` warning remains an incidental harness warning and non-blocking backlog. No fix is claimed here.
 
 ## Open findings / residual risks
@@ -579,29 +607,29 @@ The specialized upstream monitor must live-check the current upstream head befor
 - Global formatting historically reported four out-of-scope documentation files; do not conflate pre-existing formatting debt with product regressions. Re-check when documentation tooling is next touched.
 - Repository Prettier hooks normalized Markdown table alignment in this PR; PM accepted the formatting. This creates a residual auditability limitation when comparing prior table edits; no formatter bypass or manual reversal was used.
 - **MOBILE-SCROLL-FLICKER-01 — OPEN:** reproduction is currently blocked by the harness precondition `MISSING_GENERATED_VERSION_INFO`; a physical iPhone gate was not run and root cause remains unknown. This continues to block future optional NAV-VISUAL PR6 glass expansion.
-- **TABLET-HEADER-WIDTH-01 — CONFIRMED:** at 768×1024, 884×1104, 900×1100 and 992×1104 the header is approximately 370 px wide with unused space and no overflow. Fix now: NO. Target: NAV-VISUAL-01 / PR4 MEDIUM-RAIL.
+- **TABLET-HEADER-WIDTH-01 — CLOSED by PR #76** (PM review of PR #86; in current production ancestry, `PM_REPORTED`). Historical record preserved: at 768×1024, 884×1104, 900×1100 and 992×1104 the header was approximately 370 px wide with unused space and no overflow; the earlier plan was fix-later in NAV-VISUAL-01 / PR4 MEDIUM-RAIL, superseded by the PR #76 change to `Content.jsx`.
 - **DOCS-LINT-01 — OPEN:** preserve the existing documentation/superpowers formatting debt; do not expand this reconciliation to unrelated files.
 - **HOME-HARNESS-STABILITY-01 — OPEN:** keep deterministic baseline failures separate from intermittent stability failures. Deterministic 10/10 failures: `LIST_SEARCH_DATE_SORT_PRESERVED`, `READER_MEASURE_01_CPL`. Intermittent 6/10 failures: `READER_VISUAL_01_WIDE_IMAGE`, `READER_MEASURE_01_DEFAULT_75_PARITY`, `READER_MEASURE_01_MEDIA_PROTECTION`. Root cause remains unknown; no product fix is claimed here.
 - **READER-MEDIA-01A — OPEN / DRAFT PR #70:** next active functional candidate; its base is stale and must be refreshed onto current main before candidate and authenticated Reader/media gates.
 - **ABOUT-ACCESSIBLE-BRAND-01 — COMPLETED:** resolved by PR #65; it is no longer an open finding.
 - **RUNTIME-IDENTITY-02 — CLOSED / NON-PRODUCT:** classified as `OLD_DOCUMENT_SESSION`; fresh-document validation showed the prior tab retained old JavaScript while new requests served the R5 asset. Server, asset, Service Worker and Cache Storage were not the cause; no product or deployment defect was found.
 
-- **PWA findings F2–F9 (classified, not fixed; details in `PWA_ARCHITECTURE.md` §4):** manifest/runtime theme-color mismatch; no maskable icon; update-aggressive service worker with an in-page reload path (runtime effect unmeasured); SPA fallback masks missing assets as HTML and no explicit `Cache-Control` for `sw.js`/manifest (header behavior unmeasured); navigation route without a denylist (topology unknown); plaintext `password` in `localStorage` (pre-existing); third-party icon fallback discloses followed hostnames and `getSecondHostname` mishandles multi-part public suffixes (`www.bbc.co.uk` → `co.uk`); per-profile `localStorage` means an installed iOS app does not share Safari's state.
+- **PWA findings F2–F9 (classified, not fixed; details in `PWA_ARCHITECTURE.md` §4):** manifest/runtime theme-color mismatch; no maskable icon; update-aggressive service worker with an in-page reload path (runtime effect unmeasured); SPA fallback masks missing assets as HTML and no explicit `Cache-Control` for `sw.js`/manifest (header behavior unmeasured); navigation route without a denylist (NewsFlux has its own HTTPS origin per the `PM_REPORTED` topology; sharing with another app is unmeasured); plaintext `password` in `localStorage` (pre-existing); third-party icon fallback discloses followed hostnames and `getSecondHostname` mishandles multi-part public suffixes (`www.bbc.co.uk` → `co.uk`); per-profile `localStorage` means an installed iOS app does not share Safari's state.
 
 ## Documentation drift register (reconciled 2026-10-22)
 
-Facts verified from git history; stale historical text was **not** rewritten wholesale to avoid unsolicited edits. Closure of related findings awaits PM confirmation.
+Facts verified from git history. The closures below were confirmed by the PM review of PR #86 (`PM_REPORTED`). Stale historical text was **not** rewritten wholesale to avoid unsolicited edits; it is retained as history and labelled.
 
-| Item                                                                                         | Evidence                                                                 | Handling                                                                                    |
-| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| PRs #74, #76, #77 merged in git but absent from earlier snapshots                            | Merge commits `b6b72466`, `831ff514`, `e1c1285e`                         | Recorded in the current state and roadmap Section 3.2; closure pending PM.                  |
-| `TABLET-HEADER-WIDTH-01` still listed "CONFIRMED / fix now NO / target PR4" in Open findings | PR #76 `fix: expand tablet list header to content width` (`Content.jsx`) | Historical bullet retained; PM to confirm closure and any remaining PR4 scope.              |
-| `NAV-PR1-ROUTE-FOCUS-01` listed as an open P3 finding                                        | PR #74 `fix(nav): restore meaningful focus after drawer navigation`      | Retained in `NEWSFLUX_NAV_VISUAL_01.md`; PM to confirm closure.                             |
-| `HOME_DUP_ROOT_CAUSE_01` listed as backlog                                                   | PR #77 `fix: deduplicate initial Home entries by id`                     | PM to confirm whether the finding is resolved.                                              |
-| `READER-MEDIA-01A / PR #70` described as an open draft in several sections                   | The same document records `PR70_STATUS=MERGED` (`2a858ede…`)             | Stale text retained as history; the header block and roadmap Section 3.2 are authoritative. |
-| `DOCS-LINT-01 — OPEN` bullet in Open findings                                                | The same document records `DOCS_LINT_01_STATUS=COMPLETED_BY_PR75`        | Roadmap Section 9 already marks it completed; PM may schedule a cleanup of this bullet.     |
-| "Next recommended action" referenced DOCS-LINT-01 and PR #70                                 | See above                                                                | Replaced in this reconciliation.                                                            |
-| `docs/UPSTREAM_TRACKING.md` does not exist                                                   | Absent from the repository                                               | No file created; upstream state lives in this document and the roadmap.                     |
+| Item                                                                                         | Evidence                                                                 | Handling                                                                                                                                                                                                                            |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PRs #74, #76, #77 merged in git but absent from earlier snapshots                            | Merge commits `b6b72466`, `831ff514`, `e1c1285e`                         | Recorded as completed in the current state and roadmap Section 3.2 (PM review of PR #86).                                                                                                                                           |
+| `TABLET-HEADER-WIDTH-01` still listed "CONFIRMED / fix now NO / target PR4" in Open findings | PR #76 `fix: expand tablet list header to content width` (`Content.jsx`) | **Closed by PR #76** (PM review of PR #86); the historical bullet is retained and relabelled.                                                                                                                                       |
+| `NAV-PR1-ROUTE-FOCUS-01` listed as an open P3 finding                                        | PR #74 `fix(nav): restore meaningful focus after drawer navigation`      | PR #74 recorded as completed historical NAV route-focus work (PM review of PR #86). `NEWSFLUX_NAV_VISUAL_01.md` keeps its 2026-10-20 "OPEN_P3" and "TABLET-HEADER-WIDTH-01 CONFIRMED" text as history and is not edited in this PR. |
+| `HOME_DUP_ROOT_CAUSE_01` listed as backlog                                                   | PR #77 `fix: deduplicate initial Home entries by id`                     | **Closed for the initial canonical Home duplicate-ID root cause** (PM review of PR #86). Unrelated pagination/cursor findings (`HOME_PAGINATION_CURSOR_STALL_01`) are **not** closed.                                               |
+| `READER-MEDIA-01A / PR #70` described as an open draft in several sections                   | The same document records `PR70_STATUS=MERGED` (`2a858ede…`)             | Stale text retained as history; the header block and roadmap Section 3.2 are authoritative.                                                                                                                                         |
+| `DOCS-LINT-01 — OPEN` bullet in Open findings                                                | The same document records `DOCS_LINT_01_STATUS=COMPLETED_BY_PR75`        | Roadmap Section 9 already marks it completed; PM may schedule a cleanup of this bullet.                                                                                                                                             |
+| "Next recommended action" referenced DOCS-LINT-01 and PR #70                                 | See above                                                                | Replaced in this reconciliation.                                                                                                                                                                                                    |
+| `docs/UPSTREAM_TRACKING.md` does not exist                                                   | Absent from the repository                                               | No file created; upstream state lives in this document and the roadmap.                                                                                                                                                             |
 
 ## Product decisions and accepted baseline exceptions
 
@@ -630,7 +658,7 @@ UNKNOWN_COMMIT=RESOLVED
 
 ## Next recommended action
 
-Current sequence: PM review of the planning documentation PR (`PWA_ARCHITECTURE.md`, `DESIGN_REFERENCES.md` and this reconciliation). If the PM approves proceeding, the first authorized work item is `PWA-00` — an evidence-only baseline audit of the PWA that already exists — followed by `PWA-01A` (manifest and icons) once decisions `D1` and `D3` are made. `MARK-ALL-UNDO-JUMP-01` remains held for real reproduction evidence. The earlier sequence that referenced `DOCS-LINT-01` and PR #70 is complete and superseded. This documentation does not authorize product implementation, merge or promotion.
+Current sequence: this planning documentation PR (`PWA_ARCHITECTURE.md`, `DESIGN_REFERENCES.md` and this reconciliation) was reviewed by the PM as PASS WITH DOCUMENTATION AMENDMENTS and remains a Draft. After it, **`PWA-00` is the next authorized planning/validation candidate** — an evidence-only baseline audit of the PWA that already exists, including whether the configured Miniflux origin is same- or cross-origin. **`PWA-01A` is not yet authorized.** If `PWA-00` confirms a mid-reading reload or update disruption, `PWA-03A` outranks manifest/icon polish. `MARK-ALL-UNDO-JUMP-01` remains held for real reproduction evidence. The earlier sequence that referenced `DOCS-LINT-01` and PR #70 is complete and superseded. This documentation does not authorize product implementation, merge or promotion.
 
 ## Deployment governance
 

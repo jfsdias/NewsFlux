@@ -3,11 +3,14 @@
 - **Status:** accepted as **design input**, not as an implementation request or a visual clone.
 - **Created:** 2026-10-22, against GitHub `main` at `d7c0fc8e4ab7b5f0d959bea96cc04b086deb36fc`.
 - **Track:** `NETNEWSWIRE_UX_REFERENCE=ACCEPTED_AS_DESIGN_INPUT`.
+- **Amended:** 2026-10-22, after the PM review of PR #86 (PASS WITH DOCUMENTATION AMENDMENTS): the `SOURCE_IDENTITY` definition is confirmed. No product code changed.
 - **Companion documents:** [`PWA_ARCHITECTURE.md`](./PWA_ARCHITECTURE.md), [`NEWSFLUX_DESIGN_DIRECTION_V1.md`](./NEWSFLUX_DESIGN_DIRECTION_V1.md) (visual foundation and earlier reference review), [`NEWSFLUX_NAV_VISUAL_01.md`](./NEWSFLUX_NAV_VISUAL_01.md) (navigation contract), [`NEWSFLUX_READER_VISUAL_01.md`](./NEWSFLUX_READER_VISUAL_01.md), [`NEWSFLUX_ROADMAP.md`](./NEWSFLUX_ROADMAP.md).
 
 ```text
 NETNEWSWIRE_UX_REFERENCE=ACCEPTED_AS_DESIGN_INPUT
 NNW_IMPLEMENTATION_AUTHORIZED=NO
+SOURCE_IDENTITY_DEFINITION=CONFIRMED_PUBLISHER_FEED_SOURCE_LEVEL_VISUAL_IDENTITY
+STORY_IDENTITY_IN_NNW01=NO
 VISUAL_CLONE_REQUESTED=NO
 PERMANENT_THREE_PANE_DEFAULT=NO (unchanged)
 SINGLE_PANE_FIRST_MOBILE_TABLET_FOLD=YES (unchanged)
@@ -83,7 +86,7 @@ Caveat: screenshots show one moment of NNW's own platform conventions (AppKit/UI
 | 5   | The mark sits on an **opaque** neutral backing that keeps contrast for light and dark logos on OLED and light surfaces.                                          | `PROPOSED`                            |
 | 6   | Icons are decorative (`alt=""`) when an adjacent text names the source; the monogram is `aria-hidden`.                                                           | `PROPOSED` (matches current usage)    |
 
-**Relation to the existing backlog.** The roadmap lists `SOURCE_IDENTITY / STORY_IDENTITY — ARCHITECTURE / RESEARCH GATES` without a recorded definition. This track interprets `SOURCE_IDENTITY` as **source-level** identity (publisher/feed) and `STORY_IDENTITY` as **story-level** identity used by clustering, which stays untouched. **PM is asked to confirm this reading.** NNW-01 stays inside the no-persistence constraint; anything needing storage remains architecture-gated.
+**Relation to the existing backlog — `SOURCE_IDENTITY` CONFIRMED by the PM (review of PR #86).** The roadmap lists `SOURCE_IDENTITY / STORY_IDENTITY — ARCHITECTURE / RESEARCH GATES`. The PM confirmed that **`SOURCE_IDENTITY` means publisher/feed/source-level visual identity, reused across the sidebar, the article list and the reader.** **`STORY_IDENTITY` remains story-level identity and clustering semantics and is not part of NNW-01.** The no-new-persistence constraint is kept; anything needing storage remains architecture-gated.
 
 **Investigation scope**
 
@@ -121,7 +124,7 @@ Caveat: screenshots show one moment of NNW's own platform conventions (AppKit/UI
 | 5   | Compact and Medium navigation keep the NAV-VISUAL-01 model (bottom bar / rail + Sources entry). This track does **not** redesign them.                                                            | `BINDING`                               |
 | 6   | Grouping, optional Unread grouping, sidebar width and count presentation are part of `NAV-02F`.                                                                                                   | `OPEN` — product decision               |
 
-**Dependencies:** `NAV-02F` decisions; `NAV-VISUAL-01` PR2 (Sources panel), PR4 (Medium rail) and PR7 (sidebar model alignment); several of its nine open decisions (Sources drawer vs bottom sheet, profile placement, legacy 768 px axis). Implementation does **not** precede those decisions. The tablet header-width fix (PR #76) is merged in git; its closure status is for the PM to confirm.
+**Dependencies:** `NAV-02F` decisions; `NAV-VISUAL-01` PR2 (Sources panel), PR4 (Medium rail) and PR7 (sidebar model alignment); several of its nine open decisions (Sources drawer vs bottom sheet, profile placement, legacy 768 px axis). Implementation does **not** precede those decisions. The tablet header-width fix (PR #76) is merged and closes `TABLET-HEADER-WIDTH-01` (PM review of PR #86), so that finding no longer gates this track.
 
 **Investigation scope:** groupings and indentation (SubMenu depth vs rows), disclosure and persisted expanded state, count presentation (tabular, subtle, zero handling), selection styling, keyboard navigation (the current structure is an Arco Menu; arrow-key and tree semantics are **not audited** — to be measured), collapsed/expanded behavior at each window class, touch-target and text-zoom resilience.
 
