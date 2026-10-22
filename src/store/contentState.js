@@ -30,6 +30,7 @@ const defaultValue = {
   isArticleLoading: false, // 文章是否正在加载
   isOriginalContentFetched: false,
   originalContentRequestTokens: {},
+  temporalPaginationState: null,
   loadMoreError: false,
   loadMoreVisible: false, // 加载更多元素可见性
   total: 0, // 接口返回文章总数原始值，不受接口返回数据长度限制
@@ -156,6 +157,7 @@ export const incrementArticleListSnapshotRevision = () =>
   )
 export const setEntries = createSetter(contentState, "entries")
 export const setHomePaginationBoundary = createSetter(contentState, "homePaginationBoundary")
+export const setTemporalPaginationState = createSetter(contentState, "temporalPaginationState")
 export const reconcileArticleListFilters = ({ filterDate, filterString }) => {
   const current = contentState.get()
   const nextFilterDate = filterDate ?? null
@@ -217,6 +219,7 @@ export const setArticleListSource = ({ from, id }) => {
       current.infoFrom === "home" && nextScope.from === "home"
         ? current.homePaginationBoundary
         : null,
+    temporalPaginationState: null,
     filterDate: filters.filterDate,
     filterString: filters.filterString,
   })

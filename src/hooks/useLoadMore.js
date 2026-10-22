@@ -12,6 +12,7 @@ import {
   setHomePaginationBoundary,
   setLoadMoreError,
   setLoadMoreVisible,
+  setTemporalPaginationState,
 } from "@/store/contentState"
 import { getDataSessionRevision } from "@/store/dataState"
 import { settingsState } from "@/store/settingsState"
@@ -29,6 +30,14 @@ import {
 } from "@/utils/home-editorial-session"
 import createSetter from "@/utils/nanostores"
 import { buildPaginationCursorParams } from "@/utils/pagination-cursor"
+import {
+  appendTemporalCanonicalEntries,
+  getArticleListTemporalSortProperty,
+  getTemporalTieDrainBucketSecond,
+  inspectTemporalTieDrainPage,
+  isTemporalPaginationStateCurrent,
+  sortEntriesByTemporal,
+} from "@/utils/temporal-tie-drain"
 
 const loadingMoreState = atom(false)
 const setLoadingMore = createSetter(loadingMoreState)
@@ -91,6 +100,22 @@ const useLoadMore = () => {
       }
     }
 
+    const { temporalPaginationState } = contentState.get()
+    if (
+      isTemporalPaginationStateCurrent(temporalPaginationState, {
+        requestKey,
+        sessionRevision,
+        snapshotRevision: contentState.get().articleListSnapshotRevision,
+      }) &&
+      temporalPaginationState.sortProperty === sortProperty
+    ) {
+      return buildPaginationCursorParams({
+        entries: temporalPaginationState.canonicalEntries,
+        sortProperty,
+        orderDirection: cursorDirection,
+      })
+    }
+
     return buildPaginationCursorParams({
       entries: currentEntries,
       sortProperty,
@@ -99,11 +124,7 @@ const useLoadMore = () => {
   }
 
   const sortProperty =
-    infoFrom === "home"
-      ? "published_at"
-      : ["starred", "history"].includes(infoFrom)
-        ? "changed_at"
-        : orderBy
+    infoFrom === "home" ? "published_at" : getArticleListTemporalSortProperty(infoFrom, orderBy)
   const cursorDirection = infoFrom === "home" ? "desc" : orderDirection
 
   const getCurrentArticleListRequestKey = () =>
@@ -126,7 +147,20 @@ const useLoadMore = () => {
       requestSessionRevision === getDataSessionRevision() &&
       requestSnapshotRevision === contentState.get().articleListSnapshotRevision
     const synchronizePaginationProgress = () => {
-      const currentEntryIds = new Set(contentState.get().entries.map(({ id }) => id))
+      const content = contentState.get()
+      const { temporalPaginationState } = content
+      const hasCurrentTemporalState =
+        infoFrom !== "home" &&
+        isTemporalPaginationStateCurrent(temporalPaginationState, {
+          requestKey,
+          sessionRevision: requestSessionRevision,
+          snapshotRevision: requestSnapshotRevision,
+        })
+      const currentEntryIds = new Set(
+        hasCurrentTemporalState
+          ? temporalPaginationState.canonicalEntryIds
+          : content.entries.map(({ id }) => id),
+      )
       const paginationProgress = paginationProgressRef.current
       if (
         paginationProgress.requestKey !== requestKey ||
@@ -148,6 +182,7 @@ const useLoadMore = () => {
     try {
       let response
       let requestedHomeBoundary = null
+      let requestedTemporalTieDrain = null
       let shouldRetry
       do {
         const mutationSnapshot = getEntryMutationSnapshot()
@@ -161,13 +196,37 @@ const useLoadMore = () => {
         }
 
         synchronizePaginationProgress()
-        const filterParams = getFilterParams(
-          contentState.get().entries,
-          requestKey,
-          requestSessionRevision,
-        )
-        if (infoFrom !== "home" && filterString) {
-          filterParams.search = filterString
+        const { temporalPaginationState } = contentState.get()
+        const currentTemporalPaginationState =
+          infoFrom !== "home" &&
+          isTemporalPaginationStateCurrent(temporalPaginationState, {
+            requestKey,
+            sessionRevision: requestSessionRevision,
+            snapshotRevision: requestSnapshotRevision,
+          }) &&
+          temporalPaginationState.sortProperty === sortProperty
+            ? temporalPaginationState
+            : null
+        let filterParams
+        if (currentTemporalPaginationState?.tieDrain) {
+          requestedTemporalTieDrain = currentTemporalPaginationState.tieDrain
+          filterParams = {
+            ...(filterString && { search: filterString }),
+            temporalTieDrain: {
+              ...requestedTemporalTieDrain,
+              pageSize,
+              sortProperty,
+            },
+          }
+        } else {
+          filterParams = getFilterParams(
+            contentState.get().entries,
+            requestKey,
+            requestSessionRevision,
+          )
+          if (infoFrom !== "home" && filterString) {
+            filterParams.search = filterString
+          }
         }
 
         if (infoFrom === "starred") {
@@ -224,6 +283,92 @@ const useLoadMore = () => {
 
       const progress = paginationProgressRef.current
       const responseEntryIds = new Set(response.entries.map(({ id }) => id))
+      const previousTemporalState = contentState.get().temporalPaginationState
+      const currentPreviousTemporalState =
+        infoFrom !== "home" &&
+        isTemporalPaginationStateCurrent(previousTemporalState, {
+          requestKey,
+          sessionRevision: requestSessionRevision,
+          snapshotRevision: requestSnapshotRevision,
+        }) &&
+        previousTemporalState.sortProperty === sortProperty
+          ? previousTemporalState
+          : null
+      const temporalTieDrainBucketSecond = currentPreviousTemporalState
+        ? getTemporalTieDrainBucketSecond({
+            entries: response.entries,
+            knownEntries: currentPreviousTemporalState.canonicalEntries,
+            total: currentPreviousTemporalState.total,
+            pageSize,
+            sortProperty,
+          })
+        : null
+
+      if (requestedTemporalTieDrain) {
+        const activeTemporalState = contentState.get().temporalPaginationState
+        if (
+          !isTemporalPaginationStateCurrent(activeTemporalState, {
+            requestKey,
+            sessionRevision: requestSessionRevision,
+            snapshotRevision: requestSnapshotRevision,
+          }) ||
+          activeTemporalState.tieDrain?.bucketSecond !== requestedTemporalTieDrain.bucketSecond ||
+          activeTemporalState.tieDrain?.idCursor !== requestedTemporalTieDrain.idCursor
+        ) {
+          return
+        }
+
+        const tiePage = inspectTemporalTieDrainPage({
+          entries: response.entries,
+          bucketSecond: requestedTemporalTieDrain.bucketSecond,
+          idCursor: requestedTemporalTieDrain.idCursor,
+          pageSize,
+          sortProperty,
+        })
+        if (!tiePage.advances) {
+          console.warn("Stopped temporal tie drain because its ID cursor did not advance")
+          setLoadMoreError(true)
+          return
+        }
+
+        const bucketEntries = tiePage.entries.filter(
+          ({ id }) => !activeTemporalState.canonicalEntryIds.includes(id),
+        )
+        if (bucketEntries.length > 0) {
+          const combinedEntries = [
+            ...contentState.get().entries,
+            ...bucketEntries.map((entry) => prepareEntry(entry)),
+          ]
+          const sortedEntries = sortEntriesByTemporal(
+            combinedEntries,
+            sortProperty,
+            cursorDirection,
+          )
+          const duplicateEntries = setEntriesWithDeduplication(sortedEntries)
+          markDuplicatesAsRead(duplicateEntries)
+        }
+
+        const nextTemporalState = appendTemporalCanonicalEntries(
+          activeTemporalState,
+          tiePage.entries,
+        )
+        nextTemporalState.tieDrain = tiePage.exhausted
+          ? null
+          : {
+              ...requestedTemporalTieDrain,
+              idCursor: tiePage.nextIdCursor,
+            }
+        setTemporalPaginationState(nextTemporalState)
+        for (const entryId of tiePage.entries.map(({ id }) => id)) {
+          progress.seenResponseEntryIds.add(entryId)
+        }
+        progress.committedEntryIds = new Set(nextTemporalState.canonicalEntryIds)
+        setLoadMoreVisible(
+          !tiePage.exhausted ||
+            nextTemporalState.canonicalEntryIds.length < contentState.get().total,
+        )
+        return
+      }
 
       if (infoFrom === "home" && requestedHomeBoundary?.tieDrain) {
         const activeBoundary = contentState.get().homePaginationBoundary
@@ -286,7 +431,12 @@ const useLoadMore = () => {
           : null
       const homeTieDrainStarted = Boolean(homeResponseBoundary?.tieDrain)
 
-      if (response.entries.length > 0 && !hasNewResponseEntries && !homeTieDrainStarted) {
+      if (
+        response.entries.length > 0 &&
+        !hasNewResponseEntries &&
+        !homeTieDrainStarted &&
+        temporalTieDrainBucketSecond === null
+      ) {
         console.warn("Stopped loading more articles because the pagination cursor did not advance")
         setLoadMoreVisible(false)
         return
@@ -301,13 +451,53 @@ const useLoadMore = () => {
             sessionRevision: requestSessionRevision,
             ...homeResponseBoundary,
           })
+        } else {
+          const activeTemporalState = contentState.get().temporalPaginationState
+          if (
+            isTemporalPaginationStateCurrent(activeTemporalState, {
+              requestKey,
+              sessionRevision: requestSessionRevision,
+              snapshotRevision: requestSnapshotRevision,
+            }) &&
+            activeTemporalState.sortProperty === sortProperty
+          ) {
+            const nextTemporalState = appendTemporalCanonicalEntries(
+              activeTemporalState,
+              response.entries,
+            )
+            nextTemporalState.tieDrain =
+              temporalTieDrainBucketSecond === null
+                ? null
+                : { bucketSecond: temporalTieDrainBucketSecond, idCursor: null }
+            setTemporalPaginationState(nextTemporalState)
+          }
         }
         for (const entryId of responseEntryIds) {
           progress.seenResponseEntryIds.add(entryId)
         }
-        progress.committedEntryIds = new Set(contentState.get().entries.map(({ id }) => id))
+        const updatedTemporalState = contentState.get().temporalPaginationState
+        progress.committedEntryIds = new Set(
+          infoFrom !== "home" &&
+            isTemporalPaginationStateCurrent(updatedTemporalState, {
+              requestKey,
+              sessionRevision: requestSessionRevision,
+              snapshotRevision: requestSnapshotRevision,
+            })
+            ? updatedTemporalState.canonicalEntryIds
+            : contentState.get().entries.map(({ id }) => id),
+        )
       }
       if (homeTieDrainStarted) {
+        setLoadMoreVisible(true)
+      } else if (
+        infoFrom !== "home" &&
+        contentState.get().temporalPaginationState?.tieDrain &&
+        isTemporalPaginationStateCurrent(contentState.get().temporalPaginationState, {
+          requestKey,
+          sessionRevision: requestSessionRevision,
+          snapshotRevision: requestSnapshotRevision,
+        })
+      ) {
         setLoadMoreVisible(true)
       } else if (response.total <= pageSize || response.entries.length < pageSize) {
         setLoadMoreVisible(false)
