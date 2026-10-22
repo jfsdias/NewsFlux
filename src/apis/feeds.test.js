@@ -59,7 +59,7 @@ Object.defineProperty(globalThis, "localStorage", {
   },
 })
 
-const [{ default: apiClient }, { discoverFeeds, updateFeed }] = await Promise.all([
+const [{ default: apiClient }, { deleteFeed, discoverFeeds, updateFeed }] = await Promise.all([
   import("./ofetch"),
   import("./feeds"),
 ])
@@ -108,6 +108,75 @@ test("discoverFeeds rethrows errors other than Miniflux 404", async () => {
     await assert.rejects(discoverFeeds("https://example.test"), (error) => error === expectedError)
   } finally {
     apiClient.post = originalPost
+  }
+})
+
+test("deleteFeed uses one non-retried DELETE and preserves the provider response", async () => {
+  let request
+  const expectedResponse = { status: 204 }
+  const originalRaw = apiClient.raw
+  apiClient.raw = async (url, options) => {
+    request = { url, options }
+    return expectedResponse
+  }
+
+  try {
+    assert.equal(await deleteFeed(140), expectedResponse)
+    assert.deepEqual(request, {
+      url: "/v1/feeds/140",
+      options: { method: "DELETE", retry: false },
+    })
+  } finally {
+    apiClient.raw = originalRaw
+  }
+})
+
+test("deleteFeed treats Miniflux 404 as an already-absent success", async () => {
+  const originalRaw = apiClient.raw
+  apiClient.raw = async () => {
+    throw Object.assign(new Error("Not Found"), { status: 404 })
+  }
+
+  try {
+    const response = await deleteFeed(140)
+    assert.ok(response instanceof Response)
+    assert.equal(response.status, 204)
+  } finally {
+    apiClient.raw = originalRaw
+  }
+})
+
+test("deleteFeed rethrows non-404 provider errors", async () => {
+  const originalRaw = apiClient.raw
+  const expectedError = Object.assign(new Error("Service unavailable"), { status: 503 })
+  apiClient.raw = async () => {
+    throw expectedError
+  }
+
+  try {
+    await assert.rejects(deleteFeed(140), (error) => error === expectedError)
+  } finally {
+    apiClient.raw = originalRaw
+  }
+})
+
+test("deleteFeed does not retry or swallow network failures", async () => {
+  let request
+  const originalRaw = apiClient.raw
+  const networkError = new TypeError("Failed to fetch")
+  apiClient.raw = async (url, options) => {
+    request = { url, options }
+    throw networkError
+  }
+
+  try {
+    await assert.rejects(deleteFeed(140), (error) => error === networkError)
+    assert.deepEqual(request, {
+      url: "/v1/feeds/140",
+      options: { method: "DELETE", retry: false },
+    })
+  } finally {
+    apiClient.raw = originalRaw
   }
 })
 
