@@ -22,7 +22,11 @@ import {
   waitForEntryMutations,
 } from "@/utils/entry-mutation-state"
 import prepareEntry from "@/utils/entry-presentation"
-import { getHomePaginationBoundary } from "@/utils/home-editorial-session"
+import {
+  createHomePaginationBoundary,
+  getHomePaginationBoundary,
+  inspectHomeTieDrainPage,
+} from "@/utils/home-editorial-session"
 import createSetter from "@/utils/nanostores"
 import { buildPaginationCursorParams } from "@/utils/pagination-cursor"
 
@@ -75,11 +79,16 @@ const useLoadMore = () => {
 
     if (infoFrom === "home") {
       const boundary = contentState.get().homePaginationBoundary
-      const cursor =
-        boundary?.requestKey === requestKey && boundary.sessionRevision === sessionRevision
-          ? boundary.cursor
-          : getHomePaginationBoundary(currentEntries)
-      return cursor === null ? {} : { published_before: cursor }
+      if (boundary?.requestKey === requestKey && boundary.sessionRevision === sessionRevision) {
+        return boundary
+      }
+      return {
+        ...createHomePaginationBoundary({
+          entries: currentEntries,
+          total: contentState.get().total,
+          pageSize,
+        }),
+      }
     }
 
     return buildPaginationCursorParams({
@@ -138,6 +147,7 @@ const useLoadMore = () => {
 
     try {
       let response
+      let requestedHomeBoundary = null
       let shouldRetry
       do {
         const mutationSnapshot = getEntryMutationSnapshot()
@@ -166,7 +176,15 @@ const useLoadMore = () => {
           response = await getEntries(null, null, filterParams)
         } else {
           if (infoFrom === "home") {
-            response = await getEntries({ pageSize, cursor: filterParams.published_before })
+            requestedHomeBoundary = {
+              cursor: filterParams.cursor ?? getHomePaginationBoundary(contentState.get().entries),
+              tieDrain: filterParams.tieDrain ?? null,
+            }
+            response = await getEntries({
+              pageSize,
+              cursor: requestedHomeBoundary.cursor,
+              tieDrain: requestedHomeBoundary.tieDrain,
+            })
           } else {
             switch (showStatus) {
               case "starred": {
@@ -206,11 +224,69 @@ const useLoadMore = () => {
 
       const progress = paginationProgressRef.current
       const responseEntryIds = new Set(response.entries.map(({ id }) => id))
+
+      if (infoFrom === "home" && requestedHomeBoundary?.tieDrain) {
+        const activeBoundary = contentState.get().homePaginationBoundary
+        if (
+          activeBoundary?.requestKey !== requestKey ||
+          activeBoundary.sessionRevision !== requestSessionRevision ||
+          activeBoundary.tieDrain?.bucketSecond !== requestedHomeBoundary.tieDrain.bucketSecond ||
+          activeBoundary.tieDrain?.beforeEntryId !== requestedHomeBoundary.tieDrain.beforeEntryId
+        ) {
+          return
+        }
+
+        const tiePage = inspectHomeTieDrainPage({
+          entries: response.entries,
+          bucketSecond: requestedHomeBoundary.tieDrain.bucketSecond,
+          beforeEntryId: requestedHomeBoundary.tieDrain.beforeEntryId,
+          pageSize,
+        })
+        if (!tiePage.advances) {
+          console.warn("Stopped Home tie drain because its ID cursor did not advance")
+          setLoadMoreVisible(false)
+          return
+        }
+
+        if (tiePage.entries.length > 0) {
+          updateEntries(tiePage.entries.map((entry) => prepareEntry(entry)))
+        }
+        for (const entryId of responseEntryIds) {
+          progress.seenResponseEntryIds.add(entryId)
+        }
+        progress.committedEntryIds = new Set(contentState.get().entries.map(({ id }) => id))
+
+        setHomePaginationBoundary({
+          requestKey,
+          sessionRevision: requestSessionRevision,
+          cursor: requestedHomeBoundary.tieDrain.bucketSecond,
+          ...(!tiePage.exhausted && {
+            tieDrain: {
+              bucketSecond: requestedHomeBoundary.tieDrain.bucketSecond,
+              beforeEntryId: tiePage.nextBeforeEntryId,
+            },
+          }),
+        })
+        setLoadMoreVisible(
+          !tiePage.exhausted || contentState.get().entries.length < contentState.get().total,
+        )
+        return
+      }
+
       const hasNewResponseEntries = [...responseEntryIds].some(
         (entryId) => !progress.seenResponseEntryIds.has(entryId),
       )
+      const homeResponseBoundary =
+        infoFrom === "home"
+          ? createHomePaginationBoundary({
+              entries: response.entries,
+              total: response.total,
+              pageSize,
+            })
+          : null
+      const homeTieDrainStarted = Boolean(homeResponseBoundary?.tieDrain)
 
-      if (response.entries.length > 0 && !hasNewResponseEntries) {
+      if (response.entries.length > 0 && !hasNewResponseEntries && !homeTieDrainStarted) {
         console.warn("Stopped loading more articles because the pagination cursor did not advance")
         setLoadMoreVisible(false)
         return
@@ -223,7 +299,7 @@ const useLoadMore = () => {
           setHomePaginationBoundary({
             requestKey,
             sessionRevision: requestSessionRevision,
-            cursor: getHomePaginationBoundary(response.entries),
+            ...homeResponseBoundary,
           })
         }
         for (const entryId of responseEntryIds) {
@@ -231,7 +307,9 @@ const useLoadMore = () => {
         }
         progress.committedEntryIds = new Set(contentState.get().entries.map(({ id }) => id))
       }
-      if (response.total <= pageSize || response.entries.length < pageSize) {
+      if (homeTieDrainStarted) {
+        setLoadMoreVisible(true)
+      } else if (response.total <= pageSize || response.entries.length < pageSize) {
         setLoadMoreVisible(false)
       }
     } catch (error) {

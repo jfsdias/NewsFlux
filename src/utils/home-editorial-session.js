@@ -49,6 +49,62 @@ export const getHomePaginationBoundary = (entries) => {
   return timestamps[timestamps.length > 1 ? timestamps.length - 2 : 0]
 }
 
+export const getHomeTieDrainBucketSecond = ({ entries, total, pageSize }) => {
+  if (
+    !Array.isArray(entries) ||
+    pageSize <= 1 ||
+    entries.length !== pageSize ||
+    !Number.isFinite(total) ||
+    total <= entries.length
+  ) {
+    return null
+  }
+
+  const seconds = entries.map(({ published_at }) => Math.floor(Date.parse(published_at) / 1000))
+  if (!Number.isFinite(seconds[0]) || seconds.some((second) => second !== seconds[0])) {
+    return null
+  }
+
+  return seconds[0]
+}
+
+export const createHomePaginationBoundary = ({ entries, total, pageSize }) => {
+  const cursor = getHomePaginationBoundary(entries)
+  const bucketSecond = getHomeTieDrainBucketSecond({ entries, total, pageSize })
+
+  return {
+    cursor,
+    ...(bucketSecond !== null && {
+      tieDrain: { bucketSecond, beforeEntryId: null },
+    }),
+  }
+}
+
+export const inspectHomeTieDrainPage = ({ entries, bucketSecond, beforeEntryId, pageSize }) => {
+  if (!Array.isArray(entries) || entries.length > pageSize) {
+    return { advances: false, entries: [], exhausted: false, nextBeforeEntryId: beforeEntryId }
+  }
+
+  const ids = entries.map(({ id }) => Number(id))
+  const previousId = beforeEntryId === null ? Infinity : Number(beforeEntryId)
+  const idsAdvance = ids.every(
+    (id, index) => Number.isSafeInteger(id) && id < (index === 0 ? previousId : ids[index - 1]),
+  )
+  if (entries.length > 0 && !idsAdvance) {
+    return { advances: false, entries: [], exhausted: false, nextBeforeEntryId: beforeEntryId }
+  }
+
+  const bucketEntries = entries.filter(
+    ({ published_at }) => Math.floor(Date.parse(published_at) / 1000) === bucketSecond,
+  )
+  return {
+    advances: true,
+    entries: bucketEntries,
+    exhausted: entries.length < pageSize,
+    nextBeforeEntryId: entries.length > 0 ? ids.at(-1) : beforeEntryId,
+  }
+}
+
 export const createHomeEditorialSession = ({
   requestKey,
   sessionRevision,

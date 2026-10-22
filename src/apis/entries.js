@@ -212,11 +212,16 @@ export const updateEntriesStatusInBatches = async (
   )
 }
 
-export const getHomeEntries = async ({ pageSize = getSettings("pageSize"), cursor } = {}) => {
+export const getHomeEntries = async ({
+  pageSize = getSettings("pageSize"),
+  cursor,
+  tieDrain,
+} = {}) => {
   const { status, order, direction, limit, ...filters } = buildHomeEntryRequest({
     pageSize,
     showHiddenFeeds: getSettings("showHiddenFeeds"),
     cursor,
+    tieDrain,
   })
 
   return apiClient.get(

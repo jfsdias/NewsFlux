@@ -37,8 +37,8 @@ import {
 } from "@/utils/entry-mutation-state"
 import prepareEntry from "@/utils/entry-presentation"
 import {
+  createHomePaginationBoundary,
   deduplicateHomeEntriesById,
-  getHomePaginationBoundary,
   mergeHomeSessionEntries,
 } from "@/utils/home-editorial-session"
 
@@ -64,7 +64,11 @@ const handleResponses = (
     setEntries(preparedEntries)
     setHomePaginationBoundary({
       ...homePaginationSession,
-      cursor: getHomePaginationBoundary(canonicalEntries),
+      ...createHomePaginationBoundary({
+        entries: canonicalEntries,
+        total: response.total,
+        pageSize: homePaginationSession?.pageSize,
+      }),
     })
   } else {
     const duplicateEntries = setEntriesWithDeduplication(preparedEntries)
@@ -223,6 +227,7 @@ const useArticleList = (source, sourceId, getEntries) => {
       handleResponses(response, source === "home", preservesHomeSession, {
         requestKey,
         sessionRevision: requestSessionRevision,
+        pageSize: settings.pageSize,
       })
       if (source === "home") {
         committedHomeSnapshot.current = {
