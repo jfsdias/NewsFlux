@@ -13,6 +13,7 @@ import {
   setIsArticleListReady,
   setLoadMoreError,
   setLoadMoreVisible,
+  setTemporalPaginationState,
   setTotal,
 } from "@/store/contentState"
 import {
@@ -41,12 +42,17 @@ import {
   deduplicateHomeEntriesById,
   mergeHomeSessionEntries,
 } from "@/utils/home-editorial-session"
+import {
+  createTemporalPaginationState,
+  getArticleListTemporalSortProperty,
+} from "@/utils/temporal-tie-drain"
 
 const handleResponses = (
   response,
   isHome,
   preserveHomeSession = false,
   homePaginationSession = null,
+  temporalPaginationSession = null,
 ) => {
   const isValidResponse =
     Array.isArray(response?.entries) && Number.isFinite(response?.total) && response.total >= 0
@@ -73,6 +79,14 @@ const handleResponses = (
   } else {
     const duplicateEntries = setEntriesWithDeduplication(preparedEntries)
     markDuplicatesAsRead(duplicateEntries)
+    setTemporalPaginationState(
+      createTemporalPaginationState({
+        entries: response.entries,
+        total: response.total,
+        ...temporalPaginationSession,
+        snapshotRevision: contentState.get().articleListSnapshotRevision + 1,
+      }),
+    )
   }
   setTotal(response.total)
   setLoadMoreVisible(canonicalEntries.length < response.total)
@@ -224,11 +238,23 @@ const useArticleList = (source, sourceId, getEntries) => {
         previousHomeSnapshot.sessionRevision === requestSessionRevision &&
         previousHomeSnapshot.pageSize === settings.pageSize &&
         previousHomeSnapshot.showHiddenFeeds === settings.showHiddenFeeds
-      handleResponses(response, source === "home", preservesHomeSession, {
-        requestKey,
-        sessionRevision: requestSessionRevision,
-        pageSize: settings.pageSize,
-      })
+      handleResponses(
+        response,
+        source === "home",
+        preservesHomeSession,
+        {
+          requestKey,
+          sessionRevision: requestSessionRevision,
+          pageSize: settings.pageSize,
+        },
+        {
+          orderDirection: settings.orderDirection,
+          pageSize: settings.pageSize,
+          requestKey,
+          sessionRevision: requestSessionRevision,
+          sortProperty: getArticleListTemporalSortProperty(source, settings.orderBy),
+        },
+      )
       if (source === "home") {
         committedHomeSnapshot.current = {
           requestKey,

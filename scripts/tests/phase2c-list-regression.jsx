@@ -61,6 +61,7 @@ const categoryAdapter = (status, starred, filters) =>
   entriesApi.getCategoryEntries(1, status, starred, filters)
 const todayAdapter = (status, _starred, filters) => entriesApi.getTodayEntries(status, filters)
 const starredAdapter = (status, _starred, filters) => entriesApi.getStarredEntries(status, filters)
+const historyAdapter = (_status, _starred, filters) => entriesApi.getHistoryEntries(filters)
 // Fallback exposes pre-implementation Home leaks while keeping the harness executable in RED.
 const homeAdapter = (...args) =>
   entriesApi.getHomeEntries ? entriesApi.getHomeEntries(...args) : allAdapter(...args)
@@ -118,6 +119,7 @@ const ListProbe = ({ source }) => {
       category: categoryAdapter,
       today: todayAdapter,
       starred: starredAdapter,
+      history: historyAdapter,
     }[source] ?? allAdapter
   const sourceId = ["feed", "category"].includes(source) ? 1 : source === "all" ? "" : null
   const list = useArticleList(source, sourceId, adapter)
@@ -207,17 +209,35 @@ const serverRespond = (url) => {
   if (params.get("search")) {
     matching = matching.filter(({ title }) => title.includes(params.get("search")))
   }
-  if (params.get("published_after")) {
-    matching = matching.filter(
-      ({ published_at }) =>
-        Date.parse(published_at) / 1000 >= Number(params.get("published_after")),
-    )
+  for (const field of ["published_at", "changed_at"]) {
+    const prefix = field.replace(/_at$/, "")
+    for (const boundary of ["after", "before"]) {
+      const cursor = params.get(`${prefix}_${boundary}`)
+      if (cursor !== null) {
+        matching = matching.filter((item) =>
+          boundary === "after"
+            ? Date.parse(item[field]) > Number(cursor) * 1000
+            : Date.parse(item[field]) < Number(cursor) * 1000,
+        )
+      }
+    }
   }
-  if (params.get("published_before")) {
-    matching = matching.filter(
-      ({ published_at }) =>
-        Date.parse(published_at) / 1000 <= Number(params.get("published_before")),
+  const temporalOrder = params.get("order")
+  if (["published_at", "changed_at"].includes(temporalOrder)) {
+    const direction = params.get("direction") === "desc" ? -1 : 1
+    matching = [...matching].toSorted(
+      (left, right) =>
+        direction * (Date.parse(left[temporalOrder]) - Date.parse(right[temporalOrder])),
     )
+  } else if (temporalOrder === "id") {
+    const direction = params.get("direction") === "desc" ? -1 : 1
+    matching = [...matching].toSorted((left, right) => direction * (left.id - right.id))
+  }
+  if (params.has("before_entry_id")) {
+    matching = matching.filter(({ id }) => id < Number(params.get("before_entry_id")))
+  }
+  if (params.has("after_entry_id")) {
+    matching = matching.filter(({ id }) => id > Number(params.get("after_entry_id")))
   }
   if (url.startsWith("/v1/feeds/1/")) {
     matching = matching.filter((item) => item.feed.id === 1)
@@ -349,6 +369,19 @@ const Harness = () => {
     assert(!undoNotification(), `${source} Undo left a duplicate notice`)
   }
   const requiredListRegressionGates = [
+    "PUBLISHED_DESC_TIE_RECOVERY",
+    "PUBLISHED_ASC_TIE_RECOVERY",
+    "CHANGED_DESC_TIE_RECOVERY",
+    "CHANGED_ASC_TIE_RECOVERY",
+    "MIXED_PAGE_TRANSITIONS_TO_TIE_DRAIN",
+    "ALL_SCOPE_PASS",
+    "UNREAD_SCOPE_PASS",
+    "STARRED_SCOPE_PASS",
+    "HISTORY_SCOPE_PASS",
+    "TODAY_SCOPE_PASS",
+    "FEED_SCOPE_PASS",
+    "CATEGORY_SCOPE_PASS",
+    "SEARCH_SCOPE_PASS",
     "NO_ALL_RANKING",
     "NO_UNREAD_RANKING",
     "ALL_SORT_PREFERENCE_PRESERVED",
@@ -409,6 +442,201 @@ const Harness = () => {
       coverage: ["undo-expiration-and-one-shot", "undo-session-and-reconciliation"],
     },
   ]
+  const runTemporalTieRecovery = async (sortProperty, direction, source) => {
+    const tieSecond = Math.floor(Date.parse("2026-10-20T12:00:00Z") / 1000)
+    const tieTimestamp = new Date(tieSecond * 1000).toISOString()
+    const adjacentSecond = tieSecond + (direction === "desc" ? -1 : 1)
+    const adjacentTimestamp = new Date(adjacentSecond * 1000).toISOString()
+    const useChangedAt = sortProperty === "changed_at"
+    const tiedEntries = [905, 904, 903, 902, 901].map((id, index) =>
+      entry(id, useChangedAt ? `2026-10-${15 + index}T12:00:00Z` : tieTimestamp, {
+        ...(source === "starred" && { starred: true }),
+        ...(useChangedAt && { changed_at: tieTimestamp }),
+      }),
+    )
+    const adjacentEntries = [800, 799, 798, 797].map((id, index) =>
+      entry(
+        id,
+        useChangedAt
+          ? `2026-10-${10 + index}T12:00:00Z`
+          : new Date(
+              (adjacentSecond + (direction === "desc" ? -index : index)) * 1000,
+            ).toISOString(),
+        {
+          ...(source === "starred" && { starred: true }),
+          ...(useChangedAt && { changed_at: adjacentTimestamp }),
+        },
+      ),
+    )
+    const fixtures = [...tiedEntries, ...adjacentEntries]
+    const expectedIds = fixtures.map(({ id }) => id)
+
+    await mount(
+      source,
+      { showStatus: "all", orderBy: sortProperty, orderDirection: direction, pageSize: 2 },
+      {},
+      fixtures,
+      { respondWithFilters: true },
+    )
+    const requestStart = requests.length
+    assertIds(expectedIds.slice(0, 2))
+    assert(
+      query().get("order") === sortProperty && query().get("direction") === direction,
+      `${sortProperty} ${direction} did not use its requested canonical sort`,
+    )
+
+    for (let page = 0; page < 12 && contentState.get().loadMoreVisible; page += 1) {
+      const previousRequestCount = requests.length
+      await controls.current.loadMore()
+      await settle()
+      if (requests.length === previousRequestCount) {
+        break
+      }
+      assert(
+        contentState.get().total === fixtures.length,
+        `${sortProperty} ${direction} replaced canonical total with an auxiliary window total`,
+      )
+      if (contentState.get().temporalPaginationState?.tieDrain) {
+        assert(
+          contentState.get().loadMoreVisible,
+          `${sortProperty} ${direction} hid Load More before its tie bucket drained`,
+        )
+      }
+    }
+
+    assertIds(expectedIds)
+    const scenarioRequests = requests.slice(requestStart)
+    const prefix = sortProperty.replace(/_at$/, "")
+    const drainRequests = scenarioRequests.filter((url) => {
+      const params = new URL(url, "https://fixture.invalid").searchParams
+      return (
+        params.get("order") === "id" &&
+        params.get(`${prefix}_after`) === String(tieSecond - 1) &&
+        params.get(`${prefix}_before`) === String(tieSecond + 1)
+      )
+    })
+    assert(drainRequests.length === 3, `${sortProperty} ${direction} did not drain by ID pages`)
+    const drainParams = drainRequests.map(
+      (url) => new URL(url, "https://fixture.invalid").searchParams,
+    )
+    assert(
+      drainParams[0].get("before_entry_id") === null &&
+        drainParams[1].get("before_entry_id") === "904" &&
+        drainParams[2].get("before_entry_id") === "902",
+      `${sortProperty} ${direction} did not advance the tie-drain ID cursor`,
+    )
+    const resumedTemporalRequest = scenarioRequests.findLast((url) => {
+      const params = new URL(url, "https://fixture.invalid").searchParams
+      return (
+        params.get("order") === sortProperty &&
+        params.has(`${prefix}_${direction === "desc" ? "before" : "after"}`)
+      )
+    })
+    assert(
+      resumedTemporalRequest,
+      `${sortProperty} ${direction} did not resume its temporal cursor`,
+    )
+    assert(
+      contentState.get().loadMoreVisible === false,
+      `${sortProperty} ${direction} did not reconcile Load More after all entries loaded`,
+    )
+  }
+  const runTieDrainScope = async ({
+    source,
+    settingChanges = {},
+    contentChanges = {},
+    entryOverrides = {},
+    expectedPath,
+    expectedParams,
+  }) => {
+    const tieSecond = Math.floor((fixtureNow - 12 * 60 * 60 * 1000) / 1000)
+    const timestamp = new Date(tieSecond * 1000).toISOString()
+    const fixtures = [905, 904, 903].map((id) =>
+      entry(id, timestamp, {
+        ...(source === "starred" && { starred: true }),
+        ...entryOverrides,
+      }),
+    )
+    await mount(
+      source,
+      {
+        orderBy: "published_at",
+        orderDirection: "desc",
+        pageSize: 2,
+        ...settingChanges,
+      },
+      contentChanges,
+      fixtures,
+      { respondWithFilters: true },
+    )
+    await controls.current.loadMore()
+    await settle()
+    const drainUrl = requests.findLast((url) => {
+      return new URL(url, "https://fixture.invalid").searchParams.get("order") === "id"
+    })
+    assert(drainUrl, `${source} did not enter temporal tie-drain`)
+    const parsedUrl = new URL(drainUrl, "https://fixture.invalid")
+    assert(parsedUrl.pathname === expectedPath, `${source} tie-drain changed endpoint scope`)
+    const resolvedExpectedParams =
+      typeof expectedParams === "function" ? expectedParams({ tieSecond }) : expectedParams
+    for (const [key, value] of Object.entries(resolvedExpectedParams)) {
+      assert(
+        parsedUrl.searchParams.get(key) === value,
+        `${source} tie-drain lost ${key}=${value}: ${parsedUrl.search}`,
+      )
+    }
+    assert(
+      parsedUrl.searchParams.get("limit") === "2" &&
+        parsedUrl.searchParams.get("direction") === "desc",
+      `${source} tie-drain did not use the bounded ID acquisition page`,
+    )
+  }
+  const runMixedPageTieTransition = async () => {
+    const tieSecond = Math.floor(Date.parse("2026-10-20T12:00:00Z") / 1000)
+    const fixtures = [
+      entry(1003, new Date((tieSecond + 2) * 1000).toISOString()),
+      entry(1002, new Date((tieSecond + 1) * 1000).toISOString()),
+      entry(1001, new Date(tieSecond * 1000).toISOString()),
+      entry(1000, new Date(tieSecond * 1000).toISOString()),
+      ...[900, 899].map((id) => entry(id, new Date((tieSecond - 1) * 1000).toISOString())),
+    ]
+    await mount(
+      "all",
+      { showStatus: "all", orderBy: "published_at", orderDirection: "desc", pageSize: 3 },
+      {},
+      fixtures,
+      { respondWithFilters: true },
+    )
+    assert(
+      !contentState.get().temporalPaginationState?.tieDrain,
+      "A safe multi-second initial page entered tie-drain",
+    )
+    await controls.current.loadMore()
+    await settle()
+    assert(
+      contentState.get().temporalPaginationState?.tieDrain?.bucketSecond === tieSecond,
+      "A mixed continuation page did not detect a same-second bucket repeated from the prior page",
+    )
+    await controls.current.loadMore()
+    await settle()
+    assert(
+      requests.some(
+        (url) => new URL(url, "https://fixture.invalid").searchParams.get("order") === "id",
+      ),
+      "A mixed-page boundary did not transition into ID tie-drain",
+    )
+    await controls.current.loadMore()
+    await settle()
+    assert(
+      !contentState.get().temporalPaginationState?.tieDrain,
+      "The mixed-page tie-drain did not terminate after its bucket was exhausted",
+    )
+    assertIds(fixtures.map(({ id }) => id))
+    assert(
+      !contentState.get().loadMoreVisible,
+      "The mixed-page pagination remained visible after the canonical total was loaded",
+    )
+  }
   const scenarios = [
     [
       "LIST_REGRESSION_MATRIX_COMPLETE",
@@ -438,6 +666,106 @@ const Harness = () => {
           "Helper-level suites are missing or claim broader coverage than their tests",
         )
       },
+    ],
+    [
+      "PUBLISHED_DESC_TIE_RECOVERY",
+      async () => runTemporalTieRecovery("published_at", "desc", "all"),
+    ],
+    [
+      "PUBLISHED_ASC_TIE_RECOVERY",
+      async () => runTemporalTieRecovery("published_at", "asc", "all"),
+    ],
+    [
+      "CHANGED_DESC_TIE_RECOVERY",
+      async () => runTemporalTieRecovery("changed_at", "desc", "starred"),
+    ],
+    [
+      "CHANGED_ASC_TIE_RECOVERY",
+      async () => runTemporalTieRecovery("changed_at", "asc", "starred"),
+    ],
+    ["MIXED_PAGE_TRANSITIONS_TO_TIE_DRAIN", runMixedPageTieTransition],
+    [
+      "ALL_SCOPE_PASS",
+      async () =>
+        runTieDrainScope({
+          source: "all",
+          expectedPath: "/v1/entries",
+          expectedParams: { globally_visible: "true" },
+        }),
+    ],
+    [
+      "UNREAD_SCOPE_PASS",
+      async () =>
+        runTieDrainScope({
+          source: "all",
+          settingChanges: { showStatus: "unread" },
+          expectedPath: "/v1/entries",
+          expectedParams: { globally_visible: "true", status: "unread" },
+        }),
+    ],
+    [
+      "STARRED_SCOPE_PASS",
+      async () =>
+        runTieDrainScope({
+          source: "starred",
+          entryOverrides: { starred: true },
+          expectedPath: "/v1/entries",
+          expectedParams: { globally_visible: "true", starred: "true" },
+        }),
+    ],
+    [
+      "HISTORY_SCOPE_PASS",
+      async () =>
+        runTieDrainScope({
+          source: "history",
+          entryOverrides: { status: "read" },
+          expectedPath: "/v1/entries",
+          expectedParams: { globally_visible: "true", status: "read" },
+        }),
+    ],
+    [
+      "TODAY_SCOPE_PASS",
+      async () =>
+        runTieDrainScope({
+          source: "today",
+          settingChanges: { showStatus: "unread" },
+          expectedPath: "/v1/entries",
+          expectedParams: ({ tieSecond }) => ({
+            globally_visible: "true",
+            status: "unread",
+            published_after: String(tieSecond - 1),
+            published_before: String(tieSecond + 1),
+          }),
+        }),
+    ],
+    [
+      "FEED_SCOPE_PASS",
+      async () =>
+        runTieDrainScope({
+          source: "feed",
+          expectedPath: "/v1/feeds/1/entries",
+          expectedParams: {},
+        }),
+    ],
+    [
+      "CATEGORY_SCOPE_PASS",
+      async () =>
+        runTieDrainScope({
+          source: "category",
+          expectedPath: "/v1/categories/1/entries",
+          expectedParams: { globally_visible: "true" },
+        }),
+    ],
+    [
+      "SEARCH_SCOPE_PASS",
+      async () =>
+        runTieDrainScope({
+          source: "all",
+          contentChanges: { filterString: "target" },
+          entryOverrides: { title: "target entry" },
+          expectedPath: "/v1/entries",
+          expectedParams: { globally_visible: "true", search: "target" },
+        }),
     ],
     [
       "NO_ALL_RANKING",

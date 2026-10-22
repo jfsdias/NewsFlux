@@ -110,6 +110,40 @@ const addDateFilters = (orderField, queryParams, filterDate) => {
   }
 }
 
+const applyTemporalTieDrain = (queryParams, tieDrain) => {
+  if (!tieDrain) {
+    return
+  }
+
+  const { bucketSecond, idCursor, pageSize, sortProperty } = tieDrain
+  const prefix = sortProperty.replace(/_at$/, "")
+  const afterParam = `${prefix}_after`
+  const beforeParam = `${prefix}_before`
+  const windowAfter = bucketSecond - 1
+  const windowBefore = bucketSecond + 1
+  const existingAfterValue = queryParams.get(afterParam)
+  const existingBeforeValue = queryParams.get(beforeParam)
+  const existingAfter = existingAfterValue === null ? null : Number(existingAfterValue)
+  const existingBefore = existingBeforeValue === null ? null : Number(existingBeforeValue)
+
+  queryParams.set(
+    afterParam,
+    String(Number.isFinite(existingAfter) ? Math.max(existingAfter, windowAfter) : windowAfter),
+  )
+  queryParams.set(
+    beforeParam,
+    String(Number.isFinite(existingBefore) ? Math.min(existingBefore, windowBefore) : windowBefore),
+  )
+  queryParams.set("order", "id")
+  queryParams.set("direction", "desc")
+  queryParams.set("limit", String(pageSize))
+  queryParams.delete("after_entry_id")
+  queryParams.delete("before_entry_id")
+  if (idCursor !== null && idCursor !== undefined) {
+    queryParams.set("before_entry_id", String(idCursor))
+  }
+}
+
 const buildEntriesUrl = (baseParams, extraParams = {}, applyDateFilter = true) => {
   const {
     baseUrl,
@@ -118,7 +152,11 @@ const buildEntriesUrl = (baseParams, extraParams = {}, applyDateFilter = true) =
     status,
     direction = getSettings("orderDirection"),
   } = baseParams
-  const { filterDate = contentState.get().filterDate, ...queryFilters } = extraParams
+  const {
+    filterDate = contentState.get().filterDate,
+    temporalTieDrain,
+    ...queryFilters
+  } = extraParams
   const queryParams = new URLSearchParams({
     order: orderField,
     direction,
@@ -133,6 +171,8 @@ const buildEntriesUrl = (baseParams, extraParams = {}, applyDateFilter = true) =
   if (applyDateFilter && filterDate) {
     addDateFilters(orderField, queryParams, filterDate)
   }
+
+  applyTemporalTieDrain(queryParams, temporalTieDrain)
 
   return `${baseUrl}?${queryParams}`
 }
