@@ -1048,6 +1048,14 @@ PRODUCTION_SHA=5ea21363676dd93dde97fd5ff8548e89864495ec
 PRODUCTION_IMAGE=newsflux-local:5ea21363676d
 PRODUCTION_IMAGE_ID=NOT_RECORDED_IN_THIS_ROLLBACK_RECEIPT
 PRODUCTION_HTTP=NOT_RECORDED_IN_ROLLBACK_RECEIPT
+CLIENT_PWA_RECOVERY_AFTER_ROLLBACK=PASS
+RECOVERY_METHOD=TARGETED_SW_UNREGISTER_AND_NEWSFLUX_CACHE_RESET
+PRODUCTION_BASELINE_CONFIRMED_AFTER_CLIENT_RECOVERY=5ea21363676dd93dde97fd5ff8548e89864495ec
+OLD_SW_UNREGISTERED=PASS
+FRESH_SW_ACTIVE=PASS
+WAITING_WORKER_AFTER_RECOVERY=NO
+STALE_PWA_CACHES_REMOVED=PASS
+RUNTIME_BUILD_ASSETS_V2=ABSENT_EXPECTED
 MAIN_PRODUCTION_PARITY=NO_INTENTIONAL_PWA_DEPLOY_BLOCKER
 MAIN_AHEAD_OF_PRODUCTION_REASON=PR91_MERGED_A2A_CANARY_ROLLED_BACK_PENDING_A2C
 DEPLOYMENT_MUTATION_FOR_THIS_DOCUMENTATION_PR=NO
@@ -1097,7 +1105,7 @@ MERGE_AUTHORIZED=NO
 DEPLOY_AUTHORIZED=NO
 ```
 
-The PR #91 canary exposed a cross-build lazy-chunk recovery gap: the earlier client can request a hashed chunk from another build, receive SPA fallback HTML for a missing asset and fail its dynamic import before the normal React update interface can mount. The production rollback restores the known runtime baseline; it does not revert PR #91 from GitHub. PWA-03A2C must provide pre-React recovery before another A2A promotion. The actual owner of the production SPA fallback remains unverified; A2B must identify it before any proxy/config change.
+The PR #91 canary exposed a cross-build lazy-chunk recovery gap: the earlier client can request a hashed chunk from another build, receive SPA fallback HTML for a missing asset and fail its dynamic import before the normal React update interface can mount. After rollback, the client recovery is now confirmed: the app boots, About reports `5ea21363676dd93dde97fd5ff8548e89864495ec`, the old service worker was unregistered, a fresh worker is active with no waiting worker, and stale NewsFlux CacheStorage entries were removed (`runtime-build-assets-v2` is absent as expected). This closes the current operational browser-recovery task; it does not revert PR #91 from GitHub or close the PWA-03A2C implementation blocker. A2C still needs to provide safe pre-React recovery so a future A2A promotion can be attempted safely. The actual owner of the production SPA fallback remains unverified; A2B must identify it before any proxy/config change.
 
 ### Accepted intelligence and automation sequencing
 
