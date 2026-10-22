@@ -1,10 +1,12 @@
 # NewsFlux Roadmap
 
-- **Status:** canonical roadmap reconciled after PR #81, the PR #79 research archive, and the 2026-10-22 active-candidate review; GitHub `main` and product/production baselines remain recorded separately.
+- **Status:** canonical roadmap reconciled after PR #85 (the dedicated `3b2b08fb` upstream item; upstream cycle closed), with the `PWA FOUNDATION` and NetNewsWire UX planning tracks added; GitHub `main` and product/production baselines remain recorded separately.
 - **Created:** 2026-10-15.
 - **Last reconciled:** 2026-10-22.
-- **Reconciled against:** GitHub `main` at `313991e80c2b54a99819c2e267ef90a35a959752`; product and production at `dc72a6ed0069b539877f5b2b1f1327d66ad7d0a8`. PR #79 is docs-only and explains the main/runtime SHA difference; no deployment is required for that documentation merge. Production image `newsflux-local:dc72a6ed0069`, image ID `sha256:3ada4fb3ef18c3fd1398a67aa6ce5118c8cb88c6533775e534779cb820bde83b`, runtime running, internal HTTP PASS, public HTTP 200 and exact image/revision PASS. Restart count was not included in the supplied receipt. PR #80 is closed without merge; PR #81 is merged, deployed and validated. No PRs were open at the original 2026-10-21 pre-reconciliation snapshot.
+- **Reconciled against (current):** GitHub `main` at `d7c0fc8e4ab7b5f0d959bea96cc04b086deb36fc` (PR #85 merge). Production is at the same SHA with `PRODUCT_PRODUCTION_PARITY=PASS` and `PR85_RUNTIME_ACCEPTANCE=PASS` (`PM_REPORTED`; not independently verifiable from the repository). The current snapshot is Section 16.
+- **Previously reconciled against (historical, 2026-10-22 morning):** GitHub `main` at `313991e80c2b54a99819c2e267ef90a35a959752`; product and production at `dc72a6ed0069b539877f5b2b1f1327d66ad7d0a8`. PR #79 is docs-only and explains the main/runtime SHA difference at that time; no deployment was required for that documentation merge. Production image `newsflux-local:dc72a6ed0069`, image ID `sha256:3ada4fb3ef18c3fd1398a67aa6ce5118c8cb88c6533775e534779cb820bde83b`, runtime running, internal HTTP PASS, public HTTP 200 and exact image/revision PASS. Restart count was not included in the supplied receipt. PR #80 is closed without merge; PR #81 is merged, deployed and validated. No PRs were open at the original 2026-10-21 pre-reconciliation snapshot.
 - **Purpose:** preserve completed work, accepted findings, sequencing, architecture/product gates, upstream baseline, and the next recommended action without turning the roadmap into implementation authorization.
+- **Related planning documents:** [`PWA_ARCHITECTURE.md`](./PWA_ARCHITECTURE.md) (PWA Foundation architecture contract) and [`DESIGN_REFERENCES.md`](./DESIGN_REFERENCES.md) (NetNewsWire UX research track). Both are planning documents and authorize no implementation.
 
 This document is the canonical **roadmap**, not an implementation authorization. Detailed design decisions remain in the dedicated design documents and implementation plans remain in `docs/superpowers/plans/` where present.
 
@@ -58,6 +60,7 @@ Current reference decisions:
 - **PLANNED WITH PRODUCT DECISION:** HOME-VISUAL-02 composition and contextual chrome consolidation. NAV-VISUAL-01 has an approved design contract; PR0 and PR1 are complete, while later slices and their real-device gates remain pending.
 - **HOLD:** NewsFlux-owned Saved umbrella, internal Read Later queue, internal Bookmarks, Boards, Tags, Smart folders, per-feed layout sync, swipe-save to an undefined target, story clustering, ML.
 - **DO NOT COPY:** Apple News ad-like blocks/oversized imagery; Feedly/Inoreader toolbar density; NewsBlur visual density; glass over content; permanent three-pane UI; algorithmic For You outside Home.
+- **NetNewsWire UX research track — ACCEPTED AS DESIGN INPUT** (`NETNEWSWIRE_UX_REFERENCE`): source identity, navigation density, contextual toolbar, reader source header and a research-only multi-pane study, each separating `REFERENCE_PATTERN` from `NEWSFLUX_PRODUCT_DECISION`. See `DESIGN_REFERENCES.md`. This is not a visual-clone request and does not reopen the single-pane, opaque-content, glass-as-chrome or `884×1104` decisions.
 
 ---
 
@@ -95,62 +98,66 @@ Current reference decisions:
 
 ### 3.2 Recent PR history (completed and active)
 
-| PR  | Track                            | Status               | Notes                                                                                                                                                                                                   |
-| --- | -------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| #20 | BULK-01                          | **COMPLETED**        | Footer Mark All Read Undo; generation-scoped notification IDs; acknowledged-ID undo                                                                                                                     |
-| #21 | ID-01R                           | **COMPLETED**        | Repository/document provenance and translated README reconciliation                                                                                                                                     |
-| #22 | Documentation                    | **COMPLETED**        | Canonical roadmap red-team R2 reconciliation                                                                                                                                                            |
-| #23 | A11Y-RT-01                       | **COMPLETED**        | Reduced-transparency dark/OLED specificity fix                                                                                                                                                          |
-| #24 | LIST-VISUAL-01 / monogram subset | **COMPLETED**        | Deterministic favicon monogram fallback                                                                                                                                                                 |
-| #25 | CHROME-01A / DatePicker subset   | **COMPLETED**        | NewsFlux token styling for DatePicker                                                                                                                                                                   |
-| #26 | Upstream sync                    | **COMPLETED**        | Adapted upstream article code-block experience through `3045a5f8...`                                                                                                                                    |
-| #27 | BULK-01F                         | **COMPLETED**        | Footer Mark All Read focus restoration                                                                                                                                                                  |
-| #28 | LIST-VISUAL-01A                  | **COMPLETED**        | Read-state + metadata/source hierarchy cohesion across Column/Card/List                                                                                                                                 |
-| #29 | Documentation                    | **COMPLETED**        | Roadmap/project-state reconciliation after PR #28 production promotion                                                                                                                                  |
-| #30 | BULK-01B                         | **COMPLETED**        | Sidebar Feed/Category Mark All confirmation + safe shared Undo; race hardening; exact merge-SHA deployed                                                                                                |
-| #32 | ID-RUNTIME-01                    | **COMPLETED**        | Approved head `1237f77ff2566015ef50939e268c4ec19f66fe88`; merged/deployed as `099bdcb0483ef516f6c325e67eefb41b618a4713`; post-merge browser smoke passed                                                |
-| #34 | A11Y-01                          | **COMPLETED**        | Approved head `c62ce9160c928eedcdb09d25a1271253c8baf91c`; merged/deployed as `7b0a7e04d1e1052c33ccb23559467f1ed2dc9ac0`; tree parity, exact-SHA promotion and authenticated post-merge smoke passed     |
-| #36 | HARNESS-UNDO-ID-01               | **COMPLETED**        | Feature head `ef90eb733dbc6a26c0b85bcf33a9a866569a92b7`; merge `b65f6f88b0c27f049723714a5338527ffc92fa1a`; repaired all nine stale fixed-notice-ID assertions (29/29)                                   |
-| #38 | RUNTIME-BASE-01                  | **COMPLETED**        | Feature head `07237ba7e8c773e9de88e9c533296b9700dde287`; merge `1af58a53c6fd85bcca95ec44a56e23c7c02b6145`; pins Node 24.22.0 Alpine 3.24 and Caddy 2.11.7 by digest                                     |
-| #39 | FILTER-01B                       | **COMPLETED**        | Date/status filter transition behavior; merged as `cfef27e50fae9a153151cfc91bd0bf92c1270a37`                                                                                                            |
-| #40 | FEED-HEALTH-01A                  | **COMPLETED**        | Miniflux-reported feed update error indicator; merged as `2947169a68e5193f4cd9273d0bb7ed0faef00623`                                                                                                     |
-| #41 | READER-VISUAL-02A1               | **COMPLETED**        | Editorial typography foundation; merged as `3f72d554177c10c9eee16649ea7297495b4f6977`                                                                                                                   |
-| #42 | NAV-02 harness maintenance       | **COMPLETED**        | Mark-All expectation aligned with current batching; merged as `a21726365ce80b3f7883907228e27d9c5f693a87`                                                                                                |
-| #43 | BULK-03A                         | **COMPLETED**        | Mark articles above/below as read; merged as `978d7b009755ae6750ce84b1e172792703e98e4f`                                                                                                                 |
-| #44 | READER-MEASURE-01                | **COMPLETED**        | Bounded responsive prose measure; merge and production promotion at `118ecb2c63f7df3583d0f2524b5cc8c62bd518c1`                                                                                          |
-| #45 | Documentation                    | **COMPLETED**        | Prior post-Reader Measure reconciliation, merge `c062a4ee9f7967ef254fde2cb2ed1ca2207735e9`; superseded by this post-BULK-03B reconciliation                                                             |
-| #46 | READER-KEY-01                    | **COMPLETED**        | Feature head `bbcbc3f51e66793e617d7286d4785a5eb5611091`; merge `3e21cbb197efbca0b577e06c705a1ef9997cb597`; layered Escape complete                                                                      |
-| #47 | STATE-ERR-01                     | **COMPLETED**        | Feature head `379fa241d8fa1a4d6d9e216c374b6409322a573d`; merge `e59295501cc51a6df2b64a435c0c32eb5431aed5`; unavailable-entry 404 behavior complete                                                      |
-| #48 | CONTENT-01                       | **COMPLETED**        | Feature head `1032b5409298629382685a85935b85fdc2292f85`; merge `9f521edfd5f031e8e833a4854d896acc42a22fae`; deterministic untitled fallback complete                                                     |
-| #49 | READER-VISUAL-02A2               | **COMPLETED**        | Feature head `cafe47e1ae19b6a203e8aef35339931015614c7c`; merge `e4752d290bdfb4961d379dd05548ef3da5da42ba`; quiet header aligned to prose column                                                         |
-| #50 | BULK-03B                         | **COMPLETED**        | Feature head `dd9e68650f3f40080199b90107c2b35722166697`; merge `a8dbe15497f7d526298f223188955b82589a84a4`; 1/7/30-day age presets, strict cutoff, full discovery, scoped writes, acknowledged-only Undo |
-| #51 | Documentation                    | **COMPLETED**        | Project-state and roadmap reconciliation after BULK-03B; merge `0d3b1e9648d59018cdd1f9f17948c7d34b19924b`                                                                                               |
-| #52 | FEED-HEALTH-01B                  | **COMPLETED**        | Feature head `1b03865311993f7e72df0632ea662bbe94e926e9`; merge `051e461d1d1eb4408e15a0ebcd4e1331b546de7a`; provider-backed details/Retry and one final metadata reconciliation after bulk refresh       |
-| #53 | Selective upstream maintenance   | **COMPLETED**        | Feature head `f4db01106ca28fca3b7340be45cb87fa4059845d`; merge `046cd647c65583cdfdc7ab282701be79d4b34294`; pnpm hardening integrated, setup-node pin adapted                                            |
-| #55 | FILTER-RULES-01                  | **COMPLETED**        | Feature head `5b6abe28ae5e6b52f02461c4e3601165056900b1`; merge `1021cd5746eba2b3b90b1a863bada9043f126be1`; provider-backed per-feed raw Miniflux block/keep rules, no NewsFlux rule persistence         |
-| #57 | BULK-02                          | **COMPLETED**        | Session multi-select; merge `85b9590bbc9f4d3488fd30694b0b45553fefda5b`                                                                                                                                  |
-| #58 | MARK-ALL-REFRESH-01              | **COMPLETED**        | Suppresses transient empty state during the next-unread jump; merge `df4bea4dde5cca86a4b822d2e82f01156bb96f1a`; Undo-after-jump concern later investigated with no current defect reproduced            |
-| #59 | HOME-01                          | **COMPLETED**        | Refresh, focus, reconnect and editorial-session continuity; merge `114eed13c5f66cd57a4448ece935de6cb5f4a11e`                                                                                            |
-| #60 | NAV01                            | **COMPLETED**        | Canonical reader previous/next and next-unread continuity; merge `31c95ff835da3e716acfd6eb115db5c3b68dd71c`                                                                                             |
-| #61 | INPUT-01a                        | **COMPLETED**        | Shared reader-command ownership; head `e2cbab710f00eb84c77b3df4ddc9701839a677d9`, merge `194a1db007902411abe91459b45a19b10c76e701`                                                                      |
-| #62 | Documentation                    | **COMPLETED**        | Post-PR65 reconciliation; merged as `389ed58731c38ffff8ceda0d0347222336960f3a`                                                                                                                          |
-| #63 | ABOUT-RUNTIME-REVISION-01        | **COMPLETED**        | Feature head `9a64e9b45c6c76e6765fdaf82ee02c30f3bc57c8`; merge `723bdbb96e4445d267b443422a0be7a83e5b4f8a`; exact build identity, live About validation and production promotion passed                  |
-| #64 | INPUT-PARITY-ESCAPE-FOCUS        | **COMPLETED**        | Feature head `ee412912ad43d4902459b12151bad81c570d58cf`; merge `23474d3f83c01c4355c892f46c77d2f66b046af0`; FooterPanel Escape/focus live canary passed at 390×844, 884×1104 and 1280×800                |
-| #65 | ABOUT-ACCESSIBLE-BRAND-01        | **COMPLETED**        | Feature head `8a4d1cf358d39524e95027b13e10c0205b9aea27`; merge `405e9d7b1a3097dacef50c7908abf83d480d64dd`; six-locale accessible NewsFlux GitHub label correction; exact merge-SHA promotion passed     |
-| #66 | Mark All cold-loaded All         | **COMPLETED**        | Feature head `1b6449597179ab3c832d0c658048d46f8bddda93`; merge `0553119de95ab5b9c2e131bbb4b2ef1d0ef58456`; current-list identity and filtered unread total reconciliation                               |
-| #67 | INPUT-PARITY-TOUCH-TARGET-01     | **COMPLETED**        | Feature head `ec15233215043d6a054cb6fb5eb43eebe8b1442e`; merge `7b6e474fcd50bb891e429a632849da371e126590`; interaction targets corrected with inert gaps preserved                                      |
-| #68 | Harness maintenance              | **COMPLETED**        | Feature head `104671b51f99d0ad7c33d3514f8d4b2ad3558aee`; merge `b6b814c77160c2e61dedc7c10958f0712f59d728`; stale provider/button assumptions corrected                                                  |
-| #69 | NAV-VISUAL PR0                   | **COMPLETED**        | Feature head `b550634066ed129e4bb0e9b3ca18842469cb493e`; merge `cf37807a4d3b9da39d3c438861fac358d936fdaa`; window-class foundation                                                                      |
-| #70 | READER-MEDIA-01A                 | **COMPLETED**        | Merged as `2a858ede20e02c2c6532fa32bae4468cb64c30ea`; deferred media/player initialization completed                                                                                                    |
-| #71 | NAV-VISUAL PR1                   | **COMPLETED**        | Feature head `4712b3e49c94f560c0e83ce7c8519eb6bda9cba0`; merge and product/production promotion `d01e34fc2eb76da39467d1de9799b12194faec9c`; compact navigation and Reader/Drawer focus/resize hardening |
-| #72 | Documentation                    | **COMPLETED**        | Post-PR71 state reconciliation; docs-only merge `32244fa07b57c8bb3f5682f27b4d94917384ce63`; no deployment required                                                                                      |
-| #75 | DOCS-LINT-01                     | **COMPLETED**        | Formatting-only reconciliation of three existing superpowers docs; merge `8807469296db5815b9fc6e961d4f12275234574b`                                                                                     |
-| #79 | Research archive                 | **COMPLETED**        | Durable research archive and post-PR81 reconciliation; docs-only merge `313991e80c2b54a99819c2e267ef90a35a959752`                                                                                       |
-| #80 | Discovery Benchmark V1           | **CLOSED, NO MERGE** | Research-only harness; no product authority. G1 remained a limited research signal, G2 had no useful signal; broad discovery remains HOLD.                                                              |
-| #81 | ADD-FEED-DISCOVER-01             | **COMPLETED**        | Merged, deployed and validated as `dc72a6ed0069b539877f5b2b1f1327d66ad7d0a8`; website discovery requires explicit confirmation/selection before subscription.                                           |
-| #82 | Documentation                    | **OPEN DRAFT**       | Current documentation-only reconciliation; preserves the 2026-10-21 snapshot and records active PR #83/#84 candidates and their integration order.                                                      |
-| #83 | ADD-FEED-DISCOVERY-UX-01         | **OPEN DRAFT**       | PM review PASS; active isolated candidate for duplicate-URL presentation polish; not merged or deployed.                                                                                                |
-| #84 | MINIFLUX-DELETE-CONTRACT-01      | **OPEN DRAFT**       | PM review PASS; active isolated backend candidate; DELETE retry hazard confirmed, while historical 404 causation remains high-confidence but unproven; not merged or deployed.                          |
+| PR  | Track                            | Status               | Notes                                                                                                                                                                                                                                                 |
+| --- | -------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #20 | BULK-01                          | **COMPLETED**        | Footer Mark All Read Undo; generation-scoped notification IDs; acknowledged-ID undo                                                                                                                                                                   |
+| #21 | ID-01R                           | **COMPLETED**        | Repository/document provenance and translated README reconciliation                                                                                                                                                                                   |
+| #22 | Documentation                    | **COMPLETED**        | Canonical roadmap red-team R2 reconciliation                                                                                                                                                                                                          |
+| #23 | A11Y-RT-01                       | **COMPLETED**        | Reduced-transparency dark/OLED specificity fix                                                                                                                                                                                                        |
+| #24 | LIST-VISUAL-01 / monogram subset | **COMPLETED**        | Deterministic favicon monogram fallback                                                                                                                                                                                                               |
+| #25 | CHROME-01A / DatePicker subset   | **COMPLETED**        | NewsFlux token styling for DatePicker                                                                                                                                                                                                                 |
+| #26 | Upstream sync                    | **COMPLETED**        | Adapted upstream article code-block experience through `3045a5f8...`                                                                                                                                                                                  |
+| #27 | BULK-01F                         | **COMPLETED**        | Footer Mark All Read focus restoration                                                                                                                                                                                                                |
+| #28 | LIST-VISUAL-01A                  | **COMPLETED**        | Read-state + metadata/source hierarchy cohesion across Column/Card/List                                                                                                                                                                               |
+| #29 | Documentation                    | **COMPLETED**        | Roadmap/project-state reconciliation after PR #28 production promotion                                                                                                                                                                                |
+| #30 | BULK-01B                         | **COMPLETED**        | Sidebar Feed/Category Mark All confirmation + safe shared Undo; race hardening; exact merge-SHA deployed                                                                                                                                              |
+| #32 | ID-RUNTIME-01                    | **COMPLETED**        | Approved head `1237f77ff2566015ef50939e268c4ec19f66fe88`; merged/deployed as `099bdcb0483ef516f6c325e67eefb41b618a4713`; post-merge browser smoke passed                                                                                              |
+| #34 | A11Y-01                          | **COMPLETED**        | Approved head `c62ce9160c928eedcdb09d25a1271253c8baf91c`; merged/deployed as `7b0a7e04d1e1052c33ccb23559467f1ed2dc9ac0`; tree parity, exact-SHA promotion and authenticated post-merge smoke passed                                                   |
+| #36 | HARNESS-UNDO-ID-01               | **COMPLETED**        | Feature head `ef90eb733dbc6a26c0b85bcf33a9a866569a92b7`; merge `b65f6f88b0c27f049723714a5338527ffc92fa1a`; repaired all nine stale fixed-notice-ID assertions (29/29)                                                                                 |
+| #38 | RUNTIME-BASE-01                  | **COMPLETED**        | Feature head `07237ba7e8c773e9de88e9c533296b9700dde287`; merge `1af58a53c6fd85bcca95ec44a56e23c7c02b6145`; pins Node 24.22.0 Alpine 3.24 and Caddy 2.11.7 by digest                                                                                   |
+| #39 | FILTER-01B                       | **COMPLETED**        | Date/status filter transition behavior; merged as `cfef27e50fae9a153151cfc91bd0bf92c1270a37`                                                                                                                                                          |
+| #40 | FEED-HEALTH-01A                  | **COMPLETED**        | Miniflux-reported feed update error indicator; merged as `2947169a68e5193f4cd9273d0bb7ed0faef00623`                                                                                                                                                   |
+| #41 | READER-VISUAL-02A1               | **COMPLETED**        | Editorial typography foundation; merged as `3f72d554177c10c9eee16649ea7297495b4f6977`                                                                                                                                                                 |
+| #42 | NAV-02 harness maintenance       | **COMPLETED**        | Mark-All expectation aligned with current batching; merged as `a21726365ce80b3f7883907228e27d9c5f693a87`                                                                                                                                              |
+| #43 | BULK-03A                         | **COMPLETED**        | Mark articles above/below as read; merged as `978d7b009755ae6750ce84b1e172792703e98e4f`                                                                                                                                                               |
+| #44 | READER-MEASURE-01                | **COMPLETED**        | Bounded responsive prose measure; merge and production promotion at `118ecb2c63f7df3583d0f2524b5cc8c62bd518c1`                                                                                                                                        |
+| #45 | Documentation                    | **COMPLETED**        | Prior post-Reader Measure reconciliation, merge `c062a4ee9f7967ef254fde2cb2ed1ca2207735e9`; superseded by this post-BULK-03B reconciliation                                                                                                           |
+| #46 | READER-KEY-01                    | **COMPLETED**        | Feature head `bbcbc3f51e66793e617d7286d4785a5eb5611091`; merge `3e21cbb197efbca0b577e06c705a1ef9997cb597`; layered Escape complete                                                                                                                    |
+| #47 | STATE-ERR-01                     | **COMPLETED**        | Feature head `379fa241d8fa1a4d6d9e216c374b6409322a573d`; merge `e59295501cc51a6df2b64a435c0c32eb5431aed5`; unavailable-entry 404 behavior complete                                                                                                    |
+| #48 | CONTENT-01                       | **COMPLETED**        | Feature head `1032b5409298629382685a85935b85fdc2292f85`; merge `9f521edfd5f031e8e833a4854d896acc42a22fae`; deterministic untitled fallback complete                                                                                                   |
+| #49 | READER-VISUAL-02A2               | **COMPLETED**        | Feature head `cafe47e1ae19b6a203e8aef35339931015614c7c`; merge `e4752d290bdfb4961d379dd05548ef3da5da42ba`; quiet header aligned to prose column                                                                                                       |
+| #50 | BULK-03B                         | **COMPLETED**        | Feature head `dd9e68650f3f40080199b90107c2b35722166697`; merge `a8dbe15497f7d526298f223188955b82589a84a4`; 1/7/30-day age presets, strict cutoff, full discovery, scoped writes, acknowledged-only Undo                                               |
+| #51 | Documentation                    | **COMPLETED**        | Project-state and roadmap reconciliation after BULK-03B; merge `0d3b1e9648d59018cdd1f9f17948c7d34b19924b`                                                                                                                                             |
+| #52 | FEED-HEALTH-01B                  | **COMPLETED**        | Feature head `1b03865311993f7e72df0632ea662bbe94e926e9`; merge `051e461d1d1eb4408e15a0ebcd4e1331b546de7a`; provider-backed details/Retry and one final metadata reconciliation after bulk refresh                                                     |
+| #53 | Selective upstream maintenance   | **COMPLETED**        | Feature head `f4db01106ca28fca3b7340be45cb87fa4059845d`; merge `046cd647c65583cdfdc7ab282701be79d4b34294`; pnpm hardening integrated, setup-node pin adapted                                                                                          |
+| #55 | FILTER-RULES-01                  | **COMPLETED**        | Feature head `5b6abe28ae5e6b52f02461c4e3601165056900b1`; merge `1021cd5746eba2b3b90b1a863bada9043f126be1`; provider-backed per-feed raw Miniflux block/keep rules, no NewsFlux rule persistence                                                       |
+| #57 | BULK-02                          | **COMPLETED**        | Session multi-select; merge `85b9590bbc9f4d3488fd30694b0b45553fefda5b`                                                                                                                                                                                |
+| #58 | MARK-ALL-REFRESH-01              | **COMPLETED**        | Suppresses transient empty state during the next-unread jump; merge `df4bea4dde5cca86a4b822d2e82f01156bb96f1a`; Undo-after-jump concern later investigated with no current defect reproduced                                                          |
+| #59 | HOME-01                          | **COMPLETED**        | Refresh, focus, reconnect and editorial-session continuity; merge `114eed13c5f66cd57a4448ece935de6cb5f4a11e`                                                                                                                                          |
+| #60 | NAV01                            | **COMPLETED**        | Canonical reader previous/next and next-unread continuity; merge `31c95ff835da3e716acfd6eb115db5c3b68dd71c`                                                                                                                                           |
+| #61 | INPUT-01a                        | **COMPLETED**        | Shared reader-command ownership; head `e2cbab710f00eb84c77b3df4ddc9701839a677d9`, merge `194a1db007902411abe91459b45a19b10c76e701`                                                                                                                    |
+| #62 | Documentation                    | **COMPLETED**        | Post-PR65 reconciliation; merged as `389ed58731c38ffff8ceda0d0347222336960f3a`                                                                                                                                                                        |
+| #63 | ABOUT-RUNTIME-REVISION-01        | **COMPLETED**        | Feature head `9a64e9b45c6c76e6765fdaf82ee02c30f3bc57c8`; merge `723bdbb96e4445d267b443422a0be7a83e5b4f8a`; exact build identity, live About validation and production promotion passed                                                                |
+| #64 | INPUT-PARITY-ESCAPE-FOCUS        | **COMPLETED**        | Feature head `ee412912ad43d4902459b12151bad81c570d58cf`; merge `23474d3f83c01c4355c892f46c77d2f66b046af0`; FooterPanel Escape/focus live canary passed at 390×844, 884×1104 and 1280×800                                                              |
+| #65 | ABOUT-ACCESSIBLE-BRAND-01        | **COMPLETED**        | Feature head `8a4d1cf358d39524e95027b13e10c0205b9aea27`; merge `405e9d7b1a3097dacef50c7908abf83d480d64dd`; six-locale accessible NewsFlux GitHub label correction; exact merge-SHA promotion passed                                                   |
+| #66 | Mark All cold-loaded All         | **COMPLETED**        | Feature head `1b6449597179ab3c832d0c658048d46f8bddda93`; merge `0553119de95ab5b9c2e131bbb4b2ef1d0ef58456`; current-list identity and filtered unread total reconciliation                                                                             |
+| #67 | INPUT-PARITY-TOUCH-TARGET-01     | **COMPLETED**        | Feature head `ec15233215043d6a054cb6fb5eb43eebe8b1442e`; merge `7b6e474fcd50bb891e429a632849da371e126590`; interaction targets corrected with inert gaps preserved                                                                                    |
+| #68 | Harness maintenance              | **COMPLETED**        | Feature head `104671b51f99d0ad7c33d3514f8d4b2ad3558aee`; merge `b6b814c77160c2e61dedc7c10958f0712f59d728`; stale provider/button assumptions corrected                                                                                                |
+| #69 | NAV-VISUAL PR0                   | **COMPLETED**        | Feature head `b550634066ed129e4bb0e9b3ca18842469cb493e`; merge `cf37807a4d3b9da39d3c438861fac358d936fdaa`; window-class foundation                                                                                                                    |
+| #70 | READER-MEDIA-01A                 | **COMPLETED**        | Merged as `2a858ede20e02c2c6532fa32bae4468cb64c30ea`; deferred media/player initialization completed                                                                                                                                                  |
+| #71 | NAV-VISUAL PR1                   | **COMPLETED**        | Feature head `4712b3e49c94f560c0e83ce7c8519eb6bda9cba0`; merge and product/production promotion `d01e34fc2eb76da39467d1de9799b12194faec9c`; compact navigation and Reader/Drawer focus/resize hardening                                               |
+| #72 | Documentation                    | **COMPLETED**        | Post-PR71 state reconciliation; docs-only merge `32244fa07b57c8bb3f5682f27b4d94917384ce63`; no deployment required                                                                                                                                    |
+| #74 | NAV-PR1-ROUTE-FOCUS-01 fix       | **MERGED IN GIT**    | Merge `b6b7246642aa5ff15f3f8e7015d2efbd83a47be5` (head `0ee182ae4435a3928ffe9d3b1d06b8cb476fcbcb`); restores meaningful focus after drawer navigation. Not recorded in earlier snapshots; closure of the finding awaits PM confirmation               |
+| #75 | DOCS-LINT-01                     | **COMPLETED**        | Formatting-only reconciliation of three existing superpowers docs; merge `8807469296db5815b9fc6e961d4f12275234574b`                                                                                                                                   |
+| #76 | TABLET-HEADER-WIDTH-01 fix       | **MERGED IN GIT**    | Merge `831ff514c3a572a41cd857dd51ffd4f5c87663c1` (head `cf09491e4875cdcc94bf8235db752499ddba5003`); expands the tablet list header to content width (`Content.jsx`). Not recorded in earlier snapshots; closure of the finding awaits PM confirmation |
+| #77 | HOME id-only initial entries     | **MERGED IN GIT**    | Merge `e1c1285e717e626fc759b0bb52431cd9321df334` (head `82062eee246cf58def1ea5681dd90cbd530f2dde`); deduplicates initial Home entries by id. Not recorded in earlier snapshots; effect on `HOME_DUP_ROOT_CAUSE_01` awaits PM confirmation             |
+| #79 | Research archive                 | **COMPLETED**        | Durable research archive and post-PR81 reconciliation; docs-only merge `313991e80c2b54a99819c2e267ef90a35a959752`                                                                                                                                     |
+| #80 | Discovery Benchmark V1           | **CLOSED, NO MERGE** | Research-only harness; no product authority. G1 remained a limited research signal, G2 had no useful signal; broad discovery remains HOLD.                                                                                                            |
+| #81 | ADD-FEED-DISCOVER-01             | **COMPLETED**        | Merged, deployed and validated as `dc72a6ed0069b539877f5b2b1f1327d66ad7d0a8`; website discovery requires explicit confirmation/selection before subscription.                                                                                         |
+| #82 | Documentation                    | **COMPLETED**        | Project-state/roadmap reconciliation after PR #81; docs-only merge `68c1ef3c5d86bb1495c98da19f036215ac0c722d` (head `db272f58d4bb72749d1bf1a0ea1eaedbf6e84d8a`); no deployment required                                                               |
+| #83 | ADD-FEED-DISCOVERY-UX-01         | **COMPLETED**        | Merge `16311d0d6c3e2611fa09380ded33e63795ba0270` (head `935b1100ddb7f51358b41c7f575f0fe04a4fe25d`); duplicate-URL presentation polish resolved; included in production SHA `d7c0fc8e…` (`PM_REPORTED`)                                                |
+| #84 | MINIFLUX-DELETE-CONTRACT-01      | **COMPLETED**        | Merge `9b6f98cee745c2fed8dbe73cee2b1f2e4ad29ac7` (head `7f695d453e414057be6b6ed7e934e50f676ff0d6`); feed-deletion contract hardening (`src/apis/feeds.js`); historical 404 causation remains high-confidence but unproven                             |
+| #85 | Upstream sync (ADAPT `3b2b08fb`) | **COMPLETED**        | Merge `d7c0fc8e4ab7b5f0d959bea96cc04b086deb36fc` (head `7db4bcd8bc86b4f361890f13570003a4435547de`); empty `figcaption` elements render without children; merged, deployed and runtime-accepted (`PM_REPORTED`); upstream cycle closed                 |
 
 ### 3.3 Functional behavior and defect tracks
 
@@ -286,20 +293,20 @@ Dependency rules remain:
 | ID-RUNTIME-01   | **COMPLETED**           | PR #32; approved head `1237f77ff2566015ef50939e268c4ec19f66fe88`; merge/deployed baseline `099bdcb0483ef516f6c325e67eefb41b618a4713`; post-merge browser smoke passed |
 | GitHub metadata | **NEXT**                | Description/homepage/topics remain a separate metadata write                                                                                                          |
 | ID-DEPLOY-01    | **HOLD — ARCHITECTURE** | Choose local-build vs registry/deployer contract before checked-in distribution changes                                                                               |
-| APP-BADGE-01    | **BACKLOG**             | After ID-DEPLOY; use Miniflux unread counts subject to browser/PWA capability                                                                                         |
-| THEME-CHROME-01 | **BACKLOG**             | Align browser/PWA theme surface with NewsFlux OLED/light surfaces                                                                                                     |
+| APP-BADGE-01    | **BACKLOG**             | Becomes **PWA-04A** (Badging API, capability-detected); still after ID-DEPLOY and PWA validation; uses Miniflux unread counts                                         |
+| THEME-CHROME-01 | **ABSORBED**            | Becomes **PWA-01B** (theme and display-mode integration); see `PWA_ARCHITECTURE.md`                                                                                   |
 
 ### 3.8 Upstream maintenance
 
-| Item                                 | Status        | Notes                                                                                                                              |
-| ------------------------------------ | ------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Selective upstream maintenance model | **ONGOING**   | Never blindly merge or Sync fork                                                                                                   |
-| Last formally reviewed upstream      | **BASELINE**  | `3b2b08fb6036ef94f92a757ac6f3df889be8515c`                                                                                         |
-| Last integrated upstream frontier    | **BASELINE**  | `0887f714c36cc6c999f8b4559fa14c7948598629`, synchronized/adapted through PR #11 (merge `cef9d8faf543d297e3393b1de314c57b01d99af9`) |
-| Latest upstream sync                 | **COMPLETED** | PR #11; see the sync set and autofocus disposition below                                                                           |
-| Next upstream item                   | **QUEUED**    | ADAPT `3b2b08fb`: render empty caption elements without children; low risk, not yet integrated                                     |
+| Item                                 | Status        | Notes                                                                                                                                                                                      |
+| ------------------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Selective upstream maintenance model | **ONGOING**   | Never blindly merge or Sync fork                                                                                                                                                           |
+| Last formally reviewed upstream      | **BASELINE**  | `3b2b08fb6036ef94f92a757ac6f3df889be8515c`                                                                                                                                                 |
+| Last integrated upstream frontier    | **BASELINE**  | `3b2b08fb6036ef94f92a757ac6f3df889be8515c`, integrated by PR #85 (merge `d7c0fc8e4ab7b5f0d959bea96cc04b086deb36fc`); previous frontier `0887f714c36cc6c999f8b4559fa14c7948598629` (PR #11) |
+| Latest upstream sync                 | **COMPLETED** | PR #85 (ADAPT `3b2b08fb`); PR #11 was the previous sync set                                                                                                                                |
+| Next upstream item                   | **NONE**      | Upstream cycle **CLOSED**; the next cycle starts from a live check of the upstream head and the `INTEGRATE / ADAPT / SKIP / HOLD` audit from `3b2b08fb`                                    |
 
-Upstream audit classification remains `INTEGRATE / ADAPT / SKIP / HOLD`. PR #11 is the latest upstream sync, merged as `cef9d8faf543d297e3393b1de314c57b01d99af9`, and synchronized/adapted through `0887f714c36cc6c999f8b4559fa14c7948598629`. Its set included `aa68cb53` filtered/empty counts, `6963069b` Mark-All filter/session hardening, and `b587a964` mutation-total refresh. `0887f714` remains in upstream ancestry; its redundant tree-level autofocus change was skipped because NewsFlux already provided equivalent focus behavior. PR #26 and PR #53 remain valid historical upstream-maintenance records, but they are not the latest integrated frontier. The latest reviewed upstream commit is `3b2b08fb6036ef94f92a757ac6f3df889be8515c` (`fix(article): render empty caption elements without children (#794)`), classified `ADAPT` with low risk on `src/components/Article/ArticleDetail.jsx`. It is queued for the next dedicated upstream-sync window and remains not integrated. PR #53 used selective, non-linear maintenance:
+Upstream audit classification remains `INTEGRATE / ADAPT / SKIP / HOLD`. PR #11 was the upstream sync set before PR #85, merged as `cef9d8faf543d297e3393b1de314c57b01d99af9`, and synchronized/adapted through `0887f714c36cc6c999f8b4559fa14c7948598629`. Its set included `aa68cb53` filtered/empty counts, `6963069b` Mark-All filter/session hardening, and `b587a964` mutation-total refresh. `0887f714` remains in upstream ancestry; its redundant tree-level autofocus change was skipped because NewsFlux already provided equivalent focus behavior. PR #26 and PR #53 remain valid historical upstream-maintenance records, but they are not the latest integrated frontier. The latest reviewed upstream commit is `3b2b08fb6036ef94f92a757ac6f3df889be8515c` (`fix(article): render empty caption elements without children (#794)`), classified `ADAPT` with low risk on `src/components/Article/ArticleDetail.jsx`. It was adapted by PR #85 (merge `d7c0fc8e4ab7b5f0d959bea96cc04b086deb36fc`) and is now integrated, which closes the upstream cycle (`UPSTREAM_CYCLE=CLOSED`; the text above describing it as queued is historical). PR #53 used selective, non-linear maintenance:
 
 Explicit HOLDs from the reviewed range:
 
@@ -371,9 +378,38 @@ The following opportunities do not require new persistent NewsFlux state:
 
 - **PR #81 / ADD-FEED-DISCOVER-01 — COMPLETED, MERGED, DEPLOYED, VALIDATED** at `dc72a6ed0069b539877f5b2b1f1327d66ad7d0a8`. A normal website URL is sent to Miniflux `POST /v1/discover`; zero candidates produce explicit no-results feedback, one candidate requires confirmation, and multiple candidates require explicit selection and confirmation. `POST /v1/feeds` occurs only after that confirmation. Direct valid feed URL behavior, selected category and Fetch original content/crawler are preserved. Automated, Safari/browser, focus-lock, focus-return, controlled canary and cleanup reconciliation gates passed.
 - **PR #80 / Discovery Benchmark V1 — CLOSED WITHOUT MERGE; RESEARCH ONLY.** Corpus sufficiency passed for continued research. G1 candidate generation is a limited signal (Recall@5 0.075, Recall@10 0.125, MRR 0.057); G2 produced no useful signal. No product ranking was adopted; broad source discovery remains HOLD. No raw/private benchmark artifacts were committed.
-- **ADD_FEED_DISCOVERY_DUPLICATE_URL_01 — ACTIVE CANDIDATE, PR #83:** low, non-blocking presentation polish; candidate title can fall back to its URL and then show the URL twice. PR #83 is an isolated PM-reviewed Draft, not merged or deployed.
-- **MINIFLUX_DELETE_STATUS_01 — ACTIVE CANDIDATE, PR #84:** the DELETE retry hazard is confirmed and is being hardened in an isolated PM-reviewed Draft; the historical 404 cause remains high-confidence but unproven. PR #84 is not merged or deployed, and this finding is not backlog-only or resolved in main.
+- **ADD_FEED_DISCOVERY_DUPLICATE_URL_01 — RESOLVED by PR #83** (merge `16311d0d6c3e2611fa09380ded33e63795ba0270`): the candidate URL is now rendered exactly once; distinct title → title plus URL, missing title or title equal to the URL → URL once. Presentation only; provider behavior unchanged.
+- **MINIFLUX_DELETE_STATUS_01 — PR #84 MERGED** (merge `9b6f98cee745c2fed8dbe73cee2b1f2e4ad29ac7`): the DELETE retry hazard was hardened in `src/apis/feeds.js`; the historical 404 causation remains high-confidence but unproven, so no root-cause closure is claimed.
 - **Miniflux fetch security migration — PASS:** global private-network fetch allowance is disabled; RSS-Bridge private access is restricted through the dedicated proxy to the intended `rss-bridge:80` target.
+
+### 3.13 PWA Foundation and NetNewsWire UX tracks (planning only)
+
+Two planning tracks were added after the upstream cycle closed. They are documented in [`PWA_ARCHITECTURE.md`](./PWA_ARCHITECTURE.md) and [`DESIGN_REFERENCES.md`](./DESIGN_REFERENCES.md); neither authorizes implementation, merge or deployment.
+
+**Key finding:** a partial PWA already exists in `main` (generated manifest, Workbox service worker with `skipWaiting` + `clientsClaim` + auto-update, iOS head metadata, a standalone viewport workaround). PWA-01 is therefore an audit-and-harden problem, not a greenfield one, and the plan starts with a measurement phase. `PWA installability != offline data architecture`, and `CORRECT_FRESH_RUNTIME > AGGRESSIVE_OFFLINE_CACHING`.
+
+| Item                                                                                            | Status                  | Dependency / gate                                                            | Notes                                                                             |
+| ----------------------------------------------------------------------------------------------- | ----------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| PWA-00 baseline audit                                                                           | **PLANNED**             | PM review of the planning docs; production topology input (D4)               | Evidence-only measurement of the existing PWA on real devices; no product code    |
+| PWA-01A manifest and icons                                                                      | **PLANNED**             | PWA-00; D1 (`id`), D3 (maskable art)                                         | Recommended first implementation PR                                               |
+| PWA-01B theme and display-mode                                                                  | **PLANNED**             | PWA-01A; D2; absorbs `THEME-CHROME-01`                                       | Must not combine with visual redesign                                             |
+| PWA-01C serving contract                                                                        | **HOLD — ARCHITECTURE** | `ID-DEPLOY-01` or an explicit PM waiver (D5)                                 | `Caddyfile` headers and real 404 for missing assets; own PR and deployment window |
+| PWA-VAL-01 runtime/device validation                                                            | **PLANNED**             | After 01A/01B                                                                | Evidence-only; installed and browser modes are never merged                       |
+| PWA-02A Android / PWA-02B Apple                                                                 | **PLANNED**             | Defect-driven from PWA-VAL-01                                                | No-op if validation finds nothing                                                 |
+| PWA-03A update safety                                                                           | **PLANNED**             | D6; may be pulled before PWA-02 if PWA-00 shows an update/stale-chunk defect | Highest-blast-radius change in the track                                          |
+| PWA-03B offline/error states, 03C kill switch                                                   | **PLANNED**             | After 03A                                                                    | No offline data cache                                                             |
+| PWA-03D controlled cache policy                                                                 | **HOLD — ARCHITECTURE** | Explicit architecture decision (`ROADMAP` §6)                                | Caching authenticated or user data is blocked                                     |
+| PWA-04A badge (`APP-BADGE-01`), 04B share target → Add Feed, 04C shortcuts, 04D web-share audit | **PLANNED**             | After PWA-VAL-01; each capability-detected and optional                      | One PR per capability                                                             |
+| PWA-04E push / background sync                                                                  | **HOLD — ARCHITECTURE** | Needs a server component and/or an offline mutation queue                    | Not scheduled                                                                     |
+| NNW-01A source identity foundation                                                              | **PLANNED**             | No new persistence                                                           | One identity primitive for sidebar, list and (via NNW-04) reader                  |
+| NNW-01B icon fallback and privacy                                                               | **HOLD — PRODUCT**      | D7 (third-party icon fallback)                                               | Also covers the multi-part public-suffix hostname bug                             |
+| NNW-01C icon persistence                                                                        | **HOLD — ARCHITECTURE** | `SOURCE_IDENTITY` architecture gate                                          | Not scheduled                                                                     |
+| NNW-02 navigation density                                                                       | **HOLD — PRODUCT**      | `NAV-02F`; `NAV-VISUAL-01` PR2/PR4/PR7 and its nine open decisions           | Density is pointer-conditional; no touch-target erosion                           |
+| NNW-03 contextual toolbar                                                                       | **HOLD — PRODUCT**      | `CHROME-01` decision; `READER-VISUAL-02B`                                    | Progressive disclosure, never silent removal; one PR per surface                  |
+| NNW-04 reader source header                                                                     | **PLANNED**             | NNW-01A                                                                      | Hierarchy: title > editorial metadata > source mark                               |
+| NNW-05 multi-pane reference                                                                     | **PLANNED**             | REA research only                                                            | Single-pane contract unchanged; evidence only                                     |
+
+Refined order versus the original request (reasons in `PWA_ARCHITECTURE.md` §8): PWA-00 is added first; PWA-01 is split and absorbs `THEME-CHROME-01`; PWA-03A may be pulled before PWA-02; NNW-04 precedes NNW-02/03; PWA-01C and NNW-05 run off the main line.
 
 ---
 
@@ -437,6 +473,14 @@ Decide whether footer/header context zones remain separate or become one context
 
 The existing Article width control remains the only control. Prose uses `clamp(40ch, calc(var(--article-width) * 0.75ch), 58ch)` and stays within its frame; width 75 retains the prior visual measure. Automated Reader Measure, RV01 and 02A1 regression gates, protected-surface parity, production provenance, base-image parity and exact-SHA promotion passed. Real-device validation was not executed and remains nonblocking. PR #49 later completed the separate 02A2 real-element header/body alignment gate.
 
+### PWA FOUNDATION — decisions required before implementation
+
+The PM inputs below gate the PWA phases (details and owners in `PWA_ARCHITECTURE.md` §12): **D1** manifest `id`; **D2** `theme_color`/`background_color` policy for an OLED-first app; **D3** maskable icon art direction; **D4** production topology (public origin, TLS terminator, reverse proxy, shared origin with Miniflux); **D5** `ID-DEPLOY-01` or a waiver for serving-contract changes; **D6** update policy (deferred auto-reload vs user prompt); **D7** third-party icon fallback; **D8** token-only authentication guidance vs retained plaintext password in `localStorage`; **D9** whether offline reading is ever wanted (it triggers the Section 6 architecture gate).
+
+### NetNewsWire UX tracks — product decisions
+
+`NNW-02` depends on `NAV-02F`, `NAV-VISUAL-01` PR2/PR4/PR7 and its nine open decisions; `NNW-03` depends on the `CHROME-01` contextual-consolidation decision; `NNW-01B` depends on D7; `NNW-05` is research-only and may only produce an evidence-backed recommendation. The PM is also asked to confirm the interpretation of `SOURCE_IDENTITY` (source-level identity) versus `STORY_IDENTITY` (story-level, used by clustering) recorded in `DESIGN_REFERENCES.md`.
+
 ---
 
 ## 6. Architecture decisions required before first-party persistent state
@@ -459,13 +503,19 @@ Offline reading, feed notifications, third-party AI summaries and other new pers
 
 ## 7. Recommended execution order from the current baseline
 
-The 2026-10-21 reconciliation snapshot remains historical: it recorded PRs #79/#81 complete, PR #80 closed without merge, and no open PRs before that reconciliation. The live 2026-10-22 order is PR #82 documentation, PR #84 backend, PR #83 design after refresh, then the dedicated upstream sync for `3b2b08fb`. PRs #83 and #84 are isolated, PM-reviewed Draft candidates; neither is merged or deployed. This sequence does not cancel or permanently deprioritize upstream work. `MARK-ALL-UNDO-JUMP-01` remains held for real reproduction evidence. No broad discovery ranking or personalization expansion is authorized.
+The 2026-10-21 and 2026-10-22 (morning) snapshots remain historical. After the post-PR #85 reconciliation, PRs #82, #83, #84 and #85 are merged, no PRs were open before the planning documentation PR, and the upstream cycle is closed. `MARK-ALL-UNDO-JUMP-01` remains held for real reproduction evidence. No broad discovery ranking or personalization expansion is authorized. The sequence below is a sequencing record, **not** authorization to implement, merge or deploy anything.
 
-1. **PR #82 documentation reconciliation** — preserve the original snapshot and record the active candidate state; docs-only and no deployment required.
-2. **PR #84 / MINIFLUX-DELETE-CONTRACT-01** — backend delete-contract hardening; isolated candidate, PM review passed, not merged/deployed.
-3. **PR #83 / ADD-FEED-DISCOVERY-UX-01** — duplicate-URL presentation polish after the backend refresh; isolated candidate, PM review passed, not merged/deployed.
-4. **Dedicated upstream sync** — review and adapt the empty-caption rendering change from `3b2b08fb` against the current fork; it remains queued, not integrated, and follows the active isolated candidates.
-5. **Other planned/backlog tracks** — CHROME-01 remaining subsets, NAV-02F, HOME-SKEL-01, SAVE-EXT-01, HOME-VISUAL-02, READER-VISUAL-02B, ID-DEPLOY-01, first-party saved-state work, Personalization V2, MOTION-01 and ML ranking remain subject to their existing gates.
+1. **Planning documentation PR** — this reconciliation plus `PWA_ARCHITECTURE.md` and `DESIGN_REFERENCES.md`; docs-only, no deployment required.
+2. **PWA-00 baseline audit** — evidence-only measurement of the PWA that already exists.
+3. **PWA-01A manifest and icons**, then **PWA-01B theme and display-mode** (absorbs `THEME-CHROME-01`).
+4. **PWA-VAL-01 runtime/device validation** on the installed/browser matrix.
+5. **PWA-03A update safety** — conditional pull-forward ahead of PWA-02 if PWA-00 shows an update or stale-chunk defect (the shipped service worker is update-aggressive).
+6. **PWA-02A / PWA-02B platform adaptation** — defect-driven from the validation results.
+7. **NNW-01A source identity foundation**, then **NNW-04 reader source header**; **NNW-02** and **NNW-03** only after `NAV-02F` / `NAV-VISUAL-01` and `CHROME-01` decisions.
+8. **PWA-03B/03C**, then **PWA-04** capabilities one at a time.
+9. **Other planned/backlog tracks** — CHROME-01 remaining subsets, NAV-02F, NAV-VISUAL-01 remaining slices, HOME-SKEL-01, SAVE-EXT-01, HOME-VISUAL-02, READER-VISUAL-02B, ID-DEPLOY-01, first-party saved-state work, Personalization V2, MOTION-01 and ML ranking remain subject to their existing gates.
+
+Off the main line: **PWA-01C serving contract** (gated by `ID-DEPLOY-01` or a waiver) and **NNW-05 multi-pane research** (REA only, no PR). Never mix PWA architecture, visual redesign, upstream sync and functional feed behavior in one PR.
 
 ## 8. BULK safety contracts
 
@@ -513,15 +563,17 @@ The existing `markAllReadJumpToNext` behavior remains intentional. `MARK-ALL-UND
 - **ABOUT-ACCESSIBLE-BRAND-01 — COMPLETED:** PR #65 corrected the accessible NewsFlux GitHub link label in all six shipped locales; no longer an open finding.
 - **RUNTIME-IDENTITY-02 — CLOSED / NON-PRODUCT:** `OLD_DOCUMENT_SESSION`; the old loaded document continued running old JavaScript while fresh asset requests returned the R5 asset. Server, asset, Service Worker and Cache Storage were not the cause.
 - **HOME-HARNESS-STABILITY-01 — OPEN:** deterministic baseline failures and intermittent stability failures remain separate. Deterministic 10/10: `LIST_SEARCH_DATE_SORT_PRESERVED`, `READER_MEASURE_01_CPL`. Intermittent 6/10: `READER_VISUAL_01_WIDE_IMAGE`, `READER_MEASURE_01_DEFAULT_75_PARITY`, `READER_MEASURE_01_MEDIA_PROTECTION`. Root cause remains unknown.
-- **ADD_FEED_DISCOVERY_DUPLICATE_URL_01 — ACTIVE CANDIDATE, PR #83; LOW / NON-BLOCKING:** when the candidate title falls back to its URL, the URL may appear twice; isolated PM-reviewed Draft, not merged/deployed.
-- **MINIFLUX_DELETE_STATUS_01 — ACTIVE CANDIDATE, PR #84; NON-BLOCKING:** DELETE retry hazard confirmed; historical HTTP 404 causation remains high-confidence but unproven. Isolated PM-reviewed Draft, not merged/deployed, and unresolved in main.
+- **ADD_FEED_DISCOVERY_DUPLICATE_URL_01 — RESOLVED by PR #83.**
+- **MINIFLUX_DELETE_STATUS_01 — PR #84 MERGED:** retry hazard hardened; historical HTTP 404 causation remains high-confidence but unproven.
 - **HOME_PAGINATION_CURSOR_STALL_01 — BACKLOG.**
 - **HOME_DUP_ROOT_CAUSE_01 — BACKLOG.**
 - **FOOTERPANEL_CLIPPING — NEEDS REPRODUCTION.**
 - **NAV_HARNESS_DESKTOP_MODEL — LOW PRIORITY.**
 - **REACT19_ARCO_ELEMENT_REF — LOW PRIORITY.**
 - **RESIZEOBSERVER — NEEDS REPRODUCTION.**
-- **SOURCE_IDENTITY / STORY_IDENTITY — ARCHITECTURE / RESEARCH GATES.**
+- **SOURCE_IDENTITY / STORY_IDENTITY — ARCHITECTURE / RESEARCH GATES.** Presentation work for source-level identity is planned as `NNW-01` inside the no-persistence constraint; anything needing storage stays gated.
+- **PWA findings F2–F9 (classified, not fixed):** manifest/runtime theme-color mismatch (`PWA_THEME`); no maskable icon (`PWA_INSTALL`); update-aggressive service worker with an in-page reload path, unmeasured (`PWA_UPDATE`); SPA fallback masks missing assets as HTML and no explicit `Cache-Control` for `sw.js`/manifest (`PWA_SERVING`); navigation route without a denylist (`PWA_SCOPE`); plaintext `password` in `localStorage` (`SECURITY`, pre-existing); third-party icon fallback discloses hostnames and `getSecondHostname` mishandles multi-part suffixes (`PRIVACY` / `BUG`); per-profile `localStorage` means an installed iOS app does not share Safari's state (`STATE_PERSISTENCE`). See `PWA_ARCHITECTURE.md` §4.
+- **DOCS_DRIFT — RESOLVED IN PART:** PRs #74, #76 and #77 are merged in git but were absent from earlier snapshots; they are now listed in Section 3.2 and the closure of their related findings (`NAV-PR1-ROUTE-FOCUS-01`, `TABLET-HEADER-WIDTH-01`, `HOME_DUP_ROOT_CAUSE_01`) awaits PM confirmation. `docs/UPSTREAM_TRACKING.md` does not exist.
 - **PREFERENCE_STORAGE — ARCHITECTURE / SOURCE-OF-TRUTH / PRIVACY DECISION REQUIRED.**
 - Broad source discovery remains **HOLD**; do not broaden personalized ranking without explicit architecture/product authorization.
 
@@ -821,7 +873,7 @@ PERSONALIZED_RANKING=NO_BROADENING_WITHOUT_EXPLICIT_AUTHORIZATION
 
 This original 2026-10-21 pre-reconciliation snapshot preserves `OPEN_PRS_AT_SNAPSHOT=NONE` as observed before that reconciliation began; it is not the live candidate state. PR #79 advanced GitHub `main` without changing the product/runtime baseline, and no deployment was required for docs-only advancement. The live PR #82/#83/#84 state and current integration order are recorded separately in Section 15. The dedicated upstream-sync item remains queued, not integrated. This documentation-only reconciliation does not authorize a merge or deploy.
 
-## 15. Active parallel candidates and current integration order (2026-10-22)
+## 15. Historical: active parallel candidates and integration order (2026-10-22 morning; superseded by Section 16)
 
 The 2026-10-21 snapshot above is retained as the original pre-reconciliation record. Live GitHub state checked on 2026-10-22 shows PR #82 open as a Draft documentation reconciliation, with two isolated, PM-reviewed Draft candidates behind it. PR #84 handles backend delete-contract hardening; PR #83 handles duplicate-URL presentation polish after the backend refresh. Neither is merged or deployed.
 
@@ -851,3 +903,46 @@ UPSTREAM_3b2b08fb_STATUS=QUEUED_NOT_INTEGRATED
 ```
 
 The dedicated upstream sync for `3b2b08fb` remains queued after the active candidates; it is not cancelled or permanently deprioritized. The order is a sequencing record, not authorization to merge or deploy any candidate.
+
+This section is superseded: PR #82, PR #83, PR #84 and the dedicated upstream item (PR #85) are all merged. See Section 16.
+
+## 16. Current reconciliation snapshot (2026-10-22, post-PR #85)
+
+Production and runtime values are `PM_REPORTED` and are not independently verifiable from the repository; the merge facts are verified from git history.
+
+```text
+DOCS_DATE=2026-10-22
+CURRENT_MAIN=d7c0fc8e4ab7b5f0d959bea96cc04b086deb36fc
+PRODUCTION_SHA=d7c0fc8e4ab7b5f0d959bea96cc04b086deb36fc
+PRODUCT_PRODUCTION_PARITY=PASS
+PR85_STATUS=MERGED_DEPLOYED_VALIDATED
+PR85_RUNTIME_ACCEPTANCE=PASS
+UPSTREAM_LAST_REVIEWED_SHA=3b2b08fb6036ef94f92a757ac6f3df889be8515c
+LAST_INTEGRATED_UPSTREAM_SHA=3b2b08fb6036ef94f92a757ac6f3df889be8515c
+LAST_UPSTREAM_SYNC_PR=85
+LAST_UPSTREAM_SYNC_MERGE_SHA=d7c0fc8e4ab7b5f0d959bea96cc04b086deb36fc
+UPSTREAM_CYCLE=CLOSED
+
+PR82_STATUS=MERGED
+PR83_STATUS=MERGED
+PR84_STATUS=MERGED
+PR74_PR76_PR77_STATUS=MERGED_IN_GIT_PM_CLOSURE_CONFIRMATION_PENDING
+OPEN_PRS_BEFORE_PLANNING_DOCS_PR=NONE
+
+PWA_FOUNDATION=PLANNED
+NETNEWSWIRE_UX_REFERENCE=ACCEPTED_AS_DESIGN_INPUT
+PWA_PARTIALLY_EXISTS_IN_MAIN=YES
+PWA_IMPLEMENTATION_AUTHORIZED=NO
+NNW_IMPLEMENTATION_AUTHORIZED=NO
+RECOMMENDED_FIRST_IMPLEMENTATION_PR=PWA-01A_AFTER_PWA-00_EVIDENCE
+MERGE_AUTHORIZED=NO
+DEPLOY_AUTHORIZED=NO
+
+DOCUMENTATION_ACTION=UPDATE_IN_SCOPE
+DOCUMENTATION_REASON=UPSTREAM_CYCLE_CLOSED_AND_NEW_ARCHITECTURE_TRACKS_INTRODUCED
+DOCUMENTATION_TARGETS=NEWSFLUX_PROJECT_STATE.md;NEWSFLUX_ROADMAP.md;PWA_ARCHITECTURE.md;DESIGN_REFERENCES.md
+DOCUMENTATION_BLOCKS_NEXT=NO
+PROJECT_STATE_RECONCILED=YES
+```
+
+These tracks do **not** authorize implementation: `PWA_FOUNDATION=PLANNED` and `NETNEWSWIRE_UX_REFERENCE=ACCEPTED_AS_DESIGN_INPUT` record that the work is accepted for planning and design input only.

@@ -1,11 +1,71 @@
 # NewsFlux Project State
 
 - **Purpose:** concise operational state for PM handoffs and future sessions. The roadmap remains the source for sequencing and product/architecture detail.
-- **Last reconciled:** 2026-10-22.
-- **Reconciliation snapshot:** GitHub `main` at `313991e80c2b54a99819c2e267ef90a35a959752` on 2026-10-21.
-- **Current product/production baseline at that snapshot:** `dc72a6ed0069b539877f5b2b1f1327d66ad7d0a8`.
+- **Last reconciled:** 2026-10-22 (post-PR #85).
+- **Current snapshot:** GitHub `main` at `d7c0fc8e4ab7b5f0d959bea96cc04b086deb36fc` (PR #85 merge). Product and production are at the same SHA (`PM_REPORTED`).
+- **Previous snapshot (historical):** GitHub `main` at `313991e80c2b54a99819c2e267ef90a35a959752` on 2026-10-21; product/production baseline at that snapshot `dc72a6ed0069b539877f5b2b1f1327d66ad7d0a8`.
+- **Related planning documents:** [`PWA_ARCHITECTURE.md`](./PWA_ARCHITECTURE.md) and [`DESIGN_REFERENCES.md`](./DESIGN_REFERENCES.md) (planning only; no implementation authorized).
 
-## Current state
+## Current state (post-PR #85, 2026-10-22)
+
+Merge facts below are verified from git history. Production and runtime values are `PM_REPORTED`: they are recorded as stated by the PM and cannot be independently verified from the repository.
+
+```text
+DOCS_DATE=2026-10-22
+CURRENT_MAIN=d7c0fc8e4ab7b5f0d959bea96cc04b086deb36fc
+PRODUCTION_SHA=d7c0fc8e4ab7b5f0d959bea96cc04b086deb36fc
+PRODUCT_PRODUCTION_PARITY=PASS
+PR85_STATUS=MERGED_DEPLOYED_VALIDATED
+PR85_RUNTIME_ACCEPTANCE=PASS
+PR85_FEATURE_HEAD=7db4bcd8bc86b4f361890f13570003a4435547de
+PR85_SCOPE=ADAPT_3b2b08fb_EMPTY_CAPTION_RENDERING_ONE_PRODUCTION_FILE
+
+UPSTREAM_LAST_REVIEWED_SHA=3b2b08fb6036ef94f92a757ac6f3df889be8515c
+LAST_INTEGRATED_UPSTREAM_SHA=3b2b08fb6036ef94f92a757ac6f3df889be8515c
+LAST_UPSTREAM_SYNC_PR=85
+LAST_UPSTREAM_SYNC_MERGE_SHA=d7c0fc8e4ab7b5f0d959bea96cc04b086deb36fc
+UPSTREAM_CYCLE=CLOSED
+
+PR82_STATUS=MERGED
+PR82_MERGE_SHA=68c1ef3c5d86bb1495c98da19f036215ac0c722d
+PR83_STATUS=MERGED
+PR83_MERGE_SHA=16311d0d6c3e2611fa09380ded33e63795ba0270
+PR84_STATUS=MERGED
+PR84_MERGE_SHA=9b6f98cee745c2fed8dbe73cee2b1f2e4ad29ac7
+ADD_FEED_DISCOVERY_DUPLICATE_URL_01=RESOLVED_BY_PR83
+MINIFLUX_DELETE_STATUS_01=PR84_MERGED_HISTORICAL_404_CAUSATION_UNPROVEN
+PR74_STATUS=MERGED_IN_GIT_PM_CLOSURE_CONFIRMATION_PENDING
+PR74_MERGE_SHA=b6b7246642aa5ff15f3f8e7015d2efbd83a47be5
+PR76_STATUS=MERGED_IN_GIT_PM_CLOSURE_CONFIRMATION_PENDING
+PR76_MERGE_SHA=831ff514c3a572a41cd857dd51ffd4f5c87663c1
+PR77_STATUS=MERGED_IN_GIT_PM_CLOSURE_CONFIRMATION_PENDING
+PR77_MERGE_SHA=e1c1285e717e626fc759b0bb52431cd9321df334
+OPEN_PRS_BEFORE_PLANNING_DOCS_PR=NONE
+
+PWA_FOUNDATION=PLANNED
+NETNEWSWIRE_UX_REFERENCE=ACCEPTED_AS_DESIGN_INPUT
+PWA_PARTIALLY_EXISTS_IN_MAIN=YES
+PWA_IMPLEMENTATION_AUTHORIZED=NO
+NNW_IMPLEMENTATION_AUTHORIZED=NO
+RECOMMENDED_FIRST_IMPLEMENTATION_PR=PWA-01A_AFTER_PWA-00_EVIDENCE
+
+CURRENT_PHASE=PLANNING_AND_DOCUMENTATION
+CURRENT_PRIMARY_TRACK=PWA_FOUNDATION_AND_NNW_PLANNING
+CURRENT_PR=PLANNING_DOCUMENTATION_PR_OPEN_DRAFT_SEE_PR_DESCRIPTION
+LAST_COMPLETED_FUNCTIONAL=ADAPT_3b2b08fb_EMPTY_CAPTION / PR #85
+MERGE_AUTHORIZED=NO
+DEPLOY_AUTHORIZED=NO
+
+DOCUMENTATION_ACTION=UPDATE_IN_SCOPE
+DOCUMENTATION_REASON=UPSTREAM_CYCLE_CLOSED_AND_NEW_ARCHITECTURE_TRACKS_INTRODUCED
+DOCUMENTATION_TARGETS=NEWSFLUX_PROJECT_STATE.md;NEWSFLUX_ROADMAP.md;PWA_ARCHITECTURE.md;DESIGN_REFERENCES.md
+DOCUMENTATION_BLOCKS_NEXT=NO
+PROJECT_STATE_RECONCILED=YES
+```
+
+`PWA_FOUNDATION=PLANNED` and `NETNEWSWIRE_UX_REFERENCE=ACCEPTED_AS_DESIGN_INPUT` mean accepted for planning and design input **only**; neither authorizes implementation, merge or deployment. The sections below that carry the 2026-10-21 and 2026-10-22 (morning) values are retained as historical records and are superseded by this section.
+
+## Historical state (2026-10-21 snapshot; superseded by the section above)
 
 The GitHub, product and production values in the original 2026-10-21 pre-reconciliation snapshot below remain an immutable historical record. At that snapshot, GitHub `main` was `313991e80c2b54a99819c2e267ef90a35a959752`; product and production were at PR #81 merge SHA `dc72a6ed0069b539877f5b2b1f1327d66ad7d0a8`; runtime, HTTP and exact image/revision checks passed; no restart count was included in the receipt; and GitHub had no open PRs before that reconciliation began. The live candidate state checked on 2026-10-22 is recorded separately below.
 
@@ -102,7 +162,7 @@ MERGE_AUTHORIZED=NO
 DEPLOY_AUTHORIZED=NO
 ```
 
-## Active parallel candidates (live state checked 2026-10-22)
+## Historical: active parallel candidates (checked 2026-10-22 morning; superseded)
 
 PR #82 remains the open Draft documentation reconciliation. Two isolated, PM-reviewed Draft candidates are active behind it: PR #84 for backend delete-contract hardening and PR #83 for duplicate-URL discovery presentation polish after the backend refresh. Neither candidate is merged or deployed.
 
@@ -132,6 +192,8 @@ UPSTREAM_3b2b08fb_STATUS=QUEUED_NOT_INTEGRATED
 ```
 
 Main may advance through documentation-only merges without changing the product/runtime baseline or requiring deployment. The 2026-10-21 snapshot remains historical. As of the live 2026-10-22 check, PR #83 and PR #84 are active, isolated Draft candidates and neither is merged or deployed. The current integration order is PR #82 documentation, PR #84 backend, PR #83 design after refresh, then the dedicated upstream sync for `3b2b08fb`. That upstream item remains queued, not integrated, and is sequenced after the active candidates rather than cancelled or permanently deprioritized.
+
+**Superseded:** PR #82, PR #83, PR #84 and the dedicated upstream item (PR #85) are all merged; see the current state above.
 
 ## Historical snapshot: PR #73 reconciliation (2026-10-20)
 
@@ -446,6 +508,17 @@ Not authorized by package completion:
 
 Nine incomplete design packages remain recorded above; no unrelated product or architecture decision is implied or closed.
 
+## PWA Foundation and NetNewsWire UX tracks (planned)
+
+Documented in [`PWA_ARCHITECTURE.md`](./PWA_ARCHITECTURE.md) and [`DESIGN_REFERENCES.md`](./DESIGN_REFERENCES.md); roadmap detail is in `NEWSFLUX_ROADMAP.md` Section 3.13. **Planning only — nothing here authorizes implementation.**
+
+- **Key finding:** a partial PWA already exists in `main` (generated manifest, Workbox service worker with `skipWaiting` + `clientsClaim` + auto-update, iOS head metadata, a standalone viewport workaround). The plan therefore starts with a measurement phase, `PWA-00`, and treats `PWA-01` as hardening, not greenfield. `THEME-CHROME-01` is absorbed by `PWA-01B`; `APP-BADGE-01` becomes `PWA-04A`.
+- **Principles:** `CORRECT_FRESH_RUNTIME > AGGRESSIVE_OFFLINE_CACHING`; `PWA installability != offline data architecture`; Miniflux remains the source of truth; no authenticated-response caching; no new persistent NewsFlux state without an architecture decision; no essential feature depends on one ecosystem's API.
+- **Phases:** `PWA-00` baseline audit; `PWA-01A/B/C` manifest and icons, theme and display-mode, serving contract (01C gated by `ID-DEPLOY-01`); `PWA-VAL-01` device validation; `PWA-02A/B` Android and Apple adaptation (defect-driven); `PWA-03A/B/C/D` update safety, offline/error states, kill switch, controlled cache (03D held); `PWA-04A–E` optional capabilities (04E held).
+- **NetNewsWire UX tracks:** `NNW-01` source identity, `NNW-02` navigation density, `NNW-03` contextual toolbar, `NNW-04` reader source header, `NNW-05` multi-pane reference (research only). Each separates `REFERENCE_PATTERN` from `NEWSFLUX_PRODUCT_DECISION`; the single-pane, opaque-content, glass-as-chrome and `884×1104` contracts are unchanged.
+- **Pending PM inputs:** `D1`–`D9` in `PWA_ARCHITECTURE.md` §12 (manifest `id`, theme/background color policy, maskable icon art, production topology, `ID-DEPLOY-01` or waiver, update policy, third-party icon fallback, token-only auth guidance, offline reading).
+- **Recommended first implementation PR:** `PWA-01A`, after `PWA-00` evidence. The first authorized work item would be `PWA-00`, which contains no product code.
+
 ## Personalization / saved-state architecture
 
 - Phase 2D V1 is complete and Home-only.
@@ -462,10 +535,15 @@ Nine incomplete design packages remain recorded above; no unrelated product or a
 UPSTREAM_REPOSITORY=electh/ReactFlux
 UPSTREAM_INTEGRATION_MODE=SELECTIVE_NON_LINEAR
 UPSTREAM_LAST_REVIEWED_SHA=3b2b08fb6036ef94f92a757ac6f3df889be8515c
-LAST_INTEGRATED_UPSTREAM_SHA=0887f714c36cc6c999f8b4559fa14c7948598629
-LAST_UPSTREAM_SYNC_PR=11
-LAST_UPSTREAM_SYNC_MERGE_SHA=cef9d8faf543d297e3393b1de314c57b01d99af9
-LAST_UPSTREAM_SYNC_SET=PR11_AA68CB53_6963069B_B587A964_0887F714
+LAST_INTEGRATED_UPSTREAM_SHA=3b2b08fb6036ef94f92a757ac6f3df889be8515c
+LAST_UPSTREAM_SYNC_PR=85
+LAST_UPSTREAM_SYNC_MERGE_SHA=d7c0fc8e4ab7b5f0d959bea96cc04b086deb36fc
+UPSTREAM_CYCLE=CLOSED
+PR85_3B2B08FB=INTEGRATED_ADAPT_EMPTY_CAPTION_RENDERING
+PREVIOUS_INTEGRATED_UPSTREAM_SHA=0887f714c36cc6c999f8b4559fa14c7948598629
+PREVIOUS_UPSTREAM_SYNC_PR=11
+PREVIOUS_UPSTREAM_SYNC_MERGE_SHA=cef9d8faf543d297e3393b1de314c57b01d99af9
+PREVIOUS_UPSTREAM_SYNC_SET=PR11_AA68CB53_6963069B_B587A964_0887F714
 PR11_AA68CB53=INTEGRATED_FILTERED_EMPTY_COUNTS
 PR11_6963069B=INTEGRATED_MARK_ALL_FILTER_SESSION_HARDENING
 PR11_B587A964=INTEGRATED_MUTATION_TOTAL_REFRESH
@@ -479,6 +557,8 @@ HOLD_FRAMER_MOTION=ed0be6db9a8126d8bfdfc5afe41d2e058b7e5036 (14.0.0 to 14.2.0; p
 ```
 
 PR #53 completed selective maintenance: `e46d92ab64adcbd0bb8ac2caf6048fa37f527939` was integrated as `allowBuilds.plyr=false` in `pnpm-workspace.yaml`; `0c28762de6987c980306b8553753e549e753b4e0` was adapted by updating only `actions/setup-node` from 7.0.0 to 7.1.0 in five equivalent workflows, preserving NewsFlux customizations. The reviewed frontier is not a linear integration claim. Holds remain unapproved for implementation.
+
+PR #85 adapted `3b2b08fb` (`fix(article): render empty caption elements without children`) with the guard inserted in `processFigcaptionContent`; the upstream cycle is closed and the next cycle begins from a live check of the upstream head. The upstream repository is tracked only through this document and the roadmap (`docs/UPSTREAM_TRACKING.md` does not exist).
 
 The specialized upstream monitor must live-check the current upstream head before auditing. New commits are classified `INTEGRATE / ADAPT / SKIP / HOLD`; never blindly Sync fork or merge upstream/main.
 
@@ -505,6 +585,23 @@ The specialized upstream monitor must live-check the current upstream head befor
 - **READER-MEDIA-01A — OPEN / DRAFT PR #70:** next active functional candidate; its base is stale and must be refreshed onto current main before candidate and authenticated Reader/media gates.
 - **ABOUT-ACCESSIBLE-BRAND-01 — COMPLETED:** resolved by PR #65; it is no longer an open finding.
 - **RUNTIME-IDENTITY-02 — CLOSED / NON-PRODUCT:** classified as `OLD_DOCUMENT_SESSION`; fresh-document validation showed the prior tab retained old JavaScript while new requests served the R5 asset. Server, asset, Service Worker and Cache Storage were not the cause; no product or deployment defect was found.
+
+- **PWA findings F2–F9 (classified, not fixed; details in `PWA_ARCHITECTURE.md` §4):** manifest/runtime theme-color mismatch; no maskable icon; update-aggressive service worker with an in-page reload path (runtime effect unmeasured); SPA fallback masks missing assets as HTML and no explicit `Cache-Control` for `sw.js`/manifest (header behavior unmeasured); navigation route without a denylist (topology unknown); plaintext `password` in `localStorage` (pre-existing); third-party icon fallback discloses followed hostnames and `getSecondHostname` mishandles multi-part public suffixes (`www.bbc.co.uk` → `co.uk`); per-profile `localStorage` means an installed iOS app does not share Safari's state.
+
+## Documentation drift register (reconciled 2026-10-22)
+
+Facts verified from git history; stale historical text was **not** rewritten wholesale to avoid unsolicited edits. Closure of related findings awaits PM confirmation.
+
+| Item                                                                                         | Evidence                                                                 | Handling                                                                                    |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| PRs #74, #76, #77 merged in git but absent from earlier snapshots                            | Merge commits `b6b72466`, `831ff514`, `e1c1285e`                         | Recorded in the current state and roadmap Section 3.2; closure pending PM.                  |
+| `TABLET-HEADER-WIDTH-01` still listed "CONFIRMED / fix now NO / target PR4" in Open findings | PR #76 `fix: expand tablet list header to content width` (`Content.jsx`) | Historical bullet retained; PM to confirm closure and any remaining PR4 scope.              |
+| `NAV-PR1-ROUTE-FOCUS-01` listed as an open P3 finding                                        | PR #74 `fix(nav): restore meaningful focus after drawer navigation`      | Retained in `NEWSFLUX_NAV_VISUAL_01.md`; PM to confirm closure.                             |
+| `HOME_DUP_ROOT_CAUSE_01` listed as backlog                                                   | PR #77 `fix: deduplicate initial Home entries by id`                     | PM to confirm whether the finding is resolved.                                              |
+| `READER-MEDIA-01A / PR #70` described as an open draft in several sections                   | The same document records `PR70_STATUS=MERGED` (`2a858ede…`)             | Stale text retained as history; the header block and roadmap Section 3.2 are authoritative. |
+| `DOCS-LINT-01 — OPEN` bullet in Open findings                                                | The same document records `DOCS_LINT_01_STATUS=COMPLETED_BY_PR75`        | Roadmap Section 9 already marks it completed; PM may schedule a cleanup of this bullet.     |
+| "Next recommended action" referenced DOCS-LINT-01 and PR #70                                 | See above                                                                | Replaced in this reconciliation.                                                            |
+| `docs/UPSTREAM_TRACKING.md` does not exist                                                   | Absent from the repository                                               | No file created; upstream state lives in this document and the roadmap.                     |
 
 ## Product decisions and accepted baseline exceptions
 
@@ -533,7 +630,7 @@ UNKNOWN_COMMIT=RESOLVED
 
 ## Next recommended action
 
-Current sequence: complete the separate `DOCS-LINT-01` formatting-only PR, then refresh open draft PR #70 / `READER-MEDIA-01A` onto the exact current `main` and run its candidate/authenticated media gates. After PR #70 closes, resume NAV-VISUAL with Medium Rail / PR4; `TABLET-HEADER-WIDTH-01` remains targeted there. `MARK-ALL-UNDO-JUMP-01` remains held for real reproduction evidence. This documentation reconciliation does not authorize product implementation, merge or promotion.
+Current sequence: PM review of the planning documentation PR (`PWA_ARCHITECTURE.md`, `DESIGN_REFERENCES.md` and this reconciliation). If the PM approves proceeding, the first authorized work item is `PWA-00` — an evidence-only baseline audit of the PWA that already exists — followed by `PWA-01A` (manifest and icons) once decisions `D1` and `D3` are made. `MARK-ALL-UNDO-JUMP-01` remains held for real reproduction evidence. The earlier sequence that referenced `DOCS-LINT-01` and PR #70 is complete and superseded. This documentation does not authorize product implementation, merge or promotion.
 
 ## Deployment governance
 
