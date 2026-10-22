@@ -70,6 +70,8 @@ let fixtureEntries = routeEntries
 let fixtureTotal = 2
 let paginationPages = null
 let strictHomePagination = false
+let strictHomeExclusiveCursor = false
+let deferredTieDrain = null
 let deferredPagination = null
 let deferredArticleQuery = null
 let failPagination = false
@@ -121,12 +123,44 @@ apiClient.get = async (url) => {
       return deferredCount.promise
     }
     const isEmptyHomePageAppend = emptyPagePagination && initialHomeQueryServed
+    if (strictHomePagination && params.get("order") === "id") {
+      const bucketStart = Number(params.get("published_after")) * 1000
+      const bucketEnd = Number(params.get("published_before")) * 1000
+      const beforeEntryId = params.has("before_entry_id")
+        ? Number(params.get("before_entry_id"))
+        : Infinity
+      const entries = fixtureEntries
+        .filter((entry) => {
+          const publishedAt = Date.parse(entry.published_at)
+          return (
+            publishedAt > bucketStart && publishedAt < bucketEnd && Number(entry.id) < beforeEntryId
+          )
+        })
+        .toSorted((left, right) => Number(right.id) - Number(left.id))
+      const response = {
+        entries: entries.slice(0, Number(params.get("limit"))),
+        total: entries.length,
+      }
+      if (deferredTieDrain) {
+        const pending = deferredTieDrain
+        const deferredResponse = await pending.promise
+        if (deferredTieDrain === pending) {
+          deferredTieDrain = null
+        }
+        return deferredResponse
+      }
+      return response
+    }
     if (strictHomePagination && params.has("published_before")) {
       const cursor = Number(params.get("published_before"))
       const limit = Number(params.get("limit"))
       const entries = fixtureEntries
         .toSorted((left, right) => Date.parse(right.published_at) - Date.parse(left.published_at))
-        .filter((entry) => Date.parse(entry.published_at) / 1000 <= cursor)
+        .filter((entry) =>
+          strictHomeExclusiveCursor
+            ? Date.parse(entry.published_at) / 1000 < cursor
+            : Date.parse(entry.published_at) / 1000 <= cursor,
+        )
         .slice(0, limit)
       return { entries, total: fixtureTotal }
     }
@@ -1892,6 +1926,28 @@ const loadNextPage = async (loadedCount) => {
     () => contentState.get().entries.length > loadedCount,
     "Home sentinel did not append the next page",
   )
+  root.scrollTop = 0
+  root.dispatchEvent(new Event("scroll"))
+  await settle()
+}
+const requestNextHomeBoundary = async () => {
+  const root = scrollRoot()
+  assert(root && sentinels().length === 1, "Expected one Home pagination sentinel")
+  const requestCount = listRequests().length
+  const priorBoundary = JSON.stringify(contentState.get().homePaginationBoundary)
+  root.scrollTop = root.scrollHeight
+  sentinels()[0].scrollIntoView({ block: "end" })
+  deferredPagination?.resolve()
+  deferredPagination = null
+  root.dispatchEvent(new Event("scroll"))
+  await waitFor(
+    () =>
+      listRequests().length > requestCount &&
+      JSON.stringify(contentState.get().homePaginationBoundary) !== priorBoundary,
+    "Home pagination cursor did not advance",
+  )
+  root.scrollTop = 0
+  root.dispatchEvent(new Event("scroll"))
   await settle()
 }
 const clickMenu = (label) => {
@@ -1940,6 +1996,8 @@ const Harness = () => {
       showStatus = getDefaultSettings().showStatus,
       pages = null,
       strictHomePagination: useStrictHomePagination = false,
+      exclusiveHomeCursor: useExclusiveHomeCursor = false,
+      deferTieDrain = false,
       deferInitial = false,
       emptyPagePagination: nextEmptyPagePagination = false,
       layout = getDefaultSettings().articleListLayout,
@@ -1963,6 +2021,8 @@ const Harness = () => {
     fixtureTotal = total
     paginationPages = pages?.map((page) => page.map((entry) => ({ ...entry }))) ?? null
     strictHomePagination = useStrictHomePagination
+    strictHomeExclusiveCursor = useExclusiveHomeCursor
+    deferredTieDrain = deferTieDrain ? createDeferred() : null
     deferredPagination = pages?.length
       ? (() => {
           let release
@@ -2970,6 +3030,161 @@ const Harness = () => {
           ids().join(",") === committedHighlights.join(",") &&
             newerEntries.every(({ id }) => !ids().includes(id)),
           "Gap fill promoted canonical page entries into Highlights",
+        )
+      },
+    ],
+    [
+      "BOUNDARY_TIE_RECOVERS_OMITTED_ID",
+      async () => {
+        const tieTimestamp = "2026-10-12T12:00:00.000Z"
+        const entries = paginationEntries(23).map((entry, index) => ({
+          ...entry,
+          id: 11_000 + index,
+          published_at:
+            index < 21
+              ? tieTimestamp
+              : new Date(Date.parse(tieTimestamp) - (index - 19) * 60_000).toISOString(),
+        }))
+        await mount("/", {
+          entries,
+          total: entries.length,
+          pageSize: 20,
+          strictHomePagination: true,
+          exclusiveHomeCursor: true,
+        })
+        await waitFor(
+          () => contentState.get().isArticleListReady || contentState.get().articleListError,
+          "Initial tied Home list did not settle",
+        )
+        assert(
+          contentState.get().isArticleListReady && contentState.get().entries.length === 20,
+          `Initial tied Home page did not load: ${JSON.stringify({
+            ready: contentState.get().isArticleListReady,
+            error: Boolean(contentState.get().articleListError),
+            ids: contentState.get().entries.map(({ id }) => id),
+            total: contentState.get().total,
+            requests: listRequests().map((url) => new URL(url, "https://fixture.invalid").search),
+          })}`,
+        )
+
+        const firstPageIds = contentState.get().entries.map(({ id }) => id)
+        assert(
+          firstPageIds.join(",") ===
+            Array.from({ length: 20 }, (_, index) => 11_000 + index).join(","),
+          "Unexpected initial tie page",
+        )
+        const firstRequest = new URL(listRequests()[0], "https://fixture.invalid").searchParams
+        assert(!firstRequest.has("published_before"), "Initial Home request had a cursor")
+
+        for (
+          let page = 0;
+          page < 4 && contentState.get().entries.length < entries.length;
+          page += 1
+        ) {
+          await requestNextHomeBoundary()
+          const current = contentState.get()
+          if (!current.homePaginationBoundary?.tieDrain && current.entries.length < current.total) {
+            assert(
+              current.loadMoreVisible,
+              "HOME_TOTAL_LOAD_MORE_RECONCILIATION hid load-more before older entries were loaded",
+            )
+          }
+        }
+
+        const loadedIds = contentState.get().entries.map(({ id }) => id)
+        const tieDrainRequest = listRequests()
+          .map((url) => new URL(url, "https://fixture.invalid").searchParams)
+          .find((params) => params.get("order") === "id")
+        assert(
+          tieDrainRequest?.get("direction") === "desc" &&
+            tieDrainRequest.get("published_after") ===
+              String(Date.parse(tieTimestamp) / 1000 - 1) &&
+            tieDrainRequest.get("published_before") === String(Date.parse(tieTimestamp) / 1000 + 1),
+          "Home did not drain its tied canonical second by ID",
+        )
+        assert(
+          loadedIds.length === 23 && entries.every(({ id }) => loadedIds.includes(id)),
+          `Strict published_before skipped tied entry IDs: ${entries
+            .filter(({ id }) => !loadedIds.includes(id))
+            .map(({ id }) => id)
+            .join(",")}`,
+        )
+        assert(loadedIds.includes(11_020), "BOUNDARY_TIE_RECOVERS_OMITTED_ID missed ID 11020")
+        assert(new Set(loadedIds).size === loadedIds.length, "Tie drain appended duplicate IDs")
+        assert(!contentState.get().loadMoreVisible, "Completed tie recovery left Load More visible")
+      },
+    ],
+    [
+      "STALE_SESSION_TIE_DRAIN_IGNORED",
+      async () => {
+        const timestamp = "2026-10-12T12:00:00.000Z"
+        const entries = Array.from({ length: 5 }, (_, index) => ({
+          ...paginationEntries(1)[0],
+          id: 12_000 + index,
+          published_at: timestamp,
+        }))
+        await mount("/", {
+          entries,
+          total: entries.length,
+          pageSize: 4,
+          strictHomePagination: true,
+          deferTieDrain: true,
+        })
+        await waitFor(
+          () => contentState.get().isArticleListReady && contentState.get().entries.length === 4,
+          "Initial stale-session tie page did not commit",
+        )
+        const committedIds = contentState.get().entries.map(({ id }) => id)
+        const initialRevision = dataState.get().sessionRevision
+        const initialSnapshot = contentState.get().articleListSnapshotRevision
+        const root = scrollRoot()
+        root.scrollTop = root.scrollHeight
+        sentinels()[0].scrollIntoView({ block: "end" })
+        root.dispatchEvent(new Event("scroll"))
+        await waitFor(
+          () =>
+            listRequests().some(
+              (url) => new URL(url, "https://fixture.invalid").searchParams.get("order") === "id",
+            ),
+          "Tie-drain request did not start",
+        )
+
+        fixtureEntries = paginationEntries(4).map((entry, index) => ({
+          ...entry,
+          id: 13_000 + index,
+        }))
+        fixtureTotal = fixtureEntries.length
+        dataState.setKey("sessionRevision", initialRevision + 1)
+        await waitFor(
+          () =>
+            contentState.get().isArticleListReady &&
+            contentState.get().articleListSnapshotRevision === initialSnapshot + 1,
+          "New session canonical Home snapshot did not commit",
+        )
+        const nextSessionIds = contentState.get().entries.map(({ id }) => id)
+        deferredTieDrain?.resolve({ entries: [entries[4]], total: entries.length })
+        deferredTieDrain = null
+        await settle()
+        const finalState = contentState.get()
+        const finalIds = finalState.entries.map(({ id }) => id)
+        assert(
+          nextSessionIds.join(",") !== committedIds.join(",") &&
+            finalIds.join(",") === nextSessionIds.join(",") &&
+            !finalIds.includes(entries[4].id),
+          `Stale tie-drain response modified the new Home session: ${JSON.stringify({
+            committedIds,
+            nextSessionIds,
+            finalIds,
+            expectedStaleId: entries[4].id,
+            initialRevision,
+            currentRevision: dataState.get().sessionRevision,
+            initialSnapshot,
+            currentSnapshot: finalState.articleListSnapshotRevision,
+            boundary: finalState.homePaginationBoundary,
+            tieRequests: listRequests()
+              .map((url) => new URL(url, "https://fixture.invalid").searchParams.toString())
+              .filter((query) => query.includes("order=id")),
+          })}`,
         )
       },
     ],

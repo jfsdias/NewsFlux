@@ -50,6 +50,43 @@ test("preserves the single supplied cursor and page size", () => {
   })
 })
 
+test("uses a bounded ID-ordered query only while draining a Home timestamp tie", () => {
+  assert.deepEqual(
+    buildHomeEntryRequest({
+      pageSize: 20,
+      showHiddenFeeds: false,
+      cursor: 1_791_752_400,
+      tieDrain: { bucketSecond: 1_791_752_400, beforeEntryId: 11_020 },
+    }),
+    {
+      status: "unread",
+      order: "id",
+      direction: "desc",
+      limit: 20,
+      globally_visible: true,
+      published_after: 1_791_752_399,
+      published_before: 1_791_752_401,
+      before_entry_id: 11_020,
+    },
+  )
+  assert.deepEqual(
+    buildHomeEntryRequest({
+      pageSize: 20,
+      showHiddenFeeds: true,
+      tieDrain: { bucketSecond: 1_791_752_400, beforeEntryId: null },
+    }),
+    {
+      status: "unread",
+      order: "id",
+      direction: "desc",
+      limit: 20,
+      globally_visible: false,
+      published_after: 1_791_752_399,
+      published_before: 1_791_752_401,
+    },
+  )
+})
+
 test("uses the same query/visibility with pageSize=1 and no cursor for count reconciliation", () => {
   for (const showHiddenFeeds of [false, true]) {
     assert.deepEqual(buildHomeEntryRequest({ pageSize: 1, showHiddenFeeds }), {

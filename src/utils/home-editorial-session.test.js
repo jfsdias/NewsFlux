@@ -5,6 +5,7 @@ import test from "node:test"
 const {
   appendHomeSessionEntries,
   createHomeEditorialSession,
+  createHomePaginationBoundary,
   createHomeSessionKey,
   deduplicateHomeEntriesById,
   getHomePaginationBoundary,
@@ -272,7 +273,10 @@ test("HOME_INITIAL_DUPLICATES_KEEP_RAW_CURSOR_AND_LOAD_MORE_SEMANTICS", () => {
     /isHome && preserveHomeSession\s*\? mergeHomeSessionEntries\(contentState\.get\(\)\.entries, homeEntries\)\s*:\s*homeEntries/,
   )
   assert.match(handleResponsesSource, /setEntries\(preparedEntries\)/)
-  assert.match(handleResponsesSource, /cursor: getHomePaginationBoundary\(canonicalEntries\)/)
+  assert.match(
+    handleResponsesSource,
+    /createHomePaginationBoundary\(\{[\s\S]*entries: canonicalEntries,[\s\S]*total: response\.total/,
+  )
   assert.match(
     handleResponsesSource,
     /setLoadMoreVisible\(canonicalEntries\.length < response\.total\)/,
@@ -309,6 +313,25 @@ test("Home pagination boundary uses the second-oldest canonical timestamp for ov
     Math.floor(Date.parse(canonicalPage[18].published_at) / 1000),
   )
   assert.equal(getHomePaginationBoundary([]), null)
+})
+
+test("Home pagination boundary starts a transient drain for a saturated one-second page", () => {
+  const timestamp = "2026-10-18T12:00:00.250Z"
+  const entries = Array.from({ length: 20 }, (_, index) => ({
+    id: 20 - index,
+    published_at: timestamp,
+  }))
+  assert.deepEqual(createHomePaginationBoundary({ entries, total: 21, pageSize: 20 }), {
+    cursor: Math.floor(Date.parse(timestamp) / 1000),
+    tieDrain: {
+      bucketSecond: Math.floor(Date.parse(timestamp) / 1000),
+      beforeEntryId: null,
+    },
+  })
+  assert.equal(
+    createHomePaginationBoundary({ entries, total: 20, pageSize: 20 }).tieDrain,
+    undefined,
+  )
 })
 
 test("session identity or visibility change discards old Highlights", () => {
