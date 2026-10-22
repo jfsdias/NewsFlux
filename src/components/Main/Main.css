@@ -54,6 +54,114 @@
   width: 400px;
 }
 
+/* Discovery candidates are reading content, so rows stay opaque; glass is reserved for chrome. */
+.add-feed-discovery-modal .arco-modal-content > p {
+  margin: 0 0 12px;
+  color: var(--nf-text-secondary);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.add-feed-discovery-candidates {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+  max-height: min(56dvh, 480px);
+  padding: 3px;
+  width: 100%;
+  overflow-y: auto;
+  text-align: left;
+  white-space: normal;
+  overscroll-behavior: contain;
+}
+
+/* Two classes so the row beats Arco's vertical radio-group rule (display: block, line-height: 32px). */
+.add-feed-discovery-candidates .add-feed-discovery-candidate {
+  display: block;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  margin: 0;
+  border: 1px solid var(--nf-separator-subtle);
+  border-radius: var(--nf-radius-card);
+  padding: 10px 14px;
+  min-height: var(--mobile-form-control-size);
+  width: 100%;
+  color: var(--nf-text-primary);
+  background-color: var(--nf-surface-raised);
+  line-height: 22px;
+}
+
+.add-feed-discovery-candidates .add-feed-discovery-candidate.arco-radio {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+  transition:
+    background-color var(--nf-motion-fast) ease,
+    border-color var(--nf-motion-fast) ease;
+}
+
+.add-feed-discovery-candidate.arco-radio .arco-radio-mask-wrapper {
+  flex: 0 0 auto;
+  top: 4px;
+  vertical-align: baseline;
+}
+
+.add-feed-discovery-candidate.arco-radio .arco-radio-mask {
+  border-color: var(--nf-text-tertiary);
+}
+
+.add-feed-discovery-candidate.arco-radio .arco-radio-text {
+  flex: 1 1 auto;
+  margin: 0;
+  min-width: 0;
+  color: inherit;
+}
+
+.add-feed-discovery-candidates .add-feed-discovery-candidate.arco-radio-checked {
+  border-color: var(--nf-accent);
+  background-color: color-mix(in srgb, var(--nf-accent) 12%, var(--nf-surface-raised));
+}
+
+.add-feed-discovery-candidate.arco-radio:has(> input[type="radio"]:focus-visible) {
+  outline: 2px solid var(--nf-focus-ring);
+  outline-offset: 1px;
+}
+
+.add-feed-discovery-candidate-title,
+.add-feed-discovery-candidate-url {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.add-feed-discovery-candidate-title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+/* A lone title is the URL fallback, so it reads as an address rather than a headline. */
+.add-feed-discovery-candidate-title:only-child {
+  font-weight: 500;
+}
+
+.add-feed-discovery-candidate-url {
+  margin-top: 2px;
+  color: var(--nf-text-secondary);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+@media (hover: hover) {
+  .add-feed-discovery-candidates
+    .add-feed-discovery-candidate.arco-radio:not(.arco-radio-checked):hover {
+    background-color: color-mix(in srgb, var(--nf-text-primary) 5%, var(--nf-surface-raised));
+  }
+}
+
 @media screen and (max-width: 992px) {
   .main {
     margin: 0;
@@ -121,6 +229,22 @@
   .add-feed-discovery-modal {
     width: calc(100% - 16px);
     max-width: 400px;
+  }
+
+  .add-feed-discovery-modal .arco-modal-content > p,
+  .add-feed-discovery-candidate-title {
+    font-size: var(--mobile-form-font-size);
+  }
+
+  .add-feed-discovery-candidate-url {
+    font-size: 14px;
+    line-height: 20px;
+  }
+
+  .add-feed-discovery-modal .arco-modal-footer .arco-btn {
+    min-width: 88px;
+    height: var(--mobile-form-control-size);
+    font-size: var(--mobile-form-font-size);
   }
 
   .add-feed-modal .arco-modal-header,

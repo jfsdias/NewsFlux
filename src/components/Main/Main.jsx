@@ -1,6 +1,6 @@
 import { Button, Form, Input, Message, Radio, Select, Switch } from "@arco-design/web-react"
 import { useStore } from "@nanostores/react"
-import { useEffect, useRef, useState } from "react"
+import { Fragment, useEffect, useRef, useState } from "react"
 import { Outlet, useLocation, useNavigate } from "react-router"
 
 import { addFeed, discoverFeeds } from "@/apis"
@@ -20,6 +20,52 @@ import "./Main.css"
 const urlRule = [{ required: true }]
 const categoryRule = [{ required: true }]
 const crawlerRule = [{ type: "boolean" }]
+
+// Lowercased, scheme-less and slash-less so "Example.com/feed/" and "https://example.com/feed"
+// read as the same text.
+const normalizeDiscoveryText = (value) =>
+  value
+    .replaceAll(/\s+/g, " ")
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/\/+$/, "")
+    .toLowerCase()
+
+// A candidate's URL is shown exactly once: as the primary line when the title is missing or only
+// repeats the URL, and as the secondary line when the title adds information.
+const getDiscoveryCandidateLabels = ({ title, url }) => {
+  const label = typeof title === "string" ? title.replaceAll(/\s+/g, " ").trim() : ""
+  if (!label || normalizeDiscoveryText(label) === normalizeDiscoveryText(url)) {
+    return { primary: url, secondary: null }
+  }
+  return { primary: label, secondary: url }
+}
+
+// <wbr> after path punctuation lets a long URL wrap at segment boundaries instead of mid-word.
+const UrlText = ({ value }) =>
+  (value.match(/[^/?&=#]+[/?&=#]*|[/?&=#]+/g) ?? []).map((part, index) => (
+    <Fragment key={`${index}:${part}`}>
+      {index > 0 && <wbr />}
+      {part}
+    </Fragment>
+  ))
+
+const DiscoveryCandidateLabel = ({ candidate }) => {
+  const { primary, secondary } = getDiscoveryCandidateLabels(candidate)
+
+  return (
+    <>
+      <span className="add-feed-discovery-candidate-title">
+        {secondary === null ? <UrlText value={primary} /> : primary}
+      </span>
+      {secondary !== null && (
+        <span className="add-feed-discovery-candidate-url">
+          <UrlText value={secondary} />
+        </span>
+      )}
+    </>
+  )
+}
 
 const SettingsModal = () => {
   const location = useLocation()
@@ -344,25 +390,31 @@ const AddFeedModal = () => {
         {discoveryPrompt?.mode === "confirm" ? (
           <>
             <p>{polyglot.t("main.add_feed_discover_single_description")}</p>
-            {discoveryPrompt.candidates.map((candidate) => (
-              <div key={candidate.url}>
-                <strong>{candidate.title || candidate.url}</strong>
-                <div>{candidate.url}</div>
-              </div>
-            ))}
+            <div className="add-feed-discovery-candidates">
+              {discoveryPrompt.candidates.map((candidate) => (
+                <div key={candidate.url} className="add-feed-discovery-candidate">
+                  <DiscoveryCandidateLabel candidate={candidate} />
+                </div>
+              ))}
+            </div>
           </>
         ) : (
           <>
             <p>{polyglot.t("main.add_feed_discover_multiple_description")}</p>
             <Radio.Group
               aria-label={discoveryTitle}
+              className="add-feed-discovery-candidates"
+              direction="vertical"
               value={selectedDiscoveryUrl}
               onChange={setSelectedDiscoveryUrl}
             >
               {discoveryPrompt?.candidates.map((candidate) => (
-                <Radio key={candidate.url} value={candidate.url}>
-                  <span>{candidate.title || candidate.url}</span>
-                  <div>{candidate.url}</div>
+                <Radio
+                  key={candidate.url}
+                  className="add-feed-discovery-candidate"
+                  value={candidate.url}
+                >
+                  <DiscoveryCandidateLabel candidate={candidate} />
                 </Radio>
               ))}
             </Radio.Group>
