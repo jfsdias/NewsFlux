@@ -43,28 +43,22 @@ test("PWA-03A1 the page never reloads from a service worker event on its own", (
   assert.match(mainSource, /createPwaUpdateController/)
 })
 
-test("PWA-03A1 the only reloads in main.jsx are the preload-error guard and the user-approved reload", () => {
+test("PWA-03A1 the only reload in main.jsx is the user-approved update reload", () => {
   assert.equal(
     countMatches(mainSource, /location\.reload\(\)/g),
-    2,
-    "one in handlePreloadError, one passed to the update controller",
+    1,
+    "the preload-error recovery must not reload without an explicit user action",
   )
 })
 
-test("PWA-03A1 the existing preload-error guard is unchanged", () => {
-  assert.match(mainSource, /const PRELOAD_ERROR_RELOAD_KEY = "reactflux:preload-error-reload"/)
-  assert.match(mainSource, /const PRELOAD_ERROR_RELOAD_COOLDOWN_MS = 10_000/)
-  assert.match(
-    mainSource,
-    /globalThis\.addEventListener\("vite:preloadError", handlePreloadError\)/,
-  )
-  const guard = mainSource.slice(
-    mainSource.indexOf("const handlePreloadError"),
-    mainSource.indexOf('globalThis.addEventListener("vite:preloadError"'),
-  )
-  assert.match(guard, /globalThis\.sessionStorage\.getItem\(PRELOAD_ERROR_RELOAD_KEY\)/)
-  assert.match(guard, /elapsed < PRELOAD_ERROR_RELOAD_COOLDOWN_MS/)
-  assert.match(guard, /event\.preventDefault\(\)\s*\n\s*globalThis\.location\.reload\(\)/)
+test("PWA-03A1 preload recovery is installed before React and remains separate from updates", () => {
+  const recoveryInstall = mainSource.indexOf("installPwaChunkRecovery({")
+  const reactMount = mainSource.indexOf("ReactDOM.createRoot")
+
+  assert.notEqual(recoveryInstall, -1)
+  assert.ok(recoveryInstall < reactMount)
+  assert.match(mainSource, /createPwaUpdateController/)
+  assert.doesNotMatch(mainSource, /reactflux:preload-error-reload/)
 })
 
 test("PWA-03A1 a pending update is transient and adds no persistent state", () => {
