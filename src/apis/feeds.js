@@ -29,7 +29,18 @@ export const discoverFeeds = async (url) => {
   }
 }
 
-export const deleteFeed = async (id) => apiClient.raw(`/v1/feeds/${id}`, { method: "DELETE" })
+export const deleteFeed = async (id) => {
+  try {
+    return await apiClient.raw(`/v1/feeds/${id}`, { method: "DELETE", retry: false })
+  } catch (error) {
+    // Miniflux returns 404 when the feed is already absent for this user.
+    if (error?.status === 404) {
+      return new Response(null, { status: 204 })
+    }
+
+    throw error
+  }
+}
 
 export const updateFeed = async (id, newDetails) => {
   const { categoryId, title, siteUrl, feedUrl, hidden, disabled, isFullText } = newDetails
