@@ -7,6 +7,14 @@ handle @staticFiles {
 	file_server
 }
 
+# Build assets are immutable references from the loaded application shell. If a
+# hashed asset is absent, return a real file-server miss instead of the SPA
+# document so Vite can surface the lazy-chunk recovery path.
+@buildAssets path_regexp buildAssets \.(?:avif|css|eot|gif|ico|jpe?g|js|json|map|mjs|mp3|mp4|otf|pdf|png|svg|ttf|txt|wasm|webm|webmanifest|webp|woff2?|xml)$
+handle @buildAssets {
+	file_server
+}
+
 handle {$REACTFLUX_BASE_PATH:/}* {
 	try_files {path} {path}/ {$REACTFLUX_BASE_PATH:/}index.html
 	file_server
