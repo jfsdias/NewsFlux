@@ -3,7 +3,7 @@ import { useStore } from "@nanostores/react"
 import classNames from "classnames"
 import { memo, useLayoutEffect, useRef, useState } from "react"
 
-import FeedIcon from "@/components/ui/FeedIcon"
+import FeedSourceMark from "@/components/ui/FeedSourceMark"
 import { articleGridCardSettingsState } from "@/store/settingsState"
 import { generateReadingTime, generateRelativeTime } from "@/utils/date"
 
@@ -133,7 +133,7 @@ const getCoverCandidates = (entry) =>
       ? [{ height: entry.coverHeight, src: entry.coverSource, width: entry.coverWidth }]
       : []
 
-const ArticleGridCard = ({ displayTitle, entry, feedIconMonogramFallback }) => {
+const ArticleGridCard = ({ displayTitle, entry, feed, sourceDescriptionId, sourceName }) => {
   const { showCardSummary, showDetailedRelativeTime, showEstimatedReadingTime, showFeedIcon } =
     useStore(articleGridCardSettingsState)
   const [coverState, setCoverState] = useState(() => ({
@@ -261,13 +261,11 @@ const ArticleGridCard = ({ displayTitle, entry, feedIconMonogramFallback }) => {
         <div className="grid-card-meta">
           <div className="grid-card-source">
             {showFeedIcon && (
-              <FeedIcon
-                className="grid-card-feed-icon"
-                feed={entry.feed}
-                monogramFallback={feedIconMonogramFallback}
-              />
+              <FeedSourceMark className="grid-card-feed-icon" feed={feed} size={20} />
             )}
-            <span>{entry.feed.title}</span>
+            <span className="grid-card-source-title" id={sourceDescriptionId}>
+              {sourceName}
+            </span>
           </div>
           <time className="grid-card-time" dateTime={entry.published_at}>
             {generateRelativeTime(entry.published_at, showDetailedRelativeTime)}

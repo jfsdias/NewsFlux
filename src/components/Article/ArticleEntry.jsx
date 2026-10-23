@@ -12,17 +12,18 @@ import {
 } from "@arco-design/web-react/icon"
 import { useStore } from "@nanostores/react"
 import classNames from "classnames"
-import { memo, useLayoutEffect, useMemo, useRef } from "react"
+import { memo, useId, useLayoutEffect, useMemo, useRef } from "react"
 
 import useEntryActions from "@/hooks/useEntryActions"
 import { polyglotState } from "@/hooks/useLanguage"
 import useLongPressContextMenu from "@/hooks/useLongPressContextMenu"
 import useMarkRelativeRead from "@/hooks/useMarkRelativeRead"
 import { contentState, createEntrySelectedState } from "@/store/contentState"
-import { hasIntegrationsState } from "@/store/dataState"
+import { catalogFeedsByIdState, hasIntegrationsState } from "@/store/dataState"
 import { articleEntryInteractionSettingsState } from "@/store/settingsState"
 import getEntryDisplayTitle from "@/utils/entry-display-title"
 import { getRelativeUnreadTargetIds } from "@/utils/relative-read-targets"
+import { getSourceDisplayName } from "@/utils/source-identity"
 
 import "./ArticleEntry.css"
 
@@ -60,7 +61,6 @@ const ArticleEntry = ({
   observeRead,
   presentationClassName,
   presenter: Presenter,
-  feedIconMonogramFallback = false,
   selectionMode = false,
   bulkSelected = false,
   selectionDisabled = false,
@@ -69,6 +69,7 @@ const ArticleEntry = ({
 }) => {
   const { enableContextMenu, markReadOnScroll } = useStore(articleEntryInteractionSettingsState)
   const { infoFrom } = useStore(contentState, { keys: ["infoFrom"] })
+  const catalogFeedsById = useStore(catalogFeedsByIdState)
   const hasIntegrations = useStore(hasIntegrationsState)
   const { polyglot } = useStore(polyglotState)
   const selectedState = useMemo(() => createEntrySelectedState(entry.id), [entry.id])
@@ -79,6 +80,9 @@ const ArticleEntry = ({
     entry.title,
     polyglot.t("article_card.untitled_article"),
   )
+  const sourceFeed = catalogFeedsById.get(String(entry.feed?.id)) ?? entry.feed ?? {}
+  const sourceName = getSourceDisplayName(sourceFeed) ?? ""
+  const sourceDescriptionId = `${useId()}-source`
 
   const {
     handleSaveToThirdPartyServices,
@@ -123,6 +127,9 @@ const ArticleEntry = ({
   )
   const { getPrimaryLinkProps, openInReactFlux, opensSourceOnCardClick } = articleActivation
   const primaryLinkProps = getPrimaryLinkProps(entry)
+  const describedBy = [primaryLinkProps["aria-describedby"], sourceDescriptionId]
+    .filter(Boolean)
+    .join(" ")
   const accessibleLabel = isUnread
     ? polyglot.t("article_card.unread_article_aria_label", { title: displayTitle })
     : displayTitle
@@ -148,6 +155,7 @@ const ArticleEntry = ({
       {...primaryLinkProps}
       ref={entryRef}
       {...longPressProps}
+      aria-describedby={describedBy}
       aria-label={accessibleLabel}
       data-entry-id={entry.id}
       className={classNames("article-entry", ENTRY_CLASS_NAMES[layout], presentationClassName, {
@@ -161,8 +169,10 @@ const ArticleEntry = ({
       <Presenter
         displayTitle={displayTitle}
         entry={entry}
-        feedIconMonogramFallback={feedIconMonogramFallback}
+        feed={sourceFeed}
         previewContent={previewContent}
+        sourceDescriptionId={sourceDescriptionId}
+        sourceName={sourceName}
       />
     </a>
   )

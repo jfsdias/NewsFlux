@@ -446,8 +446,7 @@
   }
 
   .sidebar-drawer .sidebar-container .arco-menu-item .arco-icon,
-  .sidebar-drawer .arco-collapse-item-header-icon,
-  .sidebar-drawer .feed-icon-sidebar {
+  .sidebar-drawer .arco-collapse-item-header-icon {
     width: var(--mobile-navigation-icon-size);
     height: var(--mobile-navigation-icon-size);
     font-size: var(--mobile-navigation-icon-size);

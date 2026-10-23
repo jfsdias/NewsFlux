@@ -52,6 +52,11 @@ export const catalogFeedsState = computed([feedsDataState, languageState], (feed
   sortMixedLanguageArray(feeds, "title", language),
 )
 
+export const catalogFeedsByIdState = computed(
+  catalogFeedsState,
+  (feeds) => new Map(feeds.map((feed) => [String(feed.id), feed])),
+)
+
 export const catalogCategoriesState = computed(
   [categoriesDataState, languageState],
   (categories, language) => sortMixedLanguageArray(categories, "title", language),
