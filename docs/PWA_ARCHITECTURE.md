@@ -2,8 +2,8 @@
 
 - **Status:** planning and architecture contract. This document does not authorize implementation, merge or deployment.
 - **Created:** 2026-10-22, against GitHub `main` at `d7c0fc8e4ab7b5f0d959bea96cc04b086deb36fc`.
-- **Last reconciled:** 2026-10-23, against GitHub `main` at `96bd1fe563571bfa322b2fd79f6fc12f49107a76`; current implementation and audit status is recorded in §15.
-- **Track:** PWA Foundation architecture; the PWA-03A2 runtime sequence is complete in the current production app, while installability decisions remain open.
+- **Last reconciled:** 2026-10-23, against GitHub `main` at `fa27a4cec1cae1e887041ee3999622c5b8f76681`; current implementation and audit status is recorded in §16.
+- **Track:** PWA Foundation architecture; the PWA-03A2 runtime sequence remains in production at `96bd1fe563571bfa322b2fd79f6fc12f49107a76`. PR #96 advanced `main` to `fa27a4cec1cae1e887041ee3999622c5b8f76681` but was not deployed. Installability decisions remain open.
 - **Amended:** 2026-10-22, after the PM review of PR #86 (PASS WITH DOCUMENTATION AMENDMENTS): the production topology is partially recorded (D4, `PM_REPORTED`), the authorization state of PWA-00 and PWA-01A is recorded, and a priority rule for PWA-03A is added. No product code changed.
 - **Companion documents:** [`NEWSFLUX_ROADMAP.md`](./NEWSFLUX_ROADMAP.md) (sequencing), [`NEWSFLUX_PROJECT_STATE.md`](./NEWSFLUX_PROJECT_STATE.md) (operational state), [`DESIGN_REFERENCES.md`](./DESIGN_REFERENCES.md) (NetNewsWire UX research track), [`NEWSFLUX_NAV_VISUAL_01.md`](./NEWSFLUX_NAV_VISUAL_01.md) (window classes and navigation contract), [`PWA_00_BASELINE.md`](./PWA_00_BASELINE.md) (PWA-00 measurement record).
 
@@ -31,7 +31,7 @@ MERGE_AUTHORIZED=NO
 DEPLOY_AUTHORIZED=NO
 ```
 
-The original planning and audit sections below preserve their 2026-10-22 evidence and decisions. Their sequencing/authorization snapshot is historical; §15 records the current merged runtime and the later PWA-01A/01B audit outcomes. The architecture constraints and open PM decisions remain in force unless explicitly resolved there.
+The original planning and audit sections below preserve their 2026-10-22 evidence and decisions. Their sequencing/authorization snapshot is historical; §16 records the current merged runtime and the later PWA-01A/01B audit outcomes. The architecture constraints and open PM decisions remain in force unless explicitly resolved there.
 
 ## 1. Purpose and boundaries
 
@@ -483,17 +483,17 @@ The `sw.js` URL must stay stable for the life of the product; moving it orphans 
 
 ## 12. Inputs required from the PM (open)
 
-| ID  | Decision / input                                                                                                                                                                                                                                                                                                                                      | Needed by        |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| D1  | Manifest `id` value (stable, base-path aware).                                                                                                                                                                                                                                                                                                        | PWA-01A          |
-| D2  | `theme_color` / `background_color` policy for an OLED-first app, given a single manifest value.                                                                                                                                                                                                                                                       | PWA-01B          |
-| D3  | Maskable icon art direction.                                                                                                                                                                                                                                                                                                                          | PWA-01A          |
-| D4  | **Partially resolved (`PM_REPORTED`, §3.4).** Recorded: origin `https://news.jfsdias.ddns.net/`, Nginx Proxy Manager, network `npm-proxyyml_default`, `http://newsflux:2000`, exact `newsflux-local:<shortcommit>` image contract. Remaining: relation to the Miniflux origin (not assumed same-origin) and NPM header behavior — measured in PWA-00. | PWA-00           |
-| D5  | `ID-DEPLOY-01` (local build vs registry/deployer) or an explicit waiver so PWA-01C may change `Caddyfile`.                                                                                                                                                                                                                                            | PWA-01C          |
-| D6  | Update policy: deferred auto-reload vs user prompt.                                                                                                                                                                                                                                                                                                   | PWA-03A          |
-| D7  | Third-party icon fallback (DuckDuckGo): keep, make opt-in, proxy through Miniflux, or remove.                                                                                                                                                                                                                                                         | NNW-01B          |
-| D8  | Token-only authentication guidance vs retained plaintext password in `localStorage`.                                                                                                                                                                                                                                                                  | Security backlog |
-| D9  | Whether any offline reading is ever wanted (it triggers §5.2).                                                                                                                                                                                                                                                                                        | Before PWA-03D   |
+| ID  | Decision / input                                                                                                                                                                                                                                                                                                                                      | Needed by      |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| D1  | Manifest `id` value (stable, base-path aware).                                                                                                                                                                                                                                                                                                        | PWA-01A        |
+| D2  | `theme_color` / `background_color` policy for an OLED-first app, given a single manifest value.                                                                                                                                                                                                                                                       | PWA-01B        |
+| D3  | Maskable icon art direction.                                                                                                                                                                                                                                                                                                                          | PWA-01A        |
+| D4  | **Partially resolved (`PM_REPORTED`, §3.4).** Recorded: origin `https://news.jfsdias.ddns.net/`, Nginx Proxy Manager, network `npm-proxyyml_default`, `http://newsflux:2000`, exact `newsflux-local:<shortcommit>` image contract. Remaining: relation to the Miniflux origin (not assumed same-origin) and NPM header behavior — measured in PWA-00. | PWA-00         |
+| D5  | `ID-DEPLOY-01` (local build vs registry/deployer) or an explicit waiver so PWA-01C may change `Caddyfile`.                                                                                                                                                                                                                                            | PWA-01C        |
+| D6  | Update policy: deferred auto-reload vs user prompt.                                                                                                                                                                                                                                                                                                   | PWA-03A        |
+| D7  | **RESOLVED for NNW-01:** no third-party favicon lookup; use Miniflux provider icon → local deterministic monogram → local default icon.                                                                                                                                                                                                               | NNW-01B        |
+| D8  | **Architecture approved; implementation on hold.** Preserve consent → password login → create key → verify `/v1/me` → store token and key ID → only then drop stored password; logout revokes the installation's own key first.                                                                                                                       | AUTH_APIKEY_01 |
+| D9  | Whether any offline reading is ever wanted (it triggers §5.2).                                                                                                                                                                                                                                                                                        | Before PWA-03D |
 
 ## 13. Relationship to existing roadmap items
 
@@ -512,9 +512,9 @@ The `sw.js` URL must stay stable for the life of the product; moving it orphans 
 
 Read for this document (all at `d7c0fc8e`): `vite.config.js`, `index.html`, `src/main.jsx`, `src/hooks/useTheme.js`, `src/index.css`, `src/App.css`, `src/components/Sidebar/Sidebar.css`, `src/store/authState.js`, `src/store/sidebarState.js`, `src/utils/session.js`, `src/apis/ofetch.js`, `src/routes.jsx`, `src/pages/Login.jsx`, `src/components/ui/FeedIcon.jsx`, `src/hooks/useFeedIcons.js`, `Caddyfile`, `Dockerfile`, `docker-compose.yml`; build outputs `manifest.webmanifest`, `sw.js` and the main bundle for the default base path and for `VITE_BASE_PATH=/newsflux/`; the existing documentation set. The PM review of PR #86 supplied the `PM_REPORTED` production topology (§3.4). No product file was modified.
 
-## 15. Current implementation and audit status (2026-10-23)
+## 15. Historical implementation and audit snapshot (2026-10-23, before PR #96 merge)
 
-The architecture and audit work was reconciled against live GitHub `main` at `96bd1fe563571bfa322b2fd79f6fc12f49107a76`. A fresh production browser document loaded successfully and About reported the same full revision. This confirms the served app identity; no Docker image ID or container restart count was independently inspected in this session.
+This section preserves the pre-PR #96 snapshot. Its `main` and production values matched at that time; Section 16 is authoritative for current state. Historical evidence is retained without changing the earlier record.
 
 ```text
 CURRENT_MAIN=96bd1fe563571bfa322b2fd79f6fc12f49107a76
@@ -559,4 +559,40 @@ The existing generated manifest already builds with base-path-correct `start_url
 
 The runtime updates the `theme-color` metadata when the app theme changes. The manifest still supplies a single static `theme_color` / `background_color` pair, which cannot encode both light and dark policy. No implementation was made; D2 must decide the manifest color policy. Browser runtime metadata evidence is not a substitute for installed-app splash/chrome validation.
 
-The 2026-10-22 rollback snapshot and PWA-03A2C deployment blocker are closed by the subsequent merged work recorded above. The production browser identity matches current `main`; this section records no Docker/container inspection. D1, D2 and D3 remain product decisions, and this document authorizes no new implementation, merge or deployment.
+The 2026-10-22 rollback snapshot and PWA-03A2C deployment blocker were closed by the subsequent merged work recorded in this historical snapshot. At that time the production browser identity matched `main`; the current production/main distinction is recorded in Section 16. D1, D2 and D3 remain product decisions, and this document authorizes no new implementation, merge or deployment.
+
+## 16. Current implementation and audit status (post-PR #96, 2026-10-23)
+
+GitHub `main` is `fa27a4cec1cae1e887041ee3999622c5b8f76681` after PR #96. Production remains at `96bd1fe563571bfa322b2fd79f6fc12f49107a76`, where the PWA-03A2 runtime sequence was promoted through PR #95. PR #96 has not been deployed, so main/production parity is **NO**. The PR #95 exact-SHA production receipt is owner-provided (`PM_REPORTED`): image/revision, internal and public HTTP checks including the asset-404 canary passed, and the rollback image and compose backup were preserved. The receipt did not include a restart count.
+
+```text
+CURRENT_MAIN=fa27a4cec1cae1e887041ee3999622c5b8f76681
+PRODUCTION_SHA=96bd1fe563571bfa322b2fd79f6fc12f49107a76
+PRODUCTION_IMAGE=newsflux-local:96bd1fe56357
+PRODUCTION_RECEIPT=PM_REPORTED_OWNER_PROVIDED_PR95_EXACT_SHA
+PRODUCTION_IMAGE_REVISION=PASS
+PRODUCTION_INTERNAL_HTTP=PASS
+PRODUCTION_PUBLIC_HTTP=200
+PRODUCTION_ASSET_404_CANARY=PASS
+PRODUCTION_ROLLBACK_IMAGE_AND_COMPOSE_BACKUP=PRESERVED
+PRODUCTION_RESTART_COUNT=NOT_REPORTED
+MAIN_PRODUCTION_PARITY=NO
+PR96_DEPLOYED=NO
+
+PR96_STATUS=MERGED
+PR96_FEATURE_HEAD=98a1f93f9a9ccb411230c041726c4dece1f4e1b9
+PR96_MERGE_SHA=fa27a4cec1cae1e887041ee3999622c5b8f76681
+API_NONIDEMPOTENT_RETRY_01=COMPLETE
+PWA03A2=COMPLETE_IN_PRODUCTION_AT_96bd1fe
+PWA01A_AUDIT=COMPLETE
+PWA01A_OPEN_DECISIONS=D1_MANIFEST_ID;D3_MASKABLE_ICON_ART
+PWA01A_PHYSICAL_INSTALL_AND_DEEP_LINK_GATES=NOT_RUN
+PWA01B_AUDIT=COMPLETE
+PWA01B_OPEN_DECISION=D2_MANIFEST_THEME_AND_BACKGROUND_POLICY
+PWA01B_RUNTIME_THEME_META=UPDATES_DURING_THEME_CHANGE
+
+MERGE_AUTHORIZED=NO
+DEPLOY_AUTHORIZED=NO
+```
+
+PR #96's API retry correction is a functional main change, not a PWA deployment. The PWA-03A2 sequence remains active in production at the PR #95 baseline. D1 (manifest ID), D2 (manifest theme/background policy), and D3 (maskable icon art) remain product decisions; this architecture document authorizes no implementation, merge or deployment.

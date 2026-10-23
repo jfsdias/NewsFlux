@@ -1,24 +1,31 @@
 # NewsFlux Project State
 
 - **Purpose:** concise operational state for PM handoffs and future sessions. The roadmap remains the source for sequencing and product/architecture detail.
-- **Last reconciled:** 2026-10-23 (overnight queue closeout).
-- **Current snapshot:** GitHub `main` at `96bd1fe563571bfa322b2fd79f6fc12f49107a76` (PR #95 merge). Production About was read in a fresh in-app-browser document and reports the same SHA; Docker image/container details were not independently inspected in this session.
+- **Last reconciled:** 2026-10-23 (post-PR #96).
+- **Current snapshot:** GitHub `main` at `fa27a4cec1cae1e887041ee3999622c5b8f76681` (PR #96 merge). Production remains at `96bd1fe563571bfa322b2fd79f6fc12f49107a76`; PR #96 has not been deployed, so main and production do not have parity.
 - **Previous snapshot (historical):** GitHub `main` at `d7c0fc8e4ab7b5f0d959bea96cc04b086deb36fc` on 2026-10-22; the production baseline at that snapshot was recorded as the same SHA. The earlier 2026-10-21 snapshot is preserved below.
 - **Related planning documents:** [`PWA_ARCHITECTURE.md`](./PWA_ARCHITECTURE.md) and [`DESIGN_REFERENCES.md`](./DESIGN_REFERENCES.md) (planning only; no implementation authorized).
 
-## Current state (post-PR #95 and overnight queue, 2026-10-23)
+## Current state (post-PR #96, 2026-10-23)
 
-GitHub merge facts are verified from the live repository. Production app revision was checked through About in a fresh browser document; this does not independently prove the Docker image ID or container restart count. The separate older sections below are retained as dated historical records and do not override this current snapshot.
+GitHub merge facts are verified from the live repository. The production receipt for PR #95 is owner-provided (`PM_REPORTED`): it records the exact image/revision, internal and public HTTP checks including the asset-404 canary as passing, and preservation of the rollback image and compose backup. A separate fresh-browser About check reported the same production revision. The supplied receipt did not include a restart count. PR #96 is merged into `main` but has not been deployed; the historical snapshots below remain dated evidence and do not override this current state.
 
 ```text
 DOCS_DATE=2026-10-23
-CURRENT_MAIN=96bd1fe563571bfa322b2fd79f6fc12f49107a76
+CURRENT_MAIN=fa27a4cec1cae1e887041ee3999622c5b8f76681
+PRODUCT_MAIN_BASELINE=fa27a4cec1cae1e887041ee3999622c5b8f76681
 PRODUCTION_ABOUT_REVISION=96bd1fe563571bfa322b2fd79f6fc12f49107a76
 PRODUCTION_SHA=96bd1fe563571bfa322b2fd79f6fc12f49107a76
-PRODUCTION_IMAGE=PM_REPORTED_newsflux-local:96bd1fe56357
-PRODUCTION_APP_LOAD=PASS
-PRODUCTION_SHA_MATCHES_MAIN=YES
-PRODUCTION_DOCKER_IMAGE_INSPECTION=NOT_PERFORMED
+PRODUCTION_IMAGE=newsflux-local:96bd1fe56357
+PRODUCTION_RECEIPT=PM_REPORTED_OWNER_PROVIDED_PR95_EXACT_SHA
+PRODUCTION_IMAGE_REVISION=PASS
+PRODUCTION_INTERNAL_HTTP=PASS
+PRODUCTION_PUBLIC_HTTP=200
+PRODUCTION_ASSET_404_CANARY=PASS
+PRODUCTION_ROLLBACK_IMAGE_AND_COMPOSE_BACKUP=PRESERVED
+PRODUCTION_RESTART_COUNT=NOT_REPORTED
+MAIN_PRODUCTION_PARITY=NO
+PR96_DEPLOYED=NO
 
 PR88_STATUS=MERGED
 PR88_MERGE_SHA=3a1b2db07d9df08b8dde9f3148a02e6eb703ec7c
@@ -38,7 +45,21 @@ PWA03A2A=COMPLETE_MERGED
 PWA03A2C=COMPLETE_MERGED
 PWA03A2C1=COMPLETE_MERGED
 PWA03A2B=COMPLETE_MERGED
-PWA03A2=COMPLETE_PRODUCTION_AT_ABOUT_REVISION
+PWA03A2=COMPLETE_IN_PRODUCTION_AT_96bd1fe
+
+PR96_STATUS=MERGED
+PR96_FEATURE_HEAD=98a1f93f9a9ccb411230c041726c4dece1f4e1b9
+PR96_MERGE_SHA=fa27a4cec1cae1e887041ee3999622c5b8f76681
+API_NONIDEMPOTENT_RETRY_01=COMPLETE
+PR96_SIDE_EFFECTING_GET_UPDATE_CONTENT_TRUE=RETRY_FALSE
+PR96_POST_PUT_MUTATIONS=RETRY_FALSE_BY_DEFAULT
+PR96_RAW_POST_PUT_PATCH_DELETE=RETRY_FALSE_BY_DEFAULT
+PR96_EXPLICIT_RETRY_OPT_IN=PRESERVED
+PR96_SAFE_GET_RETRIES=PRESERVED
+PR96_FOCUSED_API_TESTS=20_OF_20_PASS
+PR96_FULL_NODE=513_PASS_2_SKIPPED
+PR96_LINT_PRETTIER_BUILD_DIFF_CHECK=PASS
+PR96_LIVE_MINIFLUX_WRITES=0
 
 UPSTREAM_LAST_REVIEWED_SHA=3b2b08fb6036ef94f92a757ac6f3df889be8515c
 LAST_INTEGRATED_UPSTREAM_SHA=3b2b08fb6036ef94f92a757ac6f3df889be8515c
@@ -56,18 +77,40 @@ STATS01_READINESS=HOLD_PRODUCT_DEFINITION_REQUIRED
 STATS01_IMPLEMENTED=NO
 STATS01_NEW_PERSISTENCE=NO
 
-STORY00R2B_STATUS=NOT_OBSERVED_IN_THIS_SESSION
-STORY00R2B_RESULTS=NOT_CLAIMED
+STORY00R2B_STATUS=COMPLETE_REJECT
+STORY00R2B_MODEL=MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7_FULL_ONNX_FP32
+STORY00R2B_PRIMARY_POOLED_S1_AUC=0.647_FAIL_BELOW_0.70
+STORY00R2B_SECOND_MODEL=NO
+STORY00R2B_LEXICAL_STAGE0_AUC=0.904_DEVELOPMENT_EVIDENCE_ONLY_NOT_ADOPTED
+STORY00R2B_POSITIVES_NEVER_CANDIDATES=47_OF_113
+STORY00R2B_POSITIVES_VETOED=7
+STORY00R2B_PERFECT_VERIFIER_RECALL_CEILING=0.522
+STORY00R2B_NEXT=STORY00_R3A_CANDIDATE_GENERATION_FORENSICS
 
-API_NONIDEMPOTENT_RETRY_01=OPEN_DRAFT_PR96
-PR96_BASE=96bd1fe563571bfa322b2fd79f6fc12f49107a76
-PR96_HEAD=88dc4d7ade30b1576f1c77cab954d7ea187bcbd8
-PR96_BRANCH=codex/api-nonidempotent-retry-01
-PR96_DIAGNOSTIC=TRANSPORT_FAILURE_CAN_REPLAY_MUTATING_POST_PUT_AND_RAW_REQUESTS
-PR96_RED_GREEN=PASS
-PR96_NODE_SUITE=509_PASS_2_SKIPPED_511_TOTAL
-PR96_LINT_PRETTIER_BUILD_DIFF_CHECK=PASS
-PR96_LIVE_MINIFLUX_WRITES=0
+STORY01_ARCHITECTURE=DETERMINISTIC_CONSERVATIVE_V1
+STORY01_P1=APPROVED_B_UNREAD_NEWEST_PUBLISHED_LOWEST_ID
+STORY01_P2=APPROVED_A_FROZEN_BLIND_SAMPLE_GE72_AUTO_MERGES_0_FALSE_MERGES
+STORY01_P3=APPROVED_A_FOR_ENGINE_B_FOR_RELEASE
+STORY01_P4=HOLD_PENDING_HOME_COVERAGE_MEASUREMENT
+STORY01_IMPLEMENTATION_AUTHORIZED=NO
+
+AUTO01_D1=RESOLVED
+AUTO01_V1=MINIFLUX_NATIVE_BLOCK_KEEP_RULES__NEW_ENTRIES_WEBHOOK_TO_N8N__SAVE_ENTRY_WEBHOOK_TO_N8N
+NEWSFLUX_TO_N8N_DIRECT_PATH=NO
+AUTO01_NEW_PERSISTENCE=NO
+AUTO01_D5=RESOLVED_BY_PR96
+AUTO01_D3_D4=ENVIRONMENT_DIAGNOSTICS
+
+NNW01_D7=NO_THIRD_PARTY_FAVICON_LOOKUP
+NNW01_ICON_PRIORITY=MINIFLUX_PROVIDER_ICON__LOCAL_DETERMINISTIC_MONOGRAM__LOCAL_DEFAULT_ICON
+NNW01_READY_FOR_DESIGN=YES
+NNW01_IMPLEMENTATION_AUTHORIZED=NO
+
+AUTH_APIKEY_01=ARCHITECTURE_APPROVED_IMPLEMENTATION_HOLD
+AUTH_APIKEY_01_LIFECYCLE=CONSENT_PASSWORD_LOGIN_CREATE_KEY_VERIFY_V1_ME_STORE_TOKEN_AND_KEY_ID_THEN_DROP_PASSWORD_LOGOUT_REVOKES_OWN_KEY_FIRST
+SECURITY_HEADERS_01=SEPARATE_BACKLOG
+SECURITY_HEADERS_01_MIX_WITH_NNW_OR_PWA=NO
+STATS01_STATUS=HOLD_PRODUCT_DEFINITION_REQUIRED
 
 HOME_PAGINATION_CURSOR_STALL_01=NOT_REPRODUCED_AFTER_PR87
 HOME_CURSOR_HARNESS=10_OF_10_PASS
@@ -75,10 +118,8 @@ HOME_TIE_RECOVERY=23_OF_23_INCLUDING_PREVIOUSLY_OMITTED_ID
 HOME_DUP_ROOT_CAUSE_01=SEPARATE_INITIAL_DUPLICATE_ID_FINDING_CLOSED_BY_PR77
 HOME_IMPLEMENTATION_CHANGED_IN_THIS_QUEUE=NO
 
-OPEN_PRS_BEFORE_OVERNIGHT_WORK=NONE
-OPEN_PRS_AT_RECONCILIATION_START=PR96
-CURRENT_OPEN_CODE_PR=96
-CURRENT_DOCS_PR=THIS_DRAFT
+PR97_STATUS=OPEN_DRAFT_DOCUMENTATION_RECONCILIATION
+CURRENT_DOCS_PR=97
 
 PWA_FOUNDATION=IMPLEMENTED_RUNTIME_AND_OPEN_INSTALLABILITY_DECISIONS
 NETNEWSWIRE_UX_REFERENCE=ACCEPTED_AS_DESIGN_INPUT
@@ -87,9 +128,9 @@ NNW_IMPLEMENTATION_AUTHORIZED=NO
 SOURCE_IDENTITY_DEFINITION=CONFIRMED_PUBLISHER_FEED_SOURCE_LEVEL_VISUAL_IDENTITY
 STORY_IDENTITY_IN_NNW01=NO
 
-CURRENT_PHASE=OVERNIGHT_QUEUE_CLOSEOUT
-CURRENT_PRIMARY_TRACK=DOCUMENTATION_RECONCILIATION_AND_PR96_PM_REVIEW
-LAST_COMPLETED_FUNCTIONAL=ADAPT_3b2b08fb_EMPTY_CAPTION / PR #85
+CURRENT_PHASE=POST_PR96_DOCUMENTATION_RECONCILIATION
+CURRENT_PRIMARY_TRACK=PR97_DOCUMENTATION_RECONCILIATION
+LAST_COMPLETED_FUNCTIONAL=API_NONIDEMPOTENT_RETRY_01 / PR #96
 MERGE_AUTHORIZED=NO
 DEPLOY_AUTHORIZED=NO
 PRODUCTION_MUTATIONS=NO
@@ -101,9 +142,9 @@ DOCUMENTATION_TARGETS=NEWSFLUX_PROJECT_STATE.md;NEWSFLUX_ROADMAP.md;PWA_ARCHITEC
 PROJECT_STATE_RECONCILED=YES_PENDING_DRAFT_REVIEW
 ```
 
-The previous post-PR #85 block and all earlier dated snapshots remain historical evidence. No result is inferred for the parallel STORY-00R2B research lane. PR #96 is the only code PR open at the start of this documentation reconciliation; this document is being prepared in its own Draft PR.
+The prior post-PR #95 block and all earlier dated snapshots remain historical evidence. Their PR #96 open-state, head, STORY-00R2B and production-parity values describe those snapshots only; they are superseded by this current block. PR #96 is merged, while PR #97 is this documentation-only Draft.
 
-The historical `PWA_FOUNDATION=PLANNED` and current `NETNEWSWIRE_UX_REFERENCE=ACCEPTED_AS_DESIGN_INPUT` values describe planning/design scope only; neither authorizes implementation, merge or deployment. The sections below that carry 2026-10-21 and 2026-10-22 values are retained as historical records and are superseded by this section.
+The historical `PWA_FOUNDATION=PLANNED` and current `NETNEWSWIRE_UX_REFERENCE=ACCEPTED_AS_DESIGN_INPUT` values describe planning/design scope only; neither authorizes implementation, merge or deployment. Remaining PWA decisions are D1 (manifest ID), D2 (manifest theme/background policy), D3 (maskable icon art), D5 (`ID-DEPLOY-01` or waiver), D6 (update policy) and D9 (offline reading); D4 production topology is partially resolved as noted below. AUTH_APIKEY_01's architecture is approved while implementation remains on hold, preserving its consent and verification lifecycle. NNW-01 D7 is resolved: no third-party favicon lookup, with provider icon → local deterministic monogram → local default icon. The sections below that carry 2026-10-21 and 2026-10-22 values are retained as historical records and are superseded by this section.
 
 ### Production topology (D4 — partially resolved, `PM_REPORTED`)
 
@@ -557,7 +598,7 @@ Not authorized by package completion:
 
 Nine incomplete design packages remain recorded above; no unrelated product or architecture decision is implied or closed.
 
-## PWA Foundation and NetNewsWire UX planning snapshot (2026-10-22; current execution status is above and in `PWA_ARCHITECTURE.md` §15)
+## PWA Foundation and NetNewsWire UX planning snapshot (2026-10-22; current execution status is above and in `PWA_ARCHITECTURE.md` §16)
 
 Documented in [`PWA_ARCHITECTURE.md`](./PWA_ARCHITECTURE.md) and [`DESIGN_REFERENCES.md`](./DESIGN_REFERENCES.md); roadmap detail is in `NEWSFLUX_ROADMAP.md` Section 3.13. **Planning only — nothing here authorizes implementation.**
 
@@ -612,7 +653,7 @@ PR #85 adapted `3b2b08fb` (`fix(article): render empty caption elements without 
 
 The specialized upstream monitor must live-check the current upstream head before auditing. New commits are classified `INTEGRATE / ADAPT / SKIP / HOLD`; never blindly Sync fork or merge upstream/main.
 
-## Known test debt and incidental findings
+## Historical findings register (2026-10-22 snapshot; current dispositions are above)
 
 - **Workflow repository guard finding:** existing `github.repository == 'electh/ReactFlux'` guards remain an open, non-blocking finding. Track a separate maintenance decision; do not change them as part of upstream reconciliation.
 - `HARNESS-UNDO-ID-01` was resolved by PR #36; the nine stale fixed-ID assertions were repaired and the focused list gate passed 29/29.
