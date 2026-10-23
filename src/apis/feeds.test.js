@@ -6,12 +6,26 @@ import { test } from "node:test"
 import { fileURLToPath, pathToFileURL } from "node:url"
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
+let fetchImplementation = null
+const nativeFetch = globalThis.fetch
+globalThis.fetch = (...args) =>
+  fetchImplementation ? fetchImplementation(...args) : nativeFetch(...args)
 const moduleMocks = {
   "@/routes":
     'const router = { state: { location: { pathname: "/", search: "", hash: "" } }, navigate: async () => {} }; export default router',
   "@/store/authState":
     'export const authState = { get: () => ({ server: "https://example.invalid", token: "fixture", username: "", password: "" }) }',
-  "@/store/dataState": "export const getDataSessionRevision = () => 0",
+  "@/store/contentState": "export const contentState = { get: () => ({ filterDate: null }) }",
+  "@/store/dataState":
+    "export const getDataSessionRevision = () => 0; export const isEntryScopeFullyVisible = () => false",
+  "@/store/settingsState":
+    'export const getSettings = (key) => key === "updateContentOnFetch" ? globalThis.__updateContentOnFetch : false',
+  "@/utils/constants":
+    "export const ENTRY_UPDATE_BATCH_SIZE = 1; export const MAX_ENTRIES_PER_PAGE = 20; export const MAX_ENTRY_IDS_PER_PAGE = 100",
+  "@/utils/date":
+    "export const get24HoursAgoTimestamp = () => 0; export const getDayEndTimestamp = () => 0; export const getTimestamp = () => 0",
+  "@/utils/entry-id-batches": "export const updateEntryIdsInBatches = async () => ({})",
+  "@/utils/home-entry-request": "export const buildHomeEntryRequest = () => ({})",
   "@/utils/auth": "export default () => true",
   "@/utils/session": "export const clearSession = () => {}",
 }
@@ -59,10 +73,163 @@ Object.defineProperty(globalThis, "localStorage", {
   },
 })
 
-const [{ default: apiClient }, { deleteFeed, discoverFeeds, updateFeed }] = await Promise.all([
-  import("./ofetch"),
-  import("./feeds"),
-])
+const [{ default: apiClient }, { deleteFeed, discoverFeeds, updateFeed }, { getOriginalContent }] =
+  await Promise.all([import("./ofetch"), import("./feeds"), import("./entries")])
+
+test("mutating requests are not replayed after a transport failure", async () => {
+  let attempts = 0
+  let simulatedProviderApplications = 0
+  fetchImplementation = async () => {
+    attempts += 1
+    simulatedProviderApplications += 1
+    if (attempts === 1) {
+      throw new TypeError("connection reset after provider applied the request")
+    }
+    return new Response(null, { status: 204 })
+  }
+
+  let requestError = null
+  try {
+    await apiClient.post("/v1/feeds", { feed_url: "https://example.test/feed.xml" })
+  } catch (error) {
+    requestError = error
+  } finally {
+    fetchImplementation = null
+  }
+
+  assert.equal(attempts, 1)
+  assert.equal(simulatedProviderApplications, 1)
+  assert.ok(requestError instanceof Error)
+})
+
+const runAfterOneTransportFailure = async (request) => {
+  let attempts = 0
+  fetchImplementation = async () => {
+    attempts += 1
+    if (attempts === 1) {
+      throw new TypeError("connection reset after provider applied the request")
+    }
+    return new Response(null, { status: 204 })
+  }
+
+  let requestError = null
+  try {
+    await request()
+  } catch (error) {
+    requestError = error
+  } finally {
+    fetchImplementation = null
+  }
+
+  return { attempts, requestError }
+}
+
+test("PUT mutations are not replayed after a transport failure", async () => {
+  const { attempts, requestError } = await runAfterOneTransportFailure(() =>
+    apiClient.put("/v1/entries", { entry_ids: [3], status: "read" }),
+  )
+
+  assert.equal(attempts, 1)
+  assert.ok(requestError instanceof Error)
+})
+
+test("raw DELETE mutations do not inherit a replaying retry policy", async () => {
+  const { attempts, requestError } = await runAfterOneTransportFailure(() =>
+    apiClient.raw("/v1/categories/4", { method: "DELETE" }),
+  )
+
+  assert.equal(attempts, 1)
+  assert.ok(requestError instanceof Error)
+})
+
+test("raw mutation retry policy is explicit and allows deliberate opt-in", async () => {
+  const { applyRawMutationRetryPolicy } = await import("./ofetch")
+
+  assert.equal(typeof applyRawMutationRetryPolicy, "function")
+  assert.deepEqual(applyRawMutationRetryPolicy({ method: "DELETE" }), {
+    method: "DELETE",
+    retry: false,
+  })
+  assert.deepEqual(applyRawMutationRetryPolicy({ method: "POST", retry: 2 }), {
+    method: "POST",
+    retry: 2,
+  })
+  assert.deepEqual(applyRawMutationRetryPolicy({ method: "GET" }), { method: "GET" })
+})
+
+test("raw mutation retry opt-in remains available when deliberate", async () => {
+  const { attempts, requestError } = await runAfterOneTransportFailure(() =>
+    apiClient.raw("/v1/categories/4", { method: "DELETE", retry: 1 }),
+  )
+
+  assert.equal(attempts, 2)
+  assert.equal(requestError, null)
+})
+
+test("provider-updating original-content GET is not replayed after a lost response", async () => {
+  globalThis.__updateContentOnFetch = true
+  let attempts = 0
+  let simulatedProviderUpdates = 0
+  let requestedUrl = ""
+  fetchImplementation = async (request, options) => {
+    attempts += 1
+    requestedUrl = String(request)
+    assert.equal(options.method, "GET")
+    simulatedProviderUpdates += 1
+    throw new TypeError("connection reset after provider updated content")
+  }
+
+  let requestError = null
+  try {
+    await getOriginalContent(42)
+  } catch (error) {
+    requestError = error
+  } finally {
+    fetchImplementation = null
+    globalThis.__updateContentOnFetch = false
+  }
+
+  assert.equal(
+    requestedUrl,
+    "https://example.invalid/v1/entries/42/fetch-content?update_content=true",
+  )
+  assert.equal(attempts, 1)
+  assert.equal(simulatedProviderUpdates, 1)
+  assert.ok(requestError instanceof Error)
+})
+
+test("non-updating original-content GET keeps safe transient retries", async () => {
+  globalThis.__updateContentOnFetch = false
+  let attempts = 0
+  let requestedUrl = ""
+  fetchImplementation = async (request) => {
+    attempts += 1
+    requestedUrl = String(request)
+    if (attempts === 1) {
+      throw new TypeError("temporary network failure")
+    }
+    return Response.json({ content: "original" })
+  }
+
+  try {
+    const response = await getOriginalContent(42)
+    assert.deepEqual(response, { content: "original" })
+  } finally {
+    fetchImplementation = null
+  }
+
+  assert.equal(requestedUrl, "https://example.invalid/v1/entries/42/fetch-content")
+  assert.equal(attempts, 2)
+})
+
+test("safe GET requests keep the transient transport retry", async () => {
+  const { attempts, requestError } = await runAfterOneTransportFailure(() =>
+    apiClient.get("/v1/feeds"),
+  )
+
+  assert.equal(attempts, 2)
+  assert.equal(requestError, null)
+})
 
 test("discoverFeeds calls the Miniflux discovery endpoint with the website URL", async () => {
   let request

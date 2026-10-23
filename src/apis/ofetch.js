@@ -7,6 +7,17 @@ import isValidAuth from "@/utils/auth"
 import { clearSession } from "@/utils/session"
 
 const REQUEST_AUTH_SESSION_KEY = Symbol("requestAuth")
+const MUTATING_HTTP_METHODS = new Set(["DELETE", "PATCH", "POST", "PUT"])
+
+export const applyRawMutationRetryPolicy = (options = {}) => {
+  const method = options.method?.toUpperCase()
+
+  if (!MUTATING_HTTP_METHODS.has(method)) {
+    return options
+  }
+
+  return { ...options, retry: options.retry ?? false }
+}
 
 const createRequestSessionSnapshot = ({ server, token, username, password }) => ({
   password,
@@ -27,7 +38,6 @@ const isCurrentRequestSession = (requestSession, auth) =>
 // 创建 ofetch 实例并设置默认配置
 const createApiClient = () => {
   return ofetch.create({
-    retry: 3, // 默认重试次数
     onRequest({ _request, options }) {
       const auth = authState.get()
       const requestSession = options[REQUEST_AUTH_SESSION_KEY]
@@ -78,8 +88,13 @@ const createApiClient = () => {
 }
 
 const apiClient = createApiClient()
-apiClient.get = (url, options = {}) => apiClient(url, { ...options, method: "GET" })
-apiClient.post = (url, body, options = {}) => apiClient(url, { ...options, method: "POST", body })
-apiClient.put = (url, body, options = {}) => apiClient(url, { ...options, method: "PUT", body })
+const rawRequest = apiClient.raw
+apiClient.raw = (url, options = {}) => rawRequest(url, applyRawMutationRetryPolicy(options))
+apiClient.get = (url, options = {}) =>
+  apiClient(url, { ...options, retry: options.retry ?? 3, method: "GET" })
+apiClient.post = (url, body, options = {}) =>
+  apiClient(url, { ...options, retry: options.retry ?? false, method: "POST", body })
+apiClient.put = (url, body, options = {}) =>
+  apiClient(url, { ...options, retry: options.retry ?? false, method: "PUT", body })
 
 export default apiClient
