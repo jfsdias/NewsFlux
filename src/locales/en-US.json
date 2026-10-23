@@ -496,7 +496,7 @@
     "show_estimated_reading_time_label": "Show estimated reading time",
     "show_estimated_reading_time_description": "Show estimated reading time in article card",
     "show_feed_icon_label": "Show feed icon",
-    "show_feed_icon_description": "Show feed icon in feed list and article card",
+    "show_feed_icon_description": "Show feed icons in source navigation, article cards, and the reader",
     "summary_lines_label": "Summary lines",
     "summary_lines_description": "Number of lines to show in article preview (0 to hide)",
     "lightbox_animation_label": "Lightbox animation",

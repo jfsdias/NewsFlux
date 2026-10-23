@@ -65,6 +65,18 @@ const getSourceDisplayName = (feed = {}) => {
   return getSafeHostname(feed.site_url) ?? getSafeHostname(feed.feed_url) ?? null
 }
 
+const getReaderSourceIdentity = (feed = {}) => {
+  const displayName = getSourceDisplayName(feed)
+  const hostname = getSafeHostname(feed.site_url) ?? getSafeHostname(feed.feed_url)
+  const normalizedDisplayName = asText(displayName).toLowerCase()
+  const normalizedHostname = asText(hostname).toLowerCase()
+
+  return {
+    displayName,
+    secondaryHostname: hostname && normalizedDisplayName !== normalizedHostname ? hostname : null,
+  }
+}
+
 const getTextualGrapheme = (value) => {
   const graphemes = splitGraphemes(asText(value))
   for (const grapheme of graphemes) {
@@ -170,6 +182,7 @@ const analyzeLoadedImage = (image, documentRef = globalThis.document) => {
 export {
   analyzeImageData,
   analyzeLoadedImage,
+  getReaderSourceIdentity,
   getSafeHostname,
   getSourceDisplayName,
   getSourceMonogram,

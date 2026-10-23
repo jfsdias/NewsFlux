@@ -496,7 +496,7 @@
     "show_estimated_reading_time_label": "推定読了時間を表示",
     "show_estimated_reading_time_description": "記事カードに推定読了時間を表示します",
     "show_feed_icon_label": "フィードアイコンを表示",
-    "show_feed_icon_description": "フィードリストと記事カードにフィードアイコンを表示します",
+    "show_feed_icon_description": "ソースナビゲーション、記事カード、リーダーにフィードアイコンを表示します",
     "summary_lines_label": "概要の行数",
     "summary_lines_description": "記事プレビューに表示する行数（0で非表示）",
     "lightbox_animation_label": "ライトボックスアニメーション",

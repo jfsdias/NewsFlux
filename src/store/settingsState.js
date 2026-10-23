@@ -72,6 +72,7 @@ export const articleDetailSettingsState = selectShallowSettings(
     fontFamily,
     fontSize,
     lightboxSlideAnimation,
+    showFeedIcon,
     titleAlignment,
   }) => ({
     articleWidth,
@@ -80,6 +81,7 @@ export const articleDetailSettingsState = selectShallowSettings(
     fontFamily,
     fontSize,
     lightboxSlideAnimation,
+    showFeedIcon,
     titleAlignment,
   }),
 )

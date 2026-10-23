@@ -14,7 +14,7 @@ import {
   useRef,
   useState,
 } from "react"
-import { useNavigate } from "react-router"
+import { Link, useNavigate } from "react-router"
 
 import ActionButtons from "./ActionButtons"
 import ArticleEnclosures from "./ArticleEnclosures"
@@ -25,13 +25,14 @@ import ImageLinkTag from "./ImageLinkTag"
 import ImageOverlayButton from "./ImageOverlayButton"
 
 import AdaptiveScrollArea from "@/components/ui/AdaptiveScrollArea"
-import CustomLink from "@/components/ui/CustomLink"
 import FadeTransition from "@/components/ui/FadeTransition"
+import FeedSourceMark from "@/components/ui/FeedSourceMark"
 import PlyrPlayer from "@/components/ui/LazyPlyrPlayer"
 import { polyglotState } from "@/hooks/useLanguage"
 import usePhotoSlider from "@/hooks/usePhotoSlider"
 import useScreenWidth, { prefersReducedMotionState } from "@/hooks/useScreenWidth"
 import { activeContentState } from "@/store/contentState"
+import { catalogFeedsByIdState } from "@/store/dataState"
 import { articleDetailSettingsState } from "@/store/settingsState"
 import returnToArticleImage from "@/utils/article-image-return"
 import extractCodeContent from "@/utils/code-content"
@@ -39,6 +40,7 @@ import { getCodeLanguage } from "@/utils/code-languages"
 import { generateReadableDate, generateReadingTime } from "@/utils/date"
 import getEntryDisplayTitle from "@/utils/entry-display-title"
 import buildArticleImageModel from "@/utils/images"
+import { getReaderSourceIdentity } from "@/utils/source-identity"
 import { getSafeExternalUrl } from "@/utils/url"
 import "./ArticleDetail.css"
 import "./ReaderStyles.css"
@@ -363,6 +365,15 @@ const ArticleDetail = forwardRef((_, ref) => {
   const { polyglot } = useStore(polyglotState)
 
   const activeContent = useStore(activeContentState)
+  const catalogFeedsById = useStore(catalogFeedsByIdState)
+  const resolvedFeed = catalogFeedsById.get(String(activeContent.feed.id)) ?? activeContent.feed
+  const readerSourceIdentity = getReaderSourceIdentity(resolvedFeed)
+  const sourceFeedId = resolvedFeed?.id
+  const sourceFeedNumber = Number(sourceFeedId)
+  const sourceFeedPath =
+    Number.isSafeInteger(sourceFeedNumber) && sourceFeedNumber > 0
+      ? `/feed/${sourceFeedNumber}`
+      : null
   const displayTitle = getEntryDisplayTitle(
     activeContent.title,
     polyglot.t("article_card.untitled_article"),
@@ -378,6 +389,7 @@ const ArticleDetail = forwardRef((_, ref) => {
     fontFamily,
     fontSize,
     lightboxSlideAnimation,
+    showFeedIcon,
     titleAlignment,
   } = useStore(articleDetailSettingsState)
   const scrollContainerRef = useRef(null)
@@ -525,7 +537,6 @@ const ArticleDetail = forwardRef((_, ref) => {
   }
 
   const { id: categoryId, title: categoryTitle } = activeContent.feed.category
-  const { id: feedId, title: feedTitle } = activeContent.feed
 
   const { coverSource } = activeContent
   const sourceUrl = getSafeExternalUrl(activeContent.url)
@@ -605,11 +616,39 @@ const ArticleDetail = forwardRef((_, ref) => {
             style={{ maxWidth: responsiveMaxWidth, textAlign: titleAlignment }}
           >
             <div className="article-header-column">
-              <div className="article-source">
-                <Typography.Text>
-                  <CustomLink text={feedTitle} url={`/feed/${feedId}`} />
-                </Typography.Text>
-              </div>
+              {readerSourceIdentity.displayName && (
+                <div className="article-source">
+                  {sourceFeedPath ? (
+                    <Link className="article-source-link" to={sourceFeedPath}>
+                      {showFeedIcon && <FeedSourceMark feed={resolvedFeed} size={24} />}
+                      <span className="article-source-copy">
+                        <span className="article-source-name">
+                          {readerSourceIdentity.displayName}
+                        </span>
+                        {readerSourceIdentity.secondaryHostname && (
+                          <span className="article-source-host">
+                            {readerSourceIdentity.secondaryHostname}
+                          </span>
+                        )}
+                      </span>
+                    </Link>
+                  ) : (
+                    <div className="article-source-link article-source-link--static">
+                      {showFeedIcon && <FeedSourceMark feed={resolvedFeed} size={24} />}
+                      <span className="article-source-copy">
+                        <span className="article-source-name">
+                          {readerSourceIdentity.displayName}
+                        </span>
+                        {readerSourceIdentity.secondaryHostname && (
+                          <span className="article-source-host">
+                            {readerSourceIdentity.secondaryHostname}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
               <Typography.Title
                 className="article-title"
                 heading={1}

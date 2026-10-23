@@ -496,7 +496,7 @@
     "show_estimated_reading_time_label": "Afficher le temps de lecture estimé",
     "show_estimated_reading_time_description": "Afficher le temps de lecture estimé dans la carte d'article",
     "show_feed_icon_label": "Afficher l'icône du flux",
-    "show_feed_icon_description": "Afficher l'icône du flux dans la liste des flux et la carte d'article",
+    "show_feed_icon_description": "Afficher les icônes des flux dans la navigation des sources, les cartes d'articles et le lecteur",
     "summary_lines_label": "Lignes de résumé",
     "summary_lines_description": "Nombre de lignes à afficher dans l'aperçu de l'article (0 pour masquer)",
     "lightbox_animation_label": "Animation de la lightbox",

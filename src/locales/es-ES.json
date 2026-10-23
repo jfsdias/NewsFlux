@@ -496,7 +496,7 @@
     "show_estimated_reading_time_label": "Mostrar tiempo estimado de lectura",
     "show_estimated_reading_time_description": "Mostrar tiempo estimado de lectura en la tarjeta de artículo",
     "show_feed_icon_label": "Mostar el icono del feed",
-    "show_feed_icon_description": "Mostar el icono del feed en la lista de de feeds y la tarjeta de artículo",
+    "show_feed_icon_description": "Mostrar los iconos de las fuentes en la navegación, las tarjetas de artículos y el lector",
     "summary_lines_label": "Líneas de resumen",
     "summary_lines_description": "Número de líneas a mostrar en la vista previa del artículo (0 para ocultar)",
     "lightbox_animation_label": "Animación del lightbox",

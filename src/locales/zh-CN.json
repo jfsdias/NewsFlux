@@ -496,7 +496,7 @@
     "show_estimated_reading_time_label": "显示预计阅读时间",
     "show_estimated_reading_time_description": "在文章卡片中显示预计阅读时间",
     "show_feed_icon_label": "显示订阅源图标",
-    "show_feed_icon_description": "在订阅源列表和文章卡片中显示订阅源图标",
+    "show_feed_icon_description": "在来源导航、文章卡片和阅读器中显示订阅源图标",
     "summary_lines_label": "摘要行数",
     "summary_lines_description": "文章预览显示的行数（0 表示隐藏）",
     "lightbox_animation_label": "图片浏览器动画",
