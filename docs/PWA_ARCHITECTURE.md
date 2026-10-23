@@ -2,12 +2,15 @@
 
 - **Status:** planning and architecture contract. This document does not authorize implementation, merge or deployment.
 - **Created:** 2026-10-22, against GitHub `main` at `d7c0fc8e4ab7b5f0d959bea96cc04b086deb36fc`.
-- **Track:** `PWA_FOUNDATION=PLANNED`.
+- **Last reconciled:** 2026-10-23, against GitHub `main` at `96bd1fe563571bfa322b2fd79f6fc12f49107a76`; current implementation and audit status is recorded in §15.
+- **Track:** PWA Foundation architecture; the PWA-03A2 runtime sequence is complete in the current production app, while installability decisions remain open.
 - **Amended:** 2026-10-22, after the PM review of PR #86 (PASS WITH DOCUMENTATION AMENDMENTS): the production topology is partially recorded (D4, `PM_REPORTED`), the authorization state of PWA-00 and PWA-01A is recorded, and a priority rule for PWA-03A is added. No product code changed.
 - **Companion documents:** [`NEWSFLUX_ROADMAP.md`](./NEWSFLUX_ROADMAP.md) (sequencing), [`NEWSFLUX_PROJECT_STATE.md`](./NEWSFLUX_PROJECT_STATE.md) (operational state), [`DESIGN_REFERENCES.md`](./DESIGN_REFERENCES.md) (NetNewsWire UX research track), [`NEWSFLUX_NAV_VISUAL_01.md`](./NEWSFLUX_NAV_VISUAL_01.md) (window classes and navigation contract), [`PWA_00_BASELINE.md`](./PWA_00_BASELINE.md) (PWA-00 measurement record).
 
 ```text
-PWA_FOUNDATION=PLANNED
+STATUS_SNAPSHOT_DATE=2026-10-22
+STATUS_SNAPSHOT_SUPERSEDED_BY_SECTION_15=YES
+PWA_FOUNDATION=PLANNING_SNAPSHOT
 PWA_IMPLEMENTATION_AUTHORIZED=NO
 PWA_00_AUTHORIZED_PLANNING_VALIDATION_CANDIDATE=YES
 PWA_00_STARTED=YES
@@ -27,6 +30,8 @@ NEW_PERSISTENT_NEWSFLUX_STATE_AUTHORIZED=NO
 MERGE_AUTHORIZED=NO
 DEPLOY_AUTHORIZED=NO
 ```
+
+The original planning and audit sections below preserve their 2026-10-22 evidence and decisions. Their sequencing/authorization snapshot is historical; §15 records the current merged runtime and the later PWA-01A/01B audit outcomes. The architecture constraints and open PM decisions remain in force unless explicitly resolved there.
 
 ## 1. Purpose and boundaries
 
@@ -69,7 +74,7 @@ PWA-00 ([`PWA_00_BASELINE.md`](./PWA_00_BASELINE.md) §2.1) adds `LIVE_OBSERVED`
 10. **No indiscriminate caching of authenticated responses.** Caching is allow-list based, never "cache what the network returned".
 11. **Existing NewsFlux contracts are preserved:** OLED-aware, editorial, Material interactions, Liquid Glass only as chrome, opaque content surfaces, single-pane-first on mobile/tablet/Fold, critical viewport `884×1104`, All/Unread chronological and predictable.
 
-## 3. Current-state audit
+## 3. Repository and PWA audit baseline (2026-10-22)
 
 The repository already ships a partial PWA. **PWA-01 is therefore an audit-and-harden problem, not a greenfield one.**
 
@@ -506,3 +511,52 @@ The `sw.js` URL must stay stable for the life of the product; moving it orphans 
 ## 14. Evidence inventory
 
 Read for this document (all at `d7c0fc8e`): `vite.config.js`, `index.html`, `src/main.jsx`, `src/hooks/useTheme.js`, `src/index.css`, `src/App.css`, `src/components/Sidebar/Sidebar.css`, `src/store/authState.js`, `src/store/sidebarState.js`, `src/utils/session.js`, `src/apis/ofetch.js`, `src/routes.jsx`, `src/pages/Login.jsx`, `src/components/ui/FeedIcon.jsx`, `src/hooks/useFeedIcons.js`, `Caddyfile`, `Dockerfile`, `docker-compose.yml`; build outputs `manifest.webmanifest`, `sw.js` and the main bundle for the default base path and for `VITE_BASE_PATH=/newsflux/`; the existing documentation set. The PM review of PR #86 supplied the `PM_REPORTED` production topology (§3.4). No product file was modified.
+
+## 15. Current implementation and audit status (2026-10-23)
+
+The architecture and audit work was reconciled against live GitHub `main` at `96bd1fe563571bfa322b2fd79f6fc12f49107a76`. A fresh production browser document loaded successfully and About reported the same full revision. This confirms the served app identity; no Docker image ID or container restart count was independently inspected in this session.
+
+```text
+CURRENT_MAIN=96bd1fe563571bfa322b2fd79f6fc12f49107a76
+PRODUCTION_ABOUT_REVISION=96bd1fe563571bfa322b2fd79f6fc12f49107a76
+PRODUCTION_APP_LOAD=PASS
+PRODUCTION_DOCKER_IMAGE_INSPECTION=NOT_PERFORMED
+
+PR90=PWA03A1_MERGED
+PR90_MERGE_SHA=5ea21363676dd93dde97fd5ff8548e89864495ec
+PR91=PWA03A2A_MERGED
+PR91_MERGE_SHA=de8b4645df1b8ce17b4b02c2d54adb694af25109
+PR93=PWA03A2C_MERGED
+PR93_MERGE_SHA=950ae61b71433a6fd9c11fed9ed266a17fee3185
+PR94=PWA03A2C1_MERGED
+PR94_MERGE_SHA=6a8068e9809cafdecce0c695c78dcb151d95d4a4
+PR95=PWA03A2B_MERGED
+PR95_MERGE_SHA=96bd1fe563571bfa322b2fd79f6fc12f49107a76
+PWA03A2A=COMPLETE_MERGED
+PWA03A2C=COMPLETE_MERGED
+PWA03A2C1=COMPLETE_MERGED
+PWA03A2B=COMPLETE_MERGED
+PWA03A2=COMPLETE_PRODUCTION_AT_ABOUT_REVISION
+
+PWA01A_AUDIT=COMPLETE
+PWA01A_IMPLEMENTED=NO
+PWA01A_OPEN_DECISIONS=D1_MANIFEST_ID;D3_MASKABLE_ICON_ART
+PWA01A_PHYSICAL_INSTALL_AND_DEEP_LINK_GATES=NOT_RUN
+PWA01B_AUDIT=COMPLETE
+PWA01B_IMPLEMENTED=NO
+PWA01B_OPEN_DECISION=D2_MANIFEST_THEME_AND_BACKGROUND_POLICY
+PWA01B_RUNTIME_THEME_META=UPDATES_DURING_THEME_CHANGE
+
+MERGE_AUTHORIZED=NO
+DEPLOY_AUTHORIZED=NO
+```
+
+### PWA-01A — installability audit
+
+The existing generated manifest already builds with base-path-correct `start_url` and `scope` at both `/` and `/newsflux/`; both builds passed. All referenced icons exist. The manifest does not explicitly configure `id`, and the icon set has no maskable asset. No implementation was made: D1 must choose a stable manifest ID and D3 must choose the maskable icon art direction. Physical installed-app, deep-link and platform installation gates were not run, so this audit does not claim installability on Android, iOS or iPadOS.
+
+### PWA-01B — theme and installed chrome audit
+
+The runtime updates the `theme-color` metadata when the app theme changes. The manifest still supplies a single static `theme_color` / `background_color` pair, which cannot encode both light and dark policy. No implementation was made; D2 must decide the manifest color policy. Browser runtime metadata evidence is not a substitute for installed-app splash/chrome validation.
+
+The 2026-10-22 rollback snapshot and PWA-03A2C deployment blocker are closed by the subsequent merged work recorded above. The production browser identity matches current `main`; this section records no Docker/container inspection. D1, D2 and D3 remain product decisions, and this document authorizes no new implementation, merge or deployment.
