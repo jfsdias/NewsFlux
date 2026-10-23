@@ -2,7 +2,7 @@ import SourceMark from "@/components/ui/SourceMark"
 import useFeedIcons from "@/hooks/useFeedIcons"
 
 const FeedSourceMark = ({ feed, size = 20, className = "" }) => {
-  const iconId = feed?.icon?.icon_id ?? feed?.id ?? 0
+  const iconId = feed?.icon?.icon_id ?? 0
   const providerIcon = useFeedIcons(iconId, feed)
 
   return (

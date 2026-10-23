@@ -189,6 +189,12 @@ test("all three article presenters render the current catalog SourceMark at 20px
   }
 })
 
+test("missing provider icon metadata never uses the feed ID as an icon ID", async () => {
+  const source = await readFile(path.resolve(root, "src/components/ui/FeedSourceMark.jsx"), "utf8")
+  assert.match(source, /feed\?\.icon\?\.icon_id \?\? 0/)
+  assert.doesNotMatch(source, /feed\?\.id/)
+})
+
 test("article link preserves its name and describes the visible source", () => {
   const markup = renderEntry(ArticleListItem)
   const { describedBy, link, sourceId } = getSourceDescription(markup, "list-entry-source-title")

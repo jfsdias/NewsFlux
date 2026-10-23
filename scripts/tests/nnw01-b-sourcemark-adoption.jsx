@@ -17,6 +17,7 @@ import HomeHighlightCard from "@/components/Home/HomeHighlightCard"
 import HomeRecent from "@/components/Home/HomeRecent"
 import CompactNavigation from "@/components/Navigation/CompactNavigation"
 import Sidebar from "@/components/Sidebar/Sidebar"
+import FeedSourceMark from "@/components/ui/FeedSourceMark"
 import AppDataContext from "@/contexts/app-data-context"
 import DesktopSidebarContext from "@/contexts/desktop-sidebar-context"
 import { polyglotState } from "@/hooks/useLanguage"
@@ -61,6 +62,10 @@ const feeds = [
   }),
   makeFeed(76, "Catalog white source", 424),
 ]
+const noIconMetadataFeed = {
+  ...makeFeed(777, "No Provider Icon", 0),
+  icon: {},
+}
 
 const makeEntry = (id, feed, options = {}) => ({
   id,
@@ -225,6 +230,23 @@ const runScenarios = async () => {
     }
     if (markRect && healthRect && markRect.right > healthRect.left + 1) {
       throw new Error("SourceMark and health indicator overlap")
+    }
+  })
+  gate(results, "NO_ICON_METADATA_LOCAL_FALLBACK", () => {
+    const mark = document.querySelector("[data-testid='no-icon-metadata-mark'] .source-mark")
+    const incorrectIconRequests = apiRequests.filter(
+      ({ method, args }) => method === "get" && args[0] === "/v1/icons/777",
+    )
+    if (incorrectIconRequests.length > 0) {
+      throw new Error(
+        `Feed ID 777 was requested as an icon ID ${incorrectIconRequests.length} time(s)`,
+      )
+    }
+    if (mark?.dataset.sourceMarkFallback !== "monogram") {
+      throw new Error(`Expected local monogram fallback, got ${mark?.dataset.sourceMarkFallback}`)
+    }
+    if (!mark?.textContent.includes("N")) {
+      throw new Error("The no-icon feed's local monogram is not visible")
     }
   })
 
@@ -467,6 +489,9 @@ const runScenarios = async () => {
     providerImageRequestEntries: performance
       .getEntriesByType("resource")
       .filter(({ name }) => name.includes("provider-wide.svg")).length,
+    feedIconRequests: apiRequests
+      .filter(({ method, args }) => method === "get" && /^\/v1\/icons\//.test(args[0]))
+      .map(({ args }) => args[0]),
     apiRequests: apiRequests.length,
   }
   document.querySelector("[data-testid='nnw01-b-summary']").textContent = summary
@@ -540,6 +565,9 @@ function FixtureFrame() {
           >
             Run NNW01-B gates
           </Button>
+          <div className="nnw01-b-no-icon-metadata" data-testid="no-icon-metadata-mark">
+            <FeedSourceMark feed={noIconMetadataFeed} size={20} />
+          </div>
           <span data-testid="nnw01-b-summary">Ready</span>
         </div>
         <div className="nnw01-b-content">
