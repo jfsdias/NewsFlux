@@ -21,11 +21,18 @@ class FakeElement {
     this.listeners = new Map()
     this.hidden = false
     this.disabled = false
+    this.inert = false
+    this.parentElement = null
+    this.isConnected = false
     this.textContent = ""
   }
 
   append(...children) {
-    this.children.push(...children)
+    for (const child of children) {
+      child.parentElement = this
+      child.isConnected = this.isConnected
+      this.children.push(child)
+    }
   }
 
   setAttribute(name, value) {
@@ -33,15 +40,33 @@ class FakeElement {
   }
 
   addEventListener(type, listener) {
-    this.listeners.set(type, listener)
+    const listeners = this.listeners.get(type) ?? new Set()
+    listeners.add(listener)
+    this.listeners.set(type, listeners)
+  }
+
+  removeEventListener(type, listener) {
+    this.listeners.get(type)?.delete(listener)
   }
 
   focus() {
+    if (this.isBlockedByInertAncestor()) {
+      return
+    }
     this.ownerDocument.activeElement = this
+    this.ownerDocument.dispatch("focusin", { target: this })
+  }
+
+  isBlockedByInertAncestor() {
+    return this.inert || this.parentElement?.isBlockedByInertAncestor() === true
   }
 
   click() {
-    return this.listeners.get("click")?.({ preventDefault() {} })
+    let result
+    for (const listener of this.listeners.get("click") ?? []) {
+      result = listener({ preventDefault() {} })
+    }
+    return result
   }
 
   querySelectorAll(tagName) {
@@ -68,17 +93,65 @@ class FakeElement {
     }
     return null
   }
+
+  contains(element) {
+    return element === this || this.children.some((child) => child.contains(element))
+  }
+
+  remove() {
+    if (!this.parentElement) {
+      return
+    }
+    this.parentElement.children = this.parentElement.children.filter((child) => child !== this)
+    this.parentElement = null
+    this.isConnected = false
+  }
 }
 
 class FakeDocument {
   activeElement = null
+  listeners = new Map()
 
   constructor() {
     this.body = new FakeElement(this, "body")
+    this.body.isConnected = true
   }
 
   createElement(tagName) {
     return new FakeElement(this, tagName)
+  }
+
+  addEventListener(type, listener) {
+    const listeners = this.listeners.get(type) ?? new Set()
+    listeners.add(listener)
+    this.listeners.set(type, listeners)
+  }
+
+  removeEventListener(type, listener) {
+    this.listeners.get(type)?.delete(listener)
+  }
+
+  dispatch(type, event = {}) {
+    const dispatched = {
+      type,
+      defaultPrevented: false,
+      propagationStopped: false,
+      ...event,
+      preventDefault: () => {
+        dispatched.defaultPrevented = true
+      },
+      stopImmediatePropagation: () => {
+        dispatched.propagationStopped = true
+      },
+    }
+
+    for (const listener of this.listeners.get(type) ?? []) {
+      listener(dispatched)
+      if (dispatched.propagationStopped) {
+        break
+      }
+    }
+    return dispatched
   }
 }
 
@@ -325,6 +398,68 @@ test("PWA03A2C_PRELOAD_ERROR_SHOWS_PRE_REACT_RECOVERY_WITH_ACCESSIBLE_FOCUS", ()
   assert.equal(retryButton.hidden, true)
   assert.equal(harness.windowObject.location.replaceCalls.length, 0)
   assert.equal(harness.serviceWorker.getRegistrationsCalls, 0)
+})
+
+test("PWA03A2C_FOCUS_CONTAINMENT_RESISTS_BACKGROUND_RESTORE_AND_RESTORES_INERT_ON_DISPOSE", () => {
+  const harness = createHarness()
+  const background = harness.documentObject.createElement("button")
+  const previouslyInert = harness.documentObject.createElement("button")
+  previouslyInert.inert = true
+  harness.documentObject.body.append(background)
+  harness.documentObject.body.append(previouslyInert)
+  background.focus()
+
+  harness.firePreloadError()
+  const [recoverButton] = harness.documentObject.body
+    .querySelector("section")
+    .querySelectorAll("button")
+
+  assert.equal(background.inert, true)
+  assert.equal(previouslyInert.inert, true)
+  background.focus()
+  assert.equal(harness.documentObject.activeElement, recoverButton)
+
+  harness.controller.dispose()
+
+  assert.equal(background.inert, false)
+  assert.equal(previouslyInert.inert, true)
+  assert.equal(harness.documentObject.listeners.get("focusin")?.size ?? 0, 0)
+  assert.equal(harness.documentObject.listeners.get("keydown")?.size ?? 0, 0)
+})
+
+test("PWA03A2C_TAB_AND_SHIFT_TAB_REMAIN_WITHIN_VISIBLE_RECOVERY_ACTIONS", async () => {
+  const harness = createHarness({ networkStatus: 503 })
+  harness.firePreloadError()
+  const [recoverButton, retryButton] = harness.buttons()
+  const dialog = harness.documentObject.body.querySelector("section")
+
+  const singleActionTab = harness.documentObject.dispatch("keydown", { key: "Tab" })
+  assert.equal(singleActionTab.defaultPrevented, true)
+  assert.equal(harness.documentObject.activeElement, recoverButton)
+
+  await recoverButton.click()
+  assert.equal(retryButton.hidden, false)
+
+  harness.documentObject.activeElement = recoverButton
+  harness.documentObject.dispatch("keydown", { key: "Tab" })
+  assert.equal(harness.documentObject.activeElement, retryButton)
+
+  harness.documentObject.dispatch("keydown", { key: "Tab" })
+  assert.equal(harness.documentObject.activeElement, recoverButton)
+
+  harness.documentObject.dispatch("keydown", { key: "Tab", shiftKey: true })
+  assert.equal(harness.documentObject.activeElement, retryButton)
+  assert.equal(dialog.contains(harness.documentObject.activeElement), true)
+})
+
+test("PWA03A2C_ESCAPE_DOES_NOT_DISMISS_RECOVERY", () => {
+  const harness = createHarness()
+  harness.firePreloadError()
+
+  const event = harness.documentObject.dispatch("keydown", { key: "Escape" })
+
+  assert.equal(event.defaultPrevented, true)
+  assert.ok(harness.documentObject.body.querySelector("section"))
 })
 
 test("PWA03A2C_NETWORK_FAILURE_PRESERVES_WORKERS_AND_CACHES_AND_OFFERS_RETRY", async () => {

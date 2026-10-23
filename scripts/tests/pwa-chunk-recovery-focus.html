@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NewsFlux recovery focus browser gate</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 2rem;
+      }
+
+      #background-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+      }
+
+      #receipt {
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="background-controls" aria-label="Background application controls">
+      <button id="background-focus-origin" type="button">Background focus origin</button>
+      <button id="background-restorer" type="button">Background focus restorer</button>
+      <button id="open-recovery" type="button">Trigger preload error</button>
+    </main>
+    <pre id="receipt" aria-live="polite">READY</pre>
+    <script type="module" src="/scripts/tests/pwa-chunk-recovery-focus.js"></script>
+  </body>
+</html>
