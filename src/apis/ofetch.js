@@ -27,7 +27,6 @@ const isCurrentRequestSession = (requestSession, auth) =>
 // 创建 ofetch 实例并设置默认配置
 const createApiClient = () => {
   return ofetch.create({
-    retry: 3, // 默认重试次数
     onRequest({ _request, options }) {
       const auth = authState.get()
       const requestSession = options[REQUEST_AUTH_SESSION_KEY]
@@ -78,8 +77,11 @@ const createApiClient = () => {
 }
 
 const apiClient = createApiClient()
-apiClient.get = (url, options = {}) => apiClient(url, { ...options, method: "GET" })
-apiClient.post = (url, body, options = {}) => apiClient(url, { ...options, method: "POST", body })
-apiClient.put = (url, body, options = {}) => apiClient(url, { ...options, method: "PUT", body })
+apiClient.get = (url, options = {}) =>
+  apiClient(url, { ...options, retry: options.retry ?? 3, method: "GET" })
+apiClient.post = (url, body, options = {}) =>
+  apiClient(url, { ...options, retry: options.retry ?? false, method: "POST", body })
+apiClient.put = (url, body, options = {}) =>
+  apiClient(url, { ...options, retry: options.retry ?? false, method: "PUT", body })
 
 export default apiClient

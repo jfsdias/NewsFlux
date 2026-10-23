@@ -6,6 +6,10 @@ import { test } from "node:test"
 import { fileURLToPath, pathToFileURL } from "node:url"
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
+let fetchImplementation = null
+const nativeFetch = globalThis.fetch
+globalThis.fetch = (...args) =>
+  fetchImplementation ? fetchImplementation(...args) : nativeFetch(...args)
 const moduleMocks = {
   "@/routes":
     'const router = { state: { location: { pathname: "/", search: "", hash: "" } }, navigate: async () => {} }; export default router',
@@ -63,6 +67,81 @@ const [{ default: apiClient }, { deleteFeed, discoverFeeds, updateFeed }] = awai
   import("./ofetch"),
   import("./feeds"),
 ])
+
+test("mutating requests are not replayed after a transport failure", async () => {
+  let attempts = 0
+  let simulatedProviderApplications = 0
+  fetchImplementation = async () => {
+    attempts += 1
+    simulatedProviderApplications += 1
+    if (attempts === 1) {
+      throw new TypeError("connection reset after provider applied the request")
+    }
+    return new Response(null, { status: 204 })
+  }
+
+  let requestError = null
+  try {
+    await apiClient.post("/v1/feeds", { feed_url: "https://example.test/feed.xml" })
+  } catch (error) {
+    requestError = error
+  } finally {
+    fetchImplementation = null
+  }
+
+  assert.equal(attempts, 1)
+  assert.equal(simulatedProviderApplications, 1)
+  assert.ok(requestError instanceof Error)
+})
+
+const runAfterOneTransportFailure = async (request) => {
+  let attempts = 0
+  fetchImplementation = async () => {
+    attempts += 1
+    if (attempts === 1) {
+      throw new TypeError("connection reset after provider applied the request")
+    }
+    return new Response(null, { status: 204 })
+  }
+
+  let requestError = null
+  try {
+    await request()
+  } catch (error) {
+    requestError = error
+  } finally {
+    fetchImplementation = null
+  }
+
+  return { attempts, requestError }
+}
+
+test("PUT mutations are not replayed after a transport failure", async () => {
+  const { attempts, requestError } = await runAfterOneTransportFailure(() =>
+    apiClient.put("/v1/entries", { entry_ids: [3], status: "read" }),
+  )
+
+  assert.equal(attempts, 1)
+  assert.ok(requestError instanceof Error)
+})
+
+test("raw DELETE mutations do not inherit a replaying retry policy", async () => {
+  const { attempts, requestError } = await runAfterOneTransportFailure(() =>
+    apiClient.raw("/v1/categories/4", { method: "DELETE" }),
+  )
+
+  assert.equal(attempts, 1)
+  assert.ok(requestError instanceof Error)
+})
+
+test("safe GET requests keep the transient transport retry", async () => {
+  const { attempts, requestError } = await runAfterOneTransportFailure(() =>
+    apiClient.get("/v1/feeds"),
+  )
+
+  assert.equal(attempts, 2)
+  assert.equal(requestError, null)
+})
 
 test("discoverFeeds calls the Miniflux discovery endpoint with the website URL", async () => {
   let request
