@@ -14,7 +14,7 @@ import { useStore } from "@nanostores/react"
 import { useMemo, useRef, useState } from "react"
 
 import AccessibleModal from "@/components/ui/AccessibleModal"
-import FeedIcon from "@/components/ui/FeedIcon"
+import FeedSourceMark from "@/components/ui/FeedSourceMark"
 import useAppData from "@/hooks/useAppData"
 import useHomePage, { describeHomeTarget } from "@/hooks/useHomePage"
 import { polyglotState } from "@/hooks/useLanguage"
@@ -64,11 +64,9 @@ const FeedTargetIcon = ({ feed, showFeedIcon }) => {
   }
 
   return (
-    <FeedIcon
-      className="home-page-target-icon home-page-target-feed-icon"
-      fallbackIcon={fallbackIcon}
-      feed={feed}
-    />
+    <span className="home-page-target-icon-slot">
+      <FeedSourceMark feed={feed} size={16} />
+    </span>
   )
 }
 

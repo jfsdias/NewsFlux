@@ -78,8 +78,7 @@
   padding-top: 20px;
 }
 
-.article-meta .arco-typography,
-.article-source .arco-typography {
+.article-meta .arco-typography {
   color: var(--color-text-2);
   font-size: 0.875rem;
   line-height: 2 !important;
@@ -89,6 +88,42 @@
 .article-source {
   font-size: 0.875rem;
   line-height: 1.5;
+}
+
+.article-source-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  min-height: 44px;
+  color: inherit;
+  vertical-align: middle;
+}
+
+.article-source-link:focus-visible {
+  border-radius: var(--border-radius-small);
+  outline: 2px solid var(--nf-focus-ring, rgb(var(--primary-6)));
+  outline-offset: 2px;
+}
+
+.article-source-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  line-height: 1.3;
+  text-align: start;
+}
+
+.article-source-name {
+  overflow-wrap: anywhere;
+  color: var(--color-text-1);
+  font-weight: 500;
+}
+
+.article-source-host {
+  overflow-wrap: anywhere;
+  color: var(--color-text-2);
+  font-size: 0.8125rem;
 }
 
 .article-meta,

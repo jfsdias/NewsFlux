@@ -75,12 +75,17 @@
   color: var(--color-text-2);
 }
 
-.home-page-target-current .home-page-target-icon {
-  color: rgb(var(--primary-6));
+.home-page-target-icon-slot {
+  display: inline-flex;
+  flex: 0 0 18px;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
 }
 
-.home-page-target-feed-icon {
-  object-fit: cover;
+.home-page-target-current .home-page-target-icon {
+  color: rgb(var(--primary-6));
 }
 
 .home-page-target-copy {
@@ -203,9 +208,9 @@
 
   .home-page-picker-modal {
     display: flex;
-    top: 0;
+    top: 0 !important;
     flex-direction: column;
-    width: 100%;
+    width: 100% !important;
     height: 100%;
     border-radius: 0;
   }

@@ -496,7 +496,7 @@
     "show_estimated_reading_time_label": "Geschätzte Lesedauer anzeigen",
     "show_estimated_reading_time_description": "Geschätzte Lesedauer in Artikelkarte anzeigen",
     "show_feed_icon_label": "Abonnementsymbol anzeigen",
-    "show_feed_icon_description": "Symbol des jeweiligen Abonnements in Abonnementliste und Artikelkarte anzeigen",
+    "show_feed_icon_description": "Feed-Symbole in der Quellennavigation, in Artikelkarten und im Reader anzeigen",
     "summary_lines_label": "Zusammenfassungszeilen",
     "summary_lines_description": "Anzahl der Zeilen in Artikelvorschau (0 zum Ausblenden)",
     "lightbox_animation_label": "Lightbox-Animation",
