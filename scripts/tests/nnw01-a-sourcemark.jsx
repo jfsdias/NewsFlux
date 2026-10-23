@@ -33,8 +33,8 @@ const tinyUrl = createDataIcon(1, 1, "#111111")
 const cases = [
   {
     name: "DATA_OR_MEMORY_ICON_ANALYZABLE_DARK",
-    feed: { title: "Dark" },
-    icon: createDataIcon(16, 16, "#111111"),
+    feed: { title: "Black" },
+    icon: createDataIcon(16, 16, "#000000"),
   },
   {
     name: "DATA_OR_MEMORY_ICON_ANALYZABLE_LIGHT",
@@ -45,6 +45,26 @@ const cases = [
     name: "YELLOW_ICON_ADAPTIVE",
     feed: { title: "Yellow" },
     icon: createDataIcon(16, 16, "#ffe52e"),
+  },
+  {
+    name: "ORANGE_ICON_ADAPTIVE",
+    feed: { title: "Orange" },
+    icon: createDataIcon(16, 16, "#f0902d"),
+  },
+  {
+    name: "PURPLE_ICON_ADAPTIVE",
+    feed: { title: "Purple" },
+    icon: createDataIcon(16, 16, "#5b3888"),
+  },
+  {
+    name: "BLUE_NEAR_CROSSOVER_ICON_ADAPTIVE",
+    feed: { title: "Blue" },
+    icon: createDataIcon(16, 16, "#4b78b8"),
+  },
+  {
+    name: "GREEN_ICON_ADAPTIVE",
+    feed: { title: "Green" },
+    icon: createDataIcon(16, 16, "#3a9d45"),
   },
   {
     name: "MIXED_COLORED_ICON_DETERMINISTIC",
@@ -137,6 +157,10 @@ const run = async () => {
   const dark = mark("DATA_OR_MEMORY_ICON_ANALYZABLE_DARK")
   const light = mark("DATA_OR_MEMORY_ICON_ANALYZABLE_LIGHT")
   const yellow = mark("YELLOW_ICON_ADAPTIVE")
+  const orange = mark("ORANGE_ICON_ADAPTIVE")
+  const purple = mark("PURPLE_ICON_ADAPTIVE")
+  const blue = mark("BLUE_NEAR_CROSSOVER_ICON_ADAPTIVE")
+  const green = mark("GREEN_ICON_ADAPTIVE")
   const mixed = mark("MIXED_COLORED_ICON_DETERMINISTIC")
   const mixedRepeat = mark("MIXED_COLORED_ICON_DETERMINISTIC_REPEAT")
   const crossOrigin = mark("CROSS_ORIGIN_PROVIDER_NO_ACAO")
@@ -145,9 +169,13 @@ const run = async () => {
   const monogram = mark("MONOGRAM")
   const rss = mark("RSS_TERMINAL")
 
-  record("DARK_ICON_ADAPTIVE_LIGHT_PLATE", dark?.dataset.sourceMarkPlate === "light")
+  record("BLACK_ICON_ADAPTIVE_LIGHT_PLATE", dark?.dataset.sourceMarkPlate === "light")
   record("LIGHT_ICON_ADAPTIVE_DARK_PLATE", light?.dataset.sourceMarkPlate === "dark")
   record("YELLOW_ICON_ADAPTIVE_DARK_PLATE", yellow?.dataset.sourceMarkPlate === "dark")
+  record("ORANGE_ICON_ADAPTIVE_DARK_PLATE", orange?.dataset.sourceMarkPlate === "dark")
+  record("PURPLE_ICON_ADAPTIVE_LIGHT_PLATE", purple?.dataset.sourceMarkPlate === "light")
+  record("BLUE_NEAR_CROSSOVER_ADAPTIVE_DARK_PLATE", blue?.dataset.sourceMarkPlate === "dark")
+  record("GREEN_ICON_ADAPTIVE_DARK_PLATE", green?.dataset.sourceMarkPlate === "dark")
   record(
     "MIXED_ICON_DETERMINISTIC",
     ["light", "dark"].includes(mixed?.dataset.sourceMarkPlate) &&

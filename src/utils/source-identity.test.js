@@ -47,7 +47,7 @@ test("source display name prefers a feed title and uses only safe parsed hostnam
     getSourceDisplayName({ site_url: "invalid", feed_url: "https://fallback.example.test/rss" }),
     "fallback.example.test",
   )
-  assert.equal(getSourceDisplayName({ title: "", site_url: "bad", feed_url: "also bad" }), "Source")
+  assert.equal(getSourceDisplayName({ title: "", site_url: "bad", feed_url: "also bad" }), null)
 })
 
 test("source monogram normalizes one textual grapheme across supported scripts", () => {
@@ -83,18 +83,39 @@ test("provider icon validity depends on minimum dimensions, not aspect ratio", (
   assert.equal(isProviderIconUsable(64, 24), true)
 })
 
-test("adaptive plate analysis selects a contrasting neutral plate deterministically", () => {
+test("adaptive plate uses the calibrated crossover across representative icon classes", () => {
   const image = (r, g, b) => ({ data: new Uint8ClampedArray([r, g, b, 255]), width: 1, height: 1 })
+  const cases = [
+    ["black", image(0, 0, 0), "light"],
+    ["very dark", image(26, 26, 26), "light"],
+    ["white", image(255, 255, 255), "dark"],
+    ["very light", image(242, 242, 242), "dark"],
+    ["yellow", image(255, 229, 46), "dark"],
+    ["orange", image(240, 144, 45), "dark"],
+    ["midtone purple", image(91, 56, 136), "light"],
+    ["midtone blue near crossover", image(75, 120, 184), "dark"],
+    ["midtone green", image(58, 157, 69), "dark"],
+    ["dark blue", image(16, 32, 64), "light"],
+    ["dark red", image(75, 18, 18), "light"],
+  ]
 
-  assert.equal(analyzeImageData(image(0, 0, 0)), "dark")
-  assert.equal(resolveAdaptivePlate(analyzeImageData(image(0, 0, 0))), "light")
-  assert.equal(analyzeImageData(image(255, 255, 255)), "light")
-  assert.equal(resolveAdaptivePlate(analyzeImageData(image(255, 255, 255))), "dark")
-  assert.equal(analyzeImageData(image(255, 220, 40)), "light")
-  assert.equal(resolveAdaptivePlate(analyzeImageData(image(255, 220, 40))), "dark")
-  const mixed = image(100, 60, 180)
-  assert.equal(analyzeImageData(mixed), "dark")
-  assert.equal(analyzeImageData({ ...mixed, data: new Uint8ClampedArray(mixed.data) }), "dark")
+  for (const [name, pixels, expectedPlate] of cases) {
+    assert.equal(resolveAdaptivePlate(analyzeImageData(pixels)), expectedPlate, name)
+  }
+
+  assert.equal(analyzeImageData(image(114, 114, 114)), "dark")
+  assert.equal(analyzeImageData(image(117, 117, 117)), "light")
+
+  const mixed = {
+    data: new Uint8ClampedArray([0, 0, 0, 255, 255, 255, 255, 255]),
+    width: 2,
+    height: 1,
+  }
+  assert.equal(resolveAdaptivePlate(analyzeImageData(mixed)), "dark")
+  assert.equal(
+    analyzeImageData({ ...mixed, data: new Uint8ClampedArray(mixed.data) }),
+    analyzeImageData(mixed),
+  )
   assert.equal(
     analyzeImageData({ data: new Uint8ClampedArray([0, 0, 0, 0]), width: 1, height: 1 }),
     null,

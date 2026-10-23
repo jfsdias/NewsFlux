@@ -3,6 +3,10 @@ const graphemeSegmenter =
     ? new Intl.Segmenter(undefined, { granularity: "grapheme" })
     : null
 
+// Calibrated to the 0.175907833 crossover from plate luminances 0.895710 and 0.003964.
+// Fixture classifications remain stable across the tested 0.14–0.18 interval.
+const ADAPTIVE_PLATE_LUMINANCE_THRESHOLD = 0.176
+
 const splitGraphemes = (value) => {
   if (graphemeSegmenter) {
     return [...graphemeSegmenter.segment(value)].map(({ segment }) => segment)
@@ -58,7 +62,7 @@ const getSourceDisplayName = (feed = {}) => {
     return title
   }
 
-  return getSafeHostname(feed.site_url) ?? getSafeHostname(feed.feed_url) ?? "Source"
+  return getSafeHostname(feed.site_url) ?? getSafeHostname(feed.feed_url) ?? null
 }
 
 const getTextualGrapheme = (value) => {
@@ -122,7 +126,7 @@ const analyzeImageData = (imageData) => {
     return null
   }
 
-  return weightedLuminance / alphaTotal >= 0.52 ? "light" : "dark"
+  return weightedLuminance / alphaTotal >= ADAPTIVE_PLATE_LUMINANCE_THRESHOLD ? "light" : "dark"
 }
 
 const resolveAdaptivePlate = (iconLuminance) => {
