@@ -74,6 +74,7 @@ test("mounted Settings selector browser fixture covers the real component and re
     "RSS_FALLBACK",
     "SHOW_FEED_ICON_OFF_GENERIC_RSS",
     "SHOW_FEED_ICON_OFF_NO_PROVIDER_REQUEST",
+    "PROVIDER_ICON_REQUESTS_FROM_SETTINGS_SELECTOR_ZERO",
     "CATEGORY_INDENTATION",
     "TARGET_CHECK_NO_COLLISION",
     "HIDDEN_BADGE_VISIBLE",

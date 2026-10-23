@@ -234,6 +234,11 @@ const runGates = async () => {
 
   gate("NO_PROVIDER_WRITES", providerWrites.length === 0)
   gate(
+    "PROVIDER_ICON_REQUESTS_FROM_SETTINGS_SELECTOR_ZERO",
+    iconRequests.length === 0,
+    `count=${iconRequests.length}`,
+  )
+  gate(
     "NO_THIRD_PARTY_FAVICON_REQUESTS",
     performance
       .getEntriesByType("resource")
