@@ -1,0 +1,22 @@
+#nnw01-c-settings-picker {
+  min-height: 100vh;
+  padding: 12px;
+  background: var(--nf-canvas);
+  color: var(--nf-text-primary);
+}
+
+.nnw01-c-settings-picker-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.nnw01-c-settings-picker-controls button {
+  min-height: 40px;
+}
+
+.nnw01-c-settings-picker-report {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
