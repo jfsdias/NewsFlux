@@ -1,24 +1,65 @@
 # NewsFlux Project State
 
 - **Purpose:** concise operational state for PM handoffs and future sessions. The roadmap remains the source for sequencing and product/architecture detail.
-- **Last reconciled:** 2026-10-22 (post-PR #85).
-- **Current snapshot:** GitHub `main` at `d7c0fc8e4ab7b5f0d959bea96cc04b086deb36fc` (PR #85 merge). Product and production are at the same SHA (`PM_REPORTED`).
-- **Previous snapshot (historical):** GitHub `main` at `313991e80c2b54a99819c2e267ef90a35a959752` on 2026-10-21; product/production baseline at that snapshot `dc72a6ed0069b539877f5b2b1f1327d66ad7d0a8`.
+- **Last reconciled:** 2026-10-23 (post-PR #96).
+- **Current snapshot:** GitHub `main` at `fa27a4cec1cae1e887041ee3999622c5b8f76681` (PR #96 merge). Production remains at `96bd1fe563571bfa322b2fd79f6fc12f49107a76`; PR #96 has not been deployed, so main and production do not have parity.
+- **Previous snapshot (historical):** GitHub `main` at `d7c0fc8e4ab7b5f0d959bea96cc04b086deb36fc` on 2026-10-22; the production baseline at that snapshot was recorded as the same SHA. The earlier 2026-10-21 snapshot is preserved below.
 - **Related planning documents:** [`PWA_ARCHITECTURE.md`](./PWA_ARCHITECTURE.md) and [`DESIGN_REFERENCES.md`](./DESIGN_REFERENCES.md) (planning only; no implementation authorized).
 
-## Current state (post-PR #85, 2026-10-22)
+## Current state (post-PR #96, 2026-10-23)
 
-Merge facts below are verified from git history. Production and runtime values are `PM_REPORTED`: they are recorded as stated by the PM and cannot be independently verified from the repository. The PM review of PR #86 (PASS WITH DOCUMENTATION AMENDMENTS) additionally confirmed the drift closures, the `SOURCE_IDENTITY` definition and the partial production topology below; those are `PM_REPORTED` too.
+GitHub merge facts are verified from the live repository. The production receipt for PR #95 is owner-provided (`PM_REPORTED`): it records the exact image/revision, internal and public HTTP checks including the asset-404 canary as passing, and preservation of the rollback image and compose backup. A separate fresh-browser About check reported the same production revision. The supplied receipt did not include a restart count. PR #96 is merged into `main` but has not been deployed; the historical snapshots below remain dated evidence and do not override this current state.
 
 ```text
-DOCS_DATE=2026-10-22
-CURRENT_MAIN=d7c0fc8e4ab7b5f0d959bea96cc04b086deb36fc
-PRODUCTION_SHA=d7c0fc8e4ab7b5f0d959bea96cc04b086deb36fc
-PRODUCT_PRODUCTION_PARITY=PASS
-PR85_STATUS=MERGED_DEPLOYED_VALIDATED
-PR85_RUNTIME_ACCEPTANCE=PASS
-PR85_FEATURE_HEAD=7db4bcd8bc86b4f361890f13570003a4435547de
-PR85_SCOPE=ADAPT_3b2b08fb_EMPTY_CAPTION_RENDERING_ONE_PRODUCTION_FILE
+DOCS_DATE=2026-10-23
+CURRENT_MAIN=fa27a4cec1cae1e887041ee3999622c5b8f76681
+PRODUCT_MAIN_BASELINE=fa27a4cec1cae1e887041ee3999622c5b8f76681
+PRODUCTION_ABOUT_REVISION=96bd1fe563571bfa322b2fd79f6fc12f49107a76
+PRODUCTION_SHA=96bd1fe563571bfa322b2fd79f6fc12f49107a76
+PRODUCTION_IMAGE=newsflux-local:96bd1fe56357
+PRODUCTION_RECEIPT=PM_REPORTED_OWNER_PROVIDED_PR95_EXACT_SHA
+PRODUCTION_IMAGE_REVISION=PASS
+PRODUCTION_INTERNAL_HTTP=PASS
+PRODUCTION_PUBLIC_HTTP=200
+PRODUCTION_ASSET_404_CANARY=PASS
+PRODUCTION_ROLLBACK_IMAGE_AND_COMPOSE_BACKUP=PRESERVED
+PRODUCTION_RESTART_COUNT=NOT_REPORTED
+MAIN_PRODUCTION_PARITY=NO
+PR96_DEPLOYED=NO
+
+PR88_STATUS=MERGED
+PR88_MERGE_SHA=3a1b2db07d9df08b8dde9f3148a02e6eb703ec7c
+PR90_STATUS=MERGED_PWA03A1
+PR90_MERGE_SHA=5ea21363676dd93dde97fd5ff8548e89864495ec
+PR91_STATUS=MERGED_PWA03A2A
+PR91_MERGE_SHA=de8b4645df1b8ce17b4b02c2d54adb694af25109
+PR92_STATUS=MERGED_DOCUMENTATION
+PR92_MERGE_SHA=f630fe8843a16a9ff810662632a7b6f253285151
+PR93_STATUS=MERGED_PWA03A2C
+PR93_MERGE_SHA=950ae61b71433a6fd9c11fed9ed266a17fee3185
+PR94_STATUS=MERGED_PWA03A2C1
+PR94_MERGE_SHA=6a8068e9809cafdecce0c695c78dcb151d95d4a4
+PR95_STATUS=MERGED_PWA03A2B
+PR95_MERGE_SHA=96bd1fe563571bfa322b2fd79f6fc12f49107a76
+PWA03A2A=COMPLETE_MERGED
+PWA03A2C=COMPLETE_MERGED
+PWA03A2C1=COMPLETE_MERGED
+PWA03A2B=COMPLETE_MERGED
+PWA03A2=COMPLETE_IN_PRODUCTION_AT_96bd1fe
+
+PR96_STATUS=MERGED
+PR96_FEATURE_HEAD=98a1f93f9a9ccb411230c041726c4dece1f4e1b9
+PR96_MERGE_SHA=fa27a4cec1cae1e887041ee3999622c5b8f76681
+API_NONIDEMPOTENT_RETRY_01=COMPLETE
+PR96_SIDE_EFFECTING_GET_UPDATE_CONTENT_TRUE=RETRY_FALSE
+PR96_POST_PUT_MUTATIONS=RETRY_FALSE_BY_DEFAULT
+PR96_RAW_POST_PUT_PATCH_DELETE=RETRY_FALSE_BY_DEFAULT
+PR96_EXPLICIT_RETRY_OPT_IN=PRESERVED
+PR96_SAFE_GET_RETRIES=PRESERVED
+PR96_FOCUSED_API_TESTS=20_OF_20_PASS
+PR96_FULL_NODE=513_PASS_2_SKIPPED
+PR96_LINT_PRETTIER_BUILD_DIFF_CHECK=PASS
+PR96_LIVE_MINIFLUX_WRITES=0
 
 UPSTREAM_LAST_REVIEWED_SHA=3b2b08fb6036ef94f92a757ac6f3df889be8515c
 LAST_INTEGRATED_UPSTREAM_SHA=3b2b08fb6036ef94f92a757ac6f3df889be8515c
@@ -26,70 +67,84 @@ LAST_UPSTREAM_SYNC_PR=85
 LAST_UPSTREAM_SYNC_MERGE_SHA=d7c0fc8e4ab7b5f0d959bea96cc04b086deb36fc
 UPSTREAM_CYCLE=CLOSED
 
-PR82_STATUS=MERGED
-PR82_MERGE_SHA=68c1ef3c5d86bb1495c98da19f036215ac0c722d
-PR83_STATUS=MERGED
-PR83_MERGE_SHA=16311d0d6c3e2611fa09380ded33e63795ba0270
-PR84_STATUS=MERGED
-PR84_MERGE_SHA=9b6f98cee745c2fed8dbe73cee2b1f2e4ad29ac7
-ADD_FEED_DISCOVERY_DUPLICATE_URL_01=RESOLVED_BY_PR83
-MINIFLUX_DELETE_STATUS_01=PR84_MERGED_HISTORICAL_404_CAUSATION_UNPROVEN
-PR74_STATUS=COMPLETED_HISTORICAL_NAV_ROUTE_FOCUS_SLICE
-PR74_MERGE_SHA=b6b7246642aa5ff15f3f8e7015d2efbd83a47be5
-PR76_STATUS=COMPLETED_CLOSES_TABLET_HEADER_WIDTH_01
-PR76_MERGE_SHA=831ff514c3a572a41cd857dd51ffd4f5c87663c1
-PR77_STATUS=COMPLETED_CLOSES_INITIAL_CANONICAL_HOME_DUPLICATE_IDS
-PR77_MERGE_SHA=e1c1285e717e626fc759b0bb52431cd9321df334
-TABLET_HEADER_WIDTH_01=CLOSED_BY_PR76
-HOME_DUP_ROOT_CAUSE_01=CLOSED_INITIAL_CANONICAL_HOME_DUPLICATE_IDS_BY_PR77
-HOME_PAGINATION_CURSOR_STALL_01=BACKLOG_NOT_CLOSED_BY_PR77
-ARTICLE_CODE_BLOCK_CONTROLS_HISTORICAL_FAILURE=NOT_REPRODUCED_CURRENTLY
-OPEN_PRS_BEFORE_PLANNING_DOCS_PR=NONE
+PWA01A_AUDIT=COMPLETE
+PWA01A_IMPLEMENTATION=HOLD_PM_DECISIONS_D1_MANIFEST_ID_AND_D3_MASKABLE_ICON
+PWA01A_PHYSICAL_INSTALL_AND_DEEP_LINK_GATES=NOT_RUN
+PWA01B_AUDIT=COMPLETE
+PWA01B_IMPLEMENTATION=HOLD_PM_DECISION_D2_MANIFEST_THEME_AND_BACKGROUND_POLICY
+PWA01B_RUNTIME_THEME_META=ALREADY_UPDATES_DURING_THEME_CHANGE
+STATS01_READINESS=HOLD_PRODUCT_DEFINITION_REQUIRED
+STATS01_IMPLEMENTED=NO
+STATS01_NEW_PERSISTENCE=NO
 
-PWA_FOUNDATION=PLANNED
+STORY00R2B_STATUS=COMPLETE_REJECT
+STORY00R2B_MODEL=MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7_FULL_ONNX_FP32
+STORY00R2B_PRIMARY_POOLED_S1_AUC=0.647_FAIL_BELOW_0.70
+STORY00R2B_SECOND_MODEL=NO
+STORY00R2B_LEXICAL_STAGE0_AUC=0.904_DEVELOPMENT_EVIDENCE_ONLY_NOT_ADOPTED
+STORY00R2B_POSITIVES_NEVER_CANDIDATES=47_OF_113
+STORY00R2B_POSITIVES_VETOED=7
+STORY00R2B_PERFECT_VERIFIER_RECALL_CEILING=0.522
+STORY00R2B_NEXT=STORY00_R3A_CANDIDATE_GENERATION_FORENSICS
+
+STORY01_ARCHITECTURE=DETERMINISTIC_CONSERVATIVE_V1
+STORY01_P1=APPROVED_B_UNREAD_NEWEST_PUBLISHED_LOWEST_ID
+STORY01_P2=APPROVED_A_FROZEN_BLIND_SAMPLE_GE72_AUTO_MERGES_0_FALSE_MERGES
+STORY01_P3=APPROVED_A_FOR_ENGINE_B_FOR_RELEASE
+STORY01_P4=HOLD_PENDING_HOME_COVERAGE_MEASUREMENT
+STORY01_IMPLEMENTATION_AUTHORIZED=NO
+
+AUTO01_D1=RESOLVED
+AUTO01_V1=MINIFLUX_NATIVE_BLOCK_KEEP_RULES__NEW_ENTRIES_WEBHOOK_TO_N8N__SAVE_ENTRY_WEBHOOK_TO_N8N
+NEWSFLUX_TO_N8N_DIRECT_PATH=NO
+AUTO01_NEW_PERSISTENCE=NO
+AUTO01_D5=RESOLVED_BY_PR96
+AUTO01_D3_D4=ENVIRONMENT_DIAGNOSTICS
+
+NNW01_D7=NO_THIRD_PARTY_FAVICON_LOOKUP
+NNW01_ICON_PRIORITY=MINIFLUX_PROVIDER_ICON__LOCAL_DETERMINISTIC_MONOGRAM__LOCAL_DEFAULT_ICON
+NNW01_READY_FOR_DESIGN=YES
+NNW01_IMPLEMENTATION_AUTHORIZED=NO
+
+AUTH_APIKEY_01=ARCHITECTURE_APPROVED_IMPLEMENTATION_HOLD
+AUTH_APIKEY_01_LIFECYCLE=CONSENT_PASSWORD_LOGIN_CREATE_KEY_VERIFY_V1_ME_STORE_TOKEN_AND_KEY_ID_THEN_DROP_PASSWORD_LOGOUT_REVOKES_OWN_KEY_FIRST
+SECURITY_HEADERS_01=SEPARATE_BACKLOG
+SECURITY_HEADERS_01_MIX_WITH_NNW_OR_PWA=NO
+STATS01_STATUS=HOLD_PRODUCT_DEFINITION_REQUIRED
+
+HOME_PAGINATION_CURSOR_STALL_01=NOT_REPRODUCED_AFTER_PR87
+HOME_CURSOR_HARNESS=10_OF_10_PASS
+HOME_TIE_RECOVERY=23_OF_23_INCLUDING_PREVIOUSLY_OMITTED_ID
+HOME_DUP_ROOT_CAUSE_01=SEPARATE_INITIAL_DUPLICATE_ID_FINDING_CLOSED_BY_PR77
+HOME_IMPLEMENTATION_CHANGED_IN_THIS_QUEUE=NO
+
+PR97_STATUS=OPEN_DRAFT_DOCUMENTATION_RECONCILIATION
+CURRENT_DOCS_PR=97
+
+PWA_FOUNDATION=IMPLEMENTED_RUNTIME_AND_OPEN_INSTALLABILITY_DECISIONS
 NETNEWSWIRE_UX_REFERENCE=ACCEPTED_AS_DESIGN_INPUT
 PWA_PARTIALLY_EXISTS_IN_MAIN=YES
-PWA_IMPLEMENTATION_AUTHORIZED=NO
 NNW_IMPLEMENTATION_AUTHORIZED=NO
-PM_REVIEW_PR86=PASS_WITH_DOCUMENTATION_AMENDMENTS
-PWA_00_AUTHORIZED_PLANNING_VALIDATION_CANDIDATE=YES
-PWA_01A_AUTHORIZED=NO
-PWA_03A_OUTRANKS_PWA_01A_IF_PWA_00_CONFIRMS_MIDREAD_RELOAD=YES
-RECOMMENDED_FIRST_IMPLEMENTATION_PR=NONE_AUTHORIZED
-PWA_00_STARTED=YES
-PWA_00_RESULT=LOCAL_AND_REPO_BASELINE_RECORDED__PUBLIC_ORIGIN_NOT_MEASURED
-PWA_00_BASELINE_DOC=docs/PWA_00_BASELINE.md
-PWA_00_MEASURED_AGAINST_MAIN=68b39798fa6d823b2e5b1286aa42d4309c21c2ca
-MID_READING_UPDATE_DISRUPTION=CONFIRMED_LOCAL_EXPERIMENT
-PWA_03A_PRIORITY_RECOMMENDATION=YES
-UPDATE_CHECK_BUILD_METADATA_01=NEEDS_DIAGNOSTIC
-REACT_HYDRATION_WARNING=HOLD_NEEDS_DIAGNOSTIC
 SOURCE_IDENTITY_DEFINITION=CONFIRMED_PUBLISHER_FEED_SOURCE_LEVEL_VISUAL_IDENTITY
 STORY_IDENTITY_IN_NNW01=NO
 
-PRODUCTION_TOPOLOGY=PARTIALLY_RESOLVED_PM_REPORTED
-PUBLIC_ORIGIN=https://news.jfsdias.ddns.net/
-TLS_REVERSE_PROXY=NGINX_PROXY_MANAGER
-DOCKER_NETWORK=npm-proxyyml_default
-INTERNAL_SERVICE=http://newsflux:2000
-PRODUCTION_IMAGE_CONTRACT=EXACT_newsflux-local_SHORTCOMMIT_NEVER_LATEST_OR_BRANCH
-MINIFLUX_SAME_ORIGIN_AS_NEWSFLUX_ASSUMED=NO
-
-CURRENT_PHASE=PLANNING_AND_DOCUMENTATION
-CURRENT_PRIMARY_TRACK=PWA_FOUNDATION_AND_NNW_PLANNING
-CURRENT_PR=PLANNING_DOCUMENTATION_PR_OPEN_DRAFT_SEE_PR_DESCRIPTION
-LAST_COMPLETED_FUNCTIONAL=ADAPT_3b2b08fb_EMPTY_CAPTION / PR #85
+CURRENT_PHASE=POST_PR96_DOCUMENTATION_RECONCILIATION
+CURRENT_PRIMARY_TRACK=PR97_DOCUMENTATION_RECONCILIATION
+LAST_COMPLETED_FUNCTIONAL=API_NONIDEMPOTENT_RETRY_01 / PR #96
 MERGE_AUTHORIZED=NO
 DEPLOY_AUTHORIZED=NO
+PRODUCTION_MUTATIONS=NO
 
+PWA_DOCUMENTATION_DECISIONS_OPEN=D1_MANIFEST_ID;D2_MANIFEST_COLORS;D3_MASKABLE_ICON_ART
+STATS01_BLOCKER=METRIC_DEFINITION_AND_PRESENTATION_SEMANTICS
 DOCUMENTATION_ACTION=UPDATE_IN_SCOPE
-DOCUMENTATION_REASON=UPSTREAM_CYCLE_CLOSED_AND_NEW_ARCHITECTURE_TRACKS_INTRODUCED
-DOCUMENTATION_TARGETS=NEWSFLUX_PROJECT_STATE.md;NEWSFLUX_ROADMAP.md;PWA_ARCHITECTURE.md;DESIGN_REFERENCES.md
-DOCUMENTATION_BLOCKS_NEXT=NO
-PROJECT_STATE_RECONCILED=YES
+DOCUMENTATION_TARGETS=NEWSFLUX_PROJECT_STATE.md;NEWSFLUX_ROADMAP.md;PWA_ARCHITECTURE.md
+PROJECT_STATE_RECONCILED=YES_PENDING_DRAFT_REVIEW
 ```
 
-`PWA_FOUNDATION=PLANNED` and `NETNEWSWIRE_UX_REFERENCE=ACCEPTED_AS_DESIGN_INPUT` mean accepted for planning and design input **only**; neither authorizes implementation, merge or deployment. The sections below that carry the 2026-10-21 and 2026-10-22 (morning) values are retained as historical records and are superseded by this section.
+The prior post-PR #95 block and all earlier dated snapshots remain historical evidence. Their PR #96 open-state, head, STORY-00R2B and production-parity values describe those snapshots only; they are superseded by this current block. PR #96 is merged, while PR #97 is this documentation-only Draft.
+
+The historical `PWA_FOUNDATION=PLANNED` and current `NETNEWSWIRE_UX_REFERENCE=ACCEPTED_AS_DESIGN_INPUT` values describe planning/design scope only; neither authorizes implementation, merge or deployment. Remaining PWA decisions are D1 (manifest ID), D2 (manifest theme/background policy), D3 (maskable icon art), D5 (`ID-DEPLOY-01` or waiver), D6 (update policy) and D9 (offline reading); D4 production topology is partially resolved as noted below. AUTH_APIKEY_01's architecture is approved while implementation remains on hold, preserving its consent and verification lifecycle. NNW-01 D7 is resolved: no third-party favicon lookup, with provider icon → local deterministic monogram → local default icon. The sections below that carry 2026-10-21 and 2026-10-22 values are retained as historical records and are superseded by this section.
 
 ### Production topology (D4 — partially resolved, `PM_REPORTED`)
 
@@ -501,7 +556,7 @@ Not authorized by package completion:
 
 - new trailing-thumbnail/card redesign.
 
-## Open high-priority work
+## Historical open-work snapshot (2026-10-22; current queue above)
 
 ### P1
 
@@ -516,7 +571,7 @@ Not authorized by package completion:
 - **INPUT-PARITY-TOUCH-TARGET-01 — COMPLETED / PR #67.** Effective interaction-target corrections are merged; visual icon dimensions remain independent from target size.
 - **MARK-ALL-UNDO-JUMP-01 — HOLD.** Current-base reproduction passed at 1280, 390 and 884; no current defect was proven. Reopen only with real reproduction evidence including runtime SHA, viewport/device, originating scope, setting, sequence, expected and actual behavior.
 
-## Planned functional tracks
+## Historical planned functional tracks (2026-10-22; superseded by current queue above)
 
 - BULK-01C — scoped Undo copy.
 - INPUT-PARITY-TOUCH-TARGET-01 — completed in PR #67.
@@ -543,7 +598,7 @@ Not authorized by package completion:
 
 Nine incomplete design packages remain recorded above; no unrelated product or architecture decision is implied or closed.
 
-## PWA Foundation and NetNewsWire UX tracks (planned)
+## PWA Foundation and NetNewsWire UX planning snapshot (2026-10-22; current execution status is above and in `PWA_ARCHITECTURE.md` §16)
 
 Documented in [`PWA_ARCHITECTURE.md`](./PWA_ARCHITECTURE.md) and [`DESIGN_REFERENCES.md`](./DESIGN_REFERENCES.md); roadmap detail is in `NEWSFLUX_ROADMAP.md` Section 3.13. **Planning only — nothing here authorizes implementation.**
 
@@ -598,15 +653,15 @@ PR #85 adapted `3b2b08fb` (`fix(article): render empty caption elements without 
 
 The specialized upstream monitor must live-check the current upstream head before auditing. New commits are classified `INTEGRATE / ADAPT / SKIP / HOLD`; never blindly Sync fork or merge upstream/main.
 
-## Known test debt and incidental findings
+## Historical findings register (2026-10-22 snapshot; current dispositions are above)
 
 - **Workflow repository guard finding:** existing `github.repository == 'electh/ReactFlux'` guards remain an open, non-blocking finding. Track a separate maintenance decision; do not change them as part of upstream reconciliation.
 - `HARNESS-UNDO-ID-01` was resolved by PR #36; the nine stale fixed-ID assertions were repaired and the focused list gate passed 29/29.
 - `HARNESS-CODEBLOCK-SSR-01` is not open on the current runtime baseline; PR #38 reports `CODEBLOCK_SSR_GATE=PASS` in the full Node suite on both main and candidate.
-- **`ARTICLE_CODE_BLOCK_CONTROLS_HISTORICAL_FAILURE=NOT_REPRODUCED_CURRENTLY`** (`PM_REPORTED`): on the exact current baseline `d7c0fc8e…` the focused `scripts/article-code-block-controls.test.js` passes 3/3 and `node --test scripts/*.test.js` passes 48/48 in the latest backend diagnostic; it is **not** a known failing test. Historical note preserved: in a cloud-container session (Node v22.22.0, pnpm 11.21.0) the same test failed on pristine `16311d0d…` and still failed on the `d7c0fc8e…` code with a Vite SSR error resolving the named export `Select` from `@arco-design/web-react` inside `CodeBlock.jsx`. The 46-vs-48 counts differ only because a file that fails to load counts as one failure instead of its three tests (45 + 3 = 48). Environment/toolchain sensitivity therefore remains possible; the cause is not established.
+- **Historical `ARTICLE_CODE_BLOCK_CONTROLS` diagnostic (baseline `d7c0fc8e…`; not revalidated on current main):** the focused `scripts/article-code-block-controls.test.js` passed 3/3 and `node --test scripts/*.test.js` passed 48/48 in the latest backend diagnostic on that baseline. A prior cloud-container run (Node v22.22.0, pnpm 11.21.0) failed on pristine `16311d0d…` and `d7c0fc8e…` with a Vite SSR error resolving the named export `Select` from `@arco-design/web-react` inside `CodeBlock.jsx`. The 46-vs-48 counts differ because a file that fails to load counts as one failure instead of its three tests (45 + 3 = 48). Environment/toolchain sensitivity remains possible; the cause is not established.
 - The React 19 `element.ref` warning remains an incidental harness warning and non-blocking backlog. No fix is claimed here.
 
-## Open findings / residual risks
+## Historical open findings / residual risks (2026-10-22; reconcile current disposition with the snapshot above)
 
 - **READER-MEASURE-01 real-device gate:** not executed; nonblocking. A physical `884×1104` Fold/tablet and a phone remain recommended for long-form comfort and OLED review.
 - **Reader header/body alignment:** completed by READER-VISUAL-02A2 / PR #49 using the real `.article-header-column` production element; edge alignment passed within 0.02 px across 390×844, 768×1024, 884×1104, 1024×768, 1280×800 and 1440×900 in both themes.
@@ -665,18 +720,18 @@ ABOUT_COMMIT=exact promoted merge SHA, displayed in shortened form
 UNKNOWN_COMMIT=RESOLVED
 ```
 
-## Next recommended action
+## Historical next recommended action (2026-10-22; superseded by the current queue above)
 
 Current sequence: this planning documentation PR (`PWA_ARCHITECTURE.md`, `DESIGN_REFERENCES.md` and this reconciliation) was reviewed by the PM as PASS WITH DOCUMENTATION AMENDMENTS and remains a Draft. After it, **`PWA-00` is the next authorized planning/validation candidate** — an evidence-only baseline audit of the PWA that already exists, including whether the configured Miniflux origin is same- or cross-origin. **`PWA-01A` is not yet authorized.** If `PWA-00` confirms a mid-reading reload or update disruption, `PWA-03A` outranks manifest/icon polish. `MARK-ALL-UNDO-JUMP-01` remains held for real reproduction evidence. The earlier sequence that referenced `DOCS-LINT-01` and PR #70 is complete and superseded. This documentation does not authorize product implementation, merge or promotion.
 
-## Deployment governance
+## Historical deployment receipt and enduring deployment governance
 
 - Deploy only an exact approved product/runtime SHA.
 - Never deploy `latest` or a moving branch implicitly.
-- Live production state reconciled on 2026-10-20: image `newsflux-local:d01e34fc2eb7`, image ID `sha256:d52df4be8afa1f39b79cd53f2e84466482fec3d3962fd8102d71e77e54427c`, revision label `d01e34fc2eb76da39467d1de9799b12194faec9c`, source label `https://github.com/jfsdias/NewsFlux`, status `running`, restart count `0`.
-- Internal HTTP gate returned `200`. The canonical Compose image is `newsflux-local:d01e34fc2eb7`; no candidate override is active, and the archived candidate override remains preserved.
-- `PRODUCT_PRODUCTION_PARITY=PASS` and `CANONICAL_RUNTIME_PARITY=PASS`. PR #71 merge SHA `d01e34fc2eb76da39467d1de9799b12194faec9c` remains the current product and production SHA; PR #72 advanced GitHub `main` only because it was docs-only.
-- `PERMANENT_PROMOTION=PASS`; `ROLLBACK_USED=NO`.
+- Historical live production receipt from 2026-10-20: image `newsflux-local:d01e34fc2eb7`, image ID `sha256:d52df4be8afa1f39b79cd53f2e84466482fec3d3962fd8102d71e77e54427c`, revision label `d01e34fc2eb76da39467d1de9799b12194faec9c`, source label `https://github.com/jfsdias/NewsFlux`, status `running`, restart count `0`. It is not the current production state.
+- At that historical deployment, internal HTTP returned `200`; canonical Compose referenced `newsflux-local:d01e34fc2eb7`, no candidate override was active, and the archived candidate override remained preserved.
+- At that historical point, `PRODUCT_PRODUCTION_PARITY=PASS` and `CANONICAL_RUNTIME_PARITY=PASS`; PR #71 merge SHA `d01e34fc2eb76da39467d1de9799b12194faec9c` was the product and production SHA. Later PWA runtime PRs supersede that state.
+- The historical promotion recorded `PERMANENT_PROMOTION=PASS`; `ROLLBACK_USED=NO`.
 - The historical PR #44 promotion remains in the completion history. Current production state is recorded above.
 - Docs-only work does not need a production deployment.
 - Do not delete rollback images or backups incidentally.

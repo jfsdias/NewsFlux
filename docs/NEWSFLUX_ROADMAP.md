@@ -1,14 +1,16 @@
 # NewsFlux Roadmap
 
-- **Status:** canonical roadmap reconciled after the PR #91 production rollback; PWA runtime recovery and accepted intelligence/research tracks are recorded separately from implementation authorization.
+- **Status:** canonical roadmap reconciled after PR #96; current state and sequencing are in Section 19.
 - **Created:** 2026-10-15.
-- **Last reconciled:** 2026-10-22.
-- **Reconciled against (current):** GitHub `main` at `de8b4645df1b8ce17b4b02c2d54adb694af25109` (PR #91 merge). Production is intentionally rolled back to `5ea21363676dd93dde97fd5ff8548e89864495ec` (`newsflux-local:5ea21363676d`) after the exact-SHA canary exposed a cross-build lazy-chunk recovery gap. PWA-03A2C is the deployment blocker; see Section 17.
+- **Last reconciled:** 2026-10-23.
+- **Reconciled against (current):** GitHub `main` at `fa27a4cec1cae1e887041ee3999622c5b8f76681`; production remains at `96bd1fe563571bfa322b2fd79f6fc12f49107a76`. PR #96 is merged but not deployed, so main/production parity is **NO**. The owner-provided PR #95 exact-SHA production receipt is recorded as `PM_REPORTED`; see Section 19.
 - **Previously reconciled against (historical, 2026-10-22 morning):** GitHub `main` at `313991e80c2b54a99819c2e267ef90a35a959752`; product and production at `dc72a6ed0069b539877f5b2b1f1327d66ad7d0a8`. PR #79 is docs-only and explains the main/runtime SHA difference at that time; no deployment was required for that documentation merge. Production image `newsflux-local:dc72a6ed0069`, image ID `sha256:3ada4fb3ef18c3fd1398a67aa6ce5118c8cb88c6533775e534779cb820bde83b`, runtime running, internal HTTP PASS, public HTTP 200 and exact image/revision PASS. Restart count was not included in the supplied receipt. PR #80 is closed without merge; PR #81 is merged, deployed and validated. No PRs were open at the original 2026-10-21 pre-reconciliation snapshot.
 - **Purpose:** preserve completed work, accepted findings, sequencing, architecture/product gates, upstream baseline, and the next recommended action without turning the roadmap into implementation authorization.
 - **Related planning documents:** [`PWA_ARCHITECTURE.md`](./PWA_ARCHITECTURE.md) (PWA Foundation architecture contract) and [`DESIGN_REFERENCES.md`](./DESIGN_REFERENCES.md) (NetNewsWire UX research track). Both are planning documents and authorize no implementation.
 
 This document is the canonical **roadmap**, not an implementation authorization. Detailed design decisions remain in the dedicated design documents and implementation plans remain in `docs/superpowers/plans/` where present.
+
+For present execution status, current PRs and audit outcomes, Section 19 is authoritative. Earlier status tables and snapshots, including Section 18, are retained as historical records; they do not override Section 19.
 
 No roadmap item may bypass project governance: one identifiable purpose per PR; no merge without explicit user authorization; no blind upstream sync; upstream sync, redesign and functional changes stay isolated; incidental findings are reported, classified and routed to backlog; no new persistent NewsFlux state without an explicit architecture decision; and no incidental scope expansion.
 
@@ -96,7 +98,7 @@ Current reference decisions:
 | READER-VISUAL-01       | **COMPLETED** | Reading ergonomics refinement                         |
 | UX/UI red-team round 2 | **COMPLETED** | `GOOD_WITH_DEBT`: 0 P0, 3 P1, 13 P2, 8 P3             |
 
-### 3.2 Recent PR history (completed through PR #91)
+### 3.2 Historical PR history snapshot (completed through PR #91 before later PWA work)
 
 | PR  | Track                                   | Status                             | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | --- | --------------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -388,7 +390,9 @@ The following opportunities do not require new persistent NewsFlux state:
 - **MINIFLUX_DELETE_STATUS_01 — PR #84 MERGED** (merge `9b6f98cee745c2fed8dbe73cee2b1f2e4ad29ac7`): the DELETE retry hazard was hardened in `src/apis/feeds.js`; the historical 404 causation remains high-confidence but unproven, so no root-cause closure is claimed.
 - **Miniflux fetch security migration — PASS:** global private-network fetch allowance is disabled; RSS-Bridge private access is restricted through the dedicated proxy to the intended `rss-bridge:80` target.
 
-### 3.13 PWA Foundation: current implementation and rollout state
+### 3.13 Historical PWA Foundation rollout snapshot (2026-10-22; superseded by Section 19)
+
+The table and rollout order below record the state before PRs #93–#95. Preserve it as history; Section 19 records the current PWA status.
 
 PWA work has moved from planning into implementation. The code and production state intentionally differ after PR #91's failed old-to-new runtime canary; this is an operational rollback, not an indication that PR #91 was reverted from GitHub.
 
@@ -416,7 +420,7 @@ Required ordering:
 
 Do not place another standalone deployment of A2A ahead of A2C. Do not rely solely on a control rendered inside `AppNotifications`: recovery must remain reachable if a lazy chunk failure prevents the React application from mounting. The source of the current SPA asset fallback is not yet proven; inspect the serving path before changing NPM or any proxy configuration.
 
-### 3.14 Intelligence, statistics, Home briefing, automation and discovery gates
+### 3.14 Intelligence, statistics, Home briefing, automation and discovery gates (2026-10-22 planning snapshot; current queue in Section 19)
 
 These accepted tracks preserve a deterministic and privacy-bounded direction. The status below is planning/research state, not a product implementation grant.
 
@@ -540,9 +544,9 @@ Offline reading, feed notifications, third-party AI summaries and other new pers
 
 ---
 
-## 7. Recommended execution order from the current baseline
+## 7. Historical recommended execution order (PR #91 rollback snapshot; superseded by Section 19)
 
-The current execution order reflects the PR #91 production rollback and the newly accepted research/architecture gates. It is a sequencing record, **not** authorization to implement, merge or deploy. There are no open PRs at the preparation snapshot; `MARK-ALL-UNDO-JUMP-01` remains held for real reproduction evidence.
+This historical execution order reflected the PR #91 production rollback. It is preserved as a sequencing record, **not** authorization to implement, merge or deploy. Section 19 records the current state and queue.
 
 ### Critical production-safety lane
 
@@ -603,7 +607,7 @@ The existing `markAllReadJumpToNext` behavior remains intentional. `MARK-ALL-UND
 
 ---
 
-## 9. Known test debt and incidental findings
+## 9. Historical test debt and incidental findings (2026-10-22 snapshot; current dispositions are in Section 19)
 
 - `HARNESS-UNDO-ID-01` was resolved by test-maintenance PR #36 (feature head `ef90eb733dbc6a26c0b85bcf33a9a866569a92b7`, merge `b65f6f88b0c27f049723714a5338527ffc92fa1a`); its focused list regression passed 29/29.
 - `HARNESS-CODEBLOCK-SSR-01` is no longer open: PR #38 reports `CODEBLOCK_SSR_GATE=PASS` within the full Node suite on both main and candidate.
@@ -624,7 +628,7 @@ The existing `markAllReadJumpToNext` behavior remains intentional. `MARK-ALL-UND
 - **REACT19_ARCO_ELEMENT_REF — LOW PRIORITY.**
 - **RESIZEOBSERVER — NEEDS REPRODUCTION.**
 - **SOURCE_IDENTITY / STORY_IDENTITY — ARCHITECTURE / RESEARCH GATES; `SOURCE_IDENTITY` CONFIRMED.** `SOURCE_IDENTITY` is publisher/feed/source-level visual identity reused across the sidebar, list and reader and is planned as `NNW-01` inside the no-persistence constraint; `STORY_IDENTITY` (story-level identity and clustering semantics) stays out of `NNW-01`; anything needing storage stays gated.
-- **PWA findings and rollout state:** manifest/runtime theme-color mismatch (`PWA_THEME`), no maskable icon (`PWA_INSTALL`), navigation-route scope behavior (`PWA_SCOPE`), plaintext `password` in `localStorage` (`SECURITY`, pre-existing), hostname disclosure/multi-part public-suffix handling in third-party icon fallback (`PRIVACY` / `BUG`), and per-profile storage separation between installed iOS app and Safari (`STATE_PERSISTENCE`) remain separate findings. PR #90 implements the user-controlled update prompt and is in production baseline `5ea2136`. PR #91's runtime JS/CSS status-and-MIME validation is merged into `main` but not in production after rollback. **PWA-03A2C is the current deploy blocker** because a cross-build lazy-chunk failure can prevent the React update UI from mounting; **PWA-03A2B true asset 404s follow after A2C**. See Section 17 for the current sequence and `PWA_ARCHITECTURE.md` §4 for the older planning baseline; schedule documentation synchronization.
+- **Historical PWA findings and rollout snapshot (2026-10-22):** manifest/runtime theme-color mismatch (`PWA_THEME`), no maskable icon (`PWA_INSTALL`), navigation-route scope behavior (`PWA_SCOPE`), plaintext `password` in `localStorage` (`SECURITY`, pre-existing), hostname disclosure/multi-part public-suffix handling in third-party icon fallback (`PRIVACY` / `BUG`), and per-profile storage separation between installed iOS app and Safari (`STATE_PERSISTENCE`) were tracked as separate findings. The PR #91 cross-build recovery and PR #95 asset-serving blockers recorded here were subsequently closed by PRs #93–#95. Current PWA and production status is in Section 19 and `PWA_ARCHITECTURE.md` §16.
 - **DOCS_DRIFT — RESOLVED (PM review of PR #86):** PRs #74, #76 and #77 are listed as completed in Section 3.2; `TABLET-HEADER-WIDTH-01` is closed by PR #76, the initial Home duplicate-ID case of `HOME_DUP_ROOT_CAUSE_01` by PR #77, and the NAV route-focus slice is recorded as completed historical work (PR #74). `NEWSFLUX_NAV_VISUAL_01.md` retains its 2026-10-20 statements as history. `docs/UPSTREAM_TRACKING.md` does not exist.
 - **PREFERENCE_STORAGE — ARCHITECTURE / SOURCE-OF-TRUTH / PRIVACY DECISION REQUIRED.**
 - Broad source discovery remains **HOLD**; do not broaden personalized ranking without explicit architecture/product authorization.
@@ -925,7 +929,7 @@ PERSONALIZED_RANKING=NO_BROADENING_WITHOUT_EXPLICIT_AUTHORIZATION
 
 This original 2026-10-21 pre-reconciliation snapshot preserves `OPEN_PRS_AT_SNAPSHOT=NONE` as observed before that reconciliation began; it is not the live candidate state. PR #79 advanced GitHub `main` without changing the product/runtime baseline, and no deployment was required for docs-only advancement. The live PR #82/#83/#84 state and current integration order are recorded separately in Section 15. The dedicated upstream-sync item remains queued, not integrated. This documentation-only reconciliation does not authorize a merge or deploy.
 
-## 15. Historical: active parallel candidates and integration order (2026-10-22 morning; superseded by Section 16)
+## 15. Historical: active parallel candidates and integration order (2026-10-22 morning; superseded by Section 19)
 
 The 2026-10-21 snapshot above is retained as the original pre-reconciliation record. Live GitHub state checked on 2026-10-22 shows PR #82 open as a Draft documentation reconciliation, with two isolated, PM-reviewed Draft candidates behind it. PR #84 handles backend delete-contract hardening; PR #83 handles duplicate-URL presentation polish after the backend refresh. Neither is merged or deployed.
 
@@ -1022,9 +1026,9 @@ DOCUMENTATION_BLOCKS_NEXT=NO
 PROJECT_STATE_RECONCILED=YES
 ```
 
-These tracks do **not** authorize implementation: `PWA_FOUNDATION=PLANNED` and `NETNEWSWIRE_UX_REFERENCE=ACCEPTED_AS_DESIGN_INPUT` record that the work is accepted for planning and design input only. The PM review of PR #86 (PASS WITH DOCUMENTATION AMENDMENTS) names `PWA-00` as the next authorized planning/validation candidate; `PWA-01A` is not yet authorized, and a confirmed mid-reading reload in `PWA-00` would put `PWA-03A` ahead of manifest/icon polish.
+These tracks do **not** authorize implementation: `PWA_FOUNDATION=PLANNED` and `NETNEWSWIRE_UX_REFERENCE=ACCEPTED_AS_DESIGN_INPUT` record the planning/design input state at that historical snapshot. The PM review of PR #86 and the PWA-00 outcome are retained as historical evidence; later runtime completions and the current installability decision gates are summarized in Section 19.
 
-## 17. Current reconciliation snapshot: PR #91 code merged; production rolled back (2026-10-22)
+## 17. Historical reconciliation snapshot: PR #91 code merged; production rolled back (2026-10-22)
 
 GitHub state was checked live before this documentation PR: `main` is `de8b4645df1b8ce17b4b02c2d54adb694af25109`; PR #91 is merged, PR #88 is closed/merged, and the open-PR list was empty. Production values below are the owner-provided canary/rollback receipt and remain explicitly distinguished from Git-verified merge state.
 
@@ -1115,4 +1119,160 @@ The PR #91 canary exposed a cross-build lazy-chunk recovery gap: the earlier cli
 - After STORY-00 evidence, STORY-01 may be considered for deterministic, non-persistent Home-only grouping. STORY-02 additionally requires its design gate. HOME-DAILY-01 and STATS-02 remain dependent on STORY-01 and STATS-01.
 - Story representatives, remote LLM defaults, embedding storage, behavioral persistence, broad discovery ranking and user-facing automation execution remain unapproved.
 
-This snapshot supersedes Section 16 for current code/production state. The PWA design and canonical project-state documents still contain the prior planning-only snapshot; reconcile them in a separate documentation pass rather than widening this roadmap-only change.
+At the 2026-10-22 snapshot, this superseded Section 16 for code/production state. The recovery recorded above closed the operational browser recovery task; Section 19 supersedes this snapshot for current state.
+
+## 18. Historical reconciliation snapshot: post-PR #95 before PR #96 disposition (2026-10-23)
+
+This is the state recorded before PR #96 was merged. Its `main`, PR #96 open-state/head, STORY-00R2B and production-parity fields are a dated historical snapshot and are superseded by Section 19. No historical evidence has been rewritten.
+
+```text
+DOCS_DATE=2026-10-23
+GITHUB_MAIN=96bd1fe563571bfa322b2fd79f6fc12f49107a76
+PRODUCTION_ABOUT_REVISION=96bd1fe563571bfa322b2fd79f6fc12f49107a76
+PRODUCTION_SHA=96bd1fe563571bfa322b2fd79f6fc12f49107a76
+PRODUCTION_IMAGE=PM_REPORTED_newsflux-local:96bd1fe56357
+PRODUCTION_APP_LOAD=PASS
+PRODUCTION_DOCKER_IMAGE_INSPECTION=NOT_PERFORMED
+
+PR88_STATUS=MERGED
+PR88_MERGE_SHA=3a1b2db07d9df08b8dde9f3148a02e6eb703ec7c
+PR90_STATUS=MERGED_PWA03A1
+PR90_MERGE_SHA=5ea21363676dd93dde97fd5ff8548e89864495ec
+PR91_STATUS=MERGED_PWA03A2A
+PR91_MERGE_SHA=de8b4645df1b8ce17b4b02c2d54adb694af25109
+PR92_STATUS=MERGED_DOCUMENTATION
+PR92_MERGE_SHA=f630fe8843a16a9ff810662632a7b6f253285151
+PR93_STATUS=MERGED_PWA03A2C
+PR93_MERGE_SHA=950ae61b71433a6fd9c11fed9ed266a17fee3185
+PR94_STATUS=MERGED_PWA03A2C1
+PR94_MERGE_SHA=6a8068e9809cafdecce0c695c78dcb151d95d4a4
+PR95_STATUS=MERGED_PWA03A2B
+PR95_MERGE_SHA=96bd1fe563571bfa322b2fd79f6fc12f49107a76
+PWA03A2A=COMPLETE_MERGED
+PWA03A2C=COMPLETE_MERGED
+PWA03A2C1=COMPLETE_MERGED
+PWA03A2B=COMPLETE_MERGED
+PWA03A2=COMPLETE_PRODUCTION_AT_ABOUT_REVISION
+
+PWA01A_AUDIT=COMPLETE
+PWA01A_RESULT=NO_IMPLEMENTATION;D1_MANIFEST_ID_AND_D3_MASKABLE_ICON_DECISIONS_REMAIN_OPEN
+PWA01A_PHYSICAL_INSTALL_AND_DEEP_LINK_GATES=NOT_RUN
+PWA01B_AUDIT=COMPLETE
+PWA01B_RESULT=NO_IMPLEMENTATION;D2_MANIFEST_THEME_AND_BACKGROUND_POLICY_REMAINS_OPEN
+PWA01B_RUNTIME_THEME_META=UPDATES_DURING_THEME_CHANGE
+
+STATS01_READINESS=HOLD_PRODUCT_DEFINITION_REQUIRED
+STATS01_IMPLEMENTED=NO
+STATS01_NEW_PERSISTENCE=NO
+STORY00R2B_STATUS=NOT_OBSERVED_IN_THIS_SESSION
+STORY00R2B_RESULTS=NOT_CLAIMED
+
+API_NONIDEMPOTENT_RETRY_01=OPEN_DRAFT_PR96
+PR96_BASE=96bd1fe563571bfa322b2fd79f6fc12f49107a76
+PR96_HEAD=88dc4d7ade30b1576f1c77cab954d7ea187bcbd8
+PR96_BRANCH=codex/api-nonidempotent-retry-01
+PR96_RED_GREEN=PASS
+PR96_NODE_SUITE=509_PASS_2_SKIPPED_511_TOTAL
+PR96_LIVE_MINIFLUX_WRITES=0
+
+HOME_PAGINATION_CURSOR_STALL_01=NOT_REPRODUCED_AFTER_PR87
+HOME_CURSOR_HARNESS=10_OF_10_PASS
+HOME_TIE_RECOVERY=23_OF_23_INCLUDING_PREVIOUSLY_OMITTED_ID
+HOME_IMPLEMENTATION_CHANGED_IN_THIS_QUEUE=NO
+HOME_DUP_ROOT_CAUSE_01=SEPARATE_INITIAL_DUPLICATE_ID_FINDING_CLOSED_BY_PR77
+
+STORY_IDENTITY=RESEARCH_STATUS_NOT_OBSERVED;NO_RESULT_CLAIMED
+MERGE_AUTHORIZED=NO
+DEPLOY_AUTHORIZED=NO
+PRODUCTION_MUTATIONS=NO
+```
+
+### Queue disposition recorded at this historical snapshot
+
+- **PWA-01A installability audit — complete, no implementation.** The generated manifest already follows the configured base path for `start_url` and `scope`; the referenced icons exist, but no maskable icon is present and manifest `id` is not explicitly configured. Root and non-root builds passed. Decisions D1 (stable manifest ID) and D3 (maskable icon art) are still required before implementation. Physical installed-app and deep-link gates were not run.
+- **PWA-01B theme audit — complete, no implementation.** Runtime theme-color metadata follows the app theme, while the manifest has one static theme/background pair. Decision D2 is required before changing that policy.
+- **STATS-01 — held.** Provider-backed fields exist, but no accepted definition for metric, observation window and presentation semantics was available. No product code or persistence was added.
+- **STORY-00R2B — parallel lane status not observed here.** No result is inferred or recorded.
+- **API-NONIDEMPOTENT-RETRY-01 / PR #96 — open Draft for PM review.** A transport failure can replay a mutating request under the former shared retry policy; isolated regression coverage and local gates passed. The change disables default POST/PUT retries while preserving GET retries, so consumers of shared POST/PUT calls should be reviewed.
+- **HOME_PAGINATION_CURSOR_STALL_01 — not reproduced after PR #87.** The deterministic Home suite passed 10/10; the previous equal-second case loaded 23/23 entries, including the formerly omitted ID. This is a Home cursor result and does not conflate the separate `HOME_DUP_ROOT_CAUSE_01` finding closed by PR #77.
+
+The audit-only PWA phases changed no product code. This historical snapshot records no implementation, merge or deployment authorization.
+
+## 19. Current canonical state: post-PR #96 (2026-10-23)
+
+GitHub `main` is `fa27a4cec1cae1e887041ee3999622c5b8f76681` after PR #96 merged. Production remains at `96bd1fe563571bfa322b2fd79f6fc12f49107a76`; PR #96 has not been deployed, so main and production are not at parity. PR #95 production evidence is owner-provided and retained as `PM_REPORTED`: exact image/revision, internal and public HTTP checks including the asset-404 canary passed, and rollback image plus compose backup were preserved. The receipt did not report a restart count.
+
+```text
+DOCS_DATE=2026-10-23
+GITHUB_MAIN=fa27a4cec1cae1e887041ee3999622c5b8f76681
+PRODUCT_MAIN_BASELINE=fa27a4cec1cae1e887041ee3999622c5b8f76681
+PRODUCTION_SHA=96bd1fe563571bfa322b2fd79f6fc12f49107a76
+PRODUCTION_IMAGE=newsflux-local:96bd1fe56357
+PRODUCTION_RECEIPT=PM_REPORTED_OWNER_PROVIDED_PR95_EXACT_SHA
+PRODUCTION_IMAGE_REVISION=PASS
+PRODUCTION_INTERNAL_HTTP=PASS
+PRODUCTION_PUBLIC_HTTP=200
+PRODUCTION_ASSET_404_CANARY=PASS
+PRODUCTION_ROLLBACK_IMAGE_AND_COMPOSE_BACKUP=PRESERVED
+PRODUCTION_RESTART_COUNT=NOT_REPORTED
+MAIN_PRODUCTION_PARITY=NO
+PR96_DEPLOYED=NO
+
+PR96_STATUS=MERGED
+PR96_FEATURE_HEAD=98a1f93f9a9ccb411230c041726c4dece1f4e1b9
+PR96_MERGE_SHA=fa27a4cec1cae1e887041ee3999622c5b8f76681
+API_NONIDEMPOTENT_RETRY_01=COMPLETE
+PR96_SIDE_EFFECTING_GET_UPDATE_CONTENT_TRUE=RETRY_FALSE
+PR96_RAW_MUTATING_METHODS=POST_PUT_PATCH_DELETE_RETRY_FALSE_BY_DEFAULT
+PR96_SAFE_GET_RETRIES=PRESERVED
+PR96_EXPLICIT_RETRY_OPT_IN=PRESERVED
+PR96_FOCUSED_API_TESTS=20_OF_20_PASS
+PR96_FULL_NODE=513_PASS_2_SKIPPED
+PR96_LINT_PRETTIER_BUILD_DIFF_CHECK=PASS
+PR96_LIVE_MINIFLUX_WRITES=0
+
+STORY00R2B_STATUS=COMPLETE_REJECT
+STORY00R2B_PRIMARY_MODEL=mDeBERTa_FULL_ONNX_FP32
+STORY00R2B_PRIMARY_POOLED_S1_AUC=0.647
+STORY00R2B_SECOND_MODEL=NO
+STORY00R2B_LEXICAL_STAGE0_AUC=0.904_DEVELOPMENT_EVIDENCE_ONLY_NOT_ADOPTED
+STORY00R2B_POSITIVES_NEVER_CANDIDATES=47_OF_113
+STORY00R2B_POSITIVES_VETOED=7
+STORY00R2B_PERFECT_VERIFIER_RECALL_CEILING=0.522
+STORY00R2B_NEXT=STORY00_R3A_CANDIDATE_GENERATION_FORENSICS
+
+STORY01_ARCHITECTURE=DETERMINISTIC_CONSERVATIVE_V1
+STORY01_P1=APPROVED_B_UNREAD_NEWEST_PUBLISHED_LOWEST_ID
+STORY01_P2=APPROVED_A_FROZEN_BLIND_SAMPLE_GE72_AUTO_MERGES_0_FALSE_MERGES
+STORY01_P3=APPROVED_A_FOR_ENGINE_B_FOR_RELEASE
+STORY01_P4=HOLD_PENDING_HOME_COVERAGE_MEASUREMENT
+STORY01_IMPLEMENTATION_AUTHORIZED=NO
+
+AUTO01_D1=RESOLVED
+AUTO01_V1=MINIFLUX_NATIVE_BLOCK_KEEP_RULES__NEW_ENTRIES_WEBHOOK_TO_N8N__SAVE_ENTRY_WEBHOOK_TO_N8N
+NEWSFLUX_TO_N8N_DIRECT_PATH=NO
+AUTO01_NEW_PERSISTENCE=NO
+AUTO01_D5=RESOLVED_BY_PR96
+AUTO01_D3_D4=ENVIRONMENT_DIAGNOSTICS
+
+NNW01_D7=NO_THIRD_PARTY_FAVICON_LOOKUP
+NNW01_ICON_PRIORITY=MINIFLUX_PROVIDER_ICON__LOCAL_DETERMINISTIC_MONOGRAM__LOCAL_DEFAULT_ICON
+NNW01_READY_FOR_DESIGN=YES
+NNW01_IMPLEMENTATION_AUTHORIZED=NO
+
+AUTH_APIKEY_01=ARCHITECTURE_APPROVED_IMPLEMENTATION_HOLD
+AUTH_APIKEY_01_LIFECYCLE=CONSENT_PASSWORD_LOGIN_CREATE_KEY_VERIFY_V1_ME_STORE_TOKEN_AND_KEY_ID_THEN_DROP_PASSWORD_LOGOUT_REVOKES_OWN_KEY_FIRST
+SECURITY_HEADERS_01=SEPARATE_BACKLOG
+SECURITY_HEADERS_01_MIX_WITH_NNW_OR_PWA=NO
+STATS01_STATUS=HOLD_PRODUCT_DEFINITION_REQUIRED
+HOME_PAGINATION_CURSOR_STALL_01=NOT_REPRODUCED_AFTER_PR87
+
+LAST_COMPLETED_FUNCTIONAL=API_NONIDEMPOTENT_RETRY_01 / PR #96
+CURRENT_DOCS_PR=97_DRAFT
+MERGE_AUTHORIZED=NO
+DEPLOY_AUTHORIZED=NO
+```
+
+`AUTH_APIKEY_01` retains the approved consent/create/verify/store/drop-password/revoke lifecycle: after consent, log in with the password, create an app key, verify it through `/v1/me`, store the token and `apiKeyId`, and only then remove the stored password; logout revokes the installation's own key first. `STORY-01` remains unimplemented. Security-header work stays in a separate backlog item and is not combined with NNW or PWA installability.
+
+Historical snapshots may retain earlier values such as `PR96_STATUS=OPEN`, the former PR #96 head, `STORY00R2B_STATUS=NOT_OBSERVED_IN_THIS_SESSION`, and `LAST_COMPLETED_FUNCTIONAL=...PR #85`; those values are not current. PR #96 is merged at the SHA above, production remains at PR #95, and the current functional completion is PR #96.
