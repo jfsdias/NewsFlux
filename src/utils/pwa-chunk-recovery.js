@@ -72,6 +72,22 @@ const getDialogText = (documentObject) => {
   return status
 }
 
+const setRecoveryBackgroundInert = (host, overlay) => {
+  const previousStates = [...host.children]
+    .filter((element) => element !== overlay)
+    .map((element) => [element, element.inert])
+
+  for (const [element] of previousStates) {
+    element.inert = true
+  }
+
+  return () => {
+    for (const [element, wasInert] of previousStates) {
+      element.inert = wasInert
+    }
+  }
+}
+
 const makeProbeUrl = (scopeUrl) => {
   const nonce = `${Date.now()}-${Math.random().toString(36).slice(2)}`
   return new URL(`__newsflux_recovery_probe__/${nonce}`, scopeUrl)
@@ -286,9 +302,10 @@ const createRecoverySurface = (documentObject) => {
 
   const host = documentObject.body || documentObject.documentElement
   host.append(overlay)
+  const restoreBackground = setRecoveryBackgroundInert(host, overlay)
   recoverButton.focus({ preventScroll: true })
 
-  return { overlay, dialog, recoverButton, retryButton, status }
+  return { overlay, dialog, recoverButton, retryButton, status, restoreBackground }
 }
 
 export const installPwaChunkRecovery = ({
@@ -302,6 +319,7 @@ export const installPwaChunkRecovery = ({
   let surface
   let recoveryInProgress = false
   let recoveryNavigated = false
+  let lastFocusedAction
   const scopeUrl = getNewsFluxScopeUrl(windowObject.location.origin, basePath)
 
   const currentUrl = new URL(windowObject.location.href)
@@ -376,9 +394,70 @@ export const installPwaChunkRecovery = ({
     event.preventDefault()
     if (!surface) {
       surface = createRecoverySurface(documentObject)
+      lastFocusedAction = surface.recoverButton
       surface.recoverButton.addEventListener("click", recover)
       surface.retryButton.addEventListener("click", recover)
+      documentObject.addEventListener("focusin", containRecoveryFocus, true)
+      documentObject.addEventListener("keydown", handleRecoveryKeydown, true)
     }
+  }
+
+  const getAvailableActions = () =>
+    [surface?.recoverButton, surface?.retryButton].filter(
+      (button) => button && !button.hidden && !button.disabled,
+    )
+
+  const focusRecoveryAction = (button = lastFocusedAction) => {
+    const availableActions = getAvailableActions()
+    const target = availableActions.includes(button) ? button : availableActions[0]
+    target?.focus({ preventScroll: true })
+    return target
+  }
+
+  function containRecoveryFocus(event) {
+    if (!surface || surface.dialog.contains(event.target)) {
+      if (surface && event.target === surface.recoverButton) {
+        lastFocusedAction = surface.recoverButton
+      } else if (surface && event.target === surface.retryButton) {
+        lastFocusedAction = surface.retryButton
+      }
+      return
+    }
+
+    focusRecoveryAction()
+  }
+
+  function handleRecoveryKeydown(event) {
+    if (!surface) {
+      return
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault()
+      event.stopImmediatePropagation?.()
+      return
+    }
+
+    if (event.key !== "Tab") {
+      return
+    }
+
+    event.preventDefault()
+    const actions = getAvailableActions()
+    if (actions.length === 0) {
+      surface.dialog.focus({ preventScroll: true })
+      return
+    }
+
+    const currentIndex = actions.indexOf(documentObject.activeElement)
+    const step = event.shiftKey ? -1 : 1
+    const nextIndex =
+      currentIndex === -1
+        ? event.shiftKey
+          ? actions.length - 1
+          : 0
+        : (currentIndex + step + actions.length) % actions.length
+    focusRecoveryAction(actions[nextIndex])
   }
 
   windowObject.addEventListener("vite:preloadError", handlePreloadError)
@@ -386,6 +465,9 @@ export const installPwaChunkRecovery = ({
   return {
     dispose() {
       windowObject.removeEventListener?.("vite:preloadError", handlePreloadError)
+      documentObject.removeEventListener?.("focusin", containRecoveryFocus, true)
+      documentObject.removeEventListener?.("keydown", handleRecoveryKeydown, true)
+      surface?.restoreBackground()
       surface?.overlay.remove?.()
     },
   }
