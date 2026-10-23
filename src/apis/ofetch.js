@@ -7,6 +7,17 @@ import isValidAuth from "@/utils/auth"
 import { clearSession } from "@/utils/session"
 
 const REQUEST_AUTH_SESSION_KEY = Symbol("requestAuth")
+const MUTATING_HTTP_METHODS = new Set(["DELETE", "PATCH", "POST", "PUT"])
+
+export const applyRawMutationRetryPolicy = (options = {}) => {
+  const method = options.method?.toUpperCase()
+
+  if (!MUTATING_HTTP_METHODS.has(method)) {
+    return options
+  }
+
+  return { ...options, retry: options.retry ?? false }
+}
 
 const createRequestSessionSnapshot = ({ server, token, username, password }) => ({
   password,
@@ -77,6 +88,8 @@ const createApiClient = () => {
 }
 
 const apiClient = createApiClient()
+const rawRequest = apiClient.raw
+apiClient.raw = (url, options = {}) => rawRequest(url, applyRawMutationRetryPolicy(options))
 apiClient.get = (url, options = {}) =>
   apiClient(url, { ...options, retry: options.retry ?? 3, method: "GET" })
 apiClient.post = (url, body, options = {}) =>
