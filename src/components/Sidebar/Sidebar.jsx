@@ -53,7 +53,7 @@ import AdaptiveScrollArea from "@/components/ui/AdaptiveScrollArea"
 import CustomTooltip from "@/components/ui/CustomTooltip"
 import EditCategoryModal from "@/components/ui/EditCategoryModal"
 import EditFeedModal from "@/components/ui/EditFeedModal"
-import FeedIcon from "@/components/ui/FeedIcon"
+import FeedSourceMark from "@/components/ui/FeedSourceMark"
 import useAppData from "@/hooks/useAppData"
 import useCategoryOperations from "@/hooks/useCategoryOperations"
 import { useFeedOperations } from "@/hooks/useFeedOperations"
@@ -586,7 +586,9 @@ const FeedMenuItem = ({
                 boxSizing: "border-box",
               }}
             >
-              {showFeedIcon && <FeedIcon className="feed-icon-sidebar" feed={feed} />}
+              {showFeedIcon && (
+                <FeedSourceMark className="feed-icon-sidebar" feed={feed} size={16} />
+              )}
               {hasFeedHealthError && (
                 <span aria-hidden="true" className="feed-health-indicator">
                   <IconExclamationCircle />

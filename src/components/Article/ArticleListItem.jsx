@@ -2,7 +2,7 @@ import { IconClockCircle, IconStarFill } from "@arco-design/web-react/icon"
 import { useStore } from "@nanostores/react"
 import { memo } from "react"
 
-import FeedIcon from "@/components/ui/FeedIcon"
+import FeedSourceMark from "@/components/ui/FeedSourceMark"
 import { articleListItemSettingsState } from "@/store/settingsState"
 import { generateReadingTime, generateRelativeTime } from "@/utils/date"
 
@@ -15,7 +15,14 @@ const getListSummary = (summary) =>
     ? `${summary.slice(0, MAX_LIST_SUMMARY_LENGTH - 1).trimEnd()}…`
     : summary
 
-const ArticleListItem = ({ displayTitle, entry, previewContent, feedIconMonogramFallback }) => {
+const ArticleListItem = ({
+  displayTitle,
+  entry,
+  feed,
+  previewContent,
+  sourceDescriptionId,
+  sourceName,
+}) => {
   const { showDetailedRelativeTime, showEstimatedReadingTime, showFeedIcon, showListSummary } =
     useStore(articleListItemSettingsState)
   const listSummary = getListSummary(previewContent)
@@ -23,14 +30,10 @@ const ArticleListItem = ({ displayTitle, entry, previewContent, feedIconMonogram
   return (
     <div className="list-entry-content">
       <div className="list-entry-source">
-        {showFeedIcon && (
-          <FeedIcon
-            className="list-entry-feed-icon"
-            feed={entry.feed}
-            monogramFallback={feedIconMonogramFallback}
-          />
-        )}
-        <span className="list-entry-source-title">{entry.feed.title}</span>
+        {showFeedIcon && <FeedSourceMark className="list-entry-feed-icon" feed={feed} size={20} />}
+        <span className="list-entry-source-title" id={sourceDescriptionId}>
+          {sourceName}
+        </span>
       </div>
 
       <div className="list-entry-story">

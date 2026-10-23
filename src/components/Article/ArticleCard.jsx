@@ -2,7 +2,7 @@ import { IconClockCircle, IconStarFill } from "@arco-design/web-react/icon"
 import { useStore } from "@nanostores/react"
 import { memo, useState } from "react"
 
-import FeedIcon from "@/components/ui/FeedIcon"
+import FeedSourceMark from "@/components/ui/FeedSourceMark"
 import { articleCardSettingsState } from "@/store/settingsState"
 import { WIDE_IMAGE_RATIO } from "@/utils/constants"
 import { generateReadingTime, generateRelativeTime } from "@/utils/date"
@@ -62,7 +62,14 @@ const getInitialCoverState = (entry, coverDisplayMode) => {
   }
 }
 
-const ArticleCard = ({ displayTitle, entry, previewContent, feedIconMonogramFallback }) => {
+const ArticleCard = ({
+  displayTitle,
+  entry,
+  feed,
+  previewContent,
+  sourceDescriptionId,
+  sourceName,
+}) => {
   const {
     coverDisplayMode,
     showDetailedRelativeTime,
@@ -112,15 +119,11 @@ const ArticleCard = ({ displayTitle, entry, previewContent, feedIconMonogramFall
       <div className="card-header">
         <div className="card-meta">
           <div className="card-source">
-            {showFeedIcon && (
-              <FeedIcon
-                className="feed-icon-mini"
-                feed={entry.feed}
-                monogramFallback={feedIconMonogramFallback}
-              />
-            )}
+            {showFeedIcon && <FeedSourceMark className="feed-icon-mini" feed={feed} size={20} />}
             <div className="card-source-content">
-              <span className="card-source-title">{entry.feed.title}</span>
+              <span className="card-source-title" id={sourceDescriptionId}>
+                {sourceName}
+              </span>
               {entry.author && <span className="card-author">{entry.author}</span>}
             </div>
           </div>
