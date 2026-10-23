@@ -16,6 +16,7 @@ import SidebarTrigger from "./SidebarTrigger.jsx"
 
 import AccessibleModal from "@/components/ui/AccessibleModal"
 import CustomTooltip from "@/components/ui/CustomTooltip"
+import FeedSourceMark from "@/components/ui/FeedSourceMark"
 import useContentContext from "@/hooks/useContentContext"
 import { polyglotState } from "@/hooks/useLanguage"
 import useScreenWidth from "@/hooks/useScreenWidth"
@@ -207,8 +208,8 @@ const SearchAndSortBar = ({
         "isArticleListReady",
       ],
     })
-  const { orderDirection, showStatus } = useStore(settingsState, {
-    keys: ["orderDirection", "showStatus"],
+  const { orderDirection, showFeedIcon, showStatus } = useStore(settingsState, {
+    keys: ["orderDirection", "showFeedIcon", "showStatus"],
   })
   const { polyglot } = useStore(polyglotState)
   const feeds = useStore(catalogFeedsState)
@@ -249,15 +250,15 @@ const SearchAndSortBar = ({
     (key) => !duplicateHotkeys.includes(key),
   )
 
-  const { title, count } = useMemo(() => {
+  const { feed, title, count } = useMemo(() => {
     if (id) {
       if (infoFrom === "category") {
         const category = categories.find((c) => c.id === Number(id))
-        return { title: category?.title, count: dynamicCount }
+        return { feed: null, title: category?.title, count: dynamicCount }
       }
       if (infoFrom === "feed") {
         const feed = feeds.find((f) => f.id === Number(id))
-        return { title: feed?.title, count: dynamicCount }
+        return { feed, title: feed?.title, count: dynamicCount }
       }
     }
 
@@ -269,7 +270,7 @@ const SearchAndSortBar = ({
     }
 
     const info = infoMap[infoFrom] || { key: "", count: 0 }
-    return { title: info.key ? polyglot.t(info.key) : "", count: info.count }
+    return { feed: null, title: info.key ? polyglot.t(info.key) : "", count: info.count }
   }, [infoFrom, id, categories, feeds, dynamicCount, polyglot])
 
   const toggleOrderDirection = () => {
@@ -315,7 +316,10 @@ const SearchAndSortBar = ({
     >
       <SidebarTrigger />
       {!homeMode && (
-        <div className="page-info">
+        <div className={`page-info${infoFrom === "feed" ? " page-info-feed" : ""}`}>
+          {infoFrom === "feed" && showFeedIcon && feed && (
+            <FeedSourceMark className="feed-header-source-mark" feed={feed} size={20} />
+          )}
           <div className="title-container">
             {title ? (
               <Typography.Ellipsis

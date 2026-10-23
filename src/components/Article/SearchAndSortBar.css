@@ -22,6 +22,15 @@
   overflow: hidden;
 }
 
+.search-and-sort-bar .page-info-feed .title-container {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.search-and-sort-bar .page-info .feed-header-source-mark {
+  margin-right: 8px;
+}
+
 .search-and-sort-bar .page-info .title-container .arco-typography {
   display: block;
   overflow: hidden;
