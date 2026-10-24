@@ -1,12 +1,130 @@
 # NewsFlux Project State
 
 - **Purpose:** concise operational state for PM handoffs and future sessions. The roadmap remains the source for sequencing and product/architecture detail.
-- **Last reconciled:** 2026-10-24 (post-PR #108).
-- **Current snapshot:** GitHub `main` at `bc9f175a3447a67b06d7deee12c6e19374bb7664` (PR #108 merge). Production is deployed at `bc9f175a3447a67b06d7deee12c6e19374bb7664` (image `newsflux-local:bc9f175a3447`, container `newsflux`, verified live via read-only SSH); main and production are in full parity (`MAIN_PRODUCTION_PARITY=YES`).
-- **Previous snapshot (historical):** GitHub `main` at `fa27a4cec1cae1e887041ee3999622c5b8f76681` (PR #96 merge) on 2026-10-23; production was at `96bd1fe563571bfa322b2fd79f6fc12f49107a76`. The earlier 2026-10-22 and 2026-10-21 snapshots are preserved below.
+- **Last reconciled:** 2026-10-24 (post-PR #114).
+- **Current snapshot:** GitHub `main` at `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9` (PR #114 merge). Production is deployed at `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9` (image `newsflux-local:bf1f911f0e2d`, container `newsflux`, verified live via read-only SSH); main and production are in full parity (`MAIN_PRODUCTION_PARITY=YES`).
+- **Previous snapshot (historical):** GitHub `main` at `bc9f175a3447a67b06d7deee12c6e19374bb7664` (PR #108 merge) on 2026-10-24; production was at `bc9f175a3447a67b06d7deee12c6e19374bb7664`. The earlier 2026-10-23, 2026-10-22 and 2026-10-21 snapshots are preserved below.
 - **Related planning documents:** [`PWA_ARCHITECTURE.md`](./PWA_ARCHITECTURE.md) and [`DESIGN_REFERENCES.md`](./DESIGN_REFERENCES.md) (planning only; no implementation authorized).
 
-## Current state (post-PR #108, 2026-10-24)
+## Current state (post-PR #114, 2026-10-24)
+
+GitHub merge facts and production runtime state are verified live from the repository and read-only SSH container inspection. PR #114 is merged into `main` and promoted to production at SHA `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9`. The production container `newsflux` is running `newsflux-local:bf1f911f0e2d` with OCI revision `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9`, image ID `sha256:368310dd4e8080571eb8ab72500cce4b6ac27524f4c04e891bc7d45295b8ba2f`, compose configuration SHA `8cac8c8c2a9ceecdbd5f9cad4a3b026b3e65bb6024fc88123e41843b4549a8f4`, 0 restarts, internal HTTP 200, public root HTTP 200 (at `https://news.jfsdias.ddns.net/`), public `/all` SPA fallback HTTP 200, PWA webmanifest HTTP 200, and static 404 canary returning true 404. Story ranker port 8000 is absent and no story containers exist. Main and production have full parity (`MAIN_PRODUCTION_PARITY=YES`). Prior to this reconciliation PR (#118, currently Draft), there were zero open pull requests on GitHub (`OPEN_PRS_BEFORE_RECONCILIATION=NONE`, `OPEN_OTHER_PRS=NONE`). PR #118 is expected to close upon merge, restoring a clean queue.
+
+```text
+DOCS_DATE=2026-10-24
+CURRENT_MAIN=bf1f911f0e2d405dbf84a04414a04cc0bc6530c9
+PRODUCT_MAIN_BASELINE=bf1f911f0e2d405dbf84a04414a04cc0bc6530c9
+PRODUCTION_SHA=bf1f911f0e2d405dbf84a04414a04cc0bc6530c9
+PRODUCTION_IMAGE=newsflux-local:bf1f911f0e2d
+PRODUCTION_IMAGE_ID=sha256:368310dd4e8080571eb8ab72500cce4b6ac27524f4c04e891bc7d45295b8ba2f
+PRODUCTION_VERIFICATION=LIVE_VERIFIED_READ_ONLY_SSH_EXACT_SHA
+PRODUCTION_CONTAINER=newsflux
+PRODUCTION_CONTAINER_STARTED_AT=2026-10-24T20:28:11Z
+PRODUCTION_RESTART_COUNT=0
+PRODUCTION_IMAGE_REVISION=PASS_bf1f911f0e2d405dbf84a04414a04cc0bc6530c9
+PRODUCTION_COMPOSE_CONFIG=/dockerdata/compose/newsflux/compose.yaml
+PRODUCTION_COMPOSE_SHA=8cac8c8c2a9ceecdbd5f9cad4a3b026b3e65bb6024fc88123e41843b4549a8f4
+PRODUCTION_ROLLBACK_COMPOSE=/dockerdata/compose/newsflux/compose.yaml.pre-bf1f911f0e2d-20261024-172809
+PRODUCTION_ROLLBACK_SCRIPT=/root/newsflux-rollback-bf1f911f0e2d-20261024-172809.sh
+PRODUCTION_INTERNAL_HTTP=PASS_200
+PRODUCTION_PUBLIC_HTTP=200
+PRODUCTION_PUBLIC_ALL_HTTP=200
+PRODUCTION_PWA_MANIFEST_HTTP=200
+PRODUCTION_ASSET_404_CANARY=PASS_404
+LIVE_PUBLIC_EDGE_HSTS=OBSERVED
+MAIN_PRODUCTION_PARITY=YES
+OPEN_PRS_BEFORE_RECONCILIATION=NONE
+CURRENT_RECONCILIATION_PR=118_DRAFT
+OPEN_OTHER_PRS=NONE
+
+PR109_STATUS=MERGED_DOCUMENTATION
+PR109_MERGE_SHA=701895fd690fd3833d0f4a5b1d5a09e22e9731a2
+PR106_STATUS=MERGED_DORMANT
+PR106_MERGE_SHA=4cb99e196f88b01602a7fa53575430dd74ec5f94
+PR111_STATUS=MERGED_SECURITY_HEADERS_BASELINE
+PR111_MERGE_SHA=3c1eeb03501dd0993d201c588632fa3c59b0ff7e
+PR110_STATUS=MERGED_RESEARCH_STUDY
+PR110_MERGE_SHA=fac87b621a63393da6987cf89f6b85c12cede994
+PR115_STATUS=MERGED_TEST_STABILIZATION
+PR115_MERGE_SHA=a62f53982dd7e0cff4fa2ee90a15574dc490a5d3
+PR116_STATUS=MERGED_NAV_COUNT_SEMANTICS
+PR116_MERGE_SHA=7c429766e24fd3fbb8a07e126f816d665d19b130
+PR117_STATUS=MERGED_CONTEXTUAL_CHROME
+PR117_MERGE_SHA=f79a4369677c45122faa8190269ff71eeec0ec76
+PR113_STATUS=MERGED_CPU_RUNTIME_CONTRACT
+PR113_MERGE_SHA=dd2e9e6ec429d2a8c01a9736b3090b4d20f2c4eb
+PR112_STATUS=MERGED_AUTH_APIKEY
+PR112_MERGE_SHA=3859e18d4744c7cbbdd97bdee9de3d6fe77ad99b
+PR114_STATUS=MERGED_DEPLOYED_COMPLETE
+PR114_MERGE_SHA=bf1f911f0e2d405dbf84a04414a04cc0bc6530c9
+
+PR114_DEPLOYMENT_STATUS=PASS
+PWA_D1=APPROVED
+PWA_D2=APPROVED
+PWA_D3=APPROVED
+REAL_DEVICE_D3_GATE=PASS
+
+AUTH_APIKEY_01=MERGED_DEPLOYED
+MANUAL_TOKEN_AUTH_PRESERVED=YES
+AUTH_TRANSACTION_JOURNAL=FAIL_CLOSED_PERSISTENT
+
+STORY_CANDIDATE_RANKING_CODE=MERGED
+STORY_CANDIDATE_RANKING_RUNTIME=DISABLED
+STORY_CANDIDATE_RANKING_PRODUCTION_ACTIVATION=NOT_AUTHORIZED
+STORY_POLICY_E=APPROVED_AS_FUTURE_ACTIVATION_CONTRACT
+FULL_POLICY_E_ACTIVATION_GATE=NOT_PROVEN
+
+NNW05_RESEARCH=COMPLETED
+SECURITY_HEADERS_BASELINE=COMPLETED
+NAV02F_DETERMINED_SLICE=COMPLETED
+NNW03_CHROME01_DETERMINED_SLICE=COMPLETED
+
+NON_NEGOTIABLE_BOUNDARIES=MINIFLUX_IS_SOURCE_OF_TRUTH;NO_NEW_PERSISTENT_STATE_WITHOUT_DECISION;CHRONOLOGICAL_UNREAD_ALL_NO_SILENT_RANKING;GLASS_CHROME_ONLY_OPAQUE_CONTENT;SINGLE_PANE_FIRST_MOBILE_TABLET_FOLD;CRITICAL_MEDIUM_884X1104;NO_BLIND_UPSTREAM_SYNC;EXACT_SHA_DEPLOY_ONLY
+
+EXPLICIT_HOLDS=WIDE_DESKTOP_MULTI_PANE_ACTIVATION;AUTOMATIC_VS_OPT_IN_MULTI_PANE;MULTI_PANE_THRESHOLD;HOME_MULTI_PANE_INCLUSION;UNREAD_CATEGORY_GROUPING;DESKTOP_SIDEBAR_WIDTH_CHANGES;SHOW_UNREAD_FEEDS_ONLY_DEFAULT_CHANGE;SIDEBAR_VISUAL_COUNT_CAPPING;STRUCTURAL_FOOTERPANEL_SEARCHANDSORTBAR_CONSOLIDATION;HIDING_MARK_OLDER_ON_TODAY;MOBILE_SOURCES_DRAWER_DESTINATION_DEDUPLICATION;STORY_RANKER_ACTIVATION;NEW_NEWSFLUX_PERSISTENT_CONTENT_STATE;ML_PERSONALIZATION
+
+PRESERVED_FINDINGS=REACT19_ARCO_ELEMENT_REF;RESIZEOBSERVER_LOOP;MOBILE_SCROLL_FLICKER_01;FOOTERPANEL_CLIPPING;HOME_PAGINATION_CURSOR_STALL_01_NOT_REPRODUCED;CHROME_ANDROID_3_BUTTON_NAV_BAR;OLED_SYSTEM_BAR_CANVAS_SEAM
+
+UPSTREAM_LAST_REVIEWED_SHA=3b2b08fb6036ef94f92a757ac6f3df889be8515c
+UPSTREAM_CURRENT_MAIN_OBSERVED=f4dfd1c9999d1d72a1164d7fbbe08da972e4ab1b
+UPSTREAM_COMMITS_SINCE_REVIEW=13
+UPSTREAM_AUDIT_STATUS=PENDING_RECOMMENDED_NEXT
+
+CURRENT_PHASE=POST_PR114_CANONICAL_RECONCILIATION
+LAST_COMPLETED_FUNCTIONAL=PWA-01A_INSTALLABILITY / PR #114
+RECOMMENDED_NEXT_TRACK=UPSTREAM_AUDIT_02
+MERGE_AUTHORIZED=NO
+DEPLOY_AUTHORIZED=NO
+PRODUCTION_MUTATIONS=NO
+```
+
+### Live PR inventory (PRs #109 – #117)
+
+| PR   | Title                                                          | Status | Merge SHA                                  | Description                                                                                                                                                                                                                                         |
+| ---- | -------------------------------------------------------------- | ------ | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #109 | docs: reconcile post-PR108 canonical project state and roadmap | MERGED | `701895fd690fd3833d0f4a5b1d5a09e22e9731a2` | Post-PR108 documentation reconciliation                                                                                                                                                                                                             |
+| #106 | feat(story): integrate local candidate ranking pipeline        | MERGED | `4cb99e196f88b01602a7fa53575430dd74ec5f94` | Story Candidate Ranking dormant integration; zero-cost when disabled; runtime inactive                                                                                                                                                              |
+| #111 | security: add conservative response header baseline            | MERGED | `3c1eeb03501dd0993d201c588632fa3c59b0ff7e` | Caddy response-header baseline: X-Content-Type-Options: nosniff and Referrer-Policy: strict-origin-when-cross-origin                                                                                                                                |
+| #110 | docs(design): study wide-desktop multi-pane architecture       | MERGED | `fac87b621a63393da6987cf89f6b85c12cede994` | NNW-05 reference study; preserves single-pane-first boundary; multi-pane on desktop on hold                                                                                                                                                         |
+| #115 | test(home): stabilize Home Recent state-recovery harness       | MERGED | `a62f53982dd7e0cff4fa2ee90a15574dc490a5d3` | Stabilizes Home Recent empty-state recovery test harness in scripts/tests/phase2c-editorial-home.jsx (HARNESS_ONLY, PRODUCT_CODE_CHANGED=NO)                                                                                                        |
+| #116 | feat(nav): harden NAV-02F count semantics                      | MERGED | `7c429766e24fd3fbb8a07e126f816d665d19b130` | Plural-aware accessible count labels across locales; unresolved grouping/width remain on hold                                                                                                                                                       |
+| #117 | feat(chrome): harden contextual controls and touch targets     | MERGED | `f79a4369677c45122faa8190269ff71eeec0ec76` | Contextual-chrome accessibility/touch-target hardening: FooterPanel radiogroup semantics, History visibility semantics, >=44x44 Home/SearchModal controls, and 12-surface control inventory; structural consolidation remains HOLD_PRODUCT_DECISION |
+| #113 | chore(story): harden Linux CPU runtime reproducibility         | MERGED | `dd2e9e6ec429d2a8c01a9736b3090b4d20f2c4eb` | CPU-only `torch==2.14.1+cpu` wheel; Policy E approved as contract; ranker disabled                                                                                                                                                                  |
+| #112 | feat(auth): migrate NewsFlux sessions to dedicated API keys    | MERGED | `3859e18d4744c7cbbdd97bdee9de3d6fe77ad99b` | Dedicated API key provisioning; persistent fail-closed transaction journal; manual auth preserved                                                                                                                                                   |
+| #114 | feat(pwa): harden cross-platform installability                | MERGED | `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9` | PWA-01A installability; D1/D2/D3 approved; real-device D3 gate PASS; deployed to production                                                                                                                                                         |
+
+### Next-track decision matrix
+
+| Candidate | Track Name                            | Status  | Dependencies                                                         | Decision Required                                                                                                                                         | Recommended Next      | Rationale                                                                                                                                     |
+| --------- | ------------------------------------- | ------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| A         | UPSTREAM_AUDIT_02                     | READY   | PR #118 canonical reconciliation must close first; no other open PRs | Authorization to audit `electh/ReactFlux` from `3b2b08fb` against current upstream main (`f4dfd1c9999d1d72a1164d7fbbe08da972e4ab1b`, 13 commits observed) | **YES (Recommended)** | Governance priority: review upstream drift after closing PRs #106–#117. Last audited at PR #85. Read-only classification only, no blind sync. |
+| B         | NAV-02F (Unresolved Areas)            | HOLD    | NAV-02F determined slice merged (PR #116)                            | Product decisions on: unread category grouping, desktop sidebar width, showUnreadFeedsOnly default change, badge count capping                            | NO                    | Unresolved product decisions remain on hold; guessing semantics violates core project boundaries.                                             |
+| C         | NNW-03 / CHROME-01 (Unresolved Areas) | HOLD    | NNW-03 determined slice merged (PR #117)                             | Product decisions on: structural FooterPanel/SearchAndSortBar consolidation, hiding Mark older as read on /today                                          | NO                    | Unresolved product decisions remain on hold.                                                                                                  |
+| D         | NNW-05 (Wide Desktop Multi-Pane)      | HOLD    | NNW-05 research study merged (PR #110)                               | PM product decisions on wide-desktop activation, threshold, automatic vs opt-in, Home inclusion                                                           | NO                    | Single-pane-first boundary remains binding; multi-pane layout activation remains on hold.                                                     |
+| E         | STORY_01 (Production Activation)      | HOLD    | Runtime contract merged (PR #106, #113)                              | PM production activation authorization & execution of full Policy E evidence gate                                                                         | NO                    | Story ranker runtime remains disabled and dormant; Policy E approved as future contract; activation not authorized.                           |
+| F         | PWA-02 / PWA-03A Follow-ups           | PLANNED | PWA-01A merged & deployed (PR #114)                                  | PM prioritization of update-safety / service-worker lifecycle (PWA-03A) or device defect adaptation (PWA-02)                                              | NO                    | PWA-01A installability is complete; residual findings (`CHROME_ANDROID_3_BUTTON_NAV_BAR`, `OLED_SYSTEM_BAR_CANVAS_SEAM`) are non-blocking.    |
+
+## Historical state (post-PR #108, 2026-10-24; superseded by post-PR #114 section above)
 
 GitHub merge facts and production runtime state are verified live from the repository and read-only SSH container inspection. PR #108 is merged into `main` and promoted to production at SHA `bc9f175a3447a67b06d7deee12c6e19374bb7664`. The production container `newsflux` is running `newsflux-local:bc9f175a3447` with OCI revision `bc9f175a3447a67b06d7deee12c6e19374bb7664`, 0 restarts, internal HTTP 200, public root HTTP 200, public `/all` SPA fallback HTTP 200, and static 404 canary returning true 404. Main and production have full parity. PR #106 remains an open parallel draft track and is incomplete.
 
@@ -582,6 +700,48 @@ PR #73 records the post-PR72 snapshot distinction: documentation-only merges can
 - **PR #70 / READER-MEDIA-01A:** open draft at head `0cda102f4e57e2beddfec8d4517fd9b8b4893fb2`, on stale base `cf37807a4d3b9da39d3c438861fac358d936fdaa`; next active functional candidate, refresh required.
 - **PR #71 / NAV-VISUAL PR1:** compact navigation renderer plus Reader/Drawer focus and resize hardening; feature head `4712b3e49c94f560c0e83ce7c8519eb6bda9cba0`, merge and exact product/production promotion `d01e34fc2eb76da39467d1de9799b12194faec9c`.
 - **PR #72 / documentation:** post-PR71 canonical reconciliation; docs-only merge `32244fa07b57c8bb3f5682f27b4d94917384ce63`; no production deployment was required.
+- **PR #74 / NAV-PR1-ROUTE-FOCUS-01:** restores meaningful focus after drawer navigation; merge `b6b7246642aa5ff15f3f8e7015d2efbd83a47be5`.
+- **PR #75 / DOCS-LINT-01:** formatting-only reconciliation of three existing superpowers docs; merge `8807469296db5815b9fc6e961d4f12275234574b`.
+- **PR #76 / TABLET-HEADER-WIDTH-01:** expands tablet list header to content width (`Content.jsx`); closes `TABLET-HEADER-WIDTH-01`; merge `831ff514c3a572a41cd857dd51ffd4f5c87663c1`.
+- **PR #77 / HOME-DUP-ROOT-CAUSE-01:** deduplicates initial Home entries by ID; closes initial canonical Home duplicate-ID root cause; merge `e1c1285e717e626fc759b0bb52431cd9321df334`.
+- **PR #79 / Research archive:** durable research archive and post-PR81 reconciliation; docs-only merge `313991e80c2b54a99819c2e267ef90a35a959752`.
+- **PR #81 / ADD-FEED-DISCOVER-01:** website discovery with explicit confirmation/selection before subscription; merge and production promotion `dc72a6ed0069b539877f5b2b1f1327d66ad7d0a8`.
+- **PR #82 / documentation:** post-PR81 state reconciliation; docs-only merge `68c1ef3c5d86bb1495c98da19f036215ac0c722d`.
+- **PR #83 / ADD-FEED-DISCOVERY-UX-01:** duplicate-URL discovery presentation polish; merge `16311d0d6c3e2611fa09380ded33e63795ba0270`.
+- **PR #84 / MINIFLUX-DELETE-CONTRACT-01:** feed-deletion contract hardening; merge `9b6f98cee745c2fed8dbe73cee2b1f2e4ad29ac7`.
+- **PR #85 / Upstream sync:** adapted upstream `3b2b08fb` empty `figcaption` rendering; merge `d7c0fc8e4ab7b5f0d959bea96cc04b086deb36fc`.
+- **PR #86 / PWA Foundation planning:** PWA-00 and design references planning documentation; merge `326f9be1dbc1c41d75cc3f76e149cc6bfa7db6c1`.
+- **PR #87 / HOME_CURSOR_TIE_DRAIN_V1:** Home timestamp boundary recovery; merge `68b39798fa6d823b2e5b1286aa42d4309c21c2ca`.
+- **PR #88 / PWA-00:** PWA baseline runtime measurement; merge `3a1b2db07d9df08b8dde9f3148a02e6eb703ec7c`.
+- **PR #89 / ARTICLE_LIST_TEMPORAL_TIE_DRAIN_V1:** non-Home timestamp boundary tie recovery; merge `7da97c04d296ef2cdff225ec37833df362ca1139`.
+- **PR #90 / PWA-03A1:** user-controlled service worker update prompt; merge `5ea21363676dd93dde97fd5ff8548e89864495ec`.
+- **PR #91 / PWA-03A2A:** runtime asset cache integrity; merge `de8b4645df1b8ce17b4b02c2d54adb694af25109`.
+- **PR #92 / documentation:** post-PR91 state reconciliation; merge `f630fe8843a16a9ff810662632a7b6f253285151`.
+- **PR #93 / PWA-03A2C:** runtime asset cache chunk recovery; merge `950ae61b71433a6fd9c11fed9ed266a17fee3185`.
+- **PR #94 / PWA-03A2C1:** chunk recovery error guard; merge `6a8068e9809cafdecce0c695c78dcb151d95d4a4`.
+- **PR #95 / PWA-03A2B:** update activation canary; merge `96bd1fe563571bfa322b2fd79f6fc12f49107a76`.
+- **PR #96 / API-NONIDEMPOTENT-RETRY-01:** non-idempotent retry safety; safe GET retries preserved; merge `fa27a4cec1cae1e887041ee3999622c5b8f76681`.
+- **PR #97 / documentation:** post-PR96 state reconciliation; merge `a02dd5e7f3aa30253e228c40180f1c8b9e2972b1`.
+- **PR #98 / chore(ci):** upstream Dependabot governance; merge `231809c7a74b833718a87e0cb78091f89dd00570`.
+- **PR #99 / fix(source-identity):** remove third-party favicon fallback (NNW01-P privacy); merge `cb0b200eb5cfd4d8b7e8af3b97a4fa57008b814f`.
+- **PR #100 / feat(source-identity):** SourceMark primitive (NNW01-A); merge `1430674d4322a1703e946bd5fc69c8c3f5bc2fee`.
+- **PR #101 / feat(source-identity):** SourceMark in Sidebar and article lists (NNW01-B); merge `c7dd7835f90f433323d2c0360c2d34528f95ab61`.
+- **PR #102 / feat(source-identity):** SourceMark in Reader and Settings (NNW01-C); merge `6316f0993c4e45cc84459d84d46a955f2a021dae`.
+- **PR #103 / feat(source-identity):** SourceMark in Feed header (NNW01-D); merge `36a78492fec4a673394a7b2b03f4b0a48cde987e`.
+- **PR #104 / docs(nav):** navigation density baseline audit (NNW-02A); merge `b3dcb3c29ad1bb2352381cf79065a8f07167346c`.
+- **PR #105 / feat(nav):** medium navigation rail (NAV-VISUAL PR4); merge `06e76dcef0f29ed4a104bfe5a3a935719ec46575`.
+- **PR #107 / fix:** 48px coarse-pointer navigation targets; merge `e50a6b9c494e9fd5c47baa24791249c3f30f5906`.
+- **PR #108 / feat(a11y):** native sidebar navigation semantics (NNW-02C); merge `bc9f175a3447a67b06d7deee12c6e19374bb7664`.
+- **PR #109 / documentation:** post-PR108 canonical state reconciliation; merge `701895fd690fd3833d0f4a5b1d5a09e22e9731a2`.
+- **PR #106 / feat(story):** Story Candidate Ranking dormant integration; zero runtime cost when disabled; merge `4cb99e196f88b01602a7fa53575430dd74ec5f94`.
+- **PR #111 / security:** Caddy response-header baseline: X-Content-Type-Options: nosniff and Referrer-Policy: strict-origin-when-cross-origin; merge `3c1eeb03501dd0993d201c588632fa3c59b0ff7e`.
+- **PR #110 / docs(design):** wide-desktop multi-pane reference study (NNW-05); research document only; merge `fac87b621a63393da6987cf89f6b85c12cede994`.
+- **PR #115 / test(home):** Home Recent state-recovery test harness stabilization in `scripts/tests/phase2c-editorial-home.jsx` (HARNESS_ONLY, PRODUCT_CODE_CHANGED=NO); merge `a62f53982dd7e0cff4fa2ee90a15574dc490a5d3`.
+- **PR #116 / feat(nav):** NAV-02F count semantics; plural-aware accessible count labels across locales; merge `7c429766e24fd3fbb8a07e126f816d665d19b130`.
+- **PR #117 / feat(chrome):** Contextual-chrome accessibility/touch-target hardening: FooterPanel radiogroup semantics, History visibility semantics, >=44x44 Home/SearchModal controls, and 12-surface control inventory; structural consolidation remains HOLD_PRODUCT_DECISION; merge `f79a4369677c45122faa8190269ff71eeec0ec76`.
+- **PR #113 / chore(story):** Linux CPU runtime reproducibility contract; CPU-only `torch==2.14.1+cpu` wheel; Policy E approved as contract; ranker disabled; merge `dd2e9e6ec429d2a8c01a9736b3090b4d20f2c4eb`.
+- **PR #112 / feat(auth):** session migration to dedicated Miniflux API keys; persistent fail-closed auth transaction journal; manual auth preserved; merge `3859e18d4744c7cbbdd97bdee9de3d6fe77ad99b`.
+- **PR #114 / feat(pwa):** cross-platform installability hardening; D1/D2/D3 approved; real-device D3 gate PASS on Fold; non-blocking residuals recorded; deployed to production at `bf1f911f0e2d`; merge `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9`.
 
 ## FILTER-RULES-01 closure
 
@@ -724,6 +884,9 @@ Documented in [`PWA_ARCHITECTURE.md`](./PWA_ARCHITECTURE.md) and [`DESIGN_REFERE
 UPSTREAM_REPOSITORY=electh/ReactFlux
 UPSTREAM_INTEGRATION_MODE=SELECTIVE_NON_LINEAR
 UPSTREAM_LAST_REVIEWED_SHA=3b2b08fb6036ef94f92a757ac6f3df889be8515c
+UPSTREAM_CURRENT_MAIN_OBSERVED=f4dfd1c9999d1d72a1164d7fbbe08da972e4ab1b
+UPSTREAM_COMMITS_SINCE_REVIEW=13
+UPSTREAM_AUDIT_STATUS=PENDING_RECOMMENDED_NEXT
 LAST_INTEGRATED_UPSTREAM_SHA=3b2b08fb6036ef94f92a757ac6f3df889be8515c
 LAST_UPSTREAM_SYNC_PR=85
 LAST_UPSTREAM_SYNC_MERGE_SHA=d7c0fc8e4ab7b5f0d959bea96cc04b086deb36fc
@@ -749,7 +912,7 @@ PR #53 completed selective maintenance: `e46d92ab64adcbd0bb8ac2caf6048fa37f52793
 
 PR #85 adapted `3b2b08fb` (`fix(article): render empty caption elements without children`) with the guard inserted in `processFigcaptionContent`; the upstream cycle is closed and the next cycle begins from a live check of the upstream head. The upstream repository is tracked only through this document and the roadmap (`docs/UPSTREAM_TRACKING.md` does not exist).
 
-The specialized upstream monitor must live-check the current upstream head before auditing. New commits are classified `INTEGRATE / ADAPT / SKIP / HOLD`; never blindly Sync fork or merge upstream/main.
+The specialized upstream monitor must live-check the current upstream head before auditing. New commits are classified `INTEGRATE / ADAPT / SKIP / HOLD`; never blindly Sync fork or merge upstream/main. Note (2026-10-24 post-PR #114): upstream tracking is stale since PR #85 (`3b2b08fb6036ef94f92a757ac6f3df889be8515c`); a read-only check observed current upstream main at `f4dfd1c9999d1d72a1164d7fbbe08da972e4ab1b` (13 commits ahead of reviewed baseline). A fresh selective upstream audit is the recommended next maintenance track (`UPSTREAM_AUDIT_02`). Do not perform or claim a new upstream audit in this docs reconciliation PR.
 
 ## Historical findings register (2026-10-22 snapshot; current dispositions are above)
 
@@ -775,6 +938,8 @@ The specialized upstream monitor must live-check the current upstream head befor
 - **READER-MEDIA-01A — OPEN / DRAFT PR #70:** next active functional candidate; its base is stale and must be refreshed onto current main before candidate and authenticated Reader/media gates.
 - **ABOUT-ACCESSIBLE-BRAND-01 — COMPLETED:** resolved by PR #65; it is no longer an open finding.
 - **RUNTIME-IDENTITY-02 — CLOSED / NON-PRODUCT:** classified as `OLD_DOCUMENT_SESSION`; fresh-document validation showed the prior tab retained old JavaScript while new requests served the R5 asset. Server, asset, Service Worker and Cache Storage were not the cause; no product or deployment defect was found.
+- **CHROME_ANDROID_3_BUTTON_NAV_BAR — NON-BLOCKING RESIDUAL:** observed platform/browser residual in Chrome-installed PWA on Android (white 3-button navigation bar); Samsung Internet installed PWA renders navigation bar dark correctly; treat as platform/browser residual rather than a NewsFlux code defect; do not expand scope.
+- **OLED_SYSTEM_BAR_CANVAS_SEAM — NON-BLOCKING RESIDUAL:** intentional current design difference between NewsFlux canvas (`#0B0D10`) and Android system bar (`#000000`); verified acceptable in real-device D3 gate; do not recalibrate OLED palette in this PR.
 
 - **PWA findings F2–F9 (classified, not fixed; details in `PWA_ARCHITECTURE.md` §4):** manifest/runtime theme-color mismatch; no maskable icon; update-aggressive service worker with an in-page reload path (runtime effect unmeasured); SPA fallback masks missing assets as HTML and no explicit `Cache-Control` for `sw.js`/manifest (header behavior unmeasured); navigation route without a denylist (NewsFlux has its own HTTPS origin per the `PM_REPORTED` topology; sharing with another app is unmeasured); plaintext `password` in `localStorage` (pre-existing); third-party icon fallback discloses followed hostnames and `getSecondHostname` mishandles multi-part public suffixes (`www.bbc.co.uk` → `co.uk`); per-profile `localStorage` means an installed iOS app does not share Safari's state.
 
