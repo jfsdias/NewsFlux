@@ -141,8 +141,10 @@ def rank_story_candidates(
             entry_a, entry_b = right, left
             vector_a, vector_b = vectors[right_index], vectors[left_index]
 
+        pair_key = f'{entry_a["id"]}:{entry_b["id"]}'
         candidates.append(
             {
+                "pair_key": pair_key,
                 "entry_a_id": entry_a["id"],
                 "entry_b_id": entry_b["id"],
                 "title_a": entry_a["title"],
@@ -154,8 +156,7 @@ def rank_story_candidates(
     candidates.sort(
         key=lambda candidate: (
             -candidate["qwen_score"],
-            candidate["entry_a_id"],
-            candidate["entry_b_id"],
+            candidate["pair_key"],
         )
     )
     candidates = candidates[:candidate_k]
@@ -177,8 +178,7 @@ def rank_story_candidates(
         key=lambda candidate: (
             -candidate["reranker_score"],
             candidate["qwen_rank"],
-            candidate["entry_a_id"],
-            candidate["entry_b_id"],
+            candidate["pair_key"],
         )
     )
 
