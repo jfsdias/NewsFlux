@@ -1,0 +1,126 @@
+.medium-navigation-rail {
+  display: flex;
+  grid-area: navigation;
+  box-sizing: border-box;
+  width: 80px;
+  min-height: 0;
+  height: 100%;
+  border-right: 1px solid var(--color-border-2);
+  background-color: var(--color-neutral-2);
+  color: var(--color-text-1);
+  isolation: isolate;
+  user-select: none;
+}
+
+.medium-navigation-items {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: max(12px, env(safe-area-inset-top, 0px)) 8px env(safe-area-inset-bottom, 0px);
+}
+
+.medium-navigation-item {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 64px;
+  min-width: 48px;
+  height: 64px;
+  min-height: 48px;
+  border: 0;
+  border-radius: var(--nf-radius-control, 8px);
+  padding: 6px 4px;
+  color: var(--nf-text-secondary, var(--color-text-2));
+  background: transparent;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    color var(--nf-motion-fast, 0.15s) ease,
+    background-color var(--nf-motion-fast, 0.15s) ease;
+}
+
+.medium-navigation-item:hover {
+  color: var(--nf-text-primary, var(--color-text-1));
+  background-color: var(--color-fill-2);
+}
+
+.medium-navigation-item:focus-visible {
+  outline: 2px solid var(--nf-focus-ring, rgb(var(--primary-6)));
+  outline-offset: -2px;
+}
+
+.medium-navigation-item-active {
+  color: var(--nf-text-primary, var(--color-text-1));
+  background-color: var(--color-fill-2);
+  font-weight: 600;
+}
+
+.medium-navigation-item-active::before {
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background-color: rgb(var(--primary-6));
+  content: "";
+}
+
+.medium-navigation-icon-wrapper {
+  position: relative;
+  display: flex;
+  flex: 0 0 24px;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+
+.medium-navigation-icon-wrapper .arco-icon {
+  width: 20px;
+  height: 20px;
+  font-size: 20px;
+}
+
+.medium-navigation-label {
+  display: block;
+  overflow: hidden;
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 14px;
+  letter-spacing: -0.01em;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.medium-navigation-badge {
+  position: absolute;
+  top: -4px;
+  right: -10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  padding: 0 4px;
+  color: #fff;
+  background-color: rgb(var(--primary-6));
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+}

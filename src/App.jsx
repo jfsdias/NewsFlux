@@ -15,6 +15,7 @@ import SidebarDrawerHost from "./components/Article/SidebarDrawerHost"
 import HomePageManager from "./components/HomePageManager"
 import Main from "./components/Main/Main"
 import CompactNavigation from "./components/Navigation/CompactNavigation"
+import MediumNavigation from "./components/Navigation/MediumNavigation"
 import Sidebar from "./components/Sidebar/Sidebar"
 import DesktopSidebarContext from "./contexts/desktop-sidebar-context"
 import useArticleFontStylesheet from "./hooks/useArticleFontStylesheet"
@@ -23,9 +24,11 @@ import useLanguage, { polyglotState } from "./hooks/useLanguage"
 import useScreenWidth from "./hooks/useScreenWidth"
 import useTheme from "./hooks/useTheme"
 import useWindowClass from "./hooks/useWindowClass"
+import { contentState } from "./store/contentState"
 import { settingsState } from "./store/settingsState"
 import { desktopSidebarCollapsedState, toggleDesktopSidebar } from "./store/sidebarState"
 import hideSpinner from "./utils/loading"
+import { WINDOW_CLASSES } from "./utils/window-class"
 
 const EXPANDED_SIDEBAR_WIDTH = 240
 
@@ -65,6 +68,7 @@ const App = () => {
 
   const { isBelowLarge } = useScreenWidth()
   const { windowClass } = useWindowClass()
+  const { activeContent } = useStore(contentState, { keys: ["activeContent"] })
 
   const { polyglot } = useStore(polyglotState)
   const { language } = useStore(settingsState, { keys: ["language"] })
@@ -72,6 +76,9 @@ const App = () => {
   const locale = getLocale(language)
   const sidebarCollapseLabel = polyglot?.t("sidebar.collapse")
   const sidebarWidth = isDesktopSidebarCollapsed ? 0 : EXPANDED_SIDEBAR_WIDTH
+  const desktopSidebarColumnWidth = isBelowLarge ? 0 : sidebarWidth
+  const mediumNavigationColumnWidth =
+    windowClass === WINDOW_CLASSES.MEDIUM && !activeContent ? 80 : 0
 
   const collapseButtonRef = useRef(null)
   const detailCloseButtonRef = useRef(null)
@@ -144,45 +151,52 @@ const App = () => {
           </a>
           <div
             className="app"
+            data-reader-active={Boolean(activeContent)}
             data-window-class={windowClass}
-            style={{ "--desktop-sidebar-width": `${sidebarWidth}px` }}
+            style={{
+              "--desktop-sidebar-width": `${desktopSidebarColumnWidth}px`,
+              "--medium-navigation-width": `${mediumNavigationColumnWidth}px`,
+            }}
           >
-            {!isBelowLarge && (
-              <Layout.Sider
-                breakpoint="lg"
-                collapsible={false}
-                trigger={null}
-                width={EXPANDED_SIDEBAR_WIDTH}
-                className={`sidebar ${
-                  isDesktopSidebarCollapsed ? "sidebar-collapsed" : "sidebar-expanded"
-                }`}
-              >
-                {!isDesktopSidebarCollapsed && (
-                  <Tooltip content={sidebarCollapseLabel} position="right">
-                    <Button
-                      ref={collapseButtonRef}
-                      aria-controls="desktop-sidebar-navigation"
-                      aria-expanded={true}
-                      aria-label={sidebarCollapseLabel}
-                      className="desktop-sidebar-toggle"
-                      icon={<IconMenuFold aria-hidden="true" />}
-                      shape="circle"
-                      size="small"
-                      type="secondary"
-                      onClick={collapseDesktopSidebar}
-                    />
-                  </Tooltip>
-                )}
-                <div
-                  className="desktop-sidebar-content"
-                  hidden={isDesktopSidebarCollapsed}
-                  id="desktop-sidebar-navigation"
+            <div className="desktop-sidebar-slot">
+              {!isBelowLarge && (
+                <Layout.Sider
+                  breakpoint="lg"
+                  collapsible={false}
+                  trigger={null}
+                  width={EXPANDED_SIDEBAR_WIDTH}
+                  className={`sidebar ${
+                    isDesktopSidebarCollapsed ? "sidebar-collapsed" : "sidebar-expanded"
+                  }`}
                 >
-                  {!isDesktopSidebarCollapsed && <Sidebar />}
-                </div>
-              </Layout.Sider>
-            )}
+                  {!isDesktopSidebarCollapsed && (
+                    <Tooltip content={sidebarCollapseLabel} position="right">
+                      <Button
+                        ref={collapseButtonRef}
+                        aria-controls="desktop-sidebar-navigation"
+                        aria-expanded={true}
+                        aria-label={sidebarCollapseLabel}
+                        className="desktop-sidebar-toggle"
+                        icon={<IconMenuFold aria-hidden="true" />}
+                        shape="circle"
+                        size="small"
+                        type="secondary"
+                        onClick={collapseDesktopSidebar}
+                      />
+                    </Tooltip>
+                  )}
+                  <div
+                    className="desktop-sidebar-content"
+                    hidden={isDesktopSidebarCollapsed}
+                    id="desktop-sidebar-navigation"
+                  >
+                    {!isDesktopSidebarCollapsed && <Sidebar />}
+                  </div>
+                </Layout.Sider>
+              )}
+            </div>
             <Main />
+            <MediumNavigation />
             <CompactNavigation />
             <SidebarDrawerHost />
           </div>

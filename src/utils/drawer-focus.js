@@ -57,6 +57,7 @@ export const resolveCurrentDrawerFocusTarget = (invoker, options = {}) => {
 
   const getCompactSources = () =>
     queryCandidates('[data-nav-key="sources"], [data-testid="compact-nav-sources"]')
+  const getMediumSources = () => queryCandidates('[data-testid="medium-nav-sources"]')
 
   const getHeaderTrigger = () => {
     if (
@@ -72,8 +73,10 @@ export const resolveCurrentDrawerFocusTarget = (invoker, options = {}) => {
 
   const candidateResolvers =
     invoker === "compact-sources"
-      ? [getCompactSources, getHeaderTrigger]
-      : [getHeaderTrigger, getCompactSources]
+      ? [getCompactSources, getMediumSources, getHeaderTrigger]
+      : invoker === "medium-sources"
+        ? [getMediumSources, getCompactSources, getHeaderTrigger]
+        : [getHeaderTrigger, getMediumSources, getCompactSources]
 
   for (const resolver of candidateResolvers) {
     const candidate = resolver()
