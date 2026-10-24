@@ -25,7 +25,13 @@
     "need_help": "Mehr Informationen benötigt?",
     "miniflux_official_website": "Offizielle Miniflux-Website aufrufen",
     "error": "Anmeldung fehlgeschlagen",
-    "invalid_identity": "Der Server hat eine ungültige Benutzeridentität zurückgegeben."
+    "invalid_identity": "Der Server hat eine ungültige Benutzeridentität zurückgegeben.",
+    "api_key_consent_label": "Einen dedizierten Miniflux-API-Schlüssel für dieses Gerät erstellen, anstatt mein Passwort lokal zu speichern",
+    "api_key_consent_required": "Bitte bestätigen Sie, dass NewsFlux vor der Anmeldung mit einem Passwort einen dedizierten Miniflux-API-Schlüssel erstellen darf.",
+    "api_key_migration_title": "Gespeichertes Passwort durch einen dedizierten API-Schlüssel ersetzen",
+    "api_key_migration_description": "Diese Sitzung speichert derzeit Ihr Miniflux-Passwort im lokalen Speicher. Mit Ihrer Bestätigung erstellt NewsFlux einen dedizierten Miniflux-API-Schlüssel für diese Installation, überprüft ihn über /v1/me und entfernt anschließend das gespeicherte Passwort.",
+    "api_key_migration_action": "Dedizierten API-Schlüssel erstellen",
+    "api_key_provisioning_error": "Ein dedizierter Miniflux-API-Schlüssel konnte nicht erstellt oder überprüft werden. Ihre bestehenden Zugangsdaten blieben unverändert."
   },
   "compatibility": {
     "checking": "Miniflux-Kompatibilität wird überprüft …",

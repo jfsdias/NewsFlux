@@ -24,7 +24,7 @@ import { resetSettings } from "@/store/contentBrowsingDirectionState"
 import { settingsState, updateSettings } from "@/store/settingsState"
 import { confirmDialogProps, destructiveConfirmButtonProps } from "@/utils/confirm-dialog"
 import { PRODUCT_GITHUB_REPO_PATH } from "@/utils/constants"
-import { clearSession } from "@/utils/session"
+import { logoutSession } from "@/utils/session"
 import { preloadSettingsTabs } from "@/utils/settings-loader"
 import { THEME_MODE_OPTIONS } from "@/utils/settings-options"
 import "./Profile.css"
@@ -81,8 +81,8 @@ export default function Profile() {
       content: <p>{polyglot.t("sidebar.logout_description")}</p>,
       icon: <IconInfoCircleFill />,
       okButtonProps: { ...destructiveConfirmButtonProps, status: "danger" },
-      onOk: () => {
-        clearSession()
+      onOk: async () => {
+        await logoutSession()
         navigate("/login")
         Notification.success({
           title: polyglot.t("sidebar.logout_success"),

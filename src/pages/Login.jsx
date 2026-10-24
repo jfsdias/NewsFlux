@@ -1,6 +1,7 @@
 import {
   Alert,
   Button,
+  Checkbox,
   Divider,
   Form,
   Input,
@@ -12,29 +13,20 @@ import {
 import useForm from "@arco-design/web-react/es/Form/useForm"
 import { IconHome, IconLock, IconUser } from "@arco-design/web-react/icon"
 import { useStore } from "@nanostores/react"
-import { ofetch } from "ofetch"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Navigate, useLocation, useNavigate, useSearchParams } from "react-router"
 
 import useLanguage, { polyglotState } from "@/hooks/useLanguage"
 import useTheme from "@/hooks/useTheme"
 import { authState } from "@/store/authState"
 import { settingsState, updateSettings } from "@/store/settingsState"
-import isValidAuth from "@/utils/auth"
+import isValidAuth, { getSafeAuthErrorDetails, isLegacyPasswordAuth } from "@/utils/auth"
+import { provisionDedicatedApiKeySession } from "@/utils/auth-apikey"
 import { handleEnterKeyToSubmit, validateAndFormatFormFields } from "@/utils/form"
 import { createHomeIdentity, ensureHomeIdentity, getPostLoginPath } from "@/utils/home-page"
 import hideSpinner from "@/utils/loading"
-import {
-  checkMinifluxCompatibility,
-  MINIMUM_MINIFLUX_VERSION,
-} from "@/utils/miniflux-compatibility"
-import { startSession } from "@/utils/session"
+import { MINIMUM_MINIFLUX_VERSION } from "@/utils/miniflux-compatibility"
 import "./Login.css"
-
-const getSafeRequestErrorDetails = (error) => ({
-  message: error instanceof Error ? error.message : String(error),
-  status: error?.status ?? error?.response?.status,
-})
 
 const getCompatibilityAlert = (polyglot, compatibilityError) => {
   const variables = {
@@ -71,6 +63,8 @@ const Login = () => {
 
   const [loginForm] = useForm()
   const [loading, setLoading] = useState(false)
+  const [apiKeyConsent, setApiKeyConsent] = useState(false)
+  const inFlightLoginRef = useRef(false)
 
   const [searchParams] = useSearchParams()
   const [authMethod, setAuthMethod] = useState(() =>
@@ -87,75 +81,36 @@ const Login = () => {
   )
   const redirectedServer = compatibilityErrorFromNavigation?.server
 
-  const performHealthCheck = async (auth) => {
+  const performHealthCheck = async (formAuth) => {
+    if (inFlightLoginRef.current) {
+      return
+    }
+    inFlightLoginRef.current = true
     setLoading(true)
     setCompatibilityError(null)
-    const { server, token, username, password } = auth
-    const headers = token
-      ? { "X-Auth-Token": token }
-      : { Authorization: `Basic ${btoa(`${username}:${password}`)}` }
+    const { server, token, username, password } = formAuth
 
     try {
-      let response
+      const result = await provisionDedicatedApiKeySession(
+        { server, token, username, password },
+        { consent: apiKeyConsent },
+      )
 
-      try {
-        response = await ofetch.raw("v1/me", {
-          baseURL: server,
-          headers,
-          redirect: "error",
-        })
-      } catch (error) {
-        const errorDetails = getSafeRequestErrorDetails(error)
-        console.error("Login health check failed:", errorDetails)
-        Notification.error({
-          title: polyglot.t("login.error"),
-          content: errorDetails.message,
-        })
-        return
-      }
-
-      if (response.status !== 200) {
-        return
-      }
-
-      const currentUser = response._data
-      const userId = currentUser?.id
-      if (!Number.isSafeInteger(userId) || userId <= 0) {
-        Notification.error({
-          title: polyglot.t("login.error"),
-          content: polyglot.t("login.invalid_identity"),
-        })
-        return
-      }
-
-      let compatibility
-
-      try {
-        compatibility = await checkMinifluxCompatibility(auth)
-      } catch (error) {
-        console.error("Failed to check Miniflux compatibility:", getSafeRequestErrorDetails(error))
+      if (result.status === "incompatible") {
         setCompatibilityError({
-          minimumVersion: MINIMUM_MINIFLUX_VERSION,
-          reason: "check-failed",
+          minimumVersion: result.compatibility.minimumVersion,
+          reason: result.compatibility.status,
           server,
+          version: result.compatibility.version,
         })
         return
       }
 
-      if (compatibility.status !== "supported") {
-        setCompatibilityError({
-          minimumVersion: compatibility.minimumVersion,
-          reason: compatibility.status,
-          server,
-          version: compatibility.version,
-        })
-        return
-      }
-
+      const { currentUser } = result
       Notification.success({
         title: polyglot.t("login.success"),
       })
-      const identity = createHomeIdentity(server, userId)
+      const identity = createHomeIdentity(server, currentUser.id)
       const { homePages, homePage: legacyHomePage } = settingsState.get()
       const postLoginPath = getPostLoginPath({
         homePages,
@@ -164,19 +119,73 @@ const Login = () => {
         explicitFrom: redirectTo,
       })
       updateSettings({ homePages: ensureHomeIdentity(homePages, identity, legacyHomePage) })
-      startSession({ server, token, username, password }, compatibility.version, currentUser)
       navigate(postLoginPath, { replace: true })
+    } catch (error) {
+      const safeDetails = getSafeAuthErrorDetails(error, [password, token])
+
+      if (error?.stage === "compatibility") {
+        console.error("Failed to check Miniflux compatibility:", safeDetails)
+        setCompatibilityError({
+          minimumVersion: MINIMUM_MINIFLUX_VERSION,
+          reason: "check-failed",
+          server,
+        })
+        return
+      }
+
+      if (error?.code === "INVALID_USER_IDENTITY") {
+        Notification.error({
+          title: polyglot.t("login.error"),
+          content: polyglot.t("login.invalid_identity"),
+        })
+        return
+      }
+
+      if (error?.code === "AUTH_CONSENT_REQUIRED") {
+        Message.error(polyglot.t("login.api_key_consent_required"))
+        return
+      }
+
+      if (
+        error?.stage === "create-key" ||
+        error?.stage === "verify-key" ||
+        error?.stage === "store-auth"
+      ) {
+        console.error("Dedicated API key provisioning failed:", safeDetails)
+        Notification.error({
+          title: polyglot.t("login.error"),
+          content: polyglot.t("login.api_key_provisioning_error"),
+        })
+        return
+      }
+
+      console.error("Login health check failed:", safeDetails)
+      Notification.error({
+        title: polyglot.t("login.error"),
+        content: safeDetails.message,
+      })
     } finally {
+      inFlightLoginRef.current = false
       setLoading(false)
     }
   }
 
-  const handleLogin = async (auth) => {
-    if (!isValidAuth(auth)) {
+  const handleLogin = async (formAuth) => {
+    const normalizedCandidate = {
+      ...formAuth,
+      token: authMethod === "token" ? formAuth?.token : "",
+      username: authMethod === "user" ? formAuth?.username : "",
+      password: authMethod === "user" ? formAuth?.password : "",
+    }
+    if (!isValidAuth(normalizedCandidate)) {
       Message.error(polyglot.t("login.auth_error"))
       return
     }
-    await performHealthCheck(auth)
+    if (authMethod === "user" && !apiKeyConsent) {
+      Message.error(polyglot.t("login.api_key_consent_required"))
+      return
+    }
+    await performHealthCheck(normalizedCandidate)
   }
 
   useEffect(() => {
@@ -188,7 +197,10 @@ const Login = () => {
     const { server, token, username, password } = Object.fromEntries(url.searchParams)
     if (server) {
       loginForm.setFieldsValue({ server, token, username, password })
-      loginForm.submit()
+      // Only auto-submit token logins; password logins require explicit user consent to provision an API key.
+      if (token) {
+        loginForm.submit()
+      }
     } else if (redirectedServer) {
       loginForm.setFieldsValue({ server: redirectedServer })
     }
@@ -197,7 +209,7 @@ const Login = () => {
   const compatibilityAlert =
     polyglot && compatibilityError ? getCompatibilityAlert(polyglot, compatibilityError) : null
 
-  if (isValidAuth(auth)) {
+  if (isValidAuth(auth) && !isLegacyPasswordAuth(auth)) {
     return <Navigate replace to={redirectTo || "/"} />
   }
 
@@ -303,6 +315,15 @@ const Login = () => {
                       spellCheck={false}
                     />
                   </Form.Item>
+                  <div className="login-api-key-consent">
+                    <Checkbox
+                      checked={apiKeyConsent}
+                      disabled={loading}
+                      onChange={setApiKeyConsent}
+                    >
+                      {polyglot.t("login.api_key_consent_label")}
+                    </Checkbox>
+                  </div>
                 </>
               )}
             </Form>
