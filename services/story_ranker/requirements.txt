@@ -1,6 +1,7 @@
 # Pinned canonical Linux CPU runtime dependencies for STORY01 candidate ranking
+# Note: torch==2.14.1+cpu is installed explicitly in services/story_ranker/Dockerfile
+# from https://download.pytorch.org/whl/cpu before installing this file.
 sentence-transformers==5.4.1
-torch==2.14.1
 transformers==5.20.2
 tokenizers==0.23.3
 huggingface-hub==2.3.0

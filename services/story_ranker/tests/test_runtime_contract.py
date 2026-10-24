@@ -2,12 +2,15 @@ import hashlib
 import json
 import os
 import tempfile
+import types
 import unittest
 from pathlib import Path
 
 from services.story_ranker.adapters import (
     CANONICAL_CPU_PROFILE,
+    CANONICAL_TORCH_CPU_VERSION,
     CROSS_BACKEND_VARIANCE_CLASSIFICATION,
+    PYTORCH_CPU_INDEX_URL,
     QWEN_EMBEDDING_DIGEST,
     QWEN_EMBEDDING_MODEL,
     QWEN_RERANKER_MODEL,
@@ -17,6 +20,7 @@ from services.story_ranker.adapters import (
     QwenReranker,
     build_runtime_provenance_receipt,
     configure_deterministic_cpu_runtime,
+    verify_cpu_only_torch_runtime,
     verify_offline_reranker_snapshot,
     write_reranker_snapshot_manifest,
 )
@@ -56,7 +60,92 @@ def _populate_fake_hf_snapshot(
     return snapshots_dir
 
 
+def _make_fake_torch(
+    *,
+    version: str = CANONICAL_TORCH_CPU_VERSION,
+    cuda_version: str | None = None,
+    cuda_available: bool = False,
+):
+    return types.SimpleNamespace(
+        __version__=version,
+        version=types.SimpleNamespace(cuda=cuda_version),
+        cuda=types.SimpleNamespace(is_available=lambda: cuda_available),
+    )
+
+
 class StoryRankerRuntimeContractTests(unittest.TestCase):
+    def test_torch_version_cpu_pin_contract(self):
+        self.assertEqual(CANONICAL_TORCH_CPU_VERSION, "2.14.1+cpu")
+        self.assertEqual(PYTORCH_CPU_INDEX_URL, "https://download.pytorch.org/whl/cpu")
+
+        valid_torch = _make_fake_torch(
+            version="2.14.1+cpu",
+            cuda_version=None,
+            cuda_available=False,
+        )
+        receipt = verify_cpu_only_torch_runtime(torch_module=valid_torch, device="cpu")
+        self.assertEqual(receipt["torch_version"], "2.14.1+cpu")
+        self.assertTrue(receipt["torch_version_cpu_verified"])
+        self.assertEqual(receipt["device"], "cpu")
+
+        # Generic Linux torch==2.14.1 (without +cpu) must be rejected
+        generic_torch = _make_fake_torch(
+            version="2.14.1",
+            cuda_version=None,
+            cuda_available=False,
+        )
+        with self.assertRaises(RuntimeError):
+            verify_cpu_only_torch_runtime(torch_module=generic_torch, device="cpu")
+
+        # CUDA-tagged torch==2.14.1+cu124 must be rejected
+        cu_torch = _make_fake_torch(
+            version="2.14.1+cu124",
+            cuda_version=None,
+            cuda_available=False,
+        )
+        with self.assertRaises(RuntimeError):
+            verify_cpu_only_torch_runtime(torch_module=cu_torch, device="cpu")
+
+        # Non-cpu device must be rejected for PRODUCTION_CANONICAL_CPU
+        for invalid_device in ("cuda", "cuda:0", "mps"):
+            with self.assertRaises(RuntimeError):
+                verify_cpu_only_torch_runtime(torch_module=valid_torch, device=invalid_device)
+
+    def test_torch_version_cuda_none_contract(self):
+        valid_torch = _make_fake_torch(
+            version="2.14.1+cpu",
+            cuda_version=None,
+            cuda_available=False,
+        )
+        receipt = verify_cpu_only_torch_runtime(torch_module=valid_torch, device="cpu")
+        self.assertIsNone(receipt["torch_cuda_version"])
+        self.assertTrue(receipt["torch_cuda_none_verified"])
+
+        cuda_linked_torch = _make_fake_torch(
+            version="2.14.1+cpu",
+            cuda_version="12.4",
+            cuda_available=False,
+        )
+        with self.assertRaises(RuntimeError):
+            verify_cpu_only_torch_runtime(torch_module=cuda_linked_torch, device="cpu")
+
+    def test_torch_cuda_available_false_contract(self):
+        valid_torch = _make_fake_torch(
+            version="2.14.1+cpu",
+            cuda_version=None,
+            cuda_available=False,
+        )
+        receipt = verify_cpu_only_torch_runtime(torch_module=valid_torch, device="cpu")
+        self.assertIs(receipt["torch_cuda_available"], False)
+        self.assertTrue(receipt["torch_cuda_available_false_verified"])
+
+        cuda_active_torch = _make_fake_torch(
+            version="2.14.1+cpu",
+            cuda_version=None,
+            cuda_available=True,
+        )
+        with self.assertRaises(RuntimeError):
+            verify_cpu_only_torch_runtime(torch_module=cuda_active_torch, device="cpu")
     def test_offline_model_snapshot_verification_and_revision_verification(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             hf_home = Path(tmp_dir)
@@ -125,7 +214,16 @@ class StoryRankerRuntimeContractTests(unittest.TestCase):
             embedder._verified = True
             embedder._verified_digest = QWEN_EMBEDDING_DIGEST
 
-            provenance = build_runtime_provenance_receipt(embedder=embedder, reranker=reranker)
+            valid_torch = _make_fake_torch(
+                version="2.14.1+cpu",
+                cuda_version=None,
+                cuda_available=False,
+            )
+            provenance = build_runtime_provenance_receipt(
+                embedder=embedder,
+                reranker=reranker,
+                torch_module=valid_torch,
+            )
             self.assertEqual(provenance["profile"], CANONICAL_CPU_PROFILE)
             self.assertEqual(provenance["reference_profile"], R3C_REFERENCE_PROFILE)
             self.assertEqual(
@@ -141,6 +239,17 @@ class StoryRankerRuntimeContractTests(unittest.TestCase):
             self.assertTrue(provenance["reranker_offline_snapshot_verified"])
             self.assertEqual(len(provenance["reranker_snapshot_sha256"]), 64)
             self.assertEqual(provenance["device"], "cpu")
+            self.assertEqual(provenance["expected_torch_version"], "2.14.1+cpu")
+            self.assertEqual(
+                provenance["pytorch_cpu_index_url"],
+                "https://download.pytorch.org/whl/cpu",
+            )
+            self.assertEqual(provenance["torch_runtime"]["torch_version"], "2.14.1+cpu")
+            self.assertTrue(provenance["torch_runtime"]["torch_version_cpu_verified"])
+            self.assertIsNone(provenance["torch_runtime"]["torch_cuda_version"])
+            self.assertTrue(provenance["torch_runtime"]["torch_cuda_none_verified"])
+            self.assertIs(provenance["torch_runtime"]["torch_cuda_available"], False)
+            self.assertTrue(provenance["torch_runtime"]["torch_cuda_available_false_verified"])
             self.assertIn("package_versions", provenance)
 
             contract = _model_contract(embedder=embedder, reranker=reranker)
@@ -242,17 +351,32 @@ class StoryRankerRuntimeContractTests(unittest.TestCase):
         ):
             self.assertIn(required_env, dockerfile_text)
 
-        # 3. Dockerfile must write & verify snapshot manifest at build time
+        # 3. Dockerfile must install torch==2.14.1+cpu from official PyTorch CPU index
+        #    before installing requirements.txt, without global --extra-index-url
+        self.assertNotIn("--extra-index-url", dockerfile_text)
+        torch_cpu_cmd = (
+            "pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu 'torch==2.14.1+cpu'"
+        )
+        req_install_cmd = "pip install --no-cache-dir -r /tmp/story-ranker-requirements.txt"
+        self.assertIn(torch_cpu_cmd, dockerfile_text)
+        self.assertIn(req_install_cmd, dockerfile_text)
+        self.assertLess(
+            dockerfile_text.index(torch_cpu_cmd),
+            dockerfile_text.index(req_install_cmd),
+        )
+
+        # 4. Dockerfile must verify CPU-only torch & write/verify snapshot manifest at build time
+        self.assertIn("verify_cpu_only_torch_runtime", dockerfile_text)
         self.assertIn("write_reranker_snapshot_manifest", dockerfile_text)
         self.assertIn("verify_offline_reranker_snapshot", dockerfile_text)
 
-        # 4. requirements.txt must have exact == pins matching the committed specification
+        # 5. requirements.txt must NOT contain generic torch and must preserve exact == pins
         req_lines = [
             line.strip()
             for line in requirements_text.splitlines()
             if line.strip() and not line.strip().startswith("#")
         ]
-        self.assertGreaterEqual(len(req_lines), 9)
+        self.assertEqual(len(req_lines), 8)
         pinned_packages = {}
         for line in req_lines:
             self.assertNotIn(">=", line)
@@ -261,9 +385,9 @@ class StoryRankerRuntimeContractTests(unittest.TestCase):
             name, version = line.split("==", 1)
             pinned_packages[name.strip().lower()] = version.strip()
 
+        self.assertNotIn("torch", pinned_packages)
         expected_versions = {
             "sentence-transformers": "5.4.1",
-            "torch": "2.14.1",
             "transformers": "5.20.2",
             "tokenizers": "0.23.3",
             "huggingface-hub": "2.3.0",

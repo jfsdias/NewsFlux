@@ -49,10 +49,12 @@ To eliminate container-rebuild drift and within-CPU non-determinism, `services/s
 
 1. **Digest-Pinned Base Image (`Dockerfile`):**
    - `FROM python:3.12-slim@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704`
-2. **Exact Dependency Pinning (`requirements.txt`):**
-   - Floating ranges (`sentence-transformers>=5.4,<6`) are replaced with exact `==` version pins across the full inference stack:
+2. **Explicit CPU-Only PyTorch Artifact & Exact Dependency Pinning (`Dockerfile` + `requirements.txt`):**
+   - Generic `torch==2.14.1` resolution on Linux `x86_64` pulls the ~554.6 MB CUDA-linked wheel and transitive NVIDIA/CUDA packages (`nvidia-*`, `triton`), which violates `PRODUCTION_CANONICAL_CPU`.
+   - `services/story_ranker/Dockerfile` installs the official CPU-only PyTorch wheel explicitly from the scoped PyTorch CPU index **before** installing `requirements.txt` (without setting a global `--extra-index-url`):
+     - `pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu 'torch==2.14.1+cpu'`
+   - `services/story_ranker/requirements.txt` omits generic `torch` and pins exact `==` versions for the remaining inference stack:
      - `sentence-transformers==5.4.1`
-     - `torch==2.14.1`
      - `transformers==5.20.2`
      - `tokenizers==0.23.3`
      - `huggingface-hub==2.3.0`
@@ -60,6 +62,11 @@ To eliminate container-rebuild drift and within-CPU non-determinism, `services/s
      - `numpy==2.5.4`
      - `scipy==1.18.1`
      - `scikit-learn==1.9.1`
+   - `verify_cpu_only_torch_runtime()` enforces at build time and offline startup:
+     - `torch.__version__ == "2.14.1+cpu"`
+     - `torch.version.cuda is None`
+     - `torch.cuda.is_available() is False`
+     - `device == "cpu"`
 3. **Deterministic CPU Thread & Kernel Configuration (`configure_deterministic_cpu_runtime`):**
    - Pins `PYTHONHASHSEED=0`, `OMP_NUM_THREADS=1`, `MKL_NUM_THREADS=1`, `OPENBLAS_NUM_THREADS=1`, `VECLIB_MAXIMUM_THREADS=1`, `NUMEXPR_NUM_THREADS=1`, `TOKENIZERS_PARALLELISM=false`.
    - Calls `torch.manual_seed(0)`, `torch.set_num_threads(1)`, and `torch.use_deterministic_algorithms(True, warn_only=True)`.
@@ -93,12 +100,12 @@ CPU_ACCEPTANCE_POLICY=PM_DECISION_REQUIRED
 
 To avoid conflating static contract checks or synthetic stub tests with full containerized model benchmarks, verification gates are classified explicitly:
 
-| Gate Identifier                          | Scope & Method                                                                                                                                                                                                                                                                                 | Status       |
-| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| `STATIC_RUNTIME_CONTRACT_GATE`           | Static verification of `services/story_ranker/Dockerfile` (digest-pinned base image, deterministic thread/offline env vars, build-time snapshot manifest verification) and exact `==` version pins in `services/story_ranker/requirements.txt`.                                                | `PASS`       |
-| `SYNTHETIC_DETERMINISM_GATE`             | Repeated 5-run unit test (`test_cpu_repeated_run_determinism`) verifying `configure_deterministic_cpu_runtime()` and `rank_story_candidates()` repeatability using deterministic synthetic embedder/reranker stubs.                                                                            | `PASS`       |
-| `REAL_MODEL_CPU_REPEATABILITY`           | Multi-run repeated inference benchmark of the full `Qwen/Qwen3-Reranker-0.6B` model inside the target Linux CPU container. (Note: Section 2 records a single-pass cross-backend MPS-vs-CPU comparison on the 200-entry R3C snapshot, not a multi-run Linux container repeatability benchmark.) | `NOT_PROVEN` |
-| `REAL_CONTAINER_REBUILD_REPRODUCIBILITY` | End-to-end multi-rebuild `docker build` + container execution comparison across independent Linux container image builds.                                                                                                                                                                      | `NOT_PROVEN` |
+| Gate Identifier                          | Scope & Method                                                                                                                                                                                                                                                                                                                                                                   | Status       |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `STATIC_RUNTIME_CONTRACT_GATE`           | Static verification of `services/story_ranker/Dockerfile` (digest-pinned base image, explicit `torch==2.14.1+cpu` install from `https://download.pytorch.org/whl/cpu` prior to `requirements.txt`, deterministic thread/offline env vars, build-time CPU-only torch and snapshot manifest verification) and exact `==` version pins in `services/story_ranker/requirements.txt`. | `PASS`       |
+| `SYNTHETIC_DETERMINISM_GATE`             | Repeated 5-run unit test (`test_cpu_repeated_run_determinism`) verifying `configure_deterministic_cpu_runtime()` and `rank_story_candidates()` repeatability using deterministic synthetic embedder/reranker stubs.                                                                                                                                                              | `PASS`       |
+| `REAL_MODEL_CPU_REPEATABILITY`           | Multi-run repeated inference benchmark of the full `Qwen/Qwen3-Reranker-0.6B` model inside the target Linux CPU container. (Note: Section 2 records a single-pass cross-backend MPS-vs-CPU comparison on the 200-entry R3C snapshot, not a multi-run Linux container repeatability benchmark.)                                                                                   | `NOT_PROVEN` |
+| `REAL_CONTAINER_REBUILD_REPRODUCIBILITY` | End-to-end multi-rebuild `docker build` + container execution comparison across independent Linux container image builds.                                                                                                                                                                                                                                                        | `NOT_PROVEN` |
 
 | Policy Option                                                                                                             | Description                                                                                                                                                                       | Engineering Evaluation                                                                                                                                                     | Verdict                            |
 | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |

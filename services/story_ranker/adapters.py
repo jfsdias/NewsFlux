@@ -13,6 +13,9 @@ CANONICAL_CPU_PROFILE = "PRODUCTION_CANONICAL_CPU"
 R3C_REFERENCE_PROFILE = "R3C_REFERENCE_MPS"
 CROSS_BACKEND_VARIANCE_CLASSIFICATION = "CROSS_BACKEND_NUMERIC_VARIANCE"
 
+CANONICAL_TORCH_CPU_VERSION = "2.14.1+cpu"
+PYTORCH_CPU_INDEX_URL = "https://download.pytorch.org/whl/cpu"
+
 QWEN_EMBEDDING_MODEL = "qwen3-embedding:0.6b"
 QWEN_EMBEDDING_DIGEST = "ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50eb581914a15621d"
 QWEN_EMBEDDING_DIMENSION = 1024
@@ -69,6 +72,107 @@ def configure_deterministic_cpu_runtime() -> dict[str, str]:
         pass
 
     return applied
+
+
+def verify_cpu_only_torch_runtime(
+    *,
+    torch_module: object | None = None,
+    device: str | None = None,
+    expected_torch_version: str = CANONICAL_TORCH_CPU_VERSION,
+) -> dict:
+    resolved_device = (device or os.environ.get("STORY_RANKER_DEVICE") or "cpu").strip()
+    if resolved_device != "cpu":
+        raise RuntimeError(
+            f"PRODUCTION_CANONICAL_CPU requires device=='cpu', got {resolved_device!r}"
+        )
+
+    torch_mod = torch_module
+    if torch_mod is None:
+        try:
+            import torch as imported_torch  # type: ignore[import-not-found]
+
+            torch_mod = imported_torch
+        except ImportError as exc:
+            raise RuntimeError("PyTorch CPU runtime is not installed") from exc
+
+    actual_version = getattr(torch_mod, "__version__", None)
+    if actual_version != expected_torch_version:
+        raise RuntimeError(
+            f"PyTorch version {actual_version!r} does not match canonical CPU pin {expected_torch_version!r}"
+        )
+
+    version_namespace = getattr(torch_mod, "version", None)
+    cuda_runtime_version = (
+        getattr(version_namespace, "cuda", None) if version_namespace is not None else None
+    )
+    if cuda_runtime_version is not None:
+        raise RuntimeError(
+            f"PyTorch runtime must be CPU-only (torch.version.cuda is None), got {cuda_runtime_version!r}"
+        )
+
+    cuda_namespace = getattr(torch_mod, "cuda", None)
+    is_available_fn = (
+        getattr(cuda_namespace, "is_available", None) if cuda_namespace is not None else None
+    )
+    if not callable(is_available_fn):
+        raise RuntimeError("PyTorch runtime missing callable torch.cuda.is_available()")
+
+    cuda_available = is_available_fn()
+    if cuda_available is not False:
+        raise RuntimeError(
+            f"PyTorch runtime must report torch.cuda.is_available() is False, got {cuda_available!r}"
+        )
+
+    return {
+        "torch_version": actual_version,
+        "expected_torch_version": expected_torch_version,
+        "torch_version_cpu_verified": True,
+        "torch_cuda_version": cuda_runtime_version,
+        "torch_cuda_none_verified": True,
+        "torch_cuda_available": False,
+        "torch_cuda_available_false_verified": True,
+        "device": resolved_device,
+    }
+
+
+def inspect_torch_runtime(
+    *,
+    torch_module: object | None = None,
+    device: str | None = None,
+    expected_torch_version: str = CANONICAL_TORCH_CPU_VERSION,
+) -> dict:
+    resolved_device = (device or os.environ.get("STORY_RANKER_DEVICE") or "cpu").strip()
+    try:
+        return verify_cpu_only_torch_runtime(
+            torch_module=torch_module,
+            device=resolved_device,
+            expected_torch_version=expected_torch_version,
+        )
+    except RuntimeError:
+        torch_mod = torch_module
+        if torch_mod is None:
+            try:
+                import torch as imported_torch  # type: ignore[import-not-found]
+
+                torch_mod = imported_torch
+            except ImportError:
+                torch_mod = None
+        actual_version = getattr(torch_mod, "__version__", None) if torch_mod is not None else None
+        version_ns = getattr(torch_mod, "version", None) if torch_mod is not None else None
+        cuda_version = getattr(version_ns, "cuda", None) if version_ns is not None else None
+        cuda_ns = getattr(torch_mod, "cuda", None) if torch_mod is not None else None
+        is_avail_fn = getattr(cuda_ns, "is_available", None) if cuda_ns is not None else None
+        cuda_avail = bool(is_avail_fn()) if callable(is_avail_fn) else None
+        return {
+            "torch_version": actual_version,
+            "expected_torch_version": expected_torch_version,
+            "torch_version_cpu_verified": actual_version == expected_torch_version,
+            "torch_cuda_version": cuda_version,
+            "torch_cuda_none_verified": torch_mod is not None and cuda_version is None,
+            "torch_cuda_available": cuda_avail,
+            "torch_cuda_available_false_verified": cuda_avail is False,
+            "device": resolved_device,
+        }
 
 
 def _compute_file_sha256(file_path: Path) -> str:
@@ -334,6 +438,7 @@ class QwenReranker:
             configure_deterministic_cpu_runtime()
             offline_only = os.environ.get("STORY_RANKER_OFFLINE", "1") != "0"
             if offline_only:
+                verify_cpu_only_torch_runtime(device=self.device)
                 self.verify_offline_snapshot()
             from sentence_transformers import CrossEncoder
 
@@ -370,6 +475,7 @@ def build_runtime_provenance_receipt(
     *,
     embedder: OllamaEmbedder | None = None,
     reranker: QwenReranker | None = None,
+    torch_module: object | None = None,
 ) -> dict:
     emb_receipt = (
         embedder.verification_receipt()
@@ -394,6 +500,7 @@ def build_runtime_provenance_receipt(
         }
     )
     device = reranker.device if reranker is not None else (os.environ.get("STORY_RANKER_DEVICE") or "cpu")
+    torch_receipt = inspect_torch_runtime(torch_module=torch_module, device=device)
     return {
         "profile": CANONICAL_CPU_PROFILE,
         "reference_profile": R3C_REFERENCE_PROFILE,
@@ -407,6 +514,9 @@ def build_runtime_provenance_receipt(
         "reranker_offline_snapshot_verified": rerank_receipt["offline_snapshot_verified"],
         "reranker_snapshot_sha256": rerank_receipt["manifest_sha256"],
         "device": device,
+        "expected_torch_version": CANONICAL_TORCH_CPU_VERSION,
+        "pytorch_cpu_index_url": PYTORCH_CPU_INDEX_URL,
+        "torch_runtime": torch_receipt,
         "offline_mode": os.environ.get("STORY_RANKER_OFFLINE", "1") != "0",
         "deterministic_cpu_env": {
             key: os.environ.get(key, default)

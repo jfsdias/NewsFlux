@@ -18,21 +18,24 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY services/story_ranker/requirements.txt /tmp/story-ranker-requirements.txt
-RUN pip install --no-cache-dir -r /tmp/story-ranker-requirements.txt
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu 'torch==2.14.1+cpu' && \
+    pip install --no-cache-dir -r /tmp/story-ranker-requirements.txt
 
 COPY services /app/services
 
-# Freeze and verify the exact R3C reranker snapshot in the image; runtime stays offline.
+# Freeze and verify the exact CPU-only torch runtime and R3C reranker snapshot in the image; runtime stays offline.
 RUN HF_HUB_OFFLINE=0 TRANSFORMERS_OFFLINE=0 python - <<'PY'
 from pathlib import Path
 from huggingface_hub import snapshot_download
 from services.story_ranker.adapters import (
     QWEN_RERANKER_MODEL,
     QWEN_RERANKER_REVISION,
+    verify_cpu_only_torch_runtime,
     verify_offline_reranker_snapshot,
     write_reranker_snapshot_manifest,
 )
 
+verify_cpu_only_torch_runtime(device="cpu")
 snapshot_path = Path(
     snapshot_download(
         repo_id=QWEN_RERANKER_MODEL,
