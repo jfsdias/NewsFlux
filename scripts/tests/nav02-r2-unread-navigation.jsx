@@ -166,7 +166,10 @@ const ensureDrawerOpen = async () => {
     trigger?.click()
   }
   await waitFor(
-    () => document.querySelector(".sidebar-drawer .sidebar-container"),
+    () =>
+      trigger?.getAttribute("aria-expanded") === "true" &&
+      document.querySelector(".sidebar-drawer .sidebar-container") &&
+      document.querySelector(".sidebar-drawer.arco-drawer.slideLeft-enter-done"),
     "Drawer did not open",
   )
 }
@@ -246,7 +249,7 @@ const captureMetrics = () => {
     ...(root?.querySelectorAll(
       ".arco-menu-item, .arco-menu-inline-header, .arco-collapse-item-header, .category-title",
     ) ?? []),
-  ]
+  ].filter((node) => !node.closest("[hidden]"))
   const rowBoundsStayInsideSidebar = visibleRows.every((row) => {
     const bounds = row.getBoundingClientRect()
     return bounds.left >= sidebarBounds.left - 1 && bounds.right <= sidebarBounds.right + 1
@@ -266,7 +269,11 @@ const captureMetrics = () => {
       controlsBounds && controlsBounds.width > 0 && controlsBounds.height > 0,
     ),
     rowsInsideSidebar: rowBoundsStayInsideSidebar,
-    drawerRowHeights: drawerRows.map((node) => Math.round(node.getBoundingClientRect().height)),
+    drawerRowHeights: drawerRows.map((node) => ({
+      className: node.className,
+      label: node.textContent.trim().slice(0, 32),
+      height: Math.round(node.getBoundingClientRect().height),
+    })),
     targetHeights: [
       ...(controls?.querySelectorAll(
         ".source-mode-option, .source-filter-input, .source-filter-clear",
@@ -318,16 +325,20 @@ const scenarios = [
     },
   ],
   [
-    "MODE_SELECTOR_ARROW_KEYS",
+    "MODE_SELECTOR_NATIVE_ARROW_EVENT_UNCANCELLED",
     async () => {
       await resetFixture()
       const all = sidebarRoot()?.querySelector("[data-testid='mode-all']")
       all.focus()
-      all.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }),
-      )
+      const arrowEvent = new KeyboardEvent("keydown", {
+        key: "ArrowRight",
+        bubbles: true,
+        cancelable: true,
+      })
+      all.dispatchEvent(arrowEvent)
       await settle()
-      assert(settingsState.get().showUnreadFeedsOnly, "Arrow key did not select Unread")
+      assert(!arrowEvent.defaultPrevented, "Sidebar custom-cancelled a native radio arrow key")
+      assert(!settingsState.get().showUnreadFeedsOnly, "Synthetic arrow event changed the mode")
     },
   ],
   [
@@ -393,7 +404,7 @@ const scenarios = [
     },
   ],
   [
-    "SEARCH_CLEAR_AND_ESCAPE_STOP_PROPAGATION",
+    "SEARCH_CLEAR_AND_DRAWER_ESCAPE_DELEGATION",
     async () => {
       await resetFixture()
       await setQuery("space")
@@ -402,18 +413,38 @@ const scenarios = [
       clear.click()
       await waitFor(() => sourceSearch()?.value === "", "Clear action did not empty source query")
       await setQuery("space")
-      let escaped = false
-      const observer = () => {
-        escaped = true
+      const isDesktop = currentWindowClass() === WINDOW_CLASSES.DESKTOP
+      const trigger = resolveSourcesInvoker()
+      const escapeEvent = new KeyboardEvent("keydown", {
+        key: "Escape",
+        bubbles: true,
+        cancelable: true,
+      })
+      let escapedToDocument = false
+      const observeEscape = () => {
+        escapedToDocument = true
       }
-      document.addEventListener("keydown", observer, { once: true })
-      sourceSearch().dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
-      )
-      await settle()
-      document.removeEventListener("keydown", observer)
-      assert(sourceSearch()?.value === "", "Escape did not clear source query")
-      assert(!escaped, "Escape propagated beyond the focused source search")
+      if (!isDesktop) {
+        document.addEventListener("keydown", observeEscape, { once: true })
+      }
+      sourceSearch().dispatchEvent(escapeEvent)
+      if (isDesktop) {
+        await waitFor(
+          () => sourceSearch()?.value === "",
+          "Desktop Escape did not clear source query",
+        )
+      } else {
+        await waitFor(
+          () => escapedToDocument,
+          "Drawer Escape was intercepted before reaching its close handler",
+        )
+        assert(!escapeEvent.defaultPrevented, "Drawer search intercepted Escape")
+        assert(sourceSearch()?.value === "space", "Drawer Escape unexpectedly cleared source query")
+        assert(
+          trigger?.getAttribute("aria-expanded") === "true",
+          "Synthetic Escape changed Drawer visibility",
+        )
+      }
     },
   ],
   [
@@ -594,8 +625,8 @@ const scenarios = [
       } else {
         assert(
           metrics.drawerRowHeights.length > 0 &&
-            metrics.drawerRowHeights.every((height) => height >= 44),
-          "A source Drawer row is below 44px",
+            metrics.drawerRowHeights.every(({ height }) => height >= 44),
+          `A source Drawer row is below 44px: ${JSON.stringify(metrics.drawerRowHeights)}`,
         )
         assert(
           metrics.sidebarWidth <= 360 && metrics.sidebarWidth > 0,

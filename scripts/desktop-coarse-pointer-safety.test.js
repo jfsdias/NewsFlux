@@ -86,6 +86,10 @@ test("fine-pointer navigation keeps its existing compact baseline", () => {
     "40px",
   )
   assert.equal(
+    declarationValue(rulesForSelector(sidebarCss, ".custom-menu-link"), "min-height"),
+    "40px",
+  )
+  assert.equal(
     declarationValue(rulesForSelector(sidebarCss, ".home-brand"), "padding"),
     "4px 8px 4px 4px",
   )
@@ -97,6 +101,7 @@ test("coarse-pointer navigation targets have a 48px minimum", () => {
     ".sidebar-container .arco-menu-vertical .arco-menu-item",
     ".sidebar-container .arco-menu-vertical .arco-menu-inline-header",
     ".category-title",
+    ".category-disclosure-button",
     ".arco-collapse-item-header",
     ".home-brand",
     ".sidebar .desktop-sidebar-toggle.arco-btn",
@@ -127,4 +132,5 @@ test("coarse-pointer navigation targets have a 48px minimum", () => {
     "line-height",
     48,
   )
+  assertCoarseMinimum(".sidebar-container .category-disclosure-button", "min-width", 48)
 })
