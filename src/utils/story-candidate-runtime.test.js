@@ -2,8 +2,8 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 // Node's direct test runner requires the extension; Vite resolves the same module.
-// eslint-disable-next-line import/extensions
 const { default: startHomeStoryCandidateRuntime } = await import(
+  // eslint-disable-next-line import/extensions
   "./story-candidate-runtime.js"
 )
 
