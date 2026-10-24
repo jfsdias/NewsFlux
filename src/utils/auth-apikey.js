@@ -12,6 +12,17 @@ import { clearSession, startSession } from "@/utils/session"
 
 let descriptionCounter = 0
 const inFlightProvisioningBySession = new Map()
+const pendingOrphanDescriptionsBySession = new Map()
+const MAX_DESCRIPTION_COLLISION_RETRIES = 3
+
+const getPendingDescriptionSet = (sessionKey) => {
+  let set = pendingOrphanDescriptionsBySession.get(sessionKey)
+  if (!set) {
+    set = new Set()
+    pendingOrphanDescriptionsBySession.set(sessionKey, set)
+  }
+  return set
+}
 
 const createRandomSuffix = () => {
   descriptionCounter += 1
@@ -86,6 +97,64 @@ export const revokeDedicatedApiKey = async (
     console.error("Failed to revoke dedicated API key:", getSafeAuthErrorDetails(error, secrets))
     return { attempted: true, revoked: false }
   }
+}
+
+export const reconcilePendingOrphanKeys = async ({
+  server,
+  username,
+  password,
+  userId,
+  rawFetch = ofetch.raw,
+  signal,
+} = {}) => {
+  const sessionKey = `${server}::${username}`
+  const pendingSet = pendingOrphanDescriptionsBySession.get(sessionKey)
+  if (!pendingSet || pendingSet.size === 0) {
+    return { inspected: 0, revokedIds: [] }
+  }
+
+  let listResponse
+  try {
+    listResponse = await rawFetch("v1/api-keys", {
+      baseURL: server,
+      headers: getAuthHeaders({ username, password }),
+      method: "GET",
+      redirect: "error",
+      retry: false,
+      signal,
+    })
+  } catch {
+    return { inspected: 0, revokedIds: [] }
+  }
+
+  const keys = Array.isArray(listResponse?._data) ? listResponse._data : []
+  const revokedIds = []
+
+  for (const key of keys) {
+    const keyId = normalizeApiKeyId(key?.id)
+    const normalizedDesc =
+      typeof key?.description === "string" ? key.description.trim().toLowerCase() : ""
+    const matchesUser =
+      key?.user_id === undefined || key?.user_id === null || Number(key.user_id) === Number(userId)
+    const isNeverUsed = key?.last_used_at === null || key?.last_used_at === undefined
+
+    if (keyId && normalizedDesc && pendingSet.has(normalizedDesc) && matchesUser && isNeverUsed) {
+      const result = await revokeDedicatedApiKey(
+        { server, username, password },
+        { apiKeyId: keyId, rawFetch, signal },
+      )
+      if (result.revoked) {
+        pendingSet.delete(normalizedDesc)
+        revokedIds.push(keyId)
+      }
+    }
+  }
+
+  if (pendingSet.size === 0) {
+    pendingOrphanDescriptionsBySession.delete(sessionKey)
+  }
+
+  return { inspected: keys.length, revokedIds }
 }
 
 export const logoutWithKeyRevocation = async ({
@@ -237,35 +306,91 @@ const executeProvisionDedicatedApiKeySession = async (
     }
   }
 
-  // Step 3: Create dedicated installation API key via POST /v1/api-keys
-  const description = buildDedicatedApiKeyDescription({ server, username })
-  let createKeyResponse
-  try {
-    createKeyResponse = await rawFetch("v1/api-keys", {
-      baseURL: server,
-      body: { description },
-      headers: getAuthHeaders({ username, password }),
-      method: "POST",
-      redirect: "error",
-      retry: false,
-      signal,
-    })
-  } catch (error) {
-    throw createAuthProvisioningError("Failed to create dedicated Miniflux API key", {
-      code: "CREATE_API_KEY_FAILED",
-      stage: "create-key",
-      cause: error,
-      secrets: baseSecrets,
-    })
-  }
+  // Step 3: Reconcile any pending lost-response orphan keys, then create dedicated installation API key via POST /v1/api-keys
+  const sessionKey = `${server}::${username}`
+  await reconcilePendingOrphanKeys({
+    server,
+    username,
+    password,
+    userId: initialUser.id,
+    rawFetch,
+    signal,
+  })
 
-  if (createKeyResponse?.status !== 201 && createKeyResponse?.status !== 200) {
-    throw createAuthProvisioningError("Unexpected status creating Miniflux API key", {
-      code: "CREATE_API_KEY_FAILED",
-      stage: "create-key",
-      status: createKeyResponse?.status,
-      secrets: baseSecrets,
-    })
+  let createKeyResponse
+  let lastCreateError
+  for (let attempt = 1; attempt <= MAX_DESCRIPTION_COLLISION_RETRIES; attempt += 1) {
+    const description = buildDedicatedApiKeyDescription({ server, username })
+    const normalizedDescription = description.trim().toLowerCase()
+    const pendingSet = getPendingDescriptionSet(sessionKey)
+    pendingSet.add(normalizedDescription)
+
+    try {
+      createKeyResponse = await rawFetch("v1/api-keys", {
+        baseURL: server,
+        body: { description },
+        headers: getAuthHeaders({ username, password }),
+        method: "POST",
+        redirect: "error",
+        retry: false,
+        signal,
+      })
+    } catch (error) {
+      const errorStatus = error?.status ?? error?.response?.status
+      if (errorStatus === 400 || errorStatus === 409) {
+        pendingSet.delete(normalizedDescription)
+        lastCreateError = error
+        if (attempt < MAX_DESCRIPTION_COLLISION_RETRIES) {
+          continue
+        }
+      } else {
+        await reconcilePendingOrphanKeys({
+          server,
+          username,
+          password,
+          userId: initialUser.id,
+          rawFetch,
+          signal,
+        })
+      }
+      throw createAuthProvisioningError("Failed to create dedicated Miniflux API key", {
+        code: "CREATE_API_KEY_FAILED",
+        stage: "create-key",
+        cause: error,
+        secrets: baseSecrets,
+      })
+    }
+
+    const responseStatus = createKeyResponse?.status
+    if (responseStatus === 400 || responseStatus === 409) {
+      pendingSet.delete(normalizedDescription)
+      lastCreateError = new Error("API key description collision")
+      lastCreateError.status = responseStatus
+      if (attempt < MAX_DESCRIPTION_COLLISION_RETRIES) {
+        continue
+      }
+      throw createAuthProvisioningError("Unexpected status creating Miniflux API key", {
+        code: "CREATE_API_KEY_FAILED",
+        stage: "create-key",
+        status: responseStatus,
+        secrets: baseSecrets,
+      })
+    }
+
+    pendingSet.delete(normalizedDescription)
+    if (pendingSet.size === 0) {
+      pendingOrphanDescriptionsBySession.delete(sessionKey)
+    }
+
+    if (responseStatus !== 201 && responseStatus !== 200) {
+      throw createAuthProvisioningError("Unexpected status creating Miniflux API key", {
+        code: "CREATE_API_KEY_FAILED",
+        stage: "create-key",
+        status: responseStatus,
+        secrets: baseSecrets,
+      })
+    }
+    break
   }
 
   const createdKeyData = createKeyResponse._data

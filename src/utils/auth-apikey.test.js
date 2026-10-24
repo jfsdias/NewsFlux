@@ -713,3 +713,258 @@ test("all 6 locales define AUTH_APIKEY_01 consent and migration strings", () => 
     }
   }
 })
+
+test("ORPHAN_CREATED_RESPONSE_LOST & SAFE_ORPHAN_IDENTIFICATION & SAFE_ORPHAN_REVOCATION & UNRELATED_KEYS_PROTECTED: identifies and revokes only the lost-response orphan key via GET /v1/api-keys", async () => {
+  setAuth({
+    server: SERVER_A,
+    username: FIXTURE_USERNAME,
+    password: FIXTURE_PASSWORD,
+    token: "",
+  })
+
+  const serverKeys = [
+    {
+      id: 100,
+      user_id: 17,
+      token: "unrelated-manual-token",
+      description: "Wallabag Integration",
+      last_used_at: "2026-10-20T10:00:00Z",
+    },
+    {
+      id: 101,
+      user_id: 17,
+      token: "other-newsflux-device-token",
+      description: "NewsFlux (2026-10-20T09:00:00.000Z #otherdev)",
+      last_used_at: null,
+    },
+  ]
+  const deletedKeyIds = []
+  let postAttempts = 0
+
+  const rawFetch = async (url, options = {}) => {
+    if (url === "v1/me" && options.headers?.Authorization) {
+      return { status: 200, _data: { id: 17, username: FIXTURE_USERNAME } }
+    }
+    if (url === "v1/api-keys" && options.method === "POST") {
+      postAttempts += 1
+      if (postAttempts === 1) {
+        // Server creates the key, then the HTTP response is lost in transit
+        serverKeys.push({
+          id: 555,
+          user_id: 17,
+          token: "orphan-token-lost-in-transit",
+          description: options.body.description,
+          last_used_at: null,
+        })
+        throw new TypeError("network connection reset after server created key")
+      }
+      const created = {
+        id: 556,
+        user_id: 17,
+        token: FIXTURE_TOKEN,
+        description: options.body.description,
+        last_used_at: null,
+      }
+      serverKeys.push(created)
+      return { status: 201, _data: created }
+    }
+    if (url === "v1/api-keys" && (!options.method || options.method === "GET")) {
+      return { status: 200, _data: serverKeys.map((key) => ({ ...key })) }
+    }
+    if (url.startsWith("v1/api-keys/") && options.method === "DELETE") {
+      const id = Number(url.split("/").at(-1))
+      deletedKeyIds.push(id)
+      const index = serverKeys.findIndex((key) => key.id === id)
+      if (index !== -1) {
+        serverKeys.splice(index, 1)
+      }
+      return { status: 204, _data: null }
+    }
+    if (url === "v1/me" && options.headers?.["X-Auth-Token"] === FIXTURE_TOKEN) {
+      return { status: 200, _data: { id: 17, username: FIXTURE_USERNAME } }
+    }
+    throw new Error(`Unexpected request: ${options.method ?? "GET"} ${url}`)
+  }
+
+  // First attempt loses POST /v1/api-keys response after server creates key 555
+  await assert.rejects(
+    migrateLegacyPasswordSession({
+      consent: true,
+      rawFetch,
+      checkCompatibility: supportedCompatibilityStub,
+    }),
+    (error) => error.stage === "create-key",
+  )
+
+  // Orphan key 555 must be identified via GET /v1/api-keys and revoked; unrelated keys 100 & 101 must remain untouched
+  assert.deepEqual(deletedKeyIds, [555])
+  assert.deepEqual(
+    serverKeys.map((key) => key.id),
+    [100, 101],
+  )
+  assert.equal(authState.get().password, FIXTURE_PASSWORD)
+  assert.equal(authState.get().token, "")
+  assert.equal(authState.get().apiKeyId, null)
+
+  // NEXT_ATTEMPT_BEHAVIOR: next attempt succeeds cleanly and commits key 556
+  const retryResult = await migrateLegacyPasswordSession({
+    consent: true,
+    rawFetch,
+    checkCompatibility: supportedCompatibilityStub,
+  })
+  assert.equal(retryResult.auth.apiKeyId, 556)
+  assert.equal(retryResult.auth.token, FIXTURE_TOKEN)
+  assert.equal(authState.get().password, "")
+  assert.deepEqual(
+    serverKeys.map((key) => key.id),
+    [100, 101, 556],
+  )
+})
+
+test("NEXT_ATTEMPT_BEHAVIOR when network stays down during lost-response error handler: reconciles pending orphan on next attempt", async () => {
+  setAuth({
+    server: SERVER_A,
+    username: FIXTURE_USERNAME,
+    password: FIXTURE_PASSWORD,
+    token: "",
+  })
+
+  const serverKeys = [
+    {
+      id: 200,
+      user_id: 17,
+      token: "existing-key",
+      description: "Existing CLI Key",
+      last_used_at: null,
+    },
+  ]
+  const deletedKeyIds = []
+  let networkDown = false
+  let postAttempts = 0
+
+  const rawFetch = async (url, options = {}) => {
+    if (networkDown) {
+      throw new TypeError("network still unreachable")
+    }
+    if (url === "v1/me" && options.headers?.Authorization) {
+      return { status: 200, _data: { id: 17, username: FIXTURE_USERNAME } }
+    }
+    if (url === "v1/api-keys" && options.method === "POST") {
+      postAttempts += 1
+      if (postAttempts === 1) {
+        serverKeys.push({
+          id: 701,
+          user_id: 17,
+          token: "orphan-701",
+          description: options.body.description,
+          last_used_at: null,
+        })
+        networkDown = true
+        throw new TypeError("connection dropped after POST commit")
+      }
+      const created = {
+        id: 702,
+        user_id: 17,
+        token: FIXTURE_TOKEN,
+        description: options.body.description,
+        last_used_at: null,
+      }
+      serverKeys.push(created)
+      return { status: 201, _data: created }
+    }
+    if (url === "v1/api-keys" && (!options.method || options.method === "GET")) {
+      return { status: 200, _data: serverKeys.map((key) => ({ ...key })) }
+    }
+    if (url.startsWith("v1/api-keys/") && options.method === "DELETE") {
+      const id = Number(url.split("/").at(-1))
+      deletedKeyIds.push(id)
+      const index = serverKeys.findIndex((key) => key.id === id)
+      if (index !== -1) {
+        serverKeys.splice(index, 1)
+      }
+      return { status: 204, _data: null }
+    }
+    if (url === "v1/me" && options.headers?.["X-Auth-Token"] === FIXTURE_TOKEN) {
+      return { status: 200, _data: { id: 17, username: FIXTURE_USERNAME } }
+    }
+    throw new Error(`Unexpected request: ${options.method ?? "GET"} ${url}`)
+  }
+
+  await assert.rejects(
+    migrateLegacyPasswordSession({
+      consent: true,
+      rawFetch,
+      checkCompatibility: supportedCompatibilityStub,
+    }),
+  )
+  assert.deepEqual(deletedKeyIds, [])
+
+  // Restore network and run next attempt: must reconcile orphan 701 before provisioning 702
+  networkDown = false
+  const secondResult = await migrateLegacyPasswordSession({
+    consent: true,
+    rawFetch,
+    checkCompatibility: supportedCompatibilityStub,
+  })
+  assert.deepEqual(deletedKeyIds, [701])
+  assert.equal(secondResult.auth.apiKeyId, 702)
+  assert.deepEqual(
+    serverKeys.map((key) => key.id),
+    [200, 702],
+  )
+})
+
+test("DUPLICATE_DESCRIPTION_BEHAVIOR: retries with a fresh unique description on 400 collision without deleting pre-existing key", async () => {
+  setAuth({
+    server: SERVER_A,
+    username: FIXTURE_USERNAME,
+    password: FIXTURE_PASSWORD,
+    token: "",
+  })
+
+  const deletedKeyIds = []
+  const attemptedDescriptions = []
+
+  const rawFetch = async (url, options = {}) => {
+    if (url === "v1/me" && options.headers?.Authorization) {
+      return { status: 200, _data: { id: 17, username: FIXTURE_USERNAME } }
+    }
+    if (url === "v1/api-keys" && options.method === "POST") {
+      attemptedDescriptions.push(options.body.description)
+      if (attemptedDescriptions.length === 1) {
+        const collisionError = new Error("An API key with the same description already exists.")
+        collisionError.status = 400
+        throw collisionError
+      }
+      return {
+        status: 201,
+        _data: {
+          id: 808,
+          user_id: 17,
+          token: FIXTURE_TOKEN,
+          description: options.body.description,
+          last_used_at: null,
+        },
+      }
+    }
+    if (url.startsWith("v1/api-keys/") && options.method === "DELETE") {
+      deletedKeyIds.push(Number(url.split("/").at(-1)))
+      return { status: 204, _data: null }
+    }
+    if (url === "v1/me" && options.headers?.["X-Auth-Token"] === FIXTURE_TOKEN) {
+      return { status: 200, _data: { id: 17, username: FIXTURE_USERNAME } }
+    }
+    throw new Error(`Unexpected request: ${options.method ?? "GET"} ${url}`)
+  }
+
+  const result = await migrateLegacyPasswordSession({
+    consent: true,
+    rawFetch,
+    checkCompatibility: supportedCompatibilityStub,
+  })
+
+  assert.equal(attemptedDescriptions.length, 2)
+  assert.notEqual(attemptedDescriptions[0], attemptedDescriptions[1])
+  assert.deepEqual(deletedKeyIds, [])
+  assert.equal(result.auth.apiKeyId, 808)
+})

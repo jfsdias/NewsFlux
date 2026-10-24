@@ -3,8 +3,23 @@ import { ofetch } from "ofetch"
 import router from "@/routes"
 import { authState } from "@/store/authState"
 import { getDataSessionRevision } from "@/store/dataState"
-import isValidAuth, { getAuthHeaders, getSafeAuthErrorDetails } from "@/utils/auth"
+import * as authModule from "@/utils/auth"
 import { clearSession } from "@/utils/session"
+
+const isValidAuth = (auth) => authModule.default(auth)
+const getAuthHeaders = (auth = {}) =>
+  typeof authModule.getAuthHeaders === "function"
+    ? authModule.getAuthHeaders(auth)
+    : auth.token
+      ? { "X-Auth-Token": auth.token }
+      : { Authorization: `Basic ${btoa(`${auth.username ?? ""}:${auth.password ?? ""}`)}` }
+const getSafeAuthErrorDetails = (error, secrets = []) =>
+  typeof authModule.getSafeAuthErrorDetails === "function"
+    ? authModule.getSafeAuthErrorDetails(error, secrets)
+    : {
+        message: error instanceof Error ? error.message : String(error ?? "Unknown error"),
+        status: error?.status ?? error?.response?.status,
+      }
 
 const REQUEST_AUTH_SESSION_KEY = Symbol("requestAuth")
 const MUTATING_HTTP_METHODS = new Set(["DELETE", "PATCH", "POST", "PUT"])
