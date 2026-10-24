@@ -72,7 +72,10 @@ const startHomeStoryCandidateRuntime = ({
     if (request.entries.length < targetCount) {
       return
     }
-    if (request.requestKey === completedRequestKey || generation?.requestKey === request.requestKey) {
+    if (
+      request.requestKey === completedRequestKey ||
+      generation?.requestKey === request.requestKey
+    ) {
       return
     }
 
@@ -123,7 +126,10 @@ const startHomeStoryCandidateRuntime = ({
         ) {
           return null
         }
-        const failed = failStoryCandidateGeneration(generation, generationContext(nextGeneration))
+        const failed = failStoryCandidateGeneration(
+          generation,
+          generationContext(nextGeneration),
+        )
         if (failed === generation && failed.status !== "failed") {
           return null
         }
