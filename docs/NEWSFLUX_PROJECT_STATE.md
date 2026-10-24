@@ -1,12 +1,110 @@
 # NewsFlux Project State
 
 - **Purpose:** concise operational state for PM handoffs and future sessions. The roadmap remains the source for sequencing and product/architecture detail.
-- **Last reconciled:** 2026-10-23 (post-PR #96).
-- **Current snapshot:** GitHub `main` at `fa27a4cec1cae1e887041ee3999622c5b8f76681` (PR #96 merge). Production remains at `96bd1fe563571bfa322b2fd79f6fc12f49107a76`; PR #96 has not been deployed, so main and production do not have parity.
-- **Previous snapshot (historical):** GitHub `main` at `d7c0fc8e4ab7b5f0d959bea96cc04b086deb36fc` on 2026-10-22; the production baseline at that snapshot was recorded as the same SHA. The earlier 2026-10-21 snapshot is preserved below.
+- **Last reconciled:** 2026-10-24 (post-PR #108).
+- **Current snapshot:** GitHub `main` at `bc9f175a3447a67b06d7deee12c6e19374bb7664` (PR #108 merge). Production is deployed at `bc9f175a3447a67b06d7deee12c6e19374bb7664` (image `newsflux-local:bc9f175a3447`, container `newsflux`, verified live via read-only SSH); main and production are in full parity (`MAIN_PRODUCTION_PARITY=YES`).
+- **Previous snapshot (historical):** GitHub `main` at `fa27a4cec1cae1e887041ee3999622c5b8f76681` (PR #96 merge) on 2026-10-23; production was at `96bd1fe563571bfa322b2fd79f6fc12f49107a76`. The earlier 2026-10-22 and 2026-10-21 snapshots are preserved below.
 - **Related planning documents:** [`PWA_ARCHITECTURE.md`](./PWA_ARCHITECTURE.md) and [`DESIGN_REFERENCES.md`](./DESIGN_REFERENCES.md) (planning only; no implementation authorized).
 
-## Current state (post-PR #96, 2026-10-23)
+## Current state (post-PR #108, 2026-10-24)
+
+GitHub merge facts and production runtime state are verified live from the repository and read-only SSH container inspection. PR #108 is merged into `main` and promoted to production at SHA `bc9f175a3447a67b06d7deee12c6e19374bb7664`. The production container `newsflux` is running `newsflux-local:bc9f175a3447` with OCI revision `bc9f175a3447a67b06d7deee12c6e19374bb7664`, 0 restarts, internal HTTP 200, public root HTTP 200, public `/all` SPA fallback HTTP 200, and static 404 canary returning true 404. Main and production have full parity. PR #106 remains an open parallel draft track and is incomplete.
+
+```text
+DOCS_DATE=2026-10-24
+CURRENT_MAIN=bc9f175a3447a67b06d7deee12c6e19374bb7664
+PRODUCT_MAIN_BASELINE=bc9f175a3447a67b06d7deee12c6e19374bb7664
+PRODUCTION_SHA=bc9f175a3447a67b06d7deee12c6e19374bb7664
+PRODUCTION_IMAGE=newsflux-local:bc9f175a3447
+PRODUCTION_VERIFICATION=LIVE_VERIFIED_READ_ONLY_SSH_EXACT_SHA
+PRODUCTION_CONTAINER=newsflux
+PRODUCTION_CONTAINER_STARTED_AT=2026-10-24T04:41:41Z
+PRODUCTION_RESTART_COUNT=0
+PRODUCTION_IMAGE_REVISION=PASS_bc9f175a3447a67b06d7deee12c6e19374bb7664
+PRODUCTION_COMPOSE_CONFIG=/dockerdata/compose/newsflux/compose.yaml
+PRODUCTION_INTERNAL_HTTP=PASS_200
+PRODUCTION_PUBLIC_HTTP=200
+PRODUCTION_PUBLIC_ALL_HTTP=200
+PRODUCTION_ASSET_404_CANARY=PASS_404
+MAIN_PRODUCTION_PARITY=YES
+PR108_DEPLOYED=YES
+
+PR97_STATUS=MERGED_DOCUMENTATION
+PR97_MERGE_SHA=a02dd5e7f3aa30253e228c40180f1c8b9e2972b1
+PR98_STATUS=MERGED_DEPENDABOT_GOVERNANCE
+PR98_MERGE_SHA=231809c7a74b833718a87e0cb78091f89dd00570
+PR99_STATUS=MERGED_NNW01P_SOURCE_ICON_PRIVACY
+PR99_MERGE_SHA=cb0b200eb5cfd4d8b7e8af3b97a4fa57008b814f
+PR100_STATUS=MERGED_NNW01A_SOURCEMARK_PRIMITIVE
+PR100_MERGE_SHA=1430674d4322a1703e946bd5fc69c8c3f5bc2fee
+PR101_STATUS=MERGED_NNW01B_SOURCEMARK_ADOPTION_SIDEBAR_LISTS
+PR101_MERGE_SHA=c7dd7835f90f433323d2c0360c2d34528f95ab61
+PR102_STATUS=MERGED_NNW01C_SOURCEMARK_ADOPTION_READER_SETTINGS
+PR102_MERGE_SHA=6316f0993c4e45cc84459d84d46a955f2a021dae
+PR103_STATUS=MERGED_NNW01D_SOURCEMARK_ADOPTION_FEED_HEADER
+PR103_MERGE_SHA=36a78492fec4a673394a7b2b03f4b0a48cde987e
+PR104_STATUS=MERGED_NNW02A_NAVIGATION_DENSITY_AUDIT
+PR104_MERGE_SHA=b3dcb3c29ad1bb2352381cf79065a8f07167346c
+PR105_STATUS=MERGED_NAV_VISUAL_MEDIUM_RAIL
+PR105_MERGE_SHA=06e76dcef0f29ed4a104bfe5a3a935719ec46575
+PR106_STATUS=OPEN_PARALLEL_STORY_CANDIDATE_RANKING_INCOMPLETE
+PR106_HEAD=8f8e59cc1151680cfce3f8475a99aa671de4829b
+PR106_DRAFT=YES
+PR107_STATUS=MERGED_DESKTOP_COARSE_POINTER_SAFETY
+PR107_MERGE_SHA=e50a6b9c494e9fd5c47baa24791249c3f30f5906
+PR108_STATUS=MERGED_NNW02C_DISCLOSURE_KEYBOARD_SEMANTICS
+PR108_MERGE_SHA=bc9f175a3447a67b06d7deee12c6e19374bb7664
+
+NNW01_SOURCE_IDENTITY=COMPLETED_THROUGH_SLICES_P_A_B_C_D
+NNW02A_NAVIGATION_DENSITY_AUDIT=COMPLETED
+NAV_VISUAL_MEDIUM_RAIL=COMPLETED
+DESKTOP_COARSE_POINTER_SAFETY=COMPLETED
+NNW02C_DISCLOSURE_KEYBOARD_SEMANTICS=COMPLETED
+PR106_STORY_CANDIDATE_RANKING=PARALLEL_OPEN_INCOMPLETE
+
+NON_NEGOTIABLE_BOUNDARIES=MINIFLUX_IS_SOURCE_OF_TRUTH;NO_NEW_PERSISTENT_STATE_WITHOUT_DECISION;CHRONOLOGICAL_UNREAD_ALL_NO_SILENT_RANKING;GLASS_CHROME_ONLY_OPAQUE_CONTENT;SINGLE_PANE_FIRST_MOBILE_TABLET_FOLD;CRITICAL_MEDIUM_884X1104;NO_BLIND_UPSTREAM_SYNC;EXACT_SHA_DEPLOY_ONLY
+
+PRESERVED_FINDINGS=REACT19_ARCO_ELEMENT_REF;RESIZEOBSERVER_LOOP;MOBILE_SCROLL_FLICKER_01;FOOTERPANEL_CLIPPING;HOME_PAGINATION_CURSOR_STALL_01_NOT_REPRODUCED
+
+CURRENT_PHASE=POST_PR108_CANONICAL_RECONCILIATION
+LAST_COMPLETED_FUNCTIONAL=NNW02C_DISCLOSURE_KEYBOARD_SEMANTICS / PR #108
+RECOMMENDED_NEXT_TRACK=NNW-05_RESEARCH_STUDY
+MERGE_AUTHORIZED=NO
+DEPLOY_AUTHORIZED=NO
+PRODUCTION_MUTATIONS=NO
+```
+
+### Live PR inventory (PRs #97 – #108)
+
+| PR   | Title                                                                | Status       | Merge / Head SHA                           | Description                                                      |
+| ---- | -------------------------------------------------------------------- | ------------ | ------------------------------------------ | ---------------------------------------------------------------- |
+| #97  | docs: reconcile post-PR96 and overnight NewsFlux state               | MERGED       | `a02dd5e7f3aa30253e228c40180f1c8b9e2972b1` | Post-PR96 documentation reconciliation                           |
+| #98  | chore(ci): integrate upstream Dependabot governance                  | MERGED       | `231809c7a74b833718a87e0cb78091f89dd00570` | Upstream Dependabot configuration & governance                   |
+| #99  | fix(source-identity): remove third-party favicon fallback            | MERGED       | `cb0b200eb5cfd4d8b7e8af3b97a4fa57008b814f` | NNW01-P privacy/network source icon baseline (no 3P leakage)     |
+| #100 | feat(source-identity): add SourceMark primitive                      | MERGED       | `1430674d4322a1703e946bd5fc69c8c3f5bc2fee` | NNW01-A SourceMark reusable primitive                            |
+| #101 | feat(source-identity): adopt SourceMark in Sidebar and article lists | MERGED       | `c7dd7835f90f433323d2c0360c2d34528f95ab61` | NNW01-B SourceMark adoption in Sidebar and article lists         |
+| #102 | feat(source-identity): complete Reader source identity adoption      | MERGED       | `6316f0993c4e45cc84459d84d46a955f2a021dae` | NNW01-C SourceMark adoption in Reader and Settings               |
+| #103 | feat(source-identity): add SourceMark to Feed header                 | MERGED       | `36a78492fec4a673394a7b2b03f4b0a48cde987e` | NNW01-D SourceMark adoption in Feed header                       |
+| #104 | docs(nav): audit navigation density baseline                         | MERGED       | `b3dcb3c29ad1bb2352381cf79065a8f07167346c` | NNW-02A navigation density and tap-target audit                  |
+| #105 | feat(nav): add medium navigation rail                                | MERGED       | `06e76dcef0f29ed4a104bfe5a3a935719ec46575` | 80px Medium Navigation Rail for viewports 768px-991px            |
+| #106 | feat(story): integrate local candidate ranking pipeline              | OPEN (Draft) | `8f8e59cc1151680cfce3f8475a99aa671de4829b` | Story Candidate Ranking parallel lane (INCOMPLETE, DO NOT TOUCH) |
+| #107 | fix: ensure 48px navigation targets for coarse pointers              | MERGED       | `e50a6b9c494e9fd5c47baa24791249c3f30f5906` | Desktop and coarse-pointer safety overrides (min 48px targets)   |
+| #108 | feat(a11y): use native sidebar navigation semantics                  | MERGED       | `bc9f175a3447a67b06d7deee12c6e19374bb7664` | Native links, button disclosures, and keyboard semantics         |
+
+### Next-track decision matrix
+
+| Candidate | Track Name                    | Status   | Dependencies                         | Decision Required                                                                                                                 | Overlap with PR #106 | Recommended Next             | Rationale                                                                                                          |
+| --------- | ----------------------------- | -------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- | -------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| A         | PR106_STORY_CANDIDATE_RANKING | PARALLEL | None (open draft PR #106)            | PM runtime-parity review & gate closure                                                                                           | YES (is PR #106)     | NO                           | Active parallel lane; must remain isolated without duplication or modification.                                    |
+| B         | NAV-02F                       | HOLD     | NAV-02 R2 baseline (PR105, 107, 108) | Product decisions on: unread category grouping, desktop sidebar width, showUnreadFeedsOnly persistence, unread count badge format | NO                   | NO                           | Unresolved product decisions; guessing semantics violates core project boundaries.                                 |
+| C         | NNW-02B                       | HOLD     | NNW-02A audit (PR104)                | None (PM decided NOT to pursue general density/count-group redesign now)                                                          | NO                   | NO                           | Preserves explicit PM decision to defer general density redesign.                                                  |
+| D         | NNW-03 / CHROME-01            | HOLD     | None                                 | Product decisions on contextual control consolidation across top bar and reader header                                            | NO                   | NO                           | `HOLD_PRODUCT_DECISION`. Contextual chrome consolidation remains unresolved.                                       |
+| E         | NNW-05                        | READY    | None                                 | PM authorization for bounded research study                                                                                       | NO                   | **YES (Recommended)**        | Bounded research-only study of multi-pane and reference architectures strictly within single-pane-first boundary.  |
+| F         | PWA-01A Installability        | HOLD     | PWA-00 baseline                      | Product/design decisions on D1 (manifest ID), D2 (manifest theme colors), D3 (maskable icon art)                                  | NO                   | NO                           | Implementation blocked on open PM decisions D1, D2, D3.                                                            |
+| G1        | AUTH_APIKEY_01                | HOLD     | Approved consent lifecycle           | PM authorization to begin implementation                                                                                          | NO                   | NO                           | Implementation on hold preserving consent/verification lifecycle.                                                  |
+| G2        | SECURITY_HEADERS_01           | READY    | None                                 | Confirmation of Caddy security header policy (CSP, X-Content-Type-Options, etc.)                                                  | NO                   | ALTERNATIVE (Implementation) | Bounded, identifiable scope in Caddyfile/compose; alternative next implementation track once CSP policy is locked. |
+
+## Historical state (post-PR #96, 2026-10-23; superseded by post-PR #108 section above)
 
 GitHub merge facts are verified from the live repository. The production receipt for PR #95 is owner-provided (`PM_REPORTED`): it records the exact image/revision, internal and public HTTP checks including the asset-404 canary as passing, and preservation of the rollback image and compose backup. A separate fresh-browser About check reported the same production revision. The supplied receipt did not include a restart count. PR #96 is merged into `main` but has not been deployed; the historical snapshots below remain dated evidence and do not override this current state.
 

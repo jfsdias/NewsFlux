@@ -1,16 +1,16 @@
 # NewsFlux Roadmap
 
-- **Status:** canonical roadmap reconciled after PR #96; current state and sequencing are in Section 19.
+- **Status:** canonical roadmap reconciled after PR #108; current state and sequencing are in Section 20.
 - **Created:** 2026-10-15.
-- **Last reconciled:** 2026-10-23.
-- **Reconciled against (current):** GitHub `main` at `fa27a4cec1cae1e887041ee3999622c5b8f76681`; production remains at `96bd1fe563571bfa322b2fd79f6fc12f49107a76`. PR #96 is merged but not deployed, so main/production parity is **NO**. The owner-provided PR #95 exact-SHA production receipt is recorded as `PM_REPORTED`; see Section 19.
-- **Previously reconciled against (historical, 2026-10-22 morning):** GitHub `main` at `313991e80c2b54a99819c2e267ef90a35a959752`; product and production at `dc72a6ed0069b539877f5b2b1f1327d66ad7d0a8`. PR #79 is docs-only and explains the main/runtime SHA difference at that time; no deployment was required for that documentation merge. Production image `newsflux-local:dc72a6ed0069`, image ID `sha256:3ada4fb3ef18c3fd1398a67aa6ce5118c8cb88c6533775e534779cb820bde83b`, runtime running, internal HTTP PASS, public HTTP 200 and exact image/revision PASS. Restart count was not included in the supplied receipt. PR #80 is closed without merge; PR #81 is merged, deployed and validated. No PRs were open at the original 2026-10-21 pre-reconciliation snapshot.
+- **Last reconciled:** 2026-10-24.
+- **Reconciled against (current):** GitHub `main` at `bc9f175a3447a67b06d7deee12c6e19374bb7664`; production deployed and verified live via read-only SSH at `bc9f175a3447a67b06d7deee12c6e19374bb7664`. Main/production parity is **YES**.
+- **Previously reconciled against (historical, 2026-10-23):** GitHub `main` at `fa27a4cec1cae1e887041ee3999622c5b8f76681`; production at `96bd1fe563571bfa322b2fd79f6fc12f49107a76`. PR #96 merged but not deployed at that snapshot; see Section 19.
 - **Purpose:** preserve completed work, accepted findings, sequencing, architecture/product gates, upstream baseline, and the next recommended action without turning the roadmap into implementation authorization.
 - **Related planning documents:** [`PWA_ARCHITECTURE.md`](./PWA_ARCHITECTURE.md) (PWA Foundation architecture contract) and [`DESIGN_REFERENCES.md`](./DESIGN_REFERENCES.md) (NetNewsWire UX research track). Both are planning documents and authorize no implementation.
 
 This document is the canonical **roadmap**, not an implementation authorization. Detailed design decisions remain in the dedicated design documents and implementation plans remain in `docs/superpowers/plans/` where present.
 
-For present execution status, current PRs and audit outcomes, Section 19 is authoritative. Earlier status tables and snapshots, including Section 18, are retained as historical records; they do not override Section 19.
+For present execution status, current PRs and audit outcomes, Section 20 is authoritative. Earlier status tables and snapshots, including Sections 18 and 19, are retained as historical records; they do not override Section 20.
 
 No roadmap item may bypass project governance: one identifiable purpose per PR; no merge without explicit user authorization; no blind upstream sync; upstream sync, redesign and functional changes stay isolated; incidental findings are reported, classified and routed to backlog; no new persistent NewsFlux state without an explicit architecture decision; and no incidental scope expansion.
 
@@ -1198,7 +1198,7 @@ PRODUCTION_MUTATIONS=NO
 
 The audit-only PWA phases changed no product code. This historical snapshot records no implementation, merge or deployment authorization.
 
-## 19. Current canonical state: post-PR #96 (2026-10-23)
+## 19. Historical canonical state: post-PR #96 (2026-10-23; superseded by Section 20)
 
 GitHub `main` is `fa27a4cec1cae1e887041ee3999622c5b8f76681` after PR #96 merged. Production remains at `96bd1fe563571bfa322b2fd79f6fc12f49107a76`; PR #96 has not been deployed, so main and production are not at parity. PR #95 production evidence is owner-provided and retained as `PM_REPORTED`: exact image/revision, internal and public HTTP checks including the asset-404 canary passed, and rollback image plus compose backup were preserved. The receipt did not report a restart count.
 
@@ -1276,3 +1276,107 @@ DEPLOY_AUTHORIZED=NO
 `AUTH_APIKEY_01` retains the approved consent/create/verify/store/drop-password/revoke lifecycle: after consent, log in with the password, create an app key, verify it through `/v1/me`, store the token and `apiKeyId`, and only then remove the stored password; logout revokes the installation's own key first. `STORY-01` remains unimplemented. Security-header work stays in a separate backlog item and is not combined with NNW or PWA installability.
 
 Historical snapshots may retain earlier values such as `PR96_STATUS=OPEN`, the former PR #96 head, `STORY00R2B_STATUS=NOT_OBSERVED_IN_THIS_SESSION`, and `LAST_COMPLETED_FUNCTIONAL=...PR #85`; those values are not current. PR #96 is merged at the SHA above, production remains at PR #95, and the current functional completion is PR #96.
+
+## 20. Current canonical state: post-PR #108 (2026-10-24)
+
+GitHub `main` is `bc9f175a3447a67b06d7deee12c6e19374bb7664` after PR #108 merged. Production has been deployed and verified live via read-only SSH container inspection to the same commit (`newsflux-local:bc9f175a3447`, OCI revision `bc9f175a3447a67b06d7deee12c6e19374bb7664`, container `newsflux`, 0 restarts, internal HTTP 200, public root HTTP 200, public `/all` SPA fallback HTTP 200, static 404 canary HTTP 404). Main and production are in full parity (`MAIN_PRODUCTION_PARITY=YES`).
+
+```text
+DOCS_DATE=2026-10-24
+GITHUB_MAIN=bc9f175a3447a67b06d7deee12c6e19374bb7664
+PRODUCT_MAIN_BASELINE=bc9f175a3447a67b06d7deee12c6e19374bb7664
+PRODUCTION_SHA=bc9f175a3447a67b06d7deee12c6e19374bb7664
+PRODUCTION_IMAGE=newsflux-local:bc9f175a3447
+PRODUCTION_VERIFICATION=LIVE_VERIFIED_READ_ONLY_SSH_EXACT_SHA
+PRODUCTION_CONTAINER=newsflux
+PRODUCTION_CONTAINER_STARTED_AT=2026-10-24T04:41:41Z
+PRODUCTION_RESTART_COUNT=0
+PRODUCTION_IMAGE_REVISION=PASS_bc9f175a3447a67b06d7deee12c6e19374bb7664
+PRODUCTION_COMPOSE_CONFIG=/dockerdata/compose/newsflux/compose.yaml
+PRODUCTION_INTERNAL_HTTP=PASS_200
+PRODUCTION_PUBLIC_HTTP=200
+PRODUCTION_PUBLIC_ALL_HTTP=200
+PRODUCTION_ASSET_404_CANARY=PASS_404
+MAIN_PRODUCTION_PARITY=YES
+PR108_DEPLOYED=YES
+
+PR97_STATUS=MERGED_DOCUMENTATION
+PR97_MERGE_SHA=a02dd5e7f3aa30253e228c40180f1c8b9e2972b1
+PR98_STATUS=MERGED_DEPENDABOT_GOVERNANCE
+PR98_MERGE_SHA=231809c7a74b833718a87e0cb78091f89dd00570
+PR99_STATUS=MERGED_NNW01P_SOURCE_ICON_PRIVACY
+PR99_MERGE_SHA=cb0b200eb5cfd4d8b7e8af3b97a4fa57008b814f
+PR100_STATUS=MERGED_NNW01A_SOURCEMARK_PRIMITIVE
+PR100_MERGE_SHA=1430674d4322a1703e946bd5fc69c8c3f5bc2fee
+PR101_STATUS=MERGED_NNW01B_SOURCEMARK_ADOPTION_SIDEBAR_LISTS
+PR101_MERGE_SHA=c7dd7835f90f433323d2c0360c2d34528f95ab61
+PR102_STATUS=MERGED_NNW01C_SOURCEMARK_ADOPTION_READER_SETTINGS
+PR102_MERGE_SHA=6316f0993c4e45cc84459d84d46a955f2a021dae
+PR103_STATUS=MERGED_NNW01D_SOURCEMARK_ADOPTION_FEED_HEADER
+PR103_MERGE_SHA=36a78492fec4a673394a7b2b03f4b0a48cde987e
+PR104_STATUS=MERGED_NNW02A_NAVIGATION_DENSITY_AUDIT
+PR104_MERGE_SHA=b3dcb3c29ad1bb2352381cf79065a8f07167346c
+PR105_STATUS=MERGED_NAV_VISUAL_MEDIUM_RAIL
+PR105_MERGE_SHA=06e76dcef0f29ed4a104bfe5a3a935719ec46575
+PR106_STATUS=OPEN_PARALLEL_STORY_CANDIDATE_RANKING_INCOMPLETE
+PR106_HEAD=8f8e59cc1151680cfce3f8475a99aa671de4829b
+PR106_DRAFT=YES
+PR107_STATUS=MERGED_DESKTOP_COARSE_POINTER_SAFETY
+PR107_MERGE_SHA=e50a6b9c494e9fd5c47baa24791249c3f30f5906
+PR108_STATUS=MERGED_NNW02C_DISCLOSURE_KEYBOARD_SEMANTICS
+PR108_MERGE_SHA=bc9f175a3447a67b06d7deee12c6e19374bb7664
+
+NNW01_SOURCE_IDENTITY=COMPLETED_THROUGH_SLICES_P_A_B_C_D
+NNW02A_NAVIGATION_DENSITY_AUDIT=COMPLETED
+NAV_VISUAL_MEDIUM_RAIL=COMPLETED
+DESKTOP_COARSE_POINTER_SAFETY=COMPLETED
+NNW02C_DISCLOSURE_KEYBOARD_SEMANTICS=COMPLETED
+PR106_STORY_CANDIDATE_RANKING=PARALLEL_OPEN_INCOMPLETE
+
+NON_NEGOTIABLE_BOUNDARIES=MINIFLUX_IS_SOURCE_OF_TRUTH;NO_NEW_PERSISTENT_STATE_WITHOUT_DECISION;CHRONOLOGICAL_UNREAD_ALL_NO_SILENT_RANKING;GLASS_CHROME_ONLY_OPAQUE_CONTENT;SINGLE_PANE_FIRST_MOBILE_TABLET_FOLD;CRITICAL_MEDIUM_884X1104;NO_BLIND_UPSTREAM_SYNC;EXACT_SHA_DEPLOY_ONLY
+
+PRESERVED_FINDINGS=REACT19_ARCO_ELEMENT_REF;RESIZEOBSERVER_LOOP;MOBILE_SCROLL_FLICKER_01;FOOTERPANEL_CLIPPING;HOME_PAGINATION_CURSOR_STALL_01_NOT_REPRODUCED
+
+CURRENT_PHASE=POST_PR108_CANONICAL_RECONCILIATION
+LAST_COMPLETED_FUNCTIONAL=NNW02C_DISCLOSURE_KEYBOARD_SEMANTICS / PR #108
+RECOMMENDED_NEXT_TRACK=NNW-05_RESEARCH_STUDY
+MERGE_AUTHORIZED=NO
+DEPLOY_AUTHORIZED=NO
+PRODUCTION_MUTATIONS=NO
+```
+
+### Live PR inventory (PRs #97 – #108)
+
+- **PR #97 (`a02dd5e7f3aa30253e228c40180f1c8b9e2972b1`):** docs: reconcile post-PR96 and overnight NewsFlux state. Completed canonical documentation synchronization.
+- **PR #98 (`231809c7a74b833718a87e0cb78091f89dd00570`):** chore(ci): integrate upstream Dependabot governance. Harmonized Dependabot rules and update policies with ReactFlux upstream.
+- **PR #99 (`cb0b200eb5cfd4d8b7e8af3b97a4fa57008b814f`):** fix(source-identity): remove third-party favicon fallback. Completed NNW01-P privacy baseline, eliminating external favicon network requests.
+- **PR #100 (`1430674d4322a1703e946bd5fc69c8c3f5bc2fee`):** feat(source-identity): add SourceMark primitive. Completed NNW01-A, implementing deterministic local monogram and fallback styling.
+- **PR #101 (`c7dd7835f90f433323d2c0360c2d34528f95ab61`):** feat(source-identity): adopt SourceMark in Sidebar and article lists. Completed NNW01-B.
+- **PR #102 (`6316f0993c4e45cc84459d84d46a955f2a021dae`):** feat(source-identity): complete Reader source identity adoption. Completed NNW01-C in reader view and Settings source lists.
+- **PR #103 (`36a78492fec4a673394a7b2b03f4b0a48cde987e`):** feat(source-identity): add SourceMark to Feed header. Completed NNW01-D, closing the NNW01 source identity track.
+- **PR #104 (`b3dcb3c29ad1bb2352381cf79065a8f07167346c`):** docs(nav): audit navigation density baseline. Completed NNW-02A audit across mobile, tablet, and desktop viewports.
+- **PR #105 (`06e76dcef0f29ed4a104bfe5a3a935719ec46575`):** feat(nav): add medium navigation rail. Implemented 80px responsive Medium Navigation Rail for viewports 768px–991px.
+- **PR #106 (`8f8e59cc1151680cfce3f8475a99aa671de4829b`):** feat(story): integrate local candidate ranking pipeline. Active parallel draft track; incomplete pending PM review and runtime parity gates. Must remain isolated.
+- **PR #107 (`e50a6b9c494e9fd5c47baa24791249c3f30f5906`):** fix: ensure 48px navigation targets for coarse pointers. Implemented touch safety overrides for coarse pointers while preserving 40px fine-pointer compact density.
+- **PR #108 (`bc9f175a3447a67b06d7deee12c6e19374bb7664`):** feat(a11y): use native sidebar navigation semantics. Completed NNW-02C, replacing composite role emulation with native links and button disclosures, native radio arrow keys, and proper drawer Escape delegation.
+
+### Ordered next-track decision matrix
+
+| Candidate | Track Name                    | Status   | Dependencies                         | Decision Required                                                                                                                 | Overlap with PR #106 | Recommended Next             | Rationale                                                                                                          |
+| --------- | ----------------------------- | -------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- | -------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| A         | PR106_STORY_CANDIDATE_RANKING | PARALLEL | None (open draft PR #106)            | PM runtime-parity review & gate closure                                                                                           | YES (is PR #106)     | NO                           | Active parallel lane; must remain isolated without duplication or modification.                                    |
+| B         | NAV-02F                       | HOLD     | NAV-02 R2 baseline (PR105, 107, 108) | Product decisions on: unread category grouping, desktop sidebar width, showUnreadFeedsOnly persistence, unread count badge format | NO                   | NO                           | Unresolved product decisions; guessing semantics violates core project boundaries.                                 |
+| C         | NNW-02B                       | HOLD     | NNW-02A audit (PR104)                | None (PM decided NOT to pursue general density/count-group redesign now)                                                          | NO                   | NO                           | Preserves explicit PM decision to defer general density redesign.                                                  |
+| D         | NNW-03 / CHROME-01            | HOLD     | None                                 | Product decisions on contextual control consolidation across top bar and reader header                                            | NO                   | NO                           | `HOLD_PRODUCT_DECISION`. Contextual chrome consolidation remains unresolved.                                       |
+| E         | NNW-05                        | READY    | None                                 | PM authorization for bounded research study                                                                                       | NO                   | **YES (Recommended)**        | Bounded research-only study of multi-pane and reference architectures strictly within single-pane-first boundary.  |
+| F         | PWA-01A Installability        | HOLD     | PWA-00 baseline                      | Product/design decisions on D1 (manifest ID), D2 (manifest theme colors), D3 (maskable icon art)                                  | NO                   | NO                           | Implementation blocked on open PM decisions D1, D2, D3.                                                            |
+| G1        | AUTH_APIKEY_01                | HOLD     | Approved consent lifecycle           | PM authorization to begin implementation                                                                                          | NO                   | NO                           | Implementation on hold preserving consent/verification lifecycle.                                                  |
+| G2        | SECURITY_HEADERS_01           | READY    | None                                 | Confirmation of Caddy security header policy (CSP, X-Content-Type-Options, etc.)                                                  | NO                   | ALTERNATIVE (Implementation) | Bounded, identifiable scope in Caddyfile/compose; alternative next implementation track once CSP policy is locked. |
+
+### Enduring governance and implementation guidelines
+
+- **Miniflux Source of Truth:** Miniflux remains authoritative for feeds, categories, entries, read status, and starred status. No client-only persistent database or divergence.
+- **Predictable Ordering:** Feeds and entries in All and Unread scopes remain strictly reverse-chronological or chronological. No hidden ranking outside the dedicated Home lane.
+- **Glass Restricted to Chrome:** Glassmorphism and translucent tokens apply solely to navigation bars, headers, and floating chrome. Reader cards, article text, and content views remain solid and fully opaque.
+- **Single-Pane-First:** Phone, tablet, and foldable devices maintain single-pane-first presentation. Multi-pane layouts are restricted to wide desktop landscape screens.
+- **Exact-SHA Deployments:** Production is updated strictly with verified exact OCI revision hashes, never moving branch tags or `latest`.
