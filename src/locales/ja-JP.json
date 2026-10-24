@@ -98,7 +98,9 @@
     "settings_reset_confirm": "リセットの確認",
     "settings_reset_description": "設定を初期状態にリセットしてもよろしいですか？この操作は取り消せません。",
     "logout_confirm": "ログアウトの確認",
-    "logout_description": "ログアウトしてもよろしいですか？この操作は取り消せません。"
+    "logout_description": "ログアウトしてもよろしいですか？この操作は取り消せません。",
+    "unread_count_aria": "%{label}、未読 %{count} 件",
+    "items_count_aria": "%{label}、%{count} 件"
   },
   "about": {
     "title": "概要",
