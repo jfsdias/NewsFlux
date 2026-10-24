@@ -42,12 +42,12 @@ const normalizeEntry = (entry) => {
 
 const stableRequestHash = (entries) => {
   const input = JSON.stringify(entries)
-  let hash = 0x811c9dc5
-  for (let index = 0; index < input.length; index += 1) {
-    hash ^= input.charCodeAt(index)
-    hash = Math.imul(hash, 0x01000193)
+  let hash = 0xcbf2_9ce4_8422_2325n
+  for (const character of input) {
+    hash ^= BigInt(character.codePointAt(0))
+    hash = BigInt.asUintN(64, hash * 0x0000_0100_0000_01b3n)
   }
-  return (hash >>> 0).toString(16).padStart(8, "0")
+  return hash.toString(16).padStart(16, "0")
 }
 
 export const createStoryCandidateRequest = (entries) => {
@@ -60,7 +60,7 @@ export const createStoryCandidateRequest = (entries) => {
   }
 
   const normalizedEntries = [...entriesById.values()]
-    .sort(
+    .toSorted(
       (left, right) =>
         right.publishedAtMs - left.publishedAtMs || left.id - right.id,
     )
@@ -116,13 +116,17 @@ export const normalizeStoryCandidateResponse = (response) => {
     throw new TypeError("Story candidate model contract mismatch")
   }
 
-  const candidates = response.candidates.map(normalizeCandidate).sort((a, b) => a.rank - b.rank)
+  const candidates = response.candidates
+    .map((candidate) => normalizeCandidate(candidate))
+    .toSorted((left, right) => left.rank - right.rank)
   const seenPairs = new Set()
   for (const [index, candidate] of candidates.entries()) {
     if (candidate.rank !== index + 1) {
       throw new TypeError("Story candidate ranks must be contiguous")
     }
-    const pairKey = [candidate.entryAId, candidate.entryBId].sort((a, b) => a - b).join(":")
+    const pairKey = [candidate.entryAId, candidate.entryBId]
+      .toSorted((left, right) => left - right)
+      .join(":")
     if (seenPairs.has(pairKey)) {
       throw new TypeError("Story candidate response contains duplicate pairs")
     }
