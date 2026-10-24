@@ -43,6 +43,7 @@
   margin-left: 6px;
   flex: 0 0 auto;
   font-weight: 500;
+  font-variant-numeric: tabular-nums;
   display: inline-block;
 }
 
@@ -71,6 +72,7 @@
 .article-selection-count {
   color: var(--nf-text-secondary, var(--color-text-2));
   font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 
 .article-selection-mark-read.arco-btn {
@@ -443,5 +445,18 @@
     min-height: var(--mobile-navigation-control-size);
     padding-inline: 8px;
     font-size: 0.8125rem;
+  }
+}
+
+@media (pointer: coarse) {
+  .search-syntax-help.arco-btn {
+    position: relative;
+  }
+
+  .search-syntax-help.arco-btn::after {
+    position: absolute;
+    inset: -10px;
+    content: "";
+    pointer-events: auto;
   }
 }

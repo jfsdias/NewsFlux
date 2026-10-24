@@ -104,7 +104,9 @@
     "settings_reset_confirm": "确认重置",
     "settings_reset_description": "您确定要重置您的设置吗？此操作无法撤消。",
     "logout_confirm": "确认登出",
-    "logout_description": "您确定要登出吗？此操作无法撤消。"
+    "logout_description": "您确定要登出吗？此操作无法撤消。",
+    "unread_count_aria": "%{label}，%{count} 篇未读",
+    "items_count_aria": "%{label}，%{count} 个条目"
   },
   "about": {
     "title": "关于",
@@ -194,6 +196,7 @@
   "article_list": {
     "sort_direction_desc": "最新优先",
     "sort_direction_asc": "最旧优先",
+    "filter_status_group_label": "按状态筛选文章",
     "filter_status_all": "全部",
     "filter_status_starred": "收藏",
     "filter_status_unread": "未读",

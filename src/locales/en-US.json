@@ -104,7 +104,9 @@
     "settings_reset_confirm": "Confirm Reset",
     "settings_reset_description": "Are you sure you want to reset your settings? This action cannot be undone.",
     "logout_confirm": "Confirm Logout",
-    "logout_description": "Are you sure you want to logout? This action cannot be undone."
+    "logout_description": "Are you sure you want to logout? This action cannot be undone.",
+    "unread_count_aria": "%{label}, %{count} unread",
+    "items_count_aria": "%{label}, %{count} item |||| %{label}, %{count} items"
   },
   "about": {
     "title": "About",
@@ -194,6 +196,7 @@
   "article_list": {
     "sort_direction_desc": "Newest first",
     "sort_direction_asc": "Oldest first",
+    "filter_status_group_label": "Filter articles by status",
     "filter_status_all": "All",
     "filter_status_starred": "Starred",
     "filter_status_unread": "Unread",

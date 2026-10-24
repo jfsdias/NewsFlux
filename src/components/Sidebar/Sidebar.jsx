@@ -100,6 +100,7 @@ import {
   requestSidebarMarkAllRead,
 } from "@/utils/sidebar-mark-all-read"
 import {
+  formatNavigationCountLabel,
   getCurrentZeroUnreadSource,
   getMatchingCategories,
   getSearchExpandedCategoryKeys,
@@ -217,6 +218,10 @@ const CategoryTitle = ({
         id={`category-link-${category.id}`}
         style={{ cursor: "pointer" }}
         to={categoryPath}
+        aria-label={formatNavigationCountLabel(category.title, unreadCount, {
+          countType: "unread",
+          polyglot,
+        })}
         onClick={() => {
           setActiveContent(null)
           onNavigate?.()
@@ -234,6 +239,7 @@ const CategoryTitle = ({
         </Typography.Ellipsis>
         {unreadCount > 0 && (
           <Typography.Ellipsis
+            aria-hidden="true"
             className="unread-count"
             expandable={false}
             style={{ fontWeight: 500 }}
@@ -248,7 +254,7 @@ const CategoryTitle = ({
 
 const CountDisplay = ({ count }) => {
   return (
-    <Typography.Ellipsis className="item-count" expandable={false}>
+    <Typography.Ellipsis aria-hidden="true" className="item-count" expandable={false}>
       {count || ""}
     </Typography.Ellipsis>
   )
@@ -344,14 +350,16 @@ const SourceNavigationControls = ({
   )
 }
 
-const CustomMenuItem = ({ path, Icon, label, count }) => {
+const CustomMenuItem = ({ path, Icon, label, count, countType = "unread" }) => {
   const location = useLocation()
+  const { polyglot } = useStore(polyglotState)
   const onNavigate = useContext(SidebarNavigationContext)
   const isSelected = location.pathname === path || location.pathname.startsWith(`${path}/`)
 
   return (
     <Link
       aria-current={isSelected ? "page" : undefined}
+      aria-label={formatNavigationCountLabel(label, count, { countType, polyglot })}
       to={path}
       className={classNames("arco-menu-item custom-menu-link", {
         "arco-menu-selected": isSelected,
@@ -397,12 +405,14 @@ const SidebarMenuItems = () => {
       <CustomMenuItem
         Icon={IconStar}
         count={infoFrom === "starred" ? starredCount : 0}
+        countType="items"
         label={polyglot.t("sidebar.starred")}
         path="/starred"
       />
       <CustomMenuItem
         Icon={IconHistory}
         count={infoFrom === "history" ? historyCount : 0}
+        countType="items"
         label={polyglot.t("sidebar.history")}
         path="/history"
       />
@@ -536,6 +546,11 @@ const FeedMenuItem = ({
           aria-current={isSelected ? "page" : undefined}
           data-feed-edit-id={feed.id}
           to={`/feed/${feed.id}`}
+          aria-label={formatNavigationCountLabel(feed.title, feed.unreadCount, {
+            countType: "unread",
+            polyglot,
+            showZero: showZeroCount,
+          })}
           className={classNames("arco-menu-item feed-menu-item", className, {
             "arco-menu-selected": isSelected,
           })}
@@ -566,7 +581,7 @@ const FeedMenuItem = ({
               {feed.title}
             </Typography.Ellipsis>
             {(feed.unreadCount !== 0 || showZeroCount) && (
-              <Typography.Ellipsis className="item-count" expandable={false}>
+              <Typography.Ellipsis aria-hidden="true" className="item-count" expandable={false}>
                 {feed.unreadCount}
               </Typography.Ellipsis>
             )}
