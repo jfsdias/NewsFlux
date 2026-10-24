@@ -1,12 +1,11 @@
 // Node's direct contract tests require explicit sibling extensions.
-// eslint-disable-next-line import/extensions
 import {
   createStoryCandidateRequest,
   normalizeStoryCandidateResponse,
   STORY_CANDIDATE_K,
   STORY_EMBEDDING_DIGEST,
   STORY_RERANKER_REVISION,
-} from "./story-candidate-request.js"
+} from "./story-candidate-request.js" // eslint-disable-line import/extensions
 
 export const STORY_CANDIDATE_ENDPOINT = "/api/story-candidates/v1/rank"
 
