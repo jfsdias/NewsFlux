@@ -4,7 +4,7 @@ import test from "node:test"
 // Node's direct test runner requires the extension; Vite resolves the same module.
 const { default: startHomeStoryCandidateRuntime } = await import(
   // eslint-disable-next-line import/extensions
-  "./story-candidate-runtime.js"
+  "./story-candidate-runtime.js",
 )
 
 const makeEntry = (id) => ({
