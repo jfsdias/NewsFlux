@@ -1,5 +1,7 @@
 export const STORY_CANDIDATE_ENTRY_LIMIT = 200
 export const STORY_CANDIDATE_K = 250
+export const STORY_EMBEDDING_DIGEST =
+  "ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50eb581914a15621d"
 export const STORY_RERANKER_REVISION = "e61197ed45024b0ed8a2d74b80b4d909f1255473"
 
 const FORBIDDEN_IDENTITY_FIELDS = new Set([
@@ -63,7 +65,7 @@ export const createStoryCandidateRequest = (entries) => {
         right.publishedAtMs - left.publishedAtMs || left.id - right.id,
     )
     .slice(0, STORY_CANDIDATE_ENTRY_LIMIT)
-    .map(({ publishedAtMs: _publishedAtMs, ...entry }) => entry)
+    .map(({ id, feed_id, published_at, title }) => ({ id, feed_id, published_at, title }))
 
   return Object.freeze({
     entries: Object.freeze(normalizedEntries.map((entry) => Object.freeze(entry))),
@@ -108,6 +110,7 @@ export const normalizeStoryCandidateResponse = (response) => {
   }
   if (
     Number(response?.model?.candidate_k) !== STORY_CANDIDATE_K ||
+    response?.model?.embedding_digest !== STORY_EMBEDDING_DIGEST ||
     response?.model?.reranker_revision !== STORY_RERANKER_REVISION
   ) {
     throw new TypeError("Story candidate model contract mismatch")
@@ -129,8 +132,7 @@ export const normalizeStoryCandidateResponse = (response) => {
   const model = Object.freeze({
     candidateK: STORY_CANDIDATE_K,
     rerankerRevision: STORY_RERANKER_REVISION,
-    embeddingDigest:
-      typeof response.model.embedding_digest === "string" ? response.model.embedding_digest : null,
+    embeddingDigest: STORY_EMBEDDING_DIGEST,
   })
 
   return Object.freeze({ candidates: Object.freeze(candidates), model })
