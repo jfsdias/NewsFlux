@@ -12,9 +12,11 @@ import SidebarTrigger, {
   SidebarDrawerHost,
 } from "@/components/Article/SidebarTrigger"
 import CompactNavigation from "@/components/Navigation/CompactNavigation"
+import MediumNavigation from "@/components/Navigation/MediumNavigation"
 import AppDataContext from "@/contexts/app-data-context"
 import DesktopSidebarContext from "@/contexts/desktop-sidebar-context"
 import { polyglotState } from "@/hooks/useLanguage"
+import useTheme from "@/hooks/useTheme"
 import useWindowClass from "@/hooks/useWindowClass"
 import phrases from "@/locales/en-US.json"
 import { contentState, setActiveContent } from "@/store/contentState"
@@ -28,6 +30,9 @@ import { classifyWindowClass, WINDOW_CLASSES } from "@/utils/window-class"
 
 import "@/components/Article/SidebarTrigger.css"
 import "@/components/Navigation/CompactNavigation.css"
+import "@/components/Navigation/MediumNavigation.css"
+import "@/theme.css"
+import "@/App.css"
 
 polyglotState.setKey("polyglot", new Polyglot({ locale: "en-US", phrases }))
 
@@ -268,6 +273,7 @@ const ResizeDiagnostics = () => {
 }
 
 const HarnessContent = () => {
+  useTheme()
   const { windowClass } = useWindowClass()
   const location = useLocation()
   const navigate = useNavigate()
@@ -314,6 +320,19 @@ const HarnessContent = () => {
         compactInCompact: false,
         absentInMedium: false,
         absentInDesktop: false,
+        mediumRailPresent: false,
+        mediumRailWidth80: false,
+        mediumRailOpaque: false,
+        mediumRailNoBackdropFilter: false,
+        mediumRailFiveDestinations: false,
+        mediumRailTargetMin48: false,
+        mediumSourcesButtonSemantics: false,
+        mediumHeaderTriggerAbsent: false,
+        mediumSourcesOpensDrawer: false,
+        mediumDrawerRowMin44: false,
+        mediumSourcesFocusReturn: false,
+        mediumReaderRailHidden: false,
+        mediumReaderNoGutter: false,
         hitboxContractPass: false,
         inertGapPass: false,
         activeStateParityPass: false,
@@ -415,10 +434,94 @@ const HarnessContent = () => {
       await waitForCondition(() => !document.querySelector(".compact-nav-bar"), 1500)
       results.absentInMedium = !document.querySelector(".compact-nav-bar")
 
+      // NAV-VISUAL PR4 RED/GREEN contract: MEDIUM has its own persistent 80px rail.
+      // These checks intentionally inspect the user-visible renderer, not internal state.
+      const mediumRail = document.querySelector('[data-testid="medium-navigation-rail"]')
+      results.mediumRailPresent = Boolean(mediumRail)
+      if (mediumRail) {
+        const railRect = mediumRail.getBoundingClientRect()
+        const railStyle = getComputedStyle(mediumRail)
+        const railDestinations = [...mediumRail.querySelectorAll("[data-nav-key]")]
+        const expectedKeys = ["home", "all", "today", "starred", "sources"]
+        const routeLinks = railDestinations.filter((item) => item.tagName === "A")
+        const sourcesControl = railDestinations.find((item) => item.dataset.navKey === "sources")
+        const targetSizes = railDestinations.map((item) => item.getBoundingClientRect())
+
+        results.mediumRailWidth80 = Math.round(railRect.width) === 80
+        results.mediumRailOpaque =
+          railStyle.backgroundColor !== "rgba(0, 0, 0, 0)" &&
+          railStyle.backgroundColor !== "transparent"
+        results.mediumRailNoBackdropFilter =
+          (!railStyle.backdropFilter || railStyle.backdropFilter === "none") &&
+          (!railStyle.webkitBackdropFilter || railStyle.webkitBackdropFilter === "none")
+        results.mediumRailFiveDestinations =
+          railDestinations.length === 5 &&
+          expectedKeys.every((key) =>
+            railDestinations.some((item) => item.dataset.navKey === key),
+          ) &&
+          !railDestinations.some((item) => item.dataset.navKey === "history") &&
+          routeLinks.length === 4 &&
+          sourcesControl?.tagName === "BUTTON" &&
+          !sourcesControl?.hasAttribute("aria-current") &&
+          routeLinks.every((item) =>
+            item.hasAttribute("aria-current") ? item.getAttribute("aria-current") === "page" : true,
+          )
+        results.mediumRailTargetMin48 =
+          targetSizes.length === 5 &&
+          targetSizes.every((rect) => rect.width >= 48 && rect.height >= 48)
+        results.mediumSourcesButtonSemantics =
+          sourcesControl?.tagName === "BUTTON" &&
+          sourcesControl.getAttribute("aria-haspopup") === "dialog" &&
+          sourcesControl.getAttribute("aria-controls") === "mobile-sidebar-drawer"
+      }
+
+      setActiveContent({ id: 998, title: "Medium Reader Test" })
+      await waitForCondition(
+        () => !document.querySelector('[data-testid="medium-navigation-rail"]'),
+        1500,
+      )
+      results.mediumReaderRailHidden =
+        results.mediumRailPresent &&
+        !document.querySelector('[data-testid="medium-navigation-rail"]')
+      const mediumApp = document.querySelector(".nav-visual-harness-app")
+      const readerMainRect = document.querySelector("#main-content")?.getBoundingClientRect()
+      results.mediumReaderNoGutter =
+        results.mediumReaderRailHidden &&
+        mediumApp?.style.getPropertyValue("--medium-navigation-width") === "0px" &&
+        readerMainRect?.left === 0
+      setActiveContent(null)
+
       // In MEDIUM, legacy header trigger MUST be available
       await waitForCondition(() => Boolean(document.querySelector(".entry-col .trigger")), 1500)
       const triggerInMedium = document.querySelector(".entry-col .trigger")
       results.legacyTriggerAvailableInMedium = Boolean(triggerInMedium)
+      results.mediumHeaderTriggerAbsent = !triggerInMedium
+
+      const mediumSourcesButton = document.querySelector(
+        '[data-testid="medium-navigation-rail"] [data-nav-key="sources"]',
+      )
+      if (mediumSourcesButton) {
+        mediumSourcesButton.focus({ preventScroll: true })
+        mediumSourcesButton.click()
+        await waitForCondition(() => mobileSidebarVisibleState.get() === true, 1500)
+        await waitForCondition(
+          () => Boolean(document.querySelector(".sidebar-drawer .mobile-sidebar-close")),
+          1500,
+        )
+        results.mediumSourcesOpensDrawer = mobileSidebarVisibleState.get() === true
+        const drawerRows = [
+          ...document.querySelectorAll(
+            ".sidebar-drawer .arco-menu-vertical .arco-menu-item, .sidebar-drawer .arco-menu-vertical .arco-menu-inline-header, .sidebar-drawer .category-title",
+          ),
+        ]
+        results.mediumDrawerRowMin44 =
+          drawerRows.length > 0 &&
+          drawerRows.every((row) => row.getBoundingClientRect().height >= 44)
+        document.querySelector(".sidebar-drawer .mobile-sidebar-close")?.click()
+        await waitForCondition(() => mobileSidebarVisibleState.get() === false, 1500)
+        await waitForCondition(() => document.activeElement === mediumSourcesButton, 1500)
+        results.mediumSourcesFocusReturn = document.activeElement === mediumSourcesButton
+      }
 
       // Step 4: Check DESKTOP window class
       windowClassState.set(WINDOW_CLASSES.DESKTOP)
@@ -675,7 +778,10 @@ const HarnessContent = () => {
 
         // Resize across breakpoint while drawer is open
         windowClassState.set(WINDOW_CLASSES.MEDIUM)
-        await waitForCondition(() => Boolean(document.querySelector(".brand .trigger")), 1500)
+        await waitForCondition(
+          () => Boolean(document.querySelector('[data-testid="medium-navigation-rail"]')),
+          1500,
+        )
 
         results.drawerHostStableAcrossCompactMedium =
           document.querySelector(".sidebar-drawer") === drawerElementBeforeCompactToMed
@@ -686,22 +792,31 @@ const HarnessContent = () => {
           closeBtn.click()
           await waitForCondition(() => !mobileSidebarVisibleState.get(), 1500)
           await waitForCondition(() => {
-            const headerTrigger = document.querySelector(".brand .trigger")
-            return document.activeElement === headerTrigger
+            const mediumSources = document.querySelector(
+              '[data-testid="medium-navigation-rail"] [data-nav-key="sources"]',
+            )
+            return document.activeElement === mediumSources
           }, 1500)
-          const headerTrigger = document.querySelector(".brand .trigger")
-          results.compactToMediumCloseFocusTargetHeader = document.activeElement === headerTrigger
+          const mediumSources = document.querySelector(
+            '[data-testid="medium-navigation-rail"] [data-nav-key="sources"]',
+          )
+          results.compactToMediumCloseFocusTargetHeader = document.activeElement === mediumSources
         }
       }
 
       // 10G: Medium to Compact Resize while Drawer Open -> Focus Target Sources
       windowClassState.set(WINDOW_CLASSES.MEDIUM)
-      await waitForCondition(() => Boolean(document.querySelector(".brand .trigger")), 1500)
+      await waitForCondition(
+        () => Boolean(document.querySelector('[data-testid="medium-navigation-rail"]')),
+        1500,
+      )
       const drawerElementBeforeMedToCompact = document.querySelector(".sidebar-drawer")
-      const mediumHeaderBtn = document.querySelector(".brand .trigger")
-      if (mediumHeaderBtn) {
-        mediumHeaderBtn.focus({ preventScroll: true })
-        mediumHeaderBtn.click()
+      const mediumSourcesForCompact = document.querySelector(
+        '[data-testid="medium-navigation-rail"] [data-nav-key="sources"]',
+      )
+      if (mediumSourcesForCompact) {
+        mediumSourcesForCompact.focus({ preventScroll: true })
+        mediumSourcesForCompact.click()
         await waitForCondition(() => mobileSidebarVisibleState.get() === true, 1500)
         await waitForCondition(() => Boolean(document.querySelector(".mobile-sidebar-close")), 1500)
 
@@ -925,10 +1040,18 @@ const HarnessContent = () => {
       results.drawerXNoNavRestoresTrigger = results.sourcesCloseButtonFocusReturn
       results.drawerEscapeNoNavRestoresTrigger = results.sourcesEscapeFocusReturn
 
-      // Return to "/" in COMPACT for final visual state
+      // Restore the true browser viewport class for the final visual check.
       navigate("/")
-      windowClassState.set(WINDOW_CLASSES.COMPACT)
-      await waitForCondition(() => Boolean(document.querySelector(".compact-nav-bar")), 1500)
+      windowClassState.set(actualViewportClass)
+      await waitForCondition(() => {
+        if (actualViewportClass === WINDOW_CLASSES.COMPACT) {
+          return Boolean(document.querySelector(".compact-nav-bar"))
+        }
+        if (actualViewportClass === WINDOW_CLASSES.MEDIUM) {
+          return Boolean(document.querySelector('[data-testid="medium-navigation-rail"]'))
+        }
+        return !document.querySelector(".compact-nav-bar")
+      }, 1500)
 
       const visibleOverlays = [
         ...document.querySelectorAll(".arco-drawer-mask, .arco-modal-mask"),
@@ -956,7 +1079,20 @@ const HarnessContent = () => {
 
       const mediumTransitionGatesPass =
         !mediumClassTransitionApplicable ||
-        (results.legacyTriggerAvailableInMedium &&
+        (!results.legacyTriggerAvailableInMedium &&
+          results.mediumRailPresent &&
+          results.mediumRailWidth80 &&
+          results.mediumRailOpaque &&
+          results.mediumRailNoBackdropFilter &&
+          results.mediumRailFiveDestinations &&
+          results.mediumRailTargetMin48 &&
+          results.mediumSourcesButtonSemantics &&
+          results.mediumHeaderTriggerAbsent &&
+          results.mediumSourcesOpensDrawer &&
+          results.mediumDrawerRowMin44 &&
+          results.mediumSourcesFocusReturn &&
+          results.mediumReaderRailHidden &&
+          results.mediumReaderNoGutter &&
           results.compactToMediumCloseFocusTargetHeader &&
           results.mediumToCompactCloseFocusTargetSources &&
           results.drawerHostStableAcrossCompactMedium &&
@@ -966,6 +1102,19 @@ const HarnessContent = () => {
         results.compactInCompact &&
         results.absentInMedium &&
         results.absentInDesktop &&
+        results.mediumRailPresent &&
+        results.mediumRailWidth80 &&
+        results.mediumRailOpaque &&
+        results.mediumRailNoBackdropFilter &&
+        results.mediumRailFiveDestinations &&
+        results.mediumRailTargetMin48 &&
+        results.mediumSourcesButtonSemantics &&
+        results.mediumHeaderTriggerAbsent &&
+        results.mediumSourcesOpensDrawer &&
+        results.mediumDrawerRowMin44 &&
+        results.mediumSourcesFocusReturn &&
+        results.mediumReaderRailHidden &&
+        results.mediumReaderNoGutter &&
         results.hitboxContractPass &&
         results.inertGapPass &&
         results.activeStateParityPass &&
@@ -1028,6 +1177,19 @@ const HarnessContent = () => {
         compactDuplicateTriggerAbsent: results.compactDuplicateTriggerAbsent,
         drawerHostPreserved: results.drawerHostPreserved,
         legacyTriggerAvailableInMedium: results.legacyTriggerAvailableInMedium,
+        mediumRailPresent: results.mediumRailPresent,
+        mediumRailWidth80: results.mediumRailWidth80,
+        mediumRailOpaque: results.mediumRailOpaque,
+        mediumRailNoBackdropFilter: results.mediumRailNoBackdropFilter,
+        mediumRailFiveDestinations: results.mediumRailFiveDestinations,
+        mediumRailTargetMin48: results.mediumRailTargetMin48,
+        mediumSourcesButtonSemantics: results.mediumSourcesButtonSemantics,
+        mediumHeaderTriggerAbsent: results.mediumHeaderTriggerAbsent,
+        mediumSourcesOpensDrawer: results.mediumSourcesOpensDrawer,
+        mediumDrawerRowMin44: results.mediumDrawerRowMin44,
+        mediumSourcesFocusReturn: results.mediumSourcesFocusReturn,
+        mediumReaderRailHidden: results.mediumReaderRailHidden,
+        mediumReaderNoGutter: results.mediumReaderNoGutter,
         sourcesCloseButtonFocusReturn: results.sourcesCloseButtonFocusReturn,
         sourcesEscapeFocusReturn: results.sourcesEscapeFocusReturn,
         sourcesBackdropFocusReturn: results.sourcesBackdropFocusReturn,
@@ -1076,117 +1238,138 @@ const HarnessContent = () => {
   }, [navigate])
 
   return (
-    <div className="harness-container" data-window-class={windowClass}>
-      <header
+    <div
+      className="app nav-visual-harness-app"
+      data-window-class={windowClass}
+      style={{
+        "--desktop-sidebar-width": "0px",
+        "--medium-navigation-width":
+          windowClass === WINDOW_CLASSES.MEDIUM && !isReaderActive ? "80px" : "0px",
+        height: "100vh",
+      }}
+    >
+      <div className="desktop-sidebar-slot" />
+      <div
+        className="harness-container"
         style={{
-          padding: "12px 16px",
-          display: "flex",
-          alignItems: "center",
-          gap: "16px",
-          flexWrap: "wrap",
-          maxWidth: "100%",
-          boxSizing: "border-box",
-          borderBottom: "1px solid var(--color-border-2, #e5e6eb)",
+          gridArea: "main",
+          minWidth: 0,
+          height: "100%",
+          overflow: "auto",
+          color: "var(--color-text-1)",
         }}
       >
-        <div
-          aria-hidden={isReaderActive || undefined}
-          className="entry-col"
-          inert={isReaderActive || undefined}
-        >
-          <SidebarTrigger />
-        </div>
-        <div style={{ minWidth: 0, maxWidth: "100%" }}>
-          <h1 style={{ margin: 0, fontSize: "1.25rem", overflowWrap: "anywhere" }}>
-            NAV-VISUAL PR1 Compact Navigation Renderer Harness
-          </h1>
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: "8px 16px",
-              marginTop: "8px",
-              minWidth: 0,
-              maxWidth: "100%",
-            }}
-          >
-            <div>
-              Current Route: <code data-testid="current-route">{location.pathname}</code>
-            </div>
-            <div>
-              Window Class: <code data-testid="current-window-class">{windowClass}</code>
-            </div>
-            <div>
-              Summary: <b data-testid="harness-summary">{report?.summary ?? "RUNNING"}</b>
-            </div>
-            <div data-testid="reader-second-escape-gate">
-              Second Escape closes Reader:{" "}
-              {report
-                ? report.details.readerSecondEscapeClosesReader
-                  ? "PASS"
-                  : "FAIL"
-                : "RUNNING"}
-            </div>
-            <div data-testid="harness-failing-gates">
-              Failing gates:{" "}
-              {report ? (report.summary === "PASS" ? "none" : "see detailed report") : "RUNNING"}
-            </div>
-            <div data-testid="persistence-state-debug">
-              Compact nav storage:{" "}
-              {report
-                ? JSON.stringify([
-                    report.details.compactNavStorageBeforeRun,
-                    report.details.compactNavStorageAfterRun,
-                  ])
-                : "RUNNING"}
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main
-        ref={mainRef}
-        id="main-content"
-        style={{ minHeight: "200px", padding: "16px" }}
-        tabIndex={-1}
-      >
-        {!isReaderActive && (
-          <h1 className="a11y-visually-hidden" tabIndex={-1}>
-            {location.pathname === "/" ? "Home" : location.pathname.slice(1)}
-          </h1>
-        )}
-        {isReaderActive && (
-          <div className="article-container article-container-full-size content-wrapper">
-            <ReaderSidebarTrigger />
-            <p>Reader content</p>
-          </div>
-        )}
-        <p>Main content area for test harness</p>
-      </main>
-
-      <ResizeDiagnostics />
-      <CompactNavigation />
-      <SidebarDrawerHost />
-
-      {report && (
-        <pre
-          data-testid="harness-report"
+        <header
           style={{
-            background: "#1e1e1e",
-            color: "#4ec9b0",
-            padding: "16px",
-            margin: "16px",
-            borderRadius: "8px",
-            fontSize: "12px",
+            padding: "12px 16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "16px",
+            flexWrap: "wrap",
             maxWidth: "100%",
             boxSizing: "border-box",
-            overflowWrap: "anywhere",
-            whiteSpace: "pre-wrap",
+            borderBottom: "1px solid var(--color-border-2, #e5e6eb)",
           }}
         >
-          {JSON.stringify(report, null, 2)}
-        </pre>
-      )}
+          <div
+            aria-hidden={isReaderActive || undefined}
+            className="entry-col"
+            inert={isReaderActive || undefined}
+          >
+            <SidebarTrigger />
+          </div>
+          <div style={{ minWidth: 0, maxWidth: "100%" }}>
+            <h1 style={{ margin: 0, fontSize: "1.25rem", overflowWrap: "anywhere" }}>
+              NAV-VISUAL PR1 Compact Navigation Renderer Harness
+            </h1>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "8px 16px",
+                marginTop: "8px",
+                minWidth: 0,
+                maxWidth: "100%",
+              }}
+            >
+              <div>
+                Current Route: <code data-testid="current-route">{location.pathname}</code>
+              </div>
+              <div>
+                Window Class: <code data-testid="current-window-class">{windowClass}</code>
+              </div>
+              <div>
+                Summary: <b data-testid="harness-summary">{report?.summary ?? "RUNNING"}</b>
+              </div>
+              <div data-testid="reader-second-escape-gate">
+                Second Escape closes Reader:{" "}
+                {report
+                  ? report.details.readerSecondEscapeClosesReader
+                    ? "PASS"
+                    : "FAIL"
+                  : "RUNNING"}
+              </div>
+              <div data-testid="harness-failing-gates">
+                Failing gates:{" "}
+                {report ? (report.summary === "PASS" ? "none" : "see detailed report") : "RUNNING"}
+              </div>
+              <div data-testid="persistence-state-debug">
+                Compact nav storage:{" "}
+                {report
+                  ? JSON.stringify([
+                      report.details.compactNavStorageBeforeRun,
+                      report.details.compactNavStorageAfterRun,
+                    ])
+                  : "RUNNING"}
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main
+          ref={mainRef}
+          id="main-content"
+          style={{ minHeight: "200px", padding: "16px" }}
+          tabIndex={-1}
+        >
+          {!isReaderActive && (
+            <h1 className="a11y-visually-hidden" tabIndex={-1}>
+              {location.pathname === "/" ? "Home" : location.pathname.slice(1)}
+            </h1>
+          )}
+          {isReaderActive && (
+            <div className="article-container article-container-full-size content-wrapper">
+              <ReaderSidebarTrigger />
+              <p>Reader content</p>
+            </div>
+          )}
+          <p>Main content area for test harness</p>
+        </main>
+
+        <ResizeDiagnostics />
+        {report && (
+          <pre
+            data-testid="harness-report"
+            style={{
+              background: "#1e1e1e",
+              color: "#4ec9b0",
+              padding: "16px",
+              margin: "16px",
+              borderRadius: "8px",
+              fontSize: "12px",
+              maxWidth: "100%",
+              boxSizing: "border-box",
+              overflowWrap: "anywhere",
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {JSON.stringify(report, null, 2)}
+          </pre>
+        )}
+      </div>
+      <MediumNavigation />
+      <CompactNavigation />
+      <SidebarDrawerHost />
     </div>
   )
 }

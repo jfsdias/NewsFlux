@@ -85,10 +85,17 @@
 
 .app {
   display: grid;
-  grid-template-columns: var(--desktop-sidebar-width) 1fr;
-  grid-template-areas: "sidebar main";
+  grid-template-columns:
+    var(--desktop-sidebar-width)
+    var(--medium-navigation-width, 0px)
+    minmax(0, 1fr);
+  grid-template-areas: "sidebar navigation main";
   background-color: var(--app-shell-background);
   height: 100%;
+}
+
+.desktop-sidebar-slot {
+  display: contents;
 }
 
 .arco-btn-secondary:not(.arco-btn-disabled):has(svg) {
@@ -162,7 +169,7 @@
 
 @media screen and (max-width: 992px) {
   .app {
-    grid-template-columns: 0 1fr;
+    grid-template-columns: 0 var(--medium-navigation-width, 0px) minmax(0, 1fr);
   }
 
   .arco-menu-collapse-button {

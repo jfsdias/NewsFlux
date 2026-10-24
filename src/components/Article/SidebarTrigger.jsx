@@ -17,7 +17,7 @@ import "./SidebarTrigger.css"
 
 export default function SidebarTrigger() {
   const { isBelowLarge } = useScreenWidth()
-  const { isCompact } = useWindowClass()
+  const { isCompact, isMedium } = useWindowClass()
 
   const sidebarVisible = useStore(mobileSidebarVisibleState)
   const { polyglot } = useStore(polyglotState)
@@ -52,13 +52,11 @@ export default function SidebarTrigger() {
     )
   }
 
-  // In COMPACT, the list header suppresses the redundant hamburger because CompactNavigation
-  // owns the Sources trigger, and Reader uses ReaderSidebarTrigger outside .entry-col.
-  if (isCompact) {
+  // Compact and Medium navigation render their own Sources control. Reader uses its local trigger.
+  if (isCompact || isMedium) {
     return null
   }
 
-  // In MEDIUM, show the legacy header trigger.
   return (
     <div className="brand">
       <CustomTooltip mini content={sidebarTriggerLabel}>
@@ -86,12 +84,12 @@ export default function SidebarTrigger() {
 }
 
 export function ReaderSidebarTrigger() {
-  const { isCompact } = useWindowClass()
+  const { isCompact, isMedium } = useWindowClass()
   const sidebarVisible = useStore(mobileSidebarVisibleState)
   const { polyglot } = useStore(polyglotState)
   const sidebarTriggerLabel = polyglot?.t("sidebar.open")
 
-  if (!isCompact) {
+  if (!isCompact && !isMedium) {
     return null
   }
 

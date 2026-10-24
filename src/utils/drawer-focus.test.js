@@ -93,6 +93,35 @@ test("COMPACT_SOURCES_AFTER_CLOSE_FOCUS: resolves compact sources button when in
   assert.equal(target, sourcesBtn)
 })
 
+test("MEDIUM_SOURCES_AFTER_CLOSE_FOCUS: resolves the rail Sources button for medium-sources invokers", () => {
+  const mediumSources = createMockElement({ id: "medium-sources" })
+  const compactSources = createMockElement({ id: "compact-sources" })
+  const documentRef = {
+    querySelector: (selector) => {
+      if (selector.includes('data-testid="medium-nav-sources"')) {
+        return mediumSources
+      }
+      if (selector.includes("sources")) {
+        return compactSources
+      }
+      return null
+    },
+  }
+
+  const target = resolveCurrentDrawerFocusTarget("medium-sources", { documentRef })
+  assert.equal(target, mediumSources)
+})
+
+test("MEDIUM_SOURCES_TO_COMPACT_FALLBACK: resolves compact Sources after a medium rail resize", () => {
+  const compactSources = createMockElement({ id: "compact-sources" })
+  const documentRef = {
+    querySelector: (selector) => (selector.includes("sources") ? compactSources : null),
+  }
+
+  const target = resolveCurrentDrawerFocusTarget("medium-sources", { documentRef })
+  assert.equal(target, compactSources)
+})
+
 test("READER_HEADER_AFTER_CLOSE_FOCUS: retries across frames when header trigger is temporarily in aria-hidden/inert", async () => {
   const headerBtn = createMockElement({ id: "header-trigger", ariaHidden: true })
   const documentRef = {

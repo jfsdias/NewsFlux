@@ -206,6 +206,7 @@ test("NAV-PR1-R3: SidebarDrawerHost multi-invoker focus return contract", () => 
 
   // Handles both invoker targets in drawer-focus
   assert.ok(drawerFocusSource.includes('invoker === "compact-sources"'))
+  assert.ok(drawerFocusSource.includes('invoker === "medium-sources"'))
   assert.ok(drawerFocusSource.includes("resolveCurrentDrawerFocusTarget"))
 
   // Clears invoker state on close
@@ -220,6 +221,7 @@ test("NAV-PR1-R3: no persistent state in R2 and R3 files", () => {
   const filesToCheck = [
     "src/store/sidebarState.js",
     "src/components/Navigation/CompactNavigation.jsx",
+    "src/components/Navigation/MediumNavigation.jsx",
     "src/components/Article/SidebarTrigger.jsx",
     "src/components/Article/SidebarDrawerHost.jsx",
     "src/utils/drawer-focus.js",

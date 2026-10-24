@@ -493,6 +493,18 @@
   }
 }
 
+@media screen and (min-width: 600px) and (max-width: 992px),
+  screen and (max-width: 599px) and (max-height: 479px) {
+  .sidebar-drawer .sidebar-container .arco-menu-vertical .arco-menu-item,
+  .sidebar-drawer .sidebar-container .arco-menu-vertical .arco-menu-inline-header,
+  .sidebar-drawer .sidebar-container .arco-collapse-item-header,
+  .sidebar-drawer .sidebar-container .category-title {
+    box-sizing: border-box;
+    min-height: 44px;
+    line-height: 44px;
+  }
+}
+
 .source-navigation-controls {
   position: sticky;
   top: 48px;
