@@ -3,8 +3,23 @@ import { ofetch } from "ofetch"
 import router from "@/routes"
 import { authState } from "@/store/authState"
 import { getDataSessionRevision } from "@/store/dataState"
-import isValidAuth from "@/utils/auth"
+import * as authModule from "@/utils/auth"
 import { clearSession } from "@/utils/session"
+
+const isValidAuth = (auth) => authModule.default(auth)
+const getAuthHeaders = (auth = {}) =>
+  typeof authModule.getAuthHeaders === "function"
+    ? authModule.getAuthHeaders(auth)
+    : auth.token
+      ? { "X-Auth-Token": auth.token }
+      : { Authorization: `Basic ${btoa(`${auth.username ?? ""}:${auth.password ?? ""}`)}` }
+const getSafeAuthErrorDetails = (error, secrets = []) =>
+  typeof authModule.getSafeAuthErrorDetails === "function"
+    ? authModule.getSafeAuthErrorDetails(error, secrets)
+    : {
+        message: error instanceof Error ? error.message : String(error ?? "Unknown error"),
+        status: error?.status ?? error?.response?.status,
+      }
 
 const REQUEST_AUTH_SESSION_KEY = Symbol("requestAuth")
 const MUTATING_HTTP_METHODS = new Set(["DELETE", "PATCH", "POST", "PUT"])
@@ -50,15 +65,14 @@ const createApiClient = () => {
       }
 
       options[REQUEST_AUTH_SESSION_KEY] = createRequestSessionSnapshot(auth)
-      const { server, token, username, password } = auth
+      const { server } = auth
       options.baseURL = server
-      options.headers = token
-        ? { "X-Auth-Token": token }
-        : { Authorization: `Basic ${btoa(`${username}:${password}`)}` }
+      options.headers = getAuthHeaders(auth)
     },
     onRequestError({ _request, _options, error }) {
+      const auth = authState.get()
       // 处理请求错误
-      console.error("Request error:", error)
+      console.error("Request error:", getSafeAuthErrorDetails(error, [auth.password, auth.token]))
     },
     onResponse({ options }) {
       if (!isCurrentRequestSession(options[REQUEST_AUTH_SESSION_KEY], authState.get())) {
@@ -77,9 +91,14 @@ const createApiClient = () => {
         await router.navigate("/login", { replace: true, state: { from } })
       }
       // 处理响应错误
-      const errorMessage = response._data?.error_message ?? response.statusText
-      console.error("Response error:", errorMessage)
-      const responseError = new Error(errorMessage)
+      const auth = authState.get()
+      const rawErrorMessage = response._data?.error_message ?? response.statusText
+      const safeErrorDetails = getSafeAuthErrorDetails(
+        { message: rawErrorMessage, status: statusCode },
+        [auth.password, auth.token],
+      )
+      console.error("Response error:", safeErrorDetails.message)
+      const responseError = new Error(safeErrorDetails.message)
       responseError.status = statusCode
       responseError.data = response._data
       throw responseError

@@ -25,7 +25,13 @@
     "need_help": "Besoin d'aide ?",
     "miniflux_official_website": "Aller sur le site officiel de Miniflux",
     "error": "Échec de la connexion",
-    "invalid_identity": "Le serveur a renvoyé une identité utilisateur non valide."
+    "invalid_identity": "Le serveur a renvoyé une identité utilisateur non valide.",
+    "api_key_consent_label": "Créer une clé API Miniflux dédiée pour cet appareil au lieu d’enregistrer mon mot de passe localement",
+    "api_key_consent_required": "Veuillez confirmer que NewsFlux peut créer une clé API Miniflux dédiée avant de vous connecter avec un mot de passe.",
+    "api_key_migration_title": "Remplacer le mot de passe enregistré par une clé API dédiée",
+    "api_key_migration_description": "Cette session enregistre actuellement votre mot de passe Miniflux dans le stockage local. Avec votre confirmation, NewsFlux créera une clé API Miniflux dédiée pour cette installation, la vérifiera via /v1/me, puis supprimera le mot de passe enregistré.",
+    "api_key_migration_action": "Créer une clé API dédiée",
+    "api_key_provisioning_error": "Impossible de créer ou de vérifier une clé API Miniflux dédiée. Vos identifiants actuels ont été conservés."
   },
   "compatibility": {
     "checking": "Vérification de la compatibilité avec Miniflux…",

@@ -26,7 +26,8 @@ const moduleMocks = {
     "export const get24HoursAgoTimestamp = () => 0; export const getDayEndTimestamp = () => 0; export const getTimestamp = () => 0",
   "@/utils/entry-id-batches": "export const updateEntryIdsInBatches = async () => ({})",
   "@/utils/home-entry-request": "export const buildHomeEntryRequest = () => ({})",
-  "@/utils/auth": "export default () => true",
+  "@/utils/auth":
+    'export default () => true; export const getAuthHeaders = () => ({}); export const getSafeAuthErrorDetails = (error) => ({ message: error?.message ?? String(error ?? "Unknown error"), status: error?.status ?? error?.response?.status })',
   "@/utils/session": "export const clearSession = () => {}",
 }
 
