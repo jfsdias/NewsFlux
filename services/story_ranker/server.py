@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 from http import HTTPStatus
@@ -24,6 +25,7 @@ PORT = int(os.environ.get("STORY_RANKER_PORT", "8787"))
 _EMBEDDER = OllamaEmbedder()
 _RERANKER = QwenReranker()
 _INFERENCE_LOCK = threading.Lock()
+_LOGGER = logging.getLogger("newsflux.story_ranker")
 
 
 def _model_contract() -> dict:
@@ -101,7 +103,7 @@ class StoryRankerHandler(BaseHTTPRequestHandler):
             self._write_json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "model_unavailable"})
             return
         except Exception:
-            self.log_error("unexpected story ranking failure", exc_info=True)
+            _LOGGER.exception("unexpected story ranking failure")
             self._write_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "ranking_failed"})
             return
         finally:
