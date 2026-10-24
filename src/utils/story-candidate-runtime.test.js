@@ -3,7 +3,9 @@ import test from "node:test"
 
 // Node's direct test runner requires the extension; Vite resolves the same module.
 // eslint-disable-next-line import/extensions
-const { default: startHomeStoryCandidateRuntime } = await import("./story-candidate-runtime.js")
+const { default: startHomeStoryCandidateRuntime } = await import(
+  "./story-candidate-runtime.js"
+)
 
 const makeEntry = (id) => ({
   id,
@@ -58,7 +60,10 @@ test("waits for a complete Home snapshot and runs once for its normalized reques
   await flush()
   assert.equal(calls.length, 0)
 
-  store.set({ ...store.get(), entries: [makeEntry(1), makeEntry(2), makeEntry(3)] })
+  store.set({
+    ...store.get(),
+    entries: [makeEntry(1), makeEntry(2), makeEntry(3)],
+  })
   await flush()
   assert.equal(calls.length, 1)
   assert.equal(calls[0].length, 3)
@@ -95,7 +100,10 @@ test("caps activation at 200 loaded entries when Home has more than 200", async 
 
   await flush()
   assert.equal(requestedCount, 0)
-  store.set({ ...store.get(), entries: Array.from({ length: 200 }, (_, index) => makeEntry(index + 1)) })
+  store.set({
+    ...store.get(),
+    entries: Array.from({ length: 200 }, (_, index) => makeEntry(index + 1)),
+  })
   await flush()
   assert.equal(requestedCount, 200)
   runtime.dispose()
@@ -127,7 +135,10 @@ test("fails open and ignores late results after disposal", async () => {
   await flush()
   assert.deepEqual(transitions, ["pending"])
   runtime.dispose()
-  resolveRequest({ candidates: Object.freeze([]), model: Object.freeze({ candidateK: 250 }) })
+  resolveRequest({
+    candidates: Object.freeze([]),
+    model: Object.freeze({ candidateK: 250 }),
+  })
   await flush()
   assert.deepEqual(transitions, ["pending"])
 
