@@ -1,7 +1,7 @@
 # STORY01 — Linux CPU Runtime Contract & Cross-Backend Parity Specification
 
-**Status:** Canonical Runtime Hardening Contract (`STORY01_LINUX_CPU_RUNTIME_CONTRACT`)  
-**Scope:** `services/story_ranker/` sidecar reproducibility, offline model provenance, and cross-backend evaluation policy  
+**Status:** Canonical Runtime Hardening Contract (`STORY01_LINUX_CPU_RUNTIME_CONTRACT`)
+**Scope:** `services/story_ranker/` sidecar reproducibility, offline model provenance, and cross-backend evaluation policy
 **Default Activation State:** `VITE_STORY_CANDIDATE_RANKING` remains **disabled by default** (`DORMANT_OPTIONAL_CAPABILITY`). Production `docker-compose.yml` is unchanged.
 
 ---
