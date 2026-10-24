@@ -61,11 +61,15 @@ export const createStoryCandidateRequest = (entries) => {
 
   const normalizedEntries = [...entriesById.values()]
     .toSorted(
-      (left, right) =>
-        right.publishedAtMs - left.publishedAtMs || left.id - right.id,
+      (left, right) => right.publishedAtMs - left.publishedAtMs || left.id - right.id,
     )
     .slice(0, STORY_CANDIDATE_ENTRY_LIMIT)
-    .map(({ id, feed_id, published_at, title }) => ({ id, feed_id, published_at, title }))
+    .map(({ id, feed_id, published_at, title }) => ({
+      id,
+      feed_id,
+      published_at,
+      title,
+    }))
 
   return Object.freeze({
     entries: Object.freeze(normalizedEntries.map((entry) => Object.freeze(entry))),
