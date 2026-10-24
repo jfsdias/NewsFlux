@@ -12,16 +12,298 @@ import { clearSession, startSession } from "@/utils/session"
 
 let descriptionCounter = 0
 const inFlightProvisioningBySession = new Map()
-const pendingOrphanDescriptionsBySession = new Map()
 const MAX_DESCRIPTION_COLLISION_RETRIES = 3
 
-const getPendingDescriptionSet = (sessionKey) => {
-  let set = pendingOrphanDescriptionsBySession.get(sessionKey)
-  if (!set) {
-    set = new Set()
-    pendingOrphanDescriptionsBySession.set(sessionKey, set)
+export const AUTH_TRANSACTION_JOURNAL_STORAGE_KEY = "newsflux_auth_transaction_journal"
+export const AUTH_TRANSACTION_JOURNAL_SCHEMA_VERSION = 1
+export const AUTH_TRANSACTION_JOURNAL_DEFAULT_TTL_MS = 24 * 60 * 60 * 1000
+
+const ALLOWED_JOURNAL_KEYS = new Set([
+  "schemaVersion",
+  "server",
+  "userId",
+  "username",
+  "description",
+  "state",
+  "createdAt",
+  "expiresAt",
+  "attempt",
+])
+
+const FORBIDDEN_JOURNAL_SECRET_KEYS = [
+  "password",
+  "token",
+  "apiKey",
+  "api_key",
+  "authorization",
+  "Authorization",
+  "x-auth-token",
+  "X-Auth-Token",
+  "basicAuth",
+  "secret",
+]
+
+export const normalizeCanonicalServer = (server = "") => {
+  if (typeof server !== "string") {
+    return ""
   }
-  return set
+  const trimmed = server.trim()
+  if (!trimmed) {
+    return ""
+  }
+  try {
+    const parsed = new URL(trimmed)
+    const normalizedPath = parsed.pathname.replace(/\/+$/, "")
+    return `${parsed.origin}${normalizedPath}`
+  } catch {
+    return trimmed.replace(/\/+$/, "")
+  }
+}
+
+export const sanitizeAuthTransactionJournalEntry = (
+  input = {},
+  { now = new Date(), ttlMs = AUTH_TRANSACTION_JOURNAL_DEFAULT_TTL_MS } = {},
+) => {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new Error("Invalid auth transaction journal input")
+  }
+
+  const server = normalizeCanonicalServer(input.server)
+  const userId = normalizeApiKeyId(input.userId)
+  const username = typeof input.username === "string" ? input.username.trim() : ""
+  const description = typeof input.description === "string" ? input.description.trim() : ""
+  const attemptNum = Number(input.attempt ?? 1)
+  const attempt = Number.isSafeInteger(attemptNum) && attemptNum > 0 ? attemptNum : 1
+
+  const nowDate = now instanceof Date ? now : new Date(now)
+  const nowMs = nowDate.getTime()
+  if (!Number.isFinite(nowMs)) {
+    throw new TypeError("Invalid auth transaction journal timestamp")
+  }
+
+  const createdAtMs =
+    typeof input.createdAt === "string" && Number.isFinite(Date.parse(input.createdAt))
+      ? Date.parse(input.createdAt)
+      : nowMs
+  const effectiveTtlMs =
+    Number.isFinite(Number(ttlMs)) && Number(ttlMs) > 0
+      ? Number(ttlMs)
+      : AUTH_TRANSACTION_JOURNAL_DEFAULT_TTL_MS
+  const expiresAtMs =
+    typeof input.expiresAt === "string" && Number.isFinite(Date.parse(input.expiresAt))
+      ? Date.parse(input.expiresAt)
+      : createdAtMs + effectiveTtlMs
+
+  if (!server || !userId || !description) {
+    throw new Error("Auth transaction journal requires canonical server, userId, and description")
+  }
+
+  const entry = {
+    schemaVersion: AUTH_TRANSACTION_JOURNAL_SCHEMA_VERSION,
+    server,
+    userId,
+    username,
+    description,
+    state: "pending_create",
+    createdAt: new Date(createdAtMs).toISOString(),
+    expiresAt: new Date(expiresAtMs).toISOString(),
+    attempt,
+  }
+
+  return Object.freeze(entry)
+}
+
+const isValidStoredJournalEntry = (candidate) => {
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+    return false
+  }
+  const keys = Object.keys(candidate)
+  if (keys.length === 0 || keys.some((key) => !ALLOWED_JOURNAL_KEYS.has(key))) {
+    return false
+  }
+  for (const forbidden of FORBIDDEN_JOURNAL_SECRET_KEYS) {
+    if (Object.hasOwn(candidate, forbidden)) {
+      return false
+    }
+  }
+  if (candidate.schemaVersion !== AUTH_TRANSACTION_JOURNAL_SCHEMA_VERSION) {
+    return false
+  }
+  if (candidate.state !== "pending_create") {
+    return false
+  }
+  const server = normalizeCanonicalServer(candidate.server)
+  const userId = normalizeApiKeyId(candidate.userId)
+  const description = typeof candidate.description === "string" ? candidate.description.trim() : ""
+  if (!server || !userId || !description) {
+    return false
+  }
+  if (typeof candidate.username !== "string") {
+    return false
+  }
+  const createdAtMs = Date.parse(candidate.createdAt)
+  const expiresAtMs = Date.parse(candidate.expiresAt)
+  if (!Number.isFinite(createdAtMs) || !Number.isFinite(expiresAtMs) || expiresAtMs < createdAtMs) {
+    return false
+  }
+  const attempt = Number(candidate.attempt)
+  if (!Number.isSafeInteger(attempt) || attempt < 1) {
+    return false
+  }
+  return true
+}
+
+export const readAuthTransactionJournal = ({
+  server,
+  userId,
+  username,
+  now = new Date(),
+  storage = globalThis.localStorage,
+} = {}) => {
+  if (!storage || typeof storage.getItem !== "function") {
+    return { status: "empty", entry: null }
+  }
+
+  let raw
+  try {
+    raw = storage.getItem(AUTH_TRANSACTION_JOURNAL_STORAGE_KEY)
+  } catch {
+    return { status: "empty", entry: null }
+  }
+
+  if (typeof raw !== "string" || raw.length === 0) {
+    return { status: "empty", entry: null }
+  }
+
+  let parsed
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    try {
+      storage.removeItem?.(AUTH_TRANSACTION_JOURNAL_STORAGE_KEY)
+    } catch {
+      // Ignore storage cleanup errors
+    }
+    return { status: "corrupt", entry: null }
+  }
+
+  if (!isValidStoredJournalEntry(parsed)) {
+    try {
+      storage.removeItem?.(AUTH_TRANSACTION_JOURNAL_STORAGE_KEY)
+    } catch {
+      // Ignore storage cleanup errors
+    }
+    return { status: "corrupt", entry: null }
+  }
+
+  const nowMs = (now instanceof Date ? now : new Date(now)).getTime()
+  const expiresAtMs = Date.parse(parsed.expiresAt)
+  if (Number.isFinite(nowMs) && expiresAtMs <= nowMs) {
+    try {
+      storage.removeItem?.(AUTH_TRANSACTION_JOURNAL_STORAGE_KEY)
+    } catch {
+      // Ignore storage cleanup errors
+    }
+    return { status: "stale", entry: null }
+  }
+
+  const normalizedEntry = Object.freeze({
+    schemaVersion: AUTH_TRANSACTION_JOURNAL_SCHEMA_VERSION,
+    server: normalizeCanonicalServer(parsed.server),
+    userId: normalizeApiKeyId(parsed.userId),
+    username: parsed.username.trim(),
+    description: parsed.description.trim(),
+    state: "pending_create",
+    createdAt: parsed.createdAt,
+    expiresAt: parsed.expiresAt,
+    attempt: Number(parsed.attempt),
+  })
+
+  if (server !== undefined && server !== null && String(server).trim() !== "") {
+    const requestedServer = normalizeCanonicalServer(server)
+    if (requestedServer !== normalizedEntry.server) {
+      return {
+        status: "server-mismatch",
+        entry: null,
+        preservedEntry: normalizedEntry,
+      }
+    }
+  }
+
+  if (userId !== undefined && userId !== null) {
+    const requestedUserId = normalizeApiKeyId(userId)
+    if (requestedUserId !== normalizedEntry.userId) {
+      return {
+        status: "user-mismatch",
+        entry: null,
+        preservedEntry: normalizedEntry,
+      }
+    }
+  }
+
+  if (
+    typeof username === "string" &&
+    username.trim() !== "" &&
+    normalizedEntry.username !== "" &&
+    username.trim().toLowerCase() !== normalizedEntry.username.toLowerCase()
+  ) {
+    return {
+      status: "user-mismatch",
+      entry: null,
+      preservedEntry: normalizedEntry,
+    }
+  }
+
+  return {
+    status: "pending",
+    entry: normalizedEntry,
+  }
+}
+
+export const writeAuthTransactionJournal = (
+  input,
+  {
+    now = new Date(),
+    ttlMs = AUTH_TRANSACTION_JOURNAL_DEFAULT_TTL_MS,
+    storage = globalThis.localStorage,
+  } = {},
+) => {
+  const entry = sanitizeAuthTransactionJournalEntry(input, { now, ttlMs })
+  if (!storage || typeof storage.setItem !== "function") {
+    throw new Error("Durable localStorage is unavailable for auth transaction journal")
+  }
+  storage.setItem(AUTH_TRANSACTION_JOURNAL_STORAGE_KEY, JSON.stringify(entry))
+  return entry
+}
+
+export const clearAuthTransactionJournal = ({
+  server,
+  userId,
+  username,
+  now = new Date(),
+  storage = globalThis.localStorage,
+} = {}) => {
+  if (!storage || typeof storage.removeItem !== "function") {
+    return false
+  }
+  const hasScopeFilter =
+    (server !== undefined && server !== null && String(server).trim() !== "") ||
+    (userId !== undefined && userId !== null) ||
+    (typeof username === "string" && username.trim() !== "")
+
+  if (hasScopeFilter) {
+    const current = readAuthTransactionJournal({ server, userId, username, now, storage })
+    if (current.status === "server-mismatch" || current.status === "user-mismatch") {
+      return false
+    }
+  }
+
+  try {
+    storage.removeItem(AUTH_TRANSACTION_JOURNAL_STORAGE_KEY)
+    return true
+  } catch {
+    return false
+  }
 }
 
 const createRandomSuffix = () => {
@@ -99,19 +381,38 @@ export const revokeDedicatedApiKey = async (
   }
 }
 
-export const reconcilePendingOrphanKeys = async ({
+export const reconcileAuthTransactionJournal = async ({
   server,
   username,
   password,
   userId,
   rawFetch = ofetch.raw,
+  now = new Date(),
+  storage = globalThis.localStorage,
   signal,
 } = {}) => {
-  const sessionKey = `${server}::${username}`
-  const pendingSet = pendingOrphanDescriptionsBySession.get(sessionKey)
-  if (!pendingSet || pendingSet.size === 0) {
-    return { inspected: 0, revokedIds: [] }
+  const basicSecret = username && password ? encodeBasicAuthCredentials(username, password) : ""
+  const secrets = [password, basicSecret]
+
+  const journalRead = readAuthTransactionJournal({
+    server,
+    userId,
+    username,
+    now,
+    storage,
+  })
+
+  if (journalRead.status !== "pending" || !journalRead.entry) {
+    return {
+      status: journalRead.status,
+      reconciled: true,
+      inspected: 0,
+      revokedIds: [],
+      preservedEntry: journalRead.preservedEntry ?? null,
+    }
   }
+
+  const pendingEntry = journalRead.entry
 
   let listResponse
   try {
@@ -123,39 +424,129 @@ export const reconcilePendingOrphanKeys = async ({
       retry: false,
       signal,
     })
-  } catch {
-    return { inspected: 0, revokedIds: [] }
+  } catch (error) {
+    throw createAuthProvisioningError(
+      "Failed to query Miniflux API keys for pending transaction reconciliation",
+      {
+        code: "ORPHAN_RECONCILIATION_FAILED",
+        stage: "reconcile-journal",
+        cause: error,
+        secrets,
+      },
+    )
   }
 
-  const keys = Array.isArray(listResponse?._data) ? listResponse._data : []
-  const revokedIds = []
+  if (listResponse?.status !== 200 || !Array.isArray(listResponse?._data)) {
+    throw createAuthProvisioningError(
+      "Unexpected response listing Miniflux API keys for pending transaction reconciliation",
+      {
+        code: "ORPHAN_RECONCILIATION_FAILED",
+        stage: "reconcile-journal",
+        status: listResponse?.status,
+        secrets,
+      },
+    )
+  }
 
-  for (const key of keys) {
-    const keyId = normalizeApiKeyId(key?.id)
-    const normalizedDesc =
-      typeof key?.description === "string" ? key.description.trim().toLowerCase() : ""
-    const matchesUser =
-      key?.user_id === undefined || key?.user_id === null || Number(key.user_id) === Number(userId)
-    const isNeverUsed = key?.last_used_at === null || key?.last_used_at === undefined
+  const keys = listResponse._data
+  const targetDescriptionLower = pendingEntry.description.trim().toLowerCase()
 
-    if (keyId && normalizedDesc && pendingSet.has(normalizedDesc) && matchesUser && isNeverUsed) {
-      const result = await revokeDedicatedApiKey(
-        { server, username, password },
-        { apiKeyId: keyId, rawFetch, signal },
-      )
-      if (result.revoked) {
-        pendingSet.delete(normalizedDesc)
-        revokedIds.push(keyId)
-      }
+  const matchingKeys = keys.filter((key) => {
+    const keyDesc = typeof key?.description === "string" ? key.description.trim() : ""
+    if (!keyDesc || keyDesc.toLowerCase() !== targetDescriptionLower) {
+      return false
+    }
+    const sameUser =
+      key?.user_id === undefined ||
+      key?.user_id === null ||
+      Number(key.user_id) === Number(pendingEntry.userId)
+    return sameUser
+  })
+
+  if (matchingKeys.length === 0) {
+    clearAuthTransactionJournal({
+      server: pendingEntry.server,
+      userId: pendingEntry.userId,
+      username: pendingEntry.username,
+      now,
+      storage,
+    })
+    return {
+      status: "zero-match",
+      reconciled: true,
+      inspected: keys.length,
+      revokedIds: [],
+      preservedEntry: null,
     }
   }
 
-  if (pendingSet.size === 0) {
-    pendingOrphanDescriptionsBySession.delete(sessionKey)
+  if (matchingKeys.length > 1) {
+    throw createAuthProvisioningError(
+      "Ambiguous multiple API keys match pending transaction journal; refusing speculative revocation",
+      {
+        code: "AMBIGUOUS_ORPHAN_API_KEY",
+        stage: "reconcile-journal",
+        secrets,
+      },
+    )
   }
 
-  return { inspected: keys.length, revokedIds }
+  const candidate = matchingKeys[0]
+  const candidateId = normalizeApiKeyId(candidate?.id)
+  const exactDescriptionMatch =
+    typeof candidate?.description === "string" &&
+    candidate.description.trim() === pendingEntry.description
+  const exactUserMatch =
+    candidate?.user_id === undefined ||
+    candidate?.user_id === null ||
+    Number(candidate.user_id) === Number(pendingEntry.userId)
+  const isNeverUsed = candidate?.last_used_at === null || candidate?.last_used_at === undefined
+
+  if (!candidateId || !exactDescriptionMatch || !exactUserMatch || !isNeverUsed) {
+    throw createAuthProvisioningError(
+      "Matched API key is not an unambiguous unused orphan; refusing speculative revocation",
+      {
+        code: "AMBIGUOUS_ORPHAN_API_KEY",
+        stage: "reconcile-journal",
+        secrets,
+      },
+    )
+  }
+
+  const revokeResult = await revokeDedicatedApiKey(
+    { server, username, password },
+    { apiKeyId: candidateId, rawFetch, signal },
+  )
+
+  if (!revokeResult.revoked) {
+    throw createAuthProvisioningError(
+      "Failed to revoke orphan API key from pending transaction journal",
+      {
+        code: "ORPHAN_RECONCILIATION_FAILED",
+        stage: "reconcile-journal",
+        secrets,
+      },
+    )
+  }
+
+  clearAuthTransactionJournal({
+    server: pendingEntry.server,
+    userId: pendingEntry.userId,
+    username: pendingEntry.username,
+    now,
+    storage,
+  })
+
+  return {
+    status: "orphan-revoked",
+    reconciled: true,
+    inspected: keys.length,
+    revokedIds: [candidateId],
+    preservedEntry: null,
+  }
 }
+
+export const reconcilePendingOrphanKeys = reconcileAuthTransactionJournal
 
 export const logoutWithKeyRevocation = async ({
   auth = authState.get(),
@@ -183,6 +574,39 @@ export const logoutWithKeyRevocation = async ({
   return revocationResult
 }
 
+const DEFINITIVE_PRE_CREATE_REJECTION_STATUSES = new Set([400, 401, 403, 404, 409, 422])
+
+const isDefinitivePreCreateRejectionStatus = (status) =>
+  DEFINITIVE_PRE_CREATE_REJECTION_STATUSES.has(status)
+
+const restoreOrClearJournalForScope = ({
+  preservedForeignEntry,
+  server,
+  userId,
+  username,
+  now,
+  storage,
+}) => {
+  if (preservedForeignEntry) {
+    try {
+      storage?.setItem?.(
+        AUTH_TRANSACTION_JOURNAL_STORAGE_KEY,
+        JSON.stringify(preservedForeignEntry),
+      )
+      return
+    } catch {
+      // Fall back to clearing if restore fails
+    }
+  }
+  clearAuthTransactionJournal({
+    server,
+    userId,
+    username,
+    now,
+    storage,
+  })
+}
+
 const executeProvisionDedicatedApiKeySession = async (
   normalizedAuth,
   {
@@ -190,6 +614,9 @@ const executeProvisionDedicatedApiKeySession = async (
     rawFetch = ofetch.raw,
     checkCompatibility = checkMinifluxCompatibility,
     commitSession = startSession,
+    now = new Date(),
+    journalTtlMs = AUTH_TRANSACTION_JOURNAL_DEFAULT_TTL_MS,
+    storage = globalThis.localStorage,
     signal,
   } = {},
 ) => {
@@ -246,6 +673,7 @@ const executeProvisionDedicatedApiKeySession = async (
     })
   }
 
+  // Step 2: Resolve canonical user identity
   const initialUser = initialMeResponse._data
   if (!isValidUserIdentity(initialUser)) {
     throw createAuthProvisioningError("The server returned an invalid user identity.", {
@@ -254,8 +682,9 @@ const executeProvisionDedicatedApiKeySession = async (
       secrets: baseSecrets,
     })
   }
+  const canonicalUsername = initialUser.username || username || ""
 
-  // Step 2: Check Miniflux compatibility before creating any key
+  // Step 3: Check Miniflux compatibility before creating any key
   let compatibility
   try {
     compatibility = await checkCompatibility(normalizedAuth, { signal })
@@ -283,7 +712,7 @@ const executeProvisionDedicatedApiKeySession = async (
       server,
       token,
       apiKeyId: null,
-      username: initialUser.username || username || "",
+      username: canonicalUsername,
       password: "",
     })
 
@@ -306,24 +735,55 @@ const executeProvisionDedicatedApiKeySession = async (
     }
   }
 
-  // Step 3: Reconcile any pending lost-response orphan keys, then create dedicated installation API key via POST /v1/api-keys
-  const sessionKey = `${server}::${username}`
-  await reconcilePendingOrphanKeys({
+  // Step 4: Reconcile any prior journal transaction safely BEFORE creating any new key
+  const reconciliation = await reconcileAuthTransactionJournal({
     server,
-    username,
+    username: canonicalUsername,
     password,
     userId: initialUser.id,
     rawFetch,
+    now,
+    storage,
     signal,
   })
+  const preservedForeignEntry = reconciliation.preservedEntry ?? null
 
+  // Steps 5–7: Generate exact API-key description, persist PENDING_CREATE journal BEFORE POST /v1/api-keys, then POST /v1/api-keys
   let createKeyResponse
-  let lastCreateError
   for (let attempt = 1; attempt <= MAX_DESCRIPTION_COLLISION_RETRIES; attempt += 1) {
-    const description = buildDedicatedApiKeyDescription({ server, username })
-    const normalizedDescription = description.trim().toLowerCase()
-    const pendingSet = getPendingDescriptionSet(sessionKey)
-    pendingSet.add(normalizedDescription)
+    const description = buildDedicatedApiKeyDescription({ now })
+
+    try {
+      writeAuthTransactionJournal(
+        {
+          server,
+          userId: initialUser.id,
+          username: canonicalUsername,
+          description,
+          attempt,
+        },
+        {
+          now,
+          ttlMs: journalTtlMs,
+          storage,
+        },
+      )
+    } catch (error) {
+      restoreOrClearJournalForScope({
+        preservedForeignEntry,
+        server,
+        userId: initialUser.id,
+        username: canonicalUsername,
+        now,
+        storage,
+      })
+      throw createAuthProvisioningError("Failed to persist pending auth transaction journal", {
+        code: "WRITE_AUTH_JOURNAL_FAILED",
+        stage: "write-journal",
+        cause: error,
+        secrets: baseSecrets,
+      })
+    }
 
     try {
       createKeyResponse = await rawFetch("v1/api-keys", {
@@ -338,21 +798,28 @@ const executeProvisionDedicatedApiKeySession = async (
     } catch (error) {
       const errorStatus = error?.status ?? error?.response?.status
       if (errorStatus === 400 || errorStatus === 409) {
-        pendingSet.delete(normalizedDescription)
-        lastCreateError = error
+        restoreOrClearJournalForScope({
+          preservedForeignEntry,
+          server,
+          userId: initialUser.id,
+          username: canonicalUsername,
+          now,
+          storage,
+        })
         if (attempt < MAX_DESCRIPTION_COLLISION_RETRIES) {
           continue
         }
-      } else {
-        await reconcilePendingOrphanKeys({
+      } else if (isDefinitivePreCreateRejectionStatus(errorStatus)) {
+        restoreOrClearJournalForScope({
+          preservedForeignEntry,
           server,
-          username,
-          password,
           userId: initialUser.id,
-          rawFetch,
-          signal,
+          username: canonicalUsername,
+          now,
+          storage,
         })
       }
+      // Step 10: If outcome is uncertain (e.g. lost response / timeout / 5xx), retain journal, preserve password auth, do not create another key
       throw createAuthProvisioningError("Failed to create dedicated Miniflux API key", {
         code: "CREATE_API_KEY_FAILED",
         stage: "create-key",
@@ -363,9 +830,14 @@ const executeProvisionDedicatedApiKeySession = async (
 
     const responseStatus = createKeyResponse?.status
     if (responseStatus === 400 || responseStatus === 409) {
-      pendingSet.delete(normalizedDescription)
-      lastCreateError = new Error("API key description collision")
-      lastCreateError.status = responseStatus
+      restoreOrClearJournalForScope({
+        preservedForeignEntry,
+        server,
+        userId: initialUser.id,
+        username: canonicalUsername,
+        now,
+        storage,
+      })
       if (attempt < MAX_DESCRIPTION_COLLISION_RETRIES) {
         continue
       }
@@ -377,12 +849,17 @@ const executeProvisionDedicatedApiKeySession = async (
       })
     }
 
-    pendingSet.delete(normalizedDescription)
-    if (pendingSet.size === 0) {
-      pendingOrphanDescriptionsBySession.delete(sessionKey)
-    }
-
     if (responseStatus !== 201 && responseStatus !== 200) {
+      if (isDefinitivePreCreateRejectionStatus(responseStatus)) {
+        restoreOrClearJournalForScope({
+          preservedForeignEntry,
+          server,
+          userId: initialUser.id,
+          username: canonicalUsername,
+          now,
+          storage,
+        })
+      }
       throw createAuthProvisioningError("Unexpected status creating Miniflux API key", {
         code: "CREATE_API_KEY_FAILED",
         stage: "create-key",
@@ -393,16 +870,29 @@ const executeProvisionDedicatedApiKeySession = async (
     break
   }
 
+  // Step 8: Verify returned ID/token, verify identity via /v1/me, commit auth state, and clear journal ONLY after committed success
   const createdKeyData = createKeyResponse._data
   const createdKeyId = normalizeApiKeyId(createdKeyData?.id)
   const createdToken = typeof createdKeyData?.token === "string" ? createdKeyData.token.trim() : ""
 
   if (!createdKeyId || !createdToken) {
+    let cleanedUp = !createdKeyId
     if (createdKeyId) {
-      await revokeDedicatedApiKey(
+      const revokeResult = await revokeDedicatedApiKey(
         { server, username, password },
         { apiKeyId: createdKeyId, rawFetch, signal },
       )
+      cleanedUp = revokeResult.revoked
+    }
+    if (cleanedUp) {
+      restoreOrClearJournalForScope({
+        preservedForeignEntry,
+        server,
+        userId: initialUser.id,
+        username: canonicalUsername,
+        now,
+        storage,
+      })
     }
     throw createAuthProvisioningError("Miniflux returned an invalid API key payload", {
       code: "INVALID_API_KEY_RESPONSE",
@@ -413,7 +903,6 @@ const executeProvisionDedicatedApiKeySession = async (
 
   const allSecrets = [...baseSecrets, createdToken]
 
-  // Step 4: Verify the newly created key via GET /v1/me using X-Auth-Token BEFORE committing
   let verifyResponse
   try {
     verifyResponse = await rawFetch("v1/me", {
@@ -425,10 +914,20 @@ const executeProvisionDedicatedApiKeySession = async (
       signal,
     })
   } catch (error) {
-    await revokeDedicatedApiKey(
+    const revokeResult = await revokeDedicatedApiKey(
       { server, username, password },
       { apiKeyId: createdKeyId, rawFetch, signal },
     )
+    if (revokeResult.revoked) {
+      restoreOrClearJournalForScope({
+        preservedForeignEntry,
+        server,
+        userId: initialUser.id,
+        username: canonicalUsername,
+        now,
+        storage,
+      })
+    }
     throw createAuthProvisioningError("Failed to verify newly created API key via /v1/me", {
       code: "VERIFY_API_KEY_FAILED",
       stage: "verify-key",
@@ -443,10 +942,20 @@ const executeProvisionDedicatedApiKeySession = async (
     !isValidUserIdentity(verifiedUser) ||
     verifiedUser.id !== initialUser.id
   ) {
-    await revokeDedicatedApiKey(
+    const revokeResult = await revokeDedicatedApiKey(
       { server, username, password },
       { apiKeyId: createdKeyId, rawFetch, signal },
     )
+    if (revokeResult.revoked) {
+      restoreOrClearJournalForScope({
+        preservedForeignEntry,
+        server,
+        userId: initialUser.id,
+        username: canonicalUsername,
+        now,
+        storage,
+      })
+    }
     throw createAuthProvisioningError("Newly created API key failed /v1/me identity verification", {
       code: "VERIFY_API_KEY_IDENTITY_MISMATCH",
       stage: "verify-key",
@@ -455,13 +964,12 @@ const executeProvisionDedicatedApiKeySession = async (
     })
   }
 
-  // Step 5: Store token + apiKeyId and drop password ONLY after successful verification
   const previousAuth = normalizeAuthValue(authState.get())
   const committedAuth = normalizeAuthValue({
     server,
     token: createdToken,
     apiKeyId: createdKeyId,
-    username: verifiedUser.username || username || "",
+    username: verifiedUser.username || canonicalUsername,
     password: "",
   })
 
@@ -473,10 +981,20 @@ const executeProvisionDedicatedApiKeySession = async (
     } catch {
       // Preserve best-effort fallback
     }
-    await revokeDedicatedApiKey(
+    const revokeResult = await revokeDedicatedApiKey(
       { server, token: createdToken, username, password },
       { apiKeyId: createdKeyId, rawFetch, signal },
     )
+    if (revokeResult.revoked) {
+      restoreOrClearJournalForScope({
+        preservedForeignEntry,
+        server,
+        userId: initialUser.id,
+        username: canonicalUsername,
+        now,
+        storage,
+      })
+    }
     throw createAuthProvisioningError("Failed to persist verified API key session", {
       code: "STORE_AUTH_FAILED",
       stage: "store-auth",
@@ -484,6 +1002,16 @@ const executeProvisionDedicatedApiKeySession = async (
       secrets: allSecrets,
     })
   }
+
+  // Clear journal ONLY after committed success
+  restoreOrClearJournalForScope({
+    preservedForeignEntry,
+    server,
+    userId: initialUser.id,
+    username: canonicalUsername,
+    now,
+    storage,
+  })
 
   return {
     status: "authenticated",
@@ -525,6 +1053,9 @@ export const migrateLegacyPasswordSession = async ({
   rawFetch = ofetch.raw,
   checkCompatibility = checkMinifluxCompatibility,
   commitSession = startSession,
+  now,
+  journalTtlMs,
+  storage,
   signal,
 } = {}) => {
   const normalizedAuth = normalizeAuthValue(auth)
@@ -540,6 +1071,9 @@ export const migrateLegacyPasswordSession = async ({
     rawFetch,
     checkCompatibility,
     commitSession,
+    now,
+    journalTtlMs,
+    storage,
     signal,
   })
 }
