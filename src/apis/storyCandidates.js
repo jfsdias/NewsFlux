@@ -1,5 +1,6 @@
 import {
   STORY_CANDIDATE_K,
+  STORY_EMBEDDING_DIGEST,
   STORY_RERANKER_REVISION,
   createStoryCandidateRequest,
   normalizeStoryCandidateResponse,
@@ -12,6 +13,7 @@ const emptyResponse = () =>
     candidates: [],
     model: {
       candidate_k: STORY_CANDIDATE_K,
+      embedding_digest: STORY_EMBEDDING_DIGEST,
       reranker_revision: STORY_RERANKER_REVISION,
     },
   })
