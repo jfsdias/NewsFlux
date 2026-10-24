@@ -20,3 +20,30 @@
   justify-content: center;
   gap: 12px;
 }
+
+.legacy-auth-migration-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.legacy-auth-migration-alert {
+  max-width: 480px;
+  text-align: left;
+}
+
+.legacy-auth-migration-consent {
+  max-width: 480px;
+  text-align: left;
+}
+
+.legacy-auth-migration-consent .arco-checkbox {
+  display: flex;
+  align-items: flex-start;
+  line-height: 1.45;
+}
+
+.legacy-auth-migration-consent .arco-checkbox-mask-wrapper {
+  margin-top: 2px;
+}

@@ -25,7 +25,13 @@
     "need_help": "ヘルプが必要ですか？",
     "miniflux_official_website": "Miniflux 公式サイトへ",
     "error": "ログインに失敗しました",
-    "invalid_identity": "サーバーから無効なユーザー情報が返されました。"
+    "invalid_identity": "サーバーから無効なユーザー情報が返されました。",
+    "api_key_consent_label": "パスワードをローカルに保存せず、この端末専用の Miniflux API キーを作成する",
+    "api_key_consent_required": "パスワードでログインする前に、NewsFlux が専用の Miniflux API キーを作成することに同意してください。",
+    "api_key_migration_title": "保存されたパスワードを専用 API キーへ移行",
+    "api_key_migration_description": "現在のセッションでは Miniflux のパスワードがローカルストレージに保存されています。確認の上、この環境専用の Miniflux API キーを作成し、/v1/me で検証した後に保存済みパスワードを削除します。",
+    "api_key_migration_action": "専用 API キーを作成",
+    "api_key_provisioning_error": "専用の Miniflux API キーを作成または検証できませんでした。既存の認証情報は保持されています。"
   },
   "compatibility": {
     "checking": "Miniflux の互換性を確認中…",

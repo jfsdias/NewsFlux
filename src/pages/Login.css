@@ -27,6 +27,20 @@
   margin-bottom: 20px;
 }
 
+.login-api-key-consent {
+  margin-top: 8px;
+}
+
+.login-api-key-consent .arco-checkbox {
+  display: flex;
+  align-items: flex-start;
+  line-height: 1.45;
+}
+
+.login-api-key-consent .arco-checkbox-mask-wrapper {
+  margin-top: 2px;
+}
+
 .login-help {
   display: flex;
   margin-top: 40px;
