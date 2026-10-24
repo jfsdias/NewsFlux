@@ -1,6 +1,6 @@
 # PWA-01A — Cross-Platform Installability & Provisional Decision Package
 
-**Status:** Draft Implementation + Decision Package (`PWA_01A_INSTALLABILITY`)  
+**Status:** Draft Implementation + Decision Package (`PWA_01A_INSTALLABILITY`)
 **Scope:** Web App Manifest (`manifest.webmanifest`), iOS/iPadOS standalone metadata (`index.html`), and separated `any` / `maskable` icon assets (`public/`).
 
 ---
