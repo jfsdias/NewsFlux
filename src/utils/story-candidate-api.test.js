@@ -21,6 +21,8 @@ const entries = [
   },
 ]
 
+const unavailableFetch = async () => ({ ok: false, status: 503 })
+
 test("posts only minimal article metadata to the same-origin rank endpoint", async () => {
   const calls = []
   const fetchImpl = async (...args) => {
@@ -55,7 +57,5 @@ test("posts only minimal article metadata to the same-origin rank endpoint", asy
 })
 
 test("throws on service failure so Home can fail open without changing its projection", async () => {
-  const fetchImpl = async () => ({ ok: false, status: 503 })
-
-  await assert.rejects(() => getStoryCandidates(entries, { fetchImpl }), /503/)
+  await assert.rejects(() => getStoryCandidates(entries, { fetchImpl: unavailableFetch }), /503/)
 })
