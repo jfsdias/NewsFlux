@@ -102,14 +102,16 @@
 }
 
 .sidebar-expanded .unread-count,
-.sidebar-expanded .item-count {
+.sidebar-expanded .item-count,
+.custom-menu-link .item-count {
   flex: none;
   margin-left: 8px;
   width: auto;
 }
 
 .sidebar-expanded .category-title > :first-child,
-.sidebar-expanded .custom-menu-item > :first-child {
+.sidebar-expanded .custom-menu-item > :first-child,
+.custom-menu-link .custom-menu-item > :first-child {
   flex: 1 1 auto;
   min-width: 0;
   width: auto !important;
