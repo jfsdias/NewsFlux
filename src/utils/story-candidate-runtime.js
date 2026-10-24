@@ -1,20 +1,27 @@
-import { getStoryCandidates } from "../apis/storyCandidates.js"
-import {
-  resetStoryCandidateState,
-  setStoryCandidateFailed,
-  setStoryCandidatePending,
-  setStoryCandidateReady,
-} from "../store/storyCandidateState.js"
+// Node's direct contract tests require explicit sibling extensions.
+// eslint-disable-next-line import/extensions
+import { getStoryCandidates } from "./story-candidate-api.js"
+// eslint-disable-next-line import/extensions
 import {
   createStoryCandidateGeneration,
   failStoryCandidateGeneration,
   invalidateStoryCandidateGeneration,
   resolveStoryCandidateGeneration,
 } from "./story-candidate-generation.js"
+// eslint-disable-next-line import/extensions
 import {
-  STORY_CANDIDATE_ENTRY_LIMIT,
   createStoryCandidateRequest,
+  STORY_CANDIDATE_ENTRY_LIMIT,
 } from "./story-candidate-request.js"
+
+const noop = () => {}
+
+const generationContext = (current) => ({
+  generationId: current.generationId,
+  requestKey: current.requestKey,
+  identityKey: current.identityKey,
+  sessionRevision: current.sessionRevision,
+})
 
 const validTargetCount = (content) => {
   const total = Number(content?.total)
@@ -30,28 +37,21 @@ const isHomeSnapshotReady = (content) =>
   !content?.articleListError &&
   Array.isArray(content?.entries)
 
-export const startHomeStoryCandidateRuntime = ({
+const startHomeStoryCandidateRuntime = ({
   contentStore,
   identityKey,
   sessionRevision,
   getCandidates = getStoryCandidates,
-  onPending = setStoryCandidatePending,
-  onReady = setStoryCandidateReady,
-  onFailed = setStoryCandidateFailed,
-  onDispose = resetStoryCandidateState,
+  onPending = noop,
+  onReady = noop,
+  onFailed = noop,
+  onDispose = noop,
 }) => {
   let disposed = false
   let generation = null
   let generationSequence = 0
   let completedRequestKey = null
   let abortController = null
-
-  const currentContext = (current) => ({
-    generationId: current.generationId,
-    requestKey: current.requestKey,
-    identityKey: current.identityKey,
-    sessionRevision: current.sessionRevision,
-  })
 
   const invalidatePending = () => {
     if (generation?.status === "pending") {
@@ -97,14 +97,14 @@ export const startHomeStoryCandidateRuntime = ({
     )
       .then((response) => {
         if (disposed || generation?.generationId !== nextGeneration.generationId) {
-          return
+          return null
         }
         const resolved = resolveStoryCandidateGeneration(generation, {
-          ...currentContext(nextGeneration),
+          ...generationContext(nextGeneration),
           candidates: response.candidates,
         })
         if (resolved === generation && resolved.status !== "ready") {
-          return
+          return null
         }
         generation = resolved
         completedRequestKey = nextGeneration.requestKey
@@ -116,6 +116,7 @@ export const startHomeStoryCandidateRuntime = ({
           candidates: response.candidates,
           model: response.model,
         })
+        return null
       })
       .catch((error) => {
         if (
@@ -123,16 +124,17 @@ export const startHomeStoryCandidateRuntime = ({
           error?.name === "AbortError" ||
           generation?.generationId !== nextGeneration.generationId
         ) {
-          return
+          return null
         }
-        const failed = failStoryCandidateGeneration(generation, currentContext(nextGeneration))
+        const failed = failStoryCandidateGeneration(generation, generationContext(nextGeneration))
         if (failed === generation && failed.status !== "failed") {
-          return
+          return null
         }
         generation = failed
         completedRequestKey = nextGeneration.requestKey
         abortController = null
         onFailed({ requestKey: nextGeneration.requestKey, identityKey, sessionRevision })
+        return null
       })
   }
 
@@ -151,3 +153,5 @@ export const startHomeStoryCandidateRuntime = ({
     },
   }
 }
+
+export default startHomeStoryCandidateRuntime
