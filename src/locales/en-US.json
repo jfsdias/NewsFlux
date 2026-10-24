@@ -100,7 +100,7 @@
     "logout_confirm": "Confirm Logout",
     "logout_description": "Are you sure you want to logout? This action cannot be undone.",
     "unread_count_aria": "%{label}, %{count} unread",
-    "items_count_aria": "%{label}, %{count} items"
+    "items_count_aria": "%{label}, %{count} item |||| %{label}, %{count} items"
   },
   "about": {
     "title": "About",

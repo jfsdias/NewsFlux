@@ -102,10 +102,14 @@ export const formatNavigationCountLabel = (
     return polyglot.t(phraseKey, {
       label: safeLabel,
       count: normalizedCount,
+      smart_count: normalizedCount,
     })
   }
 
-  return countType === "items"
-    ? `${safeLabel}, ${normalizedCount} items`
-    : `${safeLabel}, ${normalizedCount} unread`
+  if (countType === "items") {
+    const unit = normalizedCount === 1 ? "item" : "items"
+    return `${safeLabel}, ${normalizedCount} ${unit}`
+  }
+
+  return `${safeLabel}, ${normalizedCount} unread`
 }

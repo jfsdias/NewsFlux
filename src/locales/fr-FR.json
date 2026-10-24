@@ -99,8 +99,8 @@
     "settings_reset_description": "Êtes-vous sûr de vouloir réinitialiser vos paramètres ? Cette action est irréversible.",
     "logout_confirm": "Confirmer la déconnexion",
     "logout_description": "Êtes-vous sûr de vouloir vous déconnecter ? Cette action est irréversible.",
-    "unread_count_aria": "%{label}, %{count} non lus",
-    "items_count_aria": "%{label}, %{count} éléments"
+    "unread_count_aria": "%{label}, %{count} non lu |||| %{label}, %{count} non lus",
+    "items_count_aria": "%{label}, %{count} élément |||| %{label}, %{count} éléments"
   },
   "about": {
     "title": "À propos",

@@ -100,7 +100,7 @@
     "logout_confirm": "Ausloggen bestätigen",
     "logout_description": "Sicher, dass sich ausgeloggt werden soll? Diese Aktion kann nicht rückgängig gemacht werden.",
     "unread_count_aria": "%{label}, %{count} ungelesen",
-    "items_count_aria": "%{label}, %{count} Einträge"
+    "items_count_aria": "%{label}, %{count} Eintrag |||| %{label}, %{count} Einträge"
   },
   "about": {
     "title": "Über",

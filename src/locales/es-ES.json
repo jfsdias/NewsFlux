@@ -100,7 +100,7 @@
     "logout_confirm": "Confirmar el cierre de sesión",
     "logout_description": "¿Está seguro de que desea cerrar sesión? Esta acción no se puede deshacer.",
     "unread_count_aria": "%{label}, %{count} sin leer",
-    "items_count_aria": "%{label}, %{count} elementos"
+    "items_count_aria": "%{label}, %{count} elemento |||| %{label}, %{count} elementos"
   },
   "about": {
     "title": "Acerca de",
