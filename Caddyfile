@@ -2,6 +2,13 @@
 
 root * /srv
 
+# Story candidate ranking is an optional stateless sidecar. The React client is
+# fail-open, so an unavailable upstream must not change the existing Home
+# projection. The deployment may override this without rebuilding the app.
+handle_path /api/story-candidates/* {
+	reverse_proxy {$STORY_RANKER_UPSTREAM:story-ranker:8787}
+}
+
 @staticFiles file {path} {path}/
 handle @staticFiles {
 	file_server
