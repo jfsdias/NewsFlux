@@ -8,9 +8,15 @@ import { polyglotState } from "@/hooks/useLanguage"
 import { contentState } from "@/store/contentState"
 import { dataState } from "@/store/dataState"
 import { homeIdentityState } from "@/store/homePageState"
+import {
+  resetStoryCandidateState,
+  setStoryCandidateFailed,
+  setStoryCandidatePending,
+  setStoryCandidateReady,
+} from "@/store/storyCandidateState"
 import { projectRecentEntries } from "@/utils/home-editorial-projection"
 import { getHomeIdentityKey } from "@/utils/home-page"
-import { startHomeStoryCandidateRuntime } from "@/utils/story-candidate-runtime"
+import startHomeStoryCandidateRuntime from "@/utils/story-candidate-runtime"
 
 import "@/components/Article/ArticleList.css"
 
@@ -31,12 +37,16 @@ const HomeRecent = ({
 
   useEffect(() => {
     if (!STORY_CANDIDATE_RANKING_ENABLED) {
-      return undefined
+      return
     }
     const runtime = startHomeStoryCandidateRuntime({
       contentStore: contentState,
       identityKey,
       sessionRevision,
+      onPending: setStoryCandidatePending,
+      onReady: setStoryCandidateReady,
+      onFailed: setStoryCandidateFailed,
+      onDispose: resetStoryCandidateState,
     })
     return () => runtime.dispose()
   }, [identityKey, sessionRevision])
