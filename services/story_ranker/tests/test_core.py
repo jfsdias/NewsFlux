@@ -28,7 +28,7 @@ class StoryRankerCoreTests(unittest.TestCase):
     def test_filters_same_feed_and_pairs_outside_168_hours(self):
         entries = [
             {"id": 1, "feed_id": 10, "published_at": "2026-10-20T00:00:00Z", "title": "A"},
-            {"id": 2, "feed_id": 10, "published_at": "2026-10-20T01:00:00Z", "title": "B"},
+            {"id": 2, "feed_id": 10, "published_at": "2026-10-28T00:00:00Z", "title": "B"},
             {"id": 3, "feed_id": 20, "published_at": "2026-10-20T02:00:00Z", "title": "C"},
             {"id": 4, "feed_id": 30, "published_at": "2026-10-28T01:00:01Z", "title": "D"},
         ]
@@ -73,7 +73,7 @@ class StoryRankerCoreTests(unittest.TestCase):
         self.assertEqual(len(result), 2)
         self.assertEqual(len(reranker.calls), 2)
         self.assertEqual(reranker.calls[1], [(b, a) for a, b in reranker.calls[0]])
-        # Means are 4.0 and 6.0, so the second lexical candidate must become rank 1.
+        # Means are 4.0 and 6.0, so the second embedding candidate must become rank 1.
         self.assertEqual(result[0]["reranker_score"], 6.0)
         self.assertEqual(result[0]["rank"], 1)
         self.assertEqual(result[1]["reranker_score"], 4.0)
