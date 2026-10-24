@@ -80,3 +80,32 @@ export const getCurrentZeroUnreadSource = (
     ) ?? null
   )
 }
+
+export const formatNavigationCountLabel = (
+  label,
+  count,
+  { countType = "unread", polyglot, showZero = false } = {},
+) => {
+  const safeLabel = typeof label === "string" ? label : ""
+  const numericCount = Number(count)
+  const hasVisibleCount =
+    Number.isFinite(numericCount) && (numericCount > 0 || (showZero && numericCount === 0))
+
+  if (!hasVisibleCount) {
+    return safeLabel
+  }
+
+  const normalizedCount = Math.max(0, Math.trunc(numericCount))
+  if (polyglot && typeof polyglot.t === "function") {
+    const phraseKey =
+      countType === "items" ? "sidebar.items_count_aria" : "sidebar.unread_count_aria"
+    return polyglot.t(phraseKey, {
+      label: safeLabel,
+      count: normalizedCount,
+    })
+  }
+
+  return countType === "items"
+    ? `${safeLabel}, ${normalizedCount} items`
+    : `${safeLabel}, ${normalizedCount} unread`
+}
