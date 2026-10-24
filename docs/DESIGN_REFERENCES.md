@@ -202,10 +202,10 @@ Caveat: screenshots show one moment of NNW's own platform conventions (AppKit/UI
 
 - Questions: Q1 at which widths does the reader measure fall below the accepted floor with a persistent list; Q2 how NNW and comparable apps degrade across widths; Q3 which interactions (next-unread, mark-read, search) benefit from co-visibility; Q4 what breaks for focus return, `READER-KEY-01` Escape, deep links and back navigation; Q5 impact on Fold/tablet if the same code paths serve both; Q6 cost in state/persistence (must be none); Q7 what falsifies the idea; Q8 what real-device evidence would be required.
 - Inputs: the existing `docs/research/` archive, `NEWSFLUX_DESIGN_DIRECTION_V1.md`, `NEWSFLUX_NAV_VISUAL_01.md`, layout code, NNW's public source and help.
-- Deliverable: a labeled research document under `docs/research/` with a falsification attempt and a recommendation; **no product change, no screenshots committed**.
+- Deliverable: a labeled research document under `docs/research/` or `docs/` with a falsification attempt and a recommendation; **no product change, no screenshots committed**. Completed study: [`NNW05_MULTIPANE_REFERENCE_STUDY.md`](./NNW05_MULTIPANE_REFERENCE_STUDY.md).
 - Constraint: findings do not authorize implementation; the PM decides.
 
-**Gates (for any future follow-up, not for the research):** `884×1104` must remain single-pane; no persistent layout state without architecture approval; all prior reader and navigation gates.
+**Gates (for any future follow-up, not for the research):** `884×1104` must remain single-pane; no persistent layout state without architecture approval; all prior reader and navigation gates. Detailed gates defined in [`NNW05_MULTIPANE_REFERENCE_STUDY.md`](./NNW05_MULTIPANE_REFERENCE_STUDY.md#9-future-implementation--performance-gates).
 
 ## 5. Cross-cutting constraints
 
