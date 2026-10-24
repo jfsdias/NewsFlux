@@ -33,6 +33,7 @@ test("posts only minimal article metadata to the same-origin rank endpoint", asy
         ],
         model: {
           candidate_k: 250,
+          embedding_digest: "ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50eb581914a15621d",
           reranker_revision: "e61197ed45024b0ed8a2d74b80b4d909f1255473",
         },
       }),
