@@ -6,9 +6,16 @@ import test from "node:test"
 const requestModule = await import("./story-candidate-request.js")
 const {
   STORY_CANDIDATE_ENTRY_LIMIT,
+  STORY_EMBEDDING_DIGEST,
   createStoryCandidateRequest,
   normalizeStoryCandidateResponse,
 } = requestModule
+
+const MODEL = {
+  candidate_k: 250,
+  embedding_digest: "ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50eb581914a15621d",
+  reranker_revision: "e61197ed45024b0ed8a2d74b80b4d909f1255473",
+}
 
 const entry = (overrides = {}) => ({
   id: 10,
@@ -28,6 +35,7 @@ test("normalizes Home entries to the minimal story-ranking contract", () => {
   ])
 
   assert.equal(STORY_CANDIDATE_ENTRY_LIMIT, 200)
+  assert.equal(STORY_EMBEDDING_DIGEST, MODEL.embedding_digest)
   assert.deepEqual(request.entries, [
     {
       id: 9,
@@ -80,8 +88,20 @@ test("rejects response fields that could silently turn ranking into identity dec
             same_story: true,
           },
         ],
+        model: MODEL,
       }),
     /identity decision/i,
+  )
+})
+
+test("rejects model provenance drift", () => {
+  assert.throws(
+    () =>
+      normalizeStoryCandidateResponse({
+        candidates: [],
+        model: { ...MODEL, embedding_digest: "different" },
+      }),
+    /model contract mismatch/i,
   )
 })
 
@@ -96,10 +116,7 @@ test("accepts ranked pairs only and freezes the normalized response", () => {
         reranker_score: 2.1,
       },
     ],
-    model: {
-      candidate_k: 250,
-      reranker_revision: "e61197ed45024b0ed8a2d74b80b4d909f1255473",
-    },
+    model: MODEL,
   })
 
   assert.deepEqual(normalized.candidates, [
@@ -111,6 +128,11 @@ test("accepts ranked pairs only and freezes the normalized response", () => {
       rerankerScore: 2.1,
     },
   ])
+  assert.deepEqual(normalized.model, {
+    candidateK: 250,
+    rerankerRevision: MODEL.reranker_revision,
+    embeddingDigest: MODEL.embedding_digest,
+  })
   assert.equal(Object.isFrozen(normalized), true)
   assert.equal(Object.isFrozen(normalized.candidates), true)
 })
