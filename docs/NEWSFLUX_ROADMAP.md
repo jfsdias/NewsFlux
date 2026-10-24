@@ -1,16 +1,16 @@
 # NewsFlux Roadmap
 
-- **Status:** canonical roadmap reconciled after PR #114; current state and sequencing are in Section 21.
+- **Status:** canonical roadmap reconciled after PR #120 and UPSTREAM_AUDIT_02; current state and sequencing are in Section 22.
 - **Created:** 2026-10-15.
 - **Last reconciled:** 2026-10-24.
-- **Reconciled against (current):** GitHub `main` at `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9`; production deployed and verified live via read-only SSH at `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9`. Main/production parity is **YES**.
+- **Reconciled against (current):** GitHub `main` at `4c91f25f0ac92c9806f31ea7b766d28d22eb0d28`. The owner-reported production baseline remains `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9`; main/production SHA parity is **NO**, while there is no application runtime delta since production and PRs #118–#120 require no deployment.
 - **Previously reconciled against (historical, post-PR #108):** GitHub `main` at `bc9f175a3447a67b06d7deee12c6e19374bb7664`; production at `bc9f175a3447a67b06d7deee12c6e19374bb7664`. The earlier post-PR #96 snapshot and prior states are preserved below; see Sections 19 and 20.
 - **Purpose:** preserve completed work, accepted findings, sequencing, architecture/product gates, upstream baseline, and the next recommended action without turning the roadmap into implementation authorization.
 - **Related planning documents:** [`PWA_ARCHITECTURE.md`](./PWA_ARCHITECTURE.md) (PWA Foundation architecture contract) and [`DESIGN_REFERENCES.md`](./DESIGN_REFERENCES.md) (NetNewsWire UX research track). Both are planning documents and authorize no implementation.
 
 This document is the canonical **roadmap**, not an implementation authorization. Detailed design decisions remain in the dedicated design documents and implementation plans remain in `docs/superpowers/plans/` where present.
 
-For present execution status, current PRs and audit outcomes, Section 21 is authoritative. Earlier status tables and snapshots, including Sections 18, 19 and 20, are retained as historical records; they do not override Section 21.
+For present execution status, current PRs and audit outcomes, Section 22 is authoritative. Earlier status tables and snapshots, including Sections 18–21, are retained as historical records; they do not override Section 22.
 
 No roadmap item may bypass project governance: one identifiable purpose per PR; no merge without explicit user authorization; no blind upstream sync; upstream sync, redesign and functional changes stay isolated; incidental findings are reported, classified and routed to backlog; no new persistent NewsFlux state without an explicit architecture decision; and no incidental scope expansion.
 
@@ -1409,7 +1409,7 @@ PRODUCTION_MUTATIONS=NO
 
 ---
 
-## 21. Current canonical state: post-PR #114 (2026-10-24)
+## 21. Historical canonical state: post-PR #114 (2026-10-24; superseded by Section 22)
 
 GitHub `main` is `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9` after PR #114 merged. Production has been deployed and verified live via read-only SSH container inspection to the same commit (`newsflux-local:bf1f911f0e2d`, OCI revision `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9`, image ID `sha256:368310dd4e8080571eb8ab72500cce4b6ac27524f4c04e891bc7d45295b8ba2f`, canonical compose SHA `8cac8c8c2a9ceecdbd5f9cad4a3b026b3e65bb6024fc88123e41843b4549a8f4`, container `newsflux`, 0 restarts, internal HTTP 200, public root HTTP 200 at `https://news.jfsdias.ddns.net/`, public `/all` SPA fallback HTTP 200, PWA manifest HTTP 200, static 404 canary HTTP 404, story ranker port 8000 absent). Main and production are in full parity (`MAIN_PRODUCTION_PARITY=YES`). Prior to this reconciliation PR (#118, currently Draft), there were zero open pull requests on GitHub (`OPEN_PRS_BEFORE_RECONCILIATION=NONE`, `OPEN_OTHER_PRS=NONE`). PR #118 is expected to close upon merge, restoring a clean queue.
 
@@ -1532,3 +1532,97 @@ PRODUCTION_MUTATIONS=NO
 - **Glass Restricted to Chrome:** Glassmorphism and translucent tokens apply solely to navigation bars, headers, and floating chrome. Reader cards, article text, and content views remain solid and fully opaque.
 - **Single-Pane-First:** Phone, tablet, and foldable devices maintain single-pane-first presentation. Multi-pane layouts are restricted to wide desktop landscape screens.
 - **Exact-SHA Deployments:** Production is updated strictly with verified exact OCI revision hashes, never moving branch tags or `latest`.
+
+---
+
+## 22. Current canonical state: post-UPSTREAM_AUDIT_02 and PR #120 (2026-10-24)
+
+This section supersedes the historical post-PR #114 state in Section 21. Live GitHub checks on 2026-10-24 found `main` at `4c91f25f0ac92c9806f31ea7b766d28d22eb0d28` and no open PRs before this documentation reconciliation. Production remains at the owner-reported PR #114 runtime baseline; production was not re-inspected or modified by this documentation task.
+
+```text
+GITHUB_MAIN=4c91f25f0ac92c9806f31ea7b766d28d22eb0d28
+PRODUCTION_SHA=bf1f911f0e2d405dbf84a04414a04cc0bc6530c9
+PRODUCTION_IMAGE=newsflux-local:bf1f911f0e2d
+PRODUCTION_IMAGE_ID=sha256:368310dd4e8080571eb8ab72500cce4b6ac27524f4c04e891bc7d45295b8ba2f
+PRODUCTION_COMPOSE_SHA=8cac8c8c2a9ceecdbd5f9cad4a3b026b3e65bb6024fc88123e41843b4549a8f4
+PRODUCTION_STATE_SOURCE=OWNER_REPORTED_EXACT_SHA_HANDOFF
+PRODUCTION_STATE=UNCHANGED_INTENTIONALLY
+MAIN_PRODUCTION_SHA_PARITY=NO
+APPLICATION_RUNTIME_DELTA_SINCE_PRODUCTION=NO
+DEPLOYMENT_REQUIRED_FOR_PRS_118_119_120=NO
+
+PR118_STATUS=MERGED_DOCUMENTATION
+PR118_MERGE_SHA=27ace63bf524304fe28b9fffb61e3da049c5a6a8
+PR119_STATUS=MERGED_UPSTREAM_INTEGRATE
+PR119_MERGE_SHA=aed1459f2546fd987718723ab11293793a7afa13
+PR120_STATUS=MERGED_UPSTREAM_ADAPT
+PR120_MERGE_SHA=4c91f25f0ac92c9806f31ea7b766d28d22eb0d28
+
+UPSTREAM_AUDIT_02=COMPLETE_ACCEPTED
+UPSTREAM_LAST_REVIEWED_BEFORE=3b2b08fb6036ef94f92a757ac6f3df889be8515c
+UPSTREAM_LAST_REVIEWED_AFTER=f4dfd1c9999d1d72a1164d7fbbe08da972e4ab1b
+UPSTREAM_CURRENT_MAIN=f4dfd1c9999d1d72a1164d7fbbe08da972e4ab1b
+UNREVIEWED_UPSTREAM_COMMITS_AFTER_AUDIT=0
+UPSTREAM_COMMITS_REVIEWED=13
+LAST_INTEGRATED_UPSTREAM_SHA=3b2b08fb6036ef94f92a757ac6f3df889be8515c
+
+LATEST_RUNTIME_DEPLOYED_TRACK=PWA-01A / PR #114
+LATEST_MERGED_TRACK=UPSTREAM_AUDIT_02_ACTIONABLE_INTEGRATIONS / PR #120
+LAST_COMPLETED_TRACK=UPSTREAM_AUDIT_02_ACTIONABLE_INTEGRATIONS / PR #120
+CURRENT_PHASE=POST_UPSTREAM_AUDIT_02_CANONICAL_RECONCILIATION
+RECOMMENDED_NEXT_TRACK=PWA-VAL-01_RUNTIME_DEVICE_VALIDATION (EVIDENCE_ONLY; PM PRIORITIZATION REQUIRED)
+IMPLEMENTATION_AUTHORIZED=NO
+MERGE_AUTHORIZED=NO
+DEPLOY_AUTHORIZED=NO
+```
+
+### UPSTREAM_AUDIT_02 outcome
+
+The PM accepted the formal review of 13 commits from `3b2b08fb6036ef94f92a757ac6f3df889be8515c` through the live upstream `main` at `f4dfd1c9999d1d72a1164d7fbbe08da972e4ab1b`. Live upstream `main` remained at that reviewed SHA; there are zero unreviewed commits after the audit. The reviewed frontier is not the integrated code frontier: `LAST_INTEGRATED_UPSTREAM_SHA` remains `3b2b08fb...`.
+
+| Classification | Upstream commit(s)                                                                                                                                                                                                                                                                                                                                             | Disposition                                                                                                                                                                                                          |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| INTEGRATE (1)  | `df1690e454ef62b6d3fe143c2f17595eb4d1842b`                                                                                                                                                                                                                                                                                                                     | Implemented by PR #119 (`aed1459f2546fd987718723ab11293793a7afa13`); font failure-report comments now use `GITHUB_REPOSITORY`.                                                                                       |
+| ADAPT (1)      | `d55916e8f8e67474bc500d6a01abcbdcb7d18eb8`                                                                                                                                                                                                                                                                                                                     | Adapted by PR #120 (`4c91f25f0ac92c9806f31ea7b766d28d22eb0d28`); preserves restricted Docker GHA cache exports, fatal build/push errors and existing provenance/publishing authorization.                            |
+| SKIP (3)       | `2edb62a1c1156cae9f51a119cd16625be8756470`; `bb4c2c0c318cc6d8fee68026a133ec8db2b0a4fc`; `8b38b1b0c779da34fec5278bb301a082c54ffd9a`                                                                                                                                                                                                                             | Knip is dev-tooling maintenance outside sync scope; Dependabot grouping and `--ignore-scripts` are already covered in NewsFlux.                                                                                      |
+| HOLD (8)       | `28bb8d625bde098f0c6a0f163a77beffb441ca9f`; `ece96d8a2739f3fa4d5c3372caedeb7c96ad6b36`; `83fa55b7cc5a12b76a0a1dd1536eac5efa3f73b3`; `6920689085a76ccb6b904bdd431aae8a313cc75d`; `ff0357fd07f5fd79bebdd0fe697bf31b0ac9efd1`; `77973ed1f655089433edb7c1beef39d57179a150`; `5f9507b93b2cf61d9f5d0a7eef99fe6bd98a2170`; `f4dfd1c9999d1d72a1164d7fbbe08da972e4ab1b` | React 19.3.1, ReactDOM 19.3.1, PostCSS 8.5.31, Virtua 0.53.6, html-react-parser 6.1.9, Vite 8.3.5, React Router 8.5.0 and Framer Motion 14.6.0 remain separate dependency regressions; no bulk update is authorized. |
+
+### Production and merged PR state
+
+| PR   | Current result                                                          | Runtime effect                                       |
+| ---- | ----------------------------------------------------------------------- | ---------------------------------------------------- |
+| #118 | Merged documentation at `27ace63bf524304fe28b9fffb61e3da049c5a6a8`      | Documentation only; no application runtime change.   |
+| #119 | Merged upstream INTEGRATE at `aed1459f2546fd987718723ab11293793a7afa13` | GitHub font workflow only; no deployment required.   |
+| #120 | Merged upstream ADAPT at `4c91f25f0ac92c9806f31ea7b766d28d22eb0d28`     | GitHub deploy workflow only; no deployment required. |
+
+Production remains `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9` (`newsflux-local:bf1f911f0e2d`, image ID `sha256:368310dd4e8080571eb8ab72500cce4b6ac27524f4c04e891bc7d45295b8ba2f`, compose SHA `8cac8c8c2a9ceecdbd5f9cad4a3b026b3e65bb6024fc88123e41843b4549a8f4`). These exact production identifiers are from the owner-reported handoff, not a fresh server inspection. The main/production SHA parity is NO, but there is no application runtime delta since production because the intervening main commits were documentation and workflow-only. No catch-up deploy is required for #118–#120; production intentionally remains unchanged.
+
+### Current product baseline and holds
+
+- **PWA:** PWA-01A / PR #114 is complete, merged and deployed; D1/D2/D3 are approved and the real-device D3 gate passed. PWA-03A update safety/recovery is complete in the deployed baseline. PWA-VAL-01 remains a planned evidence-only device/runtime validation; PWA-02 stays defect-driven. This roadmap does not authorize implementation or promotion.
+- **Authentication:** AUTH_APIKEY_01 is complete, merged and deployed; manual token authentication remains supported and the consent/create/verify/store/drop-password/revoke lifecycle is preserved.
+- **Story:** ranking code is merged but runtime-disabled; production activation is not authorized. CPU acceptance is a proposed policy awaiting PM decision; recorded measurements do not constitute adoption or authorization.
+- **NNW/navigation:** NNW-05 research, NAV-02F determined slice and NNW-03/CHROME-01 determined slice are complete; unresolved product decisions remain held below.
+- **Source of truth:** Miniflux remains authoritative for feeds, categories, read and starred state. All/Unread remain chronological and predictable; no silent ranking. New persistent NewsFlux content state and ML personalization remain unauthorized.
+- **Open product holds:** wide-desktop multi-pane activation; automatic vs. opt-in mode; threshold; Home inclusion; unread category grouping; desktop Sidebar width; changing the `showUnreadFeedsOnly` default; visual count capping; FooterPanel/SearchAndSortBar consolidation; hiding Mark older as read on `/today`; mobile Sources drawer destination deduplication; Story production activation; new persistent content state; ML personalization.
+- **Open findings:** React 19 Arco `element.ref`; ResizeObserver loop; MOBILE_SCROLL_FLICKER_01; FooterPanel clipping; HOME_PAGINATION_CURSOR_STALL_01 (not reproduced after PR #87); Chrome Android three-button navigation bar; OLED system-bar canvas seam.
+
+### Docker publishing identity — separate architecture backlog
+
+`DOCKER_PUBLISHING_IDENTITY_01` is `BACKLOG_HOLD` (`HOLD_ARCHITECTURE_AUDIT_REQUIRED`). Publishing workflows still require the `electh/ReactFlux` repository identity and use `electh/reactflux` as the image destination, so publishing remains blocked for `jfsdias/NewsFlux`. A separate decision must establish whether NewsFlux wants GitHub/Docker Hub publishing given its self-hosted exact-SHA local-image production model. Do not enable publishing, change guards or destination, add credentials, or alter topology in this roadmap reconciliation.
+
+### Current next-track decision matrix
+
+The completed UPSTREAM_AUDIT_02 is removed from the ready/recommended queue. PWA-VAL-01 has precedence as an already-planned evidence-only validation stage: it can assess the deployed baseline without application changes, while PWA-03A is complete and PWA-02 is defect-driven. This recommendation is subject to PM prioritization, device availability and the existing runbook; it authorizes no implementation.
+
+| Candidate                            | Status                            | Gate / decision                                                                                                                                                | Recommended order              |
+| ------------------------------------ | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| PWA-VAL-01 runtime/device validation | PLANNED — evidence-only           | PM prioritization and physical-device availability; no code, deploy or inferred screen-reader PASS.                                                            | **Recommended next candidate** |
+| NAV-02F decisions                    | HOLD — product                    | Decide unread category grouping, Sidebar width, unread-only default and count capping.                                                                         | Later, after decisions         |
+| NNW-03 / CHROME-01 decisions         | HOLD — product                    | Decide structural FooterPanel/SearchAndSortBar consolidation and `/today` Mark older behavior.                                                                 | Later, after decisions         |
+| NNW-05 wide-desktop multi-pane       | HOLD — product                    | Decide activation, automatic vs. opt-in, threshold and Home inclusion.                                                                                         | Later, after decisions         |
+| Story activation                     | HOLD — product/evidence           | Runtime stays disabled; CPU acceptance policy remains proposed and PM-decision-required; complete activation evidence and explicit authorization are required. | No activation authorized       |
+| Eight upstream dependency updates    | HOLD — isolated regression slices | Assess each production/build/visual/lockfile impact independently.                                                                                             | No bulk update                 |
+| DOCKER_PUBLISHING_IDENTITY_01        | BACKLOG — architecture            | Decide whether to establish registry publishing before changing identity, guards, credentials or release topology.                                             | Unordered                      |
+
+The next step is a prioritization decision for PWA-VAL-01, not automatic execution. Every item remains subject to the project rules: one purpose per PR, no blind upstream sync, no new persistent state without architecture approval, and no merge without explicit user authorization.

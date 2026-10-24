@@ -1,12 +1,114 @@
 # NewsFlux Project State
 
 - **Purpose:** concise operational state for PM handoffs and future sessions. The roadmap remains the source for sequencing and product/architecture detail.
-- **Last reconciled:** 2026-10-24 (post-PR #114).
-- **Current snapshot:** GitHub `main` at `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9` (PR #114 merge). Production is deployed at `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9` (image `newsflux-local:bf1f911f0e2d`, container `newsflux`, verified live via read-only SSH); main and production are in full parity (`MAIN_PRODUCTION_PARITY=YES`).
-- **Previous snapshot (historical):** GitHub `main` at `bc9f175a3447a67b06d7deee12c6e19374bb7664` (PR #108 merge) on 2026-10-24; production was at `bc9f175a3447a67b06d7deee12c6e19374bb7664`. The earlier 2026-10-23, 2026-10-22 and 2026-10-21 snapshots are preserved below.
+- **Last reconciled:** 2026-10-24 (post-PR #120).
+- **Current snapshot:** GitHub `main` at `4c91f25f0ac92c9806f31ea7b766d28d22eb0d28`. Production remains at `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9`; literal main/production SHA parity is **NO**, while the intervening PRs #118–#120 introduced no application runtime delta and require no catch-up deployment.
+- **Previous snapshot (historical):** GitHub `main` at `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9` (PR #114 merge) on 2026-10-24; production was at the same SHA at that snapshot. The earlier post-PR #108 and 2026-10-23, 2026-10-22 and 2026-10-21 snapshots are preserved below.
 - **Related planning documents:** [`PWA_ARCHITECTURE.md`](./PWA_ARCHITECTURE.md) and [`DESIGN_REFERENCES.md`](./DESIGN_REFERENCES.md) (planning only; no implementation authorized).
 
-## Current state (post-PR #114, 2026-10-24)
+## Current state (post-PR #120, 2026-10-24)
+
+This is the authoritative project-state snapshot after the accepted UPSTREAM_AUDIT_02 and its isolated PR #118–#120 follow-through. GitHub `main` and open-PR inventory were checked live on 2026-10-24; `main` is `4c91f25f0ac92c9806f31ea7b766d28d22eb0d28`, and there were no open PRs before this documentation reconciliation. The production values below are the owner-reported exact-SHA handoff supplied for this reconciliation; production was not re-inspected or changed here.
+
+```text
+DOCS_DATE=2026-10-24
+GITHUB_MAIN=4c91f25f0ac92c9806f31ea7b766d28d22eb0d28
+OPEN_PRS_BEFORE_THIS_RECONCILIATION=NONE
+
+PRODUCTION_SHA=bf1f911f0e2d405dbf84a04414a04cc0bc6530c9
+PRODUCTION_IMAGE=newsflux-local:bf1f911f0e2d
+PRODUCTION_IMAGE_ID=sha256:368310dd4e8080571eb8ab72500cce4b6ac27524f4c04e891bc7d45295b8ba2f
+PRODUCTION_COMPOSE_SHA=8cac8c8c2a9ceecdbd5f9cad4a3b026b3e65bb6024fc88123e41843b4549a8f4
+PRODUCTION_STATE_SOURCE=OWNER_REPORTED_EXACT_SHA_HANDOFF
+PRODUCTION_STATE=UNCHANGED_INTENTIONALLY
+MAIN_PRODUCTION_SHA_PARITY=NO
+APPLICATION_RUNTIME_DELTA_SINCE_PRODUCTION=NO
+DEPLOYMENT_REQUIRED_FOR_PRS_118_119_120=NO
+PRODUCTION_MUTATIONS_IN_THIS_RECONCILIATION=NO
+
+PR118_STATUS=MERGED_DOCUMENTATION
+PR118_MERGE_SHA=27ace63bf524304fe28b9fffb61e3da049c5a6a8
+PR119_STATUS=MERGED_UPSTREAM_INTEGRATE
+PR119_MERGE_SHA=aed1459f2546fd987718723ab11293793a7afa13
+PR120_STATUS=MERGED_UPSTREAM_ADAPT
+PR120_MERGE_SHA=4c91f25f0ac92c9806f31ea7b766d28d22eb0d28
+
+UPSTREAM_AUDIT_02_STATUS=COMPLETE_ACCEPTED
+UPSTREAM_REVIEWED_FROM=3b2b08fb6036ef94f92a757ac6f3df889be8515c
+UPSTREAM_LAST_REVIEWED_SHA=f4dfd1c9999d1d72a1164d7fbbe08da972e4ab1b
+UPSTREAM_CURRENT_MAIN=f4dfd1c9999d1d72a1164d7fbbe08da972e4ab1b
+UNREVIEWED_UPSTREAM_COMMITS_AFTER_AUDIT=0
+UPSTREAM_COMMITS_REVIEWED=13
+UPSTREAM_CLASSIFICATION_COUNTS=INTEGRATE:1;ADAPT:1;SKIP:3;HOLD:8
+LAST_INTEGRATED_UPSTREAM_SHA=3b2b08fb6036ef94f92a757ac6f3df889be8515c
+
+LATEST_RUNTIME_DEPLOYED_TRACK=PWA-01A / PR #114
+LATEST_MERGED_TRACK=UPSTREAM_AUDIT_02_ACTIONABLE_INTEGRATIONS / PR #120
+CURRENT_PHASE=POST_UPSTREAM_AUDIT_02_CANONICAL_RECONCILIATION
+LAST_COMPLETED_TRACK=UPSTREAM_AUDIT_02_ACTIONABLE_INTEGRATIONS / PR #120
+RECOMMENDED_NEXT_TRACK=PWA-VAL-01_RUNTIME_DEVICE_VALIDATION (EVIDENCE_ONLY; PM PRIORITIZATION REQUIRED)
+IMPLEMENTATION_AUTHORIZED=NO
+MERGE_AUTHORIZED=NO
+DEPLOY_AUTHORIZED=NO
+```
+
+### PR #118–#120 disposition
+
+| PR   | Status                    | Merge SHA                                  | Scope and runtime consequence                                                                                                                                                  |
+| ---- | ------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| #118 | Merged documentation      | `27ace63bf524304fe28b9fffb61e3da049c5a6a8` | Canonical documentation reconciliation only; no application runtime change.                                                                                                    |
+| #119 | Merged upstream INTEGRATE | `aed1459f2546fd987718723ab11293793a7afa13` | `.github/workflows/font-update-auto-merge.yml`; uses `GITHUB_REPOSITORY` in the failure-report comment path; no deployment required.                                           |
+| #120 | Merged upstream ADAPT     | `4c91f25f0ac92c9806f31ea7b766d28d22eb0d28` | `.github/workflows/deploy-docker.yml`; preserves cache reads, narrows authorized cache exports and preserves fatal build/push failures and provenance; no deployment required. |
+
+The deployed application remains at PR #114's exact SHA. Main is ahead only through the documentation and GitHub workflow merges listed above; this is a literal SHA mismatch, not an application runtime delta. A deployment to “catch up” with #118, #119 or #120 is not required and was not performed.
+
+### UPSTREAM_AUDIT_02 accepted record
+
+The formal audit reviewed 13 commits from `3b2b08fb6036ef94f92a757ac6f3df889be8515c` through the live upstream `main` at `f4dfd1c9999d1d72a1164d7fbbe08da972e4ab1b`. Upstream `main` remained at that reviewed SHA on the final live check, so there are no unseen commits after the accepted range.
+
+- **INTEGRATE — `df1690e454ef62b6d3fe143c2f17595eb4d1842b`:** implemented by PR #119 (`aed1459f2546fd987718723ab11293793a7afa13`), replacing an undefined repository variable in the font failure-report comment endpoint.
+- **ADAPT — `d55916e8f8e67474bc500d6a01abcbdcb7d18eb8`:** adapted by PR #120 (`4c91f25f0ac92c9806f31ea7b766d28d22eb0d28`) to preserve NewsFlux's Docker publishing authorization and failure semantics while restricting cache-export behavior.
+- **SKIP (3):** `2edb62a1c1156cae9f51a119cd16625be8756470` (Knip maintenance outside sync scope); `bb4c2c0c318cc6d8fee68026a133ec8db2b0a4fc` and `8b38b1b0c779da34fec5278bb301a082c54ffd9a` (already covered by NewsFlux).
+- **HOLD (8 dependency updates):** React 19.3.1 (`28bb8d625bde098f0c6a0f163a77beffb441ca9f`), ReactDOM 19.3.1 (`ece96d8a2739f3fa4d5c3372caedeb7c96ad6b36`), PostCSS 8.5.31 (`83fa55b7cc5a12b76a0a1dd1536eac5efa3f73b3`), Virtua 0.53.6 (`6920689085a76ccb6b904bdd431aae8a313cc75d`), html-react-parser 6.1.9 (`ff0357fd07f5fd79bebdd0fe697bf31b0ac9efd1`), Vite 8.3.5 (`77973ed1f655089433edb7c1beef39d57179a150`), React Router 8.5.0 (`5f9507b93b2cf61d9f5d0a7eef99fe6bd98a2170`) and Framer Motion 14.6.0 (`f4dfd1c9999d1d72a1164d7fbbe08da972e4ab1b`). Each remains for an isolated dependency regression slice; no dependency bump is authorized by this reconciliation.
+
+`LAST_INTEGRATED_UPSTREAM_SHA=3b2b08fb6036ef94f92a757ac6f3df889be8515c` remains the integrated code frontier. The accepted audit's `f4dfd1c...` is the reviewed frontier, not an assertion that every reviewed commit was integrated.
+
+### Product baseline and preserved holds
+
+- **PWA:** PWA-01A / PR #114 is complete, merged and deployed; D1/D2/D3 are approved and the real-device D3 gate passed. PWA-03A update safety and its recovery slices are complete in the deployed PR #114 baseline. PWA-VAL-01 remains an evidence-only device/runtime validation candidate; PWA-02 remains defect-driven. This documentation authorizes neither implementation nor promotion.
+- **Auth:** AUTH_APIKEY_01 is complete, merged and deployed; manual token authentication remains supported and the consent/create/verify/store/drop-password/revoke lifecycle remains canonical.
+- **Story:** candidate-ranking code is merged but runtime-disabled; production activation is not authorized. CPU acceptance remains `PROPOSED_CPU_ACCEPTANCE_POLICY` and `PM_DECISION_REQUIRED`; measured evidence does not itself authorize activation.
+- **Source/navigation:** NNW-05 research, the NAV-02F determined slice and NNW-03/CHROME-01 determined slice are complete. Product decisions below remain held.
+- **Source of truth and ordering:** Miniflux remains authoritative for feeds, categories, read and starred status. All/Unread remain chronological and predictable; no silent ranking is allowed there. No new persistent NewsFlux content state without an explicit architecture decision.
+- **Existing product/architecture holds:** wide-desktop multi-pane activation; automatic vs. opt-in multi-pane; threshold and Home inclusion; unread category grouping; desktop Sidebar width changes; changing the `showUnreadFeedsOnly` default; Sidebar visual count capping; FooterPanel/SearchAndSortBar consolidation; hiding Mark older as read on `/today`; mobile Sources drawer destination deduplication; Story production activation; new persistent content state; and ML personalization.
+- **Dependency holds:** all eight dependency updates listed under the audit remain isolated and unapproved.
+- **Open findings retained:** React 19 Arco `element.ref`; ResizeObserver loop; MOBILE_SCROLL_FLICKER_01; FooterPanel clipping; HOME_PAGINATION_CURSOR_STALL_01 (not reproduced after PR #87); Chrome Android three-button navigation bar; OLED system-bar canvas seam.
+
+### Separate Docker publishing identity finding
+
+`DOCKER_PUBLISHING_IDENTITY_01` is `BACKLOG_HOLD` / `HOLD_ARCHITECTURE_AUDIT_REQUIRED`. The existing publishing workflows still guard for `electh/ReactFlux` and target `electh/reactflux`, so they do not enable publishing for `jfsdias/NewsFlux`. A future bounded architecture audit must decide whether a GitHub/Docker Hub publishing pipeline is wanted given production's self-hosted exact-SHA local-image model. Do not enable publishing, change repository guards or destination, add credentials, or alter release topology without that decision.
+
+### Next-track decision matrix
+
+The audit itself and the two selected workflow actions are complete. The next candidate is an already-planned, evidence-only PWA-VAL-01 runtime/device validation, subject to PM prioritization and physical-device availability. This is a recommendation for sequencing only; it grants no implementation authority. PWA-03A is complete, so it is not a pending implementation candidate.
+
+| Candidate                               | Current disposition             | Scope / decision                                                                                                                                                                         | Ordering                       |
+| --------------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| PWA-VAL-01 runtime/device validation    | Planned; evidence-only          | Validate the deployed PWA/runtime and physical-device behavior using the existing runbook; record unrun screen-reader gates honestly. PM prioritization required; no code or deployment. | **Recommended next candidate** |
+| NAV-02F unresolved decisions            | Hold — product                  | Unread grouping, Sidebar width, unread-only default and count presentation.                                                                                                              | After explicit decisions       |
+| NNW-03 / CHROME-01 unresolved decisions | Hold — product                  | FooterPanel/SearchAndSortBar consolidation and `/today` Mark older behavior.                                                                                                             | After explicit decisions       |
+| NNW-05 wide-desktop multi-pane          | Hold — product                  | Activation, automatic vs. opt-in, threshold and Home inclusion.                                                                                                                          | After explicit decisions       |
+| Story production activation             | Hold — product/evidence         | Runtime stays disabled; CPU acceptance is a proposed policy awaiting PM decision and complete activation evidence.                                                                       | No activation authorized       |
+| Dependency updates (8)                  | Hold — isolated regression work | One bounded dependency slice at a time; assess production, build, visual and lockfile impact.                                                                                            | No bulk update                 |
+| DOCKER_PUBLISHING_IDENTITY_01           | Backlog — architecture hold     | Decide whether registry publishing is desired before changing identity/guards/credentials/topology.                                                                                      | Unordered                      |
+
+`PWA-VAL-01` is recommended because it is already a planned validation stage and requires no application change; it is preferable to promoting a held product/architecture track without decisions. No implementation, merge or deployment is authorized.
+
+### Current PR inventory
+
+At the live pre-edit check, there were no open PRs. PR #118, #119 and #120 are closed by merge as recorded above. The Draft PR created for this documentation reconciliation will be the only new PR from this task.
+
+## Historical snapshot: post-PR #114 (2026-10-24; superseded by the current post-PR #120 state above)
 
 GitHub merge facts and production runtime state are verified live from the repository and read-only SSH container inspection. PR #114 is merged into `main` and promoted to production at SHA `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9`. The production container `newsflux` is running `newsflux-local:bf1f911f0e2d` with OCI revision `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9`, image ID `sha256:368310dd4e8080571eb8ab72500cce4b6ac27524f4c04e891bc7d45295b8ba2f`, compose configuration SHA `8cac8c8c2a9ceecdbd5f9cad4a3b026b3e65bb6024fc88123e41843b4549a8f4`, 0 restarts, internal HTTP 200, public root HTTP 200 (at `https://news.jfsdias.ddns.net/`), public `/all` SPA fallback HTTP 200, PWA webmanifest HTTP 200, and static 404 canary returning true 404. Story ranker port 8000 is absent and no story containers exist. Main and production have full parity (`MAIN_PRODUCTION_PARITY=YES`). Prior to this reconciliation PR (#118, currently Draft), there were zero open pull requests on GitHub (`OPEN_PRS_BEFORE_RECONCILIATION=NONE`, `OPEN_OTHER_PRS=NONE`). PR #118 is expected to close upon merge, restoring a clean queue.
 
