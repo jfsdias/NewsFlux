@@ -1,20 +1,17 @@
 // Node's direct contract tests require explicit sibling extensions.
-// eslint-disable-next-line import/extensions
-import { getStoryCandidates } from "./story-candidate-api.js"
-// eslint-disable-next-line import/extensions
+import { getStoryCandidates } from "./story-candidate-api.js" // eslint-disable-line import/extensions
 import {
   createStoryCandidateGeneration,
   failStoryCandidateGeneration,
   invalidateStoryCandidateGeneration,
   resolveStoryCandidateGeneration,
-} from "./story-candidate-generation.js"
-// eslint-disable-next-line import/extensions
+} from "./story-candidate-generation.js" // eslint-disable-line import/extensions
 import {
   createStoryCandidateRequest,
   STORY_CANDIDATE_ENTRY_LIMIT,
-} from "./story-candidate-request.js"
+} from "./story-candidate-request.js" // eslint-disable-line import/extensions
 
-const noop = () => {}
+const noop = () => null
 
 const generationContext = (current) => ({
   generationId: current.generationId,
