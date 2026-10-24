@@ -53,7 +53,7 @@ export default defineConfig(({ mode }) => {
           name: "NewsFlux",
           short_name: "NewsFlux",
           description: "A Simple but Powerful RSS Reader for Miniflux",
-          // PROVISIONAL (PWA-01A D1): Base-path-aligned manifest identity matching start_url and scope.
+          // APPROVED (PWA-01A D1): Base-path-aligned manifest identity matching start_url and scope.
           id: basePath,
           start_url: basePath,
           scope: basePath,
@@ -76,7 +76,7 @@ export default defineConfig(({ mode }) => {
               type: "image/png",
               purpose: "any",
             },
-            // PROVISIONAL (PWA-01A D3): Mechanically padded maskable icons derived from existing glyph.
+            // APPROVED (PWA-01A D3): Mechanically padded maskable icons derived from existing glyph.
             {
               src: "maskable-icon-192.png",
               sizes: "192x192",
@@ -90,7 +90,7 @@ export default defineConfig(({ mode }) => {
               purpose: "maskable",
             },
           ],
-          // PROVISIONAL (PWA-01A D2): OLED-first standalone launch palette matching index.html dark theme-color.
+          // APPROVED (PWA-01A D2): OLED-first standalone launch palette matching index.html dark theme-color.
           theme_color: "#0B0D10",
           background_color: "#0B0D10",
           display: "standalone",
