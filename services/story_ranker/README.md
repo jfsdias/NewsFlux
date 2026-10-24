@@ -40,6 +40,8 @@ The response contains only ranked entry pairs and model provenance. It deliberat
 
 The Caddy frontend route `/api/story-candidates/v1/rank` proxies to `{$STORY_RANKER_UPSTREAM}`; the default upstream is `story-ranker:8787`. If the sidecar is unavailable, Home fails open and keeps its existing projection.
 
+The frontend runtime is disabled by default. A deployment must explicitly build NewsFlux with `VITE_STORY_CANDIDATE_RANKING=1` after the sidecar/upstream has passed its deployment gates. This PR does not enable or deploy the runtime.
+
 ## Research boundary
 
 R3C validated this component as a candidate ranker, not an auto-merge rule. Corpus-wide recall was not measured. Any later clustering or identity-decision stage requires a separate authorization and PR.
