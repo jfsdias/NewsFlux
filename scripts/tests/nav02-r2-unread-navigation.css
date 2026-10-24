@@ -11,19 +11,20 @@ body {
 
 .nav02-app {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-columns: 240px 0 minmax(0, 1fr);
+  grid-template-areas: "sidebar navigation main";
   height: 100%;
 }
 
 .nav02-desktop-sidebar {
-  grid-area: 1 / 1 !important;
+  grid-area: sidebar !important;
   position: relative !important;
   width: 240px;
   height: 100%;
 }
 
 .nav02-main {
-  grid-area: 1 / 2;
+  grid-area: main;
   min-width: 0;
   overflow: auto;
   padding: 16px;
@@ -54,12 +55,22 @@ body.nav02-hide-controls .nav02-controls {
   display: none;
 }
 
-@media (max-width: 992px) {
+@media (min-width: 600px) and (max-width: 992px) {
   .nav02-app {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 0 80px minmax(0, 1fr);
   }
 
-  .nav02-main {
-    grid-area: 1 / 1;
+  .nav02-desktop-sidebar {
+    display: none;
+  }
+}
+
+@media (max-width: 599px) {
+  .nav02-app {
+    grid-template-columns: 0 0 minmax(0, 1fr);
+  }
+
+  .nav02-desktop-sidebar {
+    display: none;
   }
 }

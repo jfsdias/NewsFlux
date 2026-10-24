@@ -7,11 +7,15 @@ import { createRoot } from "react-dom/client"
 import { createMemoryRouter, RouterProvider, useLocation } from "react-router"
 
 import apiClient from "@/apis/ofetch"
+import SidebarDrawerHost from "@/components/Article/SidebarDrawerHost"
 import SidebarTrigger from "@/components/Article/SidebarTrigger"
+import CompactNavigation from "@/components/Navigation/CompactNavigation"
+import MediumNavigation from "@/components/Navigation/MediumNavigation"
 import Sidebar from "@/components/Sidebar/Sidebar"
 import AppDataContext from "@/contexts/app-data-context"
 import DesktopSidebarContext from "@/contexts/desktop-sidebar-context"
 import { polyglotState } from "@/hooks/useLanguage"
+import useWindowClass from "@/hooks/useWindowClass"
 import englishPhrases from "@/locales/en-US.json"
 import { authState } from "@/store/authState"
 import { contentState, resetContent } from "@/store/contentState"
@@ -24,13 +28,21 @@ import {
 } from "@/store/dataState"
 import { feedIconsState } from "@/store/feedIconsState"
 import { getDefaultSettings, settingsState } from "@/store/settingsState"
-import { expandedCategoriesState, setExpandedCategories } from "@/store/sidebarState"
+import {
+  expandedCategoriesState,
+  setExpandedCategories,
+  setMobileSidebarInvoker,
+  setMobileSidebarVisible,
+} from "@/store/sidebarState"
+import { classifyWindowClass, WINDOW_CLASSES } from "@/utils/window-class"
 import "@arco-design/web-react/dist/css/arco.css"
 import "simplebar-react/dist/simplebar.min.css"
 import "@/index.css"
 import "@/App.css"
 import "@/theme.css"
 import "@/components/Article/SidebarTrigger.css"
+import "@/components/Navigation/CompactNavigation.css"
+import "@/components/Navigation/MediumNavigation.css"
 import "./nav02-r2-unread-navigation.css"
 
 const makeCategory = (id, title, hide = false) => ({ id, title, hide_globally: hide })
@@ -103,8 +115,9 @@ const waitFor = async (predicate, message) => {
   throw new Error(message)
 }
 const sidebarRoot = () =>
-  document.querySelector(".sidebar-drawer .sidebar-container") ??
-  document.querySelector(".nav02-desktop-sidebar .sidebar-container")
+  currentWindowClass() === WINDOW_CLASSES.DESKTOP
+    ? document.querySelector(".nav02-desktop-sidebar .sidebar-container")
+    : document.querySelector(".sidebar-drawer .sidebar-container")
 const sourceSearch = () => sidebarRoot()?.querySelector("[data-testid='source-search']")
 const feedRows = (selector = ".source-navigation-list .feed-menu-item") => [
   ...(sidebarRoot()?.querySelectorAll(selector) ?? []),
@@ -125,11 +138,30 @@ const visibleFeedCountText = (row) => row?.innerText.trim().split("\n").at(-1)
 const activeFeedRow = (feedId) =>
   sidebarRoot()?.querySelector(`[data-feed-edit-id='${CSS.escape(feedId)}']`)
 const activeRoute = () => router.state.location.pathname
+const currentWindowClass = () => classifyWindowClass(innerWidth, innerHeight)
+const resolveSourcesInvoker = () => {
+  const windowClass = currentWindowClass()
+
+  if (windowClass === WINDOW_CLASSES.MEDIUM) {
+    return document.querySelector("[data-testid='medium-nav-sources']")
+  }
+
+  if (windowClass === WINDOW_CLASSES.COMPACT) {
+    return (
+      document.querySelector("[data-testid='compact-nav-sources']") ??
+      document.querySelector(".trigger")
+    )
+  }
+
+  return null
+}
 const ensureDrawerOpen = async () => {
-  if (innerWidth > 992) {
+  if (currentWindowClass() === WINDOW_CLASSES.DESKTOP) {
     return
   }
-  const trigger = document.querySelector(".trigger")
+
+  const trigger = resolveSourcesInvoker()
+  assert(trigger, `${currentWindowClass()} Sources invoker is missing`)
   if (trigger?.getAttribute("aria-expanded") !== "true") {
     trigger?.click()
   }
@@ -140,6 +172,8 @@ const ensureDrawerOpen = async () => {
 }
 
 const resetFixture = async (path = "/", options = {}) => {
+  setMobileSidebarVisible(false)
+  setMobileSidebarInvoker(null)
   resetData()
   resetContent()
   authState.set({ server: "https://example.invalid", token: "fixture", username: "fixture" })
@@ -180,9 +214,25 @@ const RouteProbe = () => {
   return <output data-testid="current-route">{location.pathname}</output>
 }
 
+const DesktopSidebarFixture = () => {
+  const { isDesktop } = useWindowClass()
+
+  if (!isDesktop) {
+    return null
+  }
+
+  return (
+    <aside className="sidebar sidebar-expanded nav02-desktop-sidebar">
+      <div className="desktop-sidebar-content" id="desktop-sidebar-navigation">
+        <Sidebar />
+      </div>
+    </aside>
+  )
+}
+
 const captureMetrics = () => {
   const root = sidebarRoot()
-  const isOverlay = innerWidth <= 992
+  const isOverlay = currentWindowClass() !== WINDOW_CLASSES.DESKTOP
   const sidebar = isOverlay
     ? (document.querySelector(".sidebar-drawer .arco-drawer-content") ??
       document.querySelector(".sidebar-drawer"))
@@ -192,6 +242,11 @@ const captureMetrics = () => {
   const sidebarBounds = sidebar?.getBoundingClientRect()
   const controlsBounds = controls?.getBoundingClientRect()
   const visibleRows = [...(root?.querySelectorAll(".feed-menu-item") ?? [])]
+  const drawerRows = [
+    ...(root?.querySelectorAll(
+      ".arco-menu-item, .arco-menu-inline-header, .arco-collapse-item-header, .category-title",
+    ) ?? []),
+  ]
   const rowBoundsStayInsideSidebar = visibleRows.every((row) => {
     const bounds = row.getBoundingClientRect()
     return bounds.left >= sidebarBounds.left - 1 && bounds.right <= sidebarBounds.right + 1
@@ -211,6 +266,7 @@ const captureMetrics = () => {
       controlsBounds && controlsBounds.width > 0 && controlsBounds.height > 0,
     ),
     rowsInsideSidebar: rowBoundsStayInsideSidebar,
+    drawerRowHeights: drawerRows.map((node) => Math.round(node.getBoundingClientRect().height)),
     targetHeights: [
       ...(controls?.querySelectorAll(
         ".source-mode-option, .source-filter-input, .source-filter-clear",
@@ -220,6 +276,34 @@ const captureMetrics = () => {
 }
 
 const scenarios = [
+  [
+    "RESPONSIVE_SOURCES_INVOKER_AND_DRAWER_OPEN",
+    async () => {
+      await resetFixture()
+      const windowClass = currentWindowClass()
+
+      if (windowClass === WINDOW_CLASSES.DESKTOP) {
+        const desktopSidebar = document.querySelector(".nav02-desktop-sidebar .sidebar-container")
+        assert(desktopSidebar, "Desktop permanent Sidebar is missing")
+        assert(sidebarRoot() === desktopSidebar, "Desktop fixture resolved the hidden Drawer")
+        return
+      }
+
+      const expectedInvokerTestId =
+        windowClass === WINDOW_CLASSES.MEDIUM ? "medium-nav-sources" : "compact-nav-sources"
+      const invoker = resolveSourcesInvoker()
+      assert(invoker, `${windowClass} Sources invoker is missing`)
+      assert(
+        invoker.dataset.testid === expectedInvokerTestId,
+        `${windowClass} resolved the wrong Sources invoker`,
+      )
+      assert(
+        invoker.getAttribute("aria-expanded") === "true" &&
+          document.querySelector(".sidebar-drawer .sidebar-container"),
+        `${windowClass} Sources invoker did not open the shared Drawer`,
+      )
+    },
+  ],
   [
     "MODE_SELECTOR_RADIOGROUP_AND_SINGLE_TAB_STOP",
     async () => {
@@ -504,7 +588,15 @@ const scenarios = [
       )
       assert(metrics.modeFilterSticky, "Mode and source filter controls are not sticky")
       assert(metrics.rowsInsideSidebar, "A source row is clipped by the Sidebar width")
-      if (innerWidth <= 992) {
+      if (currentWindowClass() === WINDOW_CLASSES.DESKTOP) {
+        assert(metrics.sidebarWidth === 240, "Permanent desktop sidebar width changed")
+        assert(metrics.sidebarLeft === 0, "Permanent desktop sidebar is not at the leading edge")
+      } else {
+        assert(
+          metrics.drawerRowHeights.length > 0 &&
+            metrics.drawerRowHeights.every((height) => height >= 44),
+          "A source Drawer row is below 44px",
+        )
         assert(
           metrics.sidebarWidth <= 360 && metrics.sidebarWidth > 0,
           "Drawer width exceeds 360px cap",
@@ -521,9 +613,6 @@ const scenarios = [
             `${innerWidth}px drawer measured ${metrics.sidebarWidth}px instead of 360px`,
           )
         }
-      } else {
-        assert(metrics.sidebarWidth === 240, "Permanent desktop sidebar width changed")
-        assert(metrics.sidebarLeft === 0, "Permanent desktop sidebar is not at the leading edge")
       }
       assert(metrics.documentWidth <= innerWidth, "Sidebar introduces horizontal overflow")
       assert(
@@ -594,10 +683,11 @@ const scenarios = [
     "MOBILE_FEED_SELECTION_CLOSES_DRAWER",
     async () => {
       await resetFixture("/", { unreadMode: true })
-      if (innerWidth > 992) {
+      if (currentWindowClass() === WINDOW_CLASSES.DESKTOP) {
         return
       }
-      const trigger = document.querySelector(".trigger")
+      const trigger = resolveSourcesInvoker()
+      assert(trigger, `${currentWindowClass()} Sources invoker is missing after drawer open`)
       activeFeedRow(2)?.click()
       await waitFor(
         () => activeRoute() === "/feed/2",
@@ -629,63 +719,66 @@ async function runScenarios() {
   globalThis.__nav02R2Results = results
 }
 
-const FixtureFrame = () => (
-  <div className="nav02-app">
-    <aside className="sidebar sidebar-expanded nav02-desktop-sidebar">
-      <div className="desktop-sidebar-content" id="desktop-sidebar-navigation">
-        <Sidebar />
-      </div>
-    </aside>
-    <main className="nav02-main">
-      <SidebarTrigger />
-      <h1>NAV-02 R2 navigation harness</h1>
-      <div className="nav02-controls">
-        <label htmlFor="nav02-theme">Theme</label>
-        <select
-          defaultValue="light"
-          id="nav02-theme"
-          onChange={(event) => {
-            const theme = event.target.value
-            if (theme === "dark") {
-              document.body.setAttribute("arco-theme", "dark")
-            } else {
-              document.body.removeAttribute("arco-theme")
-            }
-            settingsState.set({ ...settingsState.get(), themeMode: theme })
-          }}
-        >
-          <option value="light">Light</option>
-          <option value="dark">Dark / OLED</option>
-        </select>
-        <Button data-testid="run-nav02-suite" onClick={() => void runScenarios()}>
-          Run R2 behavior gates
-        </Button>
-        <Button
-          data-testid="capture-layout"
-          onClick={() => {
-            document.querySelector("[data-testid='layout-report']").textContent = JSON.stringify(
-              captureMetrics(),
-              null,
-              2,
-            )
-          }}
-        >
-          Capture layout
-        </Button>
-        <Button
-          data-testid="hide-harness-controls"
-          onClick={() => document.body.classList.add("nav02-hide-controls")}
-        >
-          Hide controls
-        </Button>
-      </div>
-      <p data-testid="suite-summary">Ready</p>
-      <pre className="nav02-results" data-testid="suite-results" />
-      <pre data-testid="layout-report" />
-      <RouteProbe />
-    </main>
-  </div>
-)
+const FixtureFrame = () => {
+  const { windowClass } = useWindowClass()
+
+  return (
+    <div className="nav02-app" data-window-class={windowClass}>
+      <DesktopSidebarFixture />
+      <main className="nav02-main">
+        <SidebarTrigger />
+        <h1>NAV-02 R2 navigation harness</h1>
+        <div className="nav02-controls">
+          <label htmlFor="nav02-theme">Theme</label>
+          <select
+            defaultValue="light"
+            id="nav02-theme"
+            onChange={(event) => {
+              const theme = event.target.value
+              if (theme === "dark") {
+                document.body.setAttribute("arco-theme", "dark")
+              } else {
+                document.body.removeAttribute("arco-theme")
+              }
+              settingsState.set({ ...settingsState.get(), themeMode: theme })
+            }}
+          >
+            <option value="light">Light</option>
+            <option value="dark">Dark / OLED</option>
+          </select>
+          <Button data-testid="run-nav02-suite" onClick={() => void runScenarios()}>
+            Run R2 behavior gates
+          </Button>
+          <Button
+            data-testid="capture-layout"
+            onClick={() => {
+              document.querySelector("[data-testid='layout-report']").textContent = JSON.stringify(
+                captureMetrics(),
+                null,
+                2,
+              )
+            }}
+          >
+            Capture layout
+          </Button>
+          <Button
+            data-testid="hide-harness-controls"
+            onClick={() => document.body.classList.add("nav02-hide-controls")}
+          >
+            Hide controls
+          </Button>
+        </div>
+        <p data-testid="suite-summary">Ready</p>
+        <pre className="nav02-results" data-testid="suite-results" />
+        <pre data-testid="layout-report" />
+        <RouteProbe />
+      </main>
+      <MediumNavigation />
+      <CompactNavigation />
+      <SidebarDrawerHost />
+    </div>
+  )
+}
 
 router = createMemoryRouter([{ path: "*", element: <FixtureFrame /> }], { initialEntries: ["/"] })
 createRoot(document.querySelector("#root")).render(
