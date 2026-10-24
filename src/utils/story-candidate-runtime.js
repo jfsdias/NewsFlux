@@ -1,5 +1,6 @@
 import { getStoryCandidates } from "../apis/storyCandidates.js"
 import {
+  resetStoryCandidateState,
   setStoryCandidateFailed,
   setStoryCandidatePending,
   setStoryCandidateReady,
@@ -37,6 +38,7 @@ export const startHomeStoryCandidateRuntime = ({
   onPending = setStoryCandidatePending,
   onReady = setStoryCandidateReady,
   onFailed = setStoryCandidateFailed,
+  onDispose = resetStoryCandidateState,
 }) => {
   let disposed = false
   let generation = null
@@ -145,6 +147,7 @@ export const startHomeStoryCandidateRuntime = ({
       disposed = true
       unsubscribe()
       invalidatePending()
+      onDispose()
     },
   }
 }
