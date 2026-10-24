@@ -14,6 +14,8 @@ import { startHomeStoryCandidateRuntime } from "@/utils/story-candidate-runtime"
 
 import "@/components/Article/ArticleList.css"
 
+const STORY_CANDIDATE_RANKING_ENABLED = import.meta.env.VITE_STORY_CANDIDATE_RANKING === "1"
+
 const HomeRecent = ({
   articleActivation,
   entries,
@@ -28,6 +30,9 @@ const HomeRecent = ({
   const identityKey = getHomeIdentityKey(identity)
 
   useEffect(() => {
+    if (!STORY_CANDIDATE_RANKING_ENABLED) {
+      return undefined
+    }
     const runtime = startHomeStoryCandidateRuntime({
       contentStore: contentState,
       identityKey,
