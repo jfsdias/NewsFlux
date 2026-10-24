@@ -25,7 +25,13 @@
     "need_help": "Need more info?",
     "miniflux_official_website": "Go to Miniflux official website",
     "error": "Login failed",
-    "invalid_identity": "The server returned an invalid user identity."
+    "invalid_identity": "The server returned an invalid user identity.",
+    "api_key_consent_label": "Create a dedicated Miniflux API key for this device instead of storing my password locally",
+    "api_key_consent_required": "Please confirm that NewsFlux may create a dedicated Miniflux API key before signing in with a password.",
+    "api_key_migration_title": "Upgrade stored password to a dedicated API key",
+    "api_key_migration_description": "This session currently stores your Miniflux password in local storage. With your confirmation, NewsFlux will create a dedicated Miniflux API key for this installation, verify it with /v1/me, and then remove your stored password.",
+    "api_key_migration_action": "Create dedicated API key",
+    "api_key_provisioning_error": "Could not create or verify a dedicated Miniflux API key. Your existing credentials were kept intact."
   },
   "compatibility": {
     "checking": "Checking Miniflux compatibility…",
@@ -98,7 +104,9 @@
     "settings_reset_confirm": "Confirm Reset",
     "settings_reset_description": "Are you sure you want to reset your settings? This action cannot be undone.",
     "logout_confirm": "Confirm Logout",
-    "logout_description": "Are you sure you want to logout? This action cannot be undone."
+    "logout_description": "Are you sure you want to logout? This action cannot be undone.",
+    "unread_count_aria": "%{label}, %{count} unread",
+    "items_count_aria": "%{label}, %{count} item |||| %{label}, %{count} items"
   },
   "about": {
     "title": "About",
@@ -188,6 +196,7 @@
   "article_list": {
     "sort_direction_desc": "Newest first",
     "sort_direction_asc": "Oldest first",
+    "filter_status_group_label": "Filter articles by status",
     "filter_status_all": "All",
     "filter_status_starred": "Starred",
     "filter_status_unread": "Unread",

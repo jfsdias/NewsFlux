@@ -3362,6 +3362,13 @@ const Harness = () => {
           `Empty loaded page lost its shared sentinel (ready=${contentState.get().isArticleListReady}, total=${contentState.get().total}, loadMore=${contentState.get().loadMoreVisible}, session=${homeRoot()?.getAttribute("aria-busy")})`,
         )
         assert(contentState.get().loadMoreVisible, "Positive total did not preserve pagination")
+        const emptyPageSentinel = sentinels()[0]
+        assert(emptyPageSentinel, "Empty loaded page lost its pagination sentinel")
+        emptyPageSentinel.scrollIntoView({ block: "center" })
+        await waitFor(
+          () => listRequests().length === 2,
+          "Empty-page sentinel did not request the continuation page",
+        )
         deferredPagination?.resolve()
         deferredPagination = null
         await waitFor(

@@ -20,7 +20,7 @@ import {
   getHomeTargetPath,
   isHomeTargetInCatalog,
 } from "@/utils/home-page"
-import { clearSession } from "@/utils/session"
+import { logoutSession } from "@/utils/session"
 
 const HomePageManager = () => {
   const identity = useStore(homeIdentityState)
@@ -88,8 +88,8 @@ const HomePageManager = () => {
       {isHomeRoute && (
         <Button
           size="small"
-          onClick={() => {
-            clearSession()
+          onClick={async () => {
+            await logoutSession()
             navigate("/login", { replace: true, state: { from: location.pathname } })
           }}
         >

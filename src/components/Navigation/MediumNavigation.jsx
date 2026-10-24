@@ -20,6 +20,7 @@ import {
   setMobileSidebarVisible,
 } from "@/store/sidebarState"
 import { COMPACT_NAV_DESTINATIONS, resolveCompactNavActiveKey } from "@/utils/compact-navigation"
+import { formatNavigationCountLabel } from "@/utils/source-navigation"
 
 import "./MediumNavigation.css"
 
@@ -71,6 +72,8 @@ const MediumNavigation = () => {
       to: "/",
       isActive: activeKey === COMPACT_NAV_DESTINATIONS.HOME,
       badge: null,
+      count: 0,
+      countType: "unread",
     },
     {
       key: COMPACT_NAV_DESTINATIONS.ALL,
@@ -79,6 +82,8 @@ const MediumNavigation = () => {
       to: "/all",
       isActive: activeKey === COMPACT_NAV_DESTINATIONS.ALL,
       badge: formatNavBadge(unreadTotal),
+      count: unreadTotal,
+      countType: "unread",
     },
     {
       key: COMPACT_NAV_DESTINATIONS.TODAY,
@@ -87,6 +92,8 @@ const MediumNavigation = () => {
       to: "/today",
       isActive: activeKey === COMPACT_NAV_DESTINATIONS.TODAY,
       badge: formatNavBadge(unreadTodayCount),
+      count: unreadTodayCount,
+      countType: "unread",
     },
     {
       key: COMPACT_NAV_DESTINATIONS.STARRED,
@@ -95,6 +102,8 @@ const MediumNavigation = () => {
       to: "/starred",
       isActive: activeKey === COMPACT_NAV_DESTINATIONS.STARRED,
       badge: formatNavBadge(starredCount),
+      count: starredCount,
+      countType: "items",
     },
     {
       key: COMPACT_NAV_DESTINATIONS.SOURCES,
@@ -102,6 +111,8 @@ const MediumNavigation = () => {
       Icon: IconFolder,
       isActive: activeKey === COMPACT_NAV_DESTINATIONS.SOURCES,
       onClick: handleToggleSources,
+      count: 0,
+      countType: "unread",
       isDialogTrigger: true,
     },
   ]
@@ -115,8 +126,11 @@ const MediumNavigation = () => {
     >
       <div className="medium-navigation-items">
         {items.map((item) => {
-          const { Icon, badge, isActive, isDialogTrigger, key, label } = item
-          const accessibleName = badge ? `${label} (${badge})` : label
+          const { Icon, badge, count, countType, isActive, isDialogTrigger, key, label } = item
+          const accessibleName = formatNavigationCountLabel(label, count, {
+            countType,
+            polyglot,
+          })
           const controlClassName = classNames("medium-navigation-item", {
             "medium-navigation-item-active": isActive,
           })

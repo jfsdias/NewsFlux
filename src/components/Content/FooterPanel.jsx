@@ -652,6 +652,8 @@ const FooterPanel = ({
         </Dropdown>
       )}
       <Radio.Group
+        aria-hidden={source === "history" || undefined}
+        aria-label={polyglot.t("article_list.filter_status_group_label")}
         className="nf-glass-group entry-panel-filter-group"
         style={{ visibility: source === "history" ? "hidden" : "visible" }}
         type="button"

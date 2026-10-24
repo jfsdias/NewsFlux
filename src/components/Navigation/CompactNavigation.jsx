@@ -25,6 +25,7 @@ import {
   resolveCompactNavActiveKey,
   shouldRenderCompactNavigation,
 } from "@/utils/compact-navigation"
+import { formatNavigationCountLabel } from "@/utils/source-navigation"
 
 import "./CompactNavigation.css"
 
@@ -85,6 +86,8 @@ const CompactNavigation = () => {
       onClick: () => handleNavigate("/"),
       isActive: activeKey === COMPACT_NAV_DESTINATIONS.HOME,
       badge: null,
+      count: 0,
+      countType: "unread",
     },
     {
       key: COMPACT_NAV_DESTINATIONS.ALL,
@@ -93,6 +96,8 @@ const CompactNavigation = () => {
       onClick: () => handleNavigate("/all"),
       isActive: activeKey === COMPACT_NAV_DESTINATIONS.ALL,
       badge: formatNavBadge(unreadTotal),
+      count: unreadTotal,
+      countType: "unread",
     },
     {
       key: COMPACT_NAV_DESTINATIONS.TODAY,
@@ -101,6 +106,8 @@ const CompactNavigation = () => {
       onClick: () => handleNavigate("/today"),
       isActive: activeKey === COMPACT_NAV_DESTINATIONS.TODAY,
       badge: formatNavBadge(unreadTodayCount),
+      count: unreadTodayCount,
+      countType: "unread",
     },
     {
       key: COMPACT_NAV_DESTINATIONS.STARRED,
@@ -109,6 +116,8 @@ const CompactNavigation = () => {
       onClick: () => handleNavigate("/starred"),
       isActive: activeKey === COMPACT_NAV_DESTINATIONS.STARRED,
       badge: formatNavBadge(starredCount),
+      count: starredCount,
+      countType: "items",
     },
     {
       key: COMPACT_NAV_DESTINATIONS.SOURCES,
@@ -117,6 +126,8 @@ const CompactNavigation = () => {
       onClick: handleToggleSources,
       isActive: activeKey === COMPACT_NAV_DESTINATIONS.SOURCES,
       badge: null,
+      count: 0,
+      countType: "unread",
       isDialogTrigger: true,
     },
   ]
@@ -132,8 +143,12 @@ const CompactNavigation = () => {
     >
       <div className="compact-nav-items">
         {items.map((item) => {
-          const { Icon, badge, isActive, isDialogTrigger, key, label, onClick } = item
-          const accessibleName = badge ? `${label} (${badge})` : label
+          const { Icon, badge, count, countType, isActive, isDialogTrigger, key, label, onClick } =
+            item
+          const accessibleName = formatNavigationCountLabel(label, count, {
+            countType,
+            polyglot,
+          })
 
           return (
             <button

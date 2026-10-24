@@ -25,7 +25,13 @@
     "need_help": "需要更多信息？",
     "miniflux_official_website": "前往 Miniflux 官网",
     "error": "登录失败",
-    "invalid_identity": "服务器返回了无效的用户身份。"
+    "invalid_identity": "服务器返回了无效的用户身份。",
+    "api_key_consent_label": "为此设备创建专用 Miniflux API 密钥，而不是在本地存储密码",
+    "api_key_consent_required": "使用密码登录前，请确认允许 NewsFlux 创建专用 Miniflux API 密钥。",
+    "api_key_migration_title": "将已保存的密码升级为专用 API 密钥",
+    "api_key_migration_description": "当前会话在本地存储了您的 Miniflux 密码。经您确认后，NewsFlux 将为此安装创建专用 Miniflux API 密钥，通过 /v1/me 验证后移除已存储的密码。",
+    "api_key_migration_action": "创建专用 API 密钥",
+    "api_key_provisioning_error": "无法创建或验证专用 Miniflux API 密钥，您现有的凭据已保留。"
   },
   "compatibility": {
     "checking": "正在检查 Miniflux 兼容性…",
@@ -98,7 +104,9 @@
     "settings_reset_confirm": "确认重置",
     "settings_reset_description": "您确定要重置您的设置吗？此操作无法撤消。",
     "logout_confirm": "确认登出",
-    "logout_description": "您确定要登出吗？此操作无法撤消。"
+    "logout_description": "您确定要登出吗？此操作无法撤消。",
+    "unread_count_aria": "%{label}，%{count} 篇未读",
+    "items_count_aria": "%{label}，%{count} 个条目"
   },
   "about": {
     "title": "关于",
@@ -188,6 +196,7 @@
   "article_list": {
     "sort_direction_desc": "最新优先",
     "sort_direction_asc": "最旧优先",
+    "filter_status_group_label": "按状态筛选文章",
     "filter_status_all": "全部",
     "filter_status_starred": "收藏",
     "filter_status_unread": "未读",

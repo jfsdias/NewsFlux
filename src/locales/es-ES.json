@@ -25,7 +25,13 @@
     "need_help": "¿Necesita más información?",
     "miniflux_official_website": "Ir a la página web oficial de Miniflux",
     "error": "Error de inicio de sesión",
-    "invalid_identity": "El servidor devolvió una identidad de usuario no válida."
+    "invalid_identity": "El servidor devolvió una identidad de usuario no válida.",
+    "api_key_consent_label": "Crear una clave API dedicada de Miniflux para este dispositivo en lugar de guardar mi contraseña localmente",
+    "api_key_consent_required": "Confirme que NewsFlux puede crear una clave API dedicada de Miniflux antes de iniciar sesión con contraseña.",
+    "api_key_migration_title": "Actualizar contraseña guardada a una clave API dedicada",
+    "api_key_migration_description": "Esta sesión almacena actualmente su contraseña de Miniflux en el almacenamiento local. Con su confirmación, NewsFlux creará una clave API dedicada para esta instalación, la verificará mediante /v1/me y eliminará la contraseña almacenada.",
+    "api_key_migration_action": "Crear clave API dedicada",
+    "api_key_provisioning_error": "No se pudo crear o verificar una clave API dedicada de Miniflux. Sus credenciales actuales se mantuvieron intactas."
   },
   "compatibility": {
     "checking": "Comprobando la compatibilidad con Miniflux…",
@@ -98,7 +104,9 @@
     "settings_reset_confirm": "Confirmar el restablecimiento",
     "settings_reset_description": "¿Está seguro de que desea restablecer su configuración? Esta acción no se puede deshacer.",
     "logout_confirm": "Confirmar el cierre de sesión",
-    "logout_description": "¿Está seguro de que desea cerrar sesión? Esta acción no se puede deshacer."
+    "logout_description": "¿Está seguro de que desea cerrar sesión? Esta acción no se puede deshacer.",
+    "unread_count_aria": "%{label}, %{count} sin leer",
+    "items_count_aria": "%{label}, %{count} elemento |||| %{label}, %{count} elementos"
   },
   "about": {
     "title": "Acerca de",
@@ -188,6 +196,7 @@
   "article_list": {
     "sort_direction_desc": "Las más recientes primero",
     "sort_direction_asc": "Las más antiguas primero",
+    "filter_status_group_label": "Filtrar artículos por estado",
     "filter_status_all": "Todo",
     "filter_status_starred": "Favoritos",
     "filter_status_unread": "Sin leer",
