@@ -188,6 +188,7 @@
   "article_list": {
     "sort_direction_desc": "Neueste zuerst",
     "sort_direction_asc": "Älteste zuerst",
+    "filter_status_group_label": "Artikel nach Status filtern",
     "filter_status_all": "Alles",
     "filter_status_starred": "Lesezeichen",
     "filter_status_unread": "Ungelesen",
