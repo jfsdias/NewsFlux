@@ -953,22 +953,20 @@ const executeProvisionDedicatedApiKeySession = async (
   const createdToken = typeof createdKeyData?.token === "string" ? createdKeyData.token.trim() : ""
 
   if (!createdKeyId || !createdToken) {
-    let cleanedUp = !createdKeyId
     if (createdKeyId) {
       const revokeResult = await revokeDedicatedApiKey(
         { server, username, password },
         { apiKeyId: createdKeyId, rawFetch, signal },
       )
-      cleanedUp = revokeResult.revoked
-    }
-    if (cleanedUp) {
-      clearAuthTransactionJournal({
-        server,
-        userId: initialUser.id,
-        username: canonicalUsername,
-        now,
-        storage,
-      })
+      if (revokeResult.revoked) {
+        clearAuthTransactionJournal({
+          server,
+          userId: initialUser.id,
+          username: canonicalUsername,
+          now,
+          storage,
+        })
+      }
     }
     throw createAuthProvisioningError("Miniflux returned an invalid API key payload", {
       code: "INVALID_API_KEY_RESPONSE",

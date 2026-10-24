@@ -566,7 +566,9 @@ test("invalid key & network timeout: rejects malformed key payload and timeout w
     token: "",
   })
 
-  // 1. Invalid key payload (missing token / invalid id)
+  // 1. Invalid key payload (missing token / invalid id: 0) -> retains pending journal and password
+  let postedDescription = ""
+  let deleteCalled = false
   await assert.rejects(
     migrateLegacyPasswordSession({
       consent: true,
@@ -575,7 +577,12 @@ test("invalid key & network timeout: rejects malformed key payload and timeout w
           return { status: 200, _data: { id: 17, username: FIXTURE_USERNAME } }
         }
         if (url === "v1/api-keys" && options.method === "POST") {
+          postedDescription = options.body.description
           return { status: 201, _data: { id: 0, token: "" } }
+        }
+        if (url.startsWith("v1/api-keys/") && options.method === "DELETE") {
+          deleteCalled = true
+          return { status: 204, _data: null }
         }
         throw new Error(`Unexpected request: ${url}`)
       },
@@ -587,9 +594,17 @@ test("invalid key & network timeout: rejects malformed key payload and timeout w
     }),
     (error) => error.stage === "create-key" && error.code === "INVALID_API_KEY_RESPONSE",
   )
+  assert.equal(deleteCalled, false)
   assert.equal(authState.get().password, FIXTURE_PASSWORD)
+  const journalAfterInvalidPayload = readAuthTransactionJournal({
+    server: SERVER_A,
+    userId: 17,
+    username: FIXTURE_USERNAME,
+  })
+  assert.equal(journalAfterInvalidPayload.status, "pending")
+  assert.equal(journalAfterInvalidPayload.entry?.description, postedDescription)
 
-  // 2. Network timeout
+  // 2. Network timeout (leaves existing pending journal and password intact)
   await assert.rejects(
     migrateLegacyPasswordSession({
       consent: true,
@@ -612,6 +627,10 @@ test("invalid key & network timeout: rejects malformed key payload and timeout w
     (error) => error.stage === "password-login",
   )
   assert.equal(authState.get().password, FIXTURE_PASSWORD)
+  assert.equal(
+    readAuthTransactionJournal({ server: SERVER_A, userId: 17, username: FIXTURE_USERNAME }).status,
+    "pending",
+  )
 })
 
 test("concurrent login attempts: coalesces in-flight provisioning so only one API key is created", async () => {
@@ -1634,4 +1653,336 @@ test("AUTH_TRANSACTION_JOURNAL_01: (15) MANUAL_TOKEN_WITH_FOREIGN_JOURNAL and sa
   assert.equal(corruptManualResult.auth.token, FIXTURE_TOKEN)
   assert.equal(corruptManualResult.auth.apiKeyId, null)
   assert.equal(localStorage.getItem(AUTH_TRANSACTION_JOURNAL_STORAGE_KEY), rawCorrupt)
+})
+
+test("AUTH_TRANSACTION_JOURNAL_01: (A) SUCCESS_STATUS_MISSING_ID and (B) SUCCESS_STATUS_EMPTY_BODY preserve journal, perform zero speculative DELETE, block second POST until reconciliation, and reconcile exact orphan on next login", async () => {
+  setAuth({
+    server: SERVER_A,
+    username: FIXTURE_USERNAME,
+    password: FIXTURE_PASSWORD,
+    token: "",
+  })
+
+  // --- (A) SUCCESS_STATUS_MISSING_ID: POST returns 201 with token but no valid id ---
+  let journalSnapshotDuringFirstPost = null
+  let firstPostedDescription = ""
+  const deletedKeyIds = []
+  const callSequence = []
+
+  await assert.rejects(
+    migrateLegacyPasswordSession({
+      consent: true,
+      checkCompatibility: supportedCompatibilityStub,
+      rawFetch: async (url, options = {}) => {
+        if (url === "v1/me" && options.headers?.Authorization) {
+          return { status: 200, _data: { id: 17, username: FIXTURE_USERNAME } }
+        }
+        if (url === "v1/api-keys" && options.method === "POST") {
+          firstPostedDescription = options.body.description
+          journalSnapshotDuringFirstPost = readAuthTransactionJournal({
+            server: SERVER_A,
+            userId: 17,
+            username: FIXTURE_USERNAME,
+          })
+          return {
+            status: 201,
+            _data: {
+              id: null,
+              user_id: 17,
+              token: FIXTURE_TOKEN,
+              description: firstPostedDescription,
+            },
+          }
+        }
+        if (url.startsWith("v1/api-keys/") && options.method === "DELETE") {
+          deletedKeyIds.push(Number(url.split("/").at(-1)))
+          return { status: 204, _data: null }
+        }
+        throw new Error(`Unexpected request in step A1: ${options.method ?? "GET"} ${url}`)
+      },
+    }),
+    (error) => error.stage === "create-key" && error.code === "INVALID_API_KEY_RESPONSE",
+  )
+
+  assert.equal(journalSnapshotDuringFirstPost?.status, "pending")
+  assert.equal(journalSnapshotDuringFirstPost?.entry?.description, firstPostedDescription)
+  assert.deepEqual(deletedKeyIds, [])
+  assert.equal(authState.get().password, FIXTURE_PASSWORD)
+  const journalAfterMissingId = readAuthTransactionJournal({
+    server: SERVER_A,
+    userId: 17,
+    username: FIXTURE_USERNAME,
+  })
+  assert.equal(journalAfterMissingId.status, "pending")
+  assert.equal(journalAfterMissingId.entry?.description, firstPostedDescription)
+
+  // Next login must reconcile via GET /v1/api-keys, find exact unused orphan (id: 610), revoke ONLY 610, and only THEN issue a new POST
+  const serverKeys = [
+    {
+      id: 100,
+      user_id: 17,
+      token: "cli-key",
+      description: "CLI Key",
+      last_used_at: "2026-10-20T00:00:00Z",
+    },
+    {
+      id: 610,
+      user_id: 17,
+      token: "orphan-from-missing-id-response",
+      description: firstPostedDescription,
+      last_used_at: null,
+    },
+  ]
+
+  const recoveryResult = await migrateLegacyPasswordSession({
+    consent: true,
+    checkCompatibility: supportedCompatibilityStub,
+    rawFetch: async (url, options = {}) => {
+      const method = options.method ?? "GET"
+      callSequence.push(`${method} ${url}`)
+      if (url === "v1/me" && options.headers?.Authorization) {
+        return { status: 200, _data: { id: 17, username: FIXTURE_USERNAME } }
+      }
+      if (url === "v1/api-keys" && method === "GET") {
+        return { status: 200, _data: [...serverKeys] }
+      }
+      if (url === "v1/api-keys/610" && method === "DELETE") {
+        deletedKeyIds.push(610)
+        return { status: 204, _data: null }
+      }
+      if (url === "v1/api-keys" && method === "POST") {
+        assert.deepEqual(
+          deletedKeyIds,
+          [610],
+          "Orphan key must be revoked before any new POST /v1/api-keys",
+        )
+        return {
+          status: 201,
+          _data: {
+            id: 611,
+            user_id: 17,
+            token: FIXTURE_TOKEN,
+            description: options.body.description,
+            last_used_at: null,
+          },
+        }
+      }
+      if (url === "v1/me" && options.headers?.["X-Auth-Token"] === FIXTURE_TOKEN) {
+        return { status: 200, _data: { id: 17, username: FIXTURE_USERNAME } }
+      }
+      throw new Error(`Unexpected request in step A2: ${method} ${url}`)
+    },
+  })
+
+  assert.deepEqual(deletedKeyIds, [610])
+  assert.deepEqual(callSequence, [
+    "GET v1/me",
+    "GET v1/api-keys",
+    "DELETE v1/api-keys/610",
+    "POST v1/api-keys",
+    "GET v1/me",
+  ])
+  assert.equal(recoveryResult.auth.apiKeyId, 611)
+  assert.equal(readAuthTransactionJournal().status, "empty")
+
+  // --- (B) SUCCESS_STATUS_EMPTY_BODY: POST returns 201 with missing/empty _data ---
+  setAuth({
+    server: SERVER_A,
+    username: FIXTURE_USERNAME,
+    password: FIXTURE_PASSWORD,
+    token: "",
+  })
+
+  let emptyBodyDescription = ""
+  await assert.rejects(
+    migrateLegacyPasswordSession({
+      consent: true,
+      checkCompatibility: supportedCompatibilityStub,
+      rawFetch: async (url, options = {}) => {
+        if (url === "v1/me" && options.headers?.Authorization) {
+          return { status: 200, _data: { id: 17, username: FIXTURE_USERNAME } }
+        }
+        if (url === "v1/api-keys" && options.method === "POST") {
+          emptyBodyDescription = options.body.description
+          return { status: 201, _data: undefined }
+        }
+        throw new Error(`Unexpected request in step B1: ${options.method ?? "GET"} ${url}`)
+      },
+    }),
+    (error) => error.stage === "create-key" && error.code === "INVALID_API_KEY_RESPONSE",
+  )
+
+  assert.equal(authState.get().password, FIXTURE_PASSWORD)
+  const journalAfterEmptyBody = readAuthTransactionJournal({
+    server: SERVER_A,
+    userId: 17,
+    username: FIXTURE_USERNAME,
+  })
+  assert.equal(journalAfterEmptyBody.status, "pending")
+  assert.equal(journalAfterEmptyBody.entry?.description, emptyBodyDescription)
+
+  // If next login reconciliation fails (e.g. GET /v1/api-keys 503), no second POST occurs
+  let postDuringBlockedRetry = 0
+  await assert.rejects(
+    migrateLegacyPasswordSession({
+      consent: true,
+      checkCompatibility: supportedCompatibilityStub,
+      rawFetch: async (url, options = {}) => {
+        if (url === "v1/me" && options.headers?.Authorization) {
+          return { status: 200, _data: { id: 17, username: FIXTURE_USERNAME } }
+        }
+        if (url === "v1/api-keys" && (!options.method || options.method === "GET")) {
+          const err = new Error("Service Unavailable")
+          err.status = 503
+          throw err
+        }
+        if (url === "v1/api-keys" && options.method === "POST") {
+          postDuringBlockedRetry += 1
+          return { status: 201, _data: {} }
+        }
+        throw new Error(`Unexpected request in step B2: ${options.method ?? "GET"} ${url}`)
+      },
+    }),
+    (error) => error.stage === "reconcile-journal" && error.code === "ORPHAN_RECONCILIATION_FAILED",
+  )
+  assert.equal(postDuringBlockedRetry, 0)
+  assert.equal(
+    readAuthTransactionJournal({ server: SERVER_A, userId: 17, username: FIXTURE_USERNAME }).status,
+    "pending",
+  )
+})
+
+test("AUTH_TRANSACTION_JOURNAL_01: (C) VALID_ID_MISSING_TOKEN_DELETE_SUCCESS and (D) VALID_ID_MISSING_TOKEN_DELETE_FAILURE handle known ID cleanup and fail closed when DELETE fails", async () => {
+  setAuth({
+    server: SERVER_A,
+    username: FIXTURE_USERNAME,
+    password: FIXTURE_PASSWORD,
+    token: "",
+  })
+
+  // --- (C) VALID_ID_MISSING_TOKEN_DELETE_SUCCESS: POST returns 201 with valid ID (710), missing token; DELETE 710 succeeds -> journal clears safely ---
+  const deletedKeyIds = []
+  await assert.rejects(
+    migrateLegacyPasswordSession({
+      consent: true,
+      checkCompatibility: supportedCompatibilityStub,
+      rawFetch: async (url, options = {}) => {
+        if (url === "v1/me" && options.headers?.Authorization) {
+          return { status: 200, _data: { id: 17, username: FIXTURE_USERNAME } }
+        }
+        if (url === "v1/api-keys" && options.method === "POST") {
+          return {
+            status: 201,
+            _data: {
+              id: 710,
+              user_id: 17,
+              token: "",
+              description: options.body.description,
+            },
+          }
+        }
+        if (url === "v1/api-keys/710" && options.method === "DELETE") {
+          deletedKeyIds.push(710)
+          return { status: 204, _data: null }
+        }
+        throw new Error(`Unexpected request in step C: ${options.method ?? "GET"} ${url}`)
+      },
+    }),
+    (error) => error.stage === "create-key" && error.code === "INVALID_API_KEY_RESPONSE",
+  )
+
+  assert.deepEqual(deletedKeyIds, [710])
+  assert.equal(authState.get().password, FIXTURE_PASSWORD)
+  assert.equal(readAuthTransactionJournal().status, "empty")
+
+  // --- (D) VALID_ID_MISSING_TOKEN_DELETE_FAILURE: POST returns 201 with valid ID (720), missing token; DELETE 720 fails -> journal remains pending and blocks second POST until reconciliation ---
+  let failedDeleteDescription = ""
+  const deleteAttempts = []
+  await assert.rejects(
+    migrateLegacyPasswordSession({
+      consent: true,
+      checkCompatibility: supportedCompatibilityStub,
+      rawFetch: async (url, options = {}) => {
+        if (url === "v1/me" && options.headers?.Authorization) {
+          return { status: 200, _data: { id: 17, username: FIXTURE_USERNAME } }
+        }
+        if (url === "v1/api-keys" && options.method === "POST") {
+          failedDeleteDescription = options.body.description
+          return {
+            status: 201,
+            _data: {
+              id: 720,
+              user_id: 17,
+              token: "",
+              description: failedDeleteDescription,
+            },
+          }
+        }
+        if (url === "v1/api-keys/720" && options.method === "DELETE") {
+          deleteAttempts.push(720)
+          const deleteErr = new Error("Delete failed")
+          deleteErr.status = 503
+          throw deleteErr
+        }
+        throw new Error(`Unexpected request in step D1: ${options.method ?? "GET"} ${url}`)
+      },
+    }),
+    (error) => error.stage === "create-key" && error.code === "INVALID_API_KEY_RESPONSE",
+  )
+
+  assert.deepEqual(deleteAttempts, [720])
+  assert.equal(authState.get().password, FIXTURE_PASSWORD)
+  const journalAfterDeleteFailure = readAuthTransactionJournal({
+    server: SERVER_A,
+    userId: 17,
+    username: FIXTURE_USERNAME,
+  })
+  assert.equal(journalAfterDeleteFailure.status, "pending")
+  assert.equal(journalAfterDeleteFailure.entry?.description, failedDeleteDescription)
+
+  // Subsequent password provisioning must NOT POST before reconciliation
+  let secondPostCount = 0
+  await assert.rejects(
+    migrateLegacyPasswordSession({
+      consent: true,
+      checkCompatibility: supportedCompatibilityStub,
+      rawFetch: async (url, options = {}) => {
+        if (url === "v1/me" && options.headers?.Authorization) {
+          return { status: 200, _data: { id: 17, username: FIXTURE_USERNAME } }
+        }
+        if (url === "v1/api-keys" && (!options.method || options.method === "GET")) {
+          return {
+            status: 200,
+            _data: [
+              {
+                id: 720,
+                user_id: 17,
+                token: "orphan-720",
+                description: failedDeleteDescription,
+                last_used_at: null,
+              },
+            ],
+          }
+        }
+        if (url === "v1/api-keys/720" && options.method === "DELETE") {
+          const deleteErr = new Error("Delete still failing")
+          deleteErr.status = 503
+          throw deleteErr
+        }
+        if (url === "v1/api-keys" && options.method === "POST") {
+          secondPostCount += 1
+          return { status: 201, _data: {} }
+        }
+        throw new Error(`Unexpected request in step D2: ${options.method ?? "GET"} ${url}`)
+      },
+    }),
+    (error) => error.stage === "reconcile-journal" && error.code === "ORPHAN_RECONCILIATION_FAILED",
+  )
+
+  assert.equal(secondPostCount, 0)
+  assert.equal(authState.get().password, FIXTURE_PASSWORD)
+  assert.equal(
+    readAuthTransactionJournal({ server: SERVER_A, userId: 17, username: FIXTURE_USERNAME }).status,
+    "pending",
+  )
 })
