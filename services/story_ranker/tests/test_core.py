@@ -30,7 +30,7 @@ class StoryRankerCoreTests(unittest.TestCase):
             {"id": 1, "feed_id": 10, "published_at": "2026-10-20T00:00:00Z", "title": "A"},
             {"id": 2, "feed_id": 10, "published_at": "2026-10-28T00:00:00Z", "title": "B"},
             {"id": 3, "feed_id": 20, "published_at": "2026-10-20T02:00:00Z", "title": "C"},
-            {"id": 4, "feed_id": 30, "published_at": "2026-10-28T01:00:01Z", "title": "D"},
+            {"id": 4, "feed_id": 10, "published_at": "2026-10-28T01:00:01Z", "title": "D"},
         ]
         embedder = FakeEmbedder(
             {
