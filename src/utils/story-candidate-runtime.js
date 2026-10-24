@@ -128,10 +128,7 @@ const startHomeStoryCandidateRuntime = ({
         ) {
           return null
         }
-        const failed = failStoryCandidateGeneration(
-          generation,
-          generationContext(nextGeneration),
-        )
+        const failed = failStoryCandidateGeneration(generation, generationContext(nextGeneration))
         if (failed === generation && failed.status !== "failed") {
           return null
         }
