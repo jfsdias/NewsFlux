@@ -42,10 +42,10 @@ const normalizeEntry = (entry) => {
 
 const stableRequestHash = (entries) => {
   const input = JSON.stringify(entries)
-  let hash = 0xcbf2_9ce4_8422_2325n
+  let hash = 0xcb_f2_9c_e4_84_22_23_25n
   for (const character of input) {
     hash ^= BigInt(character.codePointAt(0))
-    hash = BigInt.asUintN(64, hash * 0x0000_0100_0000_01b3n)
+    hash = BigInt.asUintN(64, hash * 0x00_00_01_00_00_00_01_b3n)
   }
   return hash.toString(16).padStart(16, "0")
 }
