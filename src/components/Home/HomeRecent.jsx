@@ -1,10 +1,16 @@
 import { useStore } from "@nanostores/react"
+import { useEffect } from "react"
 
 import ArticleEntry from "@/components/Article/ArticleEntry"
 import ArticleGridCard from "@/components/Article/ArticleGridCard"
 import useArticleListLayout from "@/hooks/useArticleListLayout"
 import { polyglotState } from "@/hooks/useLanguage"
+import { contentState } from "@/store/contentState"
+import { dataState } from "@/store/dataState"
+import { homeIdentityState } from "@/store/homePageState"
 import { projectRecentEntries } from "@/utils/home-editorial-projection"
+import { getHomeIdentityKey } from "@/utils/home-page"
+import { startHomeStoryCandidateRuntime } from "@/utils/story-candidate-runtime"
 
 import "@/components/Article/ArticleList.css"
 
@@ -17,6 +23,19 @@ const HomeRecent = ({
   scrollRootRef,
 }) => {
   const { polyglot } = useStore(polyglotState)
+  const identity = useStore(homeIdentityState)
+  const { sessionRevision } = useStore(dataState, { keys: ["sessionRevision"] })
+  const identityKey = getHomeIdentityKey(identity)
+
+  useEffect(() => {
+    const runtime = startHomeStoryCandidateRuntime({
+      contentStore: contentState,
+      identityKey,
+      sessionRevision,
+    })
+    return () => runtime.dispose()
+  }, [identityKey, sessionRevision])
+
   const entryById = new Map(
     projectRecentEntries(entries, highlightIds).map((entry) => [entry.id, entry]),
   )
