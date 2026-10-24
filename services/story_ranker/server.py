@@ -14,6 +14,8 @@ from services.story_ranker.adapters import (
     QWEN_RERANKER_REVISION,
     OllamaEmbedder,
     QwenReranker,
+    build_runtime_provenance_receipt,
+    configure_deterministic_cpu_runtime,
 )
 from services.story_ranker.core import CANDIDATE_K, PAIR_WINDOW_HOURS, rank_story_candidates
 
@@ -22,13 +24,18 @@ MAX_REQUEST_BYTES = 256 * 1024
 HOST = os.environ.get("STORY_RANKER_HOST", "0.0.0.0")
 PORT = int(os.environ.get("STORY_RANKER_PORT", "8787"))
 
+configure_deterministic_cpu_runtime()
 _EMBEDDER = OllamaEmbedder()
 _RERANKER = QwenReranker()
 _INFERENCE_LOCK = threading.Lock()
 _LOGGER = logging.getLogger("newsflux.story_ranker")
 
 
-def _model_contract() -> dict:
+def _model_contract(
+    *,
+    embedder: OllamaEmbedder | None = _EMBEDDER,
+    reranker: QwenReranker | None = _RERANKER,
+) -> dict:
     return {
         "candidate_generator": QWEN_EMBEDDING_MODEL,
         "embedding_digest": QWEN_EMBEDDING_DIGEST,
@@ -37,6 +44,10 @@ def _model_contract() -> dict:
         "reranker": QWEN_RERANKER_MODEL,
         "reranker_revision": QWEN_RERANKER_REVISION,
         "scoring": "mean(raw_logit_A_B,raw_logit_B_A)",
+        "runtime_provenance": build_runtime_provenance_receipt(
+            embedder=embedder,
+            reranker=reranker,
+        ),
     }
 
 
@@ -58,7 +69,11 @@ class StoryRankerHandler(BaseHTTPRequestHandler):
             return
         self._write_json(
             HTTPStatus.OK,
-            {"status": "ok", "model": _model_contract(), "persistent_state": False},
+            {
+                "status": "ok",
+                "model": _model_contract(),
+                "persistent_state": False,
+            },
         )
 
     def do_POST(self) -> None:  # noqa: N802
@@ -97,7 +112,10 @@ class StoryRankerHandler(BaseHTTPRequestHandler):
                 window_hours=PAIR_WINDOW_HOURS,
             )
         except ValueError as exc:
-            self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_entries", "detail": str(exc)})
+            self._write_json(
+                HTTPStatus.BAD_REQUEST,
+                {"error": "invalid_entries", "detail": str(exc)},
+            )
             return
         except RuntimeError:
             self._write_json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "model_unavailable"})
