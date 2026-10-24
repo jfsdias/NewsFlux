@@ -79,6 +79,27 @@ class StoryRankerCoreTests(unittest.TestCase):
         self.assertEqual(result[1]["reranker_score"], 4.0)
         self.assertEqual(result[1]["rank"], 2)
 
+    def test_reproduces_r3c_string_pair_key_tie_breaking(self):
+        entries = [
+            {"id": 2, "feed_id": 10, "published_at": "2026-10-20T00:00:00Z", "title": "A"},
+            {"id": 10, "feed_id": 20, "published_at": "2026-10-20T01:00:00Z", "title": "B"},
+            {"id": 11, "feed_id": 30, "published_at": "2026-10-20T02:00:00Z", "title": "C"},
+        ]
+        embedder = FakeEmbedder({"A": [1.0, 0.0], "B": [1.0, 0.0], "C": [1.0, 0.0]})
+        reranker = FakeReranker([1.0, 1.0, 1.0, 1.0])
+
+        result = rank_story_candidates(
+            entries,
+            embedder=embedder,
+            reranker=reranker,
+            candidate_k=2,
+        )
+
+        self.assertEqual(
+            [(row["entry_a_id"], row["entry_b_id"]) for row in result],
+            [(10, 11), (2, 10)],
+        )
+
     def test_output_contains_ranking_only_not_story_identity_decisions(self):
         entries = [
             {"id": 1, "feed_id": 10, "published_at": "2026-10-20T00:00:00Z", "title": "A"},
