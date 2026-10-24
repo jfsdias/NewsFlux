@@ -150,6 +150,10 @@ class StoryRankerRuntimeContractTests(unittest.TestCase):
             self.assertIn("runtime_provenance", contract)
 
     def test_cpu_repeated_run_determinism(self):
+        """SYNTHETIC_DETERMINISM_GATE: verifies configure_deterministic_cpu_runtime()
+        and rank_story_candidates() repeatability using deterministic synthetic stubs
+        (does not claim REAL_MODEL_CPU_REPEATABILITY).
+        """
         env_Config = configure_deterministic_cpu_runtime()
         self.assertEqual(env_Config["OMP_NUM_THREADS"], "1")
         self.assertEqual(env_Config["MKL_NUM_THREADS"], "1")
@@ -213,6 +217,9 @@ class StoryRankerRuntimeContractTests(unittest.TestCase):
             self.assertEqual(max_rerank_delta, 0.0)
 
     def test_cpu_image_rebuild_reproducibility_contract(self):
+        """STATIC_RUNTIME_CONTRACT_GATE: static inspection of Dockerfile and requirements.txt
+        exact version pins (does not claim REAL_CONTAINER_REBUILD_REPRODUCIBILITY).
+        """
         service_dir = Path(__file__).resolve().parent.parent
         dockerfile_text = (service_dir / "Dockerfile").read_text(encoding="utf-8")
         requirements_text = (service_dir / "requirements.txt").read_text(encoding="utf-8")
@@ -239,7 +246,7 @@ class StoryRankerRuntimeContractTests(unittest.TestCase):
         self.assertIn("write_reranker_snapshot_manifest", dockerfile_text)
         self.assertIn("verify_offline_reranker_snapshot", dockerfile_text)
 
-        # 4. requirements.txt must have exact == pins and no floating >= or < ranges
+        # 4. requirements.txt must have exact == pins matching the committed specification
         req_lines = [
             line.strip()
             for line in requirements_text.splitlines()
@@ -254,18 +261,18 @@ class StoryRankerRuntimeContractTests(unittest.TestCase):
             name, version = line.split("==", 1)
             pinned_packages[name.strip().lower()] = version.strip()
 
-        for required_pkg in (
-            "sentence-transformers",
-            "torch",
-            "transformers",
-            "tokenizers",
-            "huggingface-hub",
-            "safetensors",
-            "numpy",
-            "scipy",
-            "scikit-learn",
-        ):
-            self.assertIn(required_pkg, pinned_packages)
+        expected_versions = {
+            "sentence-transformers": "5.4.1",
+            "torch": "2.14.1",
+            "transformers": "5.20.2",
+            "tokenizers": "0.23.3",
+            "huggingface-hub": "2.3.0",
+            "safetensors": "0.8.0",
+            "numpy": "2.5.4",
+            "scipy": "1.18.1",
+            "scikit-learn": "1.9.1",
+        }
+        self.assertEqual(pinned_packages, expected_versions)
 
 
 if __name__ == "__main__":

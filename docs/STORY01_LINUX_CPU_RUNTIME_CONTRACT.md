@@ -79,12 +79,26 @@ To eliminate container-rebuild drift and within-CPU non-determinism, `services/s
 
 **MEASURED_EVIDENCE** is the empirical MPS-vs-CPU result recorded in Section 2, including the frozen-snapshot overlap, Spearman correlation, score deltas, and `CROSS_BACKEND_NUMERIC_VARIANCE` classification. These observations are evidence; they do not themselves authorize an acceptance threshold.
 
-**PROPOSED_ACCEPTANCE_THRESHOLD:** Dual-Gate Policy E combines repeatable within-CPU determinism with a bounded cross-backend parity envelope. This is an engineering recommendation for PM review, not an adopted product or release policy.
+**PROPOSED_ACCEPTANCE_THRESHOLDS:** Dual-Gate Policy E combines repeatable within-CPU determinism with a bounded cross-backend parity envelope. This is an engineering recommendation for PM review, not an adopted product or release policy.
 
 ```ini
-CPU_ACCEPTANCE_POLICY=PM_DECISION_REQUIRED
 PROPOSED_CPU_ACCEPTANCE_POLICY=DUAL_GATE_POLICY_E
+ENGINEERING_RECOMMENDATION=YES
+PM_ACCEPTANCE=NOT_YET_GRANTED
+PRODUCT_ACCEPTANCE=NOT_YET_GRANTED
+CPU_ACCEPTANCE_POLICY=PM_DECISION_REQUIRED
 ```
+
+### Verification & Evidence Gate Classification
+
+To avoid conflating static contract checks or synthetic stub tests with full containerized model benchmarks, verification gates are classified explicitly:
+
+| Gate Identifier                          | Scope & Method                                                                                                                                                                                                                                                                                 | Status       |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `STATIC_RUNTIME_CONTRACT_GATE`           | Static verification of `services/story_ranker/Dockerfile` (digest-pinned base image, deterministic thread/offline env vars, build-time snapshot manifest verification) and exact `==` version pins in `services/story_ranker/requirements.txt`.                                                | `PASS`       |
+| `SYNTHETIC_DETERMINISM_GATE`             | Repeated 5-run unit test (`test_cpu_repeated_run_determinism`) verifying `configure_deterministic_cpu_runtime()` and `rank_story_candidates()` repeatability using deterministic synthetic embedder/reranker stubs.                                                                            | `PASS`       |
+| `REAL_MODEL_CPU_REPEATABILITY`           | Multi-run repeated inference benchmark of the full `Qwen/Qwen3-Reranker-0.6B` model inside the target Linux CPU container. (Note: Section 2 records a single-pass cross-backend MPS-vs-CPU comparison on the 200-entry R3C snapshot, not a multi-run Linux container repeatability benchmark.) | `NOT_PROVEN` |
+| `REAL_CONTAINER_REBUILD_REPRODUCIBILITY` | End-to-end multi-rebuild `docker build` + container execution comparison across independent Linux container image builds.                                                                                                                                                                      | `NOT_PROVEN` |
 
 | Policy Option                                                                                                             | Description                                                                                                                                                                       | Engineering Evaluation                                                                                                                                                     | Verdict                            |
 | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
