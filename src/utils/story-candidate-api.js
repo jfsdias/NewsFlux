@@ -19,7 +19,10 @@ const emptyResponse = () =>
     },
   })
 
-export const getStoryCandidates = async (entries, { fetchImpl = globalThis.fetch, signal } = {}) => {
+export const getStoryCandidates = async (
+  entries,
+  { fetchImpl = globalThis.fetch, signal } = {},
+) => {
   const request = createStoryCandidateRequest(entries)
   if (request.entries.length < 2) {
     return emptyResponse()
