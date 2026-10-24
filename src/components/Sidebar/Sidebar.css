@@ -647,3 +647,47 @@
     width: min(80vw, 360px) !important;
   }
 }
+
+@media (any-pointer: coarse) {
+  .sidebar-container .arco-menu-vertical .arco-menu-item,
+  .sidebar-container .arco-menu-vertical .arco-menu-inline-header,
+  .sidebar-drawer .sidebar-container .arco-menu-vertical .arco-menu-item,
+  .sidebar-drawer .sidebar-container .arco-menu-vertical .arco-menu-inline-header {
+    min-height: 48px;
+    line-height: 48px;
+  }
+
+  .sidebar-container .arco-collapse-item-header,
+  .sidebar-drawer .sidebar-container .arco-collapse-item-header {
+    box-sizing: border-box;
+    min-height: 48px;
+  }
+
+  .sidebar-container .category-title,
+  .sidebar-drawer .sidebar-container .category-title {
+    box-sizing: border-box;
+    min-height: 48px;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  .home-brand,
+  .sidebar-section-action,
+  .sidebar-profile-trigger,
+  .feed-health-trigger.arco-btn,
+  .feed-health-retry.arco-btn,
+  .source-mode-option,
+  .source-filter-input,
+  .source-filter-clear.arco-btn,
+  .sidebar .desktop-sidebar-toggle.arco-btn {
+    min-height: 48px;
+  }
+
+  .sidebar-section-action,
+  .sidebar-profile-trigger,
+  .feed-health-trigger.arco-btn,
+  .source-filter-clear.arco-btn,
+  .sidebar .desktop-sidebar-toggle.arco-btn {
+    min-width: 48px;
+  }
+}

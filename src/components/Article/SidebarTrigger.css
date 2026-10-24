@@ -67,3 +67,13 @@
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--mobile-navigation-spacing));
   }
 }
+
+@media (any-pointer: coarse) {
+  .sidebar-drawer .mobile-sidebar-close.arco-btn,
+  .reader-sidebar-trigger.arco-btn,
+  .trigger.arco-btn,
+  .desktop-sidebar-reopen.arco-btn {
+    min-width: 48px;
+    min-height: 48px;
+  }
+}
