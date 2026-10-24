@@ -33,6 +33,17 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Show exact Prettier diff
+        run: |
+          pnpm exec prettier --write \
+            src/utils/story-candidate-request.js \
+            src/utils/story-candidate-runtime.js \
+            src/utils/story-candidate-runtime.test.js
+          git diff -- \
+            src/utils/story-candidate-request.js \
+            src/utils/story-candidate-runtime.js \
+            src/utils/story-candidate-runtime.test.js
+
       - name: Run frontend story-ranking tests
         run: >-
           node --test
