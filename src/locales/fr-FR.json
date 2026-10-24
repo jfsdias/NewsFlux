@@ -190,6 +190,7 @@
   "article_list": {
     "sort_direction_desc": "Les plus récents en premier",
     "sort_direction_asc": "Les plus anciens en premier",
+    "filter_status_group_label": "Filtrer les articles par statut",
     "filter_status_all": "Tout",
     "filter_status_starred": "Favoris",
     "filter_status_unread": "Non lus",

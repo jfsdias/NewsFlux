@@ -190,6 +190,7 @@
   "article_list": {
     "sort_direction_desc": "最新优先",
     "sort_direction_asc": "最旧优先",
+    "filter_status_group_label": "按状态筛选文章",
     "filter_status_all": "全部",
     "filter_status_starred": "收藏",
     "filter_status_unread": "未读",

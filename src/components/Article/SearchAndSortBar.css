@@ -447,3 +447,16 @@
     font-size: 0.8125rem;
   }
 }
+
+@media (pointer: coarse) {
+  .search-syntax-help.arco-btn {
+    position: relative;
+  }
+
+  .search-syntax-help.arco-btn::after {
+    position: absolute;
+    inset: -10px;
+    content: "";
+    pointer-events: auto;
+  }
+}

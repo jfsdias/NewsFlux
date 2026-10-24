@@ -190,6 +190,7 @@
   "article_list": {
     "sort_direction_desc": "新しい順",
     "sort_direction_asc": "古い順",
+    "filter_status_group_label": "ステータスで記事を絞り込む",
     "filter_status_all": "すべて",
     "filter_status_starred": "スター付き",
     "filter_status_unread": "未読",

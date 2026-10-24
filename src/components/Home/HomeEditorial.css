@@ -92,6 +92,13 @@
   outline-offset: 2px;
 }
 
+@media (pointer: coarse) {
+  .home-personalization-info-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
 .home-personalization-explanation {
   grid-column: 1 / -1;
   padding: 10px 12px;
