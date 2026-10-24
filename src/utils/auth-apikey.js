@@ -179,32 +179,11 @@ export const readAuthTransactionJournal = ({
   try {
     parsed = JSON.parse(raw)
   } catch {
-    try {
-      storage.removeItem?.(AUTH_TRANSACTION_JOURNAL_STORAGE_KEY)
-    } catch {
-      // Ignore storage cleanup errors
-    }
     return { status: "corrupt", entry: null }
   }
 
   if (!isValidStoredJournalEntry(parsed)) {
-    try {
-      storage.removeItem?.(AUTH_TRANSACTION_JOURNAL_STORAGE_KEY)
-    } catch {
-      // Ignore storage cleanup errors
-    }
     return { status: "corrupt", entry: null }
-  }
-
-  const nowMs = (now instanceof Date ? now : new Date(now)).getTime()
-  const expiresAtMs = Date.parse(parsed.expiresAt)
-  if (Number.isFinite(nowMs) && expiresAtMs <= nowMs) {
-    try {
-      storage.removeItem?.(AUTH_TRANSACTION_JOURNAL_STORAGE_KEY)
-    } catch {
-      // Ignore storage cleanup errors
-    }
-    return { status: "stale", entry: null }
   }
 
   const normalizedEntry = Object.freeze({
@@ -224,7 +203,7 @@ export const readAuthTransactionJournal = ({
     if (requestedServer !== normalizedEntry.server) {
       return {
         status: "server-mismatch",
-        entry: null,
+        entry: normalizedEntry,
         preservedEntry: normalizedEntry,
       }
     }
@@ -235,7 +214,7 @@ export const readAuthTransactionJournal = ({
     if (requestedUserId !== normalizedEntry.userId) {
       return {
         status: "user-mismatch",
-        entry: null,
+        entry: normalizedEntry,
         preservedEntry: normalizedEntry,
       }
     }
@@ -249,7 +228,17 @@ export const readAuthTransactionJournal = ({
   ) {
     return {
       status: "user-mismatch",
-      entry: null,
+      entry: normalizedEntry,
+      preservedEntry: normalizedEntry,
+    }
+  }
+
+  const nowMs = (now instanceof Date ? now : new Date(now)).getTime()
+  const expiresAtMs = Date.parse(parsed.expiresAt)
+  if (Number.isFinite(nowMs) && expiresAtMs <= nowMs) {
+    return {
+      status: "stale",
+      entry: normalizedEntry,
       preservedEntry: normalizedEntry,
     }
   }
@@ -272,9 +261,41 @@ export const writeAuthTransactionJournal = (
   if (!storage || typeof storage.setItem !== "function") {
     throw new Error("Durable localStorage is unavailable for auth transaction journal")
   }
+
+  const existing = readAuthTransactionJournal({
+    server: entry.server,
+    userId: entry.userId,
+    username: entry.username,
+    now,
+    storage,
+  })
+  if (existing.status === "corrupt") {
+    const error = new Error(
+      "Corrupt pending API key transaction journal requires recovery before provisioning a new key",
+    )
+    error.code = "AUTH_JOURNAL_CORRUPT_REQUIRES_RECOVERY"
+    throw error
+  }
+  if (existing.status === "stale") {
+    const error = new Error(
+      "Stale pending API key transaction journal requires recovery before provisioning a new key",
+    )
+    error.code = "AUTH_JOURNAL_STALE_REQUIRES_RECOVERY"
+    throw error
+  }
+  if (existing.status === "server-mismatch" || existing.status === "user-mismatch") {
+    const error = new Error(
+      "Pending API key transaction journal belongs to another server or user scope",
+    )
+    error.code = "AUTH_JOURNAL_FOREIGN_SCOPE_PENDING"
+    throw error
+  }
+
   storage.setItem(AUTH_TRANSACTION_JOURNAL_STORAGE_KEY, JSON.stringify(entry))
   return entry
 }
+
+const PROTECTED_JOURNAL_STATUSES = new Set(["corrupt", "stale", "server-mismatch", "user-mismatch"])
 
 export const clearAuthTransactionJournal = ({
   server,
@@ -282,18 +303,15 @@ export const clearAuthTransactionJournal = ({
   username,
   now = new Date(),
   storage = globalThis.localStorage,
+  force = false,
 } = {}) => {
   if (!storage || typeof storage.removeItem !== "function") {
     return false
   }
-  const hasScopeFilter =
-    (server !== undefined && server !== null && String(server).trim() !== "") ||
-    (userId !== undefined && userId !== null) ||
-    (typeof username === "string" && username.trim() !== "")
 
-  if (hasScopeFilter) {
+  if (!force) {
     const current = readAuthTransactionJournal({ server, userId, username, now, storage })
-    if (current.status === "server-mismatch" || current.status === "user-mismatch") {
+    if (PROTECTED_JOURNAL_STATUSES.has(current.status)) {
       return false
     }
   }
@@ -402,14 +420,47 @@ export const reconcileAuthTransactionJournal = async ({
     storage,
   })
 
-  if (journalRead.status !== "pending" || !journalRead.entry) {
+  if (journalRead.status === "empty") {
     return {
-      status: journalRead.status,
+      status: "empty",
       reconciled: true,
       inspected: 0,
       revokedIds: [],
-      preservedEntry: journalRead.preservedEntry ?? null,
+      preservedEntry: null,
     }
+  }
+
+  if (journalRead.status === "corrupt") {
+    throw createAuthProvisioningError(
+      "Corrupt pending API key transaction journal requires recovery before provisioning a new key",
+      {
+        code: "AUTH_JOURNAL_CORRUPT_REQUIRES_RECOVERY",
+        stage: "reconcile-journal",
+        secrets,
+      },
+    )
+  }
+
+  if (journalRead.status === "stale") {
+    throw createAuthProvisioningError(
+      "Stale pending API key transaction journal requires recovery before provisioning a new key",
+      {
+        code: "AUTH_JOURNAL_STALE_REQUIRES_RECOVERY",
+        stage: "reconcile-journal",
+        secrets,
+      },
+    )
+  }
+
+  if (journalRead.status === "server-mismatch" || journalRead.status === "user-mismatch") {
+    throw createAuthProvisioningError(
+      "Pending API key transaction journal belongs to another server or user scope",
+      {
+        code: "AUTH_JOURNAL_FOREIGN_SCOPE_PENDING",
+        stage: "reconcile-journal",
+        secrets,
+      },
+    )
   }
 
   const pendingEntry = journalRead.entry
@@ -579,32 +630,54 @@ const DEFINITIVE_PRE_CREATE_REJECTION_STATUSES = new Set([400, 401, 403, 404, 40
 const isDefinitivePreCreateRejectionStatus = (status) =>
   DEFINITIVE_PRE_CREATE_REJECTION_STATUSES.has(status)
 
-const restoreOrClearJournalForScope = ({
-  preservedForeignEntry,
+const assertNoBlockingJournalBeforeProvisioning = ({
   server,
   userId,
   username,
   now,
   storage,
+  secrets,
 }) => {
-  if (preservedForeignEntry) {
-    try {
-      storage?.setItem?.(
-        AUTH_TRANSACTION_JOURNAL_STORAGE_KEY,
-        JSON.stringify(preservedForeignEntry),
-      )
-      return
-    } catch {
-      // Fall back to clearing if restore fails
-    }
-  }
-  clearAuthTransactionJournal({
+  const journalRead = readAuthTransactionJournal({
     server,
     userId,
     username,
     now,
     storage,
   })
+
+  if (journalRead.status === "corrupt") {
+    throw createAuthProvisioningError(
+      "Corrupt pending API key transaction journal requires recovery before provisioning a new key",
+      {
+        code: "AUTH_JOURNAL_CORRUPT_REQUIRES_RECOVERY",
+        stage: "reconcile-journal",
+        secrets,
+      },
+    )
+  }
+
+  if (journalRead.status === "stale") {
+    throw createAuthProvisioningError(
+      "Stale pending API key transaction journal requires recovery before provisioning a new key",
+      {
+        code: "AUTH_JOURNAL_STALE_REQUIRES_RECOVERY",
+        stage: "reconcile-journal",
+        secrets,
+      },
+    )
+  }
+
+  if (journalRead.status === "server-mismatch" || journalRead.status === "user-mismatch") {
+    throw createAuthProvisioningError(
+      "Pending API key transaction journal belongs to another server or user scope",
+      {
+        code: "AUTH_JOURNAL_FOREIGN_SCOPE_PENDING",
+        stage: "reconcile-journal",
+        secrets,
+      },
+    )
+  }
 }
 
 const executeProvisionDedicatedApiKeySession = async (
@@ -642,6 +715,16 @@ const executeProvisionDedicatedApiKeySession = async (
         secrets: baseSecrets,
       },
     )
+  }
+
+  if (isPasswordFlow) {
+    assertNoBlockingJournalBeforeProvisioning({
+      server,
+      username,
+      now,
+      storage,
+      secrets: baseSecrets,
+    })
   }
 
   // Step 1: Authenticate initial credentials against /v1/me
@@ -736,7 +819,7 @@ const executeProvisionDedicatedApiKeySession = async (
   }
 
   // Step 4: Reconcile any prior journal transaction safely BEFORE creating any new key
-  const reconciliation = await reconcileAuthTransactionJournal({
+  await reconcileAuthTransactionJournal({
     server,
     username: canonicalUsername,
     password,
@@ -746,7 +829,6 @@ const executeProvisionDedicatedApiKeySession = async (
     storage,
     signal,
   })
-  const preservedForeignEntry = reconciliation.preservedEntry ?? null
 
   // Steps 5–7: Generate exact API-key description, persist PENDING_CREATE journal BEFORE POST /v1/api-keys, then POST /v1/api-keys
   let createKeyResponse
@@ -769,8 +851,7 @@ const executeProvisionDedicatedApiKeySession = async (
         },
       )
     } catch (error) {
-      restoreOrClearJournalForScope({
-        preservedForeignEntry,
+      clearAuthTransactionJournal({
         server,
         userId: initialUser.id,
         username: canonicalUsername,
@@ -778,7 +859,7 @@ const executeProvisionDedicatedApiKeySession = async (
         storage,
       })
       throw createAuthProvisioningError("Failed to persist pending auth transaction journal", {
-        code: "WRITE_AUTH_JOURNAL_FAILED",
+        code: error?.code ?? "WRITE_AUTH_JOURNAL_FAILED",
         stage: "write-journal",
         cause: error,
         secrets: baseSecrets,
@@ -798,8 +879,7 @@ const executeProvisionDedicatedApiKeySession = async (
     } catch (error) {
       const errorStatus = error?.status ?? error?.response?.status
       if (errorStatus === 400 || errorStatus === 409) {
-        restoreOrClearJournalForScope({
-          preservedForeignEntry,
+        clearAuthTransactionJournal({
           server,
           userId: initialUser.id,
           username: canonicalUsername,
@@ -810,8 +890,7 @@ const executeProvisionDedicatedApiKeySession = async (
           continue
         }
       } else if (isDefinitivePreCreateRejectionStatus(errorStatus)) {
-        restoreOrClearJournalForScope({
-          preservedForeignEntry,
+        clearAuthTransactionJournal({
           server,
           userId: initialUser.id,
           username: canonicalUsername,
@@ -830,8 +909,7 @@ const executeProvisionDedicatedApiKeySession = async (
 
     const responseStatus = createKeyResponse?.status
     if (responseStatus === 400 || responseStatus === 409) {
-      restoreOrClearJournalForScope({
-        preservedForeignEntry,
+      clearAuthTransactionJournal({
         server,
         userId: initialUser.id,
         username: canonicalUsername,
@@ -851,8 +929,7 @@ const executeProvisionDedicatedApiKeySession = async (
 
     if (responseStatus !== 201 && responseStatus !== 200) {
       if (isDefinitivePreCreateRejectionStatus(responseStatus)) {
-        restoreOrClearJournalForScope({
-          preservedForeignEntry,
+        clearAuthTransactionJournal({
           server,
           userId: initialUser.id,
           username: canonicalUsername,
@@ -885,8 +962,7 @@ const executeProvisionDedicatedApiKeySession = async (
       cleanedUp = revokeResult.revoked
     }
     if (cleanedUp) {
-      restoreOrClearJournalForScope({
-        preservedForeignEntry,
+      clearAuthTransactionJournal({
         server,
         userId: initialUser.id,
         username: canonicalUsername,
@@ -919,8 +995,7 @@ const executeProvisionDedicatedApiKeySession = async (
       { apiKeyId: createdKeyId, rawFetch, signal },
     )
     if (revokeResult.revoked) {
-      restoreOrClearJournalForScope({
-        preservedForeignEntry,
+      clearAuthTransactionJournal({
         server,
         userId: initialUser.id,
         username: canonicalUsername,
@@ -947,8 +1022,7 @@ const executeProvisionDedicatedApiKeySession = async (
       { apiKeyId: createdKeyId, rawFetch, signal },
     )
     if (revokeResult.revoked) {
-      restoreOrClearJournalForScope({
-        preservedForeignEntry,
+      clearAuthTransactionJournal({
         server,
         userId: initialUser.id,
         username: canonicalUsername,
@@ -986,8 +1060,7 @@ const executeProvisionDedicatedApiKeySession = async (
       { apiKeyId: createdKeyId, rawFetch, signal },
     )
     if (revokeResult.revoked) {
-      restoreOrClearJournalForScope({
-        preservedForeignEntry,
+      clearAuthTransactionJournal({
         server,
         userId: initialUser.id,
         username: canonicalUsername,
@@ -1004,8 +1077,7 @@ const executeProvisionDedicatedApiKeySession = async (
   }
 
   // Clear journal ONLY after committed success
-  restoreOrClearJournalForScope({
-    preservedForeignEntry,
+  clearAuthTransactionJournal({
     server,
     userId: initialUser.id,
     username: canonicalUsername,
