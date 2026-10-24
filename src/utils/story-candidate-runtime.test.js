@@ -4,7 +4,7 @@ import test from "node:test"
 // Node's direct test runner requires the extension; Vite resolves the same module.
 const { default: startHomeStoryCandidateRuntime } = await import(
   // eslint-disable-next-line import/extensions
-  "./story-candidate-runtime.js",
+  "./story-candidate-runtime.js"
 )
 
 const makeEntry = (id) => ({
@@ -67,7 +67,10 @@ test("waits for a complete Home snapshot and runs once for its normalized reques
   await flush()
   assert.equal(calls.length, 1)
   assert.equal(calls[0].length, 3)
-  assert.deepEqual(transitions.map(([kind]) => kind), ["pending", "ready"])
+  assert.deepEqual(
+    transitions.map(([kind]) => kind),
+    ["pending", "ready"],
+  )
 
   store.set({ ...store.get() })
   await flush()
