@@ -8,7 +8,7 @@ on:
       - "src/apis/storyCandidates.js"
       - "src/apis/storyCandidates.test.js"
       - "src/store/storyCandidateState.js"
-      - "src/components/Home/HomeEditorial.jsx"
+      - "src/components/Home/HomeRecent.jsx"
       - "services/story_ranker/**"
       - "Caddyfile"
       - ".github/workflows/story-candidate-ranking.yml"
@@ -40,12 +40,29 @@ jobs:
           node --test
           src/utils/story-candidate-request.test.js
           src/utils/story-candidate-generation.test.js
+          src/utils/story-candidate-runtime.test.js
           src/apis/storyCandidates.test.js
+
+      - name: Lint story-ranking frontend changes
+        run: >-
+          pnpm exec eslint
+          src/utils/story-candidate-request.js
+          src/utils/story-candidate-generation.js
+          src/utils/story-candidate-runtime.js
+          src/apis/storyCandidates.js
+          src/store/storyCandidateState.js
+          src/components/Home/HomeRecent.jsx
+
+      - name: Build frontend
+        run: pnpm build
 
       - name: Setup Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
+
+      - name: Compile stateless engine
+        run: python -m compileall -q services/story_ranker
 
       - name: Run stateless engine unit tests
         run: python -m unittest discover -s services/story_ranker/tests -p "test_*.py" -v
