@@ -122,10 +122,24 @@
 }
 
 .category-title {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
   margin-right: -12px;
   margin-left: -32px;
   border-radius: var(--border-radius-medium);
   padding: 8px 12px 8px 42px;
+  min-height: 40px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.custom-menu-link {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 40px;
+  line-height: 40px;
 }
 
 .feed-icon-sidebar {
@@ -238,6 +252,34 @@
   background-color: transparent;
   padding-top: 0;
   padding-bottom: 0;
+}
+
+.category-disclosure-header {
+  cursor: unset;
+}
+
+.category-disclosure-button {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  width: 40px;
+  height: 40px;
+  color: var(--color-neutral-7);
+  cursor: pointer;
+}
+
+.category-disclosure-button:focus-visible,
+.category-title:focus-visible {
+  outline: 2px solid var(--nf-focus-ring, rgb(var(--primary-6)));
+  outline-offset: 1px;
+}
+
+.arco-collapse-item-content[hidden] {
+  display: none;
 }
 
 .arco-collapse-item {
@@ -427,6 +469,12 @@
     line-height: var(--mobile-navigation-control-size);
   }
 
+  .sidebar-drawer .category-disclosure-button {
+    box-sizing: border-box;
+    min-width: var(--mobile-navigation-control-size);
+    min-height: var(--mobile-navigation-control-size);
+  }
+
   .sidebar-drawer .arco-collapse-item,
   .sidebar-drawer .arco-collapse-item-header {
     border-width: 0;
@@ -497,11 +545,17 @@
   screen and (max-width: 599px) and (max-height: 479px) {
   .sidebar-drawer .sidebar-container .arco-menu-vertical .arco-menu-item,
   .sidebar-drawer .sidebar-container .arco-menu-vertical .arco-menu-inline-header,
+  .sidebar-drawer .sidebar-container .arco-menu-vertical .custom-menu-link,
   .sidebar-drawer .sidebar-container .arco-collapse-item-header,
   .sidebar-drawer .sidebar-container .category-title {
     box-sizing: border-box;
     min-height: 44px;
     line-height: 44px;
+  }
+
+  .sidebar-drawer .category-disclosure-button {
+    min-width: 44px;
+    min-height: 44px;
   }
 }
 
@@ -669,6 +723,15 @@
     min-height: 48px;
     padding-top: 0;
     padding-bottom: 0;
+  }
+
+  .sidebar-container .category-disclosure-button,
+  .sidebar-drawer .sidebar-container .category-disclosure-button {
+    justify-content: flex-start;
+    box-sizing: border-box;
+    padding-left: 10px;
+    min-width: 48px;
+    min-height: 48px;
   }
 
   .home-brand,

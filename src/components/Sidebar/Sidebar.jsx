@@ -1,6 +1,5 @@
 import {
   Button,
-  Collapse,
   Divider,
   Dropdown,
   Form,
@@ -32,7 +31,7 @@ import {
 import { useStore } from "@nanostores/react"
 import classNames from "classnames"
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react"
-import { useLocation, useNavigate } from "react-router"
+import { Link, useLocation, useNavigate } from "react-router"
 import { Virtualizer } from "virtua"
 
 const SidebarNavigationContext = createContext(null)
@@ -133,15 +132,8 @@ const CategoryTitle = ({
   const { isBelowMedium } = useScreenWidth()
   const { polyglot } = useStore(polyglotState)
 
-  const navigate = useNavigate()
   const onNavigate = useContext(SidebarNavigationContext)
   const { dropdownProps, longPressProps } = useLongPressContextMenu()
-
-  const handleNavigation = () => {
-    navigate(`/category/${category.id}`)
-    setActiveContent(null)
-    onNavigate?.()
-  }
 
   const canDelete = !feedsGroupedById[category.id] || feedsGroupedById[category.id].length === 0
   const categoryTarget = createEntityHomeTarget("category", category.id)
@@ -217,18 +209,17 @@ const CategoryTitle = ({
         </Menu>
       }
     >
-      <div
+      <Link
         {...longPressProps}
+        aria-current={isCategoryActive ? "page" : undefined}
         className={categoryClassName}
         data-category-edit-id={category.id}
-        role="button"
+        id={`category-link-${category.id}`}
         style={{ cursor: "pointer" }}
-        tabIndex={0}
-        onClick={handleNavigation}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            handleNavigation()
-          }
+        to={categoryPath}
+        onClick={() => {
+          setActiveContent(null)
+          onNavigate?.()
         }}
       >
         <Typography.Ellipsis
@@ -250,7 +241,7 @@ const CategoryTitle = ({
             {unreadCount}
           </Typography.Ellipsis>
         )}
-      </div>
+      </Link>
     </Dropdown>
   )
 }
@@ -263,36 +254,19 @@ const CountDisplay = ({ count }) => {
   )
 }
 
-const SourceNavigationControls = ({ polyglot, query, setQuery, showUnreadFeedsOnly }) => {
-  const unreadModeRef = useRef(null)
-  const allModeRef = useRef(null)
-
-  const handleModeKeyDown = (event) => {
-    const direction = {
-      ArrowDown: 1,
-      ArrowLeft: -1,
-      ArrowRight: 1,
-      ArrowUp: -1,
-    }[event.key]
-    if (direction === undefined) {
-      return
-    }
-
-    event.preventDefault()
-    const currentIndex = event.target.value === "unread" ? 0 : 1
-    const nextIndex = (currentIndex + direction + 2) % 2
-    const nextIsUnread = nextIndex === 0
-    updateSettings({ showUnreadFeedsOnly: nextIsUnread })
-    ;(nextIsUnread ? unreadModeRef : allModeRef).current?.focus()
-  }
-
+const SourceNavigationControls = ({
+  escapeClearsQuery = true,
+  polyglot,
+  query,
+  setQuery,
+  showUnreadFeedsOnly,
+}) => {
   return (
     <div className="source-navigation-controls">
       <fieldset
         aria-label={polyglot.t("sidebar.source_navigation_mode")}
         className="source-mode-selector"
         role="radiogroup"
-        onKeyDown={handleModeKeyDown}
       >
         <legend className="source-navigation-visually-hidden">
           {polyglot.t("sidebar.source_navigation_mode")}
@@ -303,7 +277,6 @@ const SourceNavigationControls = ({ polyglot, query, setQuery, showUnreadFeedsOn
           })}
         >
           <input
-            ref={unreadModeRef}
             checked={showUnreadFeedsOnly}
             data-testid="mode-unread"
             name="source-navigation-mode"
@@ -320,7 +293,6 @@ const SourceNavigationControls = ({ polyglot, query, setQuery, showUnreadFeedsOn
           })}
         >
           <input
-            ref={allModeRef}
             checked={!showUnreadFeedsOnly}
             data-testid="mode-all"
             name="source-navigation-mode"
@@ -347,7 +319,7 @@ const SourceNavigationControls = ({ polyglot, query, setQuery, showUnreadFeedsOn
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Escape" && query) {
+              if (escapeClearsQuery && event.key === "Escape" && query) {
                 event.preventDefault()
                 event.stopPropagation()
                 setQuery("")
@@ -374,23 +346,20 @@ const SourceNavigationControls = ({ polyglot, query, setQuery, showUnreadFeedsOn
 
 const CustomMenuItem = ({ path, Icon, label, count }) => {
   const location = useLocation()
-  const navigate = useNavigate()
   const onNavigate = useContext(SidebarNavigationContext)
   const isSelected = location.pathname === path || location.pathname.startsWith(`${path}/`)
 
-  const handleNavigation = () => {
-    navigate(path)
-    setActiveContent(null)
-    onNavigate?.()
-  }
-
   return (
-    <MenuItem
-      key={path}
-      className={classNames("arco-menu-item", {
+    <Link
+      aria-current={isSelected ? "page" : undefined}
+      to={path}
+      className={classNames("arco-menu-item custom-menu-link", {
         "arco-menu-selected": isSelected,
       })}
-      onClick={handleNavigation}
+      onClick={() => {
+        setActiveContent(null)
+        onNavigate?.()
+      }}
     >
       <div className="custom-menu-item">
         <span>
@@ -399,7 +368,7 @@ const CustomMenuItem = ({ path, Icon, label, count }) => {
         </span>
         <CountDisplay count={count} />
       </div>
-    </MenuItem>
+    </Link>
   )
 }
 
@@ -460,7 +429,6 @@ const FeedMenuItem = ({
 
   const { isBelowMedium } = useScreenWidth()
 
-  const navigate = useNavigate()
   const onNavigate = useContext(SidebarNavigationContext)
   const location = useLocation()
   const { dropdownProps, longPressProps } = useLongPressContextMenu()
@@ -562,16 +530,17 @@ const FeedMenuItem = ({
       }
     >
       <div className="feed-menu-item-row">
-        <MenuItem
-          key={`/feed/${feed.id}`}
+        <Link
           ref={navigationRef}
           {...longPressProps}
           aria-current={isSelected ? "page" : undefined}
-          className={classNames("feed-menu-item", className, { "arco-menu-selected": isSelected })}
           data-feed-edit-id={feed.id}
+          to={`/feed/${feed.id}`}
+          className={classNames("arco-menu-item feed-menu-item", className, {
+            "arco-menu-selected": isSelected,
+          })}
           onClick={(e) => {
             e.stopPropagation()
-            navigate(`/feed/${feed.id}`)
             setActiveContent(null)
             onNavigate?.()
           }}
@@ -602,7 +571,7 @@ const FeedMenuItem = ({
               </Typography.Ellipsis>
             )}
           </div>
-        </MenuItem>
+        </Link>
         {hasFeedHealthError && (
           <Popover
             className="feed-health-popover"
@@ -726,6 +695,7 @@ const FeedMenuGroup = ({
 }
 
 const CategoryGroup = ({
+  displayedExpandedCategories,
   sourceQuery,
   homePageReady,
   homeTarget,
@@ -740,6 +710,7 @@ const CategoryGroup = ({
   onRetryFeedHealth,
   retryingFeedIds,
   onSetHomePage,
+  onToggleCategory,
 }) => {
   const feedsGroupedById = useStore(feedsGroupedByIdState)
   const categories = useStore(visibleCategoriesState)
@@ -747,41 +718,79 @@ const CategoryGroup = ({
   const location = useLocation()
   const currentPath = location.pathname
 
-  return getMatchingCategories(categories, feedsGroupedById, sourceQuery).map((category) => (
-    <Collapse.Item
-      key={category.id}
-      expandIcon={<IconRight aria-hidden="true" />}
-      name={`/category/${category.id}`}
-      style={{ position: "relative", overflow: "hidden" }}
-      header={
-        <CategoryTitle
-          category={category}
-          homePageReady={homePageReady}
-          homeTarget={homeTarget}
-          path={currentPath}
-          onDeleteCategory={onDeleteCategory}
-          onEditCategory={onEditCategory}
-          onMarkAllAsRead={onMarkAllAsReadCategory}
-          onRefreshCategory={onRefreshCategory}
-          onSetHomePage={onSetHomePage}
-        />
-      }
-    >
-      <FeedMenuGroup
-        categoryId={category.id}
-        homePageReady={homePageReady}
-        homeTarget={homeTarget}
-        retryingFeedIds={retryingFeedIds}
-        sourceQuery={sourceQuery}
-        onDeleteFeed={onDeleteFeed}
-        onEditFeed={onEditFeed}
-        onMarkAllAsRead={onMarkAllAsReadFeed}
-        onRefreshFeed={onRefreshFeed}
-        onRetryFeedHealth={onRetryFeedHealth}
-        onSetHomePage={onSetHomePage}
-      />
-    </Collapse.Item>
-  ))
+  return getMatchingCategories(categories, feedsGroupedById, sourceQuery).map((category) => {
+    const categoryPath = `/category/${category.id}`
+    const contentId = `category-feeds-${category.id}`
+    const isExpanded = displayedExpandedCategories.includes(categoryPath)
+
+    return (
+      <div
+        key={category.id}
+        style={{ position: "relative", overflow: "hidden" }}
+        className={classNames("arco-collapse-item", {
+          "arco-collapse-item-active": isExpanded,
+        })}
+      >
+        <div className="arco-collapse-item-header category-disclosure-header">
+          <button
+            aria-controls={contentId}
+            aria-expanded={isExpanded}
+            aria-label={category.title}
+            className="arco-collapse-item-icon-hover category-disclosure-button"
+            data-category-disclosure={category.id}
+            type="button"
+            onClick={() => onToggleCategory(categoryPath)}
+          >
+            <span
+              aria-hidden="true"
+              className={classNames("arco-collapse-item-header-icon", {
+                "arco-collapse-item-header-icon-down": isExpanded,
+              })}
+            >
+              <IconRight />
+            </span>
+          </button>
+          <div className="arco-collapse-item-header-title">
+            <CategoryTitle
+              category={category}
+              homePageReady={homePageReady}
+              homeTarget={homeTarget}
+              path={currentPath}
+              onDeleteCategory={onDeleteCategory}
+              onEditCategory={onEditCategory}
+              onMarkAllAsRead={onMarkAllAsReadCategory}
+              onRefreshCategory={onRefreshCategory}
+              onSetHomePage={onSetHomePage}
+            />
+          </div>
+        </div>
+        <div
+          aria-labelledby={`category-link-${category.id}`}
+          hidden={!isExpanded}
+          id={contentId}
+          className={classNames("arco-collapse-item-content", {
+            "arco-collapse-item-content-expanded": isExpanded,
+          })}
+        >
+          <div className="arco-collapse-item-content-box">
+            <FeedMenuGroup
+              categoryId={category.id}
+              homePageReady={homePageReady}
+              homeTarget={homeTarget}
+              retryingFeedIds={retryingFeedIds}
+              sourceQuery={sourceQuery}
+              onDeleteFeed={onDeleteFeed}
+              onEditFeed={onEditFeed}
+              onMarkAllAsRead={onMarkAllAsReadFeed}
+              onRefreshFeed={onRefreshFeed}
+              onRetryFeedHealth={onRetryFeedHealth}
+              onSetHomePage={onSetHomePage}
+            />
+          </div>
+        </div>
+      </div>
+    )
+  })
 }
 
 const MoreOptionsDropdown = () => {
@@ -907,7 +916,7 @@ const updateEntriesAsRead = (entryIds) => {
   setEntries((previous) => reconcileEntriesAfterMarkRead(previous, markedEntryIds, showStatus))
 }
 
-const Sidebar = ({ headerAction, onNavigate }) => {
+const Sidebar = ({ headerAction, isDrawer = false, onNavigate }) => {
   const { catalog: catalogLoadState } = useStore(dataState, { keys: ["loadState"] }).loadState
   const { polyglot } = useStore(polyglotState)
   const expandedCategories = useStore(expandedCategoriesState)
@@ -931,7 +940,6 @@ const Sidebar = ({ headerAction, onNavigate }) => {
   const location = useLocation()
   const navigate = useNavigate()
   const currentPath = location.pathname
-  const selectedKeys = [currentPath]
   const currentFeedRouteMatch = currentPath.match(/^\/feed\/([^/]+)(?:\/|$)/)
   const currentFeedId = currentFeedRouteMatch?.[1] ?? null
   const currentFeed = visibleFeeds.find((feed) => String(feed.id) === currentFeedId)
@@ -1227,7 +1235,7 @@ const Sidebar = ({ headerAction, onNavigate }) => {
     <SidebarNavigationContext.Provider value={onNavigate}>
       <nav aria-label={PRODUCT_NAME} className="sidebar-container">
         <AdaptiveScrollArea style={{ maxHeight: "100%" }}>
-          <Menu hasCollapseButton={false} selectedKeys={selectedKeys}>
+          <Menu hasCollapseButton={false} role="none">
             <div className="menu-header">
               <CustomTooltip content={homePageActionLabel} position="bottom">
                 <span className="home-brand-tooltip-anchor">
@@ -1278,6 +1286,7 @@ const Sidebar = ({ headerAction, onNavigate }) => {
               </div>
             </div>
             <SourceNavigationControls
+              escapeClearsQuery={!isDrawer}
               polyglot={polyglot}
               query={sourceQuery}
               setQuery={setSourceQuery}
@@ -1363,17 +1372,9 @@ const Sidebar = ({ headerAction, onNavigate }) => {
                 </div>
               ) : (
                 <div aria-busy={catalogLoadState.activity === "refreshing"}>
-                  <Collapse
-                    activeKey={displayedExpandedCategories}
-                    bordered={false}
-                    triggerRegion="icon"
-                    onChange={(_key, keys) => {
-                      if (!sourceQuery.trim()) {
-                        setExpandedCategories(keys)
-                      }
-                    }}
-                  >
+                  <div className="arco-collapse arco-collapse-borderless">
                     <CategoryGroup
+                      displayedExpandedCategories={displayedExpandedCategories}
                       homePageReady={homePageReady}
                       homeTarget={homeTarget}
                       retryingFeedIds={retryingFeedIds}
@@ -1388,8 +1389,19 @@ const Sidebar = ({ headerAction, onNavigate }) => {
                       onRefreshFeed={handleRefreshFeed}
                       onRetryFeedHealth={retryFeedHealth}
                       onSetHomePage={handleSetHomePage}
+                      onToggleCategory={(categoryPath) => {
+                        if (sourceQuery.trim()) {
+                          return
+                        }
+                        const expanded = expandedCategoriesState.get()
+                        setExpandedCategories(
+                          expanded.includes(categoryPath)
+                            ? expanded.filter((key) => key !== categoryPath)
+                            : [...expanded, categoryPath],
+                        )
+                      }}
                     />
-                  </Collapse>
+                  </div>
                 </div>
               ))}
           </Menu>

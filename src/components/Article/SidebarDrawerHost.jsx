@@ -126,6 +126,7 @@ export default function SidebarDrawerHost({ headerTriggerRef = null } = {}) {
       onCancel={closeSidebar}
     >
       <Sidebar
+        isDrawer
         headerAction={
           <Button
             ref={closeButtonRef}
