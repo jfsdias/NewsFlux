@@ -23,7 +23,9 @@ const makeStore = (initial) => {
     },
     set: (next) => {
       value = next
-      for (const listener of listeners) listener(next)
+      for (const listener of listeners) {
+        listener(next)
+      }
     },
   }
 }
