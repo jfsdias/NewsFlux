@@ -8,7 +8,7 @@
 
 ## Current state (post-PR #114, 2026-10-24)
 
-GitHub merge facts and production runtime state are verified live from the repository and read-only SSH container inspection. PR #114 is merged into `main` and promoted to production at SHA `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9`. The production container `newsflux` is running `newsflux-local:bf1f911f0e2d` with OCI revision `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9`, image ID `sha256:368310dd4e8080571eb8ab72500cce4b6ac27524f4c04e891bc7d45295b8ba2f`, compose configuration SHA `8cac8c8c2a9ceecdbd5f9cad4a3b026b3e65bb6024fc88123e41843b4549a8f4`, 0 restarts, internal HTTP 200, public root HTTP 200 (at `https://news.jfsdias.ddns.net/`), public `/all` SPA fallback HTTP 200, PWA webmanifest HTTP 200, and static 404 canary returning true 404. Story ranker port 8000 is absent and no story containers exist. Main and production have full parity (`MAIN_PRODUCTION_PARITY=YES`). There are currently zero open pull requests on GitHub (`OPEN_PRS=NONE`).
+GitHub merge facts and production runtime state are verified live from the repository and read-only SSH container inspection. PR #114 is merged into `main` and promoted to production at SHA `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9`. The production container `newsflux` is running `newsflux-local:bf1f911f0e2d` with OCI revision `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9`, image ID `sha256:368310dd4e8080571eb8ab72500cce4b6ac27524f4c04e891bc7d45295b8ba2f`, compose configuration SHA `8cac8c8c2a9ceecdbd5f9cad4a3b026b3e65bb6024fc88123e41843b4549a8f4`, 0 restarts, internal HTTP 200, public root HTTP 200 (at `https://news.jfsdias.ddns.net/`), public `/all` SPA fallback HTTP 200, PWA webmanifest HTTP 200, and static 404 canary returning true 404. Story ranker port 8000 is absent and no story containers exist. Main and production have full parity (`MAIN_PRODUCTION_PARITY=YES`). Prior to this reconciliation PR (#118, currently Draft), there were zero open pull requests on GitHub (`OPEN_PRS_BEFORE_RECONCILIATION=NONE`, `OPEN_OTHER_PRS=NONE`). PR #118 is expected to close upon merge, restoring a clean queue.
 
 ```text
 DOCS_DATE=2026-10-24
@@ -31,14 +31,17 @@ PRODUCTION_PUBLIC_HTTP=200
 PRODUCTION_PUBLIC_ALL_HTTP=200
 PRODUCTION_PWA_MANIFEST_HTTP=200
 PRODUCTION_ASSET_404_CANARY=PASS_404
+LIVE_PUBLIC_EDGE_HSTS=OBSERVED
 MAIN_PRODUCTION_PARITY=YES
-OPEN_PRS=NONE
+OPEN_PRS_BEFORE_RECONCILIATION=NONE
+CURRENT_RECONCILIATION_PR=118_DRAFT
+OPEN_OTHER_PRS=NONE
 
 PR109_STATUS=MERGED_DOCUMENTATION
 PR109_MERGE_SHA=701895fd690fd3833d0f4a5b1d5a09e22e9731a2
 PR106_STATUS=MERGED_DORMANT
 PR106_MERGE_SHA=4cb99e196f88b01602a7fa53575430dd74ec5f94
-PR111_STATUS=MERGED_SECURITY_HEADERS
+PR111_STATUS=MERGED_SECURITY_HEADERS_BASELINE
 PR111_MERGE_SHA=3c1eeb03501dd0993d201c588632fa3c59b0ff7e
 PR110_STATUS=MERGED_RESEARCH_STUDY
 PR110_MERGE_SHA=fac87b621a63393da6987cf89f6b85c12cede994
@@ -83,7 +86,9 @@ EXPLICIT_HOLDS=WIDE_DESKTOP_MULTI_PANE_ACTIVATION;AUTOMATIC_VS_OPT_IN_MULTI_PANE
 PRESERVED_FINDINGS=REACT19_ARCO_ELEMENT_REF;RESIZEOBSERVER_LOOP;MOBILE_SCROLL_FLICKER_01;FOOTERPANEL_CLIPPING;HOME_PAGINATION_CURSOR_STALL_01_NOT_REPRODUCED;CHROME_ANDROID_3_BUTTON_NAV_BAR;OLED_SYSTEM_BAR_CANVAS_SEAM
 
 UPSTREAM_LAST_REVIEWED_SHA=3b2b08fb6036ef94f92a757ac6f3df889be8515c
-UPSTREAM_AUDIT_STATUS=RECOMMENDED_NEXT_MAINTENANCE_TRACK
+UPSTREAM_CURRENT_MAIN_OBSERVED=f4dfd1c9999d1d72a1164d7fbbe08da972e4ab1b
+UPSTREAM_COMMITS_SINCE_REVIEW=13
+UPSTREAM_AUDIT_STATUS=PENDING_RECOMMENDED_NEXT
 
 CURRENT_PHASE=POST_PR114_CANONICAL_RECONCILIATION
 LAST_COMPLETED_FUNCTIONAL=PWA-01A_INSTALLABILITY / PR #114
@@ -95,29 +100,29 @@ PRODUCTION_MUTATIONS=NO
 
 ### Live PR inventory (PRs #109 – #117)
 
-| PR   | Title                                                          | Status | Merge SHA                                  | Description                                                                                       |
-| ---- | -------------------------------------------------------------- | ------ | ------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| #109 | docs: reconcile post-PR108 canonical project state and roadmap | MERGED | `701895fd690fd3833d0f4a5b1d5a09e22e9731a2` | Post-PR108 documentation reconciliation                                                           |
-| #106 | feat(story): integrate local candidate ranking pipeline        | MERGED | `4cb99e196f88b01602a7fa53575430dd74ec5f94` | Story Candidate Ranking dormant integration; zero-cost when disabled; runtime inactive            |
-| #111 | security: add conservative response header baseline            | MERGED | `3c1eeb03501dd0993d201c588632fa3c59b0ff7e` | Caddy HTTP security response headers (`nosniff`, `strict-origin-when-cross-origin`, HSTS)         |
-| #110 | docs(design): study wide-desktop multi-pane architecture       | MERGED | `fac87b621a63393da6987cf89f6b85c12cede994` | NNW-05 reference study; preserves single-pane-first boundary; multi-pane on desktop on hold       |
-| #115 | test(home): stabilize Home Recent state-recovery harness       | MERGED | `a62f53982dd7e0cff4fa2ee90a15574dc490a5d3` | Stabilizes Home Recent empty state-recovery test harness                                          |
-| #116 | feat(nav): harden NAV-02F count semantics                      | MERGED | `7c429766e24fd3fbb8a07e126f816d665d19b130` | Plural-aware accessible count labels across locales; unresolved grouping/width remain on hold     |
-| #117 | feat(chrome): harden contextual controls and touch targets     | MERGED | `f79a4369677c45122faa8190269ff71eeec0ec76` | Hardened contextual controls, 48px touch targets, accessible mobile drawer trigger                |
-| #113 | chore(story): harden Linux CPU runtime reproducibility         | MERGED | `dd2e9e6ec429d2a8c01a9736b3090b4d20f2c4eb` | CPU-only `torch==2.14.1+cpu` wheel; Policy E approved as contract; ranker disabled                |
-| #112 | feat(auth): migrate NewsFlux sessions to dedicated API keys    | MERGED | `3859e18d4744c7cbbdd97bdee9de3d6fe77ad99b` | Dedicated API key provisioning; persistent fail-closed transaction journal; manual auth preserved |
-| #114 | feat(pwa): harden cross-platform installability                | MERGED | `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9` | PWA-01A installability; D1/D2/D3 approved; real-device D3 gate PASS; deployed to production       |
+| PR   | Title                                                          | Status | Merge SHA                                  | Description                                                                                                                                                                                                                                         |
+| ---- | -------------------------------------------------------------- | ------ | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #109 | docs: reconcile post-PR108 canonical project state and roadmap | MERGED | `701895fd690fd3833d0f4a5b1d5a09e22e9731a2` | Post-PR108 documentation reconciliation                                                                                                                                                                                                             |
+| #106 | feat(story): integrate local candidate ranking pipeline        | MERGED | `4cb99e196f88b01602a7fa53575430dd74ec5f94` | Story Candidate Ranking dormant integration; zero-cost when disabled; runtime inactive                                                                                                                                                              |
+| #111 | security: add conservative response header baseline            | MERGED | `3c1eeb03501dd0993d201c588632fa3c59b0ff7e` | Caddy response-header baseline: X-Content-Type-Options: nosniff and Referrer-Policy: strict-origin-when-cross-origin                                                                                                                                |
+| #110 | docs(design): study wide-desktop multi-pane architecture       | MERGED | `fac87b621a63393da6987cf89f6b85c12cede994` | NNW-05 reference study; preserves single-pane-first boundary; multi-pane on desktop on hold                                                                                                                                                         |
+| #115 | test(home): stabilize Home Recent state-recovery harness       | MERGED | `a62f53982dd7e0cff4fa2ee90a15574dc490a5d3` | Stabilizes Home Recent empty-state recovery test harness in scripts/tests/phase2c-editorial-home.jsx (HARNESS_ONLY, PRODUCT_CODE_CHANGED=NO)                                                                                                        |
+| #116 | feat(nav): harden NAV-02F count semantics                      | MERGED | `7c429766e24fd3fbb8a07e126f816d665d19b130` | Plural-aware accessible count labels across locales; unresolved grouping/width remain on hold                                                                                                                                                       |
+| #117 | feat(chrome): harden contextual controls and touch targets     | MERGED | `f79a4369677c45122faa8190269ff71eeec0ec76` | Contextual-chrome accessibility/touch-target hardening: FooterPanel radiogroup semantics, History visibility semantics, >=44x44 Home/SearchModal controls, and 12-surface control inventory; structural consolidation remains HOLD_PRODUCT_DECISION |
+| #113 | chore(story): harden Linux CPU runtime reproducibility         | MERGED | `dd2e9e6ec429d2a8c01a9736b3090b4d20f2c4eb` | CPU-only `torch==2.14.1+cpu` wheel; Policy E approved as contract; ranker disabled                                                                                                                                                                  |
+| #112 | feat(auth): migrate NewsFlux sessions to dedicated API keys    | MERGED | `3859e18d4744c7cbbdd97bdee9de3d6fe77ad99b` | Dedicated API key provisioning; persistent fail-closed transaction journal; manual auth preserved                                                                                                                                                   |
+| #114 | feat(pwa): harden cross-platform installability                | MERGED | `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9` | PWA-01A installability; D1/D2/D3 approved; real-device D3 gate PASS; deployed to production                                                                                                                                                         |
 
 ### Next-track decision matrix
 
-| Candidate | Track Name                            | Status  | Dependencies                              | Decision Required                                                                                                              | Recommended Next      | Rationale                                                                                                                                     |
-| --------- | ------------------------------------- | ------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| A         | UPSTREAM_AUDIT_02                     | READY   | None (all open PRs merged)                | Authorization to audit `electh/ReactFlux` from `3b2b08fb` against current upstream main                                        | **YES (Recommended)** | Governance priority: review upstream drift after closing PRs #106–#117. Last audited at PR #85. Read-only classification only, no blind sync. |
-| B         | NAV-02F (Unresolved Areas)            | HOLD    | NAV-02F determined slice merged (PR #116) | Product decisions on: unread category grouping, desktop sidebar width, showUnreadFeedsOnly default change, badge count capping | NO                    | Unresolved product decisions remain on hold; guessing semantics violates core project boundaries.                                             |
-| C         | NNW-03 / CHROME-01 (Unresolved Areas) | HOLD    | NNW-03 determined slice merged (PR #117)  | Product decisions on: structural FooterPanel/SearchAndSortBar consolidation, hiding Mark older as read on /today               | NO                    | Unresolved product decisions remain on hold.                                                                                                  |
-| D         | NNW-05 (Wide Desktop Multi-Pane)      | HOLD    | NNW-05 research study merged (PR #110)    | PM product decisions on wide-desktop activation, threshold, automatic vs opt-in, Home inclusion                                | NO                    | Single-pane-first boundary remains binding; multi-pane layout activation remains on hold.                                                     |
-| E         | STORY_01 (Production Activation)      | HOLD    | Runtime contract merged (PR #106, #113)   | PM production activation authorization & execution of full Policy E evidence gate                                              | NO                    | Story ranker runtime remains disabled and dormant; Policy E approved as future contract; activation not authorized.                           |
-| F         | PWA-02 / PWA-03A Follow-ups           | PLANNED | PWA-01A merged & deployed (PR #114)       | PM prioritization of update-safety / service-worker lifecycle (PWA-03A) or device defect adaptation (PWA-02)                   | NO                    | PWA-01A installability is complete; residual findings (`CHROME_ANDROID_3_BUTTON_NAV_BAR`, `OLED_SYSTEM_BAR_CANVAS_SEAM`) are non-blocking.    |
+| Candidate | Track Name                            | Status  | Dependencies                              | Decision Required                                                                                                                                         | Recommended Next      | Rationale                                                                                                                                     |
+| --------- | ------------------------------------- | ------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| A         | UPSTREAM_AUDIT_02                     | READY   | None (all open PRs merged)                | Authorization to audit `electh/ReactFlux` from `3b2b08fb` against current upstream main (`f4dfd1c9999d1d72a1164d7fbbe08da972e4ab1b`, 13 commits observed) | **YES (Recommended)** | Governance priority: review upstream drift after closing PRs #106–#117. Last audited at PR #85. Read-only classification only, no blind sync. |
+| B         | NAV-02F (Unresolved Areas)            | HOLD    | NAV-02F determined slice merged (PR #116) | Product decisions on: unread category grouping, desktop sidebar width, showUnreadFeedsOnly default change, badge count capping                            | NO                    | Unresolved product decisions remain on hold; guessing semantics violates core project boundaries.                                             |
+| C         | NNW-03 / CHROME-01 (Unresolved Areas) | HOLD    | NNW-03 determined slice merged (PR #117)  | Product decisions on: structural FooterPanel/SearchAndSortBar consolidation, hiding Mark older as read on /today                                          | NO                    | Unresolved product decisions remain on hold.                                                                                                  |
+| D         | NNW-05 (Wide Desktop Multi-Pane)      | HOLD    | NNW-05 research study merged (PR #110)    | PM product decisions on wide-desktop activation, threshold, automatic vs opt-in, Home inclusion                                                           | NO                    | Single-pane-first boundary remains binding; multi-pane layout activation remains on hold.                                                     |
+| E         | STORY_01 (Production Activation)      | HOLD    | Runtime contract merged (PR #106, #113)   | PM production activation authorization & execution of full Policy E evidence gate                                                                         | NO                    | Story ranker runtime remains disabled and dormant; Policy E approved as future contract; activation not authorized.                           |
+| F         | PWA-02 / PWA-03A Follow-ups           | PLANNED | PWA-01A merged & deployed (PR #114)       | PM prioritization of update-safety / service-worker lifecycle (PWA-03A) or device defect adaptation (PWA-02)                                              | NO                    | PWA-01A installability is complete; residual findings (`CHROME_ANDROID_3_BUTTON_NAV_BAR`, `OLED_SYSTEM_BAR_CANVAS_SEAM`) are non-blocking.    |
 
 ## Historical state (post-PR #108, 2026-10-24; superseded by post-PR #114 section above)
 
@@ -729,11 +734,11 @@ PR #73 records the post-PR72 snapshot distinction: documentation-only merges can
 - **PR #108 / feat(a11y):** native sidebar navigation semantics (NNW-02C); merge `bc9f175a3447a67b06d7deee12c6e19374bb7664`.
 - **PR #109 / documentation:** post-PR108 canonical state reconciliation; merge `701895fd690fd3833d0f4a5b1d5a09e22e9731a2`.
 - **PR #106 / feat(story):** Story Candidate Ranking dormant integration; zero runtime cost when disabled; merge `4cb99e196f88b01602a7fa53575430dd74ec5f94`.
-- **PR #111 / security:** Caddy HTTP response security headers baseline; merge `3c1eeb03501dd0993d201c588632fa3c59b0ff7e`.
+- **PR #111 / security:** Caddy response-header baseline: X-Content-Type-Options: nosniff and Referrer-Policy: strict-origin-when-cross-origin; merge `3c1eeb03501dd0993d201c588632fa3c59b0ff7e`.
 - **PR #110 / docs(design):** wide-desktop multi-pane reference study (NNW-05); research document only; merge `fac87b621a63393da6987cf89f6b85c12cede994`.
-- **PR #115 / test(home):** Home Recent state-recovery test harness stabilization; merge `a62f53982dd7e0cff4fa2ee90a15574dc490a5d3`.
+- **PR #115 / test(home):** Home Recent state-recovery test harness stabilization in `scripts/tests/phase2c-editorial-home.jsx` (HARNESS_ONLY, PRODUCT_CODE_CHANGED=NO); merge `a62f53982dd7e0cff4fa2ee90a15574dc490a5d3`.
 - **PR #116 / feat(nav):** NAV-02F count semantics; plural-aware accessible count labels across locales; merge `7c429766e24fd3fbb8a07e126f816d665d19b130`.
-- **PR #117 / feat(chrome):** NNW-03 / CHROME-01 contextual controls consolidation and 48px touch targets; merge `f79a4369677c45122faa8190269ff71eeec0ec76`.
+- **PR #117 / feat(chrome):** Contextual-chrome accessibility/touch-target hardening: FooterPanel radiogroup semantics, History visibility semantics, >=44x44 Home/SearchModal controls, and 12-surface control inventory; structural consolidation remains HOLD_PRODUCT_DECISION; merge `f79a4369677c45122faa8190269ff71eeec0ec76`.
 - **PR #113 / chore(story):** Linux CPU runtime reproducibility contract; CPU-only `torch==2.14.1+cpu` wheel; Policy E approved as contract; ranker disabled; merge `dd2e9e6ec429d2a8c01a9736b3090b4d20f2c4eb`.
 - **PR #112 / feat(auth):** session migration to dedicated Miniflux API keys; persistent fail-closed auth transaction journal; manual auth preserved; merge `3859e18d4744c7cbbdd97bdee9de3d6fe77ad99b`.
 - **PR #114 / feat(pwa):** cross-platform installability hardening; D1/D2/D3 approved; real-device D3 gate PASS on Fold; non-blocking residuals recorded; deployed to production at `bf1f911f0e2d`; merge `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9`.
@@ -879,6 +884,9 @@ Documented in [`PWA_ARCHITECTURE.md`](./PWA_ARCHITECTURE.md) and [`DESIGN_REFERE
 UPSTREAM_REPOSITORY=electh/ReactFlux
 UPSTREAM_INTEGRATION_MODE=SELECTIVE_NON_LINEAR
 UPSTREAM_LAST_REVIEWED_SHA=3b2b08fb6036ef94f92a757ac6f3df889be8515c
+UPSTREAM_CURRENT_MAIN_OBSERVED=f4dfd1c9999d1d72a1164d7fbbe08da972e4ab1b
+UPSTREAM_COMMITS_SINCE_REVIEW=13
+UPSTREAM_AUDIT_STATUS=PENDING_RECOMMENDED_NEXT
 LAST_INTEGRATED_UPSTREAM_SHA=3b2b08fb6036ef94f92a757ac6f3df889be8515c
 LAST_UPSTREAM_SYNC_PR=85
 LAST_UPSTREAM_SYNC_MERGE_SHA=d7c0fc8e4ab7b5f0d959bea96cc04b086deb36fc
@@ -904,7 +912,7 @@ PR #53 completed selective maintenance: `e46d92ab64adcbd0bb8ac2caf6048fa37f52793
 
 PR #85 adapted `3b2b08fb` (`fix(article): render empty caption elements without children`) with the guard inserted in `processFigcaptionContent`; the upstream cycle is closed and the next cycle begins from a live check of the upstream head. The upstream repository is tracked only through this document and the roadmap (`docs/UPSTREAM_TRACKING.md` does not exist).
 
-The specialized upstream monitor must live-check the current upstream head before auditing. New commits are classified `INTEGRATE / ADAPT / SKIP / HOLD`; never blindly Sync fork or merge upstream/main. Note (2026-10-24 post-PR #114): upstream tracking is stale since PR #85 (`3b2b08fb6036ef94f92a757ac6f3df889be8515c`); a fresh selective upstream audit is the recommended next maintenance track (`UPSTREAM_AUDIT_02`). Do not perform or claim a new upstream audit in this docs reconciliation PR.
+The specialized upstream monitor must live-check the current upstream head before auditing. New commits are classified `INTEGRATE / ADAPT / SKIP / HOLD`; never blindly Sync fork or merge upstream/main. Note (2026-10-24 post-PR #114): upstream tracking is stale since PR #85 (`3b2b08fb6036ef94f92a757ac6f3df889be8515c`); a read-only check observed current upstream main at `f4dfd1c9999d1d72a1164d7fbbe08da972e4ab1b` (13 commits ahead of reviewed baseline). A fresh selective upstream audit is the recommended next maintenance track (`UPSTREAM_AUDIT_02`). Do not perform or claim a new upstream audit in this docs reconciliation PR.
 
 ## Historical findings register (2026-10-22 snapshot; current dispositions are above)
 
