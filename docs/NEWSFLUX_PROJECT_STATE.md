@@ -1,18 +1,21 @@
 # NewsFlux Project State
 
 - **Purpose:** concise operational state for PM handoffs and future sessions. The roadmap remains the source for sequencing and product/architecture detail.
-- **Last reconciled:** 2026-10-25 (post-PR #129).
-- **Current snapshot:** GitHub `main` at `de138bc961d665005fe3322082034963bf263b16`. Production remains at `dc4154d7729204c65c8a1abaa50f9bfc9f92be64` (`newsflux-local:dc4154d77292`); main/production SHA parity is **NO**, while PR #129 was exclusively research documentation and offline harness tooling, introducing no application runtime delta and requiring no deployment.
+- **Last reconciled:** 2026-10-25 (post-PR #129, STORY-01B-D in progress).
+- **Current snapshot:** GitHub `main` at `de138bc961d665005fe3322082034963bf263b16`. Production remains at `dc4154d7729204c65c8a1abaa50f9bfc9f92be64` (`newsflux-local:dc4154d77292`); main/production SHA parity is **NO**, while PR #129 was exclusively research documentation and offline harness tooling, introducing no application runtime delta and requiring no deployment. Open PR: #130 (documentation reconciliation, draft). Active track: STORY-01B-D (in progress at HUMAN_LABELING_GATE).
 - **Previous snapshot (historical):** post-PR #120 on 2026-10-24; prior snapshots are preserved below.
 - **Related planning documents:** [`PWA_ARCHITECTURE.md`](./PWA_ARCHITECTURE.md) and [`DESIGN_REFERENCES.md`](./DESIGN_REFERENCES.md) (planning only; no implementation authorized).
 
 ## Current state (post-PR #129, 2026-10-25)
 
-This is the authoritative project-state snapshot following the completion and merge of STORY-01B-R (PR #129). GitHub `main` and open-PR inventory were verified live on 2026-10-25; `main` is `de138bc961d665005fe3322082034963bf263b16`, and there are no open PRs. Production remains at `dc4154d7729204c65c8a1abaa50f9bfc9f92be64` (`newsflux-local:dc4154d77292`); main/production SHA parity is NO, but MAIN_PRODUCTION_PARITY_REQUIRED is NO: PR #129 was exclusively research documentation and offline harness tooling, introducing zero product runtime changes and zero production import changes. This divergence is intentional (`INTENTIONAL_DIVERGENCE=YES`, `DEPLOYMENT_DRIFT_REQUIRING_REMEDIATION=NO`). No deployment or canary is required (`DEPLOY_REQUIRED=NO`, `CANARY_REQUIRED=NO`).
+This is the authoritative project-state snapshot following the completion and merge of STORY-01B-R (PR #129) and the authorization and preflight of STORY-01B-D. GitHub `main` was verified live at `de138bc961d665005fe3322082034963bf263b16`. Open PR inventory includes PR #130 (`codex/docs-reconcile-post-pr129`, draft documentation reconciliation). Production remains at `dc4154d7729204c65c8a1abaa50f9bfc9f92be64` (`newsflux-local:dc4154d77292`); main/production SHA parity is NO, but MAIN_PRODUCTION_PARITY_REQUIRED is NO: PR #129 was exclusively research documentation and offline harness tooling, introducing zero product runtime changes and zero production import changes. This divergence is intentional (`INTENTIONAL_DIVERGENCE=YES`, `DEPLOYMENT_DRIFT_REQUIRING_REMEDIATION=NO`). No deployment or canary is required (`DEPLOY_REQUIRED=NO`, `CANARY_REQUIRED=NO`).
 
 ```text
 DOCS_DATE=2026-10-25
 GITHUB_MAIN=de138bc961d665005fe3322082034963bf263b16
+CURRENT_OPEN_PR=#130
+CURRENT_PR_SCOPE=DOCUMENTATION_RECONCILIATION
+CURRENT_PR_STATE=DRAFT
 OPEN_PRS_BEFORE_THIS_RECONCILIATION=NONE
 
 PRODUCTION_SHA=dc4154d7729204c65c8a1abaa50f9bfc9f92be64
@@ -37,6 +40,11 @@ PR128_STATUS=MERGED_AND_DEPLOYED
 PR128_MERGE_SHA=dc4154d7729204c65c8a1abaa50f9bfc9f92be64
 PR128_PRODUCTION_SHA=dc4154d7729204c65c8a1abaa50f9bfc9f92be64
 PR128_PRODUCTION_SMOKE=PASS
+UNREAD_CATEGORY_GROUPING=PASS
+SHOW_UNREAD_DEFAULT_CHANGED=NO
+SHOW_UNREAD_DEFAULT=false
+SIDEBAR_WIDTH_CHANGED=NO
+COUNT_CAPPING=NONE
 
 PR129_STATUS=MERGED_RESEARCH_CONTRACT_AND_HARNESS
 PR129_MERGE_SHA=de138bc961d665005fe3322082034963bf263b16
@@ -51,6 +59,21 @@ LABEL_QUEUE=141
 TRANSITIVE_CHAIN_CANDIDATE_TRIPLES=12
 UNRESTRICTED_UNION_FIND_FOR_FINAL_CLUSTERING=REJECTED
 FALSE_MERGE_COST_GT_FALSE_SPLIT_COST=YES
+
+STORY-01B-D=IN_PROGRESS
+STORY_01B_D_STAGE=HUMAN_LABELING_GATE
+STORY_01B_D_PREFLIGHT=PASS
+READY_FOR_HUMAN_LABELING=YES
+CORPUS_HASH_GATE=PASS
+QUEUE_PAIR_COUNT=141
+QUEUE_REPRODUCIBILITY_GATE=PASS
+MODEL_BLINDING_GATE=PASS
+PRIVATE_DATA_GIT_GATE=PASS
+NEXT_AUTHORIZED_ACTION=HUMAN_LABELING_ONLY
+
+STORY_01B_M=NOT_AUTHORIZED
+STORY_01B_C=NOT_AUTHORIZED
+STORY_02=NOT_AUTHORIZED
 
 STORY_RANKER=DORMANT
 STORY_RANKER_DEFAULT=DISABLED
@@ -68,12 +91,12 @@ LATEST_RUNTIME_DEPLOYED_TRACK=NAV-02F-A / PR #128
 LATEST_MERGED_TRACK=STORY-01B-R / PR #129
 LAST_COMPLETED_TRACK=STORY-01B-R / PR #129
 LAST_MERGED_PR=#129
-CURRENT_PHASE=STORY_IDENTITY_GOLD_DATASET_PENDING_AUTHORIZATION
-CURRENT_TRACK=NONE_ACTIVE
-RECOMMENDED_NEXT_TRACK=STORY-01B-D (DATASET_CURATION_AND_LABELING)
-NEXT_TRACK_AUTHORIZED=NO
-IMPLEMENTATION_AUTHORIZED=NO
-NEXT_AUTHORIZED_ACTION=NONE
+CURRENT_PHASE=STORY_01B_D_GOLD_DATASET
+CURRENT_TRACK=STORY-01B-D
+RECOMMENDED_NEXT_TRACK=STORY-01B-D (HUMAN_LABELING_GATE)
+NEXT_TRACK_AUTHORIZED=STORY-01B-D_HUMAN_LABELING_ONLY
+IMPLEMENTATION_AUTHORIZED=HUMAN_LABELING_ONLY
+NEXT_AUTHORIZED_ACTION=HUMAN_LABELING_ONLY
 MERGE_AUTHORIZED=NO
 DEPLOY_AUTHORIZED=NO
 ```
@@ -89,26 +112,26 @@ DEPLOY_AUTHORIZED=NO
 
 - **PWA:** PWA-01A / PR #114 is complete, merged and deployed; D1/D2/D3 approved; real-device D3 gate passed. PWA-03A update safety and recovery slices complete in production. PWA-VAL-01 remains an evidence-only device/runtime validation candidate; PWA-02 remains defect-driven. No implementation or promotion authorized.
 - **Auth:** AUTH_APIKEY_01 is complete, merged and deployed; manual token authentication remains supported and the consent/create/verify/store/drop-password/revoke lifecycle remains canonical.
-- **Story identity & clustering:** Candidate-ranking code is merged but runtime-disabled; production activation is not authorized. Story identity research (STORY-01B-R) completed offline reference audit and corpus contract in PR #129; STORY-01B-D (gold dataset curation) is recommended next but NOT authorized. Story clustering remains NOT_ACTIVE; `STORY_IDENTITY_PRODUCTION_STORAGE` is `HOLD_ARCHITECTURE_DECISION`; `CLUSTER_WIDE_MARK_READ` is `HOLD_PRODUCT_DECISION`.
+- **Story identity & clustering:** Candidate-ranking code is merged but runtime-disabled; production activation is not authorized. Story identity research (STORY-01B-R) completed offline reference audit and corpus contract in PR #129. STORY-01B-D (gold dataset curation) is authorized and currently IN_PROGRESS at `HUMAN_LABELING_GATE`; downstream tracks (STORY-01B-M, STORY-01B-C, STORY-02) remain NOT_AUTHORIZED. Story clustering remains NOT_ACTIVE; `STORY_IDENTITY_PRODUCTION_STORAGE` is `HOLD_ARCHITECTURE_DECISION`; `CLUSTER_WIDE_MARK_READ` is `HOLD_PRODUCT_DECISION`.
 - **Source of truth and ordering:** Miniflux remains authoritative for feeds, categories, read and starred status. All/Unread remain chronological and predictable; no silent ranking. No new persistent NewsFlux content state without an explicit architecture decision.
-- **Existing product/architecture holds:** wide-desktop multi-pane activation; automatic vs. opt-in multi-pane; threshold and Home inclusion; unread category grouping; desktop Sidebar width changes; changing the `showUnreadFeedsOnly` default; Sidebar visual count capping; FooterPanel/SearchAndSortBar consolidation; hiding Mark older as read on `/today`; mobile Sources drawer destination deduplication; Story production activation; new persistent content state; and ML personalization.
+- **Existing product/architecture holds:** wide-desktop multi-pane activation; automatic vs. opt-in multi-pane; threshold and Home inclusion; FooterPanel/SearchAndSortBar consolidation; hiding Mark older as read on `/today`; mobile Sources drawer destination deduplication; Story production activation; new persistent content state; and ML personalization.
 - **Dependency holds:** all eight dependency updates listed under UPSTREAM_AUDIT_02 remain isolated and unapproved.
 - **Open findings retained:** React 19 Arco `element.ref`; ResizeObserver loop; MOBILE_SCROLL_FLICKER_01; FooterPanel clipping; HOME_PAGINATION_CURSOR_STALL_01 (not reproduced after PR #87); Chrome Android three-button navigation bar; OLED system-bar canvas seam.
 
 ### Next-track decision matrix
 
-| Candidate                               | Current disposition                         | Scope / decision                                                                                                                                                                         | Ordering                       |
-| --------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| STORY-01B-D dataset curation & labeling | PLANNED / NEXT_RECOMMENDED (NOT_AUTHORIZED) | Annotate 141 candidate pairs from STORY-01B-R queue; multi-judge adjudication of UNCERTAIN pairs. Not authorized; pending PM prioritization / authorization.                             | **Recommended next candidate** |
-| PWA-VAL-01 runtime/device validation    | Planned; evidence-only                      | Validate the deployed PWA/runtime and physical-device behavior using the existing runbook; record unrun screen-reader gates honestly. PM prioritization required; no code or deployment. | After prioritization           |
-| NAV-02F unresolved decisions            | Hold — product                              | Unread grouping, Sidebar width, unread-only default and count presentation.                                                                                                              | After explicit decisions       |
-| NNW-03 / CHROME-01 unresolved decisions | Hold — product                              | FooterPanel/SearchAndSortBar consolidation and `/today` Mark older behavior.                                                                                                             | After explicit decisions       |
-| NNW-05 wide-desktop multi-pane          | Hold — product                              | Activation, automatic vs. opt-in, threshold and Home inclusion.                                                                                                                          | After explicit decisions       |
-| Story activation                        | Hold — product/evidence                     | Runtime stays disabled; CPU acceptance policy remains proposed and PM-decision-required; complete activation evidence and explicit authorization are required.                           | No activation authorized       |
-| Eight upstream dependency updates       | Hold — isolated regression slices           | Assess each production/build/visual/lockfile impact independently.                                                                                                                       | No bulk update                 |
-| DOCKER_PUBLISHING_IDENTITY_01           | Backlog — architecture                      | Decide whether to establish registry publishing before changing identity, guards, credentials or release topology.                                                                       | Unordered                      |
+| Candidate                               | Current disposition               | Scope / decision                                                                                                                                                                         | Ordering                 |
+| --------------------------------------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| STORY-01B-D dataset curation & labeling | IN PROGRESS                       | Human labeling and review of the 141 candidate pairs; preserve UNCERTAIN and record any later adjudication auditably. `HUMAN_LABELING_GATE` reached.                                     | **Current track**        |
+| NAV-02F-A unread source category rhythm | COMPLETED                         | Non-collapsible category headings + feed rows; showUnreadFeedsOnly default=false; exact unread counts; merged in PR #128.                                                                | Complete                 |
+| PWA-VAL-01 runtime/device validation    | Planned; evidence-only            | Validate the deployed PWA/runtime and physical-device behavior using the existing runbook; record unrun screen-reader gates honestly. PM prioritization required; no code or deployment. | After prioritization     |
+| NNW-03 / CHROME-01 unresolved decisions | Hold — product                    | FooterPanel/SearchAndSortBar consolidation and `/today` Mark older behavior.                                                                                                             | After explicit decisions |
+| NNW-05 wide-desktop multi-pane          | Hold — product                    | Activation, automatic vs. opt-in, threshold and Home inclusion.                                                                                                                          | After explicit decisions |
+| Story activation                        | Hold — product/evidence           | Runtime stays disabled; CPU acceptance policy remains proposed and PM-decision-required; complete activation evidence and explicit authorization are required.                           | No activation authorized |
+| Eight upstream dependency updates       | Hold — isolated regression slices | Assess each production/build/visual/lockfile impact independently.                                                                                                                       | No bulk update           |
+| DOCKER_PUBLISHING_IDENTITY_01           | Backlog — architecture            | Decide whether to establish registry publishing before changing identity, guards, credentials or release topology.                                                                       | Unordered                |
 
-There is currently no active track authorized. Recommended next track is STORY-01B-D, but no implementation is authorized.
+The active track is STORY-01B-D (human labeling only). Downstream modeling, clustering, and runtime activation remain unauthorized.
 
 ## Previous state (post-PR #120, 2026-10-24)
 
