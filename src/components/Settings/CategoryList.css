@@ -17,12 +17,12 @@
 
 .add-category-button:hover,
 .add-category-button:focus-visible {
-  border-color: rgb(var(--primary-6));
-  color: rgb(var(--primary-6));
+  border-color: var(--nf-accent, rgb(var(--primary-6)));
+  color: var(--nf-accent, rgb(var(--primary-6)));
 }
 
 .add-category-button:focus-visible {
-  outline: 2px solid var(--nf-focus-ring, rgb(var(--primary-6)));
+  outline: 2px solid var(--nf-accent-focus, var(--nf-focus-ring, rgb(var(--primary-6))));
   outline-offset: 2px;
 }
 
@@ -53,7 +53,7 @@
 }
 
 .category-edit-button:focus-visible {
-  outline: 2px solid var(--nf-focus-ring, rgb(var(--primary-6)));
+  outline: 2px solid var(--nf-accent-focus, var(--nf-focus-ring, rgb(var(--primary-6))));
   outline-offset: 2px;
 }
 

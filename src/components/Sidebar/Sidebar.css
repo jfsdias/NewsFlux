@@ -80,7 +80,7 @@
 }
 
 .home-brand:focus-visible {
-  outline: 2px solid var(--nf-focus-ring, rgb(var(--primary-6)));
+  outline: 2px solid var(--nf-accent-focus, var(--nf-focus-ring, rgb(var(--primary-6))));
   outline-offset: 1px;
 }
 
@@ -204,7 +204,7 @@
 }
 
 .feed-health-trigger.arco-btn:focus-visible {
-  outline: 2px solid var(--nf-focus-ring, rgb(var(--primary-6)));
+  outline: 2px solid var(--nf-accent-focus, var(--nf-focus-ring, rgb(var(--primary-6))));
   outline-offset: -2px;
 }
 
@@ -277,7 +277,7 @@
 
 .category-disclosure-button:focus-visible,
 .category-title:focus-visible {
-  outline: 2px solid var(--nf-focus-ring, rgb(var(--primary-6)));
+  outline: 2px solid var(--nf-accent-focus, var(--nf-focus-ring, rgb(var(--primary-6))));
   outline-offset: 1px;
 }
 
@@ -309,7 +309,7 @@
 .submenu-active,
 .arco-menu-selected {
   background-color: var(--color-neutral-3) !important;
-  color: rgb(var(--primary-6)) !important;
+  color: var(--nf-accent) !important;
 }
 
 .submenu-inactive {
@@ -389,7 +389,7 @@
 }
 
 .sidebar .desktop-sidebar-toggle.arco-btn:focus-visible {
-  outline: 2px solid var(--nf-focus-ring, rgb(var(--primary-6)));
+  outline: 2px solid var(--nf-accent-focus, var(--nf-focus-ring, rgb(var(--primary-6))));
   outline-offset: 1px;
 }
 
@@ -603,6 +603,7 @@
   box-sizing: border-box;
   min-width: 0;
   min-height: 44px;
+  border: 1px solid transparent;
   border-radius: calc(var(--border-radius-medium) - 2px);
   padding: 0 8px;
   color: var(--color-text-2);
@@ -618,13 +619,18 @@
 }
 
 .source-mode-option-selected {
-  background-color: rgb(var(--primary-6));
-  color: var(--color-white, #fff);
+  background-color: var(--nf-accent-surface);
+  color: var(--nf-accent);
+  border-color: var(--nf-accent-border);
   font-weight: 600;
 }
 
+.source-mode-option-selected:hover {
+  background-color: var(--nf-accent-hover, var(--nf-accent-surface));
+}
+
 .source-mode-option:focus-within {
-  outline: 2px solid var(--nf-focus-ring, rgb(var(--primary-6)));
+  outline: 2px solid var(--nf-accent-focus, var(--nf-focus-ring, rgb(var(--primary-6))));
   outline-offset: 1px;
 }
 
@@ -657,7 +663,7 @@
 }
 
 .source-filter-input:focus-visible {
-  outline: 2px solid var(--nf-focus-ring, rgb(var(--primary-6)));
+  outline: 2px solid var(--nf-accent-focus, var(--nf-focus-ring, rgb(var(--primary-6))));
   outline-offset: 1px;
 }
 
@@ -689,7 +695,7 @@
 }
 
 .current-source-feed {
-  border-left: 3px solid rgb(var(--primary-6));
+  border-left: 3px solid var(--nf-accent);
 }
 
 .source-navigation-empty {

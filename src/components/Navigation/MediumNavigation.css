@@ -35,7 +35,7 @@
   min-width: 48px;
   height: 64px;
   min-height: 48px;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: var(--nf-radius-control, 8px);
   padding: 6px 4px;
   color: var(--nf-text-secondary, var(--color-text-2));
@@ -55,14 +55,20 @@
 }
 
 .medium-navigation-item:focus-visible {
-  outline: 2px solid var(--nf-focus-ring, rgb(var(--primary-6)));
+  outline: 2px solid var(--nf-accent-focus, var(--nf-focus-ring, rgb(var(--primary-6))));
   outline-offset: -2px;
 }
 
 .medium-navigation-item-active {
-  color: var(--nf-text-primary, var(--color-text-1));
-  background-color: var(--color-fill-2);
+  color: var(--nf-accent);
+  background-color: var(--nf-accent-surface);
+  border-color: var(--nf-accent-border, transparent);
   font-weight: 600;
+}
+
+.medium-navigation-item-active:hover {
+  color: var(--nf-accent);
+  background-color: var(--nf-accent-hover, var(--nf-accent-surface));
 }
 
 .medium-navigation-item-active::before {
@@ -72,7 +78,7 @@
   left: 0;
   width: 3px;
   border-radius: 0 3px 3px 0;
-  background-color: rgb(var(--primary-6));
+  background-color: var(--nf-accent);
   content: "";
 }
 
@@ -118,8 +124,8 @@
   height: 16px;
   border-radius: 8px;
   padding: 0 4px;
-  color: #fff;
-  background-color: rgb(var(--primary-6));
+  color: var(--nf-on-accent);
+  background-color: var(--nf-accent);
   font-size: 10px;
   font-weight: 600;
   line-height: 1;

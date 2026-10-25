@@ -59,13 +59,13 @@
 
 .home-page-target:focus-visible,
 .home-page-category-toggle:focus-visible {
-  outline: 2px solid var(--nf-focus-ring, rgb(var(--primary-6)));
+  outline: 2px solid var(--nf-accent-focus, var(--nf-focus-ring, rgb(var(--primary-6))));
   outline-offset: -2px;
 }
 
 .home-page-target-current {
-  background: var(--color-primary-light-1);
-  color: rgb(var(--primary-6));
+  background: var(--nf-accent-surface, var(--color-primary-light-1));
+  color: var(--nf-accent, rgb(var(--primary-6)));
 }
 
 .home-page-target-icon {
@@ -85,7 +85,7 @@
 }
 
 .home-page-target-current .home-page-target-icon {
-  color: rgb(var(--primary-6));
+  color: var(--nf-accent, rgb(var(--primary-6)));
 }
 
 .home-page-target-copy {
