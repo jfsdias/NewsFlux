@@ -1650,12 +1650,12 @@ UNREVIEWED_UPSTREAM_COMMITS_AFTER_AUDIT=0
 UPSTREAM_COMMITS_REVIEWED=13
 LAST_INTEGRATED_UPSTREAM_SHA=3b2b08fb6036ef94f92a757ac6f3df889be8515c
 
-LATEST_RUNTIME_DEPLOYED_TRACK=CHROME-01B / PR #124
-LATEST_MERGED_TRACK=CHROME-01B / PR #124
-LAST_COMPLETED_TRACK=CHROME-01B / PR #124
-CURRENT_PHASE=READER_VISUAL_02B_INTERACTION_AWARE_CHROME
-RECOMMENDED_NEXT_TRACK=READER-VISUAL-02B_INTERACTION_AWARE_CHROME
-IMPLEMENTATION_AUTHORIZED=YES
+LATEST_RUNTIME_DEPLOYED_TRACK=PWA-01A / PR #114
+LATEST_MERGED_TRACK=UPSTREAM_AUDIT_02_ACTIONABLE_INTEGRATIONS / PR #120
+LAST_COMPLETED_TRACK=UPSTREAM_AUDIT_02_ACTIONABLE_INTEGRATIONS / PR #120
+CURRENT_PHASE=POST_UPSTREAM_AUDIT_02_CANONICAL_RECONCILIATION
+RECOMMENDED_NEXT_TRACK=PWA-VAL-01_RUNTIME_DEVICE_VALIDATION (EVIDENCE_ONLY; PM PRIORITIZATION REQUIRED)
+IMPLEMENTATION_AUTHORIZED=NO
 MERGE_AUTHORIZED=NO
 DEPLOY_AUTHORIZED=NO
 ```
@@ -1683,7 +1683,7 @@ Production remains `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9` (`newsflux-local:b
 
 ### Current product baseline and holds
 
-- **PWA:** PWA-01A / PR #114 is complete, merged and deployed; D1/D2/D3 are approved and the real-device D3 gate passed. PWA-03A update safety/recovery is complete in the deployed baseline. PWA-VAL-01 was executed and accepted as PARTIAL_ACCEPTED; PWA_02_TRIGGERED=NO; PWA work is not reopened. This roadmap does not authorize PWA changes.
+- **PWA:** PWA-01A / PR #114 is complete, merged and deployed; D1/D2/D3 are approved and the real-device D3 gate passed. PWA-03A update safety/recovery is complete in the deployed baseline. PWA-VAL-01 remains a planned evidence-only device/runtime validation; PWA-02 stays defect-driven. This roadmap does not authorize implementation or promotion.
 - **Authentication:** AUTH_APIKEY_01 is complete, merged and deployed; manual token authentication remains supported and the consent/create/verify/store/drop-password/revoke lifecycle is preserved.
 - **Story:** ranking code is merged but runtime-disabled; production activation is not authorized. CPU acceptance is a proposed policy awaiting PM decision; recorded measurements do not constitute adoption or authorization.
 - **NNW/navigation:** NNW-05 research, NAV-02F determined slice and NNW-03/CHROME-01 determined slice are complete; unresolved product decisions remain held below.
@@ -1699,6 +1699,55 @@ Production remains `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9` (`newsflux-local:b
 
 The completed UPSTREAM_AUDIT_02 is removed from the ready/recommended queue. PWA-VAL-01 has precedence as an already-planned evidence-only validation stage: it can assess the deployed baseline without application changes, while PWA-03A is complete and PWA-02 is defect-driven. This recommendation is subject to PM prioritization, device availability and the existing runbook; it authorizes no implementation.
 
+| Candidate                            | Status                            | Gate / decision                                                                                                                                                | Recommended order              |
+| ------------------------------------ | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| PWA-VAL-01 runtime/device validation | PLANNED — evidence-only           | PM prioritization and physical-device availability; no code, deploy or inferred screen-reader PASS.                                                            | **Recommended next candidate** |
+| NAV-02F decisions                    | HOLD — product                    | Decide unread category grouping, Sidebar width, unread-only default and count capping.                                                                         | Later, after decisions         |
+| NNW-03 / CHROME-01 decisions         | HOLD — product                    | Decide structural FooterPanel/SearchAndSortBar consolidation and `/today` Mark older behavior.                                                                 | Later, after decisions         |
+| NNW-05 wide-desktop multi-pane       | HOLD — product                    | Decide activation, automatic vs. opt-in, threshold and Home inclusion.                                                                                         | Later, after decisions         |
+| Story activation                     | HOLD — product/evidence           | Runtime stays disabled; CPU acceptance policy remains proposed and PM-decision-required; complete activation evidence and explicit authorization are required. | No activation authorized       |
+| Eight upstream dependency updates    | HOLD — isolated regression slices | Assess each production/build/visual/lockfile impact independently.                                                                                             | No bulk update                 |
+| DOCKER_PUBLISHING_IDENTITY_01        | BACKLOG — architecture            | Decide whether to establish registry publishing before changing identity, guards, credentials or release topology.                                             | Unordered                      |
+
+The next step is a prioritization decision for PWA-VAL-01, not automatic execution. Every item remains subject to the project rules: one purpose per PR, no blind upstream sync, no new persistent state without architecture approval, and no merge without explicit user authorization.
+
+## 23. Current canonical state: post-CHROME-01B and READER-VISUAL-02B (2026-10-24)
+
+This section supersedes the historical post-UPSTREAM_AUDIT_02 state in Section 22. Live GitHub checks verify `main` at `44cca8127dfa3b0f4cb1285a69092f2c7e4a807d` and production at `44cca8127dfa3b0f4cb1285a69092f2c7e4a807d` (image `newsflux-local:44cca8127dfa`), confirming full main/production parity following the merge and deployment of CHROME-01B (PR #124). PWA-VAL-01 real-device runtime validation was partially accepted (`PWA_VAL_01=PARTIAL_ACCEPTED`, `PWA_02_TRIGGERED=NO`). The current authorized active implementation track is `READER-VISUAL-02B` (PR #125).
+
+```text
+GITHUB_MAIN=44cca8127dfa3b0f4cb1285a69092f2c7e4a807d
+PRODUCTION_SHA=44cca8127dfa3b0f4cb1285a69092f2c7e4a807d
+PRODUCTION_IMAGE=newsflux-local:44cca8127dfa
+PRODUCTION_IMAGE_ID=sha256:44cca8127dfa3b0f4cb1285a69092f2c7e4a807d
+MAIN_PRODUCTION_SHA_PARITY=YES
+APPLICATION_RUNTIME_DELTA_SINCE_PRODUCTION=NO
+
+CHROME-01B=COMPLETED
+PR124_MERGE_SHA=44cca8127dfa3b0f4cb1285a69092f2c7e4a807d
+PR124_PRODUCTION_SHA=44cca8127dfa3b0f4cb1285a69092f2c7e4a807d
+
+PWA_VAL_01=PARTIAL_ACCEPTED
+PWA_02_TRIGGERED=NO
+
+READER-VISUAL-02B=IN_PROGRESS
+PR125_DRAFT=YES
+
+LATEST_RUNTIME_DEPLOYED_TRACK=CHROME-01B / PR #124
+LATEST_MERGED_TRACK=CHROME-01B / PR #124
+LAST_COMPLETED_TRACK=CHROME-01B / PR #124
+CURRENT_PHASE=READER-VISUAL-02B_BOUNDED_IMPLEMENTATION
+CURRENT_TRACK=READER-VISUAL-02B (IN_PROGRESS; DRAFT PR #125)
+RECOMMENDED_NEXT_TRACK=READER-VISUAL-02B_VALIDATION_AND_CLOSURE
+IMPLEMENTATION_AUTHORIZED=READER-VISUAL-02B_ONLY
+MERGE_AUTHORIZED=NO
+DEPLOY_AUTHORIZED=NO
+```
+
+### Current next-track decision matrix
+
+With PWA-VAL-01 runtime validation complete and accepted without triggering PWA-02 (`PWA_VAL_01=PARTIAL_ACCEPTED`, `PWA_02_TRIGGERED=NO`), and CHROME-01B successfully deployed to production, the current active track is READER-VISUAL-02B (interaction-aware reader chrome auto-hide). All other candidate items remain on product or architecture hold.
+
 | Candidate                                  | Status                            | Gate / decision                                                                                                                                                | Recommended order        |
 | ------------------------------------------ | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
 | READER-VISUAL-02B interaction-aware chrome | IN PROGRESS                       | Auto-hide sticky ActionButtons on downward reading; immediate return on upward scroll/focus; focus safety and reduced motion.                                  | **Current track**        |
@@ -1710,4 +1759,4 @@ The completed UPSTREAM_AUDIT_02 is removed from the ready/recommended queue. PWA
 | Eight upstream dependency updates          | HOLD — isolated regression slices | Assess each production/build/visual/lockfile impact independently.                                                                                             | No bulk update           |
 | DOCKER_PUBLISHING_IDENTITY_01              | BACKLOG — architecture            | Decide whether to establish registry publishing before changing identity, guards, credentials or release topology.                                             | Unordered                |
 
-The next step is a prioritization decision for PWA-VAL-01, not automatic execution. Every item remains subject to the project rules: one purpose per PR, no blind upstream sync, no new persistent state without architecture approval, and no merge without explicit user authorization.
+The active candidate is READER-VISUAL-02B. Every item remains subject to the project rules: one purpose per PR, no blind upstream sync, no new persistent state without architecture approval, and no merge without explicit user authorization.

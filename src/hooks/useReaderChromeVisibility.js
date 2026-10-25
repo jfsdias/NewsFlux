@@ -108,13 +108,36 @@ export default function useReaderChromeVisibility({
       } else if (isFocusedWithinRef.current) {
         isFocusedWithinRef.current = false
         setIsFocusedWithin(false)
+        setVisibilityState((prev) =>
+          prev === READER_CHROME_VISIBILITY_STATES.FORCED_VISIBLE_INTERACTION
+            ? READER_CHROME_VISIBILITY_STATES.VISIBLE
+            : prev,
+        )
+      }
+    }
+
+    const handleFocusOut = (event) => {
+      const node = actionButtonsRef?.current
+      if (
+        node?.contains(event.target) &&
+        (!event.relatedTarget || !node.contains(event.relatedTarget))
+      ) {
+        isFocusedWithinRef.current = false
+        setIsFocusedWithin(false)
+        setVisibilityState((prev) =>
+          prev === READER_CHROME_VISIBILITY_STATES.FORCED_VISIBLE_INTERACTION
+            ? READER_CHROME_VISIBILITY_STATES.VISIBLE
+            : prev,
+        )
       }
     }
 
     document.addEventListener("focusin", handleFocusIn)
+    document.addEventListener("focusout", handleFocusOut)
 
     return () => {
       document.removeEventListener("focusin", handleFocusIn)
+      document.removeEventListener("focusout", handleFocusOut)
     }
   }, [actionButtonsRef])
 
@@ -174,7 +197,9 @@ export default function useReaderChromeVisibility({
   const effectiveState =
     isForcedVisible || isFocusedWithin
       ? READER_CHROME_VISIBILITY_STATES.FORCED_VISIBLE_INTERACTION
-      : visibilityState
+      : visibilityState === READER_CHROME_VISIBILITY_STATES.FORCED_VISIBLE_INTERACTION
+        ? READER_CHROME_VISIBILITY_STATES.VISIBLE
+        : visibilityState
 
   return { isVisible: effectiveIsVisible, visibilityState: effectiveState }
 }

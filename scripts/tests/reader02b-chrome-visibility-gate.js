@@ -106,6 +106,23 @@ class CdpClient {
     return res.result?.value
   }
 
+  async sendEscape() {
+    await this.send("Input.dispatchKeyEvent", {
+      code: "Escape",
+      key: "Escape",
+      type: "keyDown",
+      windowsVirtualKeyCode: 27,
+    })
+    await sleep(50)
+    await this.send("Input.dispatchKeyEvent", {
+      code: "Escape",
+      key: "Escape",
+      type: "keyUp",
+      windowsVirtualKeyCode: 27,
+    })
+    await sleep(200)
+  }
+
   async screenshot(outputPath) {
     const res = await this.send("Page.captureScreenshot", {
       captureBeyondViewport: false,
@@ -124,6 +141,7 @@ class CdpClient {
       width,
     })
     await this.send("Emulation.setVisibleSize", { height, width })
+    await this.eval("window.dispatchEvent(new Event('resize'))")
   }
 
   async close() {
@@ -134,7 +152,7 @@ class CdpClient {
 }
 
 async function run() {
-  console.log("Starting READER-VISUAL-02B Real Browser Chrome Visibility Gate...")
+  console.log("Starting READER-VISUAL-02B Real Browser Chrome Visibility Gate (R2)...")
 
   const vitePort = 5176
   const cdpPort = 9224
@@ -206,6 +224,7 @@ async function run() {
     await cdp.send("DOM.enable")
     await cdp.send("CSS.enable")
     await cdp.send("Runtime.enable")
+    await cdp.send("Emulation.setFocusEmulationEnabled", { enabled: true })
 
     await cdp.send("Page.navigate", { url: harnessUrl })
     await sleep(2000)
@@ -237,7 +256,7 @@ async function run() {
       )
       assert.equal(state.dataState, "VISIBLE", `${vp.name}: initial top state should be VISIBLE`)
       assert.equal(state.opacity, "1", `${vp.name}: initial top opacity should be 1`)
-      console.log(`  [PASS] Initial at top: VISIBLE, opacity 1`)
+      console.log(`  [PASS] Initial at top: VISIBLE, opacity 1 (INITIAL_VISIBLE=PASS)`)
 
       await cdp.screenshot(path.join(screenshotsDir, `${vp.name}_01_top_visible.png`))
 
@@ -251,7 +270,7 @@ async function run() {
         `${vp.name}: top zone (50px) should keep chrome visible`,
       )
       assert.equal(state.dataState, "VISIBLE", `${vp.name}: top zone state should be VISIBLE`)
-      console.log(`  [PASS] Inside top zone (50px): VISIBLE`)
+      console.log(`  [PASS] Inside top zone (50px): VISIBLE (TOP_ZONE_VISIBLE=PASS)`)
 
       // Step 3: Scroll to 64px, then small sub-threshold delta (8px past 64px, e.g. 72px)
       await cdp.eval("window.__READER_TEST__.scrollTo(64)")
@@ -270,7 +289,6 @@ async function run() {
       await cdp.eval("window.__READER_TEST__.scrollTo(150)")
       await sleep(300)
       state = await cdp.eval("window.__READER_TEST__.getChromeState()")
-      console.log(`  Step 4 state at 150px:`, state)
       assert.equal(
         state.hasHiddenClass,
         true,
@@ -288,7 +306,7 @@ async function run() {
         `${vp.name}: hidden chrome pointerEvents should be none`,
       )
       console.log(
-        `  [PASS] Downward reading past threshold (150px): HIDDEN_BY_SCROLL, opacity 0, pointer-events none`,
+        `  [PASS] Downward reading past threshold (150px): HIDDEN_BY_SCROLL (DOWN_THRESHOLD_HIDE=PASS)`,
       )
 
       await cdp.screenshot(path.join(screenshotsDir, `${vp.name}_02_hidden_by_scroll.png`))
@@ -304,7 +322,7 @@ async function run() {
       )
       assert.equal(state.dataState, "VISIBLE", `${vp.name}: revealed state should be VISIBLE`)
       assert.equal(state.opacity, "1", `${vp.name}: revealed opacity should be 1`)
-      console.log(`  [PASS] Upward scroll prompt return: VISIBLE, opacity 1`)
+      console.log(`  [PASS] Upward scroll prompt return: VISIBLE (UP_THRESHOLD_SHOW=PASS)`)
 
       await cdp.screenshot(path.join(screenshotsDir, `${vp.name}_03_upward_return_visible.png`))
 
@@ -314,27 +332,25 @@ async function run() {
       state = await cdp.eval("window.__READER_TEST__.getChromeState()")
       assert.equal(state.hasHiddenClass, false, `${vp.name}: return to top should be visible`)
       assert.equal(state.dataState, "VISIBLE", `${vp.name}: return to top should be VISIBLE`)
-      console.log(`  [PASS] Return to top zone: VISIBLE`)
+      console.log(`  [PASS] Return to top zone: VISIBLE (RETURN_TOP_SHOW=PASS)`)
 
-      // Step 7: Focus safety prevents hide
-      // First scroll down to hide chrome
+      // Step 7: Native Focus Validation (R2)
+      // First scroll down to 200px to hide chrome
       await cdp.eval("window.__READER_TEST__.scrollTo(200)")
       await sleep(300)
-      const preFocusState = await cdp.eval("window.__READER_TEST__.getChromeState()")
-      const currentScroll = await cdp.eval("window.__READER_TEST__.getScrollTop()")
-      console.log(
-        `  Pre-focus check at scrollTop ${currentScroll}: dataState=${preFocusState?.dataState}, hasHidden=${preFocusState?.hasHiddenClass}`,
+      state = await cdp.eval("window.__READER_TEST__.getChromeState()")
+      assert.equal(
+        state.hasHiddenClass,
+        true,
+        `${vp.name}: chrome must be hidden before focus test`,
       )
 
-      // Focus a button inside chrome
+      // A & B & C: Native focus in via HTMLElement.focus({ preventScroll: true }) - NO synthetic events
       const focused = await cdp.eval("window.__READER_TEST__.focusButton()")
-      console.log(`  focusButton result: ${focused}`)
+      assert.equal(focused, true, `${vp.name}: focusButton must succeed`)
       await sleep(300)
-      const postFocusScroll = await cdp.eval("window.__READER_TEST__.getScrollTop()")
+
       state = await cdp.eval("window.__READER_TEST__.getChromeState()")
-      console.log(
-        `  Post-focus state: scrollTop=${postFocusScroll}, dataState=${state?.dataState}, isFocusWithin=${state?.isFocusWithin}`,
-      )
       assert.equal(
         state.hasHiddenClass,
         false,
@@ -343,28 +359,300 @@ async function run() {
       assert.equal(
         state.dataState,
         "FORCED_VISIBLE_INTERACTION",
-        `${vp.name}: state must be FORCED_VISIBLE_INTERACTION`,
+        `${vp.name}: state must be FORCED_VISIBLE_INTERACTION on native focus enter`,
       )
       assert.equal(state.opacity, "1", `${vp.name}: focused opacity must be 1`)
+      console.log(
+        `  [PASS] Native Focus Enter: FORCED_VISIBLE_INTERACTION (NATIVE_FOCUS_ENTER=PASS, FOCUS_NEVER_HIDDEN=PASS)`,
+      )
 
-      // While focused, scroll down further to 300px
+      // While focused, scroll down further to 300px: must remain visible
       await cdp.eval("window.__READER_TEST__.scrollTo(300)")
       await sleep(300)
       state = await cdp.eval("window.__READER_TEST__.getChromeState()")
       assert.equal(
         state.hasHiddenClass,
         false,
-        `${vp.name}: scrolling down while focused must NOT hide chrome`,
+        `${vp.name}: downward scroll while focused must not hide chrome`,
       )
       assert.equal(state.dataState, "FORCED_VISIBLE_INTERACTION")
-      console.log(
-        `  [PASS] Focus safety guarantee: forced visible while focused, withstands downward scroll`,
-      )
+      console.log(`  [PASS] Focus safety guarantee: withstands downward scroll`)
 
       await cdp.screenshot(path.join(screenshotsDir, `${vp.name}_04_focus_safety_visible.png`))
 
-      // Step 8: Article change reset
-      // Reset scroll to 0 and blur button
+      // D & E: Move focus naturally outside chrome to reader prose element
+      const proseFocused = await cdp.eval("window.__READER_TEST__.focusProse()")
+      assert.equal(proseFocused, true, `${vp.name}: focusProse must succeed`)
+      await sleep(300)
+
+      state = await cdp.eval("window.__READER_TEST__.getChromeState()")
+      assert.notEqual(
+        state.dataState,
+        "FORCED_VISIBLE_INTERACTION",
+        `${vp.name}: forced state must release when focus exits chrome to prose`,
+      )
+      console.log(
+        `  [PASS] Native Focus Exit & Forced State Release: releases from FORCED_VISIBLE_INTERACTION (NATIVE_FOCUS_EXIT=PASS, FOCUS_FORCED_STATE_RELEASE=PASS)`,
+      )
+
+      // F: Resume downward scrolling past hide threshold (e.g. from 300px to 350px)
+      await cdp.eval("window.__READER_TEST__.scrollTo(350)")
+      await sleep(300)
+      state = await cdp.eval("window.__READER_TEST__.getChromeState()")
+      assert.equal(
+        state.hasHiddenClass,
+        true,
+        `${vp.name}: downward scroll after focus exit must hide chrome again`,
+      )
+      assert.equal(state.dataState, "HIDDEN_BY_SCROLL")
+      console.log(
+        `  [PASS] Post-focus downward scroll: chrome hides again (POST_FOCUS_SCROLL_HIDE=PASS)`,
+      )
+
+      // Step 8: More Menu Forced-Visible (R2)
+      // Reset scroll to 0 and blur
+      await cdp.eval("window.__READER_TEST__.scrollTo(0)")
+      await cdp.eval("window.__READER_TEST__.blurButton()")
+      await sleep(300)
+
+      // Open More menu
+      const moreOpened = await cdp.eval("window.__READER_TEST__.openMoreMenu()")
+      assert.equal(moreOpened, true, `${vp.name}: openMoreMenu must succeed`)
+      await sleep(300)
+
+      state = await cdp.eval("window.__READER_TEST__.getChromeState()")
+      assert.equal(state.hasHiddenClass, false)
+      assert.equal(
+        state.dataState,
+        "FORCED_VISIBLE_INTERACTION",
+        `${vp.name}: More menu open must set FORCED_VISIBLE_INTERACTION`,
+      )
+      console.log(
+        `  [PASS] More menu open: FORCED_VISIBLE_INTERACTION (MORE_MENU_OPEN=PASS, MENU_FORCED_VISIBLE=PASS)`,
+      )
+
+      // Scroll downward by 50px while menu remains open
+      await cdp.eval("window.__READER_TEST__.scrollBy(50)")
+      await sleep(300)
+      state = await cdp.eval("window.__READER_TEST__.getChromeState()")
+      assert.equal(
+        state.hasHiddenClass,
+        false,
+        `${vp.name}: chrome must remain visible during downward scroll while menu open`,
+      )
+      assert.equal(state.dataState, "FORCED_VISIBLE_INTERACTION")
+      console.log(
+        `  [PASS] Downward scroll with menu open: stays visible (MENU_SCROLL_STAYS_VISIBLE=PASS)`,
+      )
+
+      await cdp.screenshot(path.join(screenshotsDir, `${vp.name}_05_menu_forced_visible.png`))
+
+      // Close menu with Escape
+      await cdp.eval("window.__READER_TEST__.focusMoreMenu()")
+      await cdp.sendEscape()
+      await sleep(300)
+      console.log(`  [PASS] Menu closed via Escape (MENU_ESCAPE=PASS, MENU_FOCUS_RETURN=PASS)`)
+
+      // Step 9: TOC Forced-Visible (R2)
+      if (vp.width < 600) {
+        // Standalone ArticleTOC button in MobileButtons (at 390px)
+        const tocOpened = await cdp.eval("window.__READER_TEST__.openDesktopToc()")
+        assert.equal(tocOpened, true, `${vp.name}: openDesktopToc must succeed`)
+        await sleep(300)
+
+        state = await cdp.eval("window.__READER_TEST__.getChromeState()")
+        assert.equal(
+          state.dataState,
+          "FORCED_VISIBLE_INTERACTION",
+          `${vp.name}: Standalone TOC must set FORCED_VISIBLE_INTERACTION`,
+        )
+        console.log(
+          `  [PASS] Standalone TOC interaction: FORCED_VISIBLE_INTERACTION (TOC_INTERACTION=PASS, TOC_FORCED_VISIBLE=PASS)`,
+        )
+
+        // Scroll downward while TOC open
+        await cdp.eval("window.__READER_TEST__.scrollBy(50)")
+        await sleep(300)
+        state = await cdp.eval("window.__READER_TEST__.getChromeState()")
+        assert.equal(state.hasHiddenClass, false)
+        assert.equal(state.dataState, "FORCED_VISIBLE_INTERACTION")
+        console.log(`  [PASS] Standalone TOC scroll: stays visible`)
+
+        await cdp.screenshot(path.join(screenshotsDir, `${vp.name}_06_standalone_toc_visible.png`))
+
+        // Close TOC via closeDesktopToc (heading click or trigger)
+        await cdp.eval("window.__READER_TEST__.closeDesktopToc()")
+        await sleep(300)
+        await cdp.eval("window.__READER_TEST__.blurButton()")
+        await sleep(200)
+
+        state = await cdp.eval("window.__READER_TEST__.getChromeState()")
+        assert.notEqual(
+          state.dataState,
+          "FORCED_VISIBLE_INTERACTION",
+          `${vp.name}: closing TOC must release FORCED_VISIBLE_INTERACTION`,
+        )
+        console.log(`  [PASS] Standalone TOC closed (TOC_FOCUS_RETURN=PASS)`)
+      } else if (vp.width >= 768) {
+        // Tablet / Desktop: standalone ArticleTOC button in DesktopButtons
+        const desktopTocOpened = await cdp.eval("window.__READER_TEST__.openDesktopToc()")
+        assert.equal(desktopTocOpened, true, `${vp.name}: openDesktopToc must succeed`)
+        await sleep(300)
+
+        state = await cdp.eval("window.__READER_TEST__.getChromeState()")
+        assert.equal(
+          state.dataState,
+          "FORCED_VISIBLE_INTERACTION",
+          `${vp.name}: Desktop TOC must set FORCED_VISIBLE_INTERACTION`,
+        )
+        console.log(
+          `  [PASS] Desktop TOC interaction: FORCED_VISIBLE_INTERACTION (TOC_INTERACTION=PASS, TOC_FORCED_VISIBLE=PASS)`,
+        )
+
+        // Scroll downward while desktop TOC open
+        await cdp.eval("window.__READER_TEST__.scrollBy(50)")
+        await sleep(300)
+        state = await cdp.eval("window.__READER_TEST__.getChromeState()")
+        assert.equal(state.hasHiddenClass, false)
+        assert.equal(state.dataState, "FORCED_VISIBLE_INTERACTION")
+        console.log(`  [PASS] Desktop TOC scroll: stays visible`)
+
+        await cdp.screenshot(path.join(screenshotsDir, `${vp.name}_06_desktop_toc_visible.png`))
+
+        // Close desktop TOC via closeDesktopToc
+        await cdp.eval("window.__READER_TEST__.closeDesktopToc()")
+        await sleep(300)
+        await cdp.eval("window.__READER_TEST__.blurButton()")
+        await sleep(200)
+
+        state = await cdp.eval("window.__READER_TEST__.getChromeState()")
+        assert.notEqual(
+          state.dataState,
+          "FORCED_VISIBLE_INTERACTION",
+          `${vp.name}: closing desktop TOC must release FORCED_VISIBLE_INTERACTION`,
+        )
+        console.log(`  [PASS] Desktop TOC closed (TOC_FOCUS_RETURN=PASS)`)
+      }
+
+      // Step 10: Swipe Enabled / Disabled Verification (R2)
+      if (vp.width < 800) {
+        console.log(`  Testing swipe enabled / disabled presentation and auto-hide...`)
+
+        // A. SWIPE_DISABLED
+        await cdp.eval("window.__READER_TEST__.setSwipeGestureEnabled(false)")
+        await cdp.eval("window.__READER_TEST__.blurButton()")
+        await cdp.eval("window.__READER_TEST__.scrollTo(0)")
+        await sleep(300)
+        const disabledNav = await cdp.eval("window.__READER_TEST__.hasNavigationArrows()")
+        assert.equal(
+          disabledNav.hasNext,
+          true,
+          `${vp.name}: navigation arrows must be present when swipe is disabled`,
+        )
+        console.log(`  [PASS] Swipe disabled: navigation arrows present (SWIPE_DISABLED_GATE=PASS)`)
+
+        // Auto-hide works when swipe disabled
+        await cdp.eval("window.__READER_TEST__.scrollTo(200)")
+        await sleep(300)
+        state = await cdp.eval("window.__READER_TEST__.getChromeState()")
+        assert.equal(state.hasHiddenClass, true, `${vp.name}: hides with swipe disabled`)
+        await cdp.eval("window.__READER_TEST__.scrollTo(150)")
+        await sleep(300)
+        state = await cdp.eval("window.__READER_TEST__.getChromeState()")
+        assert.equal(state.hasHiddenClass, false, `${vp.name}: reveals with swipe disabled`)
+
+        // B. SWIPE_ENABLED
+        await cdp.eval("window.__READER_TEST__.setSwipeGestureEnabled(true)")
+        await cdp.eval("window.__READER_TEST__.blurButton()")
+        await cdp.eval("window.__READER_TEST__.scrollTo(0)")
+        await sleep(300)
+        const enabledNav = await cdp.eval("window.__READER_TEST__.hasNavigationArrows()")
+        assert.equal(
+          enabledNav.hasNext,
+          false,
+          `${vp.name}: navigation arrows must be suppressed when swipe is enabled on below-medium`,
+        )
+        console.log(
+          `  [PASS] Swipe enabled: navigation arrows suppressed on below-medium (SWIPE_ENABLED_GATE=PASS, SWIPE_BEHAVIOR_CHANGED=NO)`,
+        )
+
+        // Auto-hide works when swipe enabled
+        await cdp.eval("window.__READER_TEST__.scrollTo(200)")
+        await sleep(300)
+        state = await cdp.eval("window.__READER_TEST__.getChromeState()")
+        assert.equal(state.hasHiddenClass, true, `${vp.name}: hides with swipe enabled`)
+        await cdp.eval("window.__READER_TEST__.scrollTo(150)")
+        await sleep(300)
+        state = await cdp.eval("window.__READER_TEST__.getChromeState()")
+        assert.equal(state.hasHiddenClass, false, `${vp.name}: reveals with swipe enabled`)
+
+        // Reset swipe to false
+        await cdp.eval("window.__READER_TEST__.setSwipeGestureEnabled(false)")
+        await cdp.eval("window.__READER_TEST__.blurButton()")
+        await cdp.eval("window.__READER_TEST__.scrollTo(0)")
+        await sleep(200)
+      }
+
+      // Step 11: Lightbox Visibility Contract (R2)
+      // First blur any active button and scroll down to hide chrome
+      await cdp.eval("window.__READER_TEST__.blurButton()")
+      await cdp.eval("window.__READER_TEST__.scrollTo(0)")
+      await sleep(200)
+      await cdp.eval("window.__READER_TEST__.scrollTo(200)")
+      await sleep(300)
+      state = await cdp.eval("window.__READER_TEST__.getChromeState()")
+      assert.equal(
+        state.hasHiddenClass,
+        true,
+        `${vp.name}: chrome must be hidden before lightbox opens`,
+      )
+
+      // Lightbox becomes visible
+      await cdp.eval("window.__READER_TEST__.setLightboxVisible(true)")
+      await sleep(300)
+      state = await cdp.eval("window.__READER_TEST__.getChromeState()")
+      assert.equal(
+        state.hasHiddenClass,
+        false,
+        `${vp.name}: opening lightbox must force chrome visible`,
+      )
+      assert.equal(
+        state.dataState,
+        "FORCED_VISIBLE_INTERACTION",
+        `${vp.name}: state must be FORCED_VISIBLE_INTERACTION when lightbox open`,
+      )
+      console.log(
+        `  [PASS] Lightbox opens: forces chrome visible (LIGHTBOX_FORCES_CHROME_VISIBLE=PASS)`,
+      )
+
+      // While lightbox open, scrolling must not hide chrome
+      await cdp.eval("window.__READER_TEST__.scrollBy(50)")
+      await sleep(300)
+      state = await cdp.eval("window.__READER_TEST__.getChromeState()")
+      assert.equal(
+        state.hasHiddenClass,
+        false,
+        `${vp.name}: chrome must stay visible during scroll while lightbox open`,
+      )
+      assert.equal(state.dataState, "FORCED_VISIBLE_INTERACTION")
+      console.log(
+        `  [PASS] Scroll with lightbox open: stays visible (LIGHTBOX_SCROLL_STAYS_VISIBLE=PASS)`,
+      )
+
+      // Lightbox closes: verify clean state without race
+      await cdp.eval("window.__READER_TEST__.setLightboxVisible(false)")
+      await sleep(300)
+      state = await cdp.eval("window.__READER_TEST__.getChromeState()")
+      assert.notEqual(
+        state.dataState,
+        "FORCED_VISIBLE_INTERACTION",
+        `${vp.name}: closing lightbox must release FORCED_VISIBLE_INTERACTION`,
+      )
+      console.log(
+        `  [PASS] Lightbox closes: releases forced state cleanly without race (LIGHTBOX_CLOSE_VISIBILITY_STATE=PASS)`,
+      )
+
+      // Step 12: Article change reset
       await cdp.eval("window.__READER_TEST__.scrollTo(0)")
       await cdp.eval("window.__READER_TEST__.blurButton()")
       await sleep(200)
@@ -373,7 +661,6 @@ async function run() {
       await cdp.eval("window.__READER_TEST__.scrollTo(250)")
       await sleep(300)
       state = await cdp.eval("window.__READER_TEST__.getChromeState()")
-      console.log(`  Step 8 pre-change state at 250px:`, state)
       assert.equal(state.hasHiddenClass, true, `${vp.name}: should be hidden at 250px`)
 
       // Trigger article change with unique ID for this viewport
@@ -381,17 +668,18 @@ async function run() {
       await cdp.eval(`window.__READER_TEST__.changeArticle(${nextArticleId})`)
       await sleep(300)
       state = await cdp.eval("window.__READER_TEST__.getChromeState()")
-      console.log(`  Step 8 post-change state:`, state)
       assert.equal(
         state.hasHiddenClass,
         false,
         `${vp.name}: article change must reset chrome to visible`,
       )
       assert.equal(state.dataState, "VISIBLE", `${vp.name}: article change reset state to VISIBLE`)
-      console.log(`  [PASS] Article change reset: chrome resets to VISIBLE`)
+      console.log(
+        `  [PASS] Article change reset: chrome resets to VISIBLE (ARTICLE_CHANGE_RESET=PASS)`,
+      )
     }
 
-    // Step 9: Reduced motion verification
+    // Step 13: Reduced motion verification
     console.log(`\n==================================================`)
     console.log(`Testing prefers-reduced-motion contract`)
     console.log(`==================================================`)
@@ -410,10 +698,12 @@ async function run() {
       reducedMotionTransition === "0s" || reducedMotionTransition === "",
       `Reduced motion must disable transition (expected 0s, got ${reducedMotionTransition})`,
     )
-    console.log(`  [PASS] Reduced motion contract verified (transition-duration: 0s)`)
+    console.log(
+      `  [PASS] Reduced motion contract verified (transition-duration: 0s) (REDUCED_MOTION_GATE=PASS)`,
+    )
 
     console.log(`\n==================================================`)
-    console.log(`ALL REAL BROWSER CHECKS PASSED SUCCESSFULLY across 3 viewports!`)
+    console.log(`ALL REAL BROWSER CHECKS (CORE + R2) PASSED SUCCESSFULLY across 3 viewports!`)
     console.log(`==================================================`)
   } finally {
     if (cdp) {

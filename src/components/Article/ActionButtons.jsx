@@ -133,12 +133,17 @@ const ActionButtons = ({ isPhotoSliderVisible = false, scrollContainerRef = null
   const [dropdownVisible, setDropdownVisible] = useState(false)
   const [fontSubmenuVisible, setFontSubmenuVisible] = useState(false)
   const [isCompactTocVisible, setIsCompactTocVisible] = useState(false)
+  const [isDesktopTocVisible, setIsDesktopTocVisible] = useState(false)
   const compactTocMenuItemRef = useRef(null)
   const moreButtonRef = useRef(null)
   const actionButtonsRef = useRef(null)
 
   const isForcedVisible =
-    dropdownVisible || fontSubmenuVisible || isCompactTocVisible || isPhotoSliderVisible
+    dropdownVisible ||
+    fontSubmenuVisible ||
+    isCompactTocVisible ||
+    isDesktopTocVisible ||
+    isPhotoSliderVisible
 
   const { isVisible, visibilityState } = useReaderChromeVisibility({
     actionButtonsRef,
@@ -361,7 +366,7 @@ const ActionButtons = ({ isPhotoSliderVisible = false, scrollContainerRef = null
         />
       </CustomTooltip>
     ),
-    toc: hasHeadings ? <ArticleTOC /> : null,
+    toc: hasHeadings ? <ArticleTOC onVisibleChange={setIsDesktopTocVisible} /> : null,
     more: (
       <Dropdown
         popupVisible={dropdownVisible}

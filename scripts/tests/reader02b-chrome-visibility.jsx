@@ -15,7 +15,7 @@ import { polyglotState } from "@/hooks/useLanguage"
 import englishPhrases from "@/locales/en-US.json"
 import { contentState } from "@/store/contentState"
 import { dataState } from "@/store/dataState"
-import { getDefaultSettings, replaceSettings } from "@/store/settingsState"
+import { getDefaultSettings, getSettings, replaceSettings } from "@/store/settingsState"
 import "@/App.css"
 import "simplebar-react/dist/simplebar.min.css"
 import "@/theme.css"
@@ -86,6 +86,13 @@ const readerCommands = {
 
 const Harness = () => {
   const scrollContainerRef = useRef(null)
+  const [isPhotoSliderVisible, setIsPhotoSliderVisible] = React.useState(false)
+
+  React.useEffect(() => {
+    globalThis.__READER_SET_LIGHTBOX__ = (visible) => {
+      setIsPhotoSliderVisible(visible)
+    }
+  }, [])
 
   return (
     <DesktopSidebarContext.Provider value={desktopSidebar}>
@@ -107,7 +114,10 @@ const Harness = () => {
                 scrollableNodeProps={{ tabIndex: -1 }}
                 style={{ height: "100%" }}
               >
-                <ActionButtons scrollContainerRef={scrollContainerRef} />
+                <ActionButtons
+                  isPhotoSliderVisible={isPhotoSliderVisible}
+                  scrollContainerRef={scrollContainerRef}
+                />
                 <div
                   className="article-content"
                   style={{
@@ -163,7 +173,6 @@ globalThis.__READER_TEST__ = {
       document.activeElement.blur()
     }
     document.body.focus()
-    document.dispatchEvent(new FocusEvent("focusin", { bubbles: true }))
   },
   changeArticle: (newId) => {
     contentState.set({
@@ -171,12 +180,37 @@ globalThis.__READER_TEST__ = {
       activeContent: { ...contentState.get().activeContent, id: newId },
     })
   },
+  closeCompactToc: () => {
+    const heading = document.querySelector(
+      ".toc-menu-item, .toc-droplist-container .arco-dropdown-menu-item",
+    )
+    if (heading) {
+      heading.click()
+      return true
+    }
+    const backBtn = document.querySelector(".toc-back-button")
+    if (backBtn) {
+      backBtn.click()
+      return true
+    }
+    return false
+  },
   focusButton: () => {
     const btn = document.querySelector(".action-buttons button")
     if (btn) {
-      globalThis.focus()
       btn.focus({ preventScroll: true })
-      btn.dispatchEvent(new FocusEvent("focusin", { bubbles: true }))
+      return true
+    }
+    return false
+  },
+  focusProse: () => {
+    let proseEl = document.querySelector(".article-content [tabindex='-1']")
+    if (!proseEl) {
+      proseEl = document.querySelector(".article-content p")
+      proseEl?.setAttribute("tabindex", "-1")
+    }
+    if (proseEl) {
+      proseEl.focus({ preventScroll: true })
       return true
     }
     return false
@@ -203,11 +237,97 @@ globalThis.__READER_TEST__ = {
     const el = resolveScrollElement()
     return el ? el.scrollTop : 0
   },
+  hasNavigationArrows: () => {
+    const prev = document.querySelector(".action-buttons button[aria-label*='Previous article']")
+    const next = document.querySelector(".action-buttons button[aria-label*='Next article']")
+    return {
+      hasNext: Boolean(next),
+      hasPrevious: Boolean(prev),
+    }
+  },
+  focusToc: () => {
+    const el = document.querySelector(
+      ".toc-droplist-container input, .toc-droplist-container .arco-dropdown-menu-item, .toc-droplist-container",
+    )
+    if (el) {
+      el.focus?.({ preventScroll: true })
+      return true
+    }
+    return false
+  },
+  openCompactToc: () => {
+    const items = [
+      ...document.querySelectorAll(
+        ".mobile-action-menu .arco-dropdown-menu-item, .settings-dropdown .arco-dropdown-menu-item",
+      ),
+    ]
+    const target = items.find(
+      (el) =>
+        el.textContent.includes("Table of Contents") ||
+        el.querySelector(".arco-icon-unordered-list"),
+    )
+    if (target) {
+      target.click()
+      return true
+    }
+    return false
+  },
+  openDesktopToc: () => {
+    const tocBtn = document.querySelector(
+      ".action-buttons button[aria-label='Table of Contents'], .action-buttons button[aria-label*='Table of Contents']",
+    )
+    if (tocBtn) {
+      tocBtn.click()
+      return true
+    }
+    return false
+  },
+  closeDesktopToc: () => {
+    const heading = document.querySelector(".toc-menu-item")
+    if (heading) {
+      heading.click()
+      return true
+    }
+    const tocBtn = document.querySelector(
+      ".action-buttons button[aria-label='Table of Contents'], .action-buttons button[aria-label*='Table of Contents']",
+    )
+    if (tocBtn) {
+      tocBtn.click()
+      return true
+    }
+    return false
+  },
+  closeMoreMenu: () => {
+    const menu = document.querySelector(".mobile-action-menu")
+    if (menu) {
+      menu.dispatchEvent(
+        new KeyboardEvent("keydown", { bubbles: true, code: "Escape", key: "Escape" }),
+      )
+      return true
+    }
+    const moreBtn = document.querySelector(
+      ".action-buttons button[aria-label*='More actions'], .action-buttons .settings-dropdown button",
+    )
+    if (moreBtn) {
+      moreBtn.click()
+      return true
+    }
+    return false
+  },
+  focusMoreMenu: () => {
+    const item = document.querySelector(".mobile-action-menu .arco-dropdown-menu-item")
+    if (item) {
+      item.focus({ preventScroll: true })
+      return true
+    }
+    return false
+  },
   openMoreMenu: () => {
     const moreBtn = document.querySelector(
       ".action-buttons button[aria-label*='More actions'], .action-buttons .settings-dropdown button",
     )
     if (moreBtn) {
+      moreBtn.focus({ preventScroll: true })
       moreBtn.click()
       return true
     }
@@ -226,6 +346,21 @@ globalThis.__READER_TEST__ = {
       el.scrollTop = top
       el.dispatchEvent(new Event("scroll"))
     }
+  },
+  setLightboxVisible: (visible) => {
+    if (globalThis.__READER_SET_LIGHTBOX__) {
+      globalThis.__READER_SET_LIGHTBOX__(visible)
+      return true
+    }
+    return false
+  },
+  setSwipeGestureEnabled: (enabled) => {
+    const current = getSettings()
+    replaceSettings({
+      ...current,
+      enableSwipeGesture: enabled,
+    })
+    return true
   },
 }
 
