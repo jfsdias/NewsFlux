@@ -1713,13 +1713,13 @@ The next step is a prioritization decision for PWA-VAL-01, not automatic executi
 
 ## 23. Current canonical state: post-CHROME-01B and READER-VISUAL-02B (2026-10-24)
 
-This section supersedes the historical post-UPSTREAM_AUDIT_02 state in Section 22. Live GitHub checks verify `main` at `44cca8127dfa3b0f4cb1285a69092f2c7e4a807d` and production at `44cca8127dfa3b0f4cb1285a69092f2c7e4a807d` (image `newsflux-local:44cca8127dfa`), confirming full main/production parity following the merge and deployment of CHROME-01B (PR #124). PWA-VAL-01 real-device runtime validation was partially accepted (`PWA_VAL_01=PARTIAL_ACCEPTED`, `PWA_02_TRIGGERED=NO`). The current authorized active implementation track is `READER-VISUAL-02B` (PR #125).
+This section supersedes the historical post-UPSTREAM_AUDIT_02 state in Section 22. GitHub main was live-verified at `44cca8127dfa3b0f4cb1285a69092f2c7e4a807d`; production revision `44cca8127dfa3b0f4cb1285a69092f2c7e4a807d` (image `newsflux-local:44cca8127dfa`) was established by the accepted production validation handoff, confirming full main/production parity following the merge and deployment of CHROME-01B (PR #124). PWA-VAL-01 real-device runtime validation was partially accepted (`PWA_VAL_01=PARTIAL_ACCEPTED`, `PWA_02_TRIGGERED=NO`). The current authorized active implementation track is `READER-VISUAL-02B` (PR #125).
 
 ```text
 GITHUB_MAIN=44cca8127dfa3b0f4cb1285a69092f2c7e4a807d
 PRODUCTION_SHA=44cca8127dfa3b0f4cb1285a69092f2c7e4a807d
 PRODUCTION_IMAGE=newsflux-local:44cca8127dfa
-PRODUCTION_IMAGE_ID=sha256:44cca8127dfa3b0f4cb1285a69092f2c7e4a807d
+PRODUCTION_IMAGE_ID=NOT_RECORDED_IN_PM_HANDOFF
 MAIN_PRODUCTION_SHA_PARITY=YES
 APPLICATION_RUNTIME_DELTA_SINCE_PRODUCTION=NO
 
