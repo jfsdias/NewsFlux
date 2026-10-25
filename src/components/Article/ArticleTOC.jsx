@@ -88,11 +88,16 @@ const ArticleTOCPanel = ({ onBack, onClose }) => {
   )
 }
 
-const ArticleTOC = () => {
+const ArticleTOC = ({ onVisibleChange }) => {
   const headings = useStore(articleHeadingsState)
   const { polyglot } = useStore(polyglotState)
   const label = polyglot.t("article_toc.tooltip") || "Table of Contents"
   const [dropdownVisible, setDropdownVisible] = useState(false)
+
+  const handleVisibleChange = (visible) => {
+    setDropdownVisible(visible)
+    onVisibleChange?.(visible)
+  }
 
   if (headings.length === 0) {
     return null
@@ -100,7 +105,7 @@ const ArticleTOC = () => {
 
   return (
     <Dropdown
-      droplist={<ArticleTOCPanel onClose={() => setDropdownVisible(false)} />}
+      droplist={<ArticleTOCPanel onClose={() => handleVisibleChange(false)} />}
       popupVisible={dropdownVisible}
       position="br"
       trigger="click"
@@ -109,7 +114,7 @@ const ArticleTOC = () => {
         className: "toc-dropdown",
         escToClose: true,
       }}
-      onVisibleChange={setDropdownVisible}
+      onVisibleChange={handleVisibleChange}
     >
       <CustomTooltip mini content={label}>
         <Button aria-label={label} icon={<IconUnorderedList aria-hidden="true" />} shape="circle" />
