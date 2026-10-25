@@ -221,11 +221,11 @@ async function run() {
       const header = document.querySelector("#mock-compact-nav");
       const headerRect = header ? header.getBoundingClientRect() : { bottom: 0 };
       
-      const messageNotice = document.querySelector(".arco-message-notice");
-      const messageRect = messageNotice ? messageNotice.getBoundingClientRect() : { top: 0, left: 0, right: 0 };
+      const messageEl = document.querySelector(".arco-message");
+      const messageRect = messageEl ? messageEl.getBoundingClientRect() : { top: 0, left: 0, right: 0 };
 
-      const notificationNotice = document.querySelector(".arco-notification-notice");
-      const notificationRect = notificationNotice ? notificationNotice.getBoundingClientRect() : { top: 0, left: 0, right: 0 };
+      const notificationEl = document.querySelector(".arco-notification");
+      const notificationRect = notificationEl ? notificationEl.getBoundingClientRect() : { top: 0, left: 0, right: 0 };
 
       const undoBtn = document.querySelector("#btn-undo-action");
       const undoRect = undoBtn ? undoBtn.getBoundingClientRect() : { width: 0, height: 0 };
@@ -238,7 +238,9 @@ async function run() {
         messageTop: messageRect.top,
         messageLeft: messageRect.left,
         messageRight: messageRect.right,
+        messageCount: document.querySelectorAll(".arco-message").length,
         notificationTop: notificationRect.top,
+        notificationCount: document.querySelectorAll(".arco-notification").length,
         undoBtnWidth: undoRect.width,
         undoBtnHeight: undoRect.height,
         neutralBg: neutralStyle.backgroundColor,
@@ -249,10 +251,26 @@ async function run() {
 
     console.log("Mobile metrics:", mobileMetrics)
 
+    // Selector match verification
+    assert.equal(
+      mobileMetrics.messageCount,
+      1,
+      "Exactly one .arco-message root must be rendered (MESSAGE_SELECTOR_MATCHES_EXPECTED_COUNT=PASS)",
+    )
+    assert.equal(
+      mobileMetrics.notificationCount,
+      1,
+      "Exactly one .arco-notification root must be rendered (NOTIFICATION_SELECTOR_MATCHES_EXPECTED_COUNT=PASS)",
+    )
+
     // Verification 1: Compact nav clearance (Feedback top > headerBottom)
     assert.ok(
       mobileMetrics.messageTop >= mobileMetrics.headerBottom + 8,
       `Toast message (${mobileMetrics.messageTop}px) must clear compact nav (${mobileMetrics.headerBottom}px)`,
+    )
+    assert.ok(
+      mobileMetrics.notificationTop >= mobileMetrics.headerBottom + 8,
+      `Notification (${mobileMetrics.notificationTop}px) must clear compact nav (${mobileMetrics.headerBottom}px)`,
     )
     console.log("COMPACT_NAV_CLEARANCE=PASS")
     console.log("SAFE_AREA_CLEARANCE=PASS")

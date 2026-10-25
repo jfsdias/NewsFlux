@@ -1711,50 +1711,62 @@ The completed UPSTREAM_AUDIT_02 is removed from the ready/recommended queue. PWA
 
 The next step is a prioritization decision for PWA-VAL-01, not automatic execution. Every item remains subject to the project rules: one purpose per PR, no blind upstream sync, no new persistent state without architecture approval, and no merge without explicit user authorization.
 
-## 23. Current canonical state: post-READER-VISUAL-02B and HARNESS-VIS-01A (2026-10-25)
+## 23. Current canonical state: post-HARNESS-VIS-01A and HARNESS-VIS-01B (2026-10-25)
 
-This section supersedes the historical post-UPSTREAM_AUDIT_02 and post-CHROME-01B state. GitHub main was live-verified at `99f108643f7bd4d31a991c868f2e66e66e519421`; production revision `99f108643f7bd4d31a991c868f2e66e66e519421` (image `newsflux-local:99f108643f7b`) was established by the accepted production smoke handoff (`PRODUCTION_SMOKE=PASS`), confirming full main/production parity following the merge and deployment of READER-VISUAL-02B (PR #125). Real production smoke verified: `SCROLL_DOWN_HIDE=PASS`, `SCROLL_UP_SHOW=PASS`, `FOCUS_SAFETY=PASS`, `MENU_FORCED_VISIBLE=PASS`, `TOC_SMOKE=PASS`, and `LIGHTBOX_SMOKE=NOT_RUN_WITH_REASON` (no image overlay button in parsed HTML). The current authorized active implementation track is `HARNESS-VIS-01A` (cross-platform real-browser harness portability).
+This section supersedes the historical post-READER-VISUAL-02B state. GitHub main was live-verified at `ba556d61bcf7dcdbfe1541cdbd40613b4ae43b9b` following the merge of HARNESS-VIS-01A (PR #126). Deployed production application revision remains `99f108643f7bd4d31a991c868f2e66e66e519421` (image `newsflux-local:99f108643f7b`) because PR #126 changed only test harness utilities and roadmap documentation without altering shipped application runtime (`MAIN_PRODUCTION_SHA_PARITY=NO`, `APPLICATION_RUNTIME_DELTA_SINCE_PRODUCTION=NO`, `DEPLOY_REQUIRED=NO`).
+
+HARNESS-VIS-01A is completed (`CHROME01B_HARNESS_PORTABILITY_01=RESOLVED_BY_HARNESS_VIS_01A`). Real browser discovery and explicit `CHROME_PATH` override were verified (`AUTO_DISCOVERY_GATE=PASS`, `CHROME_PATH_OVERRIDE_GATE=PASS`, `READER02B_AUTO_DISCOVERY_GATE=PASS`, `READER02B_CHROME_PATH_GATE=PASS`). Simulated resolver coverage passes on all platforms (`MACOS_RESOLVER_TEST=PASS`, `LINUX_RESOLVER_TEST=PASS`, `WINDOWS_RESOLVER_TEST=PASS`), while real-browser execution on Linux/Windows remains `NOT_RUN_ENVIRONMENT_UNAVAILABLE`.
+
+The current authorized active implementation track is `HARNESS-VIS-01B` (`CHROME01B_ARCO_SELECTOR_DRIFT_01`), correcting stale feedback selectors in `scripts/tests/chrome01b-visual-gate.js`.
 
 ```text
-GITHUB_MAIN=99f108643f7bd4d31a991c868f2e66e66e519421
+GITHUB_MAIN=ba556d61bcf7dcdbfe1541cdbd40613b4ae43b9b
 PRODUCTION_SHA=99f108643f7bd4d31a991c868f2e66e66e519421
 PRODUCTION_IMAGE=newsflux-local:99f108643f7b
 PRODUCTION_IMAGE_ID=NOT_RECORDED_IN_PM_HANDOFF
-MAIN_PRODUCTION_SHA_PARITY=YES
+MAIN_PRODUCTION_SHA_PARITY=NO
 APPLICATION_RUNTIME_DELTA_SINCE_PRODUCTION=NO
+DEPLOY_REQUIRED=NO
 
 READER-VISUAL-02B=COMPLETED
 PR125_MERGE_SHA=99f108643f7bd4d31a991c868f2e66e66e519421
 PR125_PRODUCTION_SHA=99f108643f7bd4d31a991c868f2e66e66e519421
 PR125_PRODUCTION_SMOKE=PASS
-SCROLL_DOWN_HIDE=PASS
-SCROLL_UP_SHOW=PASS
-FOCUS_SAFETY=PASS
-MENU_FORCED_VISIBLE=PASS
-TOC_SMOKE=PASS
-LIGHTBOX_SMOKE=NOT_RUN_WITH_REASON
 
-HARNESS-VIS-01A=IN_PROGRESS
-CHROME01B_HARNESS_PORTABILITY_01=IN_PROGRESS
+HARNESS-VIS-01A=COMPLETED
+PR126_MERGE_SHA=ba556d61bcf7dcdbfe1541cdbd40613b4ae43b9b
+CHROME01B_HARNESS_PORTABILITY_01=RESOLVED_BY_HARNESS_VIS_01A
+CHROME_PATH_OVERRIDE=PASS
+MACOS_RESOLVER_TEST=PASS
+LINUX_RESOLVER_TEST=PASS
+WINDOWS_RESOLVER_TEST=PASS
+READER02B_AUTO_DISCOVERY_GATE=PASS
+READER02B_CHROME_PATH_GATE=PASS
+LINUX_REAL_BROWSER_GATE=NOT_RUN_ENVIRONMENT_UNAVAILABLE
+WINDOWS_REAL_BROWSER_GATE=NOT_RUN_ENVIRONMENT_UNAVAILABLE
+
+HARNESS-VIS-01B=IN_PROGRESS
+CHROME01B_ARCO_SELECTOR_DRIFT_01=IN_PROGRESS
 
 LATEST_RUNTIME_DEPLOYED_TRACK=READER-VISUAL-02B / PR #125
-LATEST_MERGED_TRACK=READER-VISUAL-02B / PR #125
-LAST_COMPLETED_TRACK=READER-VISUAL-02B / PR #125
-CURRENT_PHASE=HARNESS-VIS-01A_BOUNDED_IMPLEMENTATION
-CURRENT_TRACK=HARNESS-VIS-01A (IN_PROGRESS)
-RECOMMENDED_NEXT_TRACK=HARNESS-VIS-01A_VALIDATION_AND_CLOSURE
-IMPLEMENTATION_AUTHORIZED=HARNESS-VIS-01A_ONLY
+LATEST_MERGED_TRACK=HARNESS-VIS-01A / PR #126
+LAST_COMPLETED_TRACK=HARNESS-VIS-01A / PR #126
+CURRENT_PHASE=HARNESS-VIS-01B_BOUNDED_CORRECTION
+CURRENT_TRACK=HARNESS-VIS-01B (IN_PROGRESS)
+RECOMMENDED_NEXT_TRACK=HARNESS-VIS-01B_VALIDATION_AND_CLOSURE
+IMPLEMENTATION_AUTHORIZED=HARNESS-VIS-01B_ONLY
 MERGE_AUTHORIZED=NO
 DEPLOY_AUTHORIZED=NO
 ```
 
 ### Current next-track decision matrix
 
-With READER-VISUAL-02B deployed to production and smoke-verified (`PRODUCTION_SMOKE=PASS`), the current authorized track is HARNESS-VIS-01A (cross-platform real-browser harness portability). All other candidate items remain on product or architecture hold.
+With HARNESS-VIS-01A merged to main, the current authorized track is HARNESS-VIS-01B (correcting stale feedback selectors in `chrome01b-visual-gate.js`). All other candidate items remain on product or architecture hold.
 
 | Candidate                                   | Status                            | Gate / decision                                                                                                                                                | Recommended order        |
 | ------------------------------------------- | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| HARNESS-VIS-01A browser harness portability | IN PROGRESS                       | Replace hardcoded macOS Chrome paths with cross-platform discovery, `CHROME_PATH` override, lifecycle cleanup, and portable runner support.                    | **Current track**        |
+| HARNESS-VIS-01B Arco selector correction    | IN PROGRESS                       | Correct stale `.arco-message-notice` / `.arco-notification-notice` selectors in `chrome01b-visual-gate.js` to match current rendered roots.                    | **Current track**        |
+| HARNESS-VIS-01A browser harness portability | COMPLETED                         | Replace hardcoded macOS Chrome paths with cross-platform discovery, `CHROME_PATH` override, and host-independent unit tests; merged in PR #126.                | Complete                 |
 | READER-VISUAL-02B interaction-aware chrome  | COMPLETED                         | Auto-hide sticky ActionButtons on downward reading; immediate return on upward scroll/focus; focus safety and reduced motion; production smoke PASS.           | Complete                 |
 | PWA-VAL-01 runtime/device validation        | PARTIAL_ACCEPTED                  | Real-device PWA validation executed; PWA_02_TRIGGERED=NO; do not reopen PWA work.                                                                              | Complete                 |
 | NAV-02F decisions                           | HOLD — product                    | Decide unread category grouping, Sidebar width, unread-only default and count capping.                                                                         | Later, after decisions   |
@@ -1764,4 +1776,4 @@ With READER-VISUAL-02B deployed to production and smoke-verified (`PRODUCTION_SM
 | Eight upstream dependency updates           | HOLD — isolated regression slices | Assess each production/build/visual/lockfile impact independently.                                                                                             | No bulk update           |
 | DOCKER_PUBLISHING_IDENTITY_01               | BACKLOG — architecture            | Decide whether to establish registry publishing before changing identity, guards, credentials or release topology.                                             | Unordered                |
 
-The active candidate is HARNESS-VIS-01A. Every item remains subject to the project rules: one purpose per PR, no blind upstream sync, no new persistent state without architecture approval, and no merge without explicit user authorization.
+The active candidate is HARNESS-VIS-01B. Every item remains subject to the project rules: one purpose per PR, no blind upstream sync, no new persistent state without architecture approval, and no merge without explicit user authorization.
