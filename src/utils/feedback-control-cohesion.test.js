@@ -135,3 +135,36 @@ test("CHROME-01B: Undo notification contract — duration and unique token IDs",
   assert.equal(idB, "footer-mark-all-read-undo-token-beta-456")
   assert.notEqual(idA, idB, "Undo notification IDs must remain token-scoped")
 })
+
+test("CHROME-01B: Notification action mobile touch target >= 44px", () => {
+  const indexCss = readFileSync(path.resolve(__dirname, "../index.css"), "utf8")
+  const match = indexCss.match(
+    /\.arco-notification-btn\s+\.arco-btn\s*\{[^}]*min-height:\s*(\d+)px/i,
+  )
+  assert.ok(match, "Notification button min-height rule must exist in index.css")
+  const minHeight = Number.parseInt(match[1], 10)
+  assert.ok(
+    minHeight >= 44,
+    `Notification action touch target min-height must be >= 44px (found ${minHeight}px)`,
+  )
+})
+
+test("CHROME-01B: Primary button semantic safety — Theme accents strictly exclude danger/warning/success statuses", () => {
+  const themeCss = readFileSync(path.resolve(__dirname, "../theme.css"), "utf8")
+  assert.ok(
+    themeCss.includes(".arco-btn-status-danger"),
+    "theme.css must explicitly exclude .arco-btn-status-danger from theme accent",
+  )
+  assert.ok(
+    themeCss.includes(".arco-btn-status-warning"),
+    "theme.css must explicitly exclude .arco-btn-status-warning from theme accent",
+  )
+  assert.ok(
+    themeCss.includes(".arco-btn-status-success"),
+    "theme.css must explicitly exclude .arco-btn-status-success from theme accent",
+  )
+  assert.ok(
+    themeCss.includes(".destructive-confirm-action"),
+    "theme.css must explicitly exclude .destructive-confirm-action from theme accent",
+  )
+})

@@ -6,5 +6,3 @@ public/styles/fonts.css
 src/components/ui/*.tsx
 src/hooks/use-mobile.tsx
 src/lib/utils.ts
-.superpowers
-.worktrees

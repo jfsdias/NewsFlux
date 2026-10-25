@@ -147,8 +147,9 @@ a {
     );
   }
 
+  .arco-notification-btn-wrapper .arco-btn,
   .arco-notification-btn .arco-btn {
-    min-height: 40px;
+    min-height: 44px;
     min-width: 64px;
     font-size: 14px;
   }
@@ -197,31 +198,37 @@ body[arco-theme="dark"] .arco-notification-close-btn:hover {
   color: var(--nf-text-primary);
 }
 
+.arco-notification-btn-wrapper .arco-btn,
 .arco-notification-btn .arco-btn {
   border-radius: var(--nf-radius-control, 8px);
 }
 
+body[arco-theme="dark"] .arco-notification-btn-wrapper .arco-btn-secondary,
 body[arco-theme="dark"] .arco-notification-btn .arco-btn-secondary {
   background-color: var(--nf-surface-raised);
   border-color: var(--nf-separator-subtle);
   color: var(--nf-text-primary);
 }
 
+body[arco-theme="dark"] .arco-notification-btn-wrapper .arco-btn-secondary:hover,
 body[arco-theme="dark"] .arco-notification-btn .arco-btn-secondary:hover {
   background-color: var(--nf-state-hover);
   border-color: var(--nf-text-muted);
 }
 
+body[arco-theme="dark"] .arco-notification-btn-wrapper .arco-btn-primary,
 body[arco-theme="dark"] .arco-notification-btn .arco-btn-primary {
   background-color: var(--nf-accent);
   color: var(--nf-on-accent);
   border-color: transparent;
 }
 
+body[arco-theme="dark"] .arco-notification-btn-wrapper .arco-btn-primary:hover,
 body[arco-theme="dark"] .arco-notification-btn .arco-btn-primary:hover {
   background-color: var(--nf-accent-hover);
 }
 
+body[arco-theme="dark"] .arco-notification-btn-wrapper .arco-btn-primary:focus-visible,
 body[arco-theme="dark"] .arco-notification-btn .arco-btn-primary:focus-visible {
   outline: 2px solid var(--nf-accent-focus, var(--nf-focus-ring));
   outline-offset: 2px;

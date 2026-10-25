@@ -430,32 +430,37 @@ body[arco-theme="dark"] .app-confirm-modal .arco-modal-footer > .arco-btn-second
   border-color: var(--nf-text-muted);
 }
 
-.app-confirm-modal .destructive-confirm-action.arco-btn-primary:not(.arco-btn-disabled) {
+.app-confirm-modal .destructive-confirm-action.arco-btn-primary:not(.arco-btn-disabled),
+.app-confirm-modal .arco-btn-primary.arco-btn-status-danger:not(.arco-btn-disabled) {
   border-color: transparent;
   color: #fff;
   background-color: rgb(var(--danger-6));
 }
 
 .app-confirm-modal
-  .destructive-confirm-action.arco-btn-primary:not(.arco-btn-disabled):not(
-    .arco-btn-loading
-  ):hover {
+  .destructive-confirm-action.arco-btn-primary:not(.arco-btn-disabled):not(.arco-btn-loading):hover,
+.app-confirm-modal
+  .arco-btn-primary.arco-btn-status-danger:not(.arco-btn-disabled):not(.arco-btn-loading):hover {
   background-color: rgb(var(--danger-5));
 }
 
 .app-confirm-modal
   .destructive-confirm-action.arco-btn-primary:not(.arco-btn-disabled):not(
     .arco-btn-loading
-  ):active {
+  ):active,
+.app-confirm-modal
+  .arco-btn-primary.arco-btn-status-danger:not(.arco-btn-disabled):not(.arco-btn-loading):active {
   background-color: rgb(var(--danger-7));
 }
 
-.app-confirm-modal .destructive-confirm-action.arco-btn-primary:focus-visible {
+.app-confirm-modal .destructive-confirm-action.arco-btn-primary:focus-visible,
+.app-confirm-modal .arco-btn-primary.arco-btn-status-danger:focus-visible {
   outline: 2px solid var(--nf-focus-ring, rgb(var(--danger-3)));
   outline-offset: 2px;
 }
 
-.app-confirm-modal .destructive-confirm-action.arco-btn-primary.arco-btn-disabled {
+.app-confirm-modal .destructive-confirm-action.arco-btn-primary.arco-btn-disabled,
+.app-confirm-modal .arco-btn-primary.arco-btn-status-danger.arco-btn-disabled {
   border-color: transparent;
   color: #fff;
   background-color: var(--color-danger-light-3);

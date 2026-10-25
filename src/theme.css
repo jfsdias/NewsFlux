@@ -168,25 +168,35 @@ body[arco-theme="dark"] {
 }
 
 /* Feedback & Control Cohesion (CHROME-01B) */
-body[arco-theme="dark"] .arco-btn-primary:not(.destructive-confirm-action):not(.arco-btn-disabled) {
+body[arco-theme="dark"]
+  .arco-btn-primary:not(.arco-btn-status-danger):not(.arco-btn-status-warning):not(
+    .arco-btn-status-success
+  ):not(.destructive-confirm-action):not(.arco-btn-disabled) {
   border-color: transparent;
   color: var(--nf-on-accent);
   background-color: var(--nf-accent);
 }
 
 body[arco-theme="dark"]
-  .arco-btn-primary:not(.destructive-confirm-action):not(.arco-btn-disabled):hover {
+  .arco-btn-primary:not(.arco-btn-status-danger):not(.arco-btn-status-warning):not(
+    .arco-btn-status-success
+  ):not(.destructive-confirm-action):not(.arco-btn-disabled):hover {
   color: var(--nf-on-accent);
   background-color: var(--nf-accent-hover);
 }
 
 body[arco-theme="dark"]
-  .arco-btn-primary:not(.destructive-confirm-action):not(.arco-btn-disabled):active {
+  .arco-btn-primary:not(.arco-btn-status-danger):not(.arco-btn-status-warning):not(
+    .arco-btn-status-success
+  ):not(.destructive-confirm-action):not(.arco-btn-disabled):active {
   color: var(--nf-on-accent);
   background-color: var(--nf-accent-pressed);
 }
 
-body[arco-theme="dark"] .arco-btn-primary:not(.destructive-confirm-action):focus-visible {
+body[arco-theme="dark"]
+  .arco-btn-primary:not(.arco-btn-status-danger):not(.arco-btn-status-warning):not(
+    .arco-btn-status-success
+  ):not(.destructive-confirm-action):focus-visible {
   outline: 2px solid var(--nf-accent-focus, var(--nf-focus-ring));
   outline-offset: 2px;
 }
