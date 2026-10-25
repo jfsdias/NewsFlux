@@ -1711,52 +1711,57 @@ The completed UPSTREAM_AUDIT_02 is removed from the ready/recommended queue. PWA
 
 The next step is a prioritization decision for PWA-VAL-01, not automatic execution. Every item remains subject to the project rules: one purpose per PR, no blind upstream sync, no new persistent state without architecture approval, and no merge without explicit user authorization.
 
-## 23. Current canonical state: post-CHROME-01B and READER-VISUAL-02B (2026-10-24)
+## 23. Current canonical state: post-READER-VISUAL-02B and HARNESS-VIS-01A (2026-10-25)
 
-This section supersedes the historical post-UPSTREAM_AUDIT_02 state in Section 22. GitHub main was live-verified at `44cca8127dfa3b0f4cb1285a69092f2c7e4a807d`; production revision `44cca8127dfa3b0f4cb1285a69092f2c7e4a807d` (image `newsflux-local:44cca8127dfa`) was established by the accepted production validation handoff, confirming full main/production parity following the merge and deployment of CHROME-01B (PR #124). PWA-VAL-01 real-device runtime validation was partially accepted (`PWA_VAL_01=PARTIAL_ACCEPTED`, `PWA_02_TRIGGERED=NO`). The current authorized active implementation track is `READER-VISUAL-02B` (PR #125).
+This section supersedes the historical post-UPSTREAM_AUDIT_02 and post-CHROME-01B state. GitHub main was live-verified at `99f108643f7bd4d31a991c868f2e66e66e519421`; production revision `99f108643f7bd4d31a991c868f2e66e66e519421` (image `newsflux-local:99f108643f7b`) was established by the accepted production smoke handoff (`PRODUCTION_SMOKE=PASS`), confirming full main/production parity following the merge and deployment of READER-VISUAL-02B (PR #125). Real production smoke verified: `SCROLL_DOWN_HIDE=PASS`, `SCROLL_UP_SHOW=PASS`, `FOCUS_SAFETY=PASS`, `MENU_FORCED_VISIBLE=PASS`, `TOC_SMOKE=PASS`, and `LIGHTBOX_SMOKE=NOT_RUN_WITH_REASON` (no image overlay button in parsed HTML). The current authorized active implementation track is `HARNESS-VIS-01A` (cross-platform real-browser harness portability).
 
 ```text
-GITHUB_MAIN=44cca8127dfa3b0f4cb1285a69092f2c7e4a807d
-PRODUCTION_SHA=44cca8127dfa3b0f4cb1285a69092f2c7e4a807d
-PRODUCTION_IMAGE=newsflux-local:44cca8127dfa
+GITHUB_MAIN=99f108643f7bd4d31a991c868f2e66e66e519421
+PRODUCTION_SHA=99f108643f7bd4d31a991c868f2e66e66e519421
+PRODUCTION_IMAGE=newsflux-local:99f108643f7b
 PRODUCTION_IMAGE_ID=NOT_RECORDED_IN_PM_HANDOFF
 MAIN_PRODUCTION_SHA_PARITY=YES
 APPLICATION_RUNTIME_DELTA_SINCE_PRODUCTION=NO
 
-CHROME-01B=COMPLETED
-PR124_MERGE_SHA=44cca8127dfa3b0f4cb1285a69092f2c7e4a807d
-PR124_PRODUCTION_SHA=44cca8127dfa3b0f4cb1285a69092f2c7e4a807d
+READER-VISUAL-02B=COMPLETED
+PR125_MERGE_SHA=99f108643f7bd4d31a991c868f2e66e66e519421
+PR125_PRODUCTION_SHA=99f108643f7bd4d31a991c868f2e66e66e519421
+PR125_PRODUCTION_SMOKE=PASS
+SCROLL_DOWN_HIDE=PASS
+SCROLL_UP_SHOW=PASS
+FOCUS_SAFETY=PASS
+MENU_FORCED_VISIBLE=PASS
+TOC_SMOKE=PASS
+LIGHTBOX_SMOKE=NOT_RUN_WITH_REASON
 
-PWA_VAL_01=PARTIAL_ACCEPTED
-PWA_02_TRIGGERED=NO
+HARNESS-VIS-01A=IN_PROGRESS
+CHROME01B_HARNESS_PORTABILITY_01=IN_PROGRESS
 
-READER-VISUAL-02B=IN_PROGRESS
-PR125_DRAFT=YES
-
-LATEST_RUNTIME_DEPLOYED_TRACK=CHROME-01B / PR #124
-LATEST_MERGED_TRACK=CHROME-01B / PR #124
-LAST_COMPLETED_TRACK=CHROME-01B / PR #124
-CURRENT_PHASE=READER-VISUAL-02B_BOUNDED_IMPLEMENTATION
-CURRENT_TRACK=READER-VISUAL-02B (IN_PROGRESS; DRAFT PR #125)
-RECOMMENDED_NEXT_TRACK=READER-VISUAL-02B_VALIDATION_AND_CLOSURE
-IMPLEMENTATION_AUTHORIZED=READER-VISUAL-02B_ONLY
+LATEST_RUNTIME_DEPLOYED_TRACK=READER-VISUAL-02B / PR #125
+LATEST_MERGED_TRACK=READER-VISUAL-02B / PR #125
+LAST_COMPLETED_TRACK=READER-VISUAL-02B / PR #125
+CURRENT_PHASE=HARNESS-VIS-01A_BOUNDED_IMPLEMENTATION
+CURRENT_TRACK=HARNESS-VIS-01A (IN_PROGRESS)
+RECOMMENDED_NEXT_TRACK=HARNESS-VIS-01A_VALIDATION_AND_CLOSURE
+IMPLEMENTATION_AUTHORIZED=HARNESS-VIS-01A_ONLY
 MERGE_AUTHORIZED=NO
 DEPLOY_AUTHORIZED=NO
 ```
 
 ### Current next-track decision matrix
 
-With PWA-VAL-01 runtime validation complete and accepted without triggering PWA-02 (`PWA_VAL_01=PARTIAL_ACCEPTED`, `PWA_02_TRIGGERED=NO`), and CHROME-01B successfully deployed to production, the current active track is READER-VISUAL-02B (interaction-aware reader chrome auto-hide). All other candidate items remain on product or architecture hold.
+With READER-VISUAL-02B deployed to production and smoke-verified (`PRODUCTION_SMOKE=PASS`), the current authorized track is HARNESS-VIS-01A (cross-platform real-browser harness portability). All other candidate items remain on product or architecture hold.
 
-| Candidate                                  | Status                            | Gate / decision                                                                                                                                                | Recommended order        |
-| ------------------------------------------ | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| READER-VISUAL-02B interaction-aware chrome | IN PROGRESS                       | Auto-hide sticky ActionButtons on downward reading; immediate return on upward scroll/focus; focus safety and reduced motion.                                  | **Current track**        |
-| PWA-VAL-01 runtime/device validation       | PARTIAL_ACCEPTED                  | Real-device PWA validation executed; PWA_02_TRIGGERED=NO; do not reopen PWA work.                                                                              | Complete                 |
-| NAV-02F decisions                          | HOLD — product                    | Decide unread category grouping, Sidebar width, unread-only default and count capping.                                                                         | Later, after decisions   |
-| NNW-03 / CHROME-01 decisions               | HOLD — product                    | Decide structural FooterPanel/SearchAndSortBar consolidation and `/today` Mark older behavior.                                                                 | Later, after decisions   |
-| NNW-05 wide-desktop multi-pane             | HOLD — product                    | Decide activation, automatic vs. opt-in, threshold and Home inclusion.                                                                                         | Later, after decisions   |
-| Story activation                           | HOLD — product/evidence           | Runtime stays disabled; CPU acceptance policy remains proposed and PM-decision-required; complete activation evidence and explicit authorization are required. | No activation authorized |
-| Eight upstream dependency updates          | HOLD — isolated regression slices | Assess each production/build/visual/lockfile impact independently.                                                                                             | No bulk update           |
-| DOCKER_PUBLISHING_IDENTITY_01              | BACKLOG — architecture            | Decide whether to establish registry publishing before changing identity, guards, credentials or release topology.                                             | Unordered                |
+| Candidate                                   | Status                            | Gate / decision                                                                                                                                                | Recommended order        |
+| ------------------------------------------- | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| HARNESS-VIS-01A browser harness portability | IN PROGRESS                       | Replace hardcoded macOS Chrome paths with cross-platform discovery, `CHROME_PATH` override, lifecycle cleanup, and portable runner support.                    | **Current track**        |
+| READER-VISUAL-02B interaction-aware chrome  | COMPLETED                         | Auto-hide sticky ActionButtons on downward reading; immediate return on upward scroll/focus; focus safety and reduced motion; production smoke PASS.           | Complete                 |
+| PWA-VAL-01 runtime/device validation        | PARTIAL_ACCEPTED                  | Real-device PWA validation executed; PWA_02_TRIGGERED=NO; do not reopen PWA work.                                                                              | Complete                 |
+| NAV-02F decisions                           | HOLD — product                    | Decide unread category grouping, Sidebar width, unread-only default and count capping.                                                                         | Later, after decisions   |
+| NNW-03 / CHROME-01 decisions                | HOLD — product                    | Decide structural FooterPanel/SearchAndSortBar consolidation and `/today` Mark older behavior.                                                                 | Later, after decisions   |
+| NNW-05 wide-desktop multi-pane              | HOLD — product                    | Decide activation, automatic vs. opt-in, threshold and Home inclusion.                                                                                         | Later, after decisions   |
+| Story activation                            | HOLD — product/evidence           | Runtime stays disabled; CPU acceptance policy remains proposed and PM-decision-required; complete activation evidence and explicit authorization are required. | No activation authorized |
+| Eight upstream dependency updates           | HOLD — isolated regression slices | Assess each production/build/visual/lockfile impact independently.                                                                                             | No bulk update           |
+| DOCKER_PUBLISHING_IDENTITY_01               | BACKLOG — architecture            | Decide whether to establish registry publishing before changing identity, guards, credentials or release topology.                                             | Unordered                |
 
-The active candidate is READER-VISUAL-02B. Every item remains subject to the project rules: one purpose per PR, no blind upstream sync, no new persistent state without architecture approval, and no merge without explicit user authorization.
+The active candidate is HARNESS-VIS-01A. Every item remains subject to the project rules: one purpose per PR, no blind upstream sync, no new persistent state without architecture approval, and no merge without explicit user authorization.

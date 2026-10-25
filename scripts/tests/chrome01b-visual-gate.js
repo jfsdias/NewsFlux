@@ -8,6 +8,8 @@ import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
+import { getBrowserVersion, resolveBrowserExecutable } from "./browser-resolver.js"
+
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const screenshotsDir = "/tmp/newsflux-pr124-screenshots"
 mkdirSync(screenshotsDir, { recursive: true })
@@ -151,7 +153,12 @@ async function run() {
     console.log(`Vite harness server ready at http://127.0.0.1:${vitePort}`)
 
     // 2. Launch Google Chrome headless
-    const chromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    const resolvedBrowser = resolveBrowserExecutable()
+    const browserVersion = getBrowserVersion(resolvedBrowser.executable)
+    console.log(
+      `Resolved browser: ${resolvedBrowser.executable} (source: ${resolvedBrowser.source}, version: ${browserVersion})`,
+    )
+    const chromePath = resolvedBrowser.executable
     chromeProcess = spawn(
       chromePath,
       [
@@ -214,10 +221,10 @@ async function run() {
       const header = document.querySelector("#mock-compact-nav");
       const headerRect = header ? header.getBoundingClientRect() : { bottom: 0 };
       
-      const messageNotice = document.querySelector(".arco-message-notice");
+      const messageNotice = document.querySelector(".arco-message, .arco-message-notice");
       const messageRect = messageNotice ? messageNotice.getBoundingClientRect() : { top: 0, left: 0, right: 0 };
 
-      const notificationNotice = document.querySelector(".arco-notification-notice");
+      const notificationNotice = document.querySelector(".arco-notification, .arco-notification-notice");
       const notificationRect = notificationNotice ? notificationNotice.getBoundingClientRect() : { top: 0, left: 0, right: 0 };
 
       const undoBtn = document.querySelector("#btn-undo-action");
