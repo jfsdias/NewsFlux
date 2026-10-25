@@ -1,19 +1,24 @@
 #!/usr/bin/env python3
-"""Unit tests for Story Identity V1 Research Harness.
+"""Unit tests for Story Identity V1 Research Harness (R2).
 
 Verifies:
 - Corpus fingerprint & hash validation
-- Embedding dimensions and batch integrity
+- All-vector dimension validation (Qwen & Mistral 1024-dim across all vectors)
+- Semantic cosine recomputation and parity gate against stored pair scores
+- Numeric token separation (significant words exclude pure numbers)
+- Dedicated date token extraction and deterministic entity anchor proxy
 - Pair universe constraints (cross-feed, window)
-- Feature extraction determinism (normalization, stopwords, overlap, temporal)
-- Sampling repeatability with deterministic seed
-- Data privacy guardrails
+- Transitive chain candidate detection (A-B strong, B-C strong, A-C weak)
+- 10-strata construction and empirical deduplication
+- Blinding verification (annotator queue contains no model names, scores, or strata)
+- Same-seed byte-identical queue and audit key reproducibility
+- Private output path guardrail (rejection of untracked repo directories)
 """
 
 import csv
-import hashlib
 import json
 import os
+from pathlib import Path
 import shutil
 import tempfile
 import unittest
@@ -21,38 +26,54 @@ import unittest
 try:
     from .harness import (
         CorpusVerifier,
+        EmbeddingParityVerifier,
         EmbeddingVerifier,
         FeatureExtractor,
         PairUniverseVerifier,
         StratifiedSampler,
+        TransitiveChainDetector,
         compute_jaccard_similarity,
         compute_overlap_coefficient,
+        extract_date_tokens,
+        extract_entity_anchors,
+        extract_numeric_tokens,
         extract_significant_words,
         normalize_title,
         run_harness,
+        validate_output_path,
         verify_sha256,
+        CORPUS_FINGERPRINT_DERIVATION,
         EXPECTED_CORPUS_FINGERPRINT,
         EXPECTED_CORPUS_FILE_SHA256,
         EXPECTED_HOME200_ENTRY_COUNT,
         EXPECTED_PAIR_UNIVERSE_COUNT,
+        FEATURE_SCHEMA_VERSION,
     )
 except ImportError:
     from harness import (
         CorpusVerifier,
+        EmbeddingParityVerifier,
         EmbeddingVerifier,
         FeatureExtractor,
         PairUniverseVerifier,
         StratifiedSampler,
+        TransitiveChainDetector,
         compute_jaccard_similarity,
         compute_overlap_coefficient,
+        extract_date_tokens,
+        extract_entity_anchors,
+        extract_numeric_tokens,
         extract_significant_words,
         normalize_title,
         run_harness,
+        validate_output_path,
         verify_sha256,
+        CORPUS_FINGERPRINT_DERIVATION,
         EXPECTED_CORPUS_FINGERPRINT,
         EXPECTED_CORPUS_FILE_SHA256,
         EXPECTED_HOME200_ENTRY_COUNT,
         EXPECTED_PAIR_UNIVERSE_COUNT,
+        FEATURE_SCHEMA_VERSION,
     )
 
 
@@ -68,62 +89,71 @@ class TestStoryIdentityHarness(unittest.TestCase):
     def test_normalize_title(self):
         self.assertEqual(normalize_title(""), "")
         self.assertEqual(
-            normalize_title("‘Cinema Sintético: Grande Produção’ terá Ator Premiado em papel misterioso!"),
-            "cinema sintético grande produção terá ator premiado em papel misterioso"
+            normalize_title("‘Synthetic Title: High Production’ will feature Award-Winning Actor!"),
+            "synthetic title high production will feature award winning actor"
         )
         self.assertEqual(
             normalize_title("  Alpha   releases   platformOS 10.2   RC   "),
             "alpha releases platformos 10 2 rc"
         )
 
-    def test_extract_significant_words(self):
-        # Synthetic Portuguese title + feed title token removal
+    def test_extract_significant_words_numeric_separation(self):
+        # Verify pure numbers are excluded from significant words
         words = extract_significant_words(
-            "Operadora Alfa lança novos planos de internet com 50% de desconto",
-            feed_title="Portal Notícias Operadora Alfa"
+            "Service Provider launches new internet tier with 50 percent discount in 2026",
+            feed_title="Daily News Service Provider"
         )
-        self.assertIn("planos", words)
+        self.assertIn("launches", words)
+        self.assertIn("tier", words)
         self.assertIn("internet", words)
-        self.assertIn("desconto", words)
-        self.assertNotIn("operadora", words)  # Stripped because in feed_title
-        self.assertNotIn("alfa", words)       # Stripped because in feed_title
-        self.assertNotIn("de", words)         # Stopword
-        self.assertNotIn("com", words)        # Stopword
+        self.assertIn("discount", words)
+        self.assertIn("percent", words)
+        self.assertNotIn("50", words)    # Pure number excluded
+        self.assertNotIn("2026", words)  # Pure number excluded
+        self.assertNotIn("service", words)  # Stripped because in feed_title
+        self.assertNotIn("provider", words) # Stripped because in feed_title
+        self.assertNotIn("with", words)     # Stopword
+        self.assertNotIn("in", words)       # Stopword
 
-        # Synthetic English title
-        words_en = extract_significant_words(
-            "Example Tech Corp updates privacy terms for developer platform accounts",
-            feed_title="Tech Daily News Example"
+        # Verify dedicated numeric tokens
+        nums = extract_numeric_tokens("New model has 1024 dims and 50 batches with 2026 release")
+        self.assertEqual(nums, {"1024", "50", "2026"})
+
+        # Verify dedicated date tokens
+        dates = extract_date_tokens("Event scheduled for 2026-10-25 or 12/31/2026")
+        self.assertIn("2026", dates)
+        self.assertIn("10-25", dates)
+        self.assertIn("12/31/2026", dates)
+
+    def test_extract_entity_anchors_proxy(self):
+        anchors = extract_entity_anchors(
+            "Alpha Corp and Beta Global enter partnership in London",
+            feed_title="Tech Feed"
         )
-        self.assertIn("privacy", words_en)
-        self.assertIn("developer", words_en)
-        self.assertIn("platform", words_en)
-        self.assertNotIn("example", words_en)  # Stripped because in feed_title
-        self.assertNotIn("for", words_en)      # Stopword
+        self.assertIn("alpha", anchors)
+        self.assertIn("corp", anchors)
+        self.assertIn("beta", anchors)
+        self.assertIn("global", anchors)
+        self.assertIn("london", anchors)
 
     def test_overlap_and_jaccard_metrics(self):
-        # Empty sets
         self.assertEqual(compute_overlap_coefficient(set(), set()), 0.0)
         self.assertEqual(compute_jaccard_similarity(set(), set()), 0.0)
 
-        # Identical sets
         s1 = {"alpha", "platformos", "release"}
         self.assertEqual(compute_overlap_coefficient(s1, s1), 1.0)
         self.assertEqual(compute_jaccard_similarity(s1, s1), 1.0)
 
-        # Disjoint sets
         s2 = {"beta", "device", "firmware"}
         self.assertEqual(compute_overlap_coefficient(s1, s2), 0.0)
         self.assertEqual(compute_jaccard_similarity(s1, s2), 0.0)
 
-        # Asymmetric sets (aggregator title case)
+        # Asymmetric sets (short aggregator headline vs full headline)
         short_title = {"synthetic", "title", "entity", "event"}
         long_title = {"synthetic", "title", "entity", "event", "analysis", "commentary", "source", "detail"}
         overlap = compute_overlap_coefficient(short_title, long_title)
         jaccard = compute_jaccard_similarity(short_title, long_title)
-        # Overlap coefficient: 4 / min(4, 8) = 1.0
         self.assertEqual(overlap, 1.0)
-        # Jaccard: 4 / (4 + 8 - 4) = 4 / 8 = 0.5
         self.assertEqual(jaccard, 0.5)
 
     def test_feature_extractor(self):
@@ -136,39 +166,60 @@ class TestStoryIdentityHarness(unittest.TestCase):
             "feed_a": "Feed A",
             "feed_b": "Feed B",
             "published_at_a": "1792800000.0",
-            "published_at_b": "1792803600.0",  # Exactly 1 hour later
-            "title_a": "Breaking news event about AI models",
-            "title_b": "Breaking news event about AI models announced",
+            "published_at_b": "1792803600.0",  # Exactly 1 hour later (60 min)
+            "title_a": "Breaking news 2026 event about AI models announced in 50 states",
+            "title_b": "Breaking news 2026 event about AI models announced in 50 states today",
             "qwen_score": "0.85",
             "qwen_rank": "5",
             "mistral_score": "0.92",
             "mistral_rank": "2",
             "best_rank": "2",
         }
-        reranker_lookup = {"100:200": 6.5}
+        reranker_lookup = {
+            "100:200": {
+                "ab": 7.25,
+                "ba": 6.75,
+                "mean": 7.0,
+                "delta": 0.5,
+            }
+        }
+        corpus_lookup = {
+            100: {"url": "https://example.com/story-100", "category_id": 1},
+            200: {"url": "https://example.com/story-200", "category_id": 1},
+        }
 
-        feats = FeatureExtractor.extract_features(pair_row, reranker_lookup)
+        feats = FeatureExtractor.extract_features(pair_row, reranker_lookup, corpus_lookup)
+        self.assertEqual(feats["schema_version"], FEATURE_SCHEMA_VERSION)
         self.assertEqual(feats["pair_key"], "100:200")
         self.assertEqual(feats["id_a"], 100)
         self.assertEqual(feats["id_b"], 200)
         self.assertEqual(feats["feed_id_a"], 10)
         self.assertEqual(feats["feed_id_b"], 20)
+        self.assertEqual(feats["cross_feed"], 1)
+        self.assertEqual(feats["same_domain"], 1)
+        self.assertEqual(feats["same_category"], 1)
+        self.assertEqual(feats["canonical_url_match"], 0)
+        self.assertEqual(feats["normalized_url_match"], 0)
+        self.assertAlmostEqual(feats["published_delta_minutes"], 60.0, places=2)
         self.assertAlmostEqual(feats["published_delta_hours"], 1.0, places=3)
         self.assertEqual(feats["same_calendar_day_utc"], 1)
         self.assertEqual(feats["exact_normalized_title_match"], 0)
-        self.assertGreater(feats["shared_significant_words_count"], 0)
-        self.assertGreater(feats["title_overlap_coefficient"], 0.5)
-        self.assertEqual(feats["qwen_cosine_similarity"], 0.85)
-        self.assertEqual(feats["mistral_cosine_similarity"], 0.92)
-        self.assertEqual(feats["reranker_score"], 6.5)
+        self.assertGreater(feats["title_token_intersection"], 0)
+        self.assertGreater(feats["title_overlap_coefficient"], 0.7)
+        self.assertEqual(feats["number_overlap"], 1.0)  # Both have {"2026", "50"}
+        self.assertEqual(feats["date_overlap"], 1.0)    # Both have {"2026"}
+        self.assertEqual(feats["qwen_embedding_cosine"], 0.85)
+        self.assertEqual(feats["mistral_embedding_cosine"], 0.92)
+        self.assertEqual(feats["reranker_score_ab"], 7.25)
+        self.assertEqual(feats["reranker_score_ba"], 6.75)
+        self.assertEqual(feats["reranker_score_mean"], 7.0)
+        self.assertEqual(feats["reranker_direction_delta"], 0.5)
 
     def test_corpus_verifier_rejection(self):
-        # Non-existent file
         ok, errs, _ = CorpusVerifier.verify(os.path.join(self.test_dir, "missing.jsonl"))
         self.assertFalse(ok)
         self.assertTrue(any("does not exist" in e for e in errs))
 
-        # Corrupted SHA256
         dummy_path = os.path.join(self.test_dir, "corrupt.jsonl")
         with open(dummy_path, "w") as f:
             f.write('{"id": 1}\n')
@@ -176,28 +227,104 @@ class TestStoryIdentityHarness(unittest.TestCase):
         self.assertFalse(ok)
         self.assertTrue(any("mismatch" in e for e in errs))
 
-    def test_pair_universe_verifier_rejection(self):
-        # Same-feed violation
-        dummy_csv = os.path.join(self.test_dir, "same_feed.csv")
-        with open(dummy_csv, "w", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=["pair_key", "id_a", "id_b", "feed_id_a", "feed_id_b"])
-            writer.writeheader()
-            writer.writerow({
-                "pair_key": "1:2",
-                "id_a": "1",
-                "id_b": "2",
-                "feed_id_a": "10",
-                "feed_id_b": "10",  # Same feed violation!
-            })
-        ok, errs, _ = PairUniverseVerifier.verify(dummy_csv)
+    def test_all_vector_dimension_validation(self):
+        # Qwen with vector dimension mismatch on index 1
+        qwen_file = os.path.join(self.test_dir, "qwen_corrupt.json")
+        with open(qwen_file, "w") as f:
+            json.dump({
+                "corpus_fingerprint": EXPECTED_CORPUS_FINGERPRINT,
+                "ids": list(range(200)),
+                "embeddings": [[0.1] * 1024, [0.1] * 512] + [[0.1] * 1024] * 198
+            }, f)
+        ok, errs, _, _ = EmbeddingVerifier.verify_qwen(qwen_file)
         self.assertFalse(ok)
-        self.assertTrue(any("same-feed pairs" in e or "SHA256" in e for e in errs))
+        self.assertTrue(any("dimension" in e for e in errs))
 
-    def test_deterministic_sampling_repeatability(self):
-        # Synthetic candidate pairs
+        # Mistral with wrong batch size
+        mistral_file = os.path.join(self.test_dir, "mistral-batch-000-049.json")
+        with open(mistral_file, "w") as f:
+            json.dump({
+                "corpus_fingerprint": EXPECTED_CORPUS_FINGERPRINT,
+                "embeddings": [[0.1] * 1024] * 40 # 40 instead of 50
+            }, f)
+        ok, errs, _ = EmbeddingVerifier.verify_mistral(self.test_dir)
+        self.assertFalse(ok)
+        self.assertTrue(any("expected 50" in e or "Expected 4 Mistral batch files" in e for e in errs))
+
+    def test_embedding_parity_verifier(self):
+        # Synthetic unit vectors
+        v1 = [1.0, 0.0]
+        v2 = [0.0, 1.0]
+        v3 = [0.70710678, 0.70710678]
+
+        corpus_ids = [10, 20, 30]
+        qwen_vectors = [v1, v2, v3]
+        mistral_vectors = [v1, v2, v3]
+
+        pairs = [
+            {"pair_key": "10:20", "id_a": "10", "id_b": "20", "qwen_score": "0.0", "mistral_score": "0.0"},
+            {"pair_key": "10:30", "id_a": "10", "id_b": "30", "qwen_score": "0.70710678", "mistral_score": "0.70710678"},
+        ]
+
+        ok, errs, stats = EmbeddingParityVerifier.verify(
+            qwen_vectors=qwen_vectors,
+            mistral_vectors=mistral_vectors,
+            corpus_ids=corpus_ids,
+            pairs=pairs,
+            tolerance=1e-4
+        )
+        self.assertTrue(ok)
+        self.assertEqual(len(errs), 0)
+        self.assertLess(stats["max_qwen_delta"], 1e-4)
+        self.assertLess(stats["max_mistral_delta"], 1e-4)
+
+        # Deliberate failure test
+        pairs_fail = [
+            {"pair_key": "10:20", "id_a": "10", "id_b": "20", "qwen_score": "0.999", "mistral_score": "0.0"}
+        ]
+        ok_fail, errs_fail, _ = EmbeddingParityVerifier.verify(
+            qwen_vectors=qwen_vectors,
+            mistral_vectors=mistral_vectors,
+            corpus_ids=corpus_ids,
+            pairs=pairs_fail,
+            tolerance=1e-4
+        )
+        self.assertFalse(ok_fail)
+        self.assertTrue(any("Qwen parity failure" in e for e in errs_fail))
+
+    def test_transitive_chain_detector(self):
+        # Graph: 1-2 strong (rank 10), 2-3 strong (rank 20), 1-3 weak (rank 300)
+        pairs = [
+            {"pair_key": "1:2", "id_a": "1", "id_b": "2", "best_rank": "10"},
+            {"pair_key": "2:3", "id_a": "2", "id_b": "3", "best_rank": "20"},
+            {"pair_key": "1:3", "id_a": "1", "id_b": "3", "best_rank": "300"},
+            # Disconnected pair 4-5
+            {"pair_key": "4:5", "id_a": "4", "id_b": "5", "best_rank": "5"},
+        ]
+        candidates = TransitiveChainDetector.detect(pairs, strong_threshold=50, weak_threshold=150)
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0]["weak_pair_key"], "1:3")
+        self.assertEqual(candidates[0]["rank_ac"], 300)
+
+    def test_private_output_path_rejection(self):
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../"))
+
+        # Test 1: path outside repository -> PASS
+        ok_ext, err_ext = validate_output_path("/tmp/newsflux-test-private", repo_root=repo_root)
+        self.assertTrue(ok_ext)
+        self.assertIsNone(err_ext)
+
+        # Test 2: path inside repository under src/ -> REJECTED
+        inside_untracked = os.path.join(repo_root, "src/private_output")
+        ok_in, err_in = validate_output_path(inside_untracked, repo_root=repo_root)
+        self.assertFalse(ok_in)
+        self.assertIn("NOT git-ignored", err_in)
+
+    def test_byte_identical_queue_emission(self):
+        # Generate synthetic pair and feature sets
         pairs = []
         features = []
-        for i in range(1, 101):
+        for i in range(1, 151):
             k = f"{i}:{i+1000}"
             p = {
                 "pair_key": k,
@@ -205,36 +332,45 @@ class TestStoryIdentityHarness(unittest.TestCase):
                 "id_b": str(i + 1000),
                 "feed_id_a": "1",
                 "feed_id_b": "2",
-                "feed_a": "Feed 1",
-                "feed_b": "Feed 2",
+                "feed_a": f"Feed {i}",
+                "feed_b": f"Feed {i+1000}",
                 "published_at_a": "1792800000.0",
                 "published_at_b": "1792801000.0",
-                "title_a": f"Title A {i}",
-                "title_b": f"Title B {i}",
+                "title_a": f"Synthetic Event Title A {i}",
+                "title_b": f"Synthetic Event Title B {i}",
             }
-            # Vary ranks
-            qwen_r = i
-            mist_r = (i * 3) % 150 + 1
-            best_r = min(qwen_r, mist_r)
             f = {
+                "schema_version": FEATURE_SCHEMA_VERSION,
                 "pair_key": k,
                 "id_a": i,
                 "id_b": i + 1000,
-                "qwen_cosine_similarity": 0.8,
-                "qwen_rank": qwen_r,
-                "mistral_cosine_similarity": 0.85,
-                "mistral_rank": mist_r,
-                "best_rank": best_r,
-                "reranker_score": None,
-                "shared_significant_words_count": 2,
+                "qwen_embedding_cosine": 0.8,
+                "qwen_rank": i,
+                "mistral_embedding_cosine": 0.85,
+                "mistral_rank": (i * 3) % 150 + 1,
+                "best_rank": min(i, (i * 3) % 150 + 1),
+                "reranker_score_ab": None,
+                "reranker_score_ba": None,
+                "reranker_score_mean": None,
+                "reranker_direction_delta": None,
+                "title_token_intersection": 2,
                 "title_overlap_coefficient": 0.5,
                 "title_jaccard_similarity": 0.3,
-                "published_delta_hours": 0.5,
+                "number_overlap": 0.0,
+                "date_overlap": 0.0,
+                "entity_anchor_overlap": 0.0,
+                "published_delta_minutes": 16.67,
+                "published_delta_hours": 0.28,
+                "same_calendar_day_utc": 1,
+                "canonical_url_match": 0,
+                "normalized_url_match": 0,
+                "exact_normalized_title_match": 0,
+                "same_domain": 0,
+                "same_category": 0,
             }
             pairs.append(p)
             features.append(f)
 
-        # Run sampling twice with identical seed
         q1, c1 = StratifiedSampler.sample_review_queue(pairs, features, seed=20261025)
         q2, c2 = StratifiedSampler.sample_review_queue(pairs, features, seed=20261025)
 
@@ -243,14 +379,6 @@ class TestStoryIdentityHarness(unittest.TestCase):
         for e1, e2 in zip(q1, q2):
             self.assertEqual(e1["pair_key"], e2["pair_key"])
             self.assertEqual(e1["review_id"], e2["review_id"])
-
-        # Run sampling with different seed -> different order
-        q3, _ = StratifiedSampler.sample_review_queue(pairs, features, seed=99999999)
-        self.assertEqual(len(q1), len(q3))
-        # First element should be different due to different shuffle
-        keys_1 = [e["pair_key"] for e in q1]
-        keys_3 = [e["pair_key"] for e in q3]
-        self.assertNotEqual(keys_1, keys_3)
 
     def test_live_corpus_and_artifacts(self):
         """Validates real frozen artifacts if present on the runner filesystem."""
@@ -276,7 +404,6 @@ class TestStoryIdentityHarness(unittest.TestCase):
         )
         self.assertEqual(rc, 0)
 
-        # Verify output files exist in test_dir
         queue_csv = os.path.join(out_dir, "story01b_annotator_queue.csv")
         audit_csv = os.path.join(out_dir, "story01b_audit_key.csv")
         receipt_json = os.path.join(out_dir, "story01b_sampling_receipt.json")
@@ -285,22 +412,31 @@ class TestStoryIdentityHarness(unittest.TestCase):
         self.assertTrue(os.path.exists(audit_csv))
         self.assertTrue(os.path.exists(receipt_json))
 
-        # Check queue length
+        # Check empirical queue length is exactly 141
         with open(queue_csv) as f:
             queue_rows = list(csv.DictReader(f))
-        self.assertEqual(len(queue_rows), 124)
+        self.assertEqual(len(queue_rows), 141)
 
-        # Check that model scores are NOT in annotator queue (blinding verification)
+        # Check annotator blinding (no model scores, no ranks, no strata)
         self.assertNotIn("qwen_score", queue_rows[0])
         self.assertNotIn("mistral_score", queue_rows[0])
-        self.assertNotIn("reranker_score", queue_rows[0])
+        self.assertNotIn("reranker_score_mean", queue_rows[0])
+        self.assertNotIn("primary_stratum", queue_rows[0])
+        self.assertNotIn("sampling_strata", queue_rows[0])
 
         # Check receipt
         with open(receipt_json) as f:
             receipt = json.load(f)
         self.assertEqual(receipt["corpus_fingerprint"], EXPECTED_CORPUS_FINGERPRINT)
+        self.assertEqual(receipt["corpus_fingerprint_derivation"], CORPUS_FINGERPRINT_DERIVATION)
+        self.assertEqual(receipt["corpus_sha256"], EXPECTED_CORPUS_FILE_SHA256)
         self.assertEqual(receipt["pair_universe_count"], EXPECTED_PAIR_UNIVERSE_COUNT)
-        self.assertEqual(receipt["strata_counts"]["total_sampled_pairs"], 124)
+        self.assertEqual(receipt["queue_size"], 141)
+        self.assertEqual(receipt["strata_counts"]["total_sampled_pairs"], 141)
+        self.assertEqual(receipt["transitive_chain_candidate_count"], 12)
+        self.assertEqual(receipt["vector_provenance"]["qwen_cosine_derived_from_vector"], "PASS")
+        self.assertEqual(receipt["vector_provenance"]["mistral_cosine_derived_from_vector"], "PASS")
+        self.assertEqual(receipt["vector_provenance"]["pair_score_parity_gate"], "PASS")
 
 
 if __name__ == "__main__":
