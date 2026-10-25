@@ -1,6 +1,5 @@
-import { execFileSync, spawn } from "node:child_process"
+import { execFileSync } from "node:child_process"
 import fs from "node:fs"
-import os from "node:os"
 import path from "node:path"
 
 /**
@@ -185,93 +184,5 @@ export function getBrowserVersion(executablePath, execSyncImpl) {
     return output || "unknown"
   } catch {
     return "unknown"
-  }
-}
-
-/**
- * Creates and launches a managed headless Chromium browser process with ephemeral profile.
- *
- * @param {object} options
- * @param {string} [options.chromePath] - Explicit path, or auto-resolved if omitted.
- * @param {number} options.cdpPort - Remote debugging port.
- * @param {string[]} [options.extraArgs] - Additional command line flags.
- * @param {Record<string, string|undefined>} [options.env] - Custom env.
- * @returns {{ process: import("node:child_process").ChildProcess, profileDir: string, executable: string, source: string, cleanup: () => void }}
- */
-export function launchManagedBrowser(options) {
-  const { cdpPort, extraArgs = [], env = process.env } = options
-  if (!cdpPort) {
-    throw new Error("launchManagedBrowser requires a cdpPort option.")
-  }
-
-  const resolved = options.chromePath
-    ? {
-        executable: options.chromePath,
-        source: "EXPLICIT_OPTION",
-        type: "chromium",
-      }
-    : resolveBrowserExecutable({ env })
-
-  const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), "chrome-gate-profile-"))
-
-  const cleanup = () => {
-    if (isCleanedUp) {
-      return
-    }
-    isCleanedUp = true
-    if (child && !child.killed) {
-      try {
-        child.kill("SIGKILL")
-      } catch {
-        // ignore
-      }
-    }
-    try {
-      fs.rmSync(profileDir, { force: true, recursive: true })
-    } catch {
-      // ignore
-    }
-  }
-
-  let child = null
-  let isCleanedUp = false
-
-  if (!fs.existsSync(resolved.executable)) {
-    cleanup()
-    throw new Error(`Browser executable "${resolved.executable}" does not exist.`)
-  }
-
-  const standardArgs = [
-    "--headless=new",
-    `--remote-debugging-port=${cdpPort}`,
-    `--user-data-dir=${profileDir}`,
-    "--no-first-run",
-    "--no-default-browser-check",
-    "--disable-background-networking",
-    "--disable-sync",
-    "--hide-scrollbars",
-    ...extraArgs,
-    "about:blank",
-  ]
-
-  try {
-    child = spawn(resolved.executable, standardArgs, {
-      stdio: "ignore",
-    })
-
-    child.on("error", () => {
-      cleanup()
-    })
-
-    return {
-      cleanup,
-      executable: resolved.executable,
-      process: child,
-      profileDir,
-      source: resolved.source,
-    }
-  } catch (error) {
-    cleanup()
-    throw error
   }
 }

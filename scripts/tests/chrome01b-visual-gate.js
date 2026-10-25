@@ -221,10 +221,10 @@ async function run() {
       const header = document.querySelector("#mock-compact-nav");
       const headerRect = header ? header.getBoundingClientRect() : { bottom: 0 };
       
-      const messageNotice = document.querySelector(".arco-message, .arco-message-notice");
+      const messageNotice = document.querySelector(".arco-message-notice");
       const messageRect = messageNotice ? messageNotice.getBoundingClientRect() : { top: 0, left: 0, right: 0 };
 
-      const notificationNotice = document.querySelector(".arco-notification, .arco-notification-notice");
+      const notificationNotice = document.querySelector(".arco-notification-notice");
       const notificationRect = notificationNotice ? notificationNotice.getBoundingClientRect() : { top: 0, left: 0, right: 0 };
 
       const undoBtn = document.querySelector("#btn-undo-action");

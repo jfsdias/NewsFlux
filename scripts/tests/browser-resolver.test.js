@@ -1,15 +1,9 @@
 /* eslint-disable unicorn/consistent-function-scoping, unicorn/prefer-string-raw */
 
 import assert from "node:assert/strict"
-import fs from "node:fs"
 import test from "node:test"
 
-import {
-  findInPath,
-  getBrowserVersion,
-  launchManagedBrowser,
-  resolveBrowserExecutable,
-} from "./browser-resolver.js"
+import { findInPath, getBrowserVersion, resolveBrowserExecutable } from "./browser-resolver.js"
 
 test("findInPath resolves executable when present in PATH directory", () => {
   const fakeFs = (filePath) => filePath === "/usr/local/bin/google-chrome"
@@ -198,37 +192,4 @@ test("getBrowserVersion: handles execution error gracefully", () => {
   }
   const version = getBrowserVersion("/bad/chrome", fakeRunner)
   assert.equal(version, "unknown")
-})
-
-test("launchManagedBrowser: lifecycle cleanup and failure handling (FAILURE_CLEANUP_GATE)", () => {
-  // Test invalid executable launch throws error and cleans up profile directory
-  let profileDirCreated = null
-  assert.throws(
-    () => {
-      launchManagedBrowser({
-        cdpPort: 9999,
-        chromePath: "/nonexistent/test/browser/binary/file",
-      })
-    },
-    (err) => {
-      assert.ok(err, "Must throw on nonexistent binary")
-      return true
-    },
-  )
-
-  // Verify launch with real available browser creates profile and cleanup cleans it up
-  const resolved = resolveBrowserExecutable()
-  const session = launchManagedBrowser({
-    cdpPort: 9998,
-    chromePath: resolved.executable,
-  })
-
-  assert.ok(session.process, "Process must be spawned")
-  assert.ok(fs.existsSync(session.profileDir), "Profile dir must exist while session is active")
-  profileDirCreated = session.profileDir
-
-  // Execute cleanup
-  session.cleanup()
-  assert.equal(session.process.killed, true, "Process must be killed")
-  assert.equal(fs.existsSync(profileDirCreated), false, "Profile dir must be removed on cleanup")
 })
