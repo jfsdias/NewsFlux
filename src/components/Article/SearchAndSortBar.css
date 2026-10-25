@@ -142,7 +142,7 @@
 
 .mobile-date-picker-popup .arco-picker-cell-selected .arco-picker-date-value,
 .mobile-date-picker-popup .arco-picker-cell-selected:hover .arco-picker-date-value {
-  color: var(--nf-surface-content, var(--color-bg-1));
+  color: var(--nf-on-accent, var(--nf-surface-content, var(--color-bg-1)));
   background-color: var(--nf-accent, rgb(var(--primary-6)));
 }
 

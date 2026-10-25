@@ -132,11 +132,13 @@ const useCategoryOperations = (useNotification = false) => {
     })
     Modal.confirm({
       ...confirmDialogProps,
-      title: polyglot.t("sidebar.delete_category_confirm_title"),
+      cancelText: polyglot.t("search.cancel"),
       content: isHomePage
         ? `${confirmation} ${polyglot.t("home_page.delete_warning")}`
         : confirmation,
-      okButtonProps: destructiveConfirmButtonProps,
+      okButtonProps: { ...destructiveConfirmButtonProps, status: "danger" },
+      okText: polyglot.t("sidebar.context_menu.delete_category"),
+      title: polyglot.t("sidebar.delete_category_confirm_title"),
       onOk: () => deleteCategoryDirectly(category),
     })
   }

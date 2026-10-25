@@ -34,6 +34,61 @@
   white-space: nowrap;
 }
 
+.mark-all-read-popconfirm .arco-popconfirm-btn {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--mobile-edge-spacing);
+}
+
+.mark-all-read-popconfirm .arco-popconfirm-btn > button {
+  border-radius: var(--nf-radius-control, 8px);
+}
+
+body[arco-theme="dark"] .mark-all-read-popconfirm .arco-popconfirm-content {
+  background-color: var(--nf-surface-elevated);
+  border: 1px solid var(--nf-separator-subtle);
+  border-radius: var(--nf-radius-surface, 8px);
+  box-shadow: var(--shadow);
+  color: var(--nf-text-primary);
+}
+
+body[arco-theme="dark"] .mark-all-read-popconfirm .arco-popconfirm-title {
+  color: var(--nf-text-primary);
+}
+
+body[arco-theme="dark"] .mark-all-read-popconfirm .arco-popconfirm-inner-content {
+  color: var(--nf-text-secondary);
+}
+
+body[arco-theme="dark"] .mark-all-read-popconfirm .arco-popconfirm-btn .arco-btn-secondary {
+  background-color: var(--nf-surface-raised);
+  border-color: var(--nf-separator-subtle);
+  color: var(--nf-text-primary);
+}
+
+body[arco-theme="dark"] .mark-all-read-popconfirm .arco-popconfirm-btn .arco-btn-secondary:hover {
+  background-color: var(--nf-state-hover);
+  border-color: var(--nf-text-muted);
+}
+
+body[arco-theme="dark"] .mark-all-read-popconfirm .arco-popconfirm-btn .arco-btn-primary {
+  background-color: var(--nf-accent);
+  color: var(--nf-on-accent);
+  border-color: transparent;
+}
+
+body[arco-theme="dark"] .mark-all-read-popconfirm .arco-popconfirm-btn .arco-btn-primary:hover {
+  background-color: var(--nf-accent-hover);
+}
+
+body[arco-theme="dark"]
+  .mark-all-read-popconfirm
+  .arco-popconfirm-btn
+  .arco-btn-primary:focus-visible {
+  outline: 2px solid var(--nf-accent-focus, var(--nf-focus-ring));
+  outline-offset: 2px;
+}
+
 @media screen and (max-width: 768px) {
   .entry-panel {
     align-items: center;

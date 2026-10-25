@@ -56,10 +56,12 @@ export default function Profile() {
   const handleResetSettings = () => {
     Modal.confirm({
       ...confirmDialogProps,
-      title: polyglot.t("sidebar.settings_reset_confirm"),
+      cancelText: polyglot.t("search.cancel"),
       content: <p>{polyglot.t("sidebar.settings_reset_description")}</p>,
       icon: <IconInfoCircleFill />,
       okButtonProps: { ...destructiveConfirmButtonProps, status: "danger" },
+      okText: polyglot.t("sidebar.reset_settings"),
+      title: polyglot.t("sidebar.settings_reset_confirm"),
       onOk: () => {
         const { conflicts } = resetSettings()
         if (conflicts.length > 0) {
@@ -77,10 +79,12 @@ export default function Profile() {
   const handleLogout = () => {
     Modal.confirm({
       ...confirmDialogProps,
-      title: polyglot.t("sidebar.logout_confirm"),
+      cancelText: polyglot.t("search.cancel"),
       content: <p>{polyglot.t("sidebar.logout_description")}</p>,
       icon: <IconInfoCircleFill />,
       okButtonProps: { ...destructiveConfirmButtonProps, status: "danger" },
+      okText: polyglot.t("sidebar.logout"),
+      title: polyglot.t("sidebar.logout_confirm"),
       onOk: async () => {
         await logoutSession()
         navigate("/login")

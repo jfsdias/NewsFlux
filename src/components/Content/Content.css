@@ -54,7 +54,7 @@
   top: 50%;
   transform: translateY(-50%);
   padding: var(--hint-padding);
-  background-color: rgb(var(--primary-6));
+  background-color: var(--nf-accent, rgb(var(--primary-6)));
   border-radius: 50%;
   pointer-events: none;
   z-index: 100;

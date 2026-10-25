@@ -1169,6 +1169,8 @@ const Sidebar = ({ headerAction, isDrawer = false, onNavigate }) => {
       confirm: (onConfirm) =>
         Modal.confirm({
           ...confirmDialogProps,
+          cancelText: polyglot.t("search.cancel"),
+          okText: polyglot.t("sidebar.context_menu.mark_all_as_read"),
           title: polyglot.t("article_list.mark_all_as_read_confirm"),
           onOk: onConfirm,
         }),

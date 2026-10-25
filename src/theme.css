@@ -167,6 +167,83 @@ body[arco-theme="dark"] {
   --color-tooltip-bg: var(--nf-surface-raised);
 }
 
+/* Feedback & Control Cohesion (CHROME-01B) */
+body[arco-theme="dark"]
+  .arco-btn-primary:not(.arco-btn-status-danger):not(.arco-btn-status-warning):not(
+    .arco-btn-status-success
+  ):not(.destructive-confirm-action):not(.arco-btn-disabled) {
+  border-color: transparent;
+  color: var(--nf-on-accent);
+  background-color: var(--nf-accent);
+}
+
+body[arco-theme="dark"]
+  .arco-btn-primary:not(.arco-btn-status-danger):not(.arco-btn-status-warning):not(
+    .arco-btn-status-success
+  ):not(.destructive-confirm-action):not(.arco-btn-disabled):hover {
+  color: var(--nf-on-accent);
+  background-color: var(--nf-accent-hover);
+}
+
+body[arco-theme="dark"]
+  .arco-btn-primary:not(.arco-btn-status-danger):not(.arco-btn-status-warning):not(
+    .arco-btn-status-success
+  ):not(.destructive-confirm-action):not(.arco-btn-disabled):active {
+  color: var(--nf-on-accent);
+  background-color: var(--nf-accent-pressed);
+}
+
+body[arco-theme="dark"]
+  .arco-btn-primary:not(.arco-btn-status-danger):not(.arco-btn-status-warning):not(
+    .arco-btn-status-success
+  ):not(.destructive-confirm-action):focus-visible {
+  outline: 2px solid var(--nf-accent-focus, var(--nf-focus-ring));
+  outline-offset: 2px;
+}
+
+body[arco-theme="dark"] .arco-radio-button.arco-radio-checked:not(.arco-radio-disabled) {
+  border-color: var(--nf-accent-border);
+  color: var(--nf-accent);
+  background-color: var(--nf-accent-surface);
+}
+
+body[arco-theme="dark"] .arco-radio-button.arco-radio-checked:not(.arco-radio-disabled):hover {
+  color: var(--nf-accent);
+  background-color: var(--nf-accent-hover, var(--nf-accent-surface));
+}
+
+body[arco-theme="dark"] .arco-radio-button:focus-within {
+  outline: 2px solid var(--nf-accent-focus, var(--nf-focus-ring));
+  outline-offset: 1px;
+}
+
+body[arco-theme="dark"] .arco-select-popup,
+body[arco-theme="dark"] .arco-dropdown-menu {
+  border: 1px solid var(--nf-separator-subtle);
+  border-radius: var(--nf-radius-surface, 8px);
+  background-color: var(--nf-surface-elevated);
+  box-shadow: var(--shadow);
+}
+
+body[arco-theme="dark"] .arco-select-option,
+body[arco-theme="dark"] .arco-dropdown-menu .arco-dropdown-menu-item {
+  color: var(--nf-text-primary);
+}
+
+body[arco-theme="dark"] .arco-select-option:hover,
+body[arco-theme="dark"] .arco-dropdown-menu .arco-dropdown-menu-item:hover {
+  background-color: var(--nf-state-hover);
+}
+
+body[arco-theme="dark"] .arco-select-option.arco-select-option-selected,
+body[arco-theme="dark"]
+  .arco-dropdown-menu
+  .arco-dropdown-menu-item.arco-dropdown-menu-item-selected {
+  font-weight: 600;
+  color: var(--nf-accent);
+  background-color: var(--nf-accent-surface);
+}
+
 @media (prefers-reduced-motion: reduce) {
   body {
     --nf-motion-fast: 0ms;

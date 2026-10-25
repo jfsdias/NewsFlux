@@ -292,9 +292,11 @@ export const useFeedOperations = (useNotification = false) => {
 
       Modal.confirm({
         ...confirmDialogProps,
-        title: confirmTitle,
+        cancelText: polyglot.t("search.cancel"),
         content: `${confirmContent}${homePageWarning}`,
-        okButtonProps: destructiveConfirmButtonProps,
+        okButtonProps: { ...destructiveConfirmButtonProps, status: "danger" },
+        okText: polyglot.t("sidebar.context_menu.delete_feed"),
+        title: confirmTitle,
         onOk: () => deleteFeedDirectly(feed),
       })
     } catch (error) {
