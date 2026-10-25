@@ -1,12 +1,116 @@
 # NewsFlux Project State
 
 - **Purpose:** concise operational state for PM handoffs and future sessions. The roadmap remains the source for sequencing and product/architecture detail.
-- **Last reconciled:** 2026-10-24 (post-PR #120).
-- **Current snapshot:** GitHub `main` at `4c91f25f0ac92c9806f31ea7b766d28d22eb0d28`. Production remains at `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9`; literal main/production SHA parity is **NO**, while the intervening PRs #118–#120 introduced no application runtime delta and require no catch-up deployment.
-- **Previous snapshot (historical):** GitHub `main` at `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9` (PR #114 merge) on 2026-10-24; production was at the same SHA at that snapshot. The earlier post-PR #108 and 2026-10-23, 2026-10-22 and 2026-10-21 snapshots are preserved below.
+- **Last reconciled:** 2026-10-25 (post-PR #129).
+- **Current snapshot:** GitHub `main` at `de138bc961d665005fe3322082034963bf263b16`. Production remains at `dc4154d7729204c65c8a1abaa50f9bfc9f92be64` (`newsflux-local:dc4154d77292`); main/production SHA parity is **NO**, while PR #129 was exclusively research documentation and offline harness tooling, introducing no application runtime delta and requiring no deployment.
+- **Previous snapshot (historical):** post-PR #120 on 2026-10-24; prior snapshots are preserved below.
 - **Related planning documents:** [`PWA_ARCHITECTURE.md`](./PWA_ARCHITECTURE.md) and [`DESIGN_REFERENCES.md`](./DESIGN_REFERENCES.md) (planning only; no implementation authorized).
 
-## Current state (post-PR #120, 2026-10-24)
+## Current state (post-PR #129, 2026-10-25)
+
+This is the authoritative project-state snapshot following the completion and merge of STORY-01B-R (PR #129). GitHub `main` and open-PR inventory were verified live on 2026-10-25; `main` is `de138bc961d665005fe3322082034963bf263b16`, and there are no open PRs. Production remains at `dc4154d7729204c65c8a1abaa50f9bfc9f92be64` (`newsflux-local:dc4154d77292`); main/production SHA parity is NO, but MAIN_PRODUCTION_PARITY_REQUIRED is NO: PR #129 was exclusively research documentation and offline harness tooling, introducing zero product runtime changes and zero production import changes. This divergence is intentional (`INTENTIONAL_DIVERGENCE=YES`, `DEPLOYMENT_DRIFT_REQUIRING_REMEDIATION=NO`). No deployment or canary is required (`DEPLOY_REQUIRED=NO`, `CANARY_REQUIRED=NO`).
+
+```text
+DOCS_DATE=2026-10-25
+GITHUB_MAIN=de138bc961d665005fe3322082034963bf263b16
+OPEN_PRS_BEFORE_THIS_RECONCILIATION=NONE
+
+PRODUCTION_SHA=dc4154d7729204c65c8a1abaa50f9bfc9f92be64
+PRODUCTION_IMAGE=newsflux-local:dc4154d77292
+PRODUCTION_STATE=UNCHANGED_INTENTIONALLY
+MAIN_PRODUCTION_SHA_PARITY=NO
+MAIN_PRODUCTION_PARITY_REQUIRED=NO
+INTENTIONAL_DIVERGENCE=YES
+DEPLOYMENT_DRIFT_REQUIRING_REMEDIATION=NO
+APPLICATION_RUNTIME_DELTA_SINCE_PRODUCTION=NO
+DEPLOY_REQUIRED=NO
+CANARY_REQUIRED=NO
+PRODUCTION_MUTATIONS_IN_THIS_RECONCILIATION=NO
+
+UPSTREAM_LAST_REVIEWED_SHA=f4dfd1c9999d1d72a1164d7fbbe08da972e4ab1b
+UPSTREAM_CURRENT_MAIN=f4dfd1c9999d1d72a1164d7fbbe08da972e4ab1b
+UPSTREAM_DRIFT_FROM_REVIEWED_BASELINE=NO
+UNREVIEWED_UPSTREAM_COMMITS_AFTER_AUDIT=0
+LAST_INTEGRATED_UPSTREAM_SHA=3b2b08fb6036ef94f92a757ac6f3df889be8515c
+
+PR128_STATUS=MERGED_AND_DEPLOYED
+PR128_MERGE_SHA=dc4154d7729204c65c8a1abaa50f9bfc9f92be64
+PR128_PRODUCTION_SHA=dc4154d7729204c65c8a1abaa50f9bfc9f92be64
+PR128_PRODUCTION_SMOKE=PASS
+
+PR129_STATUS=MERGED_RESEARCH_CONTRACT_AND_HARNESS
+PR129_MERGE_SHA=de138bc961d665005fe3322082034963bf263b16
+PR129_SCOPE=RESEARCH_DOCUMENTATION_OFFLINE_HARNESS
+PR129_PRODUCT_RUNTIME_CHANGE=NO
+PR129_PRODUCTION_IMPORT_CHANGE=NO
+NEWSBLUR_REFERENCE_SHA=d7c61b5b3ed7a991a2385b1991449085029711d6
+CORPUS_FINGERPRINT=c12842f11c2bb3e941f182ed946e6a98ae6c70bb69ea8e7908285506af8a2ed8
+CORPUS_FILE_SHA256=0dbd48cdb37063f3a1683f7ef8fc9a2582196a2e8d42c34485b85e12242178f0
+PAIR_UNIVERSE=18953
+LABEL_QUEUE=141
+TRANSITIVE_CHAIN_CANDIDATE_TRIPLES=12
+UNRESTRICTED_UNION_FIND_FOR_FINAL_CLUSTERING=REJECTED
+FALSE_MERGE_COST_GT_FALSE_SPLIT_COST=YES
+
+STORY_RANKER=DORMANT
+STORY_RANKER_DEFAULT=DISABLED
+STORY_CLUSTERING=NOT_ACTIVE
+STORY_IDENTITY_PRODUCTION_STORAGE=HOLD_ARCHITECTURE_DECISION
+CLUSTER_WIDE_MARK_READ=HOLD_PRODUCT_DECISION
+
+STALE_DEPLOY_SCRIPT_TARGET=cf37807a4d3b9da39d3c438861fac358d936fdaa
+STALE_DEPLOY_SCRIPT=YES
+STALE_SCRIPT_EXECUTED=NO
+STALE_SCRIPT_RETARGETED=NO
+STALE_SCRIPT_REJECTED=YES
+
+LATEST_RUNTIME_DEPLOYED_TRACK=NAV-02F-A / PR #128
+LATEST_MERGED_TRACK=STORY-01B-R / PR #129
+LAST_COMPLETED_TRACK=STORY-01B-R / PR #129
+LAST_MERGED_PR=#129
+CURRENT_PHASE=STORY_IDENTITY_GOLD_DATASET_PENDING_AUTHORIZATION
+CURRENT_TRACK=NONE_ACTIVE
+RECOMMENDED_NEXT_TRACK=STORY-01B-D (DATASET_CURATION_AND_LABELING)
+NEXT_TRACK_AUTHORIZED=NO
+IMPLEMENTATION_AUTHORIZED=NO
+NEXT_AUTHORIZED_ACTION=NONE
+MERGE_AUTHORIZED=NO
+DEPLOY_AUTHORIZED=NO
+```
+
+### Recent tracks summary (PR #128 and PR #129)
+
+| PR   | Track                                      | Status                  | Merge SHA                                  | Scope and runtime consequence                                                                                                                                                                                                                               |
+| ---- | ------------------------------------------ | ----------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #128 | NAV-02F-A unread source category rhythm    | Merged and deployed     | `dc4154d7729204c65c8a1abaa50f9bfc9f92be64` | Category rhythm for unread feeds; non-collapsible category headers; `showUnreadFeedsOnly` default `false`; sidebar width unchanged; exact unread counts preserved; production smoke PASS.                                                                   |
+| #129 | STORY-01B-R NewsBlur ref & corpus contract | Merged research/harness | `de138bc961d665005fe3322082034963bf263b16` | NewsBlur reference audit (`d7c61b5b...`), Home-200 frozen corpus contract, pair universe (18,953), label queue (141), transitive chain candidates (12), offline deterministic harness; research only, zero product runtime changes; no deployment required. |
+
+### Preserved product baseline and holds
+
+- **PWA:** PWA-01A / PR #114 is complete, merged and deployed; D1/D2/D3 approved; real-device D3 gate passed. PWA-03A update safety and recovery slices complete in production. PWA-VAL-01 remains an evidence-only device/runtime validation candidate; PWA-02 remains defect-driven. No implementation or promotion authorized.
+- **Auth:** AUTH_APIKEY_01 is complete, merged and deployed; manual token authentication remains supported and the consent/create/verify/store/drop-password/revoke lifecycle remains canonical.
+- **Story identity & clustering:** Candidate-ranking code is merged but runtime-disabled; production activation is not authorized. Story identity research (STORY-01B-R) completed offline reference audit and corpus contract in PR #129; STORY-01B-D (gold dataset curation) is recommended next but NOT authorized. Story clustering remains NOT_ACTIVE; `STORY_IDENTITY_PRODUCTION_STORAGE` is `HOLD_ARCHITECTURE_DECISION`; `CLUSTER_WIDE_MARK_READ` is `HOLD_PRODUCT_DECISION`.
+- **Source of truth and ordering:** Miniflux remains authoritative for feeds, categories, read and starred status. All/Unread remain chronological and predictable; no silent ranking. No new persistent NewsFlux content state without an explicit architecture decision.
+- **Existing product/architecture holds:** wide-desktop multi-pane activation; automatic vs. opt-in multi-pane; threshold and Home inclusion; unread category grouping; desktop Sidebar width changes; changing the `showUnreadFeedsOnly` default; Sidebar visual count capping; FooterPanel/SearchAndSortBar consolidation; hiding Mark older as read on `/today`; mobile Sources drawer destination deduplication; Story production activation; new persistent content state; and ML personalization.
+- **Dependency holds:** all eight dependency updates listed under UPSTREAM_AUDIT_02 remain isolated and unapproved.
+- **Open findings retained:** React 19 Arco `element.ref`; ResizeObserver loop; MOBILE_SCROLL_FLICKER_01; FooterPanel clipping; HOME_PAGINATION_CURSOR_STALL_01 (not reproduced after PR #87); Chrome Android three-button navigation bar; OLED system-bar canvas seam.
+
+### Next-track decision matrix
+
+| Candidate                               | Current disposition                         | Scope / decision                                                                                                                                                                         | Ordering                       |
+| --------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| STORY-01B-D dataset curation & labeling | PLANNED / NEXT_RECOMMENDED (NOT_AUTHORIZED) | Annotate 141 candidate pairs from STORY-01B-R queue; multi-judge adjudication of UNCERTAIN pairs. Not authorized; pending PM prioritization / authorization.                             | **Recommended next candidate** |
+| PWA-VAL-01 runtime/device validation    | Planned; evidence-only                      | Validate the deployed PWA/runtime and physical-device behavior using the existing runbook; record unrun screen-reader gates honestly. PM prioritization required; no code or deployment. | After prioritization           |
+| NAV-02F unresolved decisions            | Hold — product                              | Unread grouping, Sidebar width, unread-only default and count presentation.                                                                                                              | After explicit decisions       |
+| NNW-03 / CHROME-01 unresolved decisions | Hold — product                              | FooterPanel/SearchAndSortBar consolidation and `/today` Mark older behavior.                                                                                                             | After explicit decisions       |
+| NNW-05 wide-desktop multi-pane          | Hold — product                              | Activation, automatic vs. opt-in, threshold and Home inclusion.                                                                                                                          | After explicit decisions       |
+| Story activation                        | Hold — product/evidence                     | Runtime stays disabled; CPU acceptance policy remains proposed and PM-decision-required; complete activation evidence and explicit authorization are required.                           | No activation authorized       |
+| Eight upstream dependency updates       | Hold — isolated regression slices           | Assess each production/build/visual/lockfile impact independently.                                                                                                                       | No bulk update                 |
+| DOCKER_PUBLISHING_IDENTITY_01           | Backlog — architecture                      | Decide whether to establish registry publishing before changing identity, guards, credentials or release topology.                                                                       | Unordered                      |
+
+There is currently no active track authorized. Recommended next track is STORY-01B-D, but no implementation is authorized.
+
+## Previous state (post-PR #120, 2026-10-24)
 
 This is the authoritative project-state snapshot after the accepted UPSTREAM_AUDIT_02 and its isolated PR #118–#120 follow-through. GitHub `main` and open-PR inventory were checked live on 2026-10-24; `main` is `4c91f25f0ac92c9806f31ea7b766d28d22eb0d28`, and there were no open PRs before this documentation reconciliation. The production values below are the owner-reported exact-SHA handoff supplied for this reconciliation; production was not re-inspected or changed here.
 
