@@ -37,6 +37,46 @@ export const getVisibleFeedSearchMatches = (feeds, query = "") => {
 export const getUnreadNavigationFeeds = (visibleFeeds, query = "") =>
   getVisibleFeedSearchMatches(visibleFeeds, query).filter((feed) => feed.unreadCount > 0)
 
+export const getGroupedUnreadNavigationFeeds = (categories = [], visibleFeeds = [], query = "") => {
+  if (!Array.isArray(categories) || categories.length === 0) {
+    return []
+  }
+
+  const unreadFeeds = getUnreadNavigationFeeds(visibleFeeds, query)
+  if (unreadFeeds.length === 0) {
+    return []
+  }
+
+  const feedsByCategoryId = new Map()
+  for (const feed of unreadFeeds) {
+    const categoryId = feed?.category?.id ?? feed?.categoryId
+    if (categoryId === undefined || categoryId === null) {
+      continue
+    }
+    const key = String(categoryId)
+    if (!feedsByCategoryId.has(key)) {
+      feedsByCategoryId.set(key, [])
+    }
+    feedsByCategoryId.get(key).push(feed)
+  }
+
+  const groups = []
+  for (const category of categories) {
+    if (!category || category.id === undefined || category.id === null) {
+      continue
+    }
+    const matchingFeeds = feedsByCategoryId.get(String(category.id))
+    if (matchingFeeds && matchingFeeds.length > 0) {
+      groups.push({
+        category,
+        feeds: matchingFeeds,
+      })
+    }
+  }
+
+  return groups
+}
+
 export const getMatchingCategories = (categories, feedsGroupedById, query = "") => {
   const normalizedQuery = normalizeSourceQuery(query)
   if (!normalizedQuery) {

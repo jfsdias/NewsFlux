@@ -102,6 +102,7 @@ import {
 import {
   formatNavigationCountLabel,
   getCurrentZeroUnreadSource,
+  getGroupedUnreadNavigationFeeds,
   getMatchingCategories,
   getSearchExpandedCategoryKeys,
   getUnreadNavigationFeeds,
@@ -1014,9 +1015,9 @@ const Sidebar = ({ headerAction, isDrawer = false, onNavigate }) => {
     showUnreadFeedsOnly,
     nextCurrentFeedContextState.retainedFeedId,
   )
-  const unreadNavigationFeeds = useMemo(
-    () => getUnreadNavigationFeeds(visibleFeeds, sourceQuery),
-    [visibleFeeds, sourceQuery],
+  const groupedUnreadNavigationFeeds = useMemo(
+    () => getGroupedUnreadNavigationFeeds(visibleCategories, visibleFeeds, sourceQuery),
+    [visibleCategories, visibleFeeds, sourceQuery],
   )
   const hasVisibleUnreadFeeds = visibleFeeds.some((feed) => feed.unreadCount > 0)
   const searchMatchingCategoryKeys = useMemo(
@@ -1329,7 +1330,7 @@ const Sidebar = ({ headerAction, isDrawer = false, onNavigate }) => {
             {catalogLoadState.hasSnapshot &&
               (showUnreadFeedsOnly ? (
                 <div aria-busy={catalogLoadState.activity === "refreshing"}>
-                  {unreadNavigationFeeds.length > 0 ? (
+                  {groupedUnreadNavigationFeeds.length > 0 ? (
                     <section
                       aria-label={polyglot.t("sidebar.unread_sources")}
                       className="source-navigation-list"
@@ -1337,20 +1338,33 @@ const Sidebar = ({ headerAction, isDrawer = false, onNavigate }) => {
                       <Typography.Title className="section-title source-list-title" heading={6}>
                         {polyglot.t("sidebar.unread_sources")}
                       </Typography.Title>
-                      {unreadNavigationFeeds.map((feed) => (
-                        <FeedMenuItem
-                          key={feed.id}
-                          feed={feed}
-                          homePageReady={homePageReady}
-                          homeTarget={homeTarget}
-                          retryingFeedIds={retryingFeedIds}
-                          onDeleteFeed={handleDeleteFeed}
-                          onEditFeed={handleEditFeed}
-                          onMarkAllAsRead={handleMarkAllAsReadFeed}
-                          onRefreshFeed={handleRefreshFeed}
-                          onRetryFeedHealth={retryFeedHealth}
-                          onSetHomePage={handleSetHomePage}
-                        />
+                      {groupedUnreadNavigationFeeds.map(({ category, feeds }) => (
+                        <section
+                          key={category.id}
+                          aria-label={category.title}
+                          className="unread-category-group"
+                        >
+                          <div className="unread-category-header">
+                            <Typography.Title className="unread-category-title" heading={6}>
+                              {category.title}
+                            </Typography.Title>
+                          </div>
+                          {feeds.map((feed) => (
+                            <FeedMenuItem
+                              key={feed.id}
+                              feed={feed}
+                              homePageReady={homePageReady}
+                              homeTarget={homeTarget}
+                              retryingFeedIds={retryingFeedIds}
+                              onDeleteFeed={handleDeleteFeed}
+                              onEditFeed={handleEditFeed}
+                              onMarkAllAsRead={handleMarkAllAsReadFeed}
+                              onRefreshFeed={handleRefreshFeed}
+                              onRetryFeedHealth={retryFeedHealth}
+                              onSetHomePage={handleSetHomePage}
+                            />
+                          ))}
+                        </section>
                       ))}
                     </section>
                   ) : (

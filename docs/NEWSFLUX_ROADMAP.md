@@ -1711,16 +1711,25 @@ The completed UPSTREAM_AUDIT_02 is removed from the ready/recommended queue. PWA
 
 The next step is a prioritization decision for PWA-VAL-01, not automatic execution. Every item remains subject to the project rules: one purpose per PR, no blind upstream sync, no new persistent state without architecture approval, and no merge without explicit user authorization.
 
-## 23. Current canonical state: post-HARNESS-VIS-01A and HARNESS-VIS-01B (2026-10-25)
+## 23. Current canonical state: post-HARNESS-VIS-01B and NAV-02F-A (2026-10-25)
 
-This section supersedes the historical post-READER-VISUAL-02B state. GitHub main was live-verified at `ba556d61bcf7dcdbfe1541cdbd40613b4ae43b9b` following the merge of HARNESS-VIS-01A (PR #126). Deployed production application revision remains `99f108643f7bd4d31a991c868f2e66e66e519421` (image `newsflux-local:99f108643f7b`) because PR #126 changed only test harness utilities and roadmap documentation without altering shipped application runtime (`MAIN_PRODUCTION_SHA_PARITY=NO`, `APPLICATION_RUNTIME_DELTA_SINCE_PRODUCTION=NO`, `DEPLOY_REQUIRED=NO`).
+This section supersedes the historical post-HARNESS-VIS-01A state. GitHub main was live-verified at `434f9519ad37dc499b2be8b0a3a64904389f5adf` following the merge of HARNESS-VIS-01B (PR #127). Deployed production application revision remains `99f108643f7bd4d31a991c868f2e66e66e519421` (image `newsflux-local:99f108643f7b`) because PR #126 and PR #127 changed only test harness utilities and roadmap documentation without altering shipped application runtime (`MAIN_PRODUCTION_SHA_PARITY=NO`, `APPLICATION_RUNTIME_DELTA_SINCE_PRODUCTION=NO`, `DEPLOY_REQUIRED=NO`).
 
-HARNESS-VIS-01A is completed (`CHROME01B_HARNESS_PORTABILITY_01=RESOLVED_BY_HARNESS_VIS_01A`). Real browser discovery and explicit `CHROME_PATH` override were verified (`AUTO_DISCOVERY_GATE=PASS`, `CHROME_PATH_OVERRIDE_GATE=PASS`, `READER02B_AUTO_DISCOVERY_GATE=PASS`, `READER02B_CHROME_PATH_GATE=PASS`). Simulated resolver coverage passes on all platforms (`MACOS_RESOLVER_TEST=PASS`, `LINUX_RESOLVER_TEST=PASS`, `WINDOWS_RESOLVER_TEST=PASS`), while real-browser execution on Linux/Windows remains `NOT_RUN_ENVIRONMENT_UNAVAILABLE`.
+HARNESS-VIS-01A is completed (`CHROME01B_HARNESS_PORTABILITY_01=RESOLVED_BY_HARNESS_VIS_01A`). Real browser discovery and explicit `CHROME_PATH` override were verified (`AUTO_DISCOVERY_GATE=PASS`, `CHROME_PATH_OVERRIDE_GATE=PASS`, `READER02B_AUTO_DISCOVERY_GATE=PASS`, `READER02B_CHROME_PATH_GATE=PASS`). Simulated resolver coverage passes on all platforms (`MACOS_RESOLVER_TEST=PASS`, `LINUX_RESOLVER_TEST=PASS`, `WINDOWS_RESOLVER_TEST=PASS`).
 
-The current authorized active implementation track is `HARNESS-VIS-01B` (`CHROME01B_ARCO_SELECTOR_DRIFT_01`), correcting stale feedback selectors in `scripts/tests/chrome01b-visual-gate.js`.
+HARNESS-VIS-01B is completed (`CHROME01B_ARCO_SELECTOR_DRIFT_01=RESOLVED_BY_HARNESS_VIS_01B`). Feedback notice selectors in `scripts/tests/chrome01b-visual-gate.js` were corrected to match Arco Design Web React rendered roots (`.arco-message`, `.arco-notification`).
+
+The current authorized active implementation track is `NAV-02F-A` (`UNREAD SOURCE CATEGORY RHYTHM`, `IN_PROGRESS`).
+
+### NAV-02F Product Decisions
+
+- **A. Unread category grouping (ADAPT):** Unread feed navigation regains category context without adding collapsible hierarchy or new persistent state. Implemented as non-collapsible, non-interactive category headings with existing feed rows underneath. Only categories containing at least one matching unread feed appear.
+- **B. Default mode:** `showUnreadFeedsOnly` default remains `false` in `src/utils/settings-schema.js` (`NO_DEFAULT_BEHAVIOR_CHANGE=YES`). Existing explicit Unread / All radio toggle remains canonical.
+- **C. Sidebar width:** Keep current contract (`SIDEBAR_WIDTH_CHANGED=NO`). No sidebar width changes in this slice.
+- **D. Count capping:** No capping (`COUNT_CAPPING=NONE`). Exact unread counts are preserved without 99+, 999+, abbreviated, or K-format counts for RSS predictability and accessible count labels.
 
 ```text
-GITHUB_MAIN=ba556d61bcf7dcdbfe1541cdbd40613b4ae43b9b
+GITHUB_MAIN=434f9519ad37dc499b2be8b0a3a64904389f5adf
 PRODUCTION_SHA=99f108643f7bd4d31a991c868f2e66e66e519421
 PRODUCTION_IMAGE=newsflux-local:99f108643f7b
 PRODUCTION_IMAGE_ID=NOT_RECORDED_IN_PM_HANDOFF
@@ -1745,35 +1754,42 @@ READER02B_CHROME_PATH_GATE=PASS
 LINUX_REAL_BROWSER_GATE=NOT_RUN_ENVIRONMENT_UNAVAILABLE
 WINDOWS_REAL_BROWSER_GATE=NOT_RUN_ENVIRONMENT_UNAVAILABLE
 
-HARNESS-VIS-01B=IN_PROGRESS
-CHROME01B_ARCO_SELECTOR_DRIFT_01=IN_PROGRESS
+HARNESS-VIS-01B=COMPLETED
+PR127_MERGE_SHA=434f9519ad37dc499b2be8b0a3a64904389f5adf
+CHROME01B_ARCO_SELECTOR_DRIFT_01=RESOLVED_BY_HARNESS_VIS_01B
+
+NAV-02F-A=IN_PROGRESS
+SHOW_UNREAD_DEFAULT_CHANGED=NO
+SHOW_UNREAD_DEFAULT=false
+SIDEBAR_WIDTH_CHANGED=NO
+COUNT_CAPPING=NONE
 
 LATEST_RUNTIME_DEPLOYED_TRACK=READER-VISUAL-02B / PR #125
-LATEST_MERGED_TRACK=HARNESS-VIS-01A / PR #126
-LAST_COMPLETED_TRACK=HARNESS-VIS-01A / PR #126
-CURRENT_PHASE=HARNESS-VIS-01B_BOUNDED_CORRECTION
-CURRENT_TRACK=HARNESS-VIS-01B (IN_PROGRESS)
-RECOMMENDED_NEXT_TRACK=HARNESS-VIS-01B_VALIDATION_AND_CLOSURE
-IMPLEMENTATION_AUTHORIZED=HARNESS-VIS-01B_ONLY
+LATEST_MERGED_TRACK=HARNESS-VIS-01B / PR #127
+LAST_COMPLETED_TRACK=HARNESS-VIS-01B / PR #127
+CURRENT_PHASE=NAV-02F-A_BOUNDED_NAVIGATION_PRESENTATION
+CURRENT_TRACK=NAV-02F-A (IN_PROGRESS)
+RECOMMENDED_NEXT_TRACK=NAV-02F-A_VALIDATION_AND_CLOSURE
+IMPLEMENTATION_AUTHORIZED=NAV-02F-A_ONLY
 MERGE_AUTHORIZED=NO
 DEPLOY_AUTHORIZED=NO
 ```
 
 ### Current next-track decision matrix
 
-With HARNESS-VIS-01A merged to main, the current authorized track is HARNESS-VIS-01B (correcting stale feedback selectors in `chrome01b-visual-gate.js`). All other candidate items remain on product or architecture hold.
+With HARNESS-VIS-01B merged to main, the current authorized track is NAV-02F-A (unread source category rhythm). All other candidate items remain on product or architecture hold.
 
 | Candidate                                   | Status                            | Gate / decision                                                                                                                                                | Recommended order        |
 | ------------------------------------------- | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| HARNESS-VIS-01B Arco selector correction    | IN PROGRESS                       | Correct stale `.arco-message-notice` / `.arco-notification-notice` selectors in `chrome01b-visual-gate.js` to match current rendered roots.                    | **Current track**        |
+| NAV-02F-A unread source category rhythm     | IN PROGRESS                       | Non-collapsible category headings + existing feed rows underneath; showUnreadFeedsOnly default remains false; sidebar width unchanged; exact unread counts.    | **Current track**        |
+| HARNESS-VIS-01B Arco selector correction    | COMPLETED                         | Correct stale `.arco-message-notice` / `.arco-notification-notice` selectors in `chrome01b-visual-gate.js` to match current rendered roots; merged in PR #127. | Complete                 |
 | HARNESS-VIS-01A browser harness portability | COMPLETED                         | Replace hardcoded macOS Chrome paths with cross-platform discovery, `CHROME_PATH` override, and host-independent unit tests; merged in PR #126.                | Complete                 |
 | READER-VISUAL-02B interaction-aware chrome  | COMPLETED                         | Auto-hide sticky ActionButtons on downward reading; immediate return on upward scroll/focus; focus safety and reduced motion; production smoke PASS.           | Complete                 |
 | PWA-VAL-01 runtime/device validation        | PARTIAL_ACCEPTED                  | Real-device PWA validation executed; PWA_02_TRIGGERED=NO; do not reopen PWA work.                                                                              | Complete                 |
-| NAV-02F decisions                           | HOLD — product                    | Decide unread category grouping, Sidebar width, unread-only default and count capping.                                                                         | Later, after decisions   |
 | NNW-03 / CHROME-01 decisions                | HOLD — product                    | Decide structural FooterPanel/SearchAndSortBar consolidation and `/today` Mark older behavior.                                                                 | Later, after decisions   |
 | NNW-05 wide-desktop multi-pane              | HOLD — product                    | Decide activation, automatic vs. opt-in, threshold and Home inclusion.                                                                                         | Later, after decisions   |
 | Story activation                            | HOLD — product/evidence           | Runtime stays disabled; CPU acceptance policy remains proposed and PM-decision-required; complete activation evidence and explicit authorization are required. | No activation authorized |
 | Eight upstream dependency updates           | HOLD — isolated regression slices | Assess each production/build/visual/lockfile impact independently.                                                                                             | No bulk update           |
 | DOCKER_PUBLISHING_IDENTITY_01               | BACKLOG — architecture            | Decide whether to establish registry publishing before changing identity, guards, credentials or release topology.                                             | Unordered                |
 
-The active candidate is HARNESS-VIS-01B. Every item remains subject to the project rules: one purpose per PR, no blind upstream sync, no new persistent state without architecture approval, and no merge without explicit user authorization.
+The active candidate is NAV-02F-A. Every item remains subject to the project rules: one purpose per PR, no blind upstream sync, no new persistent state without architecture approval, and no merge without explicit user authorization.

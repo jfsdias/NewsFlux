@@ -834,3 +834,15 @@ authState.set({ server: "https://example.invalid", token: "fixture", username: "
 commitIdentityData({ id: 1, username: "fixture" })
 commitCatalogData({ feedsData: fixtureFeeds, categoriesData: fixtureCategories })
 setUnreadInfo(initialUnread)
+
+globalThis.__nav02Harness = {
+  commitCatalogData,
+  setUnreadInfo,
+  makeCategory,
+  makeFeed,
+  fixtureCategories,
+  fixtureFeeds,
+  initialUnread,
+  resetFixture,
+  settle,
+}
