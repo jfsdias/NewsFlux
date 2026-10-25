@@ -37,6 +37,58 @@ export const getVisibleFeedSearchMatches = (feeds, query = "") => {
 export const getUnreadNavigationFeeds = (visibleFeeds, query = "") =>
   getVisibleFeedSearchMatches(visibleFeeds, query).filter((feed) => feed.unreadCount > 0)
 
+export const getGroupedUnreadNavigationFeeds = (categories = [], visibleFeeds = [], query = "") => {
+  const unreadFeeds = getUnreadNavigationFeeds(visibleFeeds, query)
+  if (unreadFeeds.length === 0) {
+    return []
+  }
+
+  const feedsByCategoryId = new Map()
+  for (const feed of unreadFeeds) {
+    const categoryId = feed?.category?.id ?? feed?.categoryId
+    if (categoryId === undefined || categoryId === null) {
+      continue
+    }
+    const key = String(categoryId)
+    if (!feedsByCategoryId.has(key)) {
+      feedsByCategoryId.set(key, [])
+    }
+    feedsByCategoryId.get(key).push(feed)
+  }
+
+  const groups = []
+  const seenCategoryKeys = new Set()
+
+  if (Array.isArray(categories)) {
+    for (const category of categories) {
+      if (!category || category.id === undefined || category.id === null) {
+        continue
+      }
+      const key = String(category.id)
+      seenCategoryKeys.add(key)
+      const matchingFeeds = feedsByCategoryId.get(key)
+      if (matchingFeeds && matchingFeeds.length > 0) {
+        groups.push({
+          category,
+          feeds: matchingFeeds,
+        })
+      }
+    }
+  }
+
+  for (const [key, matchingFeeds] of feedsByCategoryId.entries()) {
+    if (!seenCategoryKeys.has(key) && matchingFeeds.length > 0) {
+      const fallbackCategory = matchingFeeds[0].category || { id: key, title: "" }
+      groups.push({
+        category: fallbackCategory,
+        feeds: matchingFeeds,
+      })
+    }
+  }
+
+  return groups
+}
+
 export const getMatchingCategories = (categories, feedsGroupedById, query = "") => {
   const normalizedQuery = normalizeSourceQuery(query)
   if (!normalizedQuery) {
