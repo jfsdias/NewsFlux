@@ -609,7 +609,10 @@ const ArticleDetail = forwardRef((_, ref) => {
         className="scroll-container"
         scrollableNodeProps={{ tabIndex: -1 }}
       >
-        <ActionButtons />
+        <ActionButtons
+          isPhotoSliderVisible={isPhotoSliderVisible}
+          scrollContainerRef={scrollContainerRef}
+        />
         <FadeTransition>
           <div
             className="article-header"

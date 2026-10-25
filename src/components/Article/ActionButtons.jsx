@@ -27,6 +27,7 @@ import CustomTooltip from "@/components/ui/CustomTooltip"
 import useDesktopSidebar from "@/hooks/useDesktopSidebar"
 import useEntryActions from "@/hooks/useEntryActions"
 import { polyglotState } from "@/hooks/useLanguage"
+import useReaderChromeVisibility from "@/hooks/useReaderChromeVisibility"
 import useReaderCommands from "@/hooks/useReaderCommands"
 import useScreenWidth from "@/hooks/useScreenWidth"
 import {
@@ -99,7 +100,7 @@ const MobileButtons = memo(({ commonButtons, hasHeadings, moveContextActionToMen
 ))
 MobileButtons.displayName = "MobileButtons"
 
-const ActionButtons = () => {
+const ActionButtons = ({ isPhotoSliderVisible = false, scrollContainerRef = null }) => {
   const { detailCloseButtonRef } = useDesktopSidebar()
   const { activeContent, isOriginalContentFetched } = useStore(contentState, {
     keys: ["activeContent", "isOriginalContentFetched"],
@@ -134,6 +135,17 @@ const ActionButtons = () => {
   const [isCompactTocVisible, setIsCompactTocVisible] = useState(false)
   const compactTocMenuItemRef = useRef(null)
   const moreButtonRef = useRef(null)
+  const actionButtonsRef = useRef(null)
+
+  const isForcedVisible =
+    dropdownVisible || fontSubmenuVisible || isCompactTocVisible || isPhotoSliderVisible
+
+  const { isVisible, visibilityState } = useReaderChromeVisibility({
+    actionButtonsRef,
+    articleId: activeContent?.id,
+    isForcedVisible,
+    scrollContainerRef,
+  })
 
   const hasHeadings = headings.length > 0
 
@@ -544,7 +556,11 @@ const ActionButtons = () => {
   }
 
   return (
-    <div className={`action-buttons ${isBelowMedium ? "mobile" : ""}`}>
+    <div
+      ref={actionButtonsRef}
+      className={`action-buttons ${isBelowMedium ? "mobile" : ""} ${isVisible ? "" : "chrome-hidden"}`.trim()}
+      data-chrome-state={visibilityState}
+    >
       {isBelowMedium ? (
         <MobileButtons
           commonButtons={commonButtons}

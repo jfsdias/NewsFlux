@@ -234,21 +234,21 @@ Current reference decisions:
 
 ### 3.5 Visual-cohesion packages
 
-| Package                  | Status             | Scope / remainder                                                                                                                                                                                                                                                                                                                                                       |
-| ------------------------ | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| LIST-VISUAL-01           | **COMPLETED**      | Monogram fallback (#24) + read-state/source/metadata cohesion (#28). Human-readable unread-count labels were rehomed to NAV-02F. No thumbnail redesign is authorized by this completion.                                                                                                                                                                                |
-| CHROME-01A               | **COMPLETED**      | DatePicker token subset completed in PR #25; NNW-03 contextual controls completed in PR #117.                                                                                                                                                                                                                                                                           |
-| CHROME-01B               | **IN PROGRESS**    | FEEDBACK & CONTROL COHESION: verb-first confirmations across 6 locales, snackbar/notice placement and elevated dark styling, raw Arco control token adaptations, focus/selected semantic tokens; structural consolidation and drawer deduplication remain on hold.                                                                                                      |
-| HOME-VISUAL-02           | **HOLD — PRODUCT** | Edition/category composition requires explicit editorial decision and HOME-01 dependency resolution                                                                                                                                                                                                                                                                     |
-| READER-VISUAL-02A        | **COMPLETED**      | 02A1 in PR #41, Reader Measure in PR #44, and 02A2 / Quiet Column in PR #49; real header/prose alignment validated on the production element                                                                                                                                                                                                                            |
-| READER-VISUAL-02B        | **PLANNED**        | Auto-hide + Next only after interaction/NAV dependencies                                                                                                                                                                                                                                                                                                                |
-| NAV-VISUAL-01            | **IN PROGRESS**    | PR0 / #69 and PR1 / #71 complete; compact navigation is merged; Medium Rail / PR4 remains deferred; explicit future-slice gates remain required                                                                                                                                                                                                                         |
-| THEME_ACCENT_FAMILIES_01 | **COMPLETED**      | PR #123 merged and promoted at `104dd6bd0960bd95bc2fab1500b6faf981f9d321`. Editorial accent families (Gold, Crimson, Orange, Green, Blue, Violet); semantic tokens (`--nf-accent`, `--nf-accent-surface`, `--nf-accent-hover`, `--nf-accent-border`, `--nf-on-accent`); resolves `A11Y_CONTRAST_COMPACT_NAV_01`; perceptual R1 PASS across 390x844, 884x1104, 1280x800. |
-| READER-COVER-01          | **HOLD — PRODUCT** | Preserve the design-handoff hold; no implementation authorization                                                                                                                                                                                                                                                                                                       |
-| READER-FONT-01           | **HOLD — PRODUCT** | Preserve the design-handoff hold; no implementation authorization                                                                                                                                                                                                                                                                                                       |
-| HARNESS-VIS-01           | **BACKLOG**        | Test debt; not ordered                                                                                                                                                                                                                                                                                                                                                  |
-| TEST-ENV-01              | **BACKLOG**        | Verification required; not ordered                                                                                                                                                                                                                                                                                                                                      |
-| MOTION-01                | **BACKLOG**        | View Transition/container transform after main interaction architecture stabilizes                                                                                                                                                                                                                                                                                      |
+| Package                  | Status             | Scope / remainder                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------ | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| LIST-VISUAL-01           | **COMPLETED**      | Monogram fallback (#24) + read-state/source/metadata cohesion (#28). Human-readable unread-count labels were rehomed to NAV-02F. No thumbnail redesign is authorized by this completion.                                                                                                                                                                                                                               |
+| CHROME-01A               | **COMPLETED**      | DatePicker token subset completed in PR #25; NNW-03 contextual controls completed in PR #117.                                                                                                                                                                                                                                                                                                                          |
+| CHROME-01B               | **COMPLETED**      | PR #124 merged and promoted at `44cca8127dfa3b0f4cb1285a69092f2c7e4a807d`. Feedback and control cohesion across 6 locales, elevated dark confirm surfaces, mobile toast safe-area clearance, raw Arco control tokens, focus/selected semantic tokens; primary button semantic safety strictly excludes danger/warning/success statuses from theme accents; touch target min-height >=44px; production validation PASS. |
+| HOME-VISUAL-02           | **HOLD — PRODUCT** | Edition/category composition requires explicit editorial decision and HOME-01 dependency resolution                                                                                                                                                                                                                                                                                                                    |
+| READER-VISUAL-02A        | **COMPLETED**      | 02A1 in PR #41, Reader Measure in PR #44, and 02A2 / Quiet Column in PR #49; real header/prose alignment validated on the production element                                                                                                                                                                                                                                                                           |
+| READER-VISUAL-02B        | **IN PROGRESS**    | INTERACTION-AWARE READER CHROME: deterministic auto-hide on downward reading past threshold; immediate return on upward scroll, return to top, or focus entry; focus safety, reduced motion and liquid glass preserved; zero persistent state.                                                                                                                                                                         |
+| NAV-VISUAL-01            | **IN PROGRESS**    | PR0 / #69 and PR1 / #71 complete; compact navigation is merged; Medium Rail / PR4 remains deferred; explicit future-slice gates remain required                                                                                                                                                                                                                                                                        |
+| THEME_ACCENT_FAMILIES_01 | **COMPLETED**      | PR #123 merged and promoted at `104dd6bd0960bd95bc2fab1500b6faf981f9d321`. Editorial accent families (Gold, Crimson, Orange, Green, Blue, Violet); semantic tokens (`--nf-accent`, `--nf-accent-surface`, `--nf-accent-hover`, `--nf-accent-border`, `--nf-on-accent`); resolves `A11Y_CONTRAST_COMPACT_NAV_01`; perceptual R1 PASS across 390x844, 884x1104, 1280x800.                                                |
+| READER-COVER-01          | **HOLD — PRODUCT** | Preserve the design-handoff hold; no implementation authorization                                                                                                                                                                                                                                                                                                                                                      |
+| READER-FONT-01           | **HOLD — PRODUCT** | Preserve the design-handoff hold; no implementation authorization                                                                                                                                                                                                                                                                                                                                                      |
+| HARNESS-VIS-01           | **BACKLOG**        | Test debt; not ordered                                                                                                                                                                                                                                                                                                                                                                                                 |
+| TEST-ENV-01              | **BACKLOG**        | Verification required; not ordered                                                                                                                                                                                                                                                                                                                                                                                     |
+| MOTION-01                | **BACKLOG**        | View Transition/container transform after main interaction architecture stabilizes                                                                                                                                                                                                                                                                                                                                     |
 
 #### THEME_ACCENT_FAMILIES_01 design and accessibility contract (COMPLETED)
 
@@ -334,16 +334,28 @@ Dependency rules remain:
 - Glass is a chrome behavior only and is justified when content actually passes beneath; reduced-transparency behavior must remain correct.
 - Do not consolidate header/footer controls without a separate product decision.
 
-#### CHROME-01B | FEEDBACK & CONTROL COHESION (IN PROGRESS)
+#### CHROME-01B | FEEDBACK & CONTROL COHESION (COMPLETED)
 
-- **Status:** **IN PROGRESS**
-- **Track:** `CHROME-01B`
-- **Scope:**
+PR #124 merged and promoted to production at `44cca8127dfa3b0f4cb1285a69092f2c7e4a807d`.
+
+- **Status:** **COMPLETED**
+- **PR:** #124
+- **MERGE_SHA:** `44cca8127dfa3b0f4cb1285a69092f2c7e4a807d`
+- **PRODUCTION_SHA:** `44cca8127dfa3b0f4cb1285a69092f2c7e4a807d`
+- **PRODUCTION_VALIDATION:** PASS
+- **MOBILE_390x844:** PASS
+- **MEDIUM_884x1104:** PASS
+- **DESKTOP_1280x800:** PASS
+- **CRIMSON_DESTRUCTIVE_DISAMBIGUATION:** PASS
+- **TOUCH_TARGET_GATE:** PASS
+- **PROVIDER_WRITES:** 0
+- **APPLICATION_STATE_MUTATIONS:** 0
+- **Scope executed:**
   - Confirmation presentation: verb-first copy across all 6 shipped locales (`sidebar.context_menu.mark_all_as_read`, `search.cancel`, `sidebar.reset_settings`, `sidebar.logout`, `settings.import_settings`, `sidebar.context_menu.delete_category`, `sidebar.context_menu.delete_feed`); elevated dark surfaces (`#15191e`), subtle border (`#2a3037`), accessible focus outlines, `--nf-on-accent` text on primary action buttons.
-  - Snackbar / notification placement: mobile message wrapper offset to clear compact navigation header, dark elevated surface, subtle border, touch targets >=40px, 8s Undo toast duration and generation-scoped IDs preserved.
-  - Raw Arco controls cohesion: `.arco-btn-primary:not(.destructive-confirm-action)`, `.arco-radio-button.arco-radio-checked`, `.arco-select-popup`, `.arco-dropdown-menu`, `.mark-all-read-popconfirm` adapted using NewsFlux tokens (`--nf-accent`, `--nf-accent-surface`, `--nf-accent-border`, `--nf-on-accent`).
-  - Focus / selected styling consistency: `--nf-accent-focus`, `--nf-on-accent`, `--nf-accent-surface`.
-  - Semantic color boundaries: Theme accents (`--nf-accent*`) strictly decoupled from status semantics (`arcoDanger6Hex` `#F53F3F`, `arcoWarning6Hex` `#FF7D00`, `arcoSuccess6Hex` `#00B42A`).
+  - Primary button semantic safety: theme accents strictly decoupled and excluded from status semantics (Danger, Warning, Success); destructive modal actions retain dark Danger-6 background `rgb(247, 105, 101)` and white text `#fff`.
+  - Notification action target sizing: mobile touch target `min-height: 44px` enforced for `.arco-notification-btn-wrapper .arco-btn` and `.arco-notification-btn .arco-btn`.
+  - Snackbar / notification placement: mobile message wrapper offset to clear compact navigation header (`top: calc(env(safe-area-inset-top, 0px) + 60px)`), dark elevated surface, subtle border, 8s Undo toast duration and generation-scoped IDs preserved.
+  - Raw Arco controls cohesion: `.arco-btn-primary`, `.arco-radio-button.arco-radio-checked`, `.arco-select-popup`, `.arco-dropdown-menu`, `.mark-all-read-popconfirm` adapted using NewsFlux tokens (`--nf-accent`, `--nf-accent-surface`, `--nf-accent-border`, `--nf-on-accent`).
 - **Non-negotiable structural holds preserved:**
   - `STRUCTURAL_FOOTERPANEL_SEARCHANDSORTBAR_CONSOLIDATION` = HOLD
   - `HIDING_MARK_OLDER_ON_TODAY` = HOLD
@@ -353,6 +365,19 @@ Dependency rules remain:
   - `SHOW_UNREAD_FEEDS_ONLY_DEFAULT_CHANGE` = HOLD
   - `SIDEBAR_VISUAL_COUNT_CAPPING` = HOLD
   - `UNREAD_CATEGORY_GROUPING` = HOLD
+
+#### READER-VISUAL-02B | INTERACTION-AWARE READER CHROME (IN PROGRESS)
+
+- **Status:** **IN PROGRESS**
+- **Track:** `READER-VISUAL-02B`
+- **Scope:**
+  - Sticky `ActionButtons` chrome retreats on downward scroll past `SHOW_TOP_THRESHOLD` (~64px) and `DOWN_THRESHOLD` (~16px) to maximize reading space and sightline.
+  - Returns immediately upon upward scroll (>12px), returning to top zone (`scrollTop <= 64px`), or focus entering chrome.
+  - Focus safety: never hidden while chrome or its dropdowns/menus/TOC have focus; CSS `:focus-within` guarantees immediate visual recovery before focus is lost.
+  - Reduced motion contract: instant visibility change without sliding animation when `prefersReducedMotion` is requested.
+  - Liquid glass preserved: `nf-glass-group` chrome vacates visual space when hidden (`transform: translateY(-100%); opacity: 0; pointer-events: none;`); zero layout reflow or shift.
+  - Canonical `useReaderCommands` and swipe behavior preserved.
+  - Zero persistent reading state: ephemeral session state only.
 
 #### HOME-VISUAL-02 contract retained
 
@@ -1625,12 +1650,12 @@ UNREVIEWED_UPSTREAM_COMMITS_AFTER_AUDIT=0
 UPSTREAM_COMMITS_REVIEWED=13
 LAST_INTEGRATED_UPSTREAM_SHA=3b2b08fb6036ef94f92a757ac6f3df889be8515c
 
-LATEST_RUNTIME_DEPLOYED_TRACK=PWA-01A / PR #114
-LATEST_MERGED_TRACK=UPSTREAM_AUDIT_02_ACTIONABLE_INTEGRATIONS / PR #120
-LAST_COMPLETED_TRACK=UPSTREAM_AUDIT_02_ACTIONABLE_INTEGRATIONS / PR #120
-CURRENT_PHASE=POST_UPSTREAM_AUDIT_02_CANONICAL_RECONCILIATION
-RECOMMENDED_NEXT_TRACK=PWA-VAL-01_RUNTIME_DEVICE_VALIDATION (EVIDENCE_ONLY; PM PRIORITIZATION REQUIRED)
-IMPLEMENTATION_AUTHORIZED=NO
+LATEST_RUNTIME_DEPLOYED_TRACK=CHROME-01B / PR #124
+LATEST_MERGED_TRACK=CHROME-01B / PR #124
+LAST_COMPLETED_TRACK=CHROME-01B / PR #124
+CURRENT_PHASE=READER_VISUAL_02B_INTERACTION_AWARE_CHROME
+RECOMMENDED_NEXT_TRACK=READER-VISUAL-02B_INTERACTION_AWARE_CHROME
+IMPLEMENTATION_AUTHORIZED=YES
 MERGE_AUTHORIZED=NO
 DEPLOY_AUTHORIZED=NO
 ```
@@ -1658,7 +1683,7 @@ Production remains `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9` (`newsflux-local:b
 
 ### Current product baseline and holds
 
-- **PWA:** PWA-01A / PR #114 is complete, merged and deployed; D1/D2/D3 are approved and the real-device D3 gate passed. PWA-03A update safety/recovery is complete in the deployed baseline. PWA-VAL-01 remains a planned evidence-only device/runtime validation; PWA-02 stays defect-driven. This roadmap does not authorize implementation or promotion.
+- **PWA:** PWA-01A / PR #114 is complete, merged and deployed; D1/D2/D3 are approved and the real-device D3 gate passed. PWA-03A update safety/recovery is complete in the deployed baseline. PWA-VAL-01 was executed and accepted as PARTIAL_ACCEPTED; PWA_02_TRIGGERED=NO; PWA work is not reopened. This roadmap does not authorize PWA changes.
 - **Authentication:** AUTH_APIKEY_01 is complete, merged and deployed; manual token authentication remains supported and the consent/create/verify/store/drop-password/revoke lifecycle is preserved.
 - **Story:** ranking code is merged but runtime-disabled; production activation is not authorized. CPU acceptance is a proposed policy awaiting PM decision; recorded measurements do not constitute adoption or authorization.
 - **NNW/navigation:** NNW-05 research, NAV-02F determined slice and NNW-03/CHROME-01 determined slice are complete; unresolved product decisions remain held below.
@@ -1674,14 +1699,15 @@ Production remains `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9` (`newsflux-local:b
 
 The completed UPSTREAM_AUDIT_02 is removed from the ready/recommended queue. PWA-VAL-01 has precedence as an already-planned evidence-only validation stage: it can assess the deployed baseline without application changes, while PWA-03A is complete and PWA-02 is defect-driven. This recommendation is subject to PM prioritization, device availability and the existing runbook; it authorizes no implementation.
 
-| Candidate                            | Status                            | Gate / decision                                                                                                                                                | Recommended order              |
-| ------------------------------------ | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| PWA-VAL-01 runtime/device validation | PLANNED — evidence-only           | PM prioritization and physical-device availability; no code, deploy or inferred screen-reader PASS.                                                            | **Recommended next candidate** |
-| NAV-02F decisions                    | HOLD — product                    | Decide unread category grouping, Sidebar width, unread-only default and count capping.                                                                         | Later, after decisions         |
-| NNW-03 / CHROME-01 decisions         | HOLD — product                    | Decide structural FooterPanel/SearchAndSortBar consolidation and `/today` Mark older behavior.                                                                 | Later, after decisions         |
-| NNW-05 wide-desktop multi-pane       | HOLD — product                    | Decide activation, automatic vs. opt-in, threshold and Home inclusion.                                                                                         | Later, after decisions         |
-| Story activation                     | HOLD — product/evidence           | Runtime stays disabled; CPU acceptance policy remains proposed and PM-decision-required; complete activation evidence and explicit authorization are required. | No activation authorized       |
-| Eight upstream dependency updates    | HOLD — isolated regression slices | Assess each production/build/visual/lockfile impact independently.                                                                                             | No bulk update                 |
-| DOCKER_PUBLISHING_IDENTITY_01        | BACKLOG — architecture            | Decide whether to establish registry publishing before changing identity, guards, credentials or release topology.                                             | Unordered                      |
+| Candidate                                  | Status                            | Gate / decision                                                                                                                                                | Recommended order        |
+| ------------------------------------------ | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| READER-VISUAL-02B interaction-aware chrome | IN PROGRESS                       | Auto-hide sticky ActionButtons on downward reading; immediate return on upward scroll/focus; focus safety and reduced motion.                                  | **Current track**        |
+| PWA-VAL-01 runtime/device validation       | PARTIAL_ACCEPTED                  | Real-device PWA validation executed; PWA_02_TRIGGERED=NO; do not reopen PWA work.                                                                              | Complete                 |
+| NAV-02F decisions                          | HOLD — product                    | Decide unread category grouping, Sidebar width, unread-only default and count capping.                                                                         | Later, after decisions   |
+| NNW-03 / CHROME-01 decisions               | HOLD — product                    | Decide structural FooterPanel/SearchAndSortBar consolidation and `/today` Mark older behavior.                                                                 | Later, after decisions   |
+| NNW-05 wide-desktop multi-pane             | HOLD — product                    | Decide activation, automatic vs. opt-in, threshold and Home inclusion.                                                                                         | Later, after decisions   |
+| Story activation                           | HOLD — product/evidence           | Runtime stays disabled; CPU acceptance policy remains proposed and PM-decision-required; complete activation evidence and explicit authorization are required. | No activation authorized |
+| Eight upstream dependency updates          | HOLD — isolated regression slices | Assess each production/build/visual/lockfile impact independently.                                                                                             | No bulk update           |
+| DOCKER_PUBLISHING_IDENTITY_01              | BACKLOG — architecture            | Decide whether to establish registry publishing before changing identity, guards, credentials or release topology.                                             | Unordered                |
 
 The next step is a prioritization decision for PWA-VAL-01, not automatic execution. Every item remains subject to the project rules: one purpose per PR, no blind upstream sync, no new persistent state without architecture approval, and no merge without explicit user authorization.
