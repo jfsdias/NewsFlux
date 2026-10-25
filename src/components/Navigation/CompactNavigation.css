@@ -47,7 +47,7 @@
   box-sizing: border-box;
   margin: 0;
   padding: 4px 2px;
-  border: none;
+  border: 1px solid transparent;
   border-radius: var(--nf-radius-control, 8px);
   background: transparent;
   color: var(--nf-text-secondary, var(--color-text-2));
@@ -64,13 +64,20 @@
 }
 
 .compact-nav-item:focus-visible {
-  outline: 2px solid var(--nf-focus-ring, rgb(var(--primary-6)));
+  outline: 2px solid var(--nf-accent-focus, var(--nf-focus-ring, rgb(var(--primary-6))));
   outline-offset: -2px;
 }
 
 .compact-nav-item-active {
-  color: rgb(var(--primary-6));
+  color: var(--nf-accent);
+  background-color: var(--nf-accent-surface);
+  border-color: var(--nf-accent-border, transparent);
   font-weight: 500;
+}
+
+.compact-nav-item-active:hover {
+  color: var(--nf-accent);
+  background-color: var(--nf-accent-hover, var(--nf-accent-surface));
 }
 
 .compact-nav-icon-wrapper {
@@ -109,8 +116,8 @@
   box-sizing: border-box;
   padding: 0 4px;
   border-radius: 8px;
-  background-color: rgb(var(--primary-6));
-  color: #fff;
+  background-color: var(--nf-accent);
+  color: var(--nf-on-accent);
   font-size: 10px;
   font-weight: 600;
   line-height: 1;

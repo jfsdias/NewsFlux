@@ -136,7 +136,7 @@
 
 .nf-glass-group .arco-btn:focus-visible,
 .nf-glass-group .arco-radio-button:focus-within {
-  outline: 2px solid var(--nf-focus-ring);
+  outline: 2px solid var(--nf-accent-focus, var(--nf-focus-ring));
   outline-offset: 2px;
   z-index: 2;
 }
@@ -153,14 +153,14 @@
 }
 
 .nf-glass-group .arco-radio-button.arco-radio-checked {
-  border-color: transparent;
+  border-color: var(--nf-accent-border, transparent);
   border-radius: 999px;
-  background-color: var(--nf-state-selected);
-  color: var(--nf-text-primary);
+  background-color: var(--nf-accent-surface, var(--nf-state-selected));
+  color: var(--nf-accent, var(--nf-text-primary));
 }
 
 .nf-glass-group .arco-radio-button.arco-radio-checked:hover {
-  background-color: var(--nf-state-selected);
+  background-color: var(--nf-accent-hover, var(--nf-accent-surface, var(--nf-state-selected)));
 }
 
 @media (prefers-reduced-motion: reduce) {

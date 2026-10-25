@@ -67,9 +67,8 @@ const useTheme = () => {
         ?.setAttribute("content", isPhotoSliderVisible || isDarkMode ? "black" : "default")
     }
 
-    applyColor(themeColor)
-
     const isDarkMode = themeMode === "system" ? isSystemDark : themeMode === "dark"
+    applyColor(themeColor, isDarkMode)
     applyColorScheme(isDarkMode)
   }, [isDetailLayerActive, isPhotoSliderVisible, isSystemDark, themeMode, themeColor])
 }
