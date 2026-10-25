@@ -38,6 +38,10 @@ export const getUnreadNavigationFeeds = (visibleFeeds, query = "") =>
   getVisibleFeedSearchMatches(visibleFeeds, query).filter((feed) => feed.unreadCount > 0)
 
 export const getGroupedUnreadNavigationFeeds = (categories = [], visibleFeeds = [], query = "") => {
+  if (!Array.isArray(categories) || categories.length === 0) {
+    return []
+  }
+
   const unreadFeeds = getUnreadNavigationFeeds(visibleFeeds, query)
   if (unreadFeeds.length === 0) {
     return []
@@ -57,30 +61,14 @@ export const getGroupedUnreadNavigationFeeds = (categories = [], visibleFeeds = 
   }
 
   const groups = []
-  const seenCategoryKeys = new Set()
-
-  if (Array.isArray(categories)) {
-    for (const category of categories) {
-      if (!category || category.id === undefined || category.id === null) {
-        continue
-      }
-      const key = String(category.id)
-      seenCategoryKeys.add(key)
-      const matchingFeeds = feedsByCategoryId.get(key)
-      if (matchingFeeds && matchingFeeds.length > 0) {
-        groups.push({
-          category,
-          feeds: matchingFeeds,
-        })
-      }
+  for (const category of categories) {
+    if (!category || category.id === undefined || category.id === null) {
+      continue
     }
-  }
-
-  for (const [key, matchingFeeds] of feedsByCategoryId.entries()) {
-    if (!seenCategoryKeys.has(key) && matchingFeeds.length > 0) {
-      const fallbackCategory = matchingFeeds[0].category || { id: key, title: "" }
+    const matchingFeeds = feedsByCategoryId.get(String(category.id))
+    if (matchingFeeds && matchingFeeds.length > 0) {
       groups.push({
-        category: fallbackCategory,
+        category,
         feeds: matchingFeeds,
       })
     }

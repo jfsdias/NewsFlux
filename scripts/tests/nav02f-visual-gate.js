@@ -122,6 +122,25 @@ class CdpClient {
     await this.send("Emulation.setVisibleSize", { width, height })
   }
 
+  async sendTabKey() {
+    await this.send("Input.dispatchKeyEvent", {
+      type: "rawKeyDown",
+      windowsVirtualKeyCode: 9,
+      nativeVirtualKeyCode: 9,
+      macCharCode: 9,
+      key: "Tab",
+      code: "Tab",
+    })
+    await this.send("Input.dispatchKeyEvent", {
+      type: "keyUp",
+      windowsVirtualKeyCode: 9,
+      nativeVirtualKeyCode: 9,
+      macCharCode: 9,
+      key: "Tab",
+      code: "Tab",
+    })
+  }
+
   async close() {
     if (this.ws) {
       this.ws.close()
@@ -130,7 +149,7 @@ class CdpClient {
 }
 
 async function run() {
-  console.log("Starting NAV-02F-A Real Browser Visual & Structural Gate...")
+  console.log("Starting NAV-02F-A Real Browser Visual & Structural Gate (R2)...")
 
   const vitePort = 5178
   const cdpPort = 9226
@@ -238,15 +257,14 @@ async function run() {
       (() => {
         const drawer = document.querySelector(".sidebar-drawer");
         const list = document.querySelector(".source-navigation-list");
-        const groups = [...document.querySelectorAll(".unread-category-group")];
-        const headers = [...document.querySelectorAll(".unread-category-header")];
-        const titles = [...document.querySelectorAll(".unread-category-title")].map(t => t.textContent.trim());
-        const feedRows = [...document.querySelectorAll(".source-navigation-list .feed-menu-item")];
+        const groups = [...document.querySelectorAll(".sidebar-drawer .unread-category-group")];
+        const headers = [...document.querySelectorAll(".sidebar-drawer .unread-category-header")];
+        const titles = [...document.querySelectorAll(".sidebar-drawer .unread-category-title")].map(t => t.textContent.trim());
+        const feedRows = [...document.querySelectorAll(".sidebar-drawer .source-navigation-list .feed-menu-item")];
 
         const firstHeader = headers[0];
         const headerComputed = firstHeader ? window.getComputedStyle(firstHeader.querySelector(".unread-category-title")) : null;
 
-        // Check category grouping structure
         const groupData = groups.map(g => {
           const catTitle = g.querySelector(".unread-category-title")?.textContent.trim();
           const feeds = [...g.querySelectorAll(".feed-menu-item")].map(f => ({
@@ -258,14 +276,11 @@ async function run() {
           return { category: catTitle, feeds };
         });
 
-        // Check tap targets (min 44px)
         const allFeedHeights = feedRows.map(f => f.getBoundingClientRect().height);
         const minFeedHeight = Math.min(...allFeedHeights);
 
-        // Check horizontal overflow
         const hasHorizontalOverflow = drawer ? drawer.scrollWidth > drawer.clientWidth : false;
 
-        // Check header interactivity
         const headerTabstops = headers.map(h => {
           const el = h.querySelector(".unread-category-title") || h;
           return el.getAttribute("tabindex") !== null && el.getAttribute("tabindex") !== "-1";
@@ -319,10 +334,15 @@ async function run() {
 
     await cdp.screenshot(path.join(screenshotsDir, "390x844_01_unread_category_rhythm.png"))
 
-    // Test Search in Mobile Drawer
+    // =========================================================================
+    // SEARCH CONTRACT: SINGLE-CATEGORY, MULTI-CATEGORY, NO-MATCH
+    // =========================================================================
+    console.log("\n--- SEARCH CONTRACT VERIFICATION ---")
+
+    // A. Single-category search ("Space" -> Science only)
     await cdp.eval(`
       (() => {
-        const input = document.querySelector("[data-testid='source-search']");
+        const input = document.querySelector(".sidebar-drawer [data-testid='source-search']");
         const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
         setter.call(input, "Space");
         input.dispatchEvent(new InputEvent("input", { bubbles: true, data: "Space", inputType: "insertText" }));
@@ -330,27 +350,200 @@ async function run() {
     `)
     await sleep(400)
 
-    const searchMetrics = await cdp.eval(`
+    const singleCategorySearch = await cdp.eval(`
       (() => {
-        const groups = [...document.querySelectorAll(".unread-category-group")];
+        const groups = [...document.querySelectorAll(".sidebar-drawer .unread-category-group")];
         const titles = groups.map(g => g.querySelector(".unread-category-title")?.textContent.trim());
-        const feeds = [...document.querySelectorAll(".source-navigation-list .feed-menu-item")].map(f => f.dataset.feedEditId);
+        const feeds = [...document.querySelectorAll(".sidebar-drawer .source-navigation-list .feed-menu-item")].map(f => f.dataset.feedEditId);
         return { count: groups.length, titles, feeds };
       })()
     `)
-    assert.equal(searchMetrics.count, 1, "Search for 'Space' isolates single category group")
-    assert.deepEqual(searchMetrics.titles, ["Science"], "Only Science group is shown for 'Space'")
-    assert.deepEqual(searchMetrics.feeds, ["3"], "Only feed 3 (Science & Space) matches")
-    console.log("SOURCE_SEARCH_GATE=PASS")
-    await cdp.screenshot(path.join(screenshotsDir, "390x844_02_unread_search_single_category.png"))
+    assert.equal(singleCategorySearch.count, 1, "Single category search isolates 1 group")
+    assert.deepEqual(singleCategorySearch.titles, ["Science"], "Only Science group appears")
+    assert.deepEqual(singleCategorySearch.feeds, ["3"], "Only feed 3 (Science & Space) appears")
+    console.log("SINGLE_CATEGORY_SEARCH=PASS")
 
-    // Clear search
+    // B. Real multi-category search:
+    // Update fixture catalog to have feeds matching a single search query in multiple categories:
+    // General (1): Northwind Daily Briefing (id 2) -> matches "Daily"
+    // Science (2): Science Daily Dispatch (id 33) -> matches "Daily"
     await cdp.eval(`
       (() => {
-        const input = document.querySelector("[data-testid='source-search']");
+        const h = globalThis.__nav02Harness;
+        const generalCat = h.fixtureCategories[0];
+        const scienceCat = h.fixtureCategories[1];
+        const multiCatFeeds = [
+          ...h.fixtureFeeds,
+          h.makeFeed(33, "Science Daily Dispatch", scienceCat),
+        ];
+        h.commitCatalogData({ feedsData: multiCatFeeds, categoriesData: h.fixtureCategories });
+        h.setUnreadInfo({ ...h.initialUnread, 33: 5 });
+      })()
+    `)
+    await sleep(300)
+
+    await cdp.eval(`
+      (() => {
+        const input = document.querySelector(".sidebar-drawer [data-testid='source-search']");
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+        setter.call(input, "Daily");
+        input.dispatchEvent(new InputEvent("input", { bubbles: true, data: "Daily", inputType: "insertText" }));
+      })()
+    `)
+    await sleep(400)
+
+    const multiCategorySearch = await cdp.eval(`
+      (() => {
+        const groups = [...document.querySelectorAll(".sidebar-drawer .unread-category-group")];
+        const titles = groups.map(g => g.querySelector(".unread-category-title")?.textContent.trim());
+        const feeds = [...document.querySelectorAll(".sidebar-drawer .source-navigation-list .feed-menu-item")].map(f => f.dataset.feedEditId);
+        return { count: groups.length, titles, feeds };
+      })()
+    `)
+    console.log("Multi-category search metrics:", multiCategorySearch)
+    assert.equal(
+      multiCategorySearch.count,
+      2,
+      "Search for 'Daily' matches feeds across 2 categories",
+    )
+    assert.deepEqual(
+      multiCategorySearch.titles,
+      ["General", "Science"],
+      "Multi-category search preserves canonical category order",
+    )
+    assert.deepEqual(
+      multiCategorySearch.feeds,
+      ["2", "33"],
+      "Both matching unread feeds are present",
+    )
+    console.log("MULTI_CATEGORY_SEARCH=PASS")
+    console.log("MULTI_CATEGORY_SEARCH_ORDER=PASS")
+
+    await cdp.screenshot(path.join(screenshotsDir, "390x844_02_unread_multi_category_search.png"))
+
+    // C. No-match search ("nonexistent" -> 0 groups, empty status)
+    await cdp.eval(`
+      (() => {
+        const input = document.querySelector(".sidebar-drawer [data-testid='source-search']");
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+        setter.call(input, "nonexistent");
+        input.dispatchEvent(new InputEvent("input", { bubbles: true, data: "nonexistent", inputType: "insertText" }));
+      })()
+    `)
+    await sleep(400)
+
+    const noMatchSearch = await cdp.eval(`
+      (() => {
+        const groups = [...document.querySelectorAll(".sidebar-drawer .unread-category-group")];
+        const emptyMsg = document.querySelector(".sidebar-drawer .source-navigation-empty");
+        return { count: groups.length, hasEmptyMsg: !!emptyMsg, text: emptyMsg?.textContent.trim() };
+      })()
+    `)
+    assert.equal(noMatchSearch.count, 0, "No-match search shows 0 groups")
+    assert.ok(noMatchSearch.hasEmptyMsg, "Empty state message is shown")
+    console.log("NO_MATCH_SEARCH=PASS")
+
+    // Clear search and reset catalog to clean baseline
+    await cdp.eval(`
+      (() => {
+        const input = document.querySelector(".sidebar-drawer [data-testid='source-search']");
         const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
         setter.call(input, "");
         input.dispatchEvent(new InputEvent("input", { bubbles: true, data: "", inputType: "deleteContentBackward" }));
+        const h = globalThis.__nav02Harness;
+        h.commitCatalogData({ feedsData: h.fixtureFeeds, categoriesData: h.fixtureCategories });
+        h.setUnreadInfo(h.initialUnread);
+      })()
+    `)
+    await sleep(300)
+
+    // =========================================================================
+    // LONG LABEL & THREE-DIGIT COUNT EVIDENCE
+    // =========================================================================
+    console.log("\n--- LONG LABEL & THREE-DIGIT COUNT EVIDENCE ---")
+    await cdp.eval(`
+      (() => {
+        const h = globalThis.__nav02Harness;
+        const longCat = h.makeCategory(50, "Extremely Long Category Name For Testing Horizontal Overflow Boundaries In Responsive Viewports");
+        const longFeed = h.makeFeed(51, "International Publication of Advanced Computing and Long Title News Reporting Weekly", longCat);
+        h.commitCatalogData({
+          feedsData: [...h.fixtureFeeds, longFeed],
+          categoriesData: [...h.fixtureCategories, longCat],
+        });
+        h.setUnreadInfo({ ...h.initialUnread, 51: 123 });
+      })()
+    `)
+    await sleep(500)
+
+    const longLabelMetrics = await cdp.eval(`
+      (() => {
+        const drawer = document.querySelector(".sidebar-drawer");
+        const longCatGroup = [...document.querySelectorAll(".sidebar-drawer .unread-category-group")]
+          .find(g => g.querySelector(".unread-category-title")?.textContent.includes("Extremely Long Category"));
+        const longCatTitle = longCatGroup?.querySelector(".unread-category-title");
+        const longFeedRow = document.querySelector(".sidebar-drawer [data-feed-edit-id='51']");
+        const longFeedText = longFeedRow?.querySelector(".item-count");
+        const longFeedAria = longFeedRow?.getAttribute("aria-label");
+
+        const catTitleStyle = longCatTitle ? window.getComputedStyle(longCatTitle) : null;
+        const drawerOverflow = drawer ? drawer.scrollWidth > drawer.clientWidth : false;
+
+        return {
+          catPresent: !!longCatGroup,
+          feedPresent: !!longFeedRow,
+          renderedCountText: longFeedText?.innerText.trim(),
+          feedAriaLabel: longFeedAria,
+          drawerOverflow,
+          textOverflow: catTitleStyle?.textOverflow,
+          whiteSpace: catTitleStyle?.whiteSpace,
+          overflow: catTitleStyle?.overflow,
+        };
+      })()
+    `)
+
+    console.log("Long label & count metrics:", longLabelMetrics)
+    assert.ok(longLabelMetrics.catPresent, "Long category is present")
+    assert.ok(longLabelMetrics.feedPresent, "Long feed is present")
+    assert.equal(
+      longLabelMetrics.renderedCountText,
+      "123",
+      "Three-digit count renders exactly 123 without capping or truncation",
+    )
+    assert.ok(
+      longLabelMetrics.feedAriaLabel?.includes("123") &&
+        longLabelMetrics.feedAriaLabel?.includes("unread"),
+      `Feed aria-label contains exact count: ${longLabelMetrics.feedAriaLabel}`,
+    )
+    assert.equal(
+      longLabelMetrics.drawerOverflow,
+      false,
+      "No horizontal drawer overflow with long labels",
+    )
+    assert.equal(longLabelMetrics.textOverflow, "ellipsis", "Long category title enforces ellipsis")
+    assert.equal(
+      longLabelMetrics.whiteSpace,
+      "nowrap",
+      "Long category title does not break across multiple lines",
+    )
+
+    console.log("THREE_DIGIT_COUNT=PASS")
+    console.log("THREE_DIGIT_COUNT_ARIA=PASS")
+    console.log("EXACT_COUNTS=PASS")
+    console.log("COUNT_CAPPING=NONE")
+    console.log("LONG_CATEGORY_NO_HORIZONTAL_OVERFLOW=PASS")
+    console.log("LONG_FEED_NO_HORIZONTAL_OVERFLOW=PASS")
+    console.log("ELLIPSIS_OR_SAFE_WRAP=PASS")
+
+    await cdp.screenshot(
+      path.join(screenshotsDir, "390x844_03_unread_long_labels_and_three_digit_count.png"),
+    )
+
+    // Reset catalog back to standard baseline
+    await cdp.eval(`
+      (() => {
+        const h = globalThis.__nav02Harness;
+        h.commitCatalogData({ feedsData: h.fixtureFeeds, categoriesData: h.fixtureCategories });
+        h.setUnreadInfo(h.initialUnread);
       })()
     `)
     await sleep(300)
@@ -377,8 +570,8 @@ async function run() {
       (() => {
         const rail = document.querySelector(".medium-navigation-rail");
         const drawer = document.querySelector(".sidebar-drawer");
-        const groups = [...document.querySelectorAll(".unread-category-group")];
-        const feedRows = [...document.querySelectorAll(".source-navigation-list .feed-menu-item")];
+        const groups = [...document.querySelectorAll(".sidebar-drawer .unread-category-group")];
+        const feedRows = [...document.querySelectorAll(".sidebar-drawer .source-navigation-list .feed-menu-item")];
 
         return {
           railPresent: !!rail,
@@ -455,41 +648,60 @@ async function run() {
     console.log("EXACT_COUNTS=PASS")
     console.log("COUNT_CAPPING=NONE")
 
-    // Test Keyboard Tab Navigation: Category heading is skipped
-    const keyboardNavResult = await cdp.eval(`
+    // =========================================================================
+    // REAL CDP NATIVE KEYBOARD NAVIGATION (TAB SKIPS CATEGORY HEADINGS)
+    // =========================================================================
+    console.log("\n--- CDP NATIVE KEYBOARD TAB NAVIGATION ---")
+    await cdp.eval(`
       (() => {
-        const searchInput = document.querySelector("[data-testid='source-search']");
-        if (!searchInput) return { error: "search input missing" };
+        const searchInput = document.querySelector(".nav02-desktop-sidebar [data-testid='source-search']");
         searchInput.focus();
+      })()
+    `)
+    await sleep(200)
 
-        // Simulate Tab key event
-        const feedRows = [...document.querySelectorAll(".source-navigation-list .feed-menu-item")];
-        const firstFeedLink = feedRows[0];
+    const focusBefore = await cdp.eval(`document.activeElement?.getAttribute("data-testid")`)
+    assert.equal(focusBefore, "source-search", "Search input successfully focused prior to Tab")
 
-        // In standard DOM Tab navigation from search, the next focusable element is the first feed row
-        const categoryHeader = document.querySelector(".unread-category-header .unread-category-title");
-        const isHeaderFocusable = categoryHeader.tabIndex >= 0;
+    // Send real native browser Tab key via CDP
+    await cdp.sendTabKey()
+    await sleep(200)
 
+    const focusAfterTab = await cdp.eval(`
+      (() => {
+        const active = document.activeElement;
+        const categoryHeader = document.querySelector(".nav02-desktop-sidebar .unread-category-title");
         return {
-          activeElementBefore: document.activeElement?.tagName,
-          categoryHeaderFocusable: isHeaderFocusable,
-          firstFeedTagName: firstFeedLink?.tagName,
+          activeTagName: active?.tagName,
+          activeFeedId: active?.getAttribute("data-feed-edit-id"),
+          isActiveCategoryHeader: active === categoryHeader || active?.classList.contains("unread-category-title"),
+          activeClass: active?.className,
         };
       })()
     `)
 
+    console.log("Focus state after native Tab key:", focusAfterTab)
     assert.equal(
-      keyboardNavResult.categoryHeaderFocusable,
+      focusAfterTab.isActiveCategoryHeader,
       false,
-      "Category header is NOT focusable",
+      "Native Tab did not focus the category heading",
+    )
+    assert.equal(
+      focusAfterTab.activeFeedId,
+      "2",
+      "Native Tab directly focused the first feed link (Northwind Daily Briefing)",
     )
     console.log("CATEGORY_HEADING_TABSTOP=NO")
+    console.log("NATIVE_TAB_SKIPS_CATEGORY_HEADING=PASS")
     console.log("FEED_KEYBOARD_NAVIGATION=PASS")
 
-    // Test All mode regression check
+    // =========================================================================
+    // ALL MODE REGRESSION CHECK & MODE TOGGLE
+    // =========================================================================
+    console.log("\n--- ALL MODE REGRESSION & STATIC TOGGLE CONTRACT ---")
     await cdp.eval(`
       (() => {
-        const allRadio = document.querySelector("[data-testid='mode-all']");
+        const allRadio = document.querySelector(".nav02-desktop-sidebar [data-testid='mode-all']");
         allRadio.click();
       })()
     `)
@@ -497,11 +709,12 @@ async function run() {
 
     const allModeMetrics = await cdp.eval(`
       (() => {
-        const collapseContainer = document.querySelector(".arco-collapse");
-        const unreadGroups = document.querySelectorAll(".unread-category-group");
+        const desktopSidebar = document.querySelector(".nav02-desktop-sidebar");
+        const collapseContainer = desktopSidebar?.querySelector(".arco-collapse");
+        const unreadGroups = desktopSidebar?.querySelectorAll(".unread-category-group");
         return {
           hasCollapse: !!collapseContainer,
-          unreadGroupCount: unreadGroups.length,
+          unreadGroupCount: unreadGroups?.length ?? 0,
         };
       })()
     `)
@@ -516,7 +729,7 @@ async function run() {
     // Switch back to Unread mode
     await cdp.eval(`
       (() => {
-        const unreadRadio = document.querySelector("[data-testid='mode-unread']");
+        const unreadRadio = document.querySelector(".nav02-desktop-sidebar [data-testid='mode-unread']");
         unreadRadio.click();
       })()
     `)
@@ -530,13 +743,14 @@ async function run() {
     `)
     assert.equal(unreadRestored, 2, "Unread mode restores category groups")
     console.log("MODE_TOGGLE=PASS")
+    console.log("MODE_PERSISTENCE=UNCHANGED_STATIC_CONTRACT")
 
     await cdp.screenshot(
       path.join(screenshotsDir, "1280x800_02_desktop_unread_category_rhythm.png"),
     )
 
     console.log("\n============================================================")
-    console.log("ALL REAL BROWSER RUNTIME & VISUAL GATES PASSED!")
+    console.log("ALL REAL BROWSER RUNTIME & VISUAL GATES (R2) PASSED!")
     console.log("============================================================")
   } finally {
     if (cdp) {

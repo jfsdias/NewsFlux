@@ -77,9 +77,15 @@ test("Current source lookup respects the supplied visible-feed collection", () =
 const categorizedFeeds = [
   { id: 101, title: "Alpha News Daily", unreadCount: 3, category: { id: 10, title: "News" } },
   { id: 102, title: "Alpha Tech Wire", unreadCount: 0, category: { id: 20, title: "Tech" } },
-  { id: 103, title: "Beta Daily Digest", unreadCount: 1, category: { id: 10, title: "News" } },
-  { id: 104, title: "Gamma Research", unreadCount: 5, category: { id: 30, title: "Science" } },
+  { id: 103, title: "Beta Morning Digest", unreadCount: 1, category: { id: 10, title: "News" } },
+  { id: 104, title: "Gamma Science Daily", unreadCount: 5, category: { id: 30, title: "Science" } },
   { id: 105, title: "Delta Journal", unreadCount: 0, category: { id: 40, title: "EmptyCategory" } },
+  {
+    id: 106,
+    title: "Orphaned Feed Daily",
+    unreadCount: 4,
+    category: { id: 999, title: "UnknownCategory" },
+  },
 ]
 
 const testCategories = [
@@ -150,14 +156,20 @@ test("getGroupedUnreadNavigationFeeds filters with search query across single an
     },
   ])
 
-  // Query matching across multiple categories (both "Alpha News Daily" and "Beta Daily Digest" have "Daily")
+  // Real multi-category search: "daily" matches Alpha News Daily (News) and Gamma Science Daily (Science)
   const multiMatch = getGroupedUnreadNavigationFeeds(testCategories, categorizedFeeds, "daily")
   assert.deepEqual(multiMatch, [
     {
       category: testCategories[0],
-      feeds: [categorizedFeeds[0], categorizedFeeds[2]],
+      feeds: [categorizedFeeds[0]],
+    },
+    {
+      category: testCategories[2],
+      feeds: [categorizedFeeds[3]],
     },
   ])
+  assert.equal(multiMatch[0].category.id, 10)
+  assert.equal(multiMatch[1].category.id, 30)
 
   // Query matching zero-unread feed returns empty because unreadCount is 0
   const zeroUnreadMatch = getGroupedUnreadNavigationFeeds(testCategories, categorizedFeeds, "wire")
@@ -166,6 +178,18 @@ test("getGroupedUnreadNavigationFeeds filters with search query across single an
   // Query matching nothing
   const noMatch = getGroupedUnreadNavigationFeeds(testCategories, categorizedFeeds, "nonexistent")
   assert.deepEqual(noMatch, [])
+})
+
+test("getGroupedUnreadNavigationFeeds enforces canonical category authority without synthesis", () => {
+  // Empty categories array returns empty even when feeds exist
+  assert.deepEqual(getGroupedUnreadNavigationFeeds([], categorizedFeeds), [])
+
+  // Feed referencing absent category (id 999) is omitted completely
+  const result = getGroupedUnreadNavigationFeeds(testCategories, categorizedFeeds)
+  const allResultCategoryIds = result.map((g) => g.category.id)
+  assert.equal(allResultCategoryIds.includes(999), false)
+  const allResultFeedIds = result.flatMap((g) => g.feeds.map((f) => f.id))
+  assert.equal(allResultFeedIds.includes(106), false)
 })
 
 test("getGroupedUnreadNavigationFeeds does not mutate input arrays or objects", () => {
@@ -182,5 +206,5 @@ test("getGroupedUnreadNavigationFeeds handles empty or missing inputs gracefully
   assert.deepEqual(getGroupedUnreadNavigationFeeds(), [])
   assert.deepEqual(getGroupedUnreadNavigationFeeds([], []), [])
   assert.deepEqual(getGroupedUnreadNavigationFeeds(testCategories, []), [])
-  assert.deepEqual(getGroupedUnreadNavigationFeeds([], categorizedFeeds).length, 2)
+  assert.deepEqual(getGroupedUnreadNavigationFeeds([], categorizedFeeds), [])
 })
