@@ -154,7 +154,9 @@ const MarkAllReadButton = ({ disabled, from, id, loading, onConfirm }) => {
     <Popconfirm
       autoFocus
       focusLock
+      cancelText={polyglot.t("search.cancel")}
       className="mark-all-read-popconfirm"
+      okText={polyglot.t("sidebar.context_menu.mark_all_as_read")}
       popupVisible={confirmVisible}
       title={polyglot.t("article_list.mark_all_as_read_confirm")}
       triggerProps={{

@@ -113,10 +113,12 @@ const General = () => {
 
       Modal.confirm({
         ...confirmDialogProps,
-        title: polyglot.t("settings.settings_import_confirm"),
+        cancelText: polyglot.t("search.cancel"),
         content: <p>{polyglot.t("settings.settings_import_description")}</p>,
         icon: <IconInfoCircleFill aria-hidden="true" />,
         okButtonProps: { ...destructiveConfirmButtonProps, status: "danger" },
+        okText: polyglot.t("settings.import_settings"),
+        title: polyglot.t("settings.settings_import_confirm"),
         onOk: () => applyImportedSettings(importedSnapshot),
       })
     } catch (error) {

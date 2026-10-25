@@ -324,103 +324,139 @@
   }
 
   .app-confirm-modal.arco-modal-simple {
-    display: flex;
-    flex-direction: column;
-    box-sizing: border-box;
     width: calc(100% - 16px);
-    max-width: 400px;
     max-height: calc(100vh - 16px);
     max-height: calc(100dvh - 16px);
-    padding: 20px;
-    overflow: hidden;
-  }
-
-  .app-confirm-modal.arco-modal-simple .arco-modal-header {
-    flex: 0 0 auto;
-    margin-bottom: 16px;
-  }
-
-  .app-confirm-modal.arco-modal-simple .arco-modal-title {
-    font-size: 18px;
-    line-height: 26px;
-    text-align: left;
-    overflow-wrap: anywhere;
-  }
-
-  .app-confirm-modal.arco-modal-simple .arco-modal-title > span {
-    display: flex;
-    align-items: flex-start;
-    min-width: 0;
-  }
-
-  .app-confirm-modal.arco-modal-simple .arco-modal-title .arco-icon {
-    flex: 0 0 var(--mobile-form-icon-size);
-    width: var(--mobile-form-icon-size);
-    height: var(--mobile-form-icon-size);
-    margin: 3px 8px 0 0;
-    font-size: var(--mobile-form-icon-size);
-  }
-
-  .app-confirm-modal.arco-modal-simple .arco-modal-content {
-    flex: 1 1 auto;
-    min-height: 0;
-    font-size: var(--mobile-form-font-size);
-    line-height: 1.5;
-    text-align: left;
-    overflow-y: auto;
-    overflow-wrap: anywhere;
-    overscroll-behavior: contain;
-  }
-
-  .app-confirm-modal.arco-modal-simple .arco-modal-content > p {
-    margin: 0;
-  }
-
-  .app-confirm-modal.arco-modal-simple .arco-modal-footer {
-    display: flex;
-    flex: 0 0 auto;
-    justify-content: flex-end;
-    gap: var(--mobile-edge-spacing);
-    margin-top: 24px;
   }
 
   .app-confirm-modal.arco-modal-simple .arco-modal-footer > .arco-btn {
-    box-sizing: border-box;
-    min-width: 88px;
-    height: var(--mobile-form-control-size);
-    margin: 0;
+    min-height: var(--mobile-form-control-size);
     font-size: var(--mobile-form-font-size);
-    white-space: nowrap;
   }
+}
 
-  .app-confirm-modal .destructive-confirm-action.arco-btn-primary:not(.arco-btn-disabled) {
-    border-color: transparent;
-    color: #fff;
-    background-color: rgb(var(--danger-6));
-  }
+.app-confirm-modal.arco-modal-simple {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 400px;
+  padding: 20px;
+  border-radius: var(--nf-radius-surface, 12px);
+  overflow: hidden;
+}
 
-  .app-confirm-modal
-    .destructive-confirm-action.arco-btn-primary:not(.arco-btn-disabled):not(
-      .arco-btn-loading
-    ):hover {
-    background-color: rgb(var(--danger-5));
-  }
+body[arco-theme="dark"] .app-confirm-modal.arco-modal-simple {
+  background-color: var(--nf-surface-elevated);
+  border: 1px solid var(--nf-separator-subtle);
+  box-shadow: var(--shadow);
+}
 
-  .app-confirm-modal
-    .destructive-confirm-action.arco-btn-primary:not(.arco-btn-disabled):not(
-      .arco-btn-loading
-    ):active {
-    background-color: rgb(var(--danger-7));
-  }
+.app-confirm-modal.arco-modal-simple .arco-modal-header {
+  flex: 0 0 auto;
+  margin-bottom: 16px;
+}
 
-  .app-confirm-modal .destructive-confirm-action.arco-btn-primary:focus-visible {
-    outline: 2px solid var(--nf-focus-ring, rgb(var(--danger-3)));
-    outline-offset: 2px;
-  }
+.app-confirm-modal.arco-modal-simple .arco-modal-title {
+  font-size: 18px;
+  line-height: 26px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
 
-  .app-confirm-modal .destructive-confirm-action.arco-btn-primary.arco-btn-disabled {
-    border-color: transparent;
-    color: #fff;
-    background-color: var(--color-danger-light-3);
-  }
+body[arco-theme="dark"] .app-confirm-modal.arco-modal-simple .arco-modal-title {
+  color: var(--nf-text-primary);
+}
+
+.app-confirm-modal.arco-modal-simple .arco-modal-title > span {
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.app-confirm-modal.arco-modal-simple .arco-modal-title .arco-icon {
+  flex: 0 0 var(--mobile-form-icon-size);
+  width: var(--mobile-form-icon-size);
+  height: var(--mobile-form-icon-size);
+  margin: 3px 8px 0 0;
+  font-size: var(--mobile-form-icon-size);
+}
+
+.app-confirm-modal.arco-modal-simple .arco-modal-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  font-size: var(--mobile-form-font-size);
+  line-height: 1.5;
+  text-align: left;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  overscroll-behavior: contain;
+}
+
+body[arco-theme="dark"] .app-confirm-modal.arco-modal-simple .arco-modal-content {
+  color: var(--nf-text-secondary);
+}
+
+.app-confirm-modal.arco-modal-simple .arco-modal-content > p {
+  margin: 0;
+}
+
+.app-confirm-modal.arco-modal-simple .arco-modal-footer {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  gap: var(--mobile-edge-spacing);
+  margin-top: 24px;
+}
+
+.app-confirm-modal.arco-modal-simple .arco-modal-footer > .arco-btn {
+  box-sizing: border-box;
+  min-width: 88px;
+  height: var(--mobile-form-control-size);
+  margin: 0;
+  border-radius: var(--nf-radius-control, 8px);
+  font-size: var(--mobile-form-font-size);
+  white-space: nowrap;
+}
+
+body[arco-theme="dark"] .app-confirm-modal .arco-modal-footer > .arco-btn-secondary {
+  background-color: var(--nf-surface-raised);
+  border-color: var(--nf-separator-subtle);
+  color: var(--nf-text-primary);
+}
+
+body[arco-theme="dark"] .app-confirm-modal .arco-modal-footer > .arco-btn-secondary:hover {
+  background-color: var(--nf-state-hover);
+  border-color: var(--nf-text-muted);
+}
+
+.app-confirm-modal .destructive-confirm-action.arco-btn-primary:not(.arco-btn-disabled) {
+  border-color: transparent;
+  color: #fff;
+  background-color: rgb(var(--danger-6));
+}
+
+.app-confirm-modal
+  .destructive-confirm-action.arco-btn-primary:not(.arco-btn-disabled):not(
+    .arco-btn-loading
+  ):hover {
+  background-color: rgb(var(--danger-5));
+}
+
+.app-confirm-modal
+  .destructive-confirm-action.arco-btn-primary:not(.arco-btn-disabled):not(
+    .arco-btn-loading
+  ):active {
+  background-color: rgb(var(--danger-7));
+}
+
+.app-confirm-modal .destructive-confirm-action.arco-btn-primary:focus-visible {
+  outline: 2px solid var(--nf-focus-ring, rgb(var(--danger-3)));
+  outline-offset: 2px;
+}
+
+.app-confirm-modal .destructive-confirm-action.arco-btn-primary.arco-btn-disabled {
+  border-color: transparent;
+  color: #fff;
+  background-color: var(--color-danger-light-3);
 }

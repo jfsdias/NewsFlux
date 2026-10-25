@@ -192,6 +192,7 @@ Current reference decisions:
 | #113 | Story Linux CPU runtime contract        | **COMPLETED**                      | CPU-only `torch==2.14.1+cpu` wheel; Policy E approved as contract; ranker runtime disabled; merge `dd2e9e6ec429d2a8c01a9736b3090b4d20f2c4eb`                                                                                                                                                                                                                                                                                           |
 | #112 | AUTH_APIKEY_01 session migration        | **COMPLETED**                      | Dedicated API key provisioning; persistent fail-closed auth transaction journal; manual auth preserved; merge `3859e18d4744c7cbbdd97bdee9de3d6fe77ad99b`                                                                                                                                                                                                                                                                               |
 | #114 | PWA-01A installability hardening        | **COMPLETED**                      | Cross-platform installability; D1/D2/D3 approved; real-device D3 gate PASS on Fold; non-blocking residuals recorded; deployed to production at `bf1f911f0e2d`; merge `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9`                                                                                                                                                                                                                        |
+| #123 | THEME_ACCENT_FAMILIES_01                | **COMPLETED**                      | Editorial accent families (Gold, Crimson, Orange, Green, Blue, Violet); semantic tokens; resolves `A11Y_CONTRAST_COMPACT_NAV_01`; production promotion PASS at `104dd6bd0960`; merge `104dd6bd0960bd95bc2fab1500b6faf981f9d321`                                                                                                                                                                                                        |
 
 ### 3.3 Functional behavior and defect tracks
 
@@ -233,22 +234,41 @@ Current reference decisions:
 
 ### 3.5 Visual-cohesion packages
 
-| Package                  | Status             | Scope / remainder                                                                                                                                                                                                                                                                                                                                                                          |
-| ------------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| LIST-VISUAL-01           | **COMPLETED**      | Monogram fallback (#24) + read-state/source/metadata cohesion (#28). Human-readable unread-count labels were rehomed to NAV-02F. No thumbnail redesign is authorized by this completion.                                                                                                                                                                                                   |
-| CHROME-01                | **PLANNED**        | DatePicker token subset completed in #25; verb-first confirmations, snackbar placement and remaining raw-Arco styling remain separate scoped work                                                                                                                                                                                                                                          |
-| HOME-VISUAL-02           | **HOLD — PRODUCT** | Edition/category composition requires explicit editorial decision and HOME-01 dependency resolution                                                                                                                                                                                                                                                                                        |
-| READER-VISUAL-02A        | **COMPLETED**      | 02A1 in PR #41, Reader Measure in PR #44, and 02A2 / Quiet Column in PR #49; real header/prose alignment validated on the production element                                                                                                                                                                                                                                               |
-| READER-VISUAL-02B        | **PLANNED**        | Auto-hide + Next only after interaction/NAV dependencies                                                                                                                                                                                                                                                                                                                                   |
-| NAV-VISUAL-01            | **IN PROGRESS**    | PR0 / #69 and PR1 / #71 complete; compact navigation is merged; Medium Rail / PR4 remains deferred; explicit future-slice gates remain required                                                                                                                                                                                                                                            |
-| THEME_ACCENT_FAMILIES_01 | **IN PROGRESS**    | Editorial accent families (Gold, Crimson, Orange, Green, Blue, Violet); semantic tokens (`--nf-accent`, `--nf-accent-surface`, `--nf-accent-hover`, `--nf-accent-border`, `--nf-on-accent`); dark tinted surfaces for persistent selection; resolves `A11Y_CONTRAST_COMPACT_NAV_01` with >=4.5:1 contrast; preserves OLED canvas `#0B0D10`, persisted setting names, and PR #122 contract. |
-| READER-COVER-01          | **HOLD — PRODUCT** | Preserve the design-handoff hold; no implementation authorization                                                                                                                                                                                                                                                                                                                          |
-| READER-FONT-01           | **HOLD — PRODUCT** | Preserve the design-handoff hold; no implementation authorization                                                                                                                                                                                                                                                                                                                          |
-| HARNESS-VIS-01           | **BACKLOG**        | Test debt; not ordered                                                                                                                                                                                                                                                                                                                                                                     |
-| TEST-ENV-01              | **BACKLOG**        | Verification required; not ordered                                                                                                                                                                                                                                                                                                                                                         |
-| MOTION-01                | **BACKLOG**        | View Transition/container transform after main interaction architecture stabilizes                                                                                                                                                                                                                                                                                                         |
+| Package                  | Status             | Scope / remainder                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------ | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| LIST-VISUAL-01           | **COMPLETED**      | Monogram fallback (#24) + read-state/source/metadata cohesion (#28). Human-readable unread-count labels were rehomed to NAV-02F. No thumbnail redesign is authorized by this completion.                                                                                                                                                                                |
+| CHROME-01A               | **COMPLETED**      | DatePicker token subset completed in PR #25; NNW-03 contextual controls completed in PR #117.                                                                                                                                                                                                                                                                           |
+| CHROME-01B               | **IN PROGRESS**    | FEEDBACK & CONTROL COHESION: verb-first confirmations across 6 locales, snackbar/notice placement and elevated dark styling, raw Arco control token adaptations, focus/selected semantic tokens; structural consolidation and drawer deduplication remain on hold.                                                                                                      |
+| HOME-VISUAL-02           | **HOLD — PRODUCT** | Edition/category composition requires explicit editorial decision and HOME-01 dependency resolution                                                                                                                                                                                                                                                                     |
+| READER-VISUAL-02A        | **COMPLETED**      | 02A1 in PR #41, Reader Measure in PR #44, and 02A2 / Quiet Column in PR #49; real header/prose alignment validated on the production element                                                                                                                                                                                                                            |
+| READER-VISUAL-02B        | **PLANNED**        | Auto-hide + Next only after interaction/NAV dependencies                                                                                                                                                                                                                                                                                                                |
+| NAV-VISUAL-01            | **IN PROGRESS**    | PR0 / #69 and PR1 / #71 complete; compact navigation is merged; Medium Rail / PR4 remains deferred; explicit future-slice gates remain required                                                                                                                                                                                                                         |
+| THEME_ACCENT_FAMILIES_01 | **COMPLETED**      | PR #123 merged and promoted at `104dd6bd0960bd95bc2fab1500b6faf981f9d321`. Editorial accent families (Gold, Crimson, Orange, Green, Blue, Violet); semantic tokens (`--nf-accent`, `--nf-accent-surface`, `--nf-accent-hover`, `--nf-accent-border`, `--nf-on-accent`); resolves `A11Y_CONTRAST_COMPACT_NAV_01`; perceptual R1 PASS across 390x844, 884x1104, 1280x800. |
+| READER-COVER-01          | **HOLD — PRODUCT** | Preserve the design-handoff hold; no implementation authorization                                                                                                                                                                                                                                                                                                       |
+| READER-FONT-01           | **HOLD — PRODUCT** | Preserve the design-handoff hold; no implementation authorization                                                                                                                                                                                                                                                                                                       |
+| HARNESS-VIS-01           | **BACKLOG**        | Test debt; not ordered                                                                                                                                                                                                                                                                                                                                                  |
+| TEST-ENV-01              | **BACKLOG**        | Verification required; not ordered                                                                                                                                                                                                                                                                                                                                      |
+| MOTION-01                | **BACKLOG**        | View Transition/container transform after main interaction architecture stabilizes                                                                                                                                                                                                                                                                                      |
 
-#### THEME_ACCENT_FAMILIES_01 design and accessibility contract
+#### THEME_ACCENT_FAMILIES_01 design and accessibility contract (COMPLETED)
+
+PR #123 merged and promoted to production at `104dd6bd0960bd95bc2fab1500b6faf981f9d321`.
+
+- **Status:** **COMPLETED**
+- **PR:** #123
+- **MERGE_SHA:** `104dd6bd0960bd95bc2fab1500b6faf981f9d321`
+- **PRODUCTION_SHA:** `104dd6bd0960bd95bc2fab1500b6faf981f9d321`
+- **PRODUCTION_PROMOTION:** PASS
+- **PERCEPTUAL_R1:** PASS
+- **MOBILE_390x844:** PASS
+- **MEDIUM_884x1104:** PASS
+- **DESKTOP_1280x800:** PASS
+- **A11Y_CONTRAST_COMPACT_NAV_01:** RESOLVED
+- **PR122_RUNTIME_REGRESSION_GATE:** PASS
+- **Perceptual conclusions:**
+  - Editorial Gold: PASS
+  - Editorial Crimson: PASS
+  - `CRIMSON_READS_AS_DESTRUCTIVE`: NO
 
 Isolated design and accessibility slice implementing editorial accent families and semantic tokens while resolving `A11Y_CONTRAST_COMPACT_NAV_01`:
 
@@ -307,11 +327,32 @@ Dependency rules remain:
 
 #### CHROME-01 contract retained
 
-- Prefer verb-first confirmations such as `Mark 18 as read` / `Cancel` over generic `OK` / `Cancel` where semantics are already known.
+- Historical completed subset: `CHROME-01A / DatePicker` = COMPLETED (PR #25); `NNW-03 / CHROME-01 contextual controls` = COMPLETED (PR #117).
+- Prefer verb-first confirmations such as `Mark all as read` / `Cancel` over generic `OK` / `Cancel` where semantics are already known.
 - Keep Undo reachable on touch devices; any snackbar relocation must remain generation-safe and one-at-a-time.
 - Raw Arco date selectors, popconfirms and notifications should use NewsFlux tokens rather than a parallel component system.
 - Glass is a chrome behavior only and is justified when content actually passes beneath; reduced-transparency behavior must remain correct.
 - Do not consolidate header/footer controls without a separate product decision.
+
+#### CHROME-01B | FEEDBACK & CONTROL COHESION (IN PROGRESS)
+
+- **Status:** **IN PROGRESS**
+- **Track:** `CHROME-01B`
+- **Scope:**
+  - Confirmation presentation: verb-first copy across all 6 shipped locales (`sidebar.context_menu.mark_all_as_read`, `search.cancel`, `sidebar.reset_settings`, `sidebar.logout`, `settings.import_settings`, `sidebar.context_menu.delete_category`, `sidebar.context_menu.delete_feed`); elevated dark surfaces (`#15191e`), subtle border (`#2a3037`), accessible focus outlines, `--nf-on-accent` text on primary action buttons.
+  - Snackbar / notification placement: mobile message wrapper offset to clear compact navigation header, dark elevated surface, subtle border, touch targets >=40px, 8s Undo toast duration and generation-scoped IDs preserved.
+  - Raw Arco controls cohesion: `.arco-btn-primary:not(.destructive-confirm-action)`, `.arco-radio-button.arco-radio-checked`, `.arco-select-popup`, `.arco-dropdown-menu`, `.mark-all-read-popconfirm` adapted using NewsFlux tokens (`--nf-accent`, `--nf-accent-surface`, `--nf-accent-border`, `--nf-on-accent`).
+  - Focus / selected styling consistency: `--nf-accent-focus`, `--nf-on-accent`, `--nf-accent-surface`.
+  - Semantic color boundaries: Theme accents (`--nf-accent*`) strictly decoupled from status semantics (`arcoDanger6Hex` `#F53F3F`, `arcoWarning6Hex` `#FF7D00`, `arcoSuccess6Hex` `#00B42A`).
+- **Non-negotiable structural holds preserved:**
+  - `STRUCTURAL_FOOTERPANEL_SEARCHANDSORTBAR_CONSOLIDATION` = HOLD
+  - `HIDING_MARK_OLDER_ON_TODAY` = HOLD
+  - `MOBILE_SOURCES_DRAWER_DESTINATION_DEDUPLICATION` = HOLD
+  - `WIDE_DESKTOP_MULTI_PANE` = HOLD
+  - `DESKTOP_SIDEBAR_WIDTH_CHANGES` = HOLD
+  - `SHOW_UNREAD_FEEDS_ONLY_DEFAULT_CHANGE` = HOLD
+  - `SIDEBAR_VISUAL_COUNT_CAPPING` = HOLD
+  - `UNREAD_CATEGORY_GROUPING` = HOLD
 
 #### HOME-VISUAL-02 contract retained
 
