@@ -70,6 +70,11 @@ QUEUE_REPRODUCIBILITY_GATE=PASS
 MODEL_BLINDING_GATE=PASS
 PRIVATE_DATA_GIT_GATE=PASS
 NEXT_AUTHORIZED_ACTION=HUMAN_LABELING_ONLY
+STORY01B_D_TOOLING_PERSISTENCE=PARTIAL
+STORY01B_D_LOCAL_BRANCH_PRESENT=NO
+STORY01B_D_WORKTREE_PRESENT=NO
+STORY01B_D_PRIVATE_ANNOTATION_UI_PRESENT=YES
+STORY01B_D_PRIVATE_QUEUE_PRESENT=YES
 
 STORY_01B_M=NOT_AUTHORIZED
 STORY_01B_C=NOT_AUTHORIZED
@@ -112,7 +117,7 @@ DEPLOY_AUTHORIZED=NO
 
 - **PWA:** PWA-01A / PR #114 is complete, merged and deployed; D1/D2/D3 approved; real-device D3 gate passed. PWA-03A update safety and recovery slices complete in production. PWA-VAL-01 remains an evidence-only device/runtime validation candidate; PWA-02 remains defect-driven. No implementation or promotion authorized.
 - **Auth:** AUTH_APIKEY_01 is complete, merged and deployed; manual token authentication remains supported and the consent/create/verify/store/drop-password/revoke lifecycle remains canonical.
-- **Story identity & clustering:** Candidate-ranking code is merged but runtime-disabled; production activation is not authorized. Story identity research (STORY-01B-R) completed offline reference audit and corpus contract in PR #129. STORY-01B-D (gold dataset curation) is authorized and currently IN_PROGRESS at `HUMAN_LABELING_GATE`; downstream tracks (STORY-01B-M, STORY-01B-C, STORY-02) remain NOT_AUTHORIZED. Story clustering remains NOT_ACTIVE; `STORY_IDENTITY_PRODUCTION_STORAGE` is `HOLD_ARCHITECTURE_DECISION`; `CLUSTER_WIDE_MARK_READ` is `HOLD_PRODUCT_DECISION`.
+- **Story identity & clustering:** Candidate-ranking code is merged but runtime-disabled; production activation is not authorized. Story identity research (STORY-01B-R) completed offline reference audit and corpus contract in PR #129. STORY-01B-D (gold dataset curation) is authorized and currently IN_PROGRESS at `HUMAN_LABELING_GATE`; downstream tracks (STORY-01B-M, STORY-01B-C, STORY-02) remain NOT_AUTHORIZED. Essential private annotation artifacts remain preserved locally (`STORY01B_D_TOOLING_PERSISTENCE=PARTIAL`, `STORY01B_D_PRIVATE_ANNOTATION_UI_PRESENT=YES`, `STORY01B_D_PRIVATE_QUEUE_PRESENT=YES`), while dedicated development branch/worktree are not present (`STORY01B_D_LOCAL_BRANCH_PRESENT=NO`, `STORY01B_D_WORKTREE_PRESENT=NO`). Story clustering remains NOT_ACTIVE; `STORY_IDENTITY_PRODUCTION_STORAGE` is `HOLD_ARCHITECTURE_DECISION`; `CLUSTER_WIDE_MARK_READ` is `HOLD_PRODUCT_DECISION`.
 - **Source of truth and ordering:** Miniflux remains authoritative for feeds, categories, read and starred status. All/Unread remain chronological and predictable; no silent ranking. No new persistent NewsFlux content state without an explicit architecture decision.
 - **Existing product/architecture holds:** wide-desktop multi-pane activation; automatic vs. opt-in multi-pane; threshold and Home inclusion; FooterPanel/SearchAndSortBar consolidation; hiding Mark older as read on `/today`; mobile Sources drawer destination deduplication; Story production activation; new persistent content state; and ML personalization.
 - **Dependency holds:** all eight dependency updates listed under UPSTREAM_AUDIT_02 remain isolated and unapproved.

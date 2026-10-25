@@ -1723,9 +1723,9 @@ This section supersedes the historical post-NAV-02F-A state. GitHub main was liv
 
 NAV-02F-A is completed (`PR128_MERGE_SHA=dc4154d7729204c65c8a1abaa50f9bfc9f92be64`). Unread source navigation regained category rhythm without collapsible hierarchy or persistent state. `showUnreadFeedsOnly` default remains false; sidebar width unchanged; exact unread counts preserved.
 
-STORY-01B-R is completed (`PR129_MERGE_SHA=de138bc961d665005fe3322082034963bf263b16`). Mode was bounded research, reference audit, corpus contract, offline feature extraction harness, and draft PR. No product activation, no home clustering, no All/Unread change, no merge, no deploy.
+STORY-01B-R is completed (`PR129_MERGE_SHA=de138bc961d665005fe3322082034963bf263b16`). Mode was bounded research, reference audit, corpus contract, offline feature extraction harness, and draft PR. No product activation, no home clustering, no All/Unread change, no deploy.
 
-The active track is `STORY-01B-D` (`GOLD DATASET`, `IN_PROGRESS`), which is authorized and has reached the `HUMAN_LABELING_GATE` (`STORY_01B_D_PREFLIGHT=PASS`, `READY_FOR_HUMAN_LABELING=YES`, `NEXT_AUTHORIZED_ACTION=HUMAN_LABELING_ONLY`). Open PR inventory includes PR #130 (`codex/docs-reconcile-post-pr129`, draft documentation reconciliation). Downstream modeling and clustering tracks remain unauthorized (`STORY_01B_M=NOT_AUTHORIZED`, `STORY_01B_C=NOT_AUTHORIZED`, `STORY_02=NOT_AUTHORIZED`).
+The active track is `STORY-01B-D` (`GOLD DATASET`, `IN_PROGRESS`), which is authorized and has reached the `HUMAN_LABELING_GATE` (`STORY_01B_D_PREFLIGHT=PASS`, `READY_FOR_HUMAN_LABELING=YES`, `NEXT_AUTHORIZED_ACTION=HUMAN_LABELING_ONLY`). Essential private annotation artifacts remain preserved locally (`STORY01B_D_TOOLING_PERSISTENCE=PARTIAL`, `STORY01B_D_PRIVATE_ANNOTATION_UI_PRESENT=YES`, `STORY01B_D_PRIVATE_QUEUE_PRESENT=YES`), while dedicated development branch/worktree are not present (`STORY01B_D_LOCAL_BRANCH_PRESENT=NO`, `STORY01B_D_WORKTREE_PRESENT=NO`). Open PR inventory includes PR #130 (`codex/docs-reconcile-post-pr129`, draft documentation reconciliation). Downstream modeling and clustering tracks remain unauthorized (`STORY_01B_M=NOT_AUTHORIZED`, `STORY_01B_C=NOT_AUTHORIZED`, `STORY_02=NOT_AUTHORIZED`).
 
 ### NAV-02F Product Decisions (Completed in PR #128)
 
@@ -1803,6 +1803,11 @@ QUEUE_REPRODUCIBILITY_GATE=PASS
 MODEL_BLINDING_GATE=PASS
 PRIVATE_DATA_GIT_GATE=PASS
 NEXT_AUTHORIZED_ACTION=HUMAN_LABELING_ONLY
+STORY01B_D_TOOLING_PERSISTENCE=PARTIAL
+STORY01B_D_LOCAL_BRANCH_PRESENT=NO
+STORY01B_D_WORKTREE_PRESENT=NO
+STORY01B_D_PRIVATE_ANNOTATION_UI_PRESENT=YES
+STORY01B_D_PRIVATE_QUEUE_PRESENT=YES
 
 STORY_01B_M=NOT_AUTHORIZED
 STORY_01B_C=NOT_AUTHORIZED
