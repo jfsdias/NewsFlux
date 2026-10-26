@@ -262,6 +262,11 @@ class TestErrorAudit(unittest.TestCase):
         self.assertEqual(counts["B0_ONLY_DIFFERENT_EVENT_FP"], 5)
         self.assertEqual(len(regimes["disagreement_rows"]), 156)
 
+        # Verify regimes are dynamically computed from data statistics
+        self.assertIn("rescues 8 SAME_EVENT pairs", regimes["b4_gain_regimes"])
+        self.assertIn("eliminates 5 DIFFERENT_EVENT false positives", regimes["b4_gain_regimes"])
+        self.assertIn("exhibits 3 false merges in RELATED_TOPIC pairs", regimes["b4_risk_regimes"])
+
     def test_end_to_end_audit_determinism(self):
         """Test that running the full audit twice generates identical outputs."""
         if not self.has_private_inputs:

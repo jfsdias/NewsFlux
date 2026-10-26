@@ -636,18 +636,31 @@ def analyze_error_regimes(
             "delta_h_bin": bin_continuous_value(dh, delta_h_bins),
         })
 
-    # Summary of characteristics
+    # Derive regime characterization directly from empirical disagreement group statistics
+    b4_tp_rows = [r for r in disagreement_rows if r["disagreement_type"] == "B4_RESCUES_B0_FN"]
+    b0_de_rows = [r for r in disagreement_rows if r["disagreement_type"] == "B0_FALSE_MERGE_DIFFERENT"]
+    b4_rt_rows = [r for r in disagreement_rows if r["disagreement_type"] == "B4_FALSE_MERGE_RELATED"]
+
+    b4_tp_ov = [r["title_overlap_coefficient"] for r in b4_tp_rows] or [0.0]
+    b4_tp_qw = [r["qwen_embedding_cosine"] for r in b4_tp_rows] or [0.0]
+    b4_tp_ms = [r["mistral_embedding_cosine"] for r in b4_tp_rows] or [0.0]
+    b0_de_ov = [r["title_overlap_coefficient"] for r in b0_de_rows] or [0.0]
+    b0_de_qw = [r["qwen_embedding_cosine"] for r in b0_de_rows] or [0.0]
+    b4_rt_dh = [r["published_delta_hours"] for r in b4_rt_rows] or [0.0]
+    b4_rt_ms = [r["mistral_embedding_cosine"] for r in b4_rt_rows] or [0.0]
+
     b4_gain_regimes = (
-        "PARAPHRASED_HEADLINES_WITH_HIGH_DENSE_SIMILARITY: B4 rescues SAME_EVENT pairs with low title overlap "
-        "([0.2, 0.35)) where Qwen cosine > 0.75 and Mistral cosine > 0.78 across different publishers. "
-        "B4 also eliminates DIFFERENT_EVENT false positives where superficial title token overlap was >= 0.35 "
-        "due to generic keywords (e.g. 'Apple', 'Lula') but dense embeddings correctly scored < 0.60."
+        f"PARAPHRASED_HEADLINES_WITH_HIGH_DENSE_SIMILARITY: B4 rescues {len(b4_tp_rows)} SAME_EVENT pairs with low title overlap "
+        f"([{min(b4_tp_ov):.2f}, {max(b4_tp_ov):.2f}]) where Qwen cosine in [{min(b4_tp_qw):.2f}, {max(b4_tp_qw):.2f}] "
+        f"and Mistral cosine in [{min(b4_tp_ms):.2f}, {max(b4_tp_ms):.2f}]. "
+        f"B4 also eliminates {len(b0_de_rows)} DIFFERENT_EVENT false positives where B0 superficial overlap was in "
+        f"[{min(b0_de_ov):.2f}, {max(b0_de_ov):.2f}] but dense embeddings correctly scored Qwen in [{min(b0_de_qw):.2f}, {max(b0_de_qw):.2f}]."
     )
 
     b4_risk_regimes = (
-        "SAME_CATEGORY_TEMPORALLY_COINCIDENT_BROAD_TOPICS: B4 false merges occur in RELATED_TOPIC pairs "
-        "within the same category published within < 1 hour where Mistral cosine is elevated (> 0.72) "
-        "despite distinct specific sub-events. B0's stricter lexical requirement rejects these."
+        f"SAME_CATEGORY_TEMPORALLY_COINCIDENT_BROAD_TOPICS: B4 exhibits {len(b4_rt_rows)} false merges in RELATED_TOPIC pairs "
+        f"where Mistral cosine is elevated in [{min(b4_rt_ms):.2f}, {max(b4_rt_ms):.2f}] and published delta hours is in "
+        f"[{min(b4_rt_dh):.2f}h, {max(b4_rt_dh):.2f}h] despite distinct sub-events. B0 lexical threshold rejects these."
     )
 
     information_gap = (
