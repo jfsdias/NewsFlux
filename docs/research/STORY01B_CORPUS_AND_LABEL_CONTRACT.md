@@ -1,12 +1,14 @@
 # STORY01B Research: Story Identity Corpus and Label Contract
 
-- **Track:** STORY-01B-R
-- **Topic:** Story Identity Corpus Contract, Feature Taxonomy, Label Specification, and Review Queue Design
+- **Track:** STORY-01B-R / STORY-01B-D / STORY-01B-D4
+- **Topic:** Story Identity Corpus Contract, Feature Taxonomy, Reconciled Label Specification, Gold Dataset Freeze, and Downstream Evaluation Contracts
 - **NewsFlux Base Commit:** `dc4154d7729204c65c8a1abaa50f9bfc9f92be64`
+- **Reconciliation Commit:** `84183b78e56dc4f20f5ff8e40c7944f35707b143`
 - **Date:** 2026-10-25
-- **Status:** COMPLETE / RESEARCH ONLY
+- **Status:** GOLD DATASET CURATION COMPLETE / CONTRACT RECONCILED / RESEARCH ONLY
 - **Runtime Activation:** NONE (`NO PRODUCT ACTIVATION`, `MERGE=NO`, `DEPLOY=NO`)
 - **Feature Schema Version:** `story01b-pair-v1`
+- **Gold Dataset Version:** `story01b-gold-v1` (Byte SHA256: `150db715c499835c5ec4d7b2d4d0ea5875913f5c4717aa30258af4dfed640b2b`)
 
 ---
 
@@ -41,7 +43,7 @@ The research baseline utilizes the frozen `Home-200` corpus snapshot:
 | **Total Feeds**                   | `37` distinct feeds                                                                                                            |
 | **Total Categories**              | `10` distinct categories                                                                                                       |
 | **Observed Temporal Span**        | `2026-10-23` to `2026-10-24` (`HOME200_OBSERVED_TEMPORAL_SPAN≈6.95h`, $\min \Delta = 0.0\text{h}, \max \Delta = 6.95\text{h}$) |
-| **True Event Distribution**       | `SAME_EVENT_TEMPORAL_DISTRIBUTION=NOT_MEASURED_PENDING_STORY_01B_D`                                                            |
+| **True Event Distribution**       | `GOLD_V1_FROZEN` (`SAME_EVENT=57`, `RELATED_TOPIC=19`, `DIFFERENT_EVENT=80`, `UNCERTAIN=0` in `story01b-gold-v1`)              |
 | **Declared Languages**            | Portuguese (`pt`): 97, English (`en`): 70, Unset: 33                                                                           |
 | **Heuristic Effective Languages** | Portuguese (`pt`): 121, English (`en`): 71, Undetermined (`und`): 8                                                            |
 | **Fields Collected**              | `id`, `feed_id`, `feed_title`, `category_id`, `title`, `url`, `published_at`, `language`                                       |
@@ -143,16 +145,16 @@ Averaging raw cosine similarities (e.g. $\frac{\text{Qwen} + \text{Mistral}}{2}$
 
 ---
 
-## 4. Pair-Label Taxonomy
+## 4. Pair-Label Taxonomy and Reconciled Semantics
 
 The labeling contract defines four mutually exclusive classes:
 
 ```mermaid
 stateDiagram-v2
     [*] --> EvaluatingPair
-    EvaluatingPair --> SAME_EVENT: Same concrete event & occurrence
-    EvaluatingPair --> RELATED_TOPIC: Shared domain/entity, different events
-    EvaluatingPair --> DIFFERENT_EVENT: Coincidental words or unrelated events
+    EvaluatingPair --> SAME_EVENT: Primary subject belongs to same coherent news episode
+    EvaluatingPair --> RELATED_TOPIC: Shared domain/entity/context, distinct episodes
+    EvaluatingPair --> DIFFERENT_EVENT: Broad coincidences or unrelated events
     EvaluatingPair --> UNCERTAIN: Insufficient context or borderline ambiguity
 ```
 
@@ -160,41 +162,87 @@ stateDiagram-v2
 
 #### 1. `SAME_EVENT`
 
-Both articles report on the **exact same underlying news event or real-world occurrence** (identical _who, what, when, where_).
+Two articles whose **primary editorial subject belongs to the same coherent developing news/story episode**.
 
-- _Criterion:_ A reader who reads Article A and then reads Article B learns about the same event from another publisher's perspective.
-- _Examples:_
-  - _Outbreak reporting:_ "Anvisa suspende lote de medicamento por contaminação" vs. "Lote de remédio é interditado pela Anvisa após contaminação".
-  - _Product release:_ "Alpha releases platformOS 10.2 RC" vs. "platformOS 10.2 RC now available to developers".
-  - _Casting announcement:_ "‘Estúdio Alfa’ confirma atriz premiada para nova franquia de cinema" vs. "Nova franquia de cinema: atriz premiada é confirmada pelo Estúdio Alfa".
+- **Operational Scope:**
+  - Breaking report and immediate follow-up coverage;
+  - Reactions directly tied to the occurrence;
+  - Analyses, commentary, or deep-dives focused on the same episode;
+  - Initial hands-on reviews, unboxings, or impressions within an event launch window;
+  - Initial retail/market availability announcements tied directly to the launch;
+  - Diverse publisher editorial angles covering the same developing occurrence;
+  - Direct judicial, administrative, or institutional decisions that form part of the same news sequence.
+- **Examples:**
+  - _Product launch episode:_ "Apple introduces iPhone Duo with dual display" vs. "iPhone Duo: First 24 hours in the Splash Zone" vs. "iPhone Duo hands-on: The dual-screen gamble".
+  - _Judicial controversy episode:_ "TSE ministros veem risco de canal 'Exército de Lula' ser derrubado" vs. "Ministro do TSE proíbe suspensão monocrática de canal partidário".
+  - _Sports match episode:_ "Ao vivo: Vitória enfrenta Athletico-PR pela Série A" vs. "Vitória reencontra Athletico-PR dois meses após virada épica" vs. "Live pré-jogo com mudanças na escalação".
+  - _Software release candidate:_ "Apple Seeds Updated watchOS 27.2 Release Candidate" vs. "watchOS 27.2 gets new RC ahead of next week's launch".
 
 #### 2. `RELATED_TOPIC`
 
-Articles share a **common entity, company, person, ongoing broad subject, or theme**, but report on **distinct events, different developments, analyses, previews, or follow-ups**.
+Articles sharing a **meaningful subject, actor, product, franchise, institution, context, or theme**, but representing **distinct news/story episodes**.
 
-- _Criterion:_ Articles share context, but one does not substitute for the other. Merging them into a single card would hide a distinct event from the reader.
-- _Examples:_
-  - _Entity overlap, different products:_ "Alpha Corp reports Q4 earnings" vs. "Alpha Corp announces new tablet device".
-  - _Ongoing conflict/policy:_ "Senate debates new tax reform bill" vs. "President signs executive decree on agricultural subsidies".
-  - _Sports:_ "Team A manager previews tomorrow's match" vs. "Team A signs new striker for next season".
+- **Operational Scope:**
+  - Common entity, company, person, or franchise, but distinct independent developments;
+  - Feature comparisons across platforms;
+  - Independent institutional milestones within the same domain.
+- **Validated Conceptual Examples:**
+  - _Gaming:_ Pitch details of _Mass Effect 5_ ("Mass Effect 5 pitched as John Wick in space") vs. player petition regarding studio closure ("Petição para salvar Mass Effect após fechamento da BioWare").
+  - _Entertainment / MCU:_ Casting rumor for a movie franchise ("Marvel procura atriz para mutante popular") vs. promotional images of another film ("Vingadores: Doutor Destino mostra equipe de Sam Wilson").
+  - _Tech policy:_ Streaming service family plan enforcement policy vs. comparative feature guide ("Recursos do YouTube Music que o Spotify não tem").
 
 #### 3. `DIFFERENT_EVENT`
 
-Articles describe **completely separate events** with no substantive connection, even if they share broad domain vocabulary (e.g. technology, law, politics, sports) or common stopwords.
+Articles without a **sufficiently specific shared editorial episode or meaningful direct topic relationship**.
 
-- _Examples:_
-  - "Tesla opens new Supercharger station in Texas" vs. "Boeing faces FAA inspection on 737 fuselage".
-  - "Sergipe recebe projeto do CNJ" vs. "STF julga recurso sobre previdência".
+- **Operational Scope:**
+  - Completely separate events across distinct actors, institutions, or subjects.
+  - Coincidences at very broad thematic or domain levels (e.g. _technology_, _law_, _Brazil_, _streaming_, _Big Tech_, _elections_, _judiciary_) **do NOT suffice** for `RELATED_TOPIC`.
+- **Validated Conceptual Examples:**
+  - _Big Tech / Social Media:_ YouTube rolling out custom feed updates vs. Meta delaying terms of service changes.
+  - _Judiciary:_ OAB-BA lawsuit regarding attorney fee tax invoicing vs. TRE-BA electoral court conviction for transphobia.
+  - _Logistics vs. Judicial Appointments:_ Port container demurrage injunction vs. bar association nominee list for TRT-1 appellate seats.
 
 #### 4. `UNCERTAIN`
 
-The pair is **genuinely ambiguous**, borderline, or cannot be resolved with certainty based solely on headline and metadata without inspecting full article text.
+The pair is **genuinely ambiguous**, borderline, or cannot be resolved with certainty based on available headlines, summaries, and source metadata without further investigative evidence.
 
-- _Criterion:_ Requires multi-judge adjudication or full-text fetch in `STORY-01B-D`.
+- **Status in Gold V1:** `UNCERTAIN` remains a legitimate, permanent class in the schema (`UNCERTAIN != DIFFERENT_EVENT`). In `story01b-gold-v1`, following full human adjudication, `UNCERTAIN = 0`. It remains reserved for future ambiguous candidates.
 
 ---
 
-## 5. Error Cost Asymmetry Policy
+### 4.2 Editorial Adjudication Rules
+
+#### Rule 1: Primary-Subject Requirement (`PRIMARY_SUBJECT_REQUIRED = YES`)
+
+An article belongs to a news episode only if that episode constitutes its **primary editorial subject**. Incidental, passing, or ancillary mentions do not qualify.
+
+- _Example:_ A review of a third-party accessory or application mentioning compatibility with Product X is **not** part of the Product X launch story episode.
+
+#### Rule 2: Multi-Topic Aggregator Rule (`MULTI_TOPIC_INHERITANCE = NO`)
+
+Podcasts, newsletters, daily roundups, news briefs, or multi-topic aggregators that touch upon multiple topics do **not** automatically inherit identity from each referenced story. The mere presence of a topic keyword in the headline or text does not make the pair `SAME_EVENT`.
+
+#### Rule 3: Same Subject Is Not Same Event (`SAME_SUBJECT != SAME_EVENT`)
+
+Articles sharing the same broad subject entity alone:
+
+```text
+same product
+same company
+same person
+same franchise
+same court
+same election
+same sport/team
+same broad news cycle
+```
+
+are **NOT** sufficient on their own for `SAME_EVENT`. They must be classified as `RELATED_TOPIC` (if a meaningful editorial connection exists) or `DIFFERENT_EVENT` (if the connection is merely coincidental or ambient domain-level).
+
+---
+
+## 5. Error Cost Asymmetry Policy and Transitivity Contract
 
 NewsFlux formally enshrines an asymmetric loss policy:
 
@@ -204,19 +252,33 @@ $$\text{Cost}(\text{False Merge}) \gg \text{Cost}(\text{False Split})$$
 
 1. **The Cost of a False Merge:**
    - When two articles about different events are merged, the non-representative article is hidden under the representative's card.
-   - The reader misses an entire news story.
-   - Editorial trust is compromised.
+   - The reader misses an entire distinct news story.
+   - Editorial trust and reader discovery are compromised.
 2. **The Cost of a False Split:**
    - When two articles about the same event are not merged, both appear as separate chronological cards in the feed.
    - This merely preserves the status quo of standard RSS readers (NewsFlux's current baseline).
    - Zero information is lost.
 
-### 5.2 Algorithmic Consequence
+### 5.2 Conservative Separation Principle
 
-- The classifier threshold must prioritize **precision over recall** for `SAME_EVENT`.
-- Unrestricted transitive merging is completely disallowed:
-  $$\text{UNRESTRICTED\_UNION\_FIND\_FOR\_FINAL\_CLUSTERING} = \text{REJECTED}$$
-- Any clustering stage must enforce pairwise clique consistency or strict medoid/representative similarity.
+When genuine editorial doubt exists between merging two episodes or keeping them separate:
+$$\text{Prefer Conservative Separation (False Split)}$$
+This principle guides classifier precision and clustering conservatism without reverting to an excessively narrow atomic occurrence contract.
+
+### 5.3 Transitivity Contract
+
+NewsFlux explicitly rejects unrestricted transitive clustering:
+
+$$A \sim B \land B \sim C \;\not\implies\; A \sim C$$
+
+$$\text{UNRESTRICTED\_UNION\_FIND\_FOR\_FINAL\_CLUSTERING} = \text{REJECTED}$$
+
+Clustering topologies must enforce:
+
+1. **Pairwise compatibility:** Candidate pairs within a cluster must maintain high pairwise affinity or clique coherence;
+2. **Representative / Medoid stability:** Articles in a cluster must be directly comparable to the cluster representative;
+3. **Temporal compatibility:** Articles must fall within a bounded plausible reporting window;
+4. **Contradiction checks:** Explicit domain, topic, or entity divergence flags must veto cluster membership.
 
 ---
 
@@ -274,3 +336,112 @@ An offline triple detector searches the graph of strong pairs (`best_rank <= 50`
 - **Private Output Guard (`PRIVATE_OUTPUT_PATH_GUARD=PASS`):**
   - Writing raw private article titles, feed names, or URLs inside the repository is strictly rejected unless verified by `git check-ignore`. Canonical output remains outside the repository (default `/tmp/newsflux-story01b-private/`).
   - `PRIVATE_ARTIFACT_TRACKED_BY_GIT=NO`.
+
+---
+
+## 7. STORY-01B-D Gold Dataset Freeze (`story01b-gold-v1`)
+
+The human labeling track (`STORY-01B-D`) concluded with a fully adjudicated, model-blinded, and diversity-hardened gold dataset.
+
+### 7.1 Canonical Gold Dataset Metadata
+
+```text
+GOLD_DATASET_VERSION=story01b-gold-v1
+GOLD_DATASET_SHA256=150db715c499835c5ec4d7b2d4d0ea5875913f5c4717aa30258af4dfed640b2b
+TOTAL_PAIRS=156
+
+CLASS_DISTRIBUTION:
+  DIFFERENT_EVENT = 80 (51.28%)
+  SAME_EVENT      = 57 (36.54%)
+  RELATED_TOPIC   = 19 (12.18%)
+  UNCERTAIN       =  0 ( 0.00%)
+
+SAME_EVENT_DISTINCT_EPISODE_FAMILIES=10
+LARGEST_EPISODE_FAMILY=IPHONE_DUO_FIRST_GEN_LAUNCH
+LARGEST_EPISODE_FAMILY_PAIR_COUNT=42
+LARGEST_EPISODE_FAMILY_SHARE=73.68%
+NON_DUO_SAME_EVENT_PAIR_COUNT=15 (26.32%)
+```
+
+### 7.2 Curation and Adjudication Audit Trail
+
+1. **Base 141-Pair Review Queue:** Labeled via local offline annotation UI under strict model-blinding (`ANNOTATOR_MODEL_BLINDING=PASS`).
+2. **Duo Boundary Audit:** Five borderline iPhone Duo pairs (`REV-116`, `REV-005`, `REV-067`, `REV-101`, `REV-120`) reviewed and preserved as `KEEP_ORIGINAL` (`DIFFERENT_EVENT`) under explicit user decisions (`decision_source=EXPLICIT_USER_DECISION`).
+3. **Non-Duo Granularity Adjudication:** Thirteen candidate pairs from the base sample re-evaluated under the coherent developing episode standard: 10 pairs promoted to `SAME_EVENT`, 3 pairs preserved as `RELATED_TOPIC` (`decision_source=EXPLICIT_USER_DECISION`).
+4. **Supplemental Diversity Queue:** Fifteen model-blinded candidate pairs evaluated to test non-Duo coverage and negative boundary discrimination: 11 labeled `RELATED_TOPIC`, 4 labeled `DIFFERENT_EVENT` (`decision_source=EXPLICIT_USER_DECISION`).
+5. **Deduplication and Episode Families:** The union of 141 reviewed pairs and 15 supplemental pairs produced **156 distinct pairs** (zero overlap). `episode_family_id` was strictly assigned only to the 57 `SAME_EVENT` pairs; all 99 non-`SAME_EVENT` pairs carry an empty `episode_family_id`.
+6. **Data Privacy Guard:** Canonical private CSVs, individual article titles, and user notes remain strictly in private offline storage (`/tmp/newsflux-story01b-private/checkpoints/`) in read-only mode (`0444`) and are never tracked in git.
+
+---
+
+## 8. Downstream Machine Learning & Evaluation Contracts (STORY-01B-M)
+
+### 8.1 ML Target Contract
+
+For downstream classifier training and benchmarking in `STORY-01B-M`:
+
+- **Primary Binary Classification Objective:**
+  - $\text{POSITIVE} = \text{SAME\_EVENT}$
+  - $\text{NEGATIVE} = \text{RELATED\_TOPIC} + \text{DIFFERENT\_EVENT}$
+- **Hard-Negative Monitoring:**
+  - `RELATED_TOPIC` must remain separately identified in all benchmarking reports. It constitutes the critical hard-negative boundary measuring whether models distinguish distinct episodes sharing common entities or themes.
+- **Uncertain Class Handling:**
+  - `UNCERTAIN` pairs: $\text{EXCLUDE\_FROM\_SUPERVISED\_TRAINING\_BY\_DEFAULT}$.
+  - Any future inclusion must be governed by an explicit methodological decision.
+
+### 8.2 Evaluation and Leakage Prevention Contract
+
+NewsFlux establishes an immutable evaluation guardrail:
+
+```text
+PAIR_RANDOM_SPLIT_FOR_FINAL_EVALUATION=PROHIBITED
+ARTICLE_ID_CROSS_SPLIT_LEAKAGE=PROHIBITED
+```
+
+#### Rationale
+
+In `story01b-gold-v1`, 62 out of 130 unique articles appear in multiple pairs (several articles appear in 10 to 13 distinct pairs across positive and negative strata). A naive pair-level random split causes severe **data leakage**, as pairs sharing articles would populate both training and test sets.
+
+Furthermore, naive `GroupKFold(episode_family_id)` alone is insufficient because:
+
+- Negative pairs (`RELATED_TOPIC` and `DIFFERENT_EVENT`) do not carry `episode_family_id`;
+- Articles from negative pairs overlap with articles in positive pairs.
+
+Therefore, STORY-01B-M must design and validate an **article-disjoint** partitioning strategy prior to executing any model benchmark.
+
+### 8.3 STORY-01B-M Split Feasibility Requirement (Future Gate)
+
+Prior to declaring any benchmark valid, STORY-01B-M must enforce:
+
+```text
+ARTICLE_REUSE_GRAPH_AUDITED=YES
+```
+
+- No `article_id` may appear in more than one train/validation/test split partition.
+- If connected components in the article co-occurrence graph make standard K-fold cross-validation infeasible without collapsing all classes, the system must **not** silently relax the leakage guard.
+- Instead, STORY-01B-M must document the graph structure and execute an auditable alternative protocol, such as:
+  $$\text{Leave-One-Episode-Family-Out} + \text{exclusion of all training pairs touching held-out article IDs}$$
+- The concrete split implementation belongs strictly to `STORY-01B-M`.
+
+### 8.4 Future Metrics Contract
+
+Due to the empirical concentration of the dominant news cycle (`IPHONE_DUO_FIRST_GEN_LAUNCH` accounts for $42 / 57 = 73.68\%$ of positive pairs), model selection must never rely solely on aggregate pair-weighted accuracy or global F1 score.
+
+All STORY-01B-M benchmark reports must output:
+
+1. `PAIR_LEVEL_METRICS` (Precision, Recall, F1, PR-AUC, ROC-AUC);
+2. `EPISODE_FAMILY_MACRO_METRICS` (Unweighted macro-average across all 10 episode families);
+3. `PER_FAMILY_RECALL` (Detailed recall breakdown per episode family);
+4. `IPHONE_DUO_EXCLUDED_SENSITIVITY` (Performance metrics restricted to the 9 non-Duo families to assess cross-story generalization);
+5. `RELATED_TOPIC_FALSE_POSITIVE_RATE` (False-positive rate specifically on the `RELATED_TOPIC` hard-negative pool);
+6. `DIFFERENT_EVENT_FALSE_POSITIVE_RATE` (False-positive rate on generic distinct-event pairs).
+
+The primary objective of model selection is to prove genuine generalization across diverse news domains and publishers, rather than memorization of high-frequency headline templates from the largest story family.
+
+### 8.5 Model Selection Principle
+
+Consistent with the asymmetric loss policy ($\text{Cost}(\text{False Merge}) \gg \text{Cost}(\text{False Split})$):
+
+- In downstream model selection, **precision on `SAME_EVENT` is strictly prioritized over recall**.
+- No arbitrary numeric score threshold is pre-defined prior to empirical benchmarking in `STORY-01B-M`.
+- Model selection must balance high precision against reasonable non-Duo sensitivity.
