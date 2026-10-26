@@ -91,15 +91,17 @@ OUTPUT_DIR = Path("/tmp/newsflux-story02-a0")
 class LeakageTracker:
     """Instruments and guarantees zero full-gold fits and leakage-free evaluation."""
 
-    def __init__(self):
+    def __init__(self, total_gold_count: int = 156):
         self.fit_calls: List[Dict[str, Any]] = []
         self.full_gold_fits: int = 0
+        self.total_gold_count: int = total_gold_count
 
-    def record_fit(self, train_rows: List[Dict[str, Any]], model_name: str, total_gold_count: int = 156):
+    def record_fit(self, train_rows: List[Dict[str, Any]], model_name: str, total_gold_count: Optional[int] = None):
         n = len(train_rows)
-        if n >= total_gold_count:
+        limit = total_gold_count if total_gold_count is not None else self.total_gold_count
+        if n >= limit:
             self.full_gold_fits += 1
-            raise AssertionError(f"LEAKAGE_DETECTED: Model {model_name} fit on {n} >= {total_gold_count} Gold rows!")
+            raise AssertionError(f"LEAKAGE_DETECTED: Model {model_name} fit on {n} >= {limit} Gold rows!")
         self.fit_calls.append({"model": model_name, "n_train": n})
 
 
@@ -111,10 +113,11 @@ def fit_train_only_pipeline(
     tracker: Optional[LeakageTracker] = None,
     model_name: str = "pipeline",
     impute_missing: bool = False,
+    total_gold_count: Optional[int] = None,
 ) -> Tuple[List[float], List[float]]:
     """Fits StandardScaler and LogisticRegression ONLY on train_rows and scores test_rows."""
     if tracker is not None:
-        tracker.record_fit(train_rows, model_name)
+        tracker.record_fit(train_rows, model_name, total_gold_count=total_gold_count)
 
     def extract_X(rows: List[Dict[str, Any]]) -> List[List[float]]:
         matrix = []
@@ -153,11 +156,16 @@ def evaluate_outer_3fold_leak_free(
     seed: int = DEFAULT_SEED,
     tracker: Optional[LeakageTracker] = None,
     impute_missing: bool = False,
+    total_gold_count: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Executes true leak-free 3-fold component group CV (PROTOCOL_A_COMPONENT_GROUP_3FOLD).
 
     Threshold is strictly selected using inner 2-fold component CV within the outer train set.
     """
+    total_rows = total_gold_count or sum(len(f["rows"]) for f in fold_data)
+    if tracker is None:
+        tracker = LeakageTracker(total_gold_count=total_rows)
+
     k = len(fold_data)
     oof_predictions: List[Dict[str, Any]] = []
     outer_fold_results: List[Dict[str, Any]] = []
@@ -184,11 +192,13 @@ def evaluate_outer_3fold_leak_free(
             features, inner_a, inner_b, seed=seed, tracker=tracker,
             model_name=f"{candidate_name}_inner_ab_fold{test_idx}",
             impute_missing=impute_missing,
+            total_gold_count=total_rows,
         )
         _, scores_a = fit_train_only_pipeline(
             features, inner_b, inner_a, seed=seed, tracker=tracker,
             model_name=f"{candidate_name}_inner_ba_fold{test_idx}",
             impute_missing=impute_missing,
+            total_gold_count=total_rows,
         )
 
         pooled_inner_scores = scores_b + scores_a
@@ -201,6 +211,7 @@ def evaluate_outer_3fold_leak_free(
             features, outer_train_rows, test_rows, seed=seed, tracker=tracker,
             model_name=f"{candidate_name}_outer_train_fold{test_idx}",
             impute_missing=impute_missing,
+            total_gold_count=total_rows,
         )
 
         test_preds = [1 if sc >= opt_thresh else 0 for sc in test_scores]
