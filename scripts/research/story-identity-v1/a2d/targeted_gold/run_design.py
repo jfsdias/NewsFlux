@@ -14,15 +14,19 @@ if str(HERE) not in sys.path:
 
 from sampler import (
     assert_private_output_path,
-    build_freeze_artifacts,
+    assert_distinct_private_freeze_path,
+    build_freeze_v2_artifacts,
+    graph_component_stats,
     pack_stats,
     run_canonical_audit,
     verify_freeze_artifacts,
     write_private_artifacts,
+    V1_PRIVATE_ROOT,
+    V2_PRIVATE_ROOT,
 )
 
 
-DEFAULT_PRIVATE = Path("/Users/jfsdias/NewsFlux-STORY00/private-p4/story02-a2d2")
+DEFAULT_PRIVATE = V2_PRIVATE_ROOT
 DEFAULT_GOLD = Path("/Users/jfsdias/NewsFlux-STORY00/private-p4/story02-gold-v2/story-identity-gold-v2.csv")
 DEFAULT_HUMAN_LABEL_HASH_ONLY = Path("/Users/jfsdias/NewsFlux-STORY00/private-p4/story02-gold-v2/human-labels-v1.csv")
 DEFAULT_HOME = Path("/Users/jfsdias/NewsFlux-STORY00/private-p4/20261023-220212/home-200.jsonl")
@@ -39,6 +43,7 @@ def aggregate_pack(rows: list[dict], groups: list[dict]) -> dict:
         "primary_strata": stats["primary_bucket_counts"],
         "temporal_bands": stats["temporal_band_counts"],
         "multi_pair_component_count": stats["multi_pair_component_count"],
+        "graph_component_stats": graph_component_stats(rows),
         "chain_group_count": len(groups),
         "max_single_feed_share": round(stats["max_feed_endpoint_share"], 4),
         "max_source_pair_share": round(stats["max_source_pair_share"], 4),
@@ -88,6 +93,9 @@ def main() -> int:
         "dev_blind_article_overlap": len(dev_articles & blind_articles),
         "blind_gold_article_overlap": len(blind_articles & result["gold_article_ids"]),
         "chain_group_target_feasible": result["transitive_group_target_feasible"],
+        "blind_component_diversity_feasible": result.get("blind_component_diversity_feasible"),
+        "blind_component_stats": result.get("blind_component_stats"),
+        "exact_quotas_feasible": result.get("exact_quotas_feasible"),
         "source_diversity_feasible": result["source_diversity_feasible"],
         "dev_spillovers": result["dev_spillovers"],
         "pack_freeze_feasible": result["feasible"],
@@ -99,9 +107,10 @@ def main() -> int:
         if not result["feasible"]:
             raise SystemExit("PACK_FREEZE=NO; private outputs not written")
         assert_private_output_path(args.output, Path(__file__).resolve().parents[5])
-        artifacts = build_freeze_artifacts(result, input_shas=result["inputs"])
+        assert_distinct_private_freeze_path(args.output, V1_PRIVATE_ROOT)
+        artifacts = build_freeze_v2_artifacts(result, input_shas=result["inputs"])
         hashes = write_private_artifacts(args.output, Path(__file__).resolve().parents[5], artifacts)
-        if not verify_freeze_artifacts(args.output):
+        if not verify_freeze_artifacts(args.output, freeze_manifest_name="freeze-manifest-v2.json"):
             raise SystemExit("FREEZE_VERIFIER=FAIL")
         print(json.dumps({"private_artifact_hashes": hashes, "freeze_verifier": "PASS"}, sort_keys=True))
     return 0

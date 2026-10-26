@@ -18,6 +18,10 @@ from typing import Any, Iterable
 
 SEED = 20261026
 DESIGN_VERSION = "STORY_02_A2D2_TARGETED_GOLD_V1"
+DESIGN_VERSION_V2 = "STORY_02_A2D2_TARGETED_GOLD_V2"
+SUPERSEDED_V1_FREEZE_SHA = "1a263efa48392146c24c44069fd2f31ce8fcd70ddbae833e0d6f07f0e85b7c6b"
+V1_PRIVATE_ROOT = Path("/Users/jfsdias/NewsFlux-STORY00/private-p4/story02-a2d2")
+V2_PRIVATE_ROOT = Path("/Users/jfsdias/NewsFlux-STORY00/private-p4/story02-a2d2-v2")
 EXPECTED_GOLD_SHA = "3851a1a6c6107b417e217eacb4d709f6a8b76a678fb0bfd53b7713bc0d6368f4"
 EXPECTED_HUMAN_LABEL_SHA = "7cff732171abf4f7e410c8a0f14425652ec49d8d52a11ba4268fd9262e96c88c"
 EXPECTED_HOME_SHA = "0dbd48cdb37063f3a1683f7ef8fc9a2582196a2e8d42c34485b85e12242178f0"
@@ -239,6 +243,183 @@ def _within_caps(
     )
 
 
+def _graph_components(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    adjacency: dict[int, set[int]] = defaultdict(set)
+    seen_edges: set[str] = set()
+    for row in rows:
+        a, b = int(row["article_a_id"]), int(row["article_b_id"])
+        key = canonical_pair_key(a, b)
+        if key in seen_edges:
+            continue
+        seen_edges.add(key)
+        adjacency[a].add(b)
+        adjacency[b].add(a)
+
+    components = []
+    visited: set[int] = set()
+    for start in sorted(adjacency):
+        if start in visited:
+            continue
+        stack = [start]
+        vertices: set[int] = set()
+        while stack:
+            node = stack.pop()
+            if node in visited:
+                continue
+            visited.add(node)
+            vertices.add(node)
+            stack.extend(adjacency[node] - visited)
+        edge_keys = {
+            canonical_pair_key(a, b)
+            for a in vertices
+            for b in adjacency[a]
+            if a < b
+        }
+        components.append({"article_ids": vertices, "pair_keys": edge_keys})
+    return components
+
+
+def graph_component_stats(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
+    components = _graph_components(rows)
+    histogram = Counter(len(component["pair_keys"]) for component in components)
+    return {
+        "connected_component_count": len(components),
+        "independent_pair_count": histogram.get(1, 0),
+        "multi_pair_component_count": sum(1 for component in components if len(component["pair_keys"]) > 1),
+        "max_component_pair_count": max((len(component["pair_keys"]) for component in components), default=0),
+        "max_component_article_count": max((len(component["article_ids"]) for component in components), default=0),
+        "component_pair_size_histogram": {str(size): histogram[size] for size in sorted(histogram)},
+    }
+
+
+def chain_group_bridging_count(
+    rows: Iterable[dict[str, Any]], chain_groups: list[dict[str, Any]],
+) -> int:
+    components = _graph_components(rows)
+    selected_pair_keys = {key for component in components for key in component["pair_keys"]}
+    group_component_indices = []
+    seen_group_articles: set[int] = set()
+    for group in chain_groups:
+        article_ids = {int(value) for value in group["article_ids"]}
+        if seen_group_articles & article_ids:
+            raise ValueError("CHAIN_GROUP_VERTEX_DISJOINT_GATE=FAIL")
+        seen_group_articles.update(article_ids)
+        pair_keys = {canonical_pair_key(*key.split(":")) for key in group["pair_keys"]}
+        group_articles = {article for key in pair_keys for article in _pair_articles(key)}
+        if len(pair_keys) != 2 or len(article_ids) != 3 or group_articles != article_ids:
+            raise ValueError("CHAIN_GROUP_SHAPE_GATE=FAIL")
+        if not pair_keys.issubset(selected_pair_keys):
+            raise ValueError("CHAIN_GROUP_NOT_IN_BLIND")
+        matches = [index for index, component in enumerate(components) if article_ids.issubset(component["article_ids"])]
+        if len(matches) != 1:
+            raise ValueError("CHAIN_GROUP_COMPONENT_GATE=FAIL")
+        group_component_indices.append(matches[0])
+    groups_per_component = Counter(group_component_indices)
+    return sum(max(0, count - 1) for count in groups_per_component.values())
+
+
+def validate_blind_component_diversity(
+    rows: Iterable[dict[str, Any]], chain_groups: list[dict[str, Any]], *,
+    min_connected_components: int = 8, min_independent_pairs: int = 8,
+    min_multi_pair_components: int = 6, max_component_pair_count: int = 8,
+    max_component_article_count: int = 8, min_chain_groups: int = 6,
+) -> dict[str, Any]:
+    materialized = list(rows)
+    stats = graph_component_stats(materialized)
+    stats["chain_group_count"] = len(chain_groups)
+    stats["chain_group_bridging_count"] = chain_group_bridging_count(materialized, chain_groups)
+    if stats["connected_component_count"] < min_connected_components:
+        raise ValueError("BLIND_MIN_CONNECTED_COMPONENTS_GATE=FAIL")
+    if stats["independent_pair_count"] < min_independent_pairs:
+        raise ValueError("BLIND_MIN_INDEPENDENT_PAIRS_GATE=FAIL")
+    if stats["multi_pair_component_count"] < min_multi_pair_components:
+        raise ValueError("BLIND_MIN_MULTI_PAIR_COMPONENTS_GATE=FAIL")
+    if stats["max_component_pair_count"] > max_component_pair_count:
+        raise ValueError("BLIND_MAX_COMPONENT_PAIRS_GATE=FAIL")
+    if stats["max_component_article_count"] > max_component_article_count:
+        raise ValueError("BLIND_MAX_COMPONENT_ARTICLES_GATE=FAIL")
+    if stats["chain_group_count"] < min_chain_groups:
+        raise ValueError("BLIND_MIN_CHAIN_GROUPS_GATE=FAIL")
+    if stats["chain_group_bridging_count"]:
+        raise ValueError("CHAIN_GROUP_BRIDGING_GATE=FAIL")
+    return stats
+
+
+def component_aware_can_add(
+    row: dict[str, Any], selected: list[dict[str, Any]], *,
+    chain_group_by_article: dict[int, int] | None = None,
+    reserved_independent_articles: set[int] | None = None,
+    max_component_pair_count: int = 8, max_component_article_count: int = 8,
+) -> bool:
+    a, b = int(row["article_a_id"]), int(row["article_b_id"])
+    key = canonical_pair_key(a, b)
+    if any(canonical_pair_key(item["article_a_id"], item["article_b_id"]) == key for item in selected):
+        return False
+    reserved = reserved_independent_articles or set()
+    if a in reserved or b in reserved:
+        return False
+
+    components = _graph_components(selected)
+    component_by_article = {
+        article: component for component in components for article in component["article_ids"]
+    }
+    component_a = component_by_article.get(a)
+    component_b = component_by_article.get(b)
+    labels = chain_group_by_article or {}
+
+    if component_a is not None and component_a is component_b:
+        pair_count = len(component_a["pair_keys"]) + 1
+        article_count = len(component_a["article_ids"])
+        chain_ids = {labels[article] for article in component_a["article_ids"] if article in labels}
+    else:
+        articles_a = component_a["article_ids"] if component_a else set()
+        articles_b = component_b["article_ids"] if component_b else set()
+        pairs_a = component_a["pair_keys"] if component_a else set()
+        pairs_b = component_b["pair_keys"] if component_b else set()
+        resulting_articles = articles_a | articles_b | {a, b}
+        pair_count = len(pairs_a) + len(pairs_b) + 1
+        article_count = len(resulting_articles)
+        chain_ids = {
+            labels[article]
+            for article in resulting_articles
+            if article in labels
+        }
+        labels_a = {labels[article] for article in articles_a if article in labels}
+        labels_b = {labels[article] for article in articles_b if article in labels}
+        if labels_a and labels_b and labels_a != labels_b:
+            return False
+
+    if len(chain_ids) > 1:
+        return False
+    return pair_count <= max_component_pair_count and article_count <= max_component_article_count
+
+
+def _pick_component_aware_bucket(
+    candidates: list[dict[str, Any]], bucket: str, count: int, selected: list[dict[str, Any]],
+    *, seed: int, dataset: str, feed_share_cap: float | None,
+    source_pair_share_cap: float | None, target_size: int,
+    chain_group_by_article: dict[int, int], reserved_independent_articles: set[int],
+) -> list[dict[str, Any]]:
+    if count <= 0:
+        return []
+    result = []
+    for row in _stable_order((item for item in candidates if item.get("primary_bucket") == bucket), seed, dataset):
+        if not component_aware_can_add(
+            row, selected + result,
+            chain_group_by_article=chain_group_by_article,
+            reserved_independent_articles=reserved_independent_articles,
+        ):
+            continue
+        if feed_share_cap is not None and not _within_caps(
+            row, selected + result, feed_share_cap, source_pair_share_cap or 1.0, target_size
+        ):
+            continue
+        result.append(row)
+        if len(result) >= count:
+            break
+    return result
+
+
 def select_chain_groups(
     rows: Iterable[dict[str, Any]], rank_ceiling: int = 1250,
     required_groups: int = 6, seed: int = SEED,
@@ -330,6 +511,10 @@ def select_joint_packs(
     dev_min: int = 60, blind_min: int = 32,
     dev_quotas: dict[str, int] | None = None, blind_quotas: dict[str, int] | None = None,
     chain_group_target: int = 6, enforce_source_diversity: bool = False,
+    reserve_independent_blind_pairs: int = 0,
+    independent_reserve_bucket_order: tuple[str, ...] | None = None,
+    enforce_blind_component_diversity: bool = False,
+    require_exact_quotas: bool = False,
 ) -> dict[str, Any]:
     eligible_non_gold = filter_gold_pairs(rows, gold_pair_keys)
     materialized = [row for row in eligible_non_gold if float(row.get("temporal_delta_hours", 0.0)) <= 24.0]
@@ -364,11 +549,61 @@ def select_joint_packs(
             "transitive_group_target_feasible": len(chain_groups) >= chain_group_target,
         }
 
+    chain_group_by_article = {
+        int(article_id): group_index
+        for group_index, group in enumerate(chain_groups)
+        for article_id in group["article_ids"]
+    }
+    reserved_independent_articles: set[int] = set()
+    if reserve_independent_blind_pairs:
+        used_articles = {
+            int(value) for row in blind for value in (row["article_a_id"], row["article_b_id"])
+        }
+        reserved_count = 0
+        for bucket in independent_reserve_bucket_order or PRIMARY_BUCKETS:
+            remaining = max(0, blind_quotas.get(bucket, 0) - blind_bucket_counts[bucket])
+            reserve_count = min(remaining, reserve_independent_blind_pairs - reserved_count)
+            if reserve_count <= 0:
+                continue
+            bucket_reserved = 0
+            for row in _stable_order(
+                (item for item in blind_pool if item.get("primary_bucket") == bucket),
+                seed, f"BLIND_INDEPENDENT_{bucket}",
+            ):
+                articles = {int(row["article_a_id"]), int(row["article_b_id"])}
+                if articles & used_articles:
+                    continue
+                if feed_cap is not None and not _within_caps(
+                    row, blind, feed_cap, pair_cap or 1.0, blind_target
+                ):
+                    continue
+                blind.append(row)
+                blind_bucket_counts[bucket] += 1
+                used_articles.update(articles)
+                reserved_independent_articles.update(articles)
+                reserved_count += 1
+                bucket_reserved += 1
+                if bucket_reserved >= reserve_count or reserved_count >= reserve_independent_blind_pairs:
+                    break
+            if reserved_count >= reserve_independent_blind_pairs:
+                break
+
     for bucket in PRIMARY_BUCKETS:
         remaining = blind_quotas.get(bucket, 0) - blind_bucket_counts[bucket]
-        picked = _pick_bucket(blind_pool, bucket, remaining, blind, seed=seed, dataset="BLIND",
-                              feed_share_cap=feed_cap, source_pair_share_cap=pair_cap,
-                              target_size=blind_target)
+        if enforce_blind_component_diversity:
+            picked = _pick_component_aware_bucket(
+                blind_pool, bucket, remaining, blind, seed=seed,
+                dataset="BLIND_COMPONENT_AWARE", feed_share_cap=feed_cap,
+                source_pair_share_cap=pair_cap, target_size=blind_target,
+                chain_group_by_article=chain_group_by_article,
+                reserved_independent_articles=reserved_independent_articles,
+            )
+        else:
+            picked = _pick_bucket(
+                blind_pool, bucket, remaining, blind, seed=seed, dataset="BLIND",
+                feed_share_cap=feed_cap, source_pair_share_cap=pair_cap,
+                target_size=blind_target,
+            )
         blind.extend(picked)
 
     blind_articles = {int(value) for row in blind for value in (row["article_a_id"], row["article_b_id"])}
@@ -398,6 +633,8 @@ def select_joint_packs(
                 remaining -= len(picked)
 
     isolation_ok = True
+    component_gate_error = None
+    component_stats = graph_component_stats(blind)
     try:
         validate_dataset_isolation(dev, blind, gold_article_ids, gold_pair_keys)
         validate_chain_group_isolation(chain_groups, dev, blind)
@@ -406,15 +643,39 @@ def select_joint_packs(
             validate_source_diversity(blind)
     except ValueError:
         isolation_ok = False
+    if enforce_blind_component_diversity:
+        try:
+            component_stats = validate_blind_component_diversity(blind, chain_groups)
+        except ValueError as error:
+            component_gate_error = str(error)
+    exact_quotas_ok = (
+        all(Counter(row["primary_bucket"] for row in dev).get(bucket, 0) == count
+            for bucket, count in dev_quotas.items())
+        and all(Counter(row["primary_bucket"] for row in blind).get(bucket, 0) == count
+                for bucket, count in blind_quotas.items())
+        and len(dev) == sum(dev_quotas.values())
+        and len(blind) == sum(blind_quotas.values())
+    ) if require_exact_quotas else True
+    category_diversity_ok = (
+        not pack_stats(dev)["category_dominance_warning"]
+        and not pack_stats(blind)["category_dominance_warning"]
+    ) if enforce_blind_component_diversity else True
     feasible = (
         len(dev) >= dev_min and len(blind) >= blind_min
         and len(chain_groups) >= chain_group_target and isolation_ok
+        and exact_quotas_ok and category_diversity_ok and component_gate_error is None
         and (not enforce_source_diversity or (
             _diversity_ok(dev, 0.20, 0.10) and _diversity_ok(blind, 0.20, 0.10)
         ))
     )
     return {"dev": dev, "blind": blind, "chain_groups": chain_groups,
-            "feasible": feasible, "reason": "PASS" if feasible else "MINIMUM_OR_ISOLATION_GATE",
+            "feasible": feasible, "reason": "PASS" if feasible else (
+                component_gate_error or ("EXACT_QUOTA_GATE=FAIL" if not exact_quotas_ok else "MINIMUM_OR_ISOLATION_GATE")
+            ),
+            "blind_component_stats": component_stats,
+            "exact_quotas_feasible": exact_quotas_ok,
+            "category_diversity_feasible": category_diversity_ok,
+            "blind_component_diversity_feasible": component_gate_error is None,
             "thresholds": thresholds, "dev_spillovers": dict(dev_spillovers),
             "eligible_non_gold_pair_count": len(eligible_non_gold),
             "eligible_within_p3_24h_count": len(materialized),
@@ -491,6 +752,16 @@ def assert_private_output_path(output_path: str | Path, repo_root: str | Path) -
     repo = Path(repo_root).resolve()
     if path == repo or path.is_relative_to(repo):
         raise ValueError("PRIVATE_DATA_GIT_GATE")
+    return True
+
+
+def assert_distinct_private_freeze_path(
+    output_path: str | Path, protected_v1_path: str | Path = V1_PRIVATE_ROOT,
+) -> bool:
+    output = Path(output_path).resolve()
+    protected = Path(protected_v1_path).resolve()
+    if output == protected or output.is_relative_to(protected) or protected.is_relative_to(output):
+        raise ValueError("V1_FREEZE_PATH_PROTECTED")
     return True
 
 
@@ -726,6 +997,7 @@ def _json_bytes(value: Any) -> bytes:
 def build_dataset_artifacts(
     rows: list[dict[str, Any]], *, dataset: str, seed: int,
     input_shas: dict[str, str], groups: list[dict[str, Any]],
+    design_version: str = DESIGN_VERSION,
 ) -> dict[str, bytes]:
     review_rows = build_review_pack(rows, seed=seed, dataset_salt=dataset)
     validate_reviewer_blinding(review_rows)
@@ -733,7 +1005,7 @@ def build_dataset_artifacts(
     rows = sorted(rows, key=lambda row: row["pair_key"])
     stats = pack_stats(rows)
     manifest = {
-        "design_version": DESIGN_VERSION,
+        "design_version": design_version,
         "dataset": dataset,
         "seed": seed,
         "input_shas": dict(sorted(input_shas.items())),
@@ -786,28 +1058,97 @@ def build_freeze_artifacts(
     }
 
 
+def build_freeze_v2_artifacts(
+    result: dict[str, Any], *, input_shas: dict[str, str], seed: int = SEED,
+) -> dict[str, bytes]:
+    if not result.get("feasible") or not result.get("exact_quotas_feasible"):
+        raise ValueError("PACK_FREEZE_V2=NO")
+    dev, blind = result["dev"], result["blind"]
+    if (
+        Counter(row["primary_bucket"] for row in dev) != Counter(DEV_QUOTAS)
+        or Counter(row["primary_bucket"] for row in blind) != Counter(BLIND_QUOTAS)
+    ):
+        raise ValueError("EXACT_QUOTA_GATE=FAIL")
+    groups = result["chain_groups"]
+    validate_dataset_isolation(dev, blind, result["gold_article_ids"], result["gold_pair_keys"])
+    validate_source_diversity(dev)
+    validate_source_diversity(blind)
+    dev_graph = graph_component_stats(dev)
+    blind_graph = validate_blind_component_diversity(blind, groups)
+    dev_artifacts = build_dataset_artifacts(
+        dev, dataset="DEV_AUGMENT", seed=seed, input_shas=input_shas, groups=[],
+        design_version=DESIGN_VERSION_V2,
+    )
+    blind_artifacts = build_dataset_artifacts(
+        blind, dataset="BLIND_CHALLENGE", seed=seed, input_shas=input_shas, groups=groups,
+        design_version=DESIGN_VERSION_V2,
+    )
+    counts = {"dev": pack_stats(dev), "blind": pack_stats(blind)}
+    if counts["dev"]["category_dominance_warning"] or counts["blind"]["category_dominance_warning"]:
+        raise ValueError("CATEGORY_DIVERSITY_GATE=FAIL")
+    freeze = freeze_manifest(input_shas, dev_artifacts, blind_artifacts, counts)
+    freeze.pop("created_at", None)
+    freeze.update({
+        "design_version": DESIGN_VERSION_V2,
+        "supersedes_freeze_sha256": SUPERSEDED_V1_FREEZE_SHA,
+        "supersession_reason": "BLIND_COMPONENT_CONCENTRATION_PRE_LABEL_PM_REVIEW",
+        "human_labels_at_supersession": 0,
+        "dev_graph_component_stats": dev_graph,
+        "blind_graph_component_stats": blind_graph,
+        "blind_designated_chain_group_count": blind_graph["chain_group_count"],
+        "blind_chain_group_bridging_count": blind_graph["chain_group_bridging_count"],
+        "blind_component_diversity_gate": "PASS",
+        "category_diversity_gate": "PASS",
+        "exact_quota_gate": "PASS",
+    })
+    freeze["dev_blind_pair_overlap"] = len(
+        {row["pair_key"] for row in dev} & {row["pair_key"] for row in blind}
+    )
+    dev_articles = {int(value) for row in dev for value in (row["article_a_id"], row["article_b_id"])}
+    blind_articles = {int(value) for row in blind for value in (row["article_a_id"], row["article_b_id"])}
+    freeze["dev_blind_article_overlap"] = len(dev_articles & blind_articles)
+    freeze["blind_gold_v2_article_overlap"] = len(blind_articles & result["gold_article_ids"])
+    return {
+        "dev/annotation-pack-v2.csv": dev_artifacts["pack"],
+        "dev/audit-sidecar-v2.json": dev_artifacts["sidecar"],
+        "dev/selection-manifest-v2.json": dev_artifacts["manifest"],
+        "blind/annotation-pack-v2.csv": blind_artifacts["pack"],
+        "blind/audit-sidecar-v2.json": blind_artifacts["sidecar"],
+        "blind/selection-manifest-v2.json": blind_artifacts["manifest"],
+        "freeze-manifest-v2.json": _json_bytes(freeze),
+    }
+
+
 def write_private_artifacts(
     output_root: str | Path, repo_root: str | Path, artifacts: dict[str, bytes],
 ) -> dict[str, str]:
     root = Path(output_root).resolve()
     assert_private_output_path(root, repo_root)
+    freeze_names = [name for name in artifacts if name.startswith("freeze-manifest-") and name.endswith(".json")]
+    if len(freeze_names) != 1:
+        raise ValueError("PRIVATE_FREEZE_MANIFEST_COUNT=FAIL")
+    freeze_name = freeze_names[0]
+    is_v2 = freeze_name == "freeze-manifest-v2.json"
+    if is_v2:
+        assert_distinct_private_freeze_path(root)
     root.mkdir(parents=True, exist_ok=True)
     if any("human-label" in path.name.lower() for path in root.rglob("*")):
         raise ValueError("HUMAN_LABEL_FILE_PRESENT; refusing to modify annotation workspace")
     for relative, content in artifacts.items():
         path = root / relative
-        if path.exists() and relative != "freeze-manifest-v1.json" and path.read_bytes() != content:
+        if path.exists() and relative != freeze_name and path.read_bytes() != content:
             raise ValueError("PRIVATE_OUTPUT_EXISTS_MISMATCH; refusing to overwrite a frozen artifact")
-    freeze_path = root / "freeze-manifest-v1.json"
+    freeze_path = root / freeze_name
     if freeze_path.exists():
         existing_freeze = json.loads(freeze_path.read_text(encoding="utf-8"))
+        version = "v2" if is_v2 else "v1"
         freeze_fields = {
-            "dev/annotation-pack-v1.csv": "dev_pack_sha256",
-            "dev/audit-sidecar-v1.json": "dev_sidecar_sha256",
-            "dev/selection-manifest-v1.json": "dev_manifest_sha256",
-            "blind/annotation-pack-v1.csv": "blind_pack_sha256",
-            "blind/audit-sidecar-v1.json": "blind_sidecar_sha256",
-            "blind/selection-manifest-v1.json": "blind_manifest_sha256",
+            f"dev/annotation-pack-{version}.csv": "dev_pack_sha256",
+            f"dev/audit-sidecar-{version}.json": "dev_sidecar_sha256",
+            f"dev/selection-manifest-{version}.json": "dev_manifest_sha256",
+            f"blind/annotation-pack-{version}.csv": "blind_pack_sha256",
+            f"blind/audit-sidecar-{version}.json": "blind_sidecar_sha256",
+            f"blind/selection-manifest-{version}.json": "blind_manifest_sha256",
         }
         for relative, field in freeze_fields.items():
             expected = hashlib.sha256(artifacts[relative]).hexdigest()
@@ -820,34 +1161,38 @@ def write_private_artifacts(
         if not path.exists():
             path.write_bytes(content)
         hashes[relative] = sha256_file(path)
-    if not verify_freeze_artifacts(root):
+    if not verify_freeze_artifacts(root, freeze_manifest_name=freeze_name):
         raise ValueError("FREEZE_VERIFIER=FAIL")
     return hashes
 
 
-def verify_freeze_artifacts(root: str | Path) -> bool:
+def verify_freeze_artifacts(
+    root: str | Path, *, freeze_manifest_name: str = "freeze-manifest-v1.json",
+) -> bool:
     base = Path(root)
-    freeze_path = base / "freeze-manifest-v1.json"
+    is_v2 = freeze_manifest_name == "freeze-manifest-v2.json"
+    version = "v2" if is_v2 else "v1"
+    freeze_path = base / freeze_manifest_name
     freeze = json.loads(freeze_path.read_text(encoding="utf-8"))
     pairs = (
-        ("dev/annotation-pack-v1.csv", "dev_pack_sha256"),
-        ("dev/audit-sidecar-v1.json", "dev_sidecar_sha256"),
-        ("dev/selection-manifest-v1.json", "dev_manifest_sha256"),
-        ("blind/annotation-pack-v1.csv", "blind_pack_sha256"),
-        ("blind/audit-sidecar-v1.json", "blind_sidecar_sha256"),
-        ("blind/selection-manifest-v1.json", "blind_manifest_sha256"),
+        (f"dev/annotation-pack-{version}.csv", "dev_pack_sha256"),
+        (f"dev/audit-sidecar-{version}.json", "dev_sidecar_sha256"),
+        (f"dev/selection-manifest-{version}.json", "dev_manifest_sha256"),
+        (f"blind/annotation-pack-{version}.csv", "blind_pack_sha256"),
+        (f"blind/audit-sidecar-{version}.json", "blind_sidecar_sha256"),
+        (f"blind/selection-manifest-{version}.json", "blind_manifest_sha256"),
     )
     for relative, field in pairs:
         if sha256_file(base / relative) != freeze[field]:
             raise ValueError("FREEZE_SHA_GATE=FAIL")
-    for relative in ("dev/annotation-pack-v1.csv", "blind/annotation-pack-v1.csv"):
+    for relative in (f"dev/annotation-pack-{version}.csv", f"blind/annotation-pack-{version}.csv"):
         with (base / relative).open(newline="", encoding="utf-8") as source:
             reader = csv.DictReader(source)
             if tuple(reader.fieldnames or ()) != HUMAN_REVIEW_COLUMNS:
                 raise ValueError("HUMAN_VIEW_MINING_METADATA_BLINDING=FAIL")
             if any(row.get("human_decision", "") for row in reader):
                 raise ValueError("NEW_HUMAN_LABELS=FAIL")
-    for relative in ("dev/audit-sidecar-v1.json", "blind/audit-sidecar-v1.json"):
+    for relative in (f"dev/audit-sidecar-{version}.json", f"blind/audit-sidecar-{version}.json"):
         sidecar = json.loads((base / relative).read_text(encoding="utf-8"))
         forbidden = {"human_decision", "gold_label", "expected_label", "predicted_label"}
         if any(forbidden & set(row) for row in sidecar):
@@ -860,7 +1205,60 @@ def verify_freeze_artifacts(root: str | Path) -> bool:
         raise ValueError("FREEZE_ISOLATION_GATE=FAIL")
     if freeze.get("blind_state") != "FROZEN":
         raise ValueError("BLIND_STATE_GATE=FAIL")
+    if is_v2:
+        if freeze.get("design_version") != DESIGN_VERSION_V2:
+            raise ValueError("FREEZE_V2_VERSION_GATE=FAIL")
+        if freeze.get("supersedes_freeze_sha256") != SUPERSEDED_V1_FREEZE_SHA:
+            raise ValueError("FREEZE_V2_SUPERSESSION_GATE=FAIL")
+        if freeze.get("supersession_reason") != "BLIND_COMPONENT_CONCENTRATION_PRE_LABEL_PM_REVIEW":
+            raise ValueError("FREEZE_V2_SUPERSESSION_REASON_GATE=FAIL")
+        if freeze.get("human_labels_at_supersession") != 0:
+            raise ValueError("FREEZE_V2_LABEL_COUNT_GATE=FAIL")
+        blind_rows = _pack_pair_rows(base / f"blind/annotation-pack-{version}.csv")
+        blind_sidecar = json.loads((base / f"blind/audit-sidecar-{version}.json").read_text(encoding="utf-8"))
+        groups_by_id: dict[str, dict[str, Any]] = defaultdict(lambda: {"article_ids": set(), "pair_keys": []})
+        for row in blind_sidecar:
+            group_id = row.get("component_group")
+            if not group_id:
+                continue
+            group = groups_by_id[str(group_id)]
+            group["pair_keys"].append(str(row["pair_key"]))
+            group["article_ids"].update(_pair_articles(str(row["pair_key"])))
+        groups = [
+            {"article_ids": sorted(group["article_ids"]), "pair_keys": sorted(group["pair_keys"])}
+            for _, group in sorted(groups_by_id.items())
+        ]
+        blind_stats = validate_blind_component_diversity(blind_rows, groups)
+        if freeze.get("blind_graph_component_stats") != blind_stats:
+            raise ValueError("FREEZE_V2_GRAPH_STATS_GATE=FAIL")
+        if freeze.get("blind_designated_chain_group_count") != blind_stats["chain_group_count"]:
+            raise ValueError("FREEZE_V2_CHAIN_COUNT_GATE=FAIL")
+        if freeze.get("blind_chain_group_bridging_count") != 0:
+            raise ValueError("FREEZE_V2_CHAIN_BRIDGING_GATE=FAIL")
+        if (
+            freeze.get("blind_component_diversity_gate") != "PASS"
+            or freeze.get("category_diversity_gate") != "PASS"
+            or freeze.get("exact_quota_gate") != "PASS"
+        ):
+            raise ValueError("FREEZE_V2_GATE_STATUS=FAIL")
+        dev_stats = graph_component_stats(_pack_pair_rows(base / f"dev/annotation-pack-{version}.csv"))
+        if freeze.get("dev_graph_component_stats") != dev_stats:
+            raise ValueError("FREEZE_V2_DEV_GRAPH_STATS_GATE=FAIL")
     return True
+
+
+def _pair_articles(pair_key: str) -> tuple[int, int]:
+    first, second = pair_key.split(":", maxsplit=1)
+    return int(first), int(second)
+
+
+def _pack_pair_rows(path: str | Path) -> list[dict[str, Any]]:
+    with Path(path).open(newline="", encoding="utf-8") as source:
+        rows = []
+        for row in csv.DictReader(source):
+            first, second = _pair_articles(row["pair_key"])
+            rows.append({"article_a_id": first, "article_b_id": second})
+        return rows
 
 
 def freeze_manifest(input_shas: dict[str, str], dev: dict[str, bytes], blind: dict[str, bytes], counts: dict[str, Any]) -> dict[str, Any]:
@@ -920,6 +1318,13 @@ def run_canonical_audit(
         blind_quotas=BLIND_QUOTAS,
         chain_group_target=6,
         enforce_source_diversity=True,
+        reserve_independent_blind_pairs=8,
+        independent_reserve_bucket_order=(
+            "HARD_NEGATIVE_SEEKING", "POSITIVE_SEEKING",
+            "BOUNDARY_DISAGREEMENT", "DIVERSITY_CONTROL",
+        ),
+        enforce_blind_component_diversity=True,
+        require_exact_quotas=True,
     )
     result["eligible_non_gold_pair_count"] = len(candidates)
     result["eligible_within_p3_24h_count"] = result.get("eligible_within_p3_24h_count", 0)
