@@ -3,29 +3,25 @@
 Unit tests for split_audit.py (STORY-01B-M0)
 
 Comprehensive coverage:
-- GOLD_HASH_FAIL_FAST
+- GOLD_HASH_FAIL_FAST_WITHOUT_PRIVATE_GOLD
 - GOLD_PAIR_COUNT_FAIL_FAST
 - GOLD_SCHEMA_FAIL_FAST
 - GOLD_LABEL_ENUM_FAIL_FAST
 - EPISODE_FAMILY_INVARIANT
-- LARGEST_COMPONENT_BY_ARTICLES
-- LARGEST_COMPONENT_BY_PAIRS
-- POSITIVE_FAMILY_COMPONENT_MAPPING
-- NEGATIVE_PAIR_PRUNING_REAL
-- N1_NEGATIVE_STRATEGY
-- N2_NEGATIVE_STRATEGY
-- N3_NEGATIVE_STRATEGY
-- ZERO_ARTICLE_LEAKAGE_FOR_ALL_STRATEGIES
-- DETERMINISTIC_NEGATIVE_ASSIGNMENT
+- LOFO_FAILS_IF_FAMILY_SPANS_COMPONENTS (Case A)
+- LOFO_FAILS_IF_COMPONENT_HAS_MULTIPLE_FAMILIES (Case B)
 - CONNECTED_COMPONENT_CONSTRUCTION
 - ARTICLE_DISJOINT_ASSERTION
 - FOLD_ARTICLE_LEAKAGE_DETECTION
-- EPISODE_FAMILY_HOLDOUT
+- NEGATIVE_PAIR_PRUNING_REAL
 - DETERMINISTIC_SPLIT_GENERATION
-- GOLD_DATASET_INTEGRATION
+- PROTOCOL_A_METRIC_ELIGIBILITY_REFINEMENT
+- N2_REUSED_POOL_METADATA
+- GOLD_DATASET_INTEGRATION (skipped if private dataset absent)
 """
 
 import os
+import tempfile
 import unittest
 from typing import Dict, List
 
@@ -33,6 +29,9 @@ try:
     from .split_audit import (
         ArticleGraph,
         GoldIntegrityError,
+        LofoMappingError,
+        N2_RESERVED_NEGATIVE_POOL_REUSED_ACROSS_LOFO_FOLDS,
+        N2_NEGATIVES_MUST_NOT_BE_COUNTED_AS_INDEPENDENT_REPEATED_OBSERVATIONS_IN_AGGREGATED_LOFO_METRICS,
         check_article_disjointness,
         prune_training_pairs_touching_test_articles,
         simulate_protocol_a,
@@ -49,6 +48,9 @@ except ImportError:
     from split_audit import (
         ArticleGraph,
         GoldIntegrityError,
+        LofoMappingError,
+        N2_RESERVED_NEGATIVE_POOL_REUSED_ACROSS_LOFO_FOLDS,
+        N2_NEGATIVES_MUST_NOT_BE_COUNTED_AS_INDEPENDENT_REPEATED_OBSERVATIONS_IN_AGGREGATED_LOFO_METRICS,
         check_article_disjointness,
         prune_training_pairs_touching_test_articles,
         simulate_protocol_a,
@@ -64,13 +66,20 @@ except ImportError:
 
 
 class TestSplitAuditFailFast(unittest.TestCase):
-    """Negative tests for fail-fast gold schema, hash, and invariant validation."""
+    """Negative tests for fail-fast gold schema, hash, and invariant validation without private gold."""
 
-    def test_gold_hash_fail_fast(self):
-        """Test that invalid SHA256 raises GoldIntegrityError immediately."""
-        with self.assertRaises(GoldIntegrityError) as ctx:
-            verify_gold_integrity(DEFAULT_GOLD_PATH, expected_sha="deadbeef" * 8)
-        self.assertIn("Gold SHA256 mismatch", str(ctx.exception))
+    def test_gold_hash_fail_fast_without_private_gold(self):
+        """Test that invalid SHA256 raises GoldIntegrityError using a controlled tempfile."""
+        with tempfile.NamedTemporaryFile("w+", encoding="utf-8", delete=False) as tf:
+            tf.write("entry_a_id,entry_b_id,gold_label,episode_family_id\n1,2,SAME_EVENT,FAM_1\n")
+            temp_path = tf.name
+        try:
+            with self.assertRaises(GoldIntegrityError) as ctx:
+                verify_gold_integrity(temp_path, expected_sha="deadbeef" * 8)
+            self.assertIn("Gold SHA256 mismatch", str(ctx.exception))
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
 
     def test_gold_pair_count_fail_fast(self):
         """Test that mismatched pair count raises GoldIntegrityError."""
@@ -108,11 +117,71 @@ class TestSplitAuditFailFast(unittest.TestCase):
         self.assertIn("has non-empty episode_family_id", str(ctx.exception))
 
 
+class TestLofoMappingGate(unittest.TestCase):
+    """Synthetic unit tests for LOFO positive family <-> component mapping fail-fast gates."""
+
+    def test_lofo_fails_if_family_spans_components(self):
+        """Case A: Same episode_family_id distributed across two connected components."""
+        pairs_case_a = [
+            # Component 1 (A1, A2)
+            {"entry_a_id": "A1", "entry_b_id": "A2", "gold_label": "SAME_EVENT", "episode_family_id": "FAM_SPANNED"},
+            # Component 2 (B1, B2) - disconnected from Component 1, but sharing FAM_SPANNED
+            {"entry_a_id": "B1", "entry_b_id": "B2", "gold_label": "SAME_EVENT", "episode_family_id": "FAM_SPANNED"},
+            # Pure negative component
+            {"entry_a_id": "C1", "entry_b_id": "C2", "gold_label": "DIFFERENT_EVENT", "episode_family_id": ""},
+        ]
+        graph = ArticleGraph(pairs_case_a)
+        spans, multi = graph.validate_positive_family_component_mapping(fail_fast=False)
+        self.assertGreater(spans, 0)
+        self.assertEqual(multi, 0)
+
+        # Must fail fast when fail_fast=True or LOFO simulated
+        with self.assertRaises(LofoMappingError) as ctx:
+            graph.validate_positive_family_component_mapping(fail_fast=True)
+        self.assertIn("spanning multiple components", str(ctx.exception))
+
+        with self.assertRaises(LofoMappingError):
+            simulate_lofo_n1(graph)
+
+        with self.assertRaises(LofoMappingError):
+            simulate_lofo_n2(graph, reserved_pool_ids=("C03",))
+
+        with self.assertRaises(LofoMappingError):
+            simulate_lofo_n3(graph)
+
+    def test_lofo_fails_if_component_has_multiple_families(self):
+        """Case B: A single connected component contains two distinct positive families."""
+        pairs_case_b = [
+            # Component 1 connects A1, A2, A3 but contains two families FAM_1 and FAM_2
+            {"entry_a_id": "A1", "entry_b_id": "A2", "gold_label": "SAME_EVENT", "episode_family_id": "FAM_1"},
+            {"entry_a_id": "A2", "entry_b_id": "A3", "gold_label": "SAME_EVENT", "episode_family_id": "FAM_2"},
+            # Pure negative component
+            {"entry_a_id": "C1", "entry_b_id": "C2", "gold_label": "DIFFERENT_EVENT", "episode_family_id": ""},
+        ]
+        graph = ArticleGraph(pairs_case_b)
+        spans, multi = graph.validate_positive_family_component_mapping(fail_fast=False)
+        self.assertEqual(spans, 0)
+        self.assertGreater(multi, 0)
+
+        # Must fail fast when fail_fast=True or LOFO simulated
+        with self.assertRaises(LofoMappingError) as ctx:
+            graph.validate_positive_family_component_mapping(fail_fast=True)
+        self.assertIn("multiple positive families", str(ctx.exception))
+
+        with self.assertRaises(LofoMappingError):
+            simulate_lofo_n1(graph)
+
+        with self.assertRaises(LofoMappingError):
+            simulate_lofo_n2(graph, reserved_pool_ids=("C02",))
+
+        with self.assertRaises(LofoMappingError):
+            simulate_lofo_n3(graph)
+
+
 class TestSplitAuditGraphAndProtocols(unittest.TestCase):
-    """Unit tests for graph construction, pruning, and split protocols."""
+    """Unit tests for graph construction, pruning, split protocols, and N2 metadata."""
 
     def setUp(self):
-        # Synthetic fixture for deterministic testing
         self.synthetic_pairs = [
             # Component 1 (Family F1, articles A1, A2, A3)
             {"entry_a_id": "A1", "entry_b_id": "A2", "gold_label": "SAME_EVENT", "episode_family_id": "FAM_1"},
@@ -167,10 +236,6 @@ class TestSplitAuditGraphAndProtocols(unittest.TestCase):
         in train touches an article in test. Proves REMOVED > 0 and LEAKAGE == 0.
         """
         test_articles = {"A1", "A2"}
-        # Training pairs contain:
-        # P1: (B1, B2) -> safe
-        # P2: (B2, A1) -> leaks via A1
-        # P3: (C1, C2) -> safe
         train_pairs = [
             {"entry_a_id": "B1", "entry_b_id": "B2", "gold_label": "SAME_EVENT"},
             {"entry_a_id": "B2", "entry_b_id": "A1", "gold_label": "RELATED_TOPIC"},
@@ -196,9 +261,24 @@ class TestSplitAuditGraphAndProtocols(unittest.TestCase):
         self.assertEqual(run1["article_leakage"], run2["article_leakage"])
         self.assertEqual(run1["folds"], run2["folds"])
 
+    def test_protocol_a_metric_eligibility_refinement(self):
+        """Test refined metric eligibility breakdown on Protocol A."""
+        res = simulate_protocol_a(self.synth_graph, k=2)
+        self.assertIn("binary_metric_eligible", res)
+        self.assertIn("related_topic_fpr_eligible", res)
+        self.assertIn("different_event_fpr_eligible", res)
+        self.assertIn("binary_metric_eligible_folds", res)
+        self.assertIn("related_topic_fpr_eligible_folds", res)
+        self.assertIn("different_event_fpr_eligible_folds", res)
+
+    def test_n2_reused_pool_metadata(self):
+        """Verify N2 methodological constants are explicitly True and documented."""
+        self.assertTrue(N2_RESERVED_NEGATIVE_POOL_REUSED_ACROSS_LOFO_FOLDS)
+        self.assertTrue(N2_NEGATIVES_MUST_NOT_BE_COUNTED_AS_INDEPENDENT_REPEATED_OBSERVATIONS_IN_AGGREGATED_LOFO_METRICS)
+
 
 class TestGoldIntegration(unittest.TestCase):
-    """Integration tests on the actual frozen gold dataset."""
+    """Integration tests on the actual frozen gold dataset (skipped if artifact absent)."""
 
     @classmethod
     def setUpClass(cls):
@@ -236,17 +316,40 @@ class TestGoldIntegration(unittest.TestCase):
         """Verify that each positive family occupies exactly one component and vice versa."""
         self.assertEqual(self.results["positive_family_spans_multiple_components"], 0)
         self.assertEqual(self.results["positive_component_with_multiple_families"], 0)
+        self.assertEqual(self.results["positive_family_component_mapping_gate"], "PASS")
+        self.assertEqual(self.results["lofo_mapping_fail_fast_gate"], "PASS")
 
-    def test_protocol_a_leak_free_and_metric_eligibility(self):
-        """Verify Protocol A K=2..5 leak-free assertion and metric eligibility."""
+    def test_protocol_a_k3_metric_eligibility(self):
+        """Verify Protocol A K=3 refined metric eligibility."""
         p_a_k3 = self.results["protocol_a_k3"]
         self.assertTrue(p_a_k3["feasible"])
-        self.assertTrue(p_a_k3["metric_eligible"])
         self.assertEqual(p_a_k3["article_leakage"], 0)
-        self.assertTrue(p_a_k3["all_positive_present"])
-        self.assertTrue(p_a_k3["all_negative_present"])
-        self.assertTrue(p_a_k3["all_related_topic_present"])
-        self.assertTrue(p_a_k3["all_different_event_present"])
+        self.assertTrue(p_a_k3["binary_metric_eligible"])
+        self.assertTrue(p_a_k3["related_topic_fpr_eligible"])
+        self.assertTrue(p_a_k3["different_event_fpr_eligible"])
+        self.assertEqual(p_a_k3["binary_metric_eligible_folds"], "3/3")
+        self.assertEqual(p_a_k3["related_topic_fpr_eligible_folds"], "3/3")
+        self.assertEqual(p_a_k3["different_event_fpr_eligible_folds"], "3/3")
+
+    def test_lofo_n1_metric_eligibility(self):
+        """Verify Option N1 metric eligibility breakdown (8/10, 4/10, 8/10)."""
+        self.assertEqual(self.results["n1_binary_metric_eligible_folds"], "8/10")
+        self.assertEqual(self.results["n1_related_topic_fpr_eligible_folds"], "4/10")
+        self.assertEqual(self.results["n1_different_event_fpr_eligible_folds"], "8/10")
+
+    def test_lofo_n2_metric_eligibility(self):
+        """Verify Option N2 metric eligibility breakdown (10/10, 10/10, 10/10)."""
+        self.assertEqual(self.results["n2_binary_metric_eligible_folds"], "10/10")
+        self.assertEqual(self.results["n2_related_topic_fpr_eligible_folds"], "10/10")
+        self.assertEqual(self.results["n2_different_event_fpr_eligible_folds"], "10/10")
+        self.assertTrue(self.results["n2_reserved_negative_pool_reused_across_lofo_folds"])
+        self.assertTrue(self.results["n2_negatives_must_not_be_counted_as_independent_repeated_observations_in_aggregated_lofo_metrics"])
+
+    def test_lofo_n3_metric_eligibility(self):
+        """Verify Option N3 metric eligibility breakdown (10/10, 7/10, 9/10)."""
+        self.assertEqual(self.results["n3_binary_metric_eligible_folds"], "10/10")
+        self.assertEqual(self.results["n3_related_topic_fpr_eligible_folds"], "7/10")
+        self.assertEqual(self.results["n3_different_event_fpr_eligible_folds"], "9/10")
 
     def test_negative_strategies_n1_n2_n3_leak_free(self):
         """Verify that all three negative strategies guarantee zero leakage."""

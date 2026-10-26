@@ -36,9 +36,18 @@ ALLOWED_LABELS = {"SAME_EVENT", "RELATED_TOPIC", "DIFFERENT_EVENT", "UNCERTAIN"}
 REQUIRED_COLUMNS = {"entry_a_id", "entry_b_id", "gold_label", "episode_family_id"}
 DEFAULT_GOLD_PATH = "/tmp/newsflux-story01b-private/checkpoints/story01b-gold-v1.csv"
 
+# N2 Methodological Guardrails
+N2_RESERVED_NEGATIVE_POOL_REUSED_ACROSS_LOFO_FOLDS = True
+N2_NEGATIVES_MUST_NOT_BE_COUNTED_AS_INDEPENDENT_REPEATED_OBSERVATIONS_IN_AGGREGATED_LOFO_METRICS = True
+
 
 class GoldIntegrityError(Exception):
     """Raised when gold dataset integrity, schema, or invariants fail validation."""
+    pass
+
+
+class LofoMappingError(Exception):
+    """Raised when positive families violate strict 1-to-1 bijection with connected components."""
     pass
 
 
@@ -168,43 +177,53 @@ class ArticleGraph:
         self.components = self._find_connected_components()
 
     def _find_connected_components(self) -> List[Set[str]]:
-        visited = set()
-        components = []
+        """Find connected components using BFS traversal."""
+        visited: Set[str] = set()
+        components: List[Set[str]] = []
+
         for node in sorted(self.nodes):
             if node not in visited:
-                comp = set()
+                comp: Set[str] = set()
                 queue = [node]
                 visited.add(node)
                 while queue:
                     curr = queue.pop(0)
                     comp.add(curr)
-                    for neighbor in self.adj[curr]:
+                    for neighbor in sorted(self.adj[curr]):
                         if neighbor not in visited:
                             visited.add(neighbor)
                             queue.append(neighbor)
                 components.append(comp)
-        # Deterministic ordering: descending by size, then by smallest article ID
-        components.sort(key=lambda c: (-len(c), sorted(c)[0]))
+
+        # Sort descending by size, then lexicographically by smallest node ID for determinism
+        components.sort(key=lambda c: (-len(c), min(c)))
         return components
 
     def get_degrees(self) -> List[int]:
-        return sorted(len(self.adj[n]) for n in self.nodes)
+        """Return sorted degrees of all nodes."""
+        return sorted([len(self.adj[n]) for n in self.nodes])
 
     def get_component_details(self) -> List[Dict[str, Any]]:
+        """Compute article count, pair count, and label breakdown for each connected component."""
         details = []
         for idx, comp in enumerate(self.components, 1):
-            comp_pairs = [p for (u, v, p) in self.pair_edges if u in comp and v in comp]
+            comp_pairs = [
+                p for u, v, p in self.pair_edges
+                if u in comp and v in comp
+            ]
             labels = Counter(p["gold_label"] for p in comp_pairs)
-            fams = sorted(set(p["episode_family_id"] for p in comp_pairs if p.get("episode_family_id")))
+            fams = sorted(list({p["episode_family_id"] for p in comp_pairs if p.get("episode_family_id")}))
+
             details.append({
                 "component_id": f"C{idx:02d}",
-                "nodes": comp,
-                "pairs": comp_pairs,
+                "nodes": sorted(list(comp)),
                 "article_count": len(comp),
+                "pairs": comp_pairs,
                 "pair_count": len(comp_pairs),
                 "SAME_EVENT": labels["SAME_EVENT"],
                 "RELATED_TOPIC": labels["RELATED_TOPIC"],
                 "DIFFERENT_EVENT": labels["DIFFERENT_EVENT"],
+                "UNCERTAIN": labels.get("UNCERTAIN", 0),
                 "positive_count": labels["SAME_EVENT"],
                 "negative_count": labels["RELATED_TOPIC"] + labels["DIFFERENT_EVENT"],
                 "episode_families": fams,
@@ -223,10 +242,11 @@ class ArticleGraph:
             "by_pairs": by_pairs,
         }
 
-    def validate_positive_family_component_mapping(self) -> Tuple[int, int]:
+    def validate_positive_family_component_mapping(self, fail_fast: bool = False) -> Tuple[int, int]:
         """
         Validate that every positive family occupies exactly one component,
         and no positive component contains multiple positive families.
+        If fail_fast is True, raises LofoMappingError on violation.
         Returns: (spans_multiple_components_count, multiple_families_in_component_count)
         """
         details = self.get_component_details()
@@ -240,6 +260,17 @@ class ArticleGraph:
 
         spans_multiple = sum(1 for f, comps in fam_to_comps.items() if len(comps) > 1)
         multi_fams = sum(1 for c, fams in comp_to_fams.items() if len(fams) > 1)
+
+        if fail_fast and (spans_multiple > 0 or multi_fams > 0):
+            err_parts = []
+            if spans_multiple > 0:
+                violating_fams = [f for f, comps in fam_to_comps.items() if len(comps) > 1]
+                err_parts.append(f"Positive families spanning multiple components: {violating_fams}")
+            if multi_fams > 0:
+                violating_comps = [c for c, fams in comp_to_fams.items() if len(fams) > 1]
+                err_parts.append(f"Components containing multiple positive families: {violating_comps}")
+            raise LofoMappingError(f"LOFO mapping gate failure: {'; '.join(err_parts)}")
+
         return spans_multiple, multi_fams
 
 
@@ -261,18 +292,19 @@ def prune_training_pairs_touching_test_articles(
     Remove from training_pairs any pair (u, v) where u in test_article_ids or v in test_article_ids.
     Returns: (pruned_training_pairs, removed_count, remaining_leakage)
     """
+    test_articles_set = set(test_article_ids)
     pruned = []
     removed_count = 0
     for p in training_pairs:
         u = p["entry_a_id"]
         v = p["entry_b_id"]
-        if u in test_article_ids or v in test_article_ids:
+        if u in test_articles_set or v in test_articles_set:
             removed_count += 1
         else:
             pruned.append(p)
 
     train_articles = {p["entry_a_id"] for p in pruned} | {p["entry_b_id"] for p in pruned}
-    remaining_leakage = len(train_articles & test_article_ids)
+    remaining_leakage = len(train_articles & test_articles_set)
     return pruned, removed_count, remaining_leakage
 
 
@@ -344,18 +376,29 @@ def simulate_protocol_a(graph: ArticleGraph, k: int) -> Dict[str, Any]:
     all_related = all(f["RELATED_TOPIC"] > 0 for f in folds)
     all_diff = all(f["DIFFERENT_EVENT"] > 0 for f in folds)
 
-    # Metric eligible: all folds contain both positive and negative examples
-    metric_eligible = all(f["positive_count"] > 0 and f["negative_count"] > 0 for f in folds)
+    # Refined metric eligibility dimensions
+    binary_metric_eligible = all(f["positive_count"] > 0 and f["negative_count"] > 0 for f in folds)
+    related_topic_fpr_eligible = all(f["RELATED_TOPIC"] > 0 for f in folds)
+    different_event_fpr_eligible = all(f["DIFFERENT_EVENT"] > 0 for f in folds)
+
+    bin_eligible_count = sum(1 for f in folds if f["positive_count"] > 0 and f["negative_count"] > 0)
+    rel_eligible_count = sum(1 for f in folds if f["RELATED_TOPIC"] > 0)
+    diff_eligible_count = sum(1 for f in folds if f["DIFFERENT_EVENT"] > 0)
 
     return {
         "k": k,
         "feasible": (all_positive and all_negative and leakage == 0),
-        "metric_eligible": metric_eligible,
         "article_leakage": leakage,
         "all_positive_present": all_positive,
         "all_negative_present": all_negative,
         "all_related_topic_present": all_related,
         "all_different_event_present": all_diff,
+        "binary_metric_eligible": binary_metric_eligible,
+        "related_topic_fpr_eligible": related_topic_fpr_eligible,
+        "different_event_fpr_eligible": different_event_fpr_eligible,
+        "binary_metric_eligible_folds": f"{bin_eligible_count}/{k}",
+        "related_topic_fpr_eligible_folds": f"{rel_eligible_count}/{k}",
+        "different_event_fpr_eligible_folds": f"{diff_eligible_count}/{k}",
         "folds": [
             {
                 "fold": f["fold_idx"],
@@ -369,7 +412,9 @@ def simulate_protocol_a(graph: ArticleGraph, k: int) -> Dict[str, Any]:
                 "DIFFERENT_EVENT": f["DIFFERENT_EVENT"],
                 "episode_family_count": len(f["episode_families"]),
                 "episode_families": sorted(list(f["episode_families"])),
-                "metric_eligible": (f["positive_count"] > 0 and f["negative_count"] > 0),
+                "binary_metric_eligible": (f["positive_count"] > 0 and f["negative_count"] > 0),
+                "related_topic_fpr_eligible": (f["RELATED_TOPIC"] > 0),
+                "different_event_fpr_eligible": (f["DIFFERENT_EVENT"] > 0),
             }
             for f in folds
         ],
@@ -380,16 +425,23 @@ def simulate_lofo_n1(graph: ArticleGraph) -> List[Dict[str, Any]]:
     """
     LOFO Option N1: Same Component Negatives.
     Test set uses only the positive and negative pairs from the held-out family's component.
+    Fails fast if positive family to component mapping is not a strict bijection.
     """
+    graph.validate_positive_family_component_mapping(fail_fast=True)
     comp_details = graph.get_component_details()
     fam_to_comp = {}
     for c in comp_details:
         for f in c["episode_families"]:
+            if f in fam_to_comp:
+                raise LofoMappingError(f"Family '{f}' spans multiple components: {fam_to_comp[f]['component_id']} and {c['component_id']}")
             fam_to_comp[f] = c
 
     results = []
     for fam in sorted(fam_to_comp.keys()):
         test_c = fam_to_comp[fam]
+        if len(test_c["episode_families"]) != 1:
+            raise LofoMappingError(f"Component '{test_c['component_id']}' contains multiple episode families: {test_c['episode_families']}")
+
         test_articles = test_c["nodes"]
         test_pos = test_c["SAME_EVENT"]
         test_rel = test_c["RELATED_TOPIC"]
@@ -422,7 +474,9 @@ def simulate_lofo_n1(graph: ArticleGraph) -> List[Dict[str, Any]]:
             "article_leakage": leak,
             "test_has_negatives": (test_neg > 0),
             "test_has_related_topic": (test_rel > 0),
-            "metric_eligible": (test_pos > 0 and test_neg > 0),
+            "binary_metric_eligible": (test_pos > 0 and test_neg > 0),
+            "related_topic_fpr_eligible": (test_rel > 0),
+            "different_event_fpr_eligible": (test_diff > 0),
         })
     return results
 
@@ -432,11 +486,19 @@ def simulate_lofo_n2(graph: ArticleGraph, reserved_pool_ids: Tuple[str, ...] = (
     LOFO Option N2: Reserved Negative Components Benchmark Pool.
     A fixed, deterministic subset of pure-negative components is reserved exclusively for the test
     evaluation pool across all LOFO folds (permanently excluded from training in all folds).
+
+    Limitation:
+    N2 reuses the same reserved negative benchmark pool across the 10 LOFO folds. This enables
+    contextual FPR and precision metrics per held-out family without article leakage, but the
+    pool must NOT be aggregated across folds as independent repeated observations.
     """
+    graph.validate_positive_family_component_mapping(fail_fast=True)
     comp_details = graph.get_component_details()
     fam_to_comp = {}
     for c in comp_details:
         for f in c["episode_families"]:
+            if f in fam_to_comp:
+                raise LofoMappingError(f"Family '{f}' spans multiple components: {fam_to_comp[f]['component_id']} and {c['component_id']}")
             fam_to_comp[f] = c
 
     # Extract reserved components
@@ -453,6 +515,9 @@ def simulate_lofo_n2(graph: ArticleGraph, reserved_pool_ids: Tuple[str, ...] = (
     results = []
     for fam in sorted(fam_to_comp.keys()):
         test_c = fam_to_comp[fam]
+        if len(test_c["episode_families"]) != 1:
+            raise LofoMappingError(f"Component '{test_c['component_id']}' contains multiple episode families: {test_c['episode_families']}")
+
         test_articles = set(test_c["nodes"]) | reserved_articles
 
         test_pos = test_c["SAME_EVENT"]
@@ -485,7 +550,9 @@ def simulate_lofo_n2(graph: ArticleGraph, reserved_pool_ids: Tuple[str, ...] = (
             "article_leakage": leak,
             "test_has_negatives": (test_neg > 0),
             "test_has_related_topic": (test_rel > 0),
-            "metric_eligible": (test_pos > 0 and test_neg > 0),
+            "binary_metric_eligible": (test_pos > 0 and test_neg > 0),
+            "related_topic_fpr_eligible": (test_rel > 0),
+            "different_event_fpr_eligible": (test_diff > 0),
         })
     return results
 
@@ -494,7 +561,9 @@ def simulate_lofo_n3(graph: ArticleGraph) -> List[Dict[str, Any]]:
     """
     LOFO Option N3: Component-Level Negative Partition.
     Pre-partitions all 16 pure-negative components deterministically across the 10 LOFO test folds.
+    Fails fast if positive family to component mapping is not a strict bijection.
     """
+    graph.validate_positive_family_component_mapping(fail_fast=True)
     comp_details = graph.get_component_details()
     pos_comps = [c for c in comp_details if c["positive_count"] > 0]
     neg_comps = [c for c in comp_details if c["positive_count"] == 0]
@@ -508,6 +577,11 @@ def simulate_lofo_n3(graph: ArticleGraph) -> List[Dict[str, Any]]:
 
     results = []
     for i, p_comp in enumerate(pos_comps):
+        if len(p_comp["episode_families"]) != 1:
+            raise LofoMappingError(
+                f"Component '{p_comp['component_id']}' contains {len(p_comp['episode_families'])} families; "
+                f"expected exactly 1 for LOFO: {p_comp['episode_families']}"
+            )
         fam = p_comp["episode_families"][0]
         extra_negs = fold_neg_assigned[i]
 
@@ -553,9 +627,27 @@ def simulate_lofo_n3(graph: ArticleGraph) -> List[Dict[str, Any]]:
             "article_leakage": leak,
             "test_has_negatives": (test_neg > 0),
             "test_has_related_topic": (test_rel > 0),
-            "metric_eligible": (test_pos > 0 and test_neg > 0),
+            "binary_metric_eligible": (test_pos > 0 and test_neg > 0),
+            "related_topic_fpr_eligible": (test_rel > 0),
+            "different_event_fpr_eligible": (test_diff > 0),
         })
     return results
+
+
+def summarize_lofo_eligibility(folds: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Summarize binary, related_topic, and different_event metric eligibility across LOFO folds."""
+    total = len(folds)
+    bin_count = sum(1 for f in folds if f["binary_metric_eligible"])
+    rel_count = sum(1 for f in folds if f["related_topic_fpr_eligible"])
+    diff_count = sum(1 for f in folds if f["different_event_fpr_eligible"])
+    return {
+        "binary_metric_eligible_folds": f"{bin_count}/{total}",
+        "related_topic_fpr_eligible_folds": f"{rel_count}/{total}",
+        "different_event_fpr_eligible_folds": f"{diff_count}/{total}",
+        "binary_metric_eligible": (bin_count == total),
+        "related_topic_fpr_eligible": (rel_count == total),
+        "different_event_fpr_eligible": (diff_count == total),
+    }
 
 
 def run_split_audit(gold_path: str = DEFAULT_GOLD_PATH) -> Dict[str, Any]:
@@ -573,7 +665,7 @@ def run_split_audit(gold_path: str = DEFAULT_GOLD_PATH) -> Dict[str, Any]:
     largest_by_articles = largest_comps["by_articles"]
     largest_by_pairs = largest_comps["by_pairs"]
 
-    spans_mult, multi_fams = graph.validate_positive_family_component_mapping()
+    spans_mult, multi_fams = graph.validate_positive_family_component_mapping(fail_fast=True)
 
     comp_details = graph.get_component_details()
     isolated_pairs = sum(1 for c in comp_details if c["pair_count"] == 1)
@@ -587,6 +679,10 @@ def run_split_audit(gold_path: str = DEFAULT_GOLD_PATH) -> Dict[str, Any]:
     lofo_n1 = simulate_lofo_n1(graph)
     lofo_n2 = simulate_lofo_n2(graph)
     lofo_n3 = simulate_lofo_n3(graph)
+
+    n1_summary = summarize_lofo_eligibility(lofo_n1)
+    n2_summary = summarize_lofo_eligibility(lofo_n2)
+    n3_summary = summarize_lofo_eligibility(lofo_n3)
 
     return {
         "gold_sha256": file_sha,
@@ -603,6 +699,8 @@ def run_split_audit(gold_path: str = DEFAULT_GOLD_PATH) -> Dict[str, Any]:
         "largest_component_by_pairs_article_count": largest_by_pairs["article_count"],
         "positive_family_spans_multiple_components": spans_mult,
         "positive_component_with_multiple_families": multi_fams,
+        "positive_family_component_mapping_gate": "PASS" if (spans_mult == 0 and multi_fams == 0) else "FAIL",
+        "lofo_mapping_fail_fast_gate": "PASS" if (spans_mult == 0 and multi_fams == 0) else "FAIL",
         "isolated_pair_component_count": isolated_pairs,
         "multi_pair_component_count": multi_pairs,
         "degree_max": deg_max,
@@ -615,6 +713,18 @@ def run_split_audit(gold_path: str = DEFAULT_GOLD_PATH) -> Dict[str, Any]:
         "lofo_n1": lofo_n1,
         "lofo_n2": lofo_n2,
         "lofo_n3": lofo_n3,
+        "n1_binary_metric_eligible_folds": n1_summary["binary_metric_eligible_folds"],
+        "n1_related_topic_fpr_eligible_folds": n1_summary["related_topic_fpr_eligible_folds"],
+        "n1_different_event_fpr_eligible_folds": n1_summary["different_event_fpr_eligible_folds"],
+        "n2_binary_metric_eligible_folds": n2_summary["binary_metric_eligible_folds"],
+        "n2_related_topic_fpr_eligible_folds": n2_summary["related_topic_fpr_eligible_folds"],
+        "n2_different_event_fpr_eligible_folds": n2_summary["different_event_fpr_eligible_folds"],
+        "n3_binary_metric_eligible_folds": n3_summary["binary_metric_eligible_folds"],
+        "n3_related_topic_fpr_eligible_folds": n3_summary["related_topic_fpr_eligible_folds"],
+        "n3_different_event_fpr_eligible_folds": n3_summary["different_event_fpr_eligible_folds"],
+        "n2_reserved_negative_pool_reused_across_lofo_folds": N2_RESERVED_NEGATIVE_POOL_REUSED_ACROSS_LOFO_FOLDS,
+        "n2_negatives_must_not_be_counted_as_independent_repeated_observations_in_aggregated_lofo_metrics": N2_NEGATIVES_MUST_NOT_BE_COUNTED_AS_INDEPENDENT_REPEATED_OBSERVATIONS_IN_AGGREGATED_LOFO_METRICS,
+        "n2_aggregation_guard_documented": True,
     }
 
 
@@ -641,19 +751,19 @@ def main():
     print("LARGEST COMPONENT BY ARTICLES:", results["largest_component_by_articles_id"], "articles =", results["largest_component_article_count"], "pairs =", results["largest_component_by_articles_pair_count"])
     print("LARGEST COMPONENT BY PAIRS:   ", results["largest_component_by_pairs_id"], "pairs =", results["largest_component_pair_count"], "articles =", results["largest_component_by_pairs_article_count"])
     print("POSITIVE FAMILY MAPPING INVARIANTS: spans_mult =", results["positive_family_spans_multiple_components"], "multi_fams =", results["positive_component_with_multiple_families"])
+    print("LOFO MAPPING FAIL-FAST GATE:", results["lofo_mapping_fail_fast_gate"])
     print("-" * 60)
     print("PROTOCOL A EVALUATION:")
     for k in [2, 3, 4, 5]:
         res = results[f"protocol_a_k{k}"]
-        print(f"  K={k}: Feasible={res['feasible']}, MetricEligible={res['metric_eligible']}, Leakage={res['article_leakage']}")
+        print(f"  K={k}: Feasible={res['feasible']}, BinEligible={res['binary_metric_eligible_folds']}, RelFprEligible={res['related_topic_fpr_eligible_folds']}, DiffFprEligible={res['different_event_fpr_eligible_folds']}, Leakage={res['article_leakage']}")
     print("-" * 60)
     print("NEGATIVE STRATEGIES COMPARISON (LOFO):")
-    n1_zero = sum(1 for r in results["lofo_n1"] if not r["test_has_negatives"])
-    n2_zero = sum(1 for r in results["lofo_n2"] if not r["test_has_negatives"])
-    n3_zero = sum(1 for r in results["lofo_n3"] if not r["test_has_negatives"])
-    print(f"  N1 (Same Component): Folds with 0 negatives = {n1_zero}/10, Leakage = 0")
-    print(f"  N2 (Reserved Pool):  Folds with 0 negatives = {n2_zero}/10, Leakage = 0")
-    print(f"  N3 (Partitioned):    Folds with 0 negatives = {n3_zero}/10, Leakage = 0")
+    print(f"  N1 (Same Component): BinEligible={results['n1_binary_metric_eligible_folds']}, RelFprEligible={results['n1_related_topic_fpr_eligible_folds']}, DiffFprEligible={results['n1_different_event_fpr_eligible_folds']}, Leakage=0")
+    print(f"  N2 (Reserved Pool):  BinEligible={results['n2_binary_metric_eligible_folds']}, RelFprEligible={results['n2_related_topic_fpr_eligible_folds']}, DiffFprEligible={results['n2_different_event_fpr_eligible_folds']}, Leakage=0")
+    print(f"  N3 (Partitioned):    BinEligible={results['n3_binary_metric_eligible_folds']}, RelFprEligible={results['n3_related_topic_fpr_eligible_folds']}, DiffFprEligible={results['n3_different_event_fpr_eligible_folds']}, Leakage=0")
+    print("  N2_RESERVED_NEGATIVE_POOL_REUSED_ACROSS_LOFO_FOLDS:", "YES" if results["n2_reserved_negative_pool_reused_across_lofo_folds"] else "NO")
+    print("  N2_NEGATIVES_MUST_NOT_BE_COUNTED_AS_INDEPENDENT_REPEATED_OBSERVATIONS_IN_AGGREGATED_LOFO_METRICS:", "YES" if results["n2_negatives_must_not_be_counted_as_independent_repeated_observations_in_aggregated_lofo_metrics"] else "NO")
     print("=" * 60)
     print("AUDIT_STATUS=SUCCESS")
 
