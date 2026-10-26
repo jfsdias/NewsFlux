@@ -22,10 +22,11 @@ import {
   computeOverlapCoefficient,
   executeD0Pipeline,
   extractSignificantWords,
+  getFeedIdentity,
   normalizeTitle,
   projectStories,
-  retrieveCandidates,
-  scorePairsD0,
+  R3_P3_MAX_TEMPORAL_SPAN_HOURS,
+  retrieveCandidatesRF0R,
   STOPWORDS,
 } from "./direct-story-pipeline.js"
 
@@ -99,29 +100,80 @@ function testOverlapCoefficient() {
   console.log("  PASS: Overlap coefficient calculations verified.")
 }
 
-function testCandidateRetrieval() {
-  console.log("Testing Lexical Candidate Retrieval...")
+function testFeedIdentity() {
+  console.log("Testing Feed Identity Extraction...")
 
-  const tokensMap = new Map([
-    [1, new Set(["copa", "mundo", "seleção", "brasil"])],
-    [2, new Set(["seleção", "brasil", "treino", "ancelotti"])],
-    [3, new Set(["economia", "inflação", "selic", "juros"])],
-    [4, new Set(["copa", "mundo", "brasil", "estádio"])],
-  ])
+  assert.equal(getFeedIdentity({ feed_id: 42 }), "42")
+  assert.equal(getFeedIdentity({ feed: { id: 99 } }), "99")
+  assert.equal(getFeedIdentity({ feed: "TechCrunch" }), "TechCrunch")
+  assert.equal(getFeedIdentity({ feed: 123 }), "123")
+  assert.equal(getFeedIdentity({ feed_title: "BBC News" }), "BBC News")
+  assert.equal(getFeedIdentity({}), "")
+  assert.equal(getFeedIdentity(null), "")
 
-  const candidates = retrieveCandidates(tokensMap, 2)
-  // (1, 2) shares 'seleção', 'brasil' (2 tokens)
-  // (1, 4) shares 'copa', 'mundo', 'brasil' (3 tokens)
-  // (2, 4) shares 'brasil' (1 token)
-  // (3, *) shares 0 tokens
-  assert.ok(candidates.has("1_2"))
-  assert.ok(candidates.has("1_4"))
-  assert.ok(candidates.has("2_4"))
-  assert.ok(!candidates.has("1_3"))
-  assert.ok(!candidates.has("2_3"))
-  assert.ok(!candidates.has("3_4"))
+  console.log("  PASS: Feed identity extraction verified.")
+}
 
-  console.log("  PASS: Candidate retrieval inverted index verified.")
+function testCrossFeedOnlyContract() {
+  console.log("Testing Cross-Feed Only Contract...")
+
+  const articles = [
+    { id: 1, feed_id: 10, title: "OpenAI launches new GPT-5 model today" },
+    { id: 2, feed_id: 10, title: "OpenAI launches new GPT-5 model today" }, // SAME FEED as 1
+    { id: 3, feed_id: 20, title: "OpenAI launches new GPT-5 model today" }, // CROSS FEED
+  ]
+
+  const tokensMap = new Map()
+  for (const a of articles) {
+    tokensMap.set(Number(a.id), extractSignificantWords(a.title))
+  }
+
+  const { candidatePairs } = retrieveCandidatesRF0R(articles, tokensMap, 10)
+
+  // 1 and 2 are in the same feed -> pair 1_2 MUST NOT be retrieved
+  assert.ok(!candidatePairs.has("1_2"), "Same feed pair 1_2 must NOT be retrieved")
+
+  // 1 and 3 are in different feeds -> pair 1_3 MUST be retrieved
+  assert.ok(candidatePairs.has("1_3"), "Cross feed pair 1_3 must be retrieved")
+
+  // 2 and 3 are in different feeds -> pair 2_3 MUST be retrieved
+  assert.ok(candidatePairs.has("2_3"), "Cross feed pair 2_3 must be retrieved")
+
+  console.log("  PASS: Cross-feed only contract verified.")
+}
+
+function testSymmetricPerArticleTopKAndHigherId() {
+  console.log("Testing Symmetric Per-Article Top-K & Higher-ID Selection...")
+
+  // Case: article 100 has a higher numeric ID than article 1.
+  // Under the old "otherAid > aid" logic, article 100 could never select article 1.
+  // Under RF0R, article 100 ranks all cross-feed candidates and selects article 1 as top neighbor.
+  const articles = [
+    { id: 1, feed_id: 1, title: "Apple unveils new M4 MacBook Pro with OLED display" },
+    { id: 100, feed_id: 2, title: "Apple unveils new M4 MacBook Pro with OLED display" },
+    { id: 200, feed_id: 3, title: "Totally unrelated story about agriculture and farming" },
+  ]
+
+  const tokensMap = new Map()
+  for (const a of articles) {
+    tokensMap.set(Number(a.id), extractSignificantWords(a.title))
+  }
+
+  const { candidatePairs, pairScores } = retrieveCandidatesRF0R(articles, tokensMap, 5)
+
+  // Pair 1_100 must be retrieved
+  assert.ok(
+    candidatePairs.has("1_100"),
+    "Article 100 must select Article 1 and form canonical pair 1_100",
+  )
+  assert.ok(pairScores.has("1_100"))
+  assert.equal(pairScores.get("1_100"), 1)
+
+  // Article 200 shares no tokens with 1 or 100
+  assert.ok(!candidatePairs.has("1_200"))
+  assert.ok(!candidatePairs.has("100_200"))
+
+  console.log("  PASS: Symmetric per-article top-K and higher-ID selection verified.")
 }
 
 function testP3ConservativeClustering() {
@@ -178,19 +230,41 @@ function testP3ConservativeClustering() {
   const cluster104 = clusters.find((c) => c.includes(104))
   assert.equal(cluster104.length, 1, "104 must remain a singleton")
 
-  // Temporal span test: pair above threshold but time diff > 168h
-  const tempArticleIds = [301, 302]
-  const tempLookup = {
+  // Temporal span test under R3 24h policy (RESEARCH_POLICY_24H):
+  // 1. Delta = 25h (> 24h) -> REJECTED
+  const tempArticleIds25 = [301, 302]
+  const tempLookup25 = {
     301: 0,
-    302: 200 * 3600, // 200 hours later (> 168h)
+    302: 25 * 3600, // 25 hours later
   }
-  const tempScores = new Map([["301_302", 0.95]])
-  const tempClusters = clusterWithP3(tempArticleIds, tempScores, threshold, tempLookup, {
-    maxTemporalSpanHours: 168,
+  const tempScores25 = new Map([["301_302", 0.95]])
+  const tempClusters25 = clusterWithP3(tempArticleIds25, tempScores25, threshold, tempLookup25, {
+    maxTemporalSpanHours: R3_P3_MAX_TEMPORAL_SPAN_HOURS,
   })
-  assert.equal(tempClusters.length, 2, "Temporal span violation must prevent clustering")
+  assert.equal(
+    tempClusters25.length,
+    2,
+    "Temporal span delta = 25h must reject clustering under 24h policy",
+  )
 
-  console.log("  PASS: P3 conservative clustering rules verified.")
+  // 2. Delta = 23h (<= 24h) -> ACCEPTED
+  const tempArticleIds23 = [401, 402]
+  const tempLookup23 = {
+    401: 0,
+    402: 23 * 3600, // 23 hours later
+  }
+  const tempScores23 = new Map([["401_402", 0.95]])
+  const tempClusters23 = clusterWithP3(tempArticleIds23, tempScores23, threshold, tempLookup23, {
+    maxTemporalSpanHours: R3_P3_MAX_TEMPORAL_SPAN_HOURS,
+  })
+  assert.equal(
+    tempClusters23.length,
+    1,
+    "Temporal span delta = 23h must be eligible for clustering",
+  )
+  assert.equal(tempClusters23[0].length, 2)
+
+  console.log("  PASS: P3 conservative clustering rules and 24h temporal policy verified.")
 }
 
 function testStoryProjectionAndPlacement() {
@@ -286,14 +360,20 @@ function testCorpusParityIfAvailable() {
 
   assert.equal(articles.length, 200)
 
-  // Execute full pipeline
+  // Execute full pipeline under cross-feed only contract
   const res = executeD0Pipeline(articles, { threshold: 0.3541 })
   assert.ok(res.projections.length > 0)
   assert.equal(res.stats.home_items_before, 200)
-  assert.equal(res.stats.home_items_after, 170)
-  assert.equal(res.stats.multi_article_story_count, 20)
-  assert.equal(res.stats.duplicate_articles_compressed, 30)
-  assert.equal(res.stats.noise_reduction_percent, 15)
+  assert.equal(res.stats.home_items_after, 180)
+  assert.equal(res.stats.multi_article_story_count, 12)
+  assert.equal(res.stats.duplicate_articles_compressed, 20)
+  assert.equal(res.stats.noise_reduction_percent, 10)
+
+  // Card count positions in top windows
+  assert.equal(res.stats.top10_story_card_count, 1)
+  assert.equal(res.stats.top20_story_card_count, 1)
+  assert.equal(res.stats.top50_story_card_count, 6)
+  assert.equal(res.stats.top100_story_card_count, 10)
 
   console.log(
     `  Pipeline executed on 200 articles in ${res.timingBreakdown.total_end_to_end_ms} ms`,
@@ -303,20 +383,22 @@ function testCorpusParityIfAvailable() {
   )
 
   // Benchmark multi-size
-  const bench = benchmarkPipeline(articles, [25, 50, 100, 200], 3, 0.3542)
+  const bench = benchmarkPipeline(articles, [25, 50, 100, 200], 3, { threshold: 0.3541 })
   console.log("  Benchmark results:", JSON.stringify(bench, null, 2))
 
-  console.log("  PASS: Corpus execution and benchmark verified.")
+  console.log("  PASS: Corpus execution and benchmark verified under cross-feed contract.")
 }
 
 function runAllTests() {
   console.log("========================================================")
-  console.log("Running Node.js Direct Story Pipeline Unit Tests")
+  console.log("Running Node.js Direct Story Pipeline Unit Tests (R3)")
   console.log("========================================================")
 
   testTokenExtractionEdgeCases()
   testOverlapCoefficient()
-  testCandidateRetrieval()
+  testFeedIdentity()
+  testCrossFeedOnlyContract()
+  testSymmetricPerArticleTopKAndHigherId()
   testP3ConservativeClustering()
   testStoryProjectionAndPlacement()
   testFailOpenContract()

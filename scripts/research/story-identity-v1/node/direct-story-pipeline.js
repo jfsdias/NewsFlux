@@ -1,17 +1,18 @@
 /**
- * STORY-02-A0 R2: Direct Pair Scorer Pipeline in Node.js.
+ * STORY-02-A0 R3: Direct Pair Scorer Pipeline in Node.js.
  *
  * Implements the D0_TITLE_OVERLAP_DIRECT executable pipeline in vanilla Node.js:
- * 1. extractSignificantWords: zero-model lexical token extraction.
- * 2. computeOverlapCoefficient: pure set overlap metric.
- * 3. Inverted index lexical candidate retrieval (top-K).
- * 4. Direct D0 pair scoring.
- * 5. Conservative P3 clustering with multi-member support and temporal gating.
- * 6. Representative selection (medoid) & H1 ranking preservation placement.
+ * 1. getFeedIdentity: extracts canonical feed identifier for cross-feed enforcement.
+ * 2. extractSignificantWords: zero-model lexical token extraction.
+ * 3. computeOverlapCoefficient: pure set overlap metric.
+ * 4. retrieveCandidatesRF0R: symmetric per-article top-K with deterministic lexical tie-break (cross-feed only).
+ * 5. Conservative P3 clustering under RESEARCH_POLICY_24H (24 hours).
+ * 6. Representative selection (D0_LEXICAL_MEDOID) & H1 Ranking Preservation Placement.
  *
  * Constraints:
  * - Zero models, zero containers, zero native compilation, zero external libraries.
- * - Score provider contract: synchronous or asynchronous, fail-open.
+ * - Cross-feed only: zero same-feed pairs retrieved or clustered.
+ * - Fail-open contract: returns flat feed on error.
  * - 100% deterministic: identical inputs produce identical outputs and identical SHA256 hashes.
  */
 
@@ -220,6 +221,41 @@ export const STOPWORDS = new Set([
 
 const TOKEN_REGEX = /[a-zA-Z0-9_\u00C0-\u00FF]{2,}/g
 
+export const R3_P3_MAX_TEMPORAL_SPAN_HOURS = 24
+
+/**
+ * Extracts canonical feed identity for an article.
+ *
+ * Contract:
+ * - Returns string representation of feed_id if present.
+ * - Fallback to nested feed.id if present.
+ * - Fallback to string feed or feed_title if numeric ID is missing.
+ * - Returns empty string if unidentifiable.
+ */
+export function getFeedIdentity(article) {
+  if (!article) {
+    return ""
+  }
+  if (article.feed_id !== undefined && article.feed_id !== null) {
+    return String(article.feed_id)
+  }
+  if (
+    article.feed &&
+    typeof article.feed === "object" &&
+    article.feed.id !== undefined &&
+    article.feed.id !== null
+  ) {
+    return String(article.feed.id)
+  }
+  if (typeof article.feed === "string" || typeof article.feed === "number") {
+    return String(article.feed)
+  }
+  if (article.feed_title) {
+    return String(article.feed_title)
+  }
+  return ""
+}
+
 /**
  * Normalizes title by lowercasing and replacing non-alphanumeric chars with spaces.
  */
@@ -305,66 +341,90 @@ export function buildInvertedIndex(articleTokens) {
 }
 
 /**
- * Retrieves candidate pairs via inverted index token matching (top K shared tokens).
+ * Retrieves cross-feed candidate pairs using RF0R_RUNTIME_LEXICAL_TOP_K.
+ *
+ * Contract:
+ * - CROSS_FEED_ONLY: Same-feed article pairs are strictly excluded.
+ * - SYMMETRIC_PER_ARTICLE_TOP_K: Every article independently ranks its cross-feed candidate neighbors.
+ * - HIGHER_ID_CAN_SELECT_LOWER_ID: No directional ID restriction before forming per-article top-K.
+ * - CANONICAL_PAIR_DEDUP: Returned pair keys are canonical `${min(u, v)}_${max(u, v)}`.
+ * - DETERMINISTIC_TIE_BREAK: 1. title_overlap_coefficient DESC, 2. canonical_pair_key ASC.
  */
-export function retrieveCandidates(articleTokens, kRetrieval = 20) {
+export function retrieveCandidatesRF0R(articles, articleTokens, kRetrieval = 10) {
   const invertedIndex = buildInvertedIndex(articleTokens)
-  const candidatePairs = new Set()
+  const feedLookup = new Map()
+  for (const a of articles) {
+    feedLookup.set(Number(a.id), getFeedIdentity(a))
+  }
 
-  for (const [aid, tokens] of articleTokens.entries()) {
-    const counts = new Map()
-    for (const token of tokens) {
+  const candidatePairs = new Set()
+  const pairScores = new Map()
+
+  for (const a of articles) {
+    const aid = Number(a.id)
+    const aFeed = feedLookup.get(aid)
+    const tokensA = articleTokens.get(aid)
+    if (!tokensA || tokensA.size === 0) {
+      continue
+    }
+
+    const seenNeighbors = new Set()
+    const cands = []
+
+    for (const token of tokensA) {
       const posting = invertedIndex.get(token)
       if (posting) {
         for (const otherAid of posting) {
-          if (otherAid > aid) {
-            counts.set(otherAid, (counts.get(otherAid) || 0) + 1)
+          if (
+            otherAid !== aid &&
+            feedLookup.get(otherAid) !== aFeed &&
+            !seenNeighbors.has(otherAid)
+          ) {
+            seenNeighbors.add(otherAid)
+            const tokensB = articleTokens.get(otherAid)
+            const coef = computeOverlapCoefficient(tokensA, tokensB)
+            const minId = Math.min(aid, otherAid)
+            const maxId = Math.max(aid, otherAid)
+            const canonicalKey = `${minId}_${maxId}`
+            cands.push({
+              otherAid,
+              coef,
+              canonicalKey,
+              minId,
+              maxId,
+            })
           }
         }
       }
     }
 
-    if (counts.size > 0) {
-      const sortedEntries = [...counts.entries()].toSorted((a, b) => {
-        if (b[1] !== a[1]) {
-          return b[1] - a[1]
-        }
-        return a[0] - b[0]
-      })
-      const topK = sortedEntries.slice(0, kRetrieval)
-      for (const [otherAid] of topK) {
-        candidatePairs.add(`${aid}_${otherAid}`)
+    // Sort deterministically:
+    // 1. coef DESC
+    // 2. canonicalKey ASC
+    const sorted = cands.toSorted((left, right) => {
+      if (right.coef !== left.coef) {
+        return right.coef - left.coef
       }
+      return left.canonicalKey.localeCompare(right.canonicalKey)
+    })
+
+    const topK = sorted.slice(0, kRetrieval)
+    for (const cand of topK) {
+      candidatePairs.add(cand.canonicalKey)
+      pairScores.set(cand.canonicalKey, Math.round(cand.coef * 10_000) / 10_000)
     }
   }
 
-  return candidatePairs
+  return { candidatePairs, pairScores }
 }
 
 /**
- * Scores candidate pairs using D0 title overlap coefficient.
- */
-export function scorePairsD0(candidatePairs, articleTokens) {
-  const pairScores = new Map()
-  for (const pairKey of candidatePairs) {
-    const [uStr, vStr] = pairKey.split("_")
-    const u = Number(uStr)
-    const v = Number(vStr)
-    const tokensU = articleTokens.get(u) || new Set()
-    const tokensV = articleTokens.get(v) || new Set()
-    const coef = computeOverlapCoefficient(tokensU, tokensV)
-    pairScores.set(pairKey, Math.round(coef * 10_000) / 10_000)
-  }
-  return pairScores
-}
-
-/**
- * P3 Conservative Clustering.
+ * P3 Conservative Clustering under RESEARCH_POLICY_24H.
  *
  * Rules:
  * - Edges sorted descending by score, then u, then v.
  * - Max cluster size enforcement (default 10).
- * - Max temporal span enforcement (default 168 hours).
+ * - Max temporal span enforcement (default 24 hours).
  * - Multi-member rule: candidate joining an existing cluster of size >= 2 must have
  *   at least 2 positive edges (score >= threshold) to existing members.
  * - No cluster-to-cluster bridging.
@@ -373,11 +433,11 @@ export function scorePairsD0(candidatePairs, articleTokens) {
 export function clusterWithP3(
   articleIds,
   pairScores,
-  threshold = 0.3542,
+  threshold = 0.3541,
   publishedLookup = {},
   options = {},
 ) {
-  const { maxSize = 10, maxTemporalSpanHours = 168 } = options
+  const { maxSize = 10, maxTemporalSpanHours = R3_P3_MAX_TEMPORAL_SPAN_HOURS } = options
 
   const sortedIds = [...articleIds].toSorted((a, b) => a - b)
   const articleSet = new Set(sortedIds)
@@ -480,7 +540,7 @@ export function clusterWithP3(
 }
 
 /**
- * Representative selection (R4 Hybrid Medoid) & H1 Ranking Preservation Placement.
+ * Representative selection (D0_LEXICAL_MEDOID) & H1 Ranking Preservation Placement.
  */
 export function projectStories(clusters, pairScores, homeOrder) {
   const homeIndexMap = new Map()
@@ -531,6 +591,8 @@ export function projectStories(clusters, pairScores, homeOrder) {
     projections.push({
       story_id: `story_${hash}`,
       representative_article_id: representative,
+      representative_policy: "D0_LEXICAL_MEDOID",
+      placement_policy: "H1_HIGHEST_RANKED_MEMBER_POSITION",
       alternative_article_ids: alternatives,
       member_article_ids: members,
       member_count: members.length,
@@ -538,7 +600,7 @@ export function projectStories(clusters, pairScores, homeOrder) {
     })
   }
 
-  // Sort projections by H1 position
+  // Sort projections by H1 position, tie-break by representative article id
   return projections.toSorted((a, b) => {
     if (a.h1_home_position !== b.h1_home_position) {
       return a.h1_home_position - b.h1_home_position
@@ -548,7 +610,7 @@ export function projectStories(clusters, pairScores, homeOrder) {
 }
 
 /**
- * Executes full D0 raw pipeline from raw article objects.
+ * Executes full D0 raw pipeline from raw article objects under cross-feed only contract.
  * Fail-open guarantee: If any error occurs, falls back to unclustered singletons.
  */
 export function executeD0Pipeline(articles, options = {}) {
@@ -568,35 +630,34 @@ export function executeD0Pipeline(articles, options = {}) {
     }
   }
 
-  const threshold = options.threshold ?? 0.3542
-  const kRetrieval = options.kRetrieval ?? 20
+  const threshold = options.threshold ?? 0.3541
+  const kRetrieval = options.kRetrieval ?? 10
+  const maxTemporalSpanHours = options.maxTemporalSpanHours ?? R3_P3_MAX_TEMPORAL_SPAN_HOURS
 
   try {
     const articleTokens = new Map()
     const publishedLookup = {}
-    const feedLookup = {}
     const homeOrder = []
 
     for (const a of articles) {
       const aid = Number(a.id)
       homeOrder.push(aid)
       publishedLookup[aid] = Number(a.published_at || 0)
-      feedLookup[aid] = a.feed_title || a.feed || ""
-      articleTokens.set(aid, extractSignificantWords(a.title || "", feedLookup[aid]))
+      const feedTitle = a.feed_title || a.feed || ""
+      articleTokens.set(aid, extractSignificantWords(a.title || "", feedTitle))
     }
     const t1 = performance.now()
 
-    const candidatePairs = retrieveCandidates(articleTokens, kRetrieval)
+    const { pairScores } = retrieveCandidatesRF0R(articles, articleTokens, kRetrieval)
     const t2 = performance.now()
 
-    const pairScores = scorePairsD0(candidatePairs, articleTokens)
+    const clusters = clusterWithP3(homeOrder, pairScores, threshold, publishedLookup, {
+      maxTemporalSpanHours,
+    })
     const t3 = performance.now()
 
-    const clusters = clusterWithP3(homeOrder, pairScores, threshold, publishedLookup, options)
-    const t4 = performance.now()
-
     const projections = projectStories(clusters, pairScores, homeOrder)
-    const t5 = performance.now()
+    const t4 = performance.now()
 
     const multiStories = projections.filter((p) => p.member_count > 1)
     const compressed = multiStories.reduce((acc, p) => acc + (p.member_count - 1), 0)
@@ -615,11 +676,10 @@ export function executeD0Pipeline(articles, options = {}) {
 
     const timingBreakdown = {
       token_extraction_ms: Math.round((t1 - t0) * 1000) / 1000,
-      candidate_retrieval_ms: Math.round((t2 - t1) * 1000) / 1000,
-      d0_scoring_ms: Math.round((t3 - t2) * 1000) / 1000,
-      p3_clustering_ms: Math.round((t4 - t3) * 1000) / 1000,
-      projection_and_h1_ms: Math.round((t5 - t4) * 1000) / 1000,
-      total_end_to_end_ms: Math.round((t5 - t0) * 1000) / 1000,
+      candidate_retrieval_and_scoring_ms: Math.round((t2 - t1) * 1000) / 1000,
+      p3_clustering_ms: Math.round((t3 - t2) * 1000) / 1000,
+      projection_and_h1_ms: Math.round((t4 - t3) * 1000) / 1000,
+      total_end_to_end_ms: Math.round((t4 - t0) * 1000) / 1000,
     }
 
     return { projections, stats, timingBreakdown }
@@ -628,6 +688,8 @@ export function executeD0Pipeline(articles, options = {}) {
     const fallbackProjections = articles.map((a, idx) => ({
       story_id: `story_single_${a.id}`,
       representative_article_id: Number(a.id),
+      representative_policy: "D0_SINGLETON_FALLBACK",
+      placement_policy: "H1_HIGHEST_RANKED_MEMBER_POSITION",
       alternative_article_ids: [],
       member_article_ids: [Number(a.id)],
       member_count: 1,
@@ -654,12 +716,7 @@ export function executeD0Pipeline(articles, options = {}) {
 /**
  * Benchmarks pipeline across different article batch sizes.
  */
-export function benchmarkPipeline(
-  articles,
-  sizes = [25, 50, 100, 200],
-  runs = 5,
-  threshold = 0.3542,
-) {
+export function benchmarkPipeline(articles, sizes = [25, 50, 100, 200], runs = 5, options = {}) {
   const results = {}
 
   for (const size of sizes) {
@@ -667,7 +724,7 @@ export function benchmarkPipeline(
     const timings = []
 
     for (let r = 0; r < runs; r++) {
-      const res = executeD0Pipeline(slice, { threshold })
+      const res = executeD0Pipeline(slice, options)
       timings.push(res.timingBreakdown.total_end_to_end_ms)
     }
 
