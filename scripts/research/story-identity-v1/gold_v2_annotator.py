@@ -1,8 +1,8 @@
-"""Gold V2 Human Annotation Tooling (STORY-02-A2 Track A2B).
+"""Gold V2 Human Annotation Tooling (STORY-02-A2 Track A2B R1).
 
-Provides offline review tooling, model blinding, diversity-aware ordering,
-batching (Batch A, B, C), and safe checkpointing for expanding human-labeled
-Story Identity evidence without label leakage or machine bias.
+Provides offline review tooling, strict model blinding, label-adjacent metadata
+blinding, diversity-aware ordering, batching (Batch A, B, C), and safe checkpointing
+outside git for expanding human-labeled Story Identity evidence without bias.
 """
 
 from collections import Counter, defaultdict
@@ -29,7 +29,7 @@ EXPECTED_PAIR_COUNT = 77
 ALLOWED_LABELS = frozenset({"SAME_EVENT", "RELATED_TOPIC", "DIFFERENT_EVENT", "UNCERTAIN"})
 CANONICAL_DECISION_SOURCE = "EXPLICIT_USER_DECISION"
 
-# Forbidden model-revealing field names in reviewer views
+# Forbidden model-revealing field names in raw reviewer items or pack columns
 FORBIDDEN_MODEL_FIELDS = frozenset(
     {
         "b0_prediction",
@@ -49,6 +49,39 @@ FORBIDDEN_MODEL_FIELDS = frozenset(
     }
 )
 
+# Reviewer-output-specific forbidden tokens (Section 10)
+# These represent label-adjacent metadata, mining strata, and model identities
+# that could bias the human annotator toward a specific label class.
+FORBIDDEN_HUMAN_TOKENS = frozenset(
+    {
+        "RELATED_TOPIC_BOUNDARY",
+        "DIFFERENT_EVENT_RISK",
+        "HIGH_LEXICAL",
+        "LOW_LEXICAL",
+        "HIGH_SEMANTIC",
+        "LOW_SEMANTIC",
+        "NON_DUO_COVERAGE",
+        "TEMPORAL_BOUNDARY",
+        "CROSS_CATEGORY",
+        "HIGH_SEMANTIC_LOW_ENTITY_ANCHOR",
+        "MINING",
+        "MINING_STRATUM",
+        "MINING_PRIORITY",
+        "SELECTION_REASON",
+        "REVIEW_PRIORITY",
+        "STRATUM",
+        "QWEN",
+        "MISTRAL",
+        "RERANKER",
+        "PREDICTION",
+        "EXPECTED_LABEL",
+        "GOLD_LABEL",
+        "PSEUDO_LABEL",
+        "D0_SCORE",
+        "D1_SCORE",
+    }
+)
+
 
 def compute_file_sha256(file_path: str) -> str:
     """Computes SHA256 digest of a file."""
@@ -61,12 +94,24 @@ def compute_file_sha256(file_path: str) -> str:
     return hasher.hexdigest()
 
 
+def validate_human_view_blinding(rendered_card: str) -> None:
+    """Verifies that no forbidden model names, mining strata, or reasons appear in the card.
+
+    Checks structural lines (outside of article title / feed contents).
+    """
+    card_upper = rendered_card.upper()
+    for token in FORBIDDEN_HUMAN_TOKENS:
+        # Check if the token appears as a structured field header or explicit label
+        if f"{token}:" in card_upper or f"STRATUM" in card_upper or f"MINING" in card_upper:
+            raise ValueError(f"Forbidden human view token leaked in review card: {token}")
+
+
 def verify_annotation_pack_integrity(
     pack_path: str = CANONICAL_PACK_PATH,
     sidecar_path: str = CANONICAL_SIDECAR_PATH,
     strict_sha: bool = True,
 ) -> Dict[str, Any]:
-    """Verifies SHA256 integrity and model-blinding contract of the annotation pack."""
+    """Verifies SHA256 integrity, model-blinding, and human-view blinding contracts."""
     pack_sha = compute_file_sha256(pack_path)
     sidecar_sha = compute_file_sha256(sidecar_path)
 
@@ -100,7 +145,7 @@ def verify_annotation_pack_integrity(
                 f"ID mismatch: {pack_r['annotation_id']} vs {sidecar_p['annotation_id']}"
             )
 
-    # Verify Model Blinding on the pack
+    # Verify Model Blinding on the pack columns
     pack_fieldnames = set(pack_rows[0].keys()) if pack_rows else set()
     leaked_fields = pack_fieldnames & {
         "d0_score",
@@ -109,16 +154,28 @@ def verify_annotation_pack_integrity(
         "mistral_cosine",
         "score",
         "prediction",
+        "stratum",
+        "mining_stratum",
     }
     if leaked_fields:
-        raise ValueError(f"Model scores leaked in annotation pack columns: {leaked_fields}")
+        raise ValueError(f"Forbidden fields leaked in annotation pack columns: {leaked_fields}")
+
+    # Verify Human View Blinding on all candidate cards
+    ordered_pairs = compute_diversity_order(pack_rows, sidecar_pairs)
+    for idx, item in enumerate(ordered_pairs):
+        card = format_blinded_review_card(item, idx, len(ordered_pairs))
+        if "STRATUM" in card.upper() or "MINING" in card.upper() or "PRIORITY" in card.upper():
+            raise ValueError(f"Mining metadata leaked into human card for {item['annotation_id']}")
+        validate_human_view_blinding(card)
 
     return {
         "status": "PASS",
         "pack_sha256": pack_sha,
         "sidecar_sha256": sidecar_sha,
         "pair_count": len(pack_rows),
-        "model_blinding_gate": "PASS",
+        "model_score_blinding_gate": "PASS",
+        "label_adjacent_metadata_blinding_gate": "PASS",
+        "human_view_blinding_gate": "PASS",
     }
 
 
@@ -304,11 +361,10 @@ def get_annotation_status(
 
 
 def format_blinded_review_card(item: Dict[str, Any], index: int, total: int) -> str:
-    """Renders a reviewer card strictly blinded from all model scores and predictions."""
+    """Renders a reviewer card strictly blinded from all model scores, mining metadata, and strata."""
     lines = [
         f"\n{'=' * 70}",
         f"PAIR [{index + 1}/{total}]: {item['annotation_id']} ({item['pair_key']})",
-        f"STRATUM: {item['stratum']}",
         f"{'-' * 70}",
         f"ARTICLE A: [{item['feed_a']}]",
         f"  Title: {item['title_a']}",
@@ -364,20 +420,23 @@ def run_interactive_reviewer(
             continue
 
         print(format_blinded_review_card(item, idx, total))
-        choice = input("Enter choice (1-4, s, q): ").strip().lower()
 
-        if choice == "q":
-            print("Exiting review session. Progress autosaved.")
-            break
-        if choice == "s":
-            continue
-        if choice in label_map:
-            lbl = label_map[choice]
-            rationale = input("Optional concise rationale (Enter to skip): ").strip()
-            save_human_label(pk, lbl, rationale, labels_path=labels_path)
-            print(f"Saved: {pk} -> {lbl}")
-        else:
-            print("Invalid input. Skipping.")
+        while True:
+            choice = input("Enter choice (1-4, s, q): ").strip().lower()
+
+            if choice == "q":
+                print("Exiting review session. Progress autosaved.")
+                return
+            if choice == "s":
+                print(f"Skipped: {pk}")
+                break
+            if choice in label_map:
+                lbl = label_map[choice]
+                rationale = input("Optional concise rationale (Enter to skip): ").strip()
+                save_human_label(pk, lbl, rationale, labels_path=labels_path)
+                print(f"Saved: {pk} -> {lbl}")
+                break
+            print("Invalid choice. Please enter 1, 2, 3, 4, 's' to skip, or 'q' to quit.")
 
 
 if __name__ == "__main__":
