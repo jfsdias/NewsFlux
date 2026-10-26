@@ -1734,15 +1734,23 @@ The active track is `STORY-01B-D` (`GOLD DATASET`, `IN_PROGRESS`), which is auth
 - **C. Sidebar width:** Current contract preserved (`SIDEBAR_WIDTH_CHANGED=NO`). No sidebar width changes.
 - **D. Count capping:** No capping (`COUNT_CAPPING=NONE`). Exact unread counts are preserved without 99+, 999+, abbreviated, or K-format counts for RSS predictability and accessible count labels.
 
-### STORY-01B-R Scope and Invariants (Completed in PR #129)
+### STORY-01B Track Progress and Invariants
 
-- **Audited NewsBlur Reference:** Comprehensive audit of `samuelclay/NewsBlur` (`d7c61b5b3ed7a991a2385b1991449085029711d6`), analyzing two-tier clustering, Redis storage, river view folding, and the transitive chaining failure mode in `docs/research/STORY01B_NEWSBLUR_REFERENCE.md`.
-- **Corpus and Label Contract:** Formalization of the frozen Home-200 corpus (`c12842f11c2bb3e941f182ed946e6a98ae6c70bb69ea8e7908285506af8a2ed8` via `HISTORICAL_ARTIFACT_DECLARATION`, byte SHA256 `0dbd48cdb37063f3a1683f7ef8fc9a2582196a2e8d42c34485b85e12242178f0`, 200 articles, 18,953 cross-feed pairs), pairwise feature schema (`story01b-pair-v1`), 4-class label taxonomy (`SAME_EVENT`, `RELATED_TOPIC`, `DIFFERENT_EVENT`, `UNCERTAIN`), asymmetric loss policy (`FALSE_MERGE_COST > FALSE_SPLIT_COST`), and rejection of unrestricted union-find (`UNRESTRICTED_UNION_FIND_FOR_FINAL_CLUSTERING=REJECTED`) in `docs/research/STORY01B_CORPUS_AND_LABEL_CONTRACT.md`. Storage governance: `STORY_IDENTITY_PRODUCTION_STORAGE=HOLD_ARCHITECTURE_DECISION`, `CLUSTER_WIDE_MARK_READ=HOLD_PRODUCT_DECISION`, `NEW_PRODUCTION_PERSISTENT_STATE_AUTHORIZED=NO`.
-- **Reproducible Offline Research Harness:** Isolated, deterministic harness in `scripts/research/story-identity-v1/` (`harness.py`, `test_harness.py`) validating corpus integrity, Qwen/Mistral embeddings, candidate universe, mathematical semantic vector cosine parity (`PAIR_SCORE_PARITY_GATE=PASS`), transitive chain candidate detection (`TRANSITIVE_CHAIN_CANDIDATE_COUNT=12`), deterministic feature extraction, and 10-strata empirical sampling (`RANDOM_SEED=20261025`, 141 candidate pairs).
+- **STORY-01B-R (Completed in PR #129):**
+  - Audited NewsBlur reference (`samuelclay/NewsBlur` @ `d7c61b5b3ed7a991a2385b1991449085029711d6`), analyzing two-tier clustering, Redis storage, river view folding, and transitive chaining failure modes in `docs/research/STORY01B_NEWSBLUR_REFERENCE.md`.
+  - Formalized frozen Home-200 corpus (`c12842f11c2bb3e941f182ed946e6a98ae6c70bb69ea8e7908285506af8a2ed8` via `HISTORICAL_ARTIFACT_DECLARATION`, byte SHA256 `0dbd48cdb37063f3a1683f7ef8fc9a2582196a2e8d42c34485b85e12242178f0`, 200 articles, 18,953 cross-feed pairs), pairwise feature schema (`story01b-pair-v1`), 4-class label taxonomy (`SAME_EVENT`, `RELATED_TOPIC`, `DIFFERENT_EVENT`, `UNCERTAIN`), asymmetric loss policy (`FALSE_MERGE_COST > FALSE_SPLIT_COST`), and rejection of unrestricted union-find (`UNRESTRICTED_UNION_FIND_FOR_FINAL_CLUSTERING=REJECTED`) in `docs/research/STORY01B_CORPUS_AND_LABEL_CONTRACT.md`. Storage governance: `STORY_IDENTITY_PRODUCTION_STORAGE=HOLD_ARCHITECTURE_DECISION`, `CLUSTER_WIDE_MARK_READ=HOLD_PRODUCT_DECISION`, `NEW_PRODUCTION_PERSISTENT_STATE_AUTHORIZED=NO`.
+  - Implemented reproducible offline research harness in `scripts/research/story-identity-v1/` (`harness.py`, `test_harness.py`) validating corpus integrity, Qwen/Mistral embeddings, candidate universe, mathematical semantic vector cosine parity (`PAIR_SCORE_PARITY_GATE=PASS`), transitive chain candidate detection (`TRANSITIVE_CHAIN_CANDIDATE_COUNT=12`), deterministic feature extraction, and 10-strata empirical sampling (`RANDOM_SEED=20261025`, 141 candidate pairs).
+- **STORY-01B-D (Completed):**
+  - Completed model-blinded human labeling, boundary adjudication, and diversity hardening.
+  - Frozen canonical gold dataset `story01b-gold-v1` (Byte SHA256: `150db715c499835c5ec4d7b2d4d0ea5875913f5c4717aa30258af4dfed640b2b`, 156 deduplicated pairs) outside git in read-only storage (`0444`).
+  - Class distribution: `SAME_EVENT=57` (36.54%), `RELATED_TOPIC=19` (12.18%), `DIFFERENT_EVENT=80` (51.28%), `UNCERTAIN=0` (0.00%).
+  - Ten distinct episode families established for `SAME_EVENT`, reducing dominant family concentration from 89.4% to 73.68% (`IPHONE_DUO_FIRST_GEN_LAUNCH` = 42 pairs; 15 non-Duo positive pairs across 9 families).
+- **STORY-01B-D4 (Current Documentation Reconciliation):**
+  - Reconciled operational story identity contract in `docs/research/STORY01B_CORPUS_AND_LABEL_CONTRACT.md` and roadmap: `SAME_EVENT` defined as articles whose primary editorial subject belongs to the same coherent developing news episode; enshrinement of `PRIMARY_SUBJECT_REQUIRED=YES`, `MULTI_TOPIC_INHERITANCE=NO`, `SAME_SUBJECT != SAME_EVENT`, conservative separation under asymmetric cost, rejection of unrestricted union-find transitivity, binary ML objective formulation with `RELATED_TOPIC` as critical hard-negative, prohibition of naive pair random splitting, article-disjoint cross-validation contract, and episode-macro evaluation metrics.
 - **Invariants:** Zero product code modifications; zero network inference (`MISTRAL_API_CALLS=0`, `OLLAMA_CALLS=0`); zero Miniflux mutations (`MINIFLUX_WRITES=0`); private artifacts excluded from git (`PRIVATE_ARTIFACT_TRACKED_BY_GIT=NO`).
 
 ```text
-GITHUB_MAIN=de138bc961d665005fe3322082034963bf263b16
+GITHUB_MAIN=84183b78e56dc4f20f5ff8e40c7944f35707b143
 PRODUCTION_SHA=dc4154d7729204c65c8a1abaa50f9bfc9f92be64
 PRODUCTION_IMAGE=newsflux-local:dc4154d77292
 MAIN_PRODUCTION_SHA_PARITY=NO
@@ -1756,10 +1764,10 @@ CANARY_REQUIRED=NO
 UPSTREAM_LAST_REVIEWED=f4dfd1c9999d1d72a1164d7fbbe08da972e4ab1b
 UPSTREAM_DRIFT_FROM_REVIEWED_BASELINE=NO
 
-CURRENT_OPEN_PR=#130
-CURRENT_PR_SCOPE=DOCUMENTATION_RECONCILIATION
-CURRENT_PR_STATE=DRAFT
-OPEN_PRS_BEFORE_THIS_RECONCILIATION=NONE
+PR130_MERGE_SHA=84183b78e56dc4f20f5ff8e40c7944f35707b143
+PR130_SCOPE=DOCUMENTATION_RECONCILIATION_POST_PR129
+CURRENT_OPEN_PR=NONE_PRE_PR131
+CURRENT_PR_SCOPE=STORY_01B_D4_CONTRACT_RECONCILIATION
 
 NAV-02F-A=COMPLETED
 PR128_MERGE_SHA=dc4154d7729204c65c8a1abaa50f9bfc9f92be64
@@ -1782,7 +1790,6 @@ CORPUS_CONTRACT=COMPLETE
 CORPUS_FINGERPRINT=c12842f11c2bb3e941f182ed946e6a98ae6c70bb69ea8e7908285506af8a2ed8
 CORPUS_FILE_SHA256=0dbd48cdb37063f3a1683f7ef8fc9a2582196a2e8d42c34485b85e12242178f0
 PAIR_UNIVERSE=18953
-LABEL_QUEUE=141
 TRANSITIVE_CHAIN_CANDIDATE_TRIPLES=12
 UNRESTRICTED_UNION_FIND_FOR_FINAL_CLUSTERING=REJECTED
 FALSE_MERGE_COST_GT_FALSE_SPLIT_COST=YES
@@ -1793,25 +1800,29 @@ MINIFLUX_WRITES=0
 PRODUCTION_REQUESTS=0
 PRIVATE_ARTIFACT_TRACKED_BY_GIT=NO
 
-STORY-01B-D=IN_PROGRESS
-STORY_01B_D_STAGE=HUMAN_LABELING_GATE
-STORY_01B_D_PREFLIGHT=PASS
-READY_FOR_HUMAN_LABELING=YES
-CORPUS_HASH_GATE=PASS
-QUEUE_PAIR_COUNT=141
-QUEUE_REPRODUCIBILITY_GATE=PASS
+STORY-01B-D=COMPLETED
+GOLD_DATASET_VERSION=story01b-gold-v1
+GOLD_DATASET_SHA256=150db715c499835c5ec4d7b2d4d0ea5875913f5c4717aa30258af4dfed640b2b
+TOTAL_PAIRS=156
+SAME_EVENT=57
+RELATED_TOPIC=19
+DIFFERENT_EVENT=80
+UNCERTAIN=0
+SAME_EVENT_DISTINCT_EPISODE_FAMILIES=10
+LARGEST_EPISODE_FAMILY=IPHONE_DUO_FIRST_GEN_LAUNCH
+LARGEST_EPISODE_FAMILY_PAIR_COUNT=42
+LARGEST_EPISODE_FAMILY_SHARE=73.68%
+NON_DUO_SAME_EVENT_PAIR_COUNT=15
 MODEL_BLINDING_GATE=PASS
+AUDIT_TRAIL_GATE=PASS
 PRIVATE_DATA_GIT_GATE=PASS
-NEXT_AUTHORIZED_ACTION=HUMAN_LABELING_ONLY
-STORY01B_D_TOOLING_PERSISTENCE=PARTIAL
-STORY01B_D_LOCAL_BRANCH_PRESENT=NO
-STORY01B_D_WORKTREE_PRESENT=NO
-STORY01B_D_PRIVATE_ANNOTATION_UI_PRESENT=YES
-STORY01B_D_PRIVATE_QUEUE_PRESENT=YES
+DATASET_FREEZE_GATE=PASS
 
-STORY_01B_M=NOT_AUTHORIZED
-STORY_01B_C=NOT_AUTHORIZED
-STORY_02=NOT_AUTHORIZED
+STORY-01B-D4=DOCUMENTATION_RECONCILIATION
+STORY-01B-M=NEXT_AFTER_D4
+STORY-01B-M_STATUS=NOT_AUTHORIZED
+STORY-01B-C=PLANNED
+STORY-02=PLANNED
 
 STORY_RANKER=DORMANT
 STORY_RANKER_DEFAULT=DISABLED
@@ -1826,35 +1837,37 @@ STALE_SCRIPT_RETARGETED=NO
 STALE_SCRIPT_REJECTED=YES
 
 LATEST_RUNTIME_DEPLOYED_TRACK=NAV-02F-A / PR #128
-LATEST_MERGED_TRACK=STORY-01B-R / PR #129
-LAST_COMPLETED_TRACK=STORY-01B-R / PR #129
-LAST_MERGED_PR=#129
-CURRENT_PHASE=STORY_01B_D_GOLD_DATASET
-CURRENT_TRACK=STORY-01B-D
-RECOMMENDED_NEXT_TRACK=STORY-01B-D (HUMAN_LABELING_GATE)
-NEXT_TRACK_AUTHORIZED=STORY-01B-D_HUMAN_LABELING_ONLY
-IMPLEMENTATION_AUTHORIZED=HUMAN_LABELING_ONLY
+LATEST_MERGED_TRACK=DOCS_RECONCILE / PR #130
+LAST_COMPLETED_TRACK=STORY-01B-D / GOLD_FREEZE
+LAST_MERGED_PR=#130
+CURRENT_PHASE=STORY_01B_D4_CONTRACT_RECONCILIATION
+CURRENT_TRACK=STORY-01B-D4
+RECOMMENDED_NEXT_TRACK=STORY-01B-D4 (DOC_PR) -> STORY-01B-M (UPON_PM_AUTHORIZATION)
+NEXT_TRACK_AUTHORIZED=STORY-01B-D4_DOCS_ONLY
+IMPLEMENTATION_AUTHORIZED=DOCS_ONLY
 MERGE_AUTHORIZED=NO
 DEPLOY_AUTHORIZED=NO
 ```
 
 ### Current next-track decision matrix
 
-With STORY-01B-R merged to main in PR #129, the active track is STORY-01B-D (gold dataset curation and labeling), authorized and currently in progress at `HUMAN_LABELING_GATE`. Downstream modeling/clustering tracks (STORY-01B-M, STORY-01B-C, STORY-02) and all product runtime modifications remain on hold.
+With STORY-01B-R and PR #130 merged to main, and STORY-01B-D gold dataset curation successfully completed and frozen in `story01b-gold-v1`, the active track is STORY-01B-D4 (documentation reconciliation of the story identity contract and gold metadata). Downstream modeling (STORY-01B-M), clustering (STORY-01B-C), production story integration (STORY-02), and all product runtime modifications remain unauthorized pending PM authorization.
 
-| Candidate                                   | Status            | Gate / decision                                                                                                                                                | Recommended order        |
-| ------------------------------------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| STORY-01B-D dataset curation & labeling     | IN PROGRESS       | Human labeling and review of the 141 candidate pairs; preserve UNCERTAIN and record any later adjudication auditably. `HUMAN_LABELING_GATE` reached.           | **Current track**        |
-| STORY-01B-R NewsBlur ref & corpus contract  | COMPLETED         | Audit NewsBlur clustering, establish Home-200 corpus contract, feature schema, label taxonomy, and offline harness; research only; merged in PR #129.          | Complete                 |
-| NAV-02F-A unread source category rhythm     | COMPLETED         | Non-collapsible category headings + feed rows; showUnreadFeedsOnly default=false; exact unread counts; merged in PR #128.                                      | Complete                 |
-| HARNESS-VIS-01B Arco selector correction    | COMPLETED         | Correct stale `.arco-message-notice` / `.arco-notification-notice` selectors in `chrome01b-visual-gate.js` to match current rendered roots; merged in PR #127. | Complete                 |
-| HARNESS-VIS-01A browser harness portability | COMPLETED         | Replace hardcoded macOS Chrome paths with cross-platform discovery, `CHROME_PATH` override, and host-independent unit tests; merged in PR #126.                | Complete                 |
-| READER-VISUAL-02B interaction-aware chrome  | COMPLETED         | Auto-hide sticky ActionButtons on downward reading; immediate return on upward scroll/focus; focus safety and reduced motion; production smoke PASS.           | Complete                 |
-| PWA-VAL-01 runtime/device validation        | PARTIAL_ACCEPTED  | Real-device PWA validation executed; PWA_02_TRIGGERED=NO; do not reopen PWA work.                                                                              | Complete                 |
-| NNW-03 / CHROME-01 decisions                | HOLD — product    | Decide structural FooterPanel/SearchAndSortBar consolidation and `/today` Mark older behavior.                                                                 | Later, after decisions   |
-| NNW-05 wide-desktop multi-pane              | HOLD — product    | Decide activation, automatic vs. opt-in, threshold and Home inclusion.                                                                                         | Later, after decisions   |
-| Story activation                            | HOLD — product    | Runtime stays disabled; CPU acceptance policy remains proposed and PM-decision-required; complete activation evidence and explicit authorization are required. | No activation authorized |
-| Eight upstream dependency updates           | HOLD — regression | Assess each production/build/visual/lockfile impact independently.                                                                                             | No bulk update           |
-| DOCKER_PUBLISHING_IDENTITY_01               | BACKLOG           | Decide whether to establish registry publishing before changing identity, guards, credentials or release topology.                                             | Unordered                |
+| Candidate                                   | Status            | Gate / decision                                                                                                                                                             | Recommended order        |
+| ------------------------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| STORY-01B-D4 contract reconciliation        | IN PROGRESS       | Align canonical repository documentation with operational story identity contract, leakage guardrails, and gold freeze metadata; PR in progress.                            | **Current track**        |
+| STORY-01B-D gold dataset freeze             | COMPLETED         | Complete model-blinded annotation, Duo boundary audit, non-Duo adjudication, supplemental diversity queue, and freeze `story01b-gold-v1` (156 pairs, SHA256 `150db715...`). | Complete                 |
+| STORY-01B-R NewsBlur ref & corpus contract  | COMPLETED         | Audit NewsBlur clustering, establish Home-200 corpus contract, feature schema, label taxonomy, and offline harness; research only; merged in PR #129.                       | Complete                 |
+| NAV-02F-A unread source category rhythm     | COMPLETED         | Non-collapsible category headings + feed rows; showUnreadFeedsOnly default=false; exact unread counts; merged in PR #128.                                                   | Complete                 |
+| HARNESS-VIS-01B Arco selector correction    | COMPLETED         | Correct stale `.arco-message-notice` / `.arco-notification-notice` selectors in `chrome01b-visual-gate.js` to match current rendered roots; merged in PR #127.              | Complete                 |
+| HARNESS-VIS-01A browser harness portability | COMPLETED         | Replace hardcoded macOS Chrome paths with cross-platform discovery, `CHROME_PATH` override, and host-independent unit tests; merged in PR #126.                             | Complete                 |
+| READER-VISUAL-02B interaction-aware chrome  | COMPLETED         | Auto-hide sticky ActionButtons on downward reading; immediate return on upward scroll/focus; focus safety and reduced motion; production smoke PASS.                        | Complete                 |
+| PWA-VAL-01 runtime/device validation        | PARTIAL_ACCEPTED  | Real-device PWA validation executed; PWA_02_TRIGGERED=NO; do not reopen PWA work.                                                                                           | Complete                 |
+| STORY-01B-M modeling & benchmarking         | NEXT_AFTER_D4     | Offline binary classifier training/benchmarking; requires article-disjoint cross-validation audit and multi-family macro metrics; NOT AUTHORIZED.                           | Next after D4 approval   |
+| NNW-03 / CHROME-01 decisions                | HOLD — product    | Decide structural FooterPanel/SearchAndSortBar consolidation and `/today` Mark older behavior.                                                                              | Later, after decisions   |
+| NNW-05 wide-desktop multi-pane              | HOLD — product    | Decide activation, automatic vs. opt-in, threshold and Home inclusion.                                                                                                      | Later, after decisions   |
+| Story activation                            | HOLD — product    | Runtime stays disabled; CPU acceptance policy remains proposed and PM-decision-required; complete activation evidence and explicit authorization are required.              | No activation authorized |
+| Eight upstream dependency updates           | HOLD — regression | Assess each production/build/visual/lockfile impact independently.                                                                                                          | No bulk update           |
+| DOCKER_PUBLISHING_IDENTITY_01               | BACKLOG           | Decide whether to establish registry publishing before changing identity, guards, credentials or release topology.                                                          | Unordered                |
 
-The active track is STORY-01B-D (human labeling only). Downstream modeling, clustering, and runtime activation remain unauthorized. Every item remains subject to the project rules: one purpose per PR, no blind upstream sync, no new persistent state without architecture approval, and no merge without explicit user authorization.
+The active track is STORY-01B-D4 (documentation reconciliation only). Downstream modeling, clustering, and runtime activation remain unauthorized. Every item remains subject to the project rules: one purpose per PR, no blind upstream sync, no new persistent state without architecture approval, and no merge without explicit user authorization.
