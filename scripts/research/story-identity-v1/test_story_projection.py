@@ -134,6 +134,13 @@ class TestStoryProjection(unittest.TestCase):
                 # Total members must match
                 self.assertEqual(p["member_count"], len(p["member_article_ids"]))
 
+                # Confidence verification: member_count > 1 must not be marked 'HIGH' without edge support
+                if p["member_count"] > 1:
+                    self.assertEqual(p["confidence"], "UNVERIFIED_MULTI_MEMBER")
+                    self.assertIn("confidence_methodological_debt_note", p)
+                else:
+                    self.assertEqual(p["confidence"], "STANDALONE")
+
     def test_story_projection_determinism(self):
         """Test byte-identical projection JSON across two runs."""
         if not self.has_private_inputs:

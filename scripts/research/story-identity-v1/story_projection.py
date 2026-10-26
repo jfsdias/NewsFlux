@@ -258,7 +258,10 @@ def build_story_projections(
         pub_times = [float(corpus_lookup[m].get("published_at", 0.0)) for m in member_ids]
         feeds = {corpus_lookup[m].get("feed_title", "") for m in member_ids}
 
-        confidence = "HIGH" if len(member_ids) > 1 else "STANDALONE"
+        # Confidence classification: assigning 'HIGH' based purely on member_count > 1 is recognized
+        # as methodological debt. Per STORY-01B red-team audit, true confidence requires edge support /
+        # abstention criteria (Stage C6). We record structural membership status with an explicit note.
+        confidence = "UNVERIFIED_MULTI_MEMBER" if len(member_ids) > 1 else "STANDALONE"
 
         projections.append({
             "story_id": story_id,
@@ -270,6 +273,11 @@ def build_story_projections(
             "source_count": len(feeds),
             "member_count": len(member_ids),
             "confidence": confidence,
+            "confidence_methodological_debt_note": (
+                "Assigning confidence=HIGH based purely on member_count > 1 is methodological debt. "
+                "True confidence bands (STRONG_SUPPORT, MODERATE_SUPPORT, WEAK_SUPPORT) require edge support, "
+                "crossfit consensus, and absence of contradictions (formalized in Stage C6)."
+            ),
             "cluster_policy": cluster_policy,
             "representative_policy": rep_policy,
             "alternative_policy": alt_policy,
