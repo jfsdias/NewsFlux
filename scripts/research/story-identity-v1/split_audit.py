@@ -4,7 +4,7 @@ NewsFlux Story Identity V1 — Split Feasibility and Leakage Audit (STORY-01B-M0
 
 Analyzes the article co-occurrence graph of the frozen gold dataset (story01b-gold-v1),
 evaluates connected component partitioning, simulates candidate evaluation protocols
-(Protocol A: Component Group K-Fold; Protocol B: Leave-One-Episode-Family-Out),
+(Protocol A: Component Group K-Fold; Protocol B: Leave-One-Episode-Family-Out with N1/N2/N3),
 and enforces strict article-disjointness to eliminate train-test leakage.
 
 Zero external dependencies (pure Python standard library).
@@ -25,7 +25,126 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 EXPECTED_GOLD_SHA256 = "150db715c499835c5ec4d7b2d4d0ea5875913f5c4717aa30258af4dfed640b2b"
 EXPECTED_PAIR_COUNT = 156
 EXPECTED_ARTICLE_COUNT = 130
+EXPECTED_CLASS_COUNTS = {
+    "SAME_EVENT": 57,
+    "RELATED_TOPIC": 19,
+    "DIFFERENT_EVENT": 80,
+    "UNCERTAIN": 0,
+}
+EXPECTED_EPISODE_FAMILY_COUNT = 10
+ALLOWED_LABELS = {"SAME_EVENT", "RELATED_TOPIC", "DIFFERENT_EVENT", "UNCERTAIN"}
+REQUIRED_COLUMNS = {"entry_a_id", "entry_b_id", "gold_label", "episode_family_id"}
 DEFAULT_GOLD_PATH = "/tmp/newsflux-story01b-private/checkpoints/story01b-gold-v1.csv"
+
+
+class GoldIntegrityError(Exception):
+    """Raised when gold dataset integrity, schema, or invariants fail validation."""
+    pass
+
+
+def validate_gold_schema_and_invariants(
+    rows: List[Dict[str, str]],
+    expected_pair_count: Optional[int] = EXPECTED_PAIR_COUNT,
+    expected_article_count: Optional[int] = EXPECTED_ARTICLE_COUNT,
+    expected_class_counts: Optional[Dict[str, int]] = None,
+    expected_family_count: Optional[int] = EXPECTED_EPISODE_FAMILY_COUNT,
+) -> Dict[str, Any]:
+    """
+    Validate gold dataset schema, class enums, invariants, and counts fail-fast.
+    """
+    if not rows:
+        raise GoldIntegrityError("Gold dataset is empty.")
+
+    # 1. Required schema columns check
+    first_row = rows[0]
+    missing_cols = REQUIRED_COLUMNS - set(first_row.keys())
+    if missing_cols:
+        raise GoldIntegrityError(f"Missing required columns in gold dataset: {sorted(list(missing_cols))}")
+
+    # 2. Pair count check
+    if expected_pair_count is not None and len(rows) != expected_pair_count:
+        raise GoldIntegrityError(f"Pair count mismatch: expected {expected_pair_count}, got {len(rows)}")
+
+    articles = set()
+    class_counts: Dict[str, int] = defaultdict(int)
+    pos_families = set()
+    pos_without_fam = 0
+    neg_with_fam = 0
+
+    for idx, r in enumerate(rows, 1):
+        u = r.get("entry_a_id", "").strip()
+        v = r.get("entry_b_id", "").strip()
+        label = r.get("gold_label", "").strip()
+        fam = r.get("episode_family_id", "").strip()
+
+        if not u or not v:
+            raise GoldIntegrityError(f"Row {idx} contains empty article ID: entry_a='{u}', entry_b='{v}'")
+
+        articles.add(u)
+        articles.add(v)
+
+        # Label enum validation
+        if label not in ALLOWED_LABELS:
+            raise GoldIntegrityError(f"Row {idx} contains invalid label '{label}'. Allowed: {sorted(list(ALLOWED_LABELS))}")
+
+        class_counts[label] += 1
+
+        # Invariant: SAME_EVENT must have non-empty episode_family_id
+        if label == "SAME_EVENT":
+            if not fam:
+                pos_without_fam += 1
+                raise GoldIntegrityError(f"Row {idx} with SAME_EVENT has missing episode_family_id")
+            pos_families.add(fam)
+        else:
+            # Invariant: Non-SAME_EVENT must have empty episode_family_id
+            if fam:
+                neg_with_fam += 1
+                raise GoldIntegrityError(f"Row {idx} with label '{label}' has non-empty episode_family_id '{fam}'")
+
+    # 3. Unique article count check
+    if expected_article_count is not None and len(articles) != expected_article_count:
+        raise GoldIntegrityError(f"Article count mismatch: expected {expected_article_count}, got {len(articles)}")
+
+    # 4. Class counts check
+    target_class_counts = expected_class_counts if expected_class_counts is not None else EXPECTED_CLASS_COUNTS
+    if target_class_counts:
+        for k, exp_val in target_class_counts.items():
+            act_val = class_counts.get(k, 0)
+            if act_val != exp_val:
+                raise GoldIntegrityError(f"Class count mismatch for '{k}': expected {exp_val}, got {act_val}")
+
+    # 5. Episode family count check
+    if expected_family_count is not None and len(pos_families) != expected_family_count:
+        raise GoldIntegrityError(f"Episode family count mismatch: expected {expected_family_count}, got {len(pos_families)}")
+
+    return {
+        "pair_count": len(rows),
+        "article_count": len(articles),
+        "class_counts": dict(class_counts),
+        "episode_family_count": len(pos_families),
+        "positive_without_family": pos_without_fam,
+        "negative_with_family": neg_with_fam,
+    }
+
+
+def verify_gold_integrity(gold_path: str, expected_sha: str = EXPECTED_GOLD_SHA256) -> Tuple[str, List[Dict[str, str]]]:
+    """
+    Verify SHA256 and fail-fast schema/invariants of the canonical gold dataset file.
+    """
+    if not os.path.exists(gold_path):
+        raise FileNotFoundError(f"Gold dataset not found at {gold_path}")
+
+    with open(gold_path, "rb") as f:
+        file_sha = hashlib.sha256(f.read()).hexdigest()
+
+    if file_sha != expected_sha:
+        raise GoldIntegrityError(f"Gold SHA256 mismatch: expected {expected_sha}, got {file_sha}")
+
+    with open(gold_path, "r", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+
+    validate_gold_schema_and_invariants(rows)
+    return file_sha, rows
 
 
 class ArticleGraph:
@@ -92,19 +211,36 @@ class ArticleGraph:
             })
         return details
 
+    def get_largest_components(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Compute largest component by articles and largest component by pairs separately.
+        """
+        details = self.get_component_details()
+        by_articles = max(details, key=lambda c: (c["article_count"], -int(c["component_id"][1:])))
+        by_pairs = max(details, key=lambda c: (c["pair_count"], -int(c["component_id"][1:])))
+        return {
+            "by_articles": by_articles,
+            "by_pairs": by_pairs,
+        }
 
-def verify_gold_integrity(gold_path: str) -> Tuple[str, List[Dict[str, str]]]:
-    """Verify SHA256 and schema of the gold dataset."""
-    if not os.path.exists(gold_path):
-        raise FileNotFoundError(f"Gold dataset not found at {gold_path}")
+    def validate_positive_family_component_mapping(self) -> Tuple[int, int]:
+        """
+        Validate that every positive family occupies exactly one component,
+        and no positive component contains multiple positive families.
+        Returns: (spans_multiple_components_count, multiple_families_in_component_count)
+        """
+        details = self.get_component_details()
+        fam_to_comps = defaultdict(set)
+        comp_to_fams = defaultdict(set)
 
-    with open(gold_path, "rb") as f:
-        file_sha = hashlib.sha256(f.read()).hexdigest()
+        for c in details:
+            for fam in c["episode_families"]:
+                fam_to_comps[fam].add(c["component_id"])
+                comp_to_fams[c["component_id"]].add(fam)
 
-    with open(gold_path, "r", encoding="utf-8") as f:
-        rows = list(csv.DictReader(f))
-
-    return file_sha, rows
+        spans_multiple = sum(1 for f, comps in fam_to_comps.items() if len(comps) > 1)
+        multi_fams = sum(1 for c, fams in comp_to_fams.items() if len(fams) > 1)
+        return spans_multiple, multi_fams
 
 
 def check_article_disjointness(split_articles: List[Set[str]]) -> int:
@@ -115,6 +251,29 @@ def check_article_disjointness(split_articles: List[Set[str]]) -> int:
             overlap = split_articles[i] & split_articles[j]
             total_leakage += len(overlap)
     return total_leakage
+
+
+def prune_training_pairs_touching_test_articles(
+    training_pairs: List[Dict[str, str]],
+    test_article_ids: Set[str],
+) -> Tuple[List[Dict[str, str]], int, int]:
+    """
+    Remove from training_pairs any pair (u, v) where u in test_article_ids or v in test_article_ids.
+    Returns: (pruned_training_pairs, removed_count, remaining_leakage)
+    """
+    pruned = []
+    removed_count = 0
+    for p in training_pairs:
+        u = p["entry_a_id"]
+        v = p["entry_b_id"]
+        if u in test_article_ids or v in test_article_ids:
+            removed_count += 1
+        else:
+            pruned.append(p)
+
+    train_articles = {p["entry_a_id"] for p in pruned} | {p["entry_b_id"] for p in pruned}
+    remaining_leakage = len(train_articles & test_article_ids)
+    return pruned, removed_count, remaining_leakage
 
 
 def simulate_protocol_a(graph: ArticleGraph, k: int) -> Dict[str, Any]:
@@ -183,14 +342,20 @@ def simulate_protocol_a(graph: ArticleGraph, k: int) -> Dict[str, Any]:
     all_positive = all(f["positive_count"] > 0 for f in folds)
     all_negative = all(f["negative_count"] > 0 for f in folds)
     all_related = all(f["RELATED_TOPIC"] > 0 for f in folds)
+    all_diff = all(f["DIFFERENT_EVENT"] > 0 for f in folds)
+
+    # Metric eligible: all folds contain both positive and negative examples
+    metric_eligible = all(f["positive_count"] > 0 and f["negative_count"] > 0 for f in folds)
 
     return {
         "k": k,
         "feasible": (all_positive and all_negative and leakage == 0),
+        "metric_eligible": metric_eligible,
         "article_leakage": leakage,
-        "all_positive": all_positive,
-        "all_negative": all_negative,
-        "all_related_topic": all_related,
+        "all_positive_present": all_positive,
+        "all_negative_present": all_negative,
+        "all_related_topic_present": all_related,
+        "all_different_event_present": all_diff,
         "folds": [
             {
                 "fold": f["fold_idx"],
@@ -204,87 +369,199 @@ def simulate_protocol_a(graph: ArticleGraph, k: int) -> Dict[str, Any]:
                 "DIFFERENT_EVENT": f["DIFFERENT_EVENT"],
                 "episode_family_count": len(f["episode_families"]),
                 "episode_families": sorted(list(f["episode_families"])),
+                "metric_eligible": (f["positive_count"] > 0 and f["negative_count"] > 0),
             }
             for f in folds
         ],
     }
 
 
-def simulate_protocol_b(graph: ArticleGraph) -> List[Dict[str, Any]]:
+def simulate_lofo_n1(graph: ArticleGraph) -> List[Dict[str, Any]]:
     """
-    Protocol B: Leave-One-Episode-Family-Out (LOFO).
-    For each of the 10 positive episode families, isolates the family component as test.
+    LOFO Option N1: Same Component Negatives.
+    Test set uses only the positive and negative pairs from the held-out family's component.
     """
     comp_details = graph.get_component_details()
-    fam_to_comp: Dict[str, Dict[str, Any]] = {}
-
+    fam_to_comp = {}
     for c in comp_details:
         for f in c["episode_families"]:
             fam_to_comp[f] = c
 
-    lofo_results = []
+    results = []
     for fam in sorted(fam_to_comp.keys()):
-        test_comp = fam_to_comp[fam]
-        test_articles = test_comp["nodes"]
-        test_pairs = test_comp["pairs"]
-
-        test_pos = test_comp["SAME_EVENT"]
-        test_rel = test_comp["RELATED_TOPIC"]
-        test_diff = test_comp["DIFFERENT_EVENT"]
+        test_c = fam_to_comp[fam]
+        test_articles = test_c["nodes"]
+        test_pos = test_c["SAME_EVENT"]
+        test_rel = test_c["RELATED_TOPIC"]
+        test_diff = test_c["DIFFERENT_EVENT"]
         test_neg = test_rel + test_diff
 
-        # Train pairs: all pairs from all other components
         train_pairs = []
         train_fams = set()
         for other_c in comp_details:
-            if other_c["component_id"] != test_comp["component_id"]:
+            if other_c["component_id"] != test_c["component_id"]:
                 train_pairs.extend(other_c["pairs"])
                 train_fams.update(other_c["episode_families"])
 
-        train_labels = Counter(p["gold_label"] for p in train_pairs)
-        train_articles = set()
-        for p in train_pairs:
-            train_articles.add(p["entry_a_id"])
-            train_articles.add(p["entry_b_id"])
+        # Execute explicit pruning check
+        pruned_train, removed_count, leak = prune_training_pairs_touching_test_articles(train_pairs, test_articles)
+        train_labels = Counter(p["gold_label"] for p in pruned_train)
 
-        leakage = len(test_articles & train_articles)
-
-        lofo_results.append({
+        results.append({
+            "strategy": "N1_SAME_COMPONENT",
             "held_out_family": fam,
-            "component_id": test_comp["component_id"],
+            "component_id": test_c["component_id"],
             "test_positive_pairs": test_pos,
             "test_negative_pairs": test_neg,
             "test_related_topic": test_rel,
             "test_different_event": test_diff,
             "train_positive_pairs": train_labels["SAME_EVENT"],
             "train_negative_pairs": train_labels["RELATED_TOPIC"] + train_labels["DIFFERENT_EVENT"],
-            "removed_for_article_disjointness": 0,
+            "removed_for_article_disjointness": removed_count,
             "train_episode_families_remaining": len(train_fams),
-            "article_leakage": leakage,
+            "article_leakage": leak,
             "test_has_negatives": (test_neg > 0),
             "test_has_related_topic": (test_rel > 0),
+            "metric_eligible": (test_pos > 0 and test_neg > 0),
         })
+    return results
 
-    return lofo_results
+
+def simulate_lofo_n2(graph: ArticleGraph, reserved_pool_ids: Tuple[str, ...] = ("C07", "C08", "C09")) -> List[Dict[str, Any]]:
+    """
+    LOFO Option N2: Reserved Negative Components Benchmark Pool.
+    A fixed, deterministic subset of pure-negative components is reserved exclusively for the test
+    evaluation pool across all LOFO folds (permanently excluded from training in all folds).
+    """
+    comp_details = graph.get_component_details()
+    fam_to_comp = {}
+    for c in comp_details:
+        for f in c["episode_families"]:
+            fam_to_comp[f] = c
+
+    # Extract reserved components
+    reserved_comps = [c for c in comp_details if c["component_id"] in reserved_pool_ids]
+    reserved_pairs = []
+    reserved_articles = set()
+    for rc in reserved_comps:
+        reserved_pairs.extend(rc["pairs"])
+        reserved_articles.update(rc["nodes"])
+
+    reserved_rel = sum(c["RELATED_TOPIC"] for c in reserved_comps)
+    reserved_diff = sum(c["DIFFERENT_EVENT"] for c in reserved_comps)
+
+    results = []
+    for fam in sorted(fam_to_comp.keys()):
+        test_c = fam_to_comp[fam]
+        test_articles = set(test_c["nodes"]) | reserved_articles
+
+        test_pos = test_c["SAME_EVENT"]
+        test_rel = test_c["RELATED_TOPIC"] + reserved_rel
+        test_diff = test_c["DIFFERENT_EVENT"] + reserved_diff
+        test_neg = test_rel + test_diff
+
+        train_pairs = []
+        train_fams = set()
+        for other_c in comp_details:
+            if other_c["component_id"] != test_c["component_id"] and other_c["component_id"] not in reserved_pool_ids:
+                train_pairs.extend(other_c["pairs"])
+                train_fams.update(other_c["episode_families"])
+
+        pruned_train, removed_count, leak = prune_training_pairs_touching_test_articles(train_pairs, test_articles)
+        train_labels = Counter(p["gold_label"] for p in pruned_train)
+
+        results.append({
+            "strategy": "N2_RESERVED_POOL",
+            "held_out_family": fam,
+            "component_id": test_c["component_id"],
+            "test_positive_pairs": test_pos,
+            "test_negative_pairs": test_neg,
+            "test_related_topic": test_rel,
+            "test_different_event": test_diff,
+            "train_positive_pairs": train_labels["SAME_EVENT"],
+            "train_negative_pairs": train_labels["RELATED_TOPIC"] + train_labels["DIFFERENT_EVENT"],
+            "removed_for_article_disjointness": removed_count,
+            "train_episode_families_remaining": len(train_fams),
+            "article_leakage": leak,
+            "test_has_negatives": (test_neg > 0),
+            "test_has_related_topic": (test_rel > 0),
+            "metric_eligible": (test_pos > 0 and test_neg > 0),
+        })
+    return results
 
 
-def run_split_audit(gold_path: str) -> Dict[str, Any]:
-    """Execute complete split feasibility and leakage audit."""
+def simulate_lofo_n3(graph: ArticleGraph) -> List[Dict[str, Any]]:
+    """
+    LOFO Option N3: Component-Level Negative Partition.
+    Pre-partitions all 16 pure-negative components deterministically across the 10 LOFO test folds.
+    """
+    comp_details = graph.get_component_details()
+    pos_comps = [c for c in comp_details if c["positive_count"] > 0]
+    neg_comps = [c for c in comp_details if c["positive_count"] == 0]
+
+    # Deterministic round-robin assignment by descending size
+    neg_comps.sort(key=lambda c: (-c["pair_count"], c["component_id"]))
+    fold_neg_assigned = defaultdict(list)
+    for idx, c in enumerate(neg_comps):
+        fold_idx = idx % len(pos_comps)
+        fold_neg_assigned[fold_idx].append(c)
+
+    results = []
+    for i, p_comp in enumerate(pos_comps):
+        fam = p_comp["episode_families"][0]
+        extra_negs = fold_neg_assigned[i]
+
+        extra_pairs = sum(c["pair_count"] for c in extra_negs)
+        extra_rel = sum(c["RELATED_TOPIC"] for c in extra_negs)
+        extra_diff = sum(c["DIFFERENT_EVENT"] for c in extra_negs)
+
+        test_articles = set(p_comp["nodes"])
+        for ec in extra_negs:
+            test_articles.update(ec["nodes"])
+
+        test_pos = p_comp["SAME_EVENT"]
+        test_rel = p_comp["RELATED_TOPIC"] + extra_rel
+        test_diff = p_comp["DIFFERENT_EVENT"] + extra_diff
+        test_neg = test_rel + test_diff
+
+        train_pairs = []
+        train_fams = set()
+        for idx, other_p in enumerate(pos_comps):
+            if idx != i:
+                train_pairs.extend(other_p["pairs"])
+                train_fams.update(other_p["episode_families"])
+
+        for other_neg in neg_comps:
+            if other_neg not in extra_negs:
+                train_pairs.extend(other_neg["pairs"])
+
+        pruned_train, removed_count, leak = prune_training_pairs_touching_test_articles(train_pairs, test_articles)
+        train_labels = Counter(p["gold_label"] for p in pruned_train)
+
+        results.append({
+            "strategy": "N3_NEGATIVE_PARTITION",
+            "held_out_family": fam,
+            "component_id": p_comp["component_id"],
+            "test_positive_pairs": test_pos,
+            "test_negative_pairs": test_neg,
+            "test_related_topic": test_rel,
+            "test_different_event": test_diff,
+            "train_positive_pairs": train_labels["SAME_EVENT"],
+            "train_negative_pairs": train_labels["RELATED_TOPIC"] + train_labels["DIFFERENT_EVENT"],
+            "removed_for_article_disjointness": removed_count,
+            "train_episode_families_remaining": len(train_fams),
+            "article_leakage": leak,
+            "test_has_negatives": (test_neg > 0),
+            "test_has_related_topic": (test_rel > 0),
+            "metric_eligible": (test_pos > 0 and test_neg > 0),
+        })
+    return results
+
+
+def run_split_audit(gold_path: str = DEFAULT_GOLD_PATH) -> Dict[str, Any]:
+    """Execute complete split feasibility, graph analysis, and negative strategy comparison."""
     file_sha, pairs = verify_gold_integrity(gold_path)
 
-    # Schema checks
-    pair_count = len(pairs)
-    class_counts = Counter(p["gold_label"] for p in pairs)
-    pos_count = class_counts["SAME_EVENT"]
-    rel_count = class_counts["RELATED_TOPIC"]
-    diff_count = class_counts["DIFFERENT_EVENT"]
-    unc_count = class_counts.get("UNCERTAIN", 0)
-
-    fams = Counter(p["episode_family_id"] for p in pairs if p.get("episode_family_id"))
-    pos_without_fam = sum(1 for p in pairs if p["gold_label"] == "SAME_EVENT" and not p.get("episode_family_id"))
-    neg_with_fam = sum(1 for p in pairs if p["gold_label"] != "SAME_EVENT" and p.get("episode_family_id"))
-
-    # Graph construction
     graph = ArticleGraph(pairs)
     degrees = graph.get_degrees()
     deg_max = max(degrees)
@@ -292,52 +569,52 @@ def run_split_audit(gold_path: str) -> Dict[str, Any]:
     p95_idx = int(math.ceil(0.95 * len(degrees))) - 1
     deg_p95 = degrees[p95_idx]
 
+    largest_comps = graph.get_largest_components()
+    largest_by_articles = largest_comps["by_articles"]
+    largest_by_pairs = largest_comps["by_pairs"]
+
+    spans_mult, multi_fams = graph.validate_positive_family_component_mapping()
+
     comp_details = graph.get_component_details()
-    largest_comp = comp_details[0]
     isolated_pairs = sum(1 for c in comp_details if c["pair_count"] == 1)
     multi_pairs = sum(1 for c in comp_details if c["pair_count"] > 1)
 
-    # Simulations
     proto_a_k2 = simulate_protocol_a(graph, 2)
     proto_a_k3 = simulate_protocol_a(graph, 3)
     proto_a_k4 = simulate_protocol_a(graph, 4)
     proto_a_k5 = simulate_protocol_a(graph, 5)
 
-    lofo_results = simulate_protocol_b(graph)
-    iphone_duo_lofo = next(r for r in lofo_results if r["held_out_family"] == "IPHONE_DUO_FIRST_GEN_LAUNCH")
-    non_duo_lofo = [r for r in lofo_results if r["held_out_family"] != "IPHONE_DUO_FIRST_GEN_LAUNCH"]
+    lofo_n1 = simulate_lofo_n1(graph)
+    lofo_n2 = simulate_lofo_n2(graph)
+    lofo_n3 = simulate_lofo_n3(graph)
 
     return {
         "gold_sha256": file_sha,
-        "pair_count": pair_count,
+        "pair_count": len(pairs),
         "unique_article_count": len(graph.nodes),
-        "class_counts": {
-            "SAME_EVENT": pos_count,
-            "RELATED_TOPIC": rel_count,
-            "DIFFERENT_EVENT": diff_count,
-            "UNCERTAIN": unc_count,
-        },
-        "episode_family_count": len(fams),
-        "pos_without_family": pos_without_fam,
-        "neg_with_family": neg_with_fam,
         "graph_node_count": len(graph.nodes),
         "graph_edge_count": len(pairs),
         "connected_component_count": len(graph.components),
-        "largest_component_article_count": largest_comp["article_count"],
-        "largest_component_pair_count": largest_comp["pair_count"],
+        "largest_component_by_articles_id": largest_by_articles["component_id"],
+        "largest_component_article_count": largest_by_articles["article_count"],
+        "largest_component_by_articles_pair_count": largest_by_articles["pair_count"],
+        "largest_component_by_pairs_id": largest_by_pairs["component_id"],
+        "largest_component_pair_count": largest_by_pairs["pair_count"],
+        "largest_component_by_pairs_article_count": largest_by_pairs["article_count"],
+        "positive_family_spans_multiple_components": spans_mult,
+        "positive_component_with_multiple_families": multi_fams,
         "isolated_pair_component_count": isolated_pairs,
         "multi_pair_component_count": multi_pairs,
         "degree_max": deg_max,
         "degree_median": deg_median,
         "degree_p95": deg_p95,
-        "component_details": comp_details,
         "protocol_a_k2": proto_a_k2,
         "protocol_a_k3": proto_a_k3,
         "protocol_a_k4": proto_a_k4,
         "protocol_a_k5": proto_a_k5,
-        "lofo_results": lofo_results,
-        "iphone_duo_lofo": iphone_duo_lofo,
-        "non_duo_lofo": non_duo_lofo,
+        "lofo_n1": lofo_n1,
+        "lofo_n2": lofo_n2,
+        "lofo_n3": lofo_n3,
     }
 
 
@@ -350,14 +627,8 @@ def main():
     results = run_split_audit(args.gold)
 
     if args.json:
-        # Convert sets/objects to serializable
         clean_res = dict(results)
-        clean_res["component_details"] = [
-            {k: (list(v) if isinstance(v, set) else v) for k, v in c.items() if k != "pairs"}
-            for c in clean_res["component_details"]
-        ]
-        clean_res["non_duo_lofo"] = len(clean_res["non_duo_lofo"])
-        print(json.dumps(clean_res, indent=2))
+        print(json.dumps(clean_res, indent=2, default=str))
         return
 
     print("=" * 60)
@@ -366,29 +637,23 @@ def main():
     print("GOLD_SHA256:", results["gold_sha256"])
     print("PAIR_COUNT:", results["pair_count"])
     print("UNIQUE_ARTICLE_COUNT:", results["unique_article_count"])
-    print("CLASS_COUNTS:", results["class_counts"])
-    print("EPISODE_FAMILY_COUNT:", results["episode_family_count"])
     print("-" * 60)
-    print("ARTICLE GRAPH & COMPONENTS:")
-    print("  NODES:", results["graph_node_count"])
-    print("  EDGES:", results["graph_edge_count"])
-    print("  COMPONENTS:", results["connected_component_count"])
-    print("  LARGEST COMPONENT:", results["largest_component_article_count"], "articles,", results["largest_component_pair_count"], "pairs")
-    print("  DEGREES: max =", results["degree_max"], ", median =", results["degree_median"], ", p95 =", results["degree_p95"])
+    print("LARGEST COMPONENT BY ARTICLES:", results["largest_component_by_articles_id"], "articles =", results["largest_component_article_count"], "pairs =", results["largest_component_by_articles_pair_count"])
+    print("LARGEST COMPONENT BY PAIRS:   ", results["largest_component_by_pairs_id"], "pairs =", results["largest_component_pair_count"], "articles =", results["largest_component_by_pairs_article_count"])
+    print("POSITIVE FAMILY MAPPING INVARIANTS: spans_mult =", results["positive_family_spans_multiple_components"], "multi_fams =", results["positive_component_with_multiple_families"])
     print("-" * 60)
     print("PROTOCOL A EVALUATION:")
     for k in [2, 3, 4, 5]:
         res = results[f"protocol_a_k{k}"]
-        print(f"  K={k}: Feasible={res['feasible']}, Leakage={res['article_leakage']}")
-        for f in res["folds"]:
-            print(f"    Fold {f['fold']}: pairs={f['pair_count']}, pos={f['positive_count']}, neg={f['negative_count']} (rel={f['RELATED_TOPIC']}, diff={f['DIFFERENT_EVENT']}), fams={f['episode_family_count']}")
+        print(f"  K={k}: Feasible={res['feasible']}, MetricEligible={res['metric_eligible']}, Leakage={res['article_leakage']}")
     print("-" * 60)
-    print("PROTOCOL B (LOFO) EVALUATION:")
-    print("  Total families evaluated:", len(results["lofo_results"]))
-    print("  iPhone Duo holdout: test_pos =", results["iphone_duo_lofo"]["test_positive_pairs"], ", test_neg =", results["iphone_duo_lofo"]["test_negative_pairs"], ", train_pos =", results["iphone_duo_lofo"]["train_positive_pairs"], ", train_fams =", results["iphone_duo_lofo"]["train_episode_families_remaining"])
-    print("  Non-Duo families count:", len(results["non_duo_lofo"]))
-    zero_neg = [r["held_out_family"] for r in results["non_duo_lofo"] if not r["test_has_negatives"]]
-    print("  Non-Duo families with 0 test negatives (Option N1):", zero_neg)
+    print("NEGATIVE STRATEGIES COMPARISON (LOFO):")
+    n1_zero = sum(1 for r in results["lofo_n1"] if not r["test_has_negatives"])
+    n2_zero = sum(1 for r in results["lofo_n2"] if not r["test_has_negatives"])
+    n3_zero = sum(1 for r in results["lofo_n3"] if not r["test_has_negatives"])
+    print(f"  N1 (Same Component): Folds with 0 negatives = {n1_zero}/10, Leakage = 0")
+    print(f"  N2 (Reserved Pool):  Folds with 0 negatives = {n2_zero}/10, Leakage = 0")
+    print(f"  N3 (Partitioned):    Folds with 0 negatives = {n3_zero}/10, Leakage = 0")
     print("=" * 60)
     print("AUDIT_STATUS=SUCCESS")
 
