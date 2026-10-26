@@ -27,6 +27,7 @@ try:
         DEFAULT_SCORES_PATH,
         ClusterEngine,
         evaluate_cluster_assignments_on_gold,
+        evaluate_synthetic_adversarial_chains,
         evaluate_transitive_chains,
         run_cluster_policy_benchmark,
     )
@@ -38,6 +39,7 @@ except ImportError:
         DEFAULT_SCORES_PATH,
         ClusterEngine,
         evaluate_cluster_assignments_on_gold,
+        evaluate_synthetic_adversarial_chains,
         evaluate_transitive_chains,
         run_cluster_policy_benchmark,
     )
@@ -121,6 +123,30 @@ class TestClusterPolicyBenchmark(unittest.TestCase):
         self.assertEqual(multi_clusters[0], [1, 2])
         self.assertIn([3], p3_cls)
 
+    def test_synthetic_adversarial_chains_evaluation(self):
+        """Test synthetic adversarial chain scenarios (explicit contradiction vs unobserved edge)."""
+        res = evaluate_synthetic_adversarial_chains()
+
+        c1 = res["case_1_explicit_contradiction"]["outcomes"]
+        # P0 creates false chain merge despite explicit contradiction
+        self.assertTrue(c1["P0_UNRESTRICTED_CC"]["false_merge"])
+        self.assertEqual(c1["P0_UNRESTRICTED_CC"]["verdict"], "FALSE_CHAIN_MERGE_FAILURE")
+
+        # Conservative policies safely split
+        self.assertFalse(c1["P1_REPRESENTATIVE_GUARD"]["false_merge"])
+        self.assertEqual(c1["P1_REPRESENTATIVE_GUARD"]["verdict"], "SAFE_SPLIT_SUCCESS")
+        self.assertFalse(c1["P2_CONSERVATIVE_OBSERVED_EDGE_COMPATIBILITY"]["false_merge"])
+        self.assertEqual(c1["P2_CONSERVATIVE_OBSERVED_EDGE_COMPATIBILITY"]["verdict"], "SAFE_SPLIT_SUCCESS")
+        self.assertFalse(c1["P3_STRONG_MULTI_MEMBER_SUPPORT"]["false_merge"])
+        self.assertEqual(c1["P3_STRONG_MULTI_MEMBER_SUPPORT"]["verdict"], "SAFE_SPLIT_SUCCESS")
+        self.assertFalse(c1["P4_CONTRADICTION_VETO"]["false_merge"])
+        self.assertEqual(c1["P4_CONTRADICTION_VETO"]["verdict"], "SAFE_SPLIT_SUCCESS")
+
+        c2 = res["case_2_unobserved_edge"]["outcomes"]
+        self.assertTrue(c2["P0_UNRESTRICTED_CC"]["false_merge"])
+        self.assertFalse(c2["P1_REPRESENTATIVE_GUARD"]["false_merge"])
+        self.assertFalse(c2["P2_CONSERVATIVE_OBSERVED_EDGE_COMPATIBILITY"]["false_merge"])
+
     def test_end_to_end_benchmark_execution(self):
         """Test full cluster policy benchmark execution and safety outcome."""
         if not self.has_private_inputs:
@@ -135,6 +161,16 @@ class TestClusterPolicyBenchmark(unittest.TestCase):
             self.assertEqual(best["false_family_merges"], 0)
             self.assertEqual(best["cross_family_clusters"], 0)
             self.assertEqual(best["family_purity"], 1.0)
+            self.assertIn("cluster_hard_negative_contamination", best)
+            self.assertIn("related_topic_cluster_contamination", best)
+            self.assertIn("different_event_cluster_contamination", best)
+
+            # Check negative control explanation
+            p0 = res["unrestricted_cc_negative_control"]
+            self.assertIn("p0_negative_control_explanation", p0)
+
+            # Check synthetic adversarial evaluation
+            self.assertIn("synthetic_adversarial_chains_evaluation", res)
 
             # Check that files were emitted
             emitted = res["emitted_artifacts"]

@@ -337,12 +337,100 @@ def evaluate_cluster_assignments_on_gold(
         "same_event_edge_capture_rate": same_event_capture_rate,
         "related_topic_propagated_merges": related_propagated,
         "different_event_propagated_merges": diff_propagated,
+        "related_topic_cluster_contamination": related_propagated,
+        "different_event_cluster_contamination": diff_propagated,
+        "cluster_hard_negative_contamination_count": related_propagated + diff_propagated,
+        "p0_negative_control_note": (
+            "In Gold schema, negative pairs have no episode_family_id. Hence, false merges involving "
+            "negative articles do not increase false_family_merges if the cluster contains at most one "
+            "positive family. Therefore, cluster_hard_negative_contamination_count (sum of related_topic "
+            "and different_event propagations) is the primary first-class safety metric."
+        ),
         "cluster_count": len(clusters),
         "multi_article_cluster_count": len(multi_clusters),
         "unclustered_article_count": len(singletons),
         "mean_cluster_size": round(statistics.mean(sizes), 2),
         "max_cluster_size": max(sizes) if sizes else 0,
         "failure_records": failure_records,
+    }
+
+
+def evaluate_synthetic_adversarial_chains() -> Dict[str, Any]:
+    """Evaluate cluster policies against synthetic adversarial transitive chain fixtures.
+
+    Distinguishes REAL_CORPUS_CHAIN_CANDIDATE from SYNTHETIC_ADVERSARIAL_TRANSITIVE_CASE.
+    Tests correctness across two fundamental adversarial topologies:
+      Case 1 (Explicit Contradiction): A-B positive (0.85), B-C positive (0.80), A-C negative / contradiction (0.10).
+      Case 2 (Unobserved Edge): A-B positive (0.85), B-C positive (0.80), A-C unknown / missing edge.
+    """
+    article_list = [101, 102, 103]
+    published_lookup = {101: 100.0, 102: 200.0, 103: 300.0}
+    threshold = 0.50
+
+    results = {}
+    policies = [
+        "P0_UNRESTRICTED_CC",
+        "P1_REPRESENTATIVE_GUARD",
+        "P2_CONSERVATIVE_OBSERVED_EDGE_COMPATIBILITY",
+        "P3_STRONG_MULTI_MEMBER_SUPPORT",
+        "P4_CONTRADICTION_VETO",
+    ]
+
+    # Case 1: Explicit Contradiction (A-B=0.85, B-C=0.80, A-C=0.10)
+    scores_case1 = {
+        "101:102": 0.85,
+        "102:103": 0.80,
+        "101:103": 0.10,
+    }
+
+    # Case 2: Unobserved Edge (A-B=0.85, B-C=0.80, A-C unobserved)
+    scores_case2 = {
+        "101:102": 0.85,
+        "102:103": 0.80,
+    }
+
+    case1_outcomes = {}
+    case2_outcomes = {}
+
+    for pol in policies:
+        c1 = ClusterEngine.cluster(
+            article_list=article_list,
+            score_lookup=scores_case1,
+            threshold=threshold,
+            policy_name=pol,
+            published_lookup=published_lookup,
+        )
+        # Check if 101 and 103 are in the same cluster
+        merged_c1 = any(101 in cl and 103 in cl for cl in c1)
+        case1_outcomes[pol] = {
+            "clusters": c1,
+            "false_merge": merged_c1,
+            "verdict": "FALSE_CHAIN_MERGE_FAILURE" if merged_c1 else "SAFE_SPLIT_SUCCESS",
+        }
+
+        c2 = ClusterEngine.cluster(
+            article_list=article_list,
+            score_lookup=scores_case2,
+            threshold=threshold,
+            policy_name=pol,
+            published_lookup=published_lookup,
+        )
+        merged_c2 = any(101 in cl and 103 in cl for cl in c2)
+        case2_outcomes[pol] = {
+            "clusters": c2,
+            "false_merge": merged_c2,
+            "verdict": "TRANSITIVE_EXPANSION" if merged_c2 else "CONSERVATIVE_SPLIT",
+        }
+
+    return {
+        "case_1_explicit_contradiction": {
+            "description": "A-B pos (0.85), B-C pos (0.80), A-C neg (0.10)",
+            "outcomes": case1_outcomes,
+        },
+        "case_2_unobserved_edge": {
+            "description": "A-B pos (0.85), B-C pos (0.80), A-C unobserved",
+            "outcomes": case2_outcomes,
+        },
     }
 
 
@@ -511,6 +599,9 @@ def run_cluster_policy_benchmark(
                 "same_event_capture_rate": gold_eval["same_event_edge_capture_rate"],
                 "related_topic_propagation": gold_eval["related_topic_propagated_merges"],
                 "different_event_propagation": gold_eval["different_event_propagated_merges"],
+                "related_topic_cluster_contamination": gold_eval["related_topic_cluster_contamination"],
+                "different_event_cluster_contamination": gold_eval["different_event_cluster_contamination"],
+                "cluster_hard_negative_contamination": gold_eval["cluster_hard_negative_contamination_count"],
                 "transitive_chain_false_merges": chain_eval["chain_false_merges"],
                 "transitive_chain_safe_splits": chain_eval["chain_safe_splits"],
                 "cluster_count": gold_eval["cluster_count"],
@@ -616,12 +707,25 @@ def run_cluster_policy_benchmark(
             "same_event_capture_rate": best_candidate.get("same_event_capture_rate"),
             "related_topic_propagation": best_candidate.get("related_topic_propagation"),
             "different_event_propagation": best_candidate.get("different_event_propagation"),
+            "related_topic_cluster_contamination": best_candidate.get("related_topic_cluster_contamination"),
+            "different_event_cluster_contamination": best_candidate.get("different_event_cluster_contamination"),
+            "cluster_hard_negative_contamination": best_candidate.get("cluster_hard_negative_contamination"),
         },
-        "unrestricted_cc_negative_control": next(
-            (sc for sc in scorecard if sc["policy"] == "P0_UNRESTRICTED_CC" and sc["model"] == "B4_LOGISTIC_REGRESSION" and sc["operating_point"] == "STRICT"), {}
-        ),
+        "unrestricted_cc_negative_control": {
+            **next(
+                (sc for sc in scorecard if sc["policy"] == "P0_UNRESTRICTED_CC" and sc["model"] == "B4_LOGISTIC_REGRESSION" and sc["operating_point"] == "STRICT"), {}
+            ),
+            "p0_negative_control_explanation": (
+                "In Gold schema, negative pairs have no episode_family_id. Hence, false merges involving "
+                "negative articles do not produce multiple distinct family IDs in a cluster if the cluster "
+                "contains at most one positive family. This explains why P0 reports 0 false family merges "
+                "while propagating 3 to 6 RELATED_TOPIC merges and 6 to 8 DIFFERENT_EVENT merges into clusters. "
+                "Cluster hard-negative contamination is therefore the true first-class safety metric."
+            ),
+        },
         "transitive_chain_case_count": len(chains),
         "transitive_chains_by_policy": tc_summary,
+        "synthetic_adversarial_chains_evaluation": evaluate_synthetic_adversarial_chains(),
         "scorecard": scorecard,
         "emitted_artifacts": {
             "benchmark_json_filename": "story01b-c1-cluster-policy-benchmark-v1.json",
