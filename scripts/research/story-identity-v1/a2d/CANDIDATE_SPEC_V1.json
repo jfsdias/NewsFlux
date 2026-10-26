@@ -1,0 +1,94 @@
+{
+  "version": "STORY_02_A2D_CANDIDATE_SPEC_V1",
+  "purpose": "Compare four small, predeclared, safety-aware scorers on the frozen Gold V2 component-group 3-fold split. This specification is committed before any A2D outer-test evaluation.",
+  "outer_evaluation": "COMPONENT_GROUP_3FOLD; unchanged A2C fold assignment and fingerprint",
+  "inner_selection": {
+    "data": "Only the two non-outer folds within each outer training partition",
+    "selection_order": [
+      "minimize inner OOF P3 hard-negative contamination",
+      "minimize inner OOF false-family and cross-family clusters",
+      "maximize inner OOF SAME_EVENT capture",
+      "maximize inner OOF F0.5",
+      "prefer the more conservative deterministic parameter tuple"
+    ],
+    "outer_test_use": "none"
+  },
+  "families": [
+    {
+      "name": "A_SEMANTIC_LEXICAL_CONFIRMATION",
+      "features": ["qwen_embedding_cosine", "title_overlap_coefficient"],
+      "rule_class": "monotonic conjunction: qwen >= T_sem AND title overlap >= T_lex",
+      "train_only_parameters": {
+        "T_sem_grid": "0.50 through 0.85 inclusive in 0.025 increments",
+        "T_lex_grid": "0.10 through 0.65 inclusive in 0.05 increments"
+      },
+      "rationale": "Require semantic similarity and independent lexical corroboration.",
+      "runtime_dependency": "local Qwen embedding feature plus deterministic title-token overlap"
+    },
+    {
+      "name": "B_SEMANTIC_TEMPORAL_CONFIRMATION",
+      "features": ["qwen_embedding_cosine", "published_delta_hours"],
+      "rule_class": "monotonic conjunction: qwen >= T_sem AND publication delta <= T_hours",
+      "train_only_parameters": {
+        "T_sem_grid": "0.50 through 0.85 inclusive in 0.025 increments",
+        "T_hours_grid": [1, 2, 4, 8, 12, 24]
+      },
+      "rationale": "Test whether temporal proximity adds within-P3 separation without relaxing P3's frozen 24h maximum span.",
+      "runtime_dependency": "local Qwen embedding feature plus existing article timestamps"
+    },
+    {
+      "name": "C_SEMANTIC_LOW_CORROBORATION_VETO",
+      "features": [
+        "qwen_embedding_cosine",
+        "title_overlap_coefficient",
+        "entity_anchor_overlap",
+        "number_overlap",
+        "date_overlap"
+      ],
+      "rule_class": "qwen threshold followed by a general veto when lexical overlap < 0.25, entity-anchor overlap < 0.25, number overlap == 0, and date overlap == 0",
+      "train_only_parameters": {
+        "T_sem_grid": "0.50 through 0.85 inclusive in 0.025 increments",
+        "veto_constants": "fixed in this preregistration; not fitted to any outer fold"
+      },
+      "rationale": "Reject semantic-only matches that lack every existing deterministic title corroboration signal.",
+      "runtime_dependency": "local Qwen embedding feature plus deterministic title-derived features"
+    },
+    {
+      "name": "D_LIGHTWEIGHT_LOGISTIC_REFERENCE",
+      "features": [
+        "title_overlap_coefficient",
+        "title_jaccard_similarity",
+        "number_overlap",
+        "date_overlap",
+        "entity_anchor_overlap",
+        "published_delta_hours",
+        "same_calendar_day_utc",
+        "qwen_embedding_cosine"
+      ],
+      "rule_class": "StandardScaler plus L2 LogisticRegression; threshold selected from inner OOF scores using the same safety-first selection order",
+      "train_only_parameters": {
+        "regularization_C": 1.0,
+        "solver": "lbfgs",
+        "max_iter": 1000,
+        "random_state": 20261025
+      },
+      "rationale": "Small learned reference using already materialized pair features; no model-class escalation.",
+      "runtime_dependency": "scikit-learn research dependency plus local Qwen embedding feature; research-only"
+    }
+  ],
+  "downstream_evaluation": {
+    "clusterer": "frozen P3; max cluster size 10; max temporal span 24h; strong multi-member support; no multi-cluster bridging",
+    "coverage_gate": "same-event capture >= 15",
+    "safety_gate": "zero RELATED_TOPIC and DIFFERENT_EVENT P3 contamination; zero false-family merges; zero cross-family clusters",
+    "uncertainty": "existing fixed-component 1000-draw bootstrap, seed 42",
+    "home_shadow": "only candidates passing both the OOF coverage and safety gates; no product activation"
+  },
+  "prohibited": [
+    "outer-test-informed tuning",
+    "full-Gold final fit",
+    "Gold label/family/split changes",
+    "pair-ID, title, URL, source-name or observed-error-specific rules",
+    "new model downloads or external article-content APIs",
+    "product integration, persistent state, Miniflux writes, deployment or canary"
+  ]
+}
