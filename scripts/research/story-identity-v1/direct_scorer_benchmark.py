@@ -25,6 +25,7 @@ import hashlib
 import json
 import math
 import os
+import subprocess
 import sys
 import time
 from collections import defaultdict
@@ -56,7 +57,7 @@ from split_audit import ArticleGraph
 
 CORPUS_PATH = "/Users/jfsdias/NewsFlux-STORY00/private-p4/20261023-220212/home-200.jsonl"
 PAIRS_CSV_PATH = "/Users/jfsdias/NewsFlux-STORY00/private-p4/20261023-220212/r3a-bakeoff-v1/all-crossfeed-168h-pairs.csv"
-OUTPUT_DIR = Path("/tmp/newsflux-story02-a0-r3")
+OUTPUT_DIR = Path("/tmp/newsflux-story02-a0-r4")
 
 R3_P3_MAX_TEMPORAL_SPAN_HOURS = 24.0
 CANONICAL_TOTAL_CROSSFEED_PAIRS = 18953
@@ -176,17 +177,39 @@ def evaluate_direct_scorer_3fold(
     de_fp = sum(1 for p in oof_predictions if p["gold_label"] == "DIFFERENT_EVENT" and p["pred"] == 1)
     de_fpr = de_fp / de_total if de_total > 0 else 0.0
 
-    # Family breakdowns
-    duo_positives = [p for p in oof_predictions if p["gold_label"] == "SAME_EVENT" and "iphone" in str(p["episode_family_id"]).lower()]
-    non_duo_positives = [p for p in oof_predictions if p["gold_label"] == "SAME_EVENT" and "iphone" not in str(p["episode_family_id"]).lower()]
+    # True Family breakdowns across all 10 Gold episode families
+    positives = [p for p in oof_predictions if p["gold_label"] == "SAME_EVENT"]
+    families = sorted(set(p["episode_family_id"] for p in positives))
+    family_recalls = {}
+    family_breakdown = {}
+    for fam in families:
+        fam_p = [p for p in positives if p["episode_family_id"] == fam]
+        fam_tp = sum(1 for p in fam_p if p["pred"] == 1)
+        fam_rec = fam_tp / len(fam_p) if fam_p else 0.0
+        family_recalls[fam] = fam_rec
+        family_breakdown[fam] = {
+            "tp": fam_tp,
+            "total": len(fam_p),
+            "recall": round(float(fam_rec), 4),
+        }
+
+    family_macro_recall = float(np.mean(list(family_recalls.values()))) if family_recalls else 0.0
+
+    duo_positives = [p for p in positives if "iphone" in str(p["episode_family_id"]).lower()]
+    non_duo_positives = [p for p in positives if "iphone" not in str(p["episode_family_id"]).lower()]
 
     duo_tp = sum(1 for p in duo_positives if p["pred"] == 1)
-    duo_recall = duo_tp / len(duo_positives) if duo_positives else 0.0
+    duo_pair_recall = duo_tp / len(duo_positives) if duo_positives else 0.0
 
     non_duo_tp = sum(1 for p in non_duo_positives if p["pred"] == 1)
-    non_duo_recall = non_duo_tp / len(non_duo_positives) if non_duo_positives else 0.0
+    non_duo_pair_recall = non_duo_tp / len(non_duo_positives) if non_duo_positives else 0.0
 
-    family_macro_recall = (duo_recall + non_duo_recall) / 2.0
+    non_duo_families = [fam for fam in families if "iphone" not in str(fam).lower()]
+    non_duo_family_macro_recall = (
+        float(np.mean([family_recalls[fam] for fam in non_duo_families]))
+        if non_duo_families
+        else 0.0
+    )
 
     min_t = min(fold_thresholds)
     max_t = max(fold_thresholds)
@@ -217,14 +240,19 @@ def evaluate_direct_scorer_3fold(
         "different_event_fpr": round(float(de_fpr), 4),
         "duo_tp": duo_tp,
         "duo_total": len(duo_positives),
-        "duo_recall": round(float(duo_recall), 4),
+        "duo_pair_recall": round(float(duo_pair_recall), 4),
+        "duo_recall": round(float(duo_pair_recall), 4),
         "non_duo_tp": non_duo_tp,
         "non_duo_total": len(non_duo_positives),
-        "non_duo_recall": round(float(non_duo_recall), 4),
+        "non_duo_pair_recall": round(float(non_duo_pair_recall), 4),
+        "non_duo_recall": round(float(non_duo_pair_recall), 4),
+        "non_duo_family_macro_recall": round(float(non_duo_family_macro_recall), 4),
         "family_macro_recall": round(float(family_macro_recall), 4),
+        "positive_family_count": len(families),
+        "family_recall_breakdown": family_breakdown,
         "generalization_classification": (
             "HIGH_PAIRWISE_PRECISION_BUT_SPARSE_NON_DUO_GENERALIZATION_EVIDENCE"
-            if non_duo_recall < 0.60
+            if non_duo_pair_recall < 0.60
             else "BALANCED_GENERALIZATION_EVIDENCE"
         ),
         "thresholds_by_fold": [round(t, 4) for t in fold_thresholds],
@@ -462,7 +490,14 @@ def retrieve_candidates_rf0r(
         cands = []
         for tok in tokens_a:
             for other_aid in inverted_index[tok]:
-                if other_aid != aid and feed_lookup[other_aid] != a_feed and other_aid not in seen_neighbors:
+                other_feed = feed_lookup[other_aid]
+                if (
+                    other_aid != aid
+                    and a_feed
+                    and other_feed
+                    and other_feed != a_feed
+                    and other_aid not in seen_neighbors
+                ):
                     seen_neighbors.add(other_aid)
                     coef = compute_overlap_coefficient(tokens_a, article_tokens.get(other_aid, set()))
                     min_id = min(aid, other_aid)
@@ -682,10 +717,12 @@ def execute_d1_retrieved_pipeline_on_home200(
     published_lookup = {int(a["id"]): float(a.get("published_at", 0.0)) for a in articles}
     home_order = [int(a["id"]) for a in articles]
 
-    # Group cross-feed pairs per article
+    # Group cross-feed pairs per article (both feeds must be known and distinct)
     art_cands: Dict[int, List[Tuple[float, str, Tuple[int, int]]]] = defaultdict(list)
     for (u, v), sc in qwen_pair_scores_universe.items():
-        if feed_lookup.get(u) != feed_lookup.get(v):
+        feed_u = feed_lookup.get(u)
+        feed_v = feed_lookup.get(v)
+        if feed_u and feed_v and feed_u != feed_v:
             pk = f"{u}:{v}"
             art_cands[u].append((sc, pk, (u, v)))
             art_cands[v].append((sc, pk, (u, v)))
@@ -804,8 +841,333 @@ def generate_false_merge_review_pack(
     print(f"Emitted {len(review_rows)} false merge review pairs to {output_path}")
 
 
+def evaluate_full_home_gold_observation(
+    projections: List[Dict[str, Any]],
+    gold_rows: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Evaluates the 156 Gold relationships against full Home-200 cluster assignments.
+
+    Contract:
+    - Analyzes cluster assignments from the full executable stack on Home-200.
+    - Evaluates all 156 Gold relationships (both articles present in Home-200).
+    - Checks whether articles in positive pairs are in the same cluster.
+    - Checks whether negative pairs (RELATED_TOPIC, DIFFERENT_EVENT) are in the same cluster.
+    - Checks if any cluster co-locates articles from two distinct positive families.
+    """
+    art_to_cluster: Dict[int, str] = {}
+    for p in projections:
+        cid = p["story_id"]
+        for m in p["member_article_ids"]:
+            art_to_cluster[int(m)] = cid
+
+    art_to_families: Dict[int, Set[str]] = defaultdict(set)
+    for r in gold_rows:
+        lbl = r.get("gold_label") or r.get("label")
+        if lbl == "SAME_EVENT":
+            fam = r["episode_family_id"]
+            art_to_families[int(r["entry_a_id"])].add(fam)
+            art_to_families[int(r["entry_b_id"])].add(fam)
+
+    both_present = 0
+    se_total = 0
+    se_captured = 0
+    rt_total = 0
+    rt_contam = 0
+    de_total = 0
+    de_contam = 0
+    contam_pairs: List[Dict[str, Any]] = []
+
+    for r in gold_rows:
+        u = int(r["entry_a_id"])
+        v = int(r["entry_b_id"])
+        if u in art_to_cluster and v in art_to_cluster:
+            both_present += 1
+
+        label = r.get("gold_label") or r.get("label")
+        in_same = (art_to_cluster.get(u) is not None and art_to_cluster.get(u) == art_to_cluster.get(v))
+
+        pair_key = r.get("pair_key") or f"{min(u, v)}:{max(u, v)}"
+        if label == "SAME_EVENT":
+            se_total += 1
+            if in_same:
+                se_captured += 1
+        elif label == "RELATED_TOPIC":
+            rt_total += 1
+            if in_same:
+                rt_contam += 1
+                contam_pairs.append({"pair_key": pair_key, "gold_label": label, "u": u, "v": v})
+        elif label == "DIFFERENT_EVENT":
+            de_total += 1
+            if in_same:
+                de_contam += 1
+                contam_pairs.append({"pair_key": pair_key, "gold_label": label, "u": u, "v": v})
+
+    false_family_merges = 0
+    cross_family_clusters = 0
+    for p in projections:
+        fams = set()
+        for m in p["member_article_ids"]:
+            if m in art_to_families:
+                fams.update(art_to_families[m])
+        if len(fams) > 1:
+            false_family_merges += (len(fams) - 1)
+            cross_family_clusters += 1
+
+    hard_negative_contam = rt_contam + de_contam
+    safety_class = (
+        "ZERO_OBSERVED_HARD_NEGATIVE_CONTAMINATION"
+        if hard_negative_contam == 0
+        else "NONZERO_HARD_NEGATIVE_CONTAMINATION"
+    )
+
+    return {
+        "gold_pairs_evaluated": len(gold_rows),
+        "gold_pairs_with_both_articles_present": both_present,
+        "same_event_pairs_total": se_total,
+        "same_event_pairs_captured": se_captured,
+        "same_event_capture_rate": round(se_captured / se_total, 4) if se_total > 0 else 0.0,
+        "related_topic_pairs_total": rt_total,
+        "related_topic_cluster_contamination": rt_contam,
+        "different_event_pairs_total": de_total,
+        "different_event_cluster_contamination": de_contam,
+        "cluster_hard_negative_contamination_count": hard_negative_contam,
+        "false_family_merge_count": false_family_merges,
+        "cross_family_cluster_count": cross_family_clusters,
+        "safety_classification": safety_class,
+        "contaminated_pairs": contam_pairs,
+    }
+
+
+def generate_full_stack_review_pack(
+    gold_rows: List[Dict[str, Any]],
+    z_projections: List[Dict[str, Any]],
+    z_cand_pairs: Set[Tuple[int, int]],
+    z_cand_scores: Dict[Tuple[int, int], float],
+    q_projections: List[Dict[str, Any]],
+    q_cand_pairs: Set[Tuple[int, int]],
+    q_pair_scores: Dict[Tuple[int, int], float],
+    corpus_lookup: Dict[int, Dict[str, Any]],
+    output_path: Path,
+) -> int:
+    """Emits false-merge-full-stack-review-pack-v1.csv for hard-negative Gold pairs merged in Z or Q."""
+    z_art_to_proj = {}
+    for p in z_projections:
+        for m in p["member_article_ids"]:
+            z_art_to_proj[int(m)] = p
+
+    q_art_to_proj = {}
+    for p in q_projections:
+        for m in p["member_article_ids"]:
+            q_art_to_proj[int(m)] = p
+
+    fieldnames = [
+        "pair_key",
+        "gold_label",
+        "candidate_retrieved_stack_z",
+        "d0_score",
+        "merged_in_stack_z",
+        "candidate_retrieved_stack_q",
+        "d1_score",
+        "merged_in_stack_q",
+        "title_a",
+        "title_b",
+        "feed_a",
+        "feed_b",
+        "cluster_members_stack_z",
+        "cluster_members_stack_q",
+    ]
+
+    review_rows = []
+    for r in gold_rows:
+        label = r["gold_label"]
+        if label not in ("RELATED_TOPIC", "DIFFERENT_EVENT"):
+            continue
+        u = int(r["entry_a_id"])
+        v = int(r["entry_b_id"])
+        min_id, max_id = min(u, v), max(u, v)
+        pair_tuple = (min_id, max_id)
+
+        proj_z_u = z_art_to_proj.get(u)
+        proj_z_v = z_art_to_proj.get(v)
+        in_z = bool(proj_z_u and proj_z_v and proj_z_u["story_id"] == proj_z_v["story_id"])
+
+        proj_q_u = q_art_to_proj.get(u)
+        proj_q_v = q_art_to_proj.get(v)
+        in_q = bool(proj_q_u and proj_q_v and proj_q_u["story_id"] == proj_q_v["story_id"])
+
+        if in_z or in_q:
+            cand_z = pair_tuple in z_cand_pairs
+            d0_sc = z_cand_scores.get(pair_tuple, float(r.get("title_overlap_coefficient", 0.0)))
+
+            cand_q = pair_tuple in q_cand_pairs
+            d1_sc = q_pair_scores.get(pair_tuple, float(r.get("qwen_embedding_cosine", 0.0)))
+
+            a_obj = corpus_lookup.get(u, {})
+            b_obj = corpus_lookup.get(v, {})
+
+            z_mems = ",".join(str(m) for m in sorted(proj_z_u["member_article_ids"])) if proj_z_u else str(u)
+            q_mems = ",".join(str(m) for m in sorted(proj_q_u["member_article_ids"])) if proj_q_u else str(u)
+
+            review_rows.append({
+                "pair_key": r["pair_key"],
+                "gold_label": label,
+                "candidate_retrieved_stack_z": cand_z,
+                "d0_score": round(float(d0_sc), 4),
+                "merged_in_stack_z": in_z,
+                "candidate_retrieved_stack_q": cand_q,
+                "d1_score": round(float(d1_sc), 4),
+                "merged_in_stack_q": in_q,
+                "title_a": a_obj.get("title", ""),
+                "title_b": b_obj.get("title", ""),
+                "feed_a": get_feed_identity(a_obj),
+                "feed_b": get_feed_identity(b_obj),
+                "cluster_members_stack_z": z_mems,
+                "cluster_members_stack_q": q_mems,
+            })
+
+    with open(output_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(review_rows)
+
+    return len(review_rows)
+
+
+def verify_and_emit_python_node_parity(
+    raw_articles: List[Dict[str, Any]],
+    cand_pairs: Set[Tuple[int, int]],
+    pair_scores: Dict[Tuple[int, int], float],
+    projections: List[Dict[str, Any]],
+    out_path: Path,
+) -> Dict[str, Any]:
+    """Computes cryptographic SHAs in Python and Node.js and verifies exact parity."""
+    # 1. Python candidate set SHA
+    sorted_cands = sorted(f"{u}_{v}" for (u, v) in cand_pairs)
+    py_cand_sha = hashlib.sha256("\n".join(sorted_cands).encode("utf-8")).hexdigest()
+
+    # 2. Python pair score SHA
+    score_lines = [f"{u}_{v},{pair_scores[(u, v)]:.4f}" for (u, v) in sorted(pair_scores.keys())]
+    py_score_sha = hashlib.sha256("\n".join(score_lines).encode("utf-8")).hexdigest()
+
+    # 3. Python cluster membership SHA
+    clusters = [sorted(p["member_article_ids"]) for p in projections]
+    clusters_sorted = sorted(clusters, key=lambda c: (c[0], len(c)))
+    py_cluster_sha = hashlib.sha256(json.dumps(clusters_sorted, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+    # 4. Python story projection semantic SHA
+    semantic_proj = [
+        {
+            "story_id": p["story_id"],
+            "member_article_ids": sorted(p["member_article_ids"]),
+            "representative_article_id": p["representative_article_id"],
+            "h1_home_position": p["h1_home_position"],
+        }
+        for p in projections
+    ]
+    semantic_proj_sorted = sorted(semantic_proj, key=lambda p: (p["h1_home_position"], p["story_id"]))
+    py_proj_sha = hashlib.sha256(json.dumps(semantic_proj_sorted, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+    node_script = f"""
+import fs from "node:fs";
+import crypto from "node:crypto";
+import {{
+  retrieveCandidatesRF0R,
+  extractSignificantWords,
+  clusterWithP3,
+  projectStories,
+  getFeedIdentity
+}} from "./scripts/research/story-identity-v1/node/direct-story-pipeline.js";
+
+const corpus = fs.readFileSync("{CORPUS_PATH}", "utf8").trim().split("\\n").map(l => JSON.parse(l));
+
+const articleTokens = new Map();
+const publishedLookup = {{}};
+const homeOrder = [];
+
+for (const a of corpus) {{
+  const aid = Number(a.id);
+  homeOrder.push(aid);
+  publishedLookup[aid] = Number(a.published_at || 0);
+  const feedTitle = a.feed_title || a.feed || "";
+  articleTokens.set(aid, extractSignificantWords(a.title || "", feedTitle));
+}}
+
+const {{ candidatePairs, pairScores }} = retrieveCandidatesRF0R(corpus, articleTokens, 10);
+
+const sortedCands = [...candidatePairs].toSorted();
+const candSha = crypto.createHash("sha256").update(sortedCands.join("\\n")).digest("hex");
+
+const scoreKeys = [...pairScores.keys()].toSorted();
+const scoreLines = scoreKeys.map(k => k + "," + pairScores.get(k).toFixed(4));
+const scoreSha = crypto.createHash("sha256").update(scoreLines.join("\\n")).digest("hex");
+
+const clusters = clusterWithP3(homeOrder, pairScores, 0.3541, publishedLookup, {{ maxTemporalSpanHours: 24.0 }});
+const canonicalClusters = clusters.map(c => c.toSorted((a, b) => a - b));
+const sortedClusters = canonicalClusters.toSorted((a, b) => {{
+  if (a[0] !== b[0]) return a[0] - b[0];
+  return a.length - b.length;
+}});
+const clusterSha = crypto.createHash("sha256").update(JSON.stringify(sortedClusters)).digest("hex");
+
+const projections = projectStories(clusters, pairScores, homeOrder);
+const semanticProj = projections.map(p => ({{
+  story_id: p.story_id,
+  member_article_ids: p.member_article_ids.toSorted((a, b) => a - b),
+  representative_article_id: p.representative_article_id,
+  h1_home_position: p.h1_home_position
+}}));
+const sortedProj = semanticProj.toSorted((a, b) => {{
+  if (a.h1_home_position !== b.h1_home_position) return a.h1_home_position - b.h1_home_position;
+  return a.story_id.localeCompare(b.story_id);
+}});
+const projSha = crypto.createHash("sha256").update(JSON.stringify(sortedProj)).digest("hex");
+
+console.log(JSON.stringify({{
+  node_candidate_set_sha: candSha,
+  node_pair_score_sha: scoreSha,
+  node_cluster_sha: clusterSha,
+  node_projection_sha: projSha
+}}));
+"""
+    node_cmd = ["/opt/homebrew/bin/node", "--input-type=module", "-e", node_script]
+    proc = subprocess.run(node_cmd, capture_output=True, text=True, check=True)
+    node_out = json.loads(proc.stdout)
+
+    cand_parity = (py_cand_sha == node_out["node_candidate_set_sha"])
+    score_parity = (py_score_sha == node_out["node_pair_score_sha"])
+    cluster_parity = (py_cluster_sha == node_out["node_cluster_sha"])
+    proj_parity = (py_proj_sha == node_out["node_projection_sha"])
+
+    parity_artifact = {
+        "benchmark_version": "python-node-exact-parity-v1",
+        "evaluated_at": datetime.now(timezone.utc).isoformat(),
+        "canonical_candidate_set_sha256": py_cand_sha,
+        "pair_score_sha256": py_score_sha,
+        "cluster_membership_sha256": py_cluster_sha,
+        "story_projection_membership_sha256": py_proj_sha,
+        "gates": {
+            "PYTHON_NODE_CANDIDATE_SET_PARITY": "PASS" if cand_parity else "FAIL",
+            "PYTHON_NODE_PAIR_SCORE_PARITY": "PASS" if score_parity else "FAIL",
+            "PYTHON_NODE_CLUSTER_MEMBERSHIP_PARITY": "PASS" if cluster_parity else "FAIL",
+            "PYTHON_NODE_PROJECTION_PARITY": "PASS" if proj_parity else "FAIL",
+        },
+        "python_hashes": {
+            "candidate_set": py_cand_sha,
+            "pair_score": py_score_sha,
+            "cluster_membership": py_cluster_sha,
+            "story_projection": py_proj_sha,
+        },
+        "node_hashes": node_out,
+    }
+
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(parity_artifact, f, indent=2)
+
+    return parity_artifact
+
+
 def run_direct_scorer_benchmark():
-    """Runs complete R3 benchmark and emits all 7 private artifacts."""
+    """Runs complete R4 benchmark and emits all required private artifacts."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     # 1. Load data
@@ -847,21 +1209,45 @@ def run_direct_scorer_benchmark():
                 article_tokens[aid] = extract_significant_words(a.get("title", ""), a.get("feed_title", ""))
                 raw_articles.append(a)
 
-    # 2. Evaluate D0 and D1 pair metrics (Accepted canonical R2 OOF metrics)
+    # 2. Evaluate D0 and D1 pair metrics (Accepted canonical R2 OOF metrics with R4 True Family Macro Recall)
     d0_res = evaluate_direct_scorer_3fold("D0_TITLE_OVERLAP_DIRECT", "title_overlap_coefficient", fold_data)
     d1_res = evaluate_direct_scorer_3fold("D1_QWEN_COSINE_DIRECT", "qwen_embedding_cosine", fold_data)
+
+    # Emit family recall breakdown artifact
+    family_recall_breakdown = {
+        "benchmark_version": "family-recall-breakdown-v1",
+        "evaluated_at": datetime.now(timezone.utc).isoformat(),
+        "positive_family_count": 10,
+        "d0_title_overlap_direct": {
+            "duo_pair_recall": d0_res["duo_pair_recall"],
+            "non_duo_pair_recall": d0_res["non_duo_pair_recall"],
+            "non_duo_family_macro_recall": d0_res["non_duo_family_macro_recall"],
+            "family_macro_recall": d0_res["family_macro_recall"],
+            "breakdown_by_family": d0_res["family_recall_breakdown"],
+        },
+        "d1_qwen_cosine_direct": {
+            "duo_pair_recall": d1_res["duo_pair_recall"],
+            "non_duo_pair_recall": d1_res["non_duo_pair_recall"],
+            "non_duo_family_macro_recall": d1_res["non_duo_family_macro_recall"],
+            "family_macro_recall": d1_res["family_macro_recall"],
+            "generalization_classification": d1_res["generalization_classification"],
+            "breakdown_by_family": d1_res["family_recall_breakdown"],
+        },
+    }
+    with open(OUTPUT_DIR / "family-recall-breakdown-v1.json", "w", encoding="utf-8") as f:
+        json.dump(family_recall_breakdown, f, indent=2)
 
     # 3. RF0R Retrieval Benchmark across K search
     rf0r_benchmark = run_rf0r_retrieval_benchmark(raw_articles, article_tokens, rows, [3, 5, 10, 20, 30, 50])
     with open(OUTPUT_DIR / "rf0r-retrieval-benchmark-v1.json", "w", encoding="utf-8") as f:
         json.dump(rf0r_benchmark, f, indent=2)
 
-    # 4. Cluster safety evaluation under 24h temporal policy
+    # 4. Cluster safety evaluation under 24h temporal policy (Gold Subgraph Diagnostic)
     d0_safety = evaluate_gold_cluster_safety(d0_res, rows, published_lookup, max_temporal_span_hours=24.0)
     d1_safety = evaluate_gold_cluster_safety(d1_res, rows, published_lookup, max_temporal_span_hours=24.0)
 
-    cluster_safety_r3 = {
-        "benchmark_version": "cluster-safety-r3-v1",
+    cluster_safety_r4 = {
+        "benchmark_version": "cluster-safety-r4-v1",
         "temporal_policy": "RESEARCH_POLICY_24H",
         "max_temporal_span_hours": 24.0,
         "evaluated_at": datetime.now(timezone.utc).isoformat(),
@@ -875,10 +1261,10 @@ def run_direct_scorer_benchmark():
             "d1_median": d1_safety["operating_points"]["MEDIAN"],
         },
     }
-    with open(OUTPUT_DIR / "cluster-safety-r3-v1.json", "w", encoding="utf-8") as f:
-        json.dump(cluster_safety_r3, f, indent=2)
+    with open(OUTPUT_DIR / "cluster-safety-r4-v1.json", "w", encoding="utf-8") as f:
+        json.dump(cluster_safety_r4, f, indent=2)
 
-    # 5. Executable D0 raw pipeline on Home-200 (cross-feed only, K=10)
+    # 5. Executable D0 raw pipeline on Home-200 (Stack Z: RF0R K=10 + D0 Strict + P3 24h + H1)
     d0_thresh = d0_res["research_operating_points"]["STRICT"]
     d0_proj, d0_stats, d0_timing = execute_d0_raw_pipeline_on_home200(
         raw_articles,
@@ -886,6 +1272,39 @@ def run_direct_scorer_benchmark():
         k_retrieval=10,
         max_temporal_span_hours=24.0,
     )
+    z_cand_pairs, z_cand_scores = retrieve_candidates_rf0r(raw_articles, article_tokens, k_retrieval=10)
+    z_retrieved_count = len(z_cand_pairs)
+    z_pair_reduction = round((1.0 - z_retrieved_count / CANONICAL_TOTAL_CROSSFEED_PAIRS) * 100.0, 2)
+
+    # Full Home-200 Gold observation for Stack Z
+    z_obs = evaluate_full_home_gold_observation(d0_proj, rows)
+
+    stack_z_gold_obs_artifact = {
+        "artifact_version": "stack-z-full-home-gold-observation-v1",
+        "evaluated_at": datetime.now(timezone.utc).isoformat(),
+        "stack_name": "STACK_Z_ZERO_MODEL",
+        "retrieval_method": "RF0R_RUNTIME_LEXICAL_TOP_K",
+        "retrieval_k": 10,
+        "retrieved_pair_count": z_retrieved_count,
+        "pair_reduction_percent": z_pair_reduction,
+        "scorer": "D0_TITLE_OVERLAP_DIRECT",
+        "operating_point": "STRICT",
+        "threshold": d0_thresh,
+        "temporal_policy": "RESEARCH_POLICY_24H",
+        "max_temporal_span_hours": 24.0,
+        "home_items_before": d0_stats["home_items_before"],
+        "home_items_after": d0_stats["home_items_after"],
+        "noise_reduction_percent": d0_stats["noise_reduction_percent"],
+        "multi_article_story_count": d0_stats["multi_article_story_count"],
+        "duplicate_articles_compressed": d0_stats["duplicate_articles_compressed"],
+        "top10_story_cards": d0_stats["top10_story_card_count"],
+        "top20_story_cards": d0_stats["top20_story_card_count"],
+        "top50_story_cards": d0_stats["top50_story_card_count"],
+        "top100_story_cards": d0_stats["top100_story_card_count"],
+        "gold_observation": z_obs,
+    }
+    with open(OUTPUT_DIR / "stack-z-full-home-gold-observation-v1.json", "w", encoding="utf-8") as f:
+        json.dump(stack_z_gold_obs_artifact, f, indent=2)
 
     timing_sizes = [25, 50, 100, 200]
     timing_results = {}
@@ -916,6 +1335,7 @@ def run_direct_scorer_benchmark():
         "temporal_policy": "RESEARCH_POLICY_24H",
         "max_temporal_span_hours": 24.0,
         "cross_feed_only": True,
+        "unknown_feed_eligible": False,
         "pure_client_zero_model_end_to_end": True,
         "requires_learned_model": False,
         "timing_breakdown_home200": d0_timing,
@@ -927,6 +1347,7 @@ def run_direct_scorer_benchmark():
     d0_crossfeed_home_projection = {
         "projection_version": "d0-crossfeed-home-projection-v1",
         "cross_feed_only": True,
+        "unknown_feed_eligible": False,
         "temporal_policy": "RESEARCH_POLICY_24H",
         "representative_policy": "D0_LEXICAL_MEDOID",
         "placement_policy": "H1_HIGHEST_RANKED_MEMBER_POSITION",
@@ -936,8 +1357,9 @@ def run_direct_scorer_benchmark():
     with open(OUTPUT_DIR / "d0-crossfeed-home-projection-v1.json", "w", encoding="utf-8") as f:
         json.dump(d0_crossfeed_home_projection, f, indent=2)
 
-    # 6. D1 Retrieved projection on Home-200 (using RF1_QWEN_TOP_K before clustering)
-    d1_thresh = d1_res["research_operating_points"]["MEDIAN"]
+    # 6. Executable D1 pipeline on Home-200 (Stack Q: RF1 K=10 + D1 Strict + P3 24h + H1)
+    d1_thresh = d1_res["research_operating_points"]["STRICT"]
+    d1_median_thresh = d1_res["research_operating_points"]["MEDIAN"]
     qwen_pair_scores_universe: Dict[Tuple[int, int], float] = {}
     if os.path.exists(PAIRS_CSV_PATH):
         with open(PAIRS_CSV_PATH, "r", encoding="utf-8") as f:
@@ -953,91 +1375,244 @@ def run_direct_scorer_benchmark():
         k_retrieval=10,
         max_temporal_span_hours=24.0,
     )
+    q_pair_reduction = round((1.0 - d1_retrieved_pair_count / CANONICAL_TOTAL_CROSSFEED_PAIRS) * 100.0, 2)
+    q_obs = evaluate_full_home_gold_observation(d1_proj, rows)
 
-    d1_retrieved_home_projection = {
-        "projection_version": "d1-retrieved-home-projection-v1",
+    # Sensitivity run with median threshold
+    d1_proj_med, d1_stats_med, _ = execute_d1_retrieved_pipeline_on_home200(
+        raw_articles,
+        qwen_pair_scores_universe,
+        threshold=d1_median_thresh,
+        k_retrieval=10,
+        max_temporal_span_hours=24.0,
+    )
+    q_obs_med = evaluate_full_home_gold_observation(d1_proj_med, rows)
+
+    stack_q_gold_obs_artifact = {
+        "artifact_version": "stack-q-full-home-gold-observation-v1",
+        "evaluated_at": datetime.now(timezone.utc).isoformat(),
+        "stack_name": "STACK_Q_QWEN_DIRECT",
         "retrieval_method": "RF1_QWEN_TOP_K",
         "retrieval_k": 10,
         "retrieved_pair_count": d1_retrieved_pair_count,
-        "cross_feed_only": True,
+        "pair_reduction_percent": q_pair_reduction,
+        "retrieved_count_discrepancy_root_cause": "Historical R3 handoff text contained typo/stale literal 605; actual RF1 K=10 execution across 200 articles yields 1650 unique undirected pairs",
+        "scorer": "D1_QWEN_COSINE_DIRECT",
+        "operating_point": "STRICT",
+        "threshold": d1_thresh,
         "temporal_policy": "RESEARCH_POLICY_24H",
-        "placement_policy": "H1_HIGHEST_RANKED_MEMBER_POSITION",
-        "home_stats": d1_stats,
-        "projections": d1_proj,
+        "max_temporal_span_hours": 24.0,
+        "home_items_before": d1_stats["home_items_before"],
+        "home_items_after": d1_stats["home_items_after"],
+        "noise_reduction_percent": d1_stats["noise_reduction_percent"],
+        "multi_article_story_count": d1_stats["multi_article_story_count"],
+        "duplicate_articles_compressed": d1_stats["duplicate_articles_compressed"],
+        "top10_story_cards": d1_stats["top10_story_card_count"],
+        "top20_story_cards": d1_stats["top20_story_card_count"],
+        "top50_story_cards": d1_stats["top50_story_card_count"],
+        "top100_story_cards": d1_stats["top100_story_card_count"],
+        "gold_observation": q_obs,
+        "sensitivity_median": {
+            "operating_point": "MEDIAN",
+            "threshold": d1_median_thresh,
+            "home_items_after": d1_stats_med["home_items_after"],
+            "noise_reduction_percent": d1_stats_med["noise_reduction_percent"],
+            "same_event_capture": f"{q_obs_med['same_event_pairs_captured']}/57",
+            "different_event_contamination": q_obs_med["different_event_cluster_contamination"],
+            "hard_negative_contamination": q_obs_med["cluster_hard_negative_contamination_count"],
+            "safety_classification": q_obs_med["safety_classification"],
+        },
     }
-    with open(OUTPUT_DIR / "d1-retrieved-home-projection-v1.json", "w", encoding="utf-8") as f:
-        json.dump(d1_retrieved_home_projection, f, indent=2)
+    with open(OUTPUT_DIR / "stack-q-full-home-gold-observation-v1.json", "w", encoding="utf-8") as f:
+        json.dump(stack_q_gold_obs_artifact, f, indent=2)
 
-    # 7. False merge review pack (CORRECTED: D0 uses D0 scores, D1 uses D1 scores)
-    gold_subset = set(int(r["entry_a_id"]) for r in rows) | set(int(r["entry_b_id"]) for r in rows)
-    d0_gold_pair_scores = {(min(int(r["entry_a_id"]), int(r["entry_b_id"])), max(int(r["entry_a_id"]), int(r["entry_b_id"]))): float(r["title_overlap_coefficient"]) for r in rows}
-    d1_gold_pair_scores = {(min(int(r["entry_a_id"]), int(r["entry_b_id"])), max(int(r["entry_a_id"]), int(r["entry_b_id"]))): float(r["qwen_embedding_cosine"]) for r in rows}
-
-    d0_gold_clusters = cluster_with_p3(gold_subset, d0_gold_pair_scores, d0_thresh, published_lookup, max_temporal_span_hours=24.0)
-    d1_gold_clusters = cluster_with_p3(gold_subset, d1_gold_pair_scores, d1_thresh, published_lookup, max_temporal_span_hours=24.0)
-
-    generate_false_merge_review_pack(
-        rows,
-        d0_gold_clusters,
-        d1_gold_clusters,
-        d0_thresh,
-        d1_thresh,
-        corpus_lookup,
-        OUTPUT_DIR / "false-merge-review-pack-v2.csv",
+    # 7. Exact Python <-> Node Parity
+    verify_and_emit_python_node_parity(
+        raw_articles,
+        z_cand_pairs,
+        z_cand_scores,
+        d0_proj,
+        OUTPUT_DIR / "python-node-exact-parity-v1.json",
     )
 
-    # 8. Architecture R3 Scorecard
-    architecture_r3_scorecard = {
-        "scorecard_version": "architecture-r3-scorecard-v1",
+    # 8. Full-Stack Review Pack
+    art_cands_q = defaultdict(list)
+    for (u, v), sc in qwen_pair_scores_universe.items():
+        feed_u = feed_lookup.get(u)
+        feed_v = feed_lookup.get(v)
+        if feed_u and feed_v and feed_u != feed_v:
+            pk = f"{u}:{v}"
+            art_cands_q[u].append((sc, pk, (u, v)))
+            art_cands_q[v].append((sc, pk, (u, v)))
+    q_cand_pairs = set()
+    for aid in [int(a["id"]) for a in raw_articles]:
+        cands = sorted(art_cands_q.get(aid, []), key=lambda c: (-c[0], c[1]))[:10]
+        for _, _, pt in cands:
+            q_cand_pairs.add(pt)
+
+    review_count = generate_full_stack_review_pack(
+        rows,
+        d0_proj,
+        z_cand_pairs,
+        z_cand_scores,
+        d1_proj,
+        q_cand_pairs,
+        qwen_pair_scores_universe,
+        corpus_lookup,
+        OUTPUT_DIR / "false-merge-full-stack-review-pack-v1.csv",
+    )
+    print(f"Emitted {review_count} full-stack review pairs to false-merge-full-stack-review-pack-v1.csv")
+
+    # 9. Architecture R4 Scorecard
+    architecture_r4_scorecard = {
+        "scorecard_version": "architecture-r4-scorecard-v1",
         "evaluated_at": datetime.now(timezone.utc).isoformat(),
         "temporal_policy": "RESEARCH_POLICY_24H",
         "candidate_retrieval_policy": "CROSS_FEED_ONLY",
+        "unknown_feed_policy": "UNKNOWN_FEED_NOT_ELIGIBLE (Fail-Open Standalone)",
         "stacks": {
             "STACK_Z_ZERO_MODEL": {
-                "components": "RF0R (K=10 Lexical Top-K) + D0 (Strict 0.3541 Title Overlap) + P3 (24h) + H1",
-                "retrieved_pair_count": 558,
-                "pair_reduction_percent": 97.06,
-                "gold_pr_auc": d0_res["pr_auc"],
-                "gold_precision": d0_res["precision"],
-                "gold_f05": d0_res["f05"],
-                "gold_same_event_capture": f"{d0_safety['operating_points']['STRICT']['same_event_capture']}/57",
-                "false_family_merges": 0,
-                "cross_family_clusters": 0,
-                "related_topic_contamination": d0_safety["operating_points"]["STRICT"]["related_topic_cluster_contamination"],
-                "different_event_contamination": d0_safety["operating_points"]["STRICT"]["different_event_cluster_contamination"],
-                "hard_negative_contamination": d0_safety["operating_points"]["STRICT"]["cluster_hard_negative_contamination_count"],
-                "safety_classification": d0_safety["operating_points"]["STRICT"]["safety_classification"],
+                "components": f"RF0R (K=10 Lexical Top-K) + D0 (Strict {d0_thresh:.4f} Title Overlap) + P3 (24h) + H1",
+                "retrieval_method": "RF0R_RUNTIME_LEXICAL_TOP_K",
+                "retrieval_k": 10,
+                "retrieved_pair_count": z_retrieved_count,
+                "pair_reduction_percent": z_pair_reduction,
+                "score_method": "D0_TITLE_OVERLAP_DIRECT",
+                "operating_point": "STRICT",
+                "threshold": d0_thresh,
+                "gold_pairwise_diagnostics": {
+                    "pr_auc": d0_res["pr_auc"],
+                    "precision": d0_res["precision"],
+                    "recall": d0_res["recall"],
+                    "f05": d0_res["f05"],
+                    "duo_pair_recall": d0_res["duo_pair_recall"],
+                    "non_duo_pair_recall": d0_res["non_duo_pair_recall"],
+                    "non_duo_family_macro_recall": d0_res["non_duo_family_macro_recall"],
+                    "family_macro_recall": d0_res["family_macro_recall"],
+                },
+                "pair_scorer_gold_subgraph_safety": {
+                    "same_event_capture": f"{d0_safety['operating_points']['STRICT']['same_event_capture']}/57",
+                    "different_event_contamination": d0_safety["operating_points"]["STRICT"]["different_event_cluster_contamination"],
+                    "hard_negative_contamination": d0_safety["operating_points"]["STRICT"]["cluster_hard_negative_contamination_count"],
+                    "safety_classification": d0_safety["operating_points"]["STRICT"]["safety_classification"],
+                },
+                "full_stack_gold_observation": {
+                    "gold_pairs_evaluated": z_obs["gold_pairs_evaluated"],
+                    "gold_pairs_with_both_articles_present": z_obs["gold_pairs_with_both_articles_present"],
+                    "same_event_capture": f"{z_obs['same_event_pairs_captured']}/57",
+                    "same_event_capture_rate": z_obs["same_event_capture_rate"],
+                    "related_topic_contamination": z_obs["related_topic_cluster_contamination"],
+                    "different_event_contamination": z_obs["different_event_cluster_contamination"],
+                    "hard_negative_contamination": z_obs["cluster_hard_negative_contamination_count"],
+                    "false_family_merges": z_obs["false_family_merge_count"],
+                    "cross_family_clusters": z_obs["cross_family_cluster_count"],
+                    "safety_classification": z_obs["safety_classification"],
+                },
                 "home_noise_reduction": d0_stats["noise_reduction_percent"],
+                "home_items_before": d0_stats["home_items_before"],
+                "home_items_after": d0_stats["home_items_after"],
+                "multi_article_story_count": d0_stats["multi_article_story_count"],
+                "duplicate_articles_compressed": d0_stats["duplicate_articles_compressed"],
+                "top10_story_cards": d0_stats["top10_story_card_count"],
                 "top20_story_cards": d0_stats["top20_story_card_count"],
+                "top50_story_cards": d0_stats["top50_story_card_count"],
+                "top100_story_cards": d0_stats["top100_story_card_count"],
                 "latency_median_ms": timing_results["articles_200"]["median_ms"],
+                "latency_p90_ms": timing_results["articles_200"]["p90_ms"],
                 "containers": 0,
                 "models": 0,
                 "privacy": "PERFECT (100% on-device)",
                 "status": "A1_ZERO_MODEL_EVALUATED",
+                "source_receipts": {
+                    "retrieval": {
+                        "source_artifact": "stack-z-full-home-gold-observation-v1.json",
+                        "source_fields": ["retrieval_method", "retrieval_k", "retrieved_pair_count", "pair_reduction_percent"],
+                    },
+                    "full_stack_safety": {
+                        "source_artifact": "stack-z-full-home-gold-observation-v1.json",
+                        "source_fields": ["same_event_pairs_captured", "different_event_cluster_contamination", "cluster_hard_negative_contamination_count", "safety_classification"],
+                    },
+                    "home_projection": {
+                        "source_artifact": "stack-z-full-home-gold-observation-v1.json",
+                        "source_fields": ["home_items_after", "noise_reduction_percent", "top20_story_cards"],
+                    },
+                },
             },
             "STACK_Q_QWEN_DIRECT": {
-                "components": "RF1 (K=10 Qwen Top-K) + D1 (Median 0.6789 Qwen Cosine) + P3 (24h) + H1",
-                "retrieved_pair_count": 1650,
-                "pair_reduction_percent": 91.29,
-                "gold_pr_auc": d1_res["pr_auc"],
-                "gold_precision": d1_res["precision"],
-                "gold_f05": d1_res["f05"],
-                "gold_same_event_capture": f"{d1_safety['operating_points']['MEDIAN']['same_event_capture']}/57",
-                "false_family_merges": 0,
-                "cross_family_clusters": 0,
-                "related_topic_contamination": d1_safety["operating_points"]["MEDIAN"]["related_topic_cluster_contamination"],
-                "different_event_contamination": d1_safety["operating_points"]["MEDIAN"]["different_event_cluster_contamination"],
-                "hard_negative_contamination": d1_safety["operating_points"]["MEDIAN"]["cluster_hard_negative_contamination_count"],
-                "safety_classification": d1_safety["operating_points"]["MEDIAN"]["safety_classification"],
-                "non_duo_recall": d1_res["non_duo_recall"],
-                "family_macro_recall": d1_res["family_macro_recall"],
-                "generalization_classification": "HIGH_PAIRWISE_PRECISION_BUT_SPARSE_NON_DUO_GENERALIZATION_EVIDENCE",
+                "components": f"RF1 (K=10 Qwen Top-K) + D1 (Strict {d1_thresh:.4f} Qwen Cosine) + P3 (24h) + H1",
+                "retrieval_method": "RF1_QWEN_TOP_K",
+                "retrieval_k": 10,
+                "retrieved_pair_count": d1_retrieved_pair_count,
+                "pair_reduction_percent": q_pair_reduction,
+                "retrieved_count_discrepancy_root_cause": "Historical R3 handoff text contained typo/stale literal 605; actual RF1 K=10 execution across 200 articles yields 1650 unique undirected pairs",
+                "score_method": "D1_QWEN_COSINE_DIRECT",
+                "operating_point": "STRICT",
+                "threshold": d1_thresh,
+                "gold_pairwise_diagnostics": {
+                    "pr_auc": d1_res["pr_auc"],
+                    "precision": d1_res["precision"],
+                    "recall": d1_res["recall"],
+                    "f05": d1_res["f05"],
+                    "duo_pair_recall": d1_res["duo_pair_recall"],
+                    "non_duo_pair_recall": d1_res["non_duo_pair_recall"],
+                    "non_duo_family_macro_recall": d1_res["non_duo_family_macro_recall"],
+                    "family_macro_recall": d1_res["family_macro_recall"],
+                    "generalization_classification": d1_res["generalization_classification"],
+                },
+                "pair_scorer_gold_subgraph_safety": {
+                    "same_event_capture": f"{d1_safety['operating_points']['STRICT']['same_event_capture']}/57",
+                    "different_event_contamination": d1_safety["operating_points"]["STRICT"]["different_event_cluster_contamination"],
+                    "hard_negative_contamination": d1_safety["operating_points"]["STRICT"]["cluster_hard_negative_contamination_count"],
+                    "safety_classification": d1_safety["operating_points"]["STRICT"]["safety_classification"],
+                },
+                "full_stack_gold_observation": {
+                    "gold_pairs_evaluated": q_obs["gold_pairs_evaluated"],
+                    "gold_pairs_with_both_articles_present": q_obs["gold_pairs_with_both_articles_present"],
+                    "same_event_capture": f"{q_obs['same_event_pairs_captured']}/57",
+                    "same_event_capture_rate": q_obs["same_event_capture_rate"],
+                    "related_topic_contamination": q_obs["related_topic_cluster_contamination"],
+                    "different_event_contamination": q_obs["different_event_cluster_contamination"],
+                    "hard_negative_contamination": q_obs["cluster_hard_negative_contamination_count"],
+                    "false_family_merges": q_obs["false_family_merge_count"],
+                    "cross_family_clusters": q_obs["cross_family_cluster_count"],
+                    "safety_classification": q_obs["safety_classification"],
+                },
                 "home_noise_reduction": d1_stats["noise_reduction_percent"],
+                "home_items_before": d1_stats["home_items_before"],
+                "home_items_after": d1_stats["home_items_after"],
+                "multi_article_story_count": d1_stats["multi_article_story_count"],
+                "duplicate_articles_compressed": d1_stats["duplicate_articles_compressed"],
+                "top10_story_cards": d1_stats["top10_story_card_count"],
                 "top20_story_cards": d1_stats["top20_story_card_count"],
+                "top50_story_cards": d1_stats["top50_story_card_count"],
+                "top100_story_cards": d1_stats["top100_story_card_count"],
+                "latency_median_ms": "NOT_MEASURED_END_TO_END (Qwen inference simulated from frozen embeddings)",
                 "containers": 1,
                 "models": 1,
                 "privacy": "HIGH (local HomeServer daemon)",
                 "status": "A1_QWEN_DIRECT_EVALUATED",
+                "sensitivity_median": {
+                    "operating_point": "MEDIAN",
+                    "threshold": d1_median_thresh,
+                    "home_items_after": d1_stats_med["home_items_after"],
+                    "noise_reduction_percent": d1_stats_med["noise_reduction_percent"],
+                    "hard_negative_contamination": q_obs_med["cluster_hard_negative_contamination_count"],
+                    "safety_classification": q_obs_med["safety_classification"],
+                },
+                "source_receipts": {
+                    "retrieval": {
+                        "source_artifact": "stack-q-full-home-gold-observation-v1.json",
+                        "source_fields": ["retrieval_method", "retrieval_k", "retrieved_pair_count", "pair_reduction_percent"],
+                    },
+                    "full_stack_safety": {
+                        "source_artifact": "stack-q-full-home-gold-observation-v1.json",
+                        "source_fields": ["same_event_pairs_captured", "different_event_cluster_contamination", "cluster_hard_negative_contamination_count", "safety_classification"],
+                    },
+                    "home_projection": {
+                        "source_artifact": "stack-q-full-home-gold-observation-v1.json",
+                        "source_fields": ["home_items_after", "noise_reduction_percent", "top20_story_cards"],
+                    },
+                },
             },
             "LEARNED_PF1": {
                 "status": "REFERENCE_ONLY (Requires fitted model weights/scaler not authorized for production)",
@@ -1050,19 +1625,20 @@ def run_direct_scorer_benchmark():
             },
         },
         "spike_gate_evaluation": {
-            "A1_ZERO_MODEL_READY": "PROVISIONAL_PENDING_PM_ACCEPTANCE (Zero learned models, zero containers, sub-3ms, but contains 4 different_event cluster contaminations on Gold)",
-            "A1_QWEN_DIRECT_READY": "NOT_RECOMMENDED_FOR_SPIKE (Sparse non-duo generalization evidence 0.4000, requires Ollama daemon)",
+            "A1_ZERO_MODEL_READY": "PROVISIONAL_PENDING_PM_ACCEPTANCE (Zero learned models, zero containers, sub-3ms, but contains 5 different_event cluster contaminations on full Home-200)",
+            "A1_QWEN_DIRECT_READY": "NOT_RECOMMENDED_FOR_SPIKE (Sparse non-duo generalization evidence 0.4000, requires Ollama daemon, 1 different_event contamination on full Home-200)",
             "A1_PLUMBING_ONLY_READY": "RECOMMENDED_BY_RESEARCH (Enables frontend score provider interface, Web Worker, P3, H1, StoryProjection, feature flag, and fail-open with fixture testing without exposing users to hard negative merges)",
         },
         "recommended_spike_outcome": "A1_PLUMBING_ONLY_READY",
         "recommended_next_track": "STORY-02-A1 (Plumbing Spike: Score Provider Interface, Web Worker, P3 Cluster Engine, H1 Placement, Feature Flag Gate)",
     }
-    with open(OUTPUT_DIR / "architecture-r3-scorecard-v1.json", "w", encoding="utf-8") as f:
-        json.dump(architecture_r3_scorecard, f, indent=2)
+    with open(OUTPUT_DIR / "architecture-r4-scorecard-v1.json", "w", encoding="utf-8") as f:
+        json.dump(architecture_r4_scorecard, f, indent=2)
 
-    print("STORY-02-A0 R3 Benchmark Completed Successfully.")
+    print("STORY-02-A0 R4 Benchmark Completed Successfully.")
     print(f"Artifacts emitted to {OUTPUT_DIR}")
 
 
 if __name__ == "__main__":
     run_direct_scorer_benchmark()
+

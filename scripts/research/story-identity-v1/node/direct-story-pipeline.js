@@ -345,6 +345,7 @@ export function buildInvertedIndex(articleTokens) {
  *
  * Contract:
  * - CROSS_FEED_ONLY: Same-feed article pairs are strictly excluded.
+ * - UNKNOWN_FEED_NOT_ELIGIBLE: Both feed identities must be known and non-empty (unknown vs known and unknown vs unknown rejected).
  * - SYMMETRIC_PER_ARTICLE_TOP_K: Every article independently ranks its cross-feed candidate neighbors.
  * - HIGHER_ID_CAN_SELECT_LOWER_ID: No directional ID restriction before forming per-article top-K.
  * - CANONICAL_PAIR_DEDUP: Returned pair keys are canonical `${min(u, v)}_${max(u, v)}`.
@@ -375,9 +376,12 @@ export function retrieveCandidatesRF0R(articles, articleTokens, kRetrieval = 10)
       const posting = invertedIndex.get(token)
       if (posting) {
         for (const otherAid of posting) {
+          const otherFeed = feedLookup.get(otherAid)
           if (
             otherAid !== aid &&
-            feedLookup.get(otherAid) !== aFeed &&
+            Boolean(aFeed) &&
+            Boolean(otherFeed) &&
+            otherFeed !== aFeed &&
             !seenNeighbors.has(otherAid)
           ) {
             seenNeighbors.add(otherAid)
@@ -648,7 +652,11 @@ export function executeD0Pipeline(articles, options = {}) {
     }
     const t1 = performance.now()
 
-    const { pairScores } = retrieveCandidatesRF0R(articles, articleTokens, kRetrieval)
+    const { candidatePairs, pairScores } = retrieveCandidatesRF0R(
+      articles,
+      articleTokens,
+      kRetrieval,
+    )
     const t2 = performance.now()
 
     const clusters = clusterWithP3(homeOrder, pairScores, threshold, publishedLookup, {
@@ -682,7 +690,7 @@ export function executeD0Pipeline(articles, options = {}) {
       total_end_to_end_ms: Math.round((t4 - t0) * 1000) / 1000,
     }
 
-    return { projections, stats, timingBreakdown }
+    return { projections, stats, timingBreakdown, candidatePairs, pairScores, clusters }
   } catch (error) {
     // Fail-open fallback: return 1:1 singletons
     const fallbackProjections = articles.map((a, idx) => ({

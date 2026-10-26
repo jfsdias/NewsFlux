@@ -226,8 +226,8 @@ class TestDirectScorerBenchmark(unittest.TestCase):
         self.assertAlmostEqual(self.d1_res["non_duo_recall"], 0.4000)
 
     def test_d0_d1_review_pack_score_source(self):
-        """Verifies review pack uses correct score sources and fixes R2 bug."""
-        review_pack_path = OUTPUT_DIR / "false-merge-review-pack-v2.csv"
+        """Verifies full-stack review pack contains 14 canonical fields and exact contaminated pairs."""
+        review_pack_path = OUTPUT_DIR / "false-merge-full-stack-review-pack-v1.csv"
         if not review_pack_path.exists():
             self.skipTest(f"Review pack not found at {review_pack_path}")
 
@@ -238,24 +238,194 @@ class TestDirectScorerBenchmark(unittest.TestCase):
 
         expected_fields = [
             "pair_key", "gold_label",
-            "d0_score", "d0_threshold", "merged_in_d0",
-            "d1_score", "d1_threshold", "merged_in_d1",
+            "candidate_retrieved_stack_z", "d0_score", "merged_in_stack_z",
+            "candidate_retrieved_stack_q", "d1_score", "merged_in_stack_q",
             "title_a", "title_b", "feed_a", "feed_b",
+            "cluster_members_stack_z", "cluster_members_stack_q",
         ]
         self.assertEqual(fieldnames, expected_fields)
+        self.assertEqual(len(rows), 6)
 
-        # Regression test: find at least one pair where D0 score != D1 score and cluster status differs
-        divergent_pairs = [r for r in rows if r["merged_in_d0"] != r["merged_in_d1"]]
-        self.assertGreater(
-            len(divergent_pairs),
-            0,
-            "Review pack must contain pairs where D0 and D1 cluster decisions diverge",
-        )
+        # 5 contaminated in Stack Z, 1 contaminated in Stack Q
+        z_merged = [r for r in rows if r["merged_in_stack_z"] == "True"]
+        q_merged = [r for r in rows if r["merged_in_stack_q"] == "True"]
+        self.assertEqual(len(z_merged), 5)
+        self.assertEqual(len(q_merged), 1)
 
-        for dp in divergent_pairs:
-            d0_score = float(dp["d0_score"])
-            d1_score = float(dp["d1_score"])
-            self.assertNotEqual(d0_score, d1_score)
+    def test_unknown_feed_not_eligible(self):
+        """Verifies unknown feed policy: pairs with unknown/missing feeds are not eligible."""
+        articles = [
+            {"id": 1, "feed_id": 10, "title": "Breaking technology announcement today"},
+            {"id": 2, "feed_id": "", "title": "Breaking technology announcement today"},  # Unknown feed
+            {"id": 3, "feed": None, "title": "Breaking technology announcement today"},  # Unknown feed
+            {"id": 4, "feed_id": 20, "title": "Breaking technology announcement today"},  # Known feed (different)
+        ]
+        tokens_map = {a["id"]: extract_significant_words(a["title"]) for a in articles}
+        candidates, _ = retrieve_candidates_rf0r(articles, tokens_map, k_retrieval=10)
+
+        # 1 (known) and 2 (unknown) -> NOT retrieved
+        self.assertNotIn((1, 2), candidates)
+        # 1 (known) and 3 (unknown) -> NOT retrieved
+        self.assertNotIn((1, 3), candidates)
+        # 2 (unknown) and 3 (unknown) -> NOT retrieved
+        self.assertNotIn((2, 3), candidates)
+        # 2 (unknown) and 4 (known) -> NOT retrieved
+        self.assertNotIn((2, 4), candidates)
+        # 1 (feed 10) and 4 (feed 20) -> retrieved
+        self.assertIn((1, 4), candidates)
+
+    def test_true_10_family_macro_recall(self):
+        """Verifies true 10-family macro recall evaluation for D0 and D1."""
+        # D0 assertions
+        self.assertEqual(self.d0_res["positive_family_count"], 10)
+        self.assertAlmostEqual(self.d0_res["family_macro_recall"], 0.7690, places=4)
+        self.assertAlmostEqual(self.d0_res["non_duo_family_macro_recall"], 0.7778, places=4)
+        self.assertAlmostEqual(self.d0_res["duo_pair_recall"], 0.6905, places=4)
+        self.assertAlmostEqual(self.d0_res["non_duo_pair_recall"], 0.8667, places=4)
+
+        # D1 assertions
+        self.assertEqual(self.d1_res["positive_family_count"], 10)
+        self.assertAlmostEqual(self.d1_res["family_macro_recall"], 0.6333, places=4)
+        self.assertAlmostEqual(self.d1_res["non_duo_family_macro_recall"], 0.5926, places=4)
+        self.assertAlmostEqual(self.d1_res["duo_pair_recall"], 1.0000, places=4)
+        self.assertAlmostEqual(self.d1_res["non_duo_pair_recall"], 0.4000, places=4)
+
+    def test_stack_z_gold_safety_uses_retrieval(self):
+        """Verifies Stack Z full Home-200 gold safety derives from full pipeline execution."""
+        z_file = OUTPUT_DIR / "stack-z-full-home-gold-observation-v1.json"
+        if not z_file.exists():
+            self.skipTest(f"Artifact not found at {z_file}")
+
+        with open(z_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        g_obs = data["gold_observation"]
+        self.assertEqual(g_obs["gold_pairs_evaluated"], 156)
+        self.assertEqual(g_obs["gold_pairs_with_both_articles_present"], 156)
+        self.assertEqual(g_obs["same_event_pairs_captured"], 26)
+        self.assertEqual(g_obs["same_event_pairs_total"], 57)
+        self.assertAlmostEqual(g_obs["same_event_capture_rate"], 0.4561, places=3)
+        self.assertEqual(g_obs["related_topic_cluster_contamination"], 0)
+        self.assertEqual(g_obs["different_event_cluster_contamination"], 5)
+        self.assertEqual(g_obs["false_family_merge_count"], 0)
+        self.assertEqual(data["retrieved_pair_count"], 558)
+
+    def test_stack_q_gold_safety_uses_retrieval(self):
+        """Verifies Stack Q full Home-200 gold safety derives from full pipeline execution."""
+        q_file = OUTPUT_DIR / "stack-q-full-home-gold-observation-v1.json"
+        if not q_file.exists():
+            self.skipTest(f"Artifact not found at {q_file}")
+
+        with open(q_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        g_obs = data["gold_observation"]
+        self.assertEqual(g_obs["gold_pairs_evaluated"], 156)
+        self.assertEqual(g_obs["gold_pairs_with_both_articles_present"], 156)
+        self.assertEqual(g_obs["same_event_pairs_captured"], 19)
+        self.assertEqual(g_obs["same_event_pairs_total"], 57)
+        self.assertAlmostEqual(g_obs["same_event_capture_rate"], 0.3333, places=3)
+        self.assertEqual(g_obs["related_topic_cluster_contamination"], 0)
+        self.assertEqual(g_obs["different_event_cluster_contamination"], 1)
+        self.assertEqual(g_obs["false_family_merge_count"], 0)
+        self.assertEqual(data["retrieved_pair_count"], 1650)
+
+    def test_scorecard_no_hardcoded_retrieval_count(self):
+        """Verifies scorecard does not hardcode retrieval count and derives from observation artifacts."""
+        scorecard_file = OUTPUT_DIR / "architecture-r4-scorecard-v1.json"
+        if not scorecard_file.exists():
+            self.skipTest(f"Scorecard not found at {scorecard_file}")
+
+        with open(scorecard_file, "r", encoding="utf-8") as f:
+            sc = json.load(f)
+
+        z_stack = sc["stacks"]["STACK_Z_ZERO_MODEL"]
+        q_stack = sc["stacks"]["STACK_Q_QWEN_DIRECT"]
+
+        self.assertEqual(z_stack["retrieved_pair_count"], 558)
+        self.assertEqual(q_stack["retrieved_pair_count"], 1650)
+        self.assertIn("source_receipts", z_stack)
+        self.assertIn("source_receipts", q_stack)
+
+    def test_d1_retrieved_pair_count_single_source_of_truth(self):
+        """Verifies D1 retrieved pair count is 1650 (not 605) on full Home-200."""
+        scorecard_file = OUTPUT_DIR / "architecture-r4-scorecard-v1.json"
+        if not scorecard_file.exists():
+            self.skipTest(f"Scorecard not found at {scorecard_file}")
+
+        with open(scorecard_file, "r", encoding="utf-8") as f:
+            sc = json.load(f)
+
+        q_stack = sc["stacks"]["STACK_Q_QWEN_DIRECT"]
+        self.assertEqual(q_stack["retrieved_pair_count"], 1650)
+        self.assertAlmostEqual(q_stack["pair_reduction_percent"], 91.29, places=2)
+        self.assertIn("retrieved_count_discrepancy_root_cause", q_stack)
+
+    def test_python_node_four_way_cryptographic_parity(self):
+        """Verifies 4-way cryptographic SHA256 parity between Python and Node."""
+        parity_file = OUTPUT_DIR / "python-node-exact-parity-v1.json"
+        if not parity_file.exists():
+            self.skipTest(f"Parity file not found at {parity_file}")
+
+        with open(parity_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        self.assertEqual(data["gates"]["PYTHON_NODE_CANDIDATE_SET_PARITY"], "PASS")
+        self.assertEqual(data["gates"]["PYTHON_NODE_PAIR_SCORE_PARITY"], "PASS")
+        self.assertEqual(data["gates"]["PYTHON_NODE_CLUSTER_MEMBERSHIP_PARITY"], "PASS")
+        self.assertEqual(data["gates"]["PYTHON_NODE_PROJECTION_PARITY"], "PASS")
+
+        self.assertEqual(data["canonical_candidate_set_sha256"], "5a3d36d6f1cbc2341be511bdb72c7a8eaddab8b90f86b86f35c1f18431fb7fd2")
+        self.assertEqual(data["pair_score_sha256"], "e58557dbf79266e1aa448c0356f1f852ab7f1aa73721bacaadb65e8616f4e4b9")
+        self.assertEqual(data["cluster_membership_sha256"], "0f695257fa3f8260eed113ad378e3212a8f74637e7897ccca87532b90ac15c52")
+        self.assertEqual(data["story_projection_membership_sha256"], "0b8bc7bf3ab2ded2525e0e726160cf10cf9957e56bdbde52f396e0f5a941318a")
+
+    def test_regression_indirect_co_clustering_detected(self):
+        """Verifies full-stack safety detects indirect co-clustering of negative pairs."""
+        from direct_scorer_benchmark import evaluate_full_home_gold_observation
+
+        # Synthetic projection where article 10 and 20 are in the same cluster via 30
+        synthetic_projections = [
+            {
+                "story_id": "story_cluster_1",
+                "member_article_ids": [10, 20, 30],
+                "representative_article_id": 10,
+                "h1_home_position": 0,
+            }
+        ]
+        # Gold pair (10, 20) is DIFFERENT_EVENT
+        gold_rows = [
+            {
+                "entry_a_id": 10,
+                "entry_b_id": 20,
+                "label": "DIFFERENT_EVENT",
+                "episode_family_id": "fam_synthetic",
+            }
+        ]
+        obs = evaluate_full_home_gold_observation(synthetic_projections, gold_rows)
+        self.assertEqual(obs["different_event_cluster_contamination"], 1)
+        self.assertEqual(obs["safety_classification"], "NONZERO_HARD_NEGATIVE_CONTAMINATION")
+        self.assertEqual(obs["contaminated_pairs"][0]["pair_key"], "10:20")
+
+    def test_d1_strict_operating_point(self):
+        """Verifies Stack Q scorecard evaluates STRICT operating point and preserves median as sensitivity."""
+        scorecard_file = OUTPUT_DIR / "architecture-r4-scorecard-v1.json"
+        if not scorecard_file.exists():
+            self.skipTest(f"Scorecard not found at {scorecard_file}")
+
+        with open(scorecard_file, "r", encoding="utf-8") as f:
+            sc = json.load(f)
+
+        q_stack = sc["stacks"]["STACK_Q_QWEN_DIRECT"]
+        self.assertEqual(q_stack["operating_point"], "STRICT")
+        self.assertAlmostEqual(q_stack["threshold"], 0.6850, places=3)
+        self.assertEqual(q_stack["full_stack_gold_observation"]["different_event_contamination"], 1)
+
+        self.assertIn("sensitivity_median", q_stack)
+        med = q_stack["sensitivity_median"]
+        self.assertEqual(med["operating_point"], "MEDIAN")
+        self.assertAlmostEqual(med["threshold"], 0.6789, places=3)
+        self.assertEqual(med["hard_negative_contamination"], 1)
 
     def test_rf0r_k_search_benchmark(self):
         """Verifies RF0R candidate retrieval K search against Gold."""
@@ -350,15 +520,18 @@ class TestDirectScorerBenchmark(unittest.TestCase):
         self.assertEqual(node_stats["top20_story_card_count"], py_stats["top20_story_card_count"])
 
     def test_private_artifacts_exist(self):
-        """Verifies all 7 R3 private artifacts exist in /tmp/newsflux-story02-a0-r3/."""
+        """Verifies all required R4 private artifacts exist in /tmp/newsflux-story02-a0-r4/."""
         expected_artifacts = [
-            "rf0r-retrieval-benchmark-v1.json",
+            "architecture-r4-scorecard-v1.json",
+            "stack-z-full-home-gold-observation-v1.json",
+            "stack-q-full-home-gold-observation-v1.json",
+            "cluster-safety-r4-v1.json",
+            "false-merge-full-stack-review-pack-v1.csv",
+            "family-recall-breakdown-v1.json",
+            "python-node-exact-parity-v1.json",
             "d0-crossfeed-runtime-pipeline-v1.json",
             "d0-crossfeed-home-projection-v1.json",
-            "d1-retrieved-home-projection-v1.json",
-            "cluster-safety-r3-v1.json",
-            "false-merge-review-pack-v2.csv",
-            "architecture-r3-scorecard-v1.json",
+            "rf0r-retrieval-benchmark-v1.json",
         ]
         for name in expected_artifacts:
             art_path = OUTPUT_DIR / name

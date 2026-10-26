@@ -13,6 +13,7 @@
  */
 
 import assert from "node:assert/strict"
+import crypto from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
 
@@ -140,6 +141,37 @@ function testCrossFeedOnlyContract() {
   assert.ok(candidatePairs.has("2_3"), "Cross feed pair 2_3 must be retrieved")
 
   console.log("  PASS: Cross-feed only contract verified.")
+}
+
+function testUnknownFeedContract() {
+  console.log("Testing Unknown Feed Contract (UNKNOWN_FEED_NOT_ELIGIBLE)...")
+
+  const articles = [
+    { id: 1, feed_id: 10, title: "Breaking technology announcement today" },
+    { id: 2, feed_id: "", title: "Breaking technology announcement today" }, // Unknown feed
+    { id: 3, feed: null, title: "Breaking technology announcement today" }, // Unknown feed
+    { id: 4, feed_id: 20, title: "Breaking technology announcement today" }, // Known feed (different)
+  ]
+
+  const tokensMap = new Map()
+  for (const a of articles) {
+    tokensMap.set(Number(a.id), extractSignificantWords(a.title))
+  }
+
+  const { candidatePairs } = retrieveCandidatesRF0R(articles, tokensMap, 10)
+
+  // 1 (known) and 2 (unknown) -> MUST NOT be retrieved
+  assert.ok(!candidatePairs.has("1_2"), "Pair 1_2 (known vs unknown) must NOT be retrieved")
+  // 1 (known) and 3 (unknown) -> MUST NOT be retrieved
+  assert.ok(!candidatePairs.has("1_3"), "Pair 1_3 (known vs unknown) must NOT be retrieved")
+  // 2 (unknown) and 3 (unknown) -> MUST NOT be retrieved
+  assert.ok(!candidatePairs.has("2_3"), "Pair 2_3 (unknown vs unknown) must NOT be retrieved")
+  // 2 (unknown) and 4 (known) -> MUST NOT be retrieved
+  assert.ok(!candidatePairs.has("2_4"), "Pair 2_4 (unknown vs known) must NOT be retrieved")
+  // 1 (feed 10) and 4 (feed 20) -> MUST be retrieved
+  assert.ok(candidatePairs.has("1_4"), "Pair 1_4 (known distinct feeds) must be retrieved")
+
+  console.log("  PASS: Unknown feed contract verified.")
 }
 
 function testSymmetricPerArticleTopKAndHigherId() {
@@ -389,21 +421,98 @@ function testCorpusParityIfAvailable() {
   console.log("  PASS: Corpus execution and benchmark verified under cross-feed contract.")
 }
 
+function testNodeCryptographicParity() {
+  if (!fs.existsSync(CORPUS_PATH)) {
+    console.log(`Corpus file not found at ${CORPUS_PATH}, skipping cryptographic parity test.`)
+    return
+  }
+
+  console.log("Testing Node.js Cryptographic 4-Way Parity on Home-200...")
+  const lines = fs.readFileSync(CORPUS_PATH, "utf8").trim().split("\n")
+  const articles = lines.map((l) => JSON.parse(l))
+
+  const res = executeD0Pipeline(articles, { threshold: 0.3541 })
+
+  // 1. Candidate Set SHA256 (newline-joined sorted keys)
+  const sortedCands = [...res.candidatePairs].toSorted()
+  const candidateSetSha = crypto.createHash("sha256").update(sortedCands.join("\n")).digest("hex")
+  assert.equal(
+    candidateSetSha,
+    "5a3d36d6f1cbc2341be511bdb72c7a8eaddab8b90f86b86f35c1f18431fb7fd2",
+    "Candidate Set SHA must match canonical hash",
+  )
+
+  // 2. Pair Score SHA256 (newline-joined sorted key,score lines)
+  const scoreKeys = [...res.pairScores.keys()].toSorted()
+  const scoreLines = scoreKeys.map((k) => `${k},${res.pairScores.get(k).toFixed(4)}`)
+  const pairScoreSha = crypto.createHash("sha256").update(scoreLines.join("\n")).digest("hex")
+  assert.equal(
+    pairScoreSha,
+    "e58557dbf79266e1aa448c0356f1f852ab7f1aa73721bacaadb65e8616f4e4b9",
+    "Pair Score SHA must match canonical hash",
+  )
+
+  // 3. Cluster Membership SHA256
+  const canonicalClusters = res.clusters.map((c) => c.toSorted((a, b) => a - b))
+  const sortedClusters = canonicalClusters.toSorted((a, b) => {
+    if (a[0] !== b[0]) {
+      return a[0] - b[0]
+    }
+    return a.length - b.length
+  })
+  const clusterSha = crypto
+    .createHash("sha256")
+    .update(JSON.stringify(sortedClusters))
+    .digest("hex")
+  assert.equal(
+    clusterSha,
+    "0f695257fa3f8260eed113ad378e3212a8f74637e7897ccca87532b90ac15c52",
+    "Cluster Membership SHA must match canonical hash",
+  )
+
+  // 4. Story Projection Semantic SHA256
+  const semanticProj = res.projections.map((p) => ({
+    story_id: p.story_id,
+    member_article_ids: p.member_article_ids.toSorted((a, b) => a - b),
+    representative_article_id: p.representative_article_id,
+    h1_home_position: p.h1_home_position,
+  }))
+  const semanticProjSorted = semanticProj.toSorted((a, b) => {
+    if (a.h1_home_position !== b.h1_home_position) {
+      return a.h1_home_position - b.h1_home_position
+    }
+    return a.story_id.localeCompare(b.story_id)
+  })
+  const projSha = crypto
+    .createHash("sha256")
+    .update(JSON.stringify(semanticProjSorted))
+    .digest("hex")
+  assert.equal(
+    projSha,
+    "0b8bc7bf3ab2ded2525e0e726160cf10cf9957e56bdbde52f396e0f5a941318a",
+    "Story Projection Semantic SHA must match canonical hash",
+  )
+
+  console.log("  PASS: All 4 cryptographic SHA256 hashes match canonical benchmarks perfectly.")
+}
+
 function runAllTests() {
   console.log("========================================================")
-  console.log("Running Node.js Direct Story Pipeline Unit Tests (R3)")
+  console.log("Running Node.js Direct Story Pipeline Unit Tests (R4)")
   console.log("========================================================")
 
   testTokenExtractionEdgeCases()
   testOverlapCoefficient()
   testFeedIdentity()
   testCrossFeedOnlyContract()
+  testUnknownFeedContract()
   testSymmetricPerArticleTopKAndHigherId()
   testP3ConservativeClustering()
   testStoryProjectionAndPlacement()
   testFailOpenContract()
   testZeroModelVerification()
   testCorpusParityIfAvailable()
+  testNodeCryptographicParity()
 
   console.log("========================================================")
   console.log("ALL NODE.JS PIPELINE TESTS PASSED SUCCESSFULLY")
