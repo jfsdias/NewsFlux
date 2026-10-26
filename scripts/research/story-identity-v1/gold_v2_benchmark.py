@@ -16,12 +16,14 @@ Methodological Principles:
 from __future__ import annotations
 
 import csv
+import argparse
 import hashlib
 import json
 import os
 import random
 import sys
 import time
+from importlib.metadata import version
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -89,6 +91,217 @@ CANONICAL_PAIRS_PATH = "/Users/jfsdias/NewsFlux-STORY00/private-p4/20261023-2202
 GOLD_V2_DIR = Path("/Users/jfsdias/NewsFlux-STORY00/private-p4/story02-gold-v2")
 GOLD_V2_CSV_PATH = GOLD_V2_DIR / "story-identity-gold-v2.csv"
 EXPECTED_GOLD_V2_SHA256 = "3851a1a6c6107b417e217eacb4d709f6a8b76a678fb0bfd53b7713bc0d6368f4"
+
+OOF_THRESHOLD_STRATEGY = "INNER_TRAIN_ONLY_PER_OUTER_FOLD"
+OPERATING_POINT_NAMES = ("STRICT", "MEDIAN", "PERMISSIVE")
+MIN_SAME_EVENT_CAPTURE = 15  # Existing evaluator policy, unchanged by R1.
+ORIGINAL_A2C_BASELINE = {
+    "d0_strict": {"same_event_capture": 4, "hard_negative_cluster_contamination": 0},
+    "d1_strict": {"same_event_capture": 19, "hard_negative_cluster_contamination": 1},
+    "pf1_reported": {
+        "same_event_capture": 14, "hard_negative_cluster_contamination": 1,
+        "methodology": "HISTORICAL_REPORTED_VALUE_NOT_REPRODUCIBLE_BY_PREVIOUS_RUNNER",
+    },
+}
+
+
+def evaluate_partition_safety(
+    clusters: List[List[int]], gold_rows: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Measure P3 membership, including transitive contamination, on frozen labels."""
+    projections = [
+        {"story_id": str(idx), "member_article_ids": members}
+        for idx, members in enumerate(clusters)
+    ]
+    obs = evaluate_full_home_gold_observation(projections, gold_rows)
+    membership = {aid: idx for idx, members in enumerate(clusters) for aid in members}
+    families: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for row in gold_rows:
+        if row["gold_label"] == "SAME_EVENT":
+            families[row["episode_family_id"]].append(row)
+
+    def captured(row):
+        u, v = int(row["entry_a_id"]), int(row["entry_b_id"])
+        return u in membership and v in membership and membership[u] == membership[v]
+
+    breakdown = {}
+    fragmentation = {}
+    for family, pairs in sorted(families.items()):
+        count = sum(captured(row) for row in pairs)
+        breakdown[family] = {"captured": count, "total": len(pairs), "recall": count / len(pairs)}
+        members = {int(row[key]) for row in pairs for key in ("entry_a_id", "entry_b_id")}
+        fragmentation[family] = len({membership[aid] for aid in members})
+    non_duo = [name for name in families if name != "IPHONE_DUO_FIRST_GEN_LAUNCH"]
+    non_duo_total = sum(breakdown[name]["total"] for name in non_duo)
+    non_duo_capture = sum(breakdown[name]["captured"] for name in non_duo)
+    capture = obs["same_event_pairs_captured"]
+    hard_neg = obs["cluster_hard_negative_contamination_count"]
+    cross_family = obs["cross_family_cluster_count"]
+    safety = (
+        "TOO_LOW_COVERAGE" if capture < MIN_SAME_EVENT_CAPTURE else
+        "NONZERO_HARD_NEGATIVE_CONTAMINATION" if hard_neg or cross_family else
+        "ZERO_OBSERVED_HARD_NEGATIVE_CONTAMINATION"
+    )
+    return {
+        "same_event_capture": capture,
+        "same_event_capture_rate": obs["same_event_capture_rate"],
+        "related_topic_cluster_contamination": obs["related_topic_cluster_contamination"],
+        "different_event_cluster_contamination": obs["different_event_cluster_contamination"],
+        "cluster_hard_negative_contamination_count": hard_neg,
+        "false_family_merge_count": obs["false_family_merge_count"],
+        "cross_family_cluster_count": cross_family,
+        "multi_article_story_count": sum(len(c) > 1 for c in clusters),
+        "total_articles_clustered": sum(len(c) for c in clusters if len(c) > 1),
+        "family_fragmentation_breakdown": fragmentation,
+        "family_capture_breakdown": breakdown,
+        "family_macro_recall": round(float(np.mean([b["recall"] for b in breakdown.values()])), 4) if breakdown else 0.0,
+        "non_duo_pair_recall": round(non_duo_capture / non_duo_total, 4) if non_duo_total else 0.0,
+        "non_duo_family_macro_recall": round(float(np.mean([breakdown[name]["recall"] for name in non_duo])), 4) if non_duo else 0.0,
+        "safety_classification": safety,
+    }
+
+
+def evaluate_direct_frontier(scorer_result, gold_rows, published_lookup):
+    """Fixed-threshold research descriptions, distinct from pooled OOF estimates."""
+    scores = {
+        tuple(sorted((int(row["entry_a_id"]), int(row["entry_b_id"])))): float(row[scorer_result["feature_key"]])
+        for row in gold_rows
+    }
+    articles = {aid for pair in scores for aid in pair}
+    evaluations = {}
+    for name in OPERATING_POINT_NAMES:
+        threshold = scorer_result["research_operating_points"][name]
+        clusters = cluster_with_p3(articles, scores, threshold, published_lookup, max_temporal_span_hours=24.0)
+        evaluations[name] = {
+            "operating_point": name, "threshold": threshold,
+            "metrics_basis": "FIXED_THRESHOLD_RESEARCH_P3_NOT_POOLED_OOF",
+            **evaluate_partition_safety(clusters, gold_rows),
+        }
+    return {"scorer_name": scorer_result["scorer_name"], "operating_points": evaluations}
+
+
+def evaluate_pf1_oof_cluster_safety(oof_predictions, gold_rows, published_lookup):
+    """OOF_BINARY_EDGE_P3: evaluation construct, never a global learned operating point.
+
+    Only each pair's held-out binary decision becomes an edge. All positive
+    edges have equal weight; canonical article IDs break ties. Cross-fold
+    probabilities are neither sorted nor thresholded together.
+    """
+    # Preserve temporal constraints when replaying the runner's saved JSON.
+    published_lookup = {int(aid): float(value) for aid, value in published_lookup.items()}
+    expected = {row["pair_key"] for row in gold_rows}
+    keys = [row["pair_key"] for row in oof_predictions]
+    if len(keys) != len(set(keys)) or set(keys) != expected:
+        raise ValueError("PF1 OOF decisions must cover every Gold pair exactly once")
+    if any(row["pred"] not in (0, 1) for row in oof_predictions):
+        raise ValueError("PF1 OOF decisions must be binary")
+    scores = {}
+    for row in oof_predictions:
+        pair = tuple(sorted((int(row["entry_a_id"]), int(row["entry_b_id"]))))
+        if row["pair_key"] != f"{pair[0]}:{pair[1]}":
+            raise ValueError("PF1 OOF pair key does not match its article IDs")
+        if row["pred"] == 1:
+            scores[pair] = 1.0
+    articles = {int(row[key]) for row in gold_rows for key in ("entry_a_id", "entry_b_id")}
+    # 0.5 distinguishes binary presence/absence; it is not a PF1 score threshold.
+    clusters = cluster_with_p3(articles, scores, 0.5, published_lookup, max_temporal_span_hours=24.0)
+    return {
+        "cluster_evaluation": "OOF_BINARY_EDGE_P3",
+        "deployable_global_operating_point": False,
+        "edge_order": "EQUAL_BINARY_WEIGHT_THEN_CANONICAL_ARTICLE_IDS",
+        "positive_oof_edge_count": len(scores),
+        **evaluate_partition_safety(clusters, gold_rows),
+    }
+
+
+def qualifies_for_integration(point):
+    """Require conservative safety AND existing minimum useful coverage."""
+    return (
+        point["same_event_capture"] >= MIN_SAME_EVENT_CAPTURE
+        and point["safety_classification"] != "TOO_LOW_COVERAGE"
+        and point["false_family_merge_count"] == 0
+        and point["cross_family_cluster_count"] == 0
+        and point["cluster_hard_negative_contamination_count"] == 0
+    )
+
+
+def pareto_operating_points(points):
+    """Pareto dominance across explicit dimensions, without a scalar loss."""
+    def dimensions(point):
+        return (
+            -point["false_family_merge_count"], -point["cross_family_cluster_count"],
+            -point["cluster_hard_negative_contamination_count"], point["same_event_capture"],
+            point["family_macro_recall"], point["non_duo_pair_recall"],
+            point["non_duo_family_macro_recall"], point["scorer"] == "D0_DIRECT_LEXICAL",
+        )
+    return [point for point in points if not any(
+        all(x >= y for x, y in zip(dimensions(other), dimensions(point)))
+        and any(x > y for x, y in zip(dimensions(other), dimensions(point)))
+        for other in points
+    )]
+
+
+def select_research_provider(points):
+    """R1 recommends only qualifying existing direct operating points for A3."""
+    qualifying = [point for point in points
+                  if point["scorer"] in ("D0_DIRECT_LEXICAL", "D1_DIRECT_QWEN")
+                  and qualifies_for_integration(point)]
+    if not qualifying:
+        return {
+            "qualifying_operating_points": [],
+            "research_recommendation": "NO_CLEAR_WINNER",
+            "scoreprovider_selection": "DEFERRED_NO_CLEAR_WINNER",
+            "lightweight_model_artifact_decision_required": "DEFERRED",
+            "next_recommended_track": "MORE_SCORER_RESEARCH",
+            "why": "No D0/D1 point combines zero family/cross-family/hard-negative merges with capture >= 15; PF1 binary-edge clustering is evaluation-only.",
+        }
+    # Safety is a hard prerequisite, then compare in the PM's stated order.
+    winner = max(qualifying, key=lambda p: (
+        p["same_event_capture"], p["family_macro_recall"], p["non_duo_pair_recall"],
+        p["non_duo_family_macro_recall"], p["scorer"] == "D0_DIRECT_LEXICAL",
+    ))
+    return {
+        "qualifying_operating_points": [f"{p['scorer']}:{p['operating_point']}" for p in qualifying],
+        "research_recommendation": "QUALIFYING_DIRECT_OPERATING_POINT",
+        "scoreprovider_selection": winner["scorer"],
+        "selected_operating_point": winner["operating_point"],
+        "lightweight_model_artifact_decision_required": "NO",
+        "next_recommended_track": "STORY_02_A3_PROVIDER_INTEGRATION",
+        "why": "Zero observed safety violations and sufficient coverage; ordered by capture, family macro recall, non-Duo robustness, then runtime simplicity. Research recommendation only.",
+    }
+
+
+def audit_frozen_folds(fold_data, gold_rows):
+    """Verify measured disjointness/coverage, preserving the existing assignments."""
+    all_keys = [row["pair_key"] for fold in fold_data for row in fold["rows"]]
+    expected = {row["pair_key"] for row in gold_rows}
+    if len(all_keys) != len(set(all_keys)) or set(all_keys) != expected:
+        raise AssertionError("PAIR_LEAKAGE_OR_COVERAGE_FAILURE")
+    family_sets = [{row["episode_family_id"] for row in fold["rows"] if row["gold_label"] == "SAME_EVENT"} for fold in fold_data]
+    for i, fold in enumerate(fold_data):
+        for j in range(i):
+            if fold["articles"] & fold_data[j]["articles"]:
+                raise AssertionError("ARTICLE_LEAKAGE_DETECTED")
+            if family_sets[i] & family_sets[j]:
+                raise AssertionError("FAMILY_LEAKAGE_DETECTED")
+    assignments = [
+        {"fold": fold["fold_idx"], "components": fold["components"],
+         "pair_keys": sorted(row["pair_key"] for row in fold["rows"])}
+        for fold in fold_data
+    ]
+    return hashlib.sha256(json.dumps(assignments, sort_keys=True).encode()).hexdigest()
+
+
+def write_private_results(results, output_path):
+    """Full predictions/labels stay outside the repository, including symlink targets."""
+    path = Path(output_path).resolve()
+    repo_root = CUR_DIR.parents[2].resolve()
+    if path.is_relative_to(repo_root):
+        raise ValueError("Private benchmark output must stay outside the repository")
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as handle:
+        json.dump(results, handle, indent=2, sort_keys=True)
+        handle.write("\n")
 
 
 def compute_file_sha256(path: str | Path) -> str:
@@ -373,7 +586,6 @@ def run_gold_v2_benchmark() -> Dict[str, Any]:
     comp_map = {c["component_id"]: c for c in comp_details}
 
     p_a_3 = simulate_protocol_a(graph, 3)
-    p_a_2 = simulate_protocol_a(graph, 2)
 
     # Build fold_data for 3-fold
     fold_data = []
@@ -395,14 +607,7 @@ def run_gold_v2_benchmark() -> Dict[str, Any]:
             "rows": fold_pairs,
         })
 
-    # Article disjointness verification across folds
-    article_leakage = 0
-    for i in range(len(fold_data)):
-        for j in range(i + 1, len(fold_data)):
-            ov = len(fold_data[i]["articles"] & fold_data[j]["articles"])
-            article_leakage += ov
-    if article_leakage > 0:
-        raise AssertionError(f"ARTICLE_LEAKAGE_DETECTED: {article_leakage}")
+    fold_assignment_sha = audit_frozen_folds(fold_data, gold_v2_rows)
 
     # Step 5: Benchmark D0
     d0_res = evaluate_direct_scorer_3fold("D0_DIRECT_LEXICAL", "title_overlap_coefficient", fold_data)
@@ -411,6 +616,10 @@ def run_gold_v2_benchmark() -> Dict[str, Any]:
     # Step 6: Benchmark D1
     d1_res = evaluate_direct_scorer_3fold("D1_DIRECT_QWEN", "qwen_embedding_cosine", fold_data)
     ci_d1 = compute_component_bootstrap_ci(d1_res["oof_predictions"], comp_map)
+    for res in (d0_res, d1_res):
+        res["oof_threshold_strategy"] = OOF_THRESHOLD_STRATEGY
+        res["oof_metrics_basis"] = "POOLED_FOLD_SPECIFIC_BINARY_DECISIONS"
+        res["research_operating_point_basis"] = "STRICT_MAX_MEDIAN_MEDIAN_PERMISSIVE_MIN_FOLD_THRESHOLDS"
 
     # Step 7: Benchmark PF1
     tracker = LeakageTracker(total_gold_count=233)
@@ -423,11 +632,15 @@ def run_gold_v2_benchmark() -> Dict[str, Any]:
         total_gold_count=233,
     )
     ci_pf1 = compute_component_bootstrap_ci(pf1_res["oof_predictions"], comp_map)
+    pf1_res["oof_threshold_strategy"] = OOF_THRESHOLD_STRATEGY
+    pf1_res["oof_metrics_basis"] = "POOLED_FOLD_SPECIFIC_BINARY_DECISIONS"
+    pf1_res["pooled_probability_calibration"] = "NOT_GLOBALLY_CALIBRATED_ACROSS_OUTER_MODELS"
 
     # Step 8: Downstream Cluster Safety on Gold V2 Subgraph
     published_lookup = {int(a["id"]): float(a.get("published_at", 0.0)) for a in home_articles}
-    d0_safety = evaluate_gold_cluster_safety(d0_res, gold_v2_rows, published_lookup, max_temporal_span_hours=24.0)
-    d1_safety = evaluate_gold_cluster_safety(d1_res, gold_v2_rows, published_lookup, max_temporal_span_hours=24.0)
+    d0_safety = evaluate_direct_frontier(d0_res, gold_v2_rows, published_lookup)
+    d1_safety = evaluate_direct_frontier(d1_res, gold_v2_rows, published_lookup)
+    pf1_safety = evaluate_pf1_oof_cluster_safety(pf1_res["oof_predictions"], gold_v2_rows, published_lookup)
 
     # Step 9: Retrieval Coverage
     article_tokens: Dict[int, Set[str]] = {}
@@ -445,21 +658,33 @@ def run_gold_v2_benchmark() -> Dict[str, Any]:
 
     retrieval_cov = evaluate_retrieval_coverage(home_articles, article_tokens, gold_v2_rows, qwen_pair_scores)
 
-    # Step 10: Home-200 Shadow Feed Execution
-    # Candidate Scorer Selection: D0_DIRECT_LEXICAL (or compare D0 vs D1)
-    d0_thresh_strict = d0_res["research_operating_points"]["STRICT"]
-    d0_proj, d0_stats, d0_timing = execute_d0_raw_pipeline_on_home200(
-        home_articles, threshold=d0_thresh_strict, k_retrieval=10, max_temporal_span_hours=24.0
-    )
-    d0_home_obs = evaluate_full_home_gold_observation(d0_proj, gold_v2_rows)
+    # Step 10: All six fixed-threshold shadows, including disqualified points
+    # for transparency. No model is fitted on full Gold or activated in runtime.
+    home_frontiers = {"d0": {}, "d1": {}}
+    for scorer, res in (("d0", d0_res), ("d1", d1_res)):
+        for name in OPERATING_POINT_NAMES:
+            threshold = res["research_operating_points"][name]
+            if scorer == "d0":
+                proj, stats, _ = execute_d0_raw_pipeline_on_home200(
+                    home_articles, threshold=threshold, k_retrieval=10, max_temporal_span_hours=24.0)
+            else:
+                proj, stats, _ = execute_d1_retrieved_pipeline_on_home200(
+                    home_articles, qwen_pair_scores, threshold=threshold, k_retrieval=10, max_temporal_span_hours=24.0)
+            home_frontiers[scorer][name] = {
+                "threshold": threshold, "stats": stats,
+                "top_rank_count_basis": "H1_ORIGINAL_HOME_MEMBER_POSITION",
+                "observation": evaluate_full_home_gold_observation(proj, gold_v2_rows),
+            }
 
-    d1_thresh_strict = d1_res["research_operating_points"]["STRICT"]
-    d1_proj, d1_stats, d1_retrieved = execute_d1_retrieved_pipeline_on_home200(
-        home_articles, qwen_pair_scores, threshold=d1_thresh_strict, k_retrieval=10, max_temporal_span_hours=24.0
-    )
-    d1_home_obs = evaluate_full_home_gold_observation(d1_proj, gold_v2_rows)
-
-    return {
+    frontier = [
+        {"scorer": safety["scorer_name"], **metrics}
+        for safety in (d0_safety, d1_safety)
+        for metrics in safety["operating_points"].values()
+    ]
+    results = {
+        "research_version": "STORY_02_A2C_R1",
+        "environment": {"python": sys.version.split()[0], "numpy": np.__version__, "scikit_learn": version("scikit-learn")},
+        "original_a2c_baseline": ORIGINAL_A2C_BASELINE,
         "input_results": input_results,
         "gold_v2_meta": gold_v2_meta,
         "split": {
@@ -468,31 +693,87 @@ def run_gold_v2_benchmark() -> Dict[str, Any]:
             "article_leakage": "ZERO",
             "pair_leakage": "ZERO",
             "family_leakage": "ZERO",
-            "related_coverage_gate": "PASS",
-            "different_coverage_gate": "PASS",
+            "fold_assignment_sha256": fold_assignment_sha,
+            "fold_pair_counts": [len(f["rows"]) for f in fold_data],
+            "fold_component_assignments": [f["components"] for f in fold_data],
+            "related_coverage_gate": "PASS" if p_a_3["all_related_topic_present"] else "FAIL",
+            "different_coverage_gate": "PASS" if p_a_3["all_different_event_present"] else "FAIL",
         },
         "d0": d0_res,
         "d0_ci": ci_d0,
         "d0_safety": d0_safety,
-        "d0_home_stats": d0_stats,
-        "d0_home_obs": d0_home_obs,
+        "d0_home_stats": home_frontiers["d0"]["STRICT"]["stats"],
+        "d0_home_obs": home_frontiers["d0"]["STRICT"]["observation"],
+        "d0_home_frontier": home_frontiers["d0"],
         "d1": d1_res,
         "d1_ci": ci_d1,
         "d1_safety": d1_safety,
-        "d1_home_stats": d1_stats,
-        "d1_home_obs": d1_home_obs,
+        "d1_home_stats": home_frontiers["d1"]["STRICT"]["stats"],
+        "d1_home_obs": home_frontiers["d1"]["STRICT"]["observation"],
+        "d1_home_frontier": home_frontiers["d1"],
         "pf1": pf1_res,
         "pf1_ci": ci_pf1,
+        "pf1_safety": pf1_safety,
+        "pf1_fit_audit": {
+            "fit_calls": tracker.fit_calls,
+            "full_gold_final_fit": "NO" if tracker.full_gold_fits == 0 else "YES",
+            "production_model_artifact": "NO",
+        },
+        "published_lookup": published_lookup,
+        "frontier": frontier,
+        "pareto_frontier": pareto_operating_points(frontier),
+        "decision": select_research_provider(frontier),
+        "uncertainty_basis": "COMPONENT_BOOTSTRAP_OF_FIXED_OOF_BINARY_DECISIONS_1000_DRAWS_SEED_42",
+        "uncertainty_limitations": "Descriptive percentile intervals; not nested refit/threshold uncertainty. Giant component dominates. Existing zero-denominator draws yield zero.",
         "retrieval_coverage": retrieval_cov,
     }
+    results["research_output"] = make_research_output(results)
+    return results
+
+
+def make_research_output(results):
+    """Decision-critical handoff values are emitted by the versioned runner."""
+    pf1 = results["pf1_safety"]
+    output = {
+        "PF1_CLUSTER_EVALUATION": pf1["cluster_evaluation"],
+        "PF1_RELATED_CLUSTER_CONTAMINATION": pf1["related_topic_cluster_contamination"],
+        "PF1_DIFFERENT_CLUSTER_CONTAMINATION": pf1["different_event_cluster_contamination"],
+        "PF1_HARD_NEGATIVE_CLUSTER_CONTAMINATION": pf1["cluster_hard_negative_contamination_count"],
+        "PF1_FALSE_FAMILY_MERGES": pf1["false_family_merge_count"],
+        "PF1_CROSS_FAMILY_CLUSTERS": pf1["cross_family_cluster_count"],
+        "PF1_SAME_EVENT_CAPTURE": pf1["same_event_capture"],
+        "PF1_FAMILY_FRAGMENTATION": pf1["family_fragmentation_breakdown"],
+        "FULL_GOLD_FINAL_FIT": results["pf1_fit_audit"]["full_gold_final_fit"],
+        "PRODUCTION_MODEL_ARTIFACT": "NO",
+        "GOLD_V2_SHA256": results["gold_v2_meta"]["gold_v2_sha256"],
+        "OOF_THRESHOLD_STRATEGY": OOF_THRESHOLD_STRATEGY,
+        "ENVIRONMENT": results["environment"],
+        "ORIGINAL_A2C_BASELINE": results["original_a2c_baseline"],
+        "SAFETY_FIRST_FRONTIER": results["frontier"],
+        "PARETO_FRONTIER": results["pareto_frontier"],
+        "DECISION": results["decision"],
+    }
+    for scorer in ("d0", "d1", "pf1"):
+        for metric, ci_key in (("PRECISION", "precision"), ("RECALL", "recall"), ("F05", "f05"), ("RELATED_FPR", "rt_fpr"), ("DIFFERENT_FPR", "de_fpr")):
+            output[f"{scorer.upper()}_{metric}_CI95"] = results[scorer + "_ci"][ci_key]
+    for scorer in ("d0", "d1"):
+        output[f"{scorer.upper()}_FOLD_THRESHOLDS"] = results[scorer]["thresholds_by_fold"]
+        output[f"{scorer.upper()}_THRESHOLD_SUMMARY"] = results[scorer]["threshold_summary"]
+        output[f"{scorer.upper()}_OOF_METRICS_BASIS"] = results[scorer]["oof_metrics_basis"]
+        output[f"{scorer.upper()}_HOME_FRONTIER"] = results[scorer + "_home_frontier"]
+    return output
 
 
 def main():
-    print("=" * 70)
-    print("NEWSFLUX — STORY-02-A2C BENCHMARK EXECUTION")
-    print("=" * 70)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", type=Path, help="Private JSON destination outside the repository")
+    args = parser.parse_args()
+    if args.output and args.output.resolve().is_relative_to(CUR_DIR.parents[2].resolve()):
+        parser.error("Private benchmark output must stay outside the repository")
     results = run_gold_v2_benchmark()
-    print("BENCHMARK COMPLETED SUCCESSFULLY.")
+    if args.output:
+        write_private_results(results, args.output)
+    print(json.dumps(results["research_output"], indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":
