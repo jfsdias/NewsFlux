@@ -59,6 +59,30 @@ export class StoryRequestController {
   }
 
   /**
+   * Checks whether the given request context matches the latest active request.
+   * Only the latest active request is allowed to mutate controller-global state.
+   *
+   * @param {string|number} requestId
+   * @param {number|string} [sessionRevision]
+   * @param {string} [articleRevision]
+   * @returns {boolean}
+   */
+  isCurrentRequest(requestId, sessionRevision, articleRevision) {
+    const numericId =
+      typeof requestId === "string" ? Number(requestId.replace("req_", "")) : Number(requestId)
+    if (this.activeRequestId !== numericId) {
+      return false
+    }
+    if (sessionRevision !== undefined && this.activeSessionRevision !== sessionRevision) {
+      return false
+    }
+    if (articleRevision !== undefined && this.activeArticleRevision !== articleRevision) {
+      return false
+    }
+    return true
+  }
+
+  /**
    * Updates the active score provider.
    *
    * @param {import('./score-provider.js').ScoreProvider} provider
@@ -150,10 +174,14 @@ export class StoryRequestController {
       providerMs = Math.round((performance.now() - p0) * 1000) / 1000
     } catch (error) {
       // Provider failure fails open (Section 24, 25)
-      this.status = PIPELINE_STATES.FAILED_OPEN
-      this.lastFailOpenReason = FAIL_OPEN_REASONS.PROVIDER_FAILED
+      if (this.isCurrentRequest(requestId, sessionRevision, articleRevision)) {
+        this.status = PIPELINE_STATES.FAILED_OPEN
+        this.lastFailOpenReason = FAIL_OPEN_REASONS.PROVIDER_FAILED
+      }
       return {
         status: PIPELINE_STATES.FAILED_OPEN,
+        articleRevision,
+        sessionRevision,
         projections: null,
         failOpenReason: FAIL_OPEN_REASONS.PROVIDER_FAILED,
         error: String(error?.message || error),
@@ -162,11 +190,12 @@ export class StoryRequestController {
     }
 
     // Check if request became stale during provider call
-    if (this.activeRequestId !== Number(requestId.replace("req_", ""))) {
-      this.status = PIPELINE_STATES.FAILED_OPEN
-      this.lastFailOpenReason = FAIL_OPEN_REASONS.STALE_RESULT
+    if (!this.isCurrentRequest(requestId, sessionRevision, articleRevision)) {
+      // Stale request: DO NOT overwrite controller-global state!
       return {
         status: PIPELINE_STATES.FAILED_OPEN,
+        articleRevision,
+        sessionRevision,
         projections: null,
         failOpenReason: FAIL_OPEN_REASONS.STALE_RESULT,
         timing: { providerMs, totalMs: Math.round((performance.now() - t0) * 1000) / 1000 },
@@ -179,10 +208,14 @@ export class StoryRequestController {
     // Fast path: if zero positive pairs returned (e.g. NullScoreProvider),
     // return null projections -> Home renders flat Home (Sections 8, 31)
     if (validatedPairs.length === 0) {
-      this.status = PIPELINE_STATES.READY
-      this.lastFailOpenReason = null
+      if (this.isCurrentRequest(requestId, sessionRevision, articleRevision)) {
+        this.status = PIPELINE_STATES.READY
+        this.lastFailOpenReason = null
+      }
       return {
         status: PIPELINE_STATES.READY,
+        articleRevision,
+        sessionRevision,
         projections: null,
         failOpenReason: null,
         timing: {
@@ -214,12 +247,16 @@ export class StoryRequestController {
         timeoutMs: effectiveTimeout,
       })
     } catch (error) {
-      this.status = PIPELINE_STATES.FAILED_OPEN
       const reason =
         error?.message === "TIMEOUT" ? FAIL_OPEN_REASONS.TIMEOUT : FAIL_OPEN_REASONS.WORKER_FAILED
-      this.lastFailOpenReason = reason
+      if (this.isCurrentRequest(requestId, sessionRevision, articleRevision)) {
+        this.status = PIPELINE_STATES.FAILED_OPEN
+        this.lastFailOpenReason = reason
+      }
       return {
         status: PIPELINE_STATES.FAILED_OPEN,
+        articleRevision,
+        sessionRevision,
         projections: null,
         failOpenReason: reason,
         error: String(error?.message || error),
@@ -228,15 +265,12 @@ export class StoryRequestController {
     }
 
     // 7. Stale Result Validation (Section 21)
-    if (
-      this.activeRequestId !== Number(requestId.replace("req_", "")) ||
-      this.activeSessionRevision !== sessionRevision ||
-      this.activeArticleRevision !== articleRevision
-    ) {
-      this.status = PIPELINE_STATES.FAILED_OPEN
-      this.lastFailOpenReason = FAIL_OPEN_REASONS.STALE_RESULT
+    if (!this.isCurrentRequest(requestId, sessionRevision, articleRevision)) {
+      // Stale request: DO NOT overwrite controller-global state!
       return {
         status: PIPELINE_STATES.FAILED_OPEN,
+        articleRevision,
+        sessionRevision,
         projections: null,
         failOpenReason: FAIL_OPEN_REASONS.STALE_RESULT,
         timing: { providerMs, totalMs: Math.round((performance.now() - t0) * 1000) / 1000 },
@@ -246,10 +280,14 @@ export class StoryRequestController {
     // 8. Projection Accounting & Invariant Validation (Section 27)
     const validation = validateStoryProjections(workerResult.projections, articles)
     if (!validation.valid) {
-      this.status = PIPELINE_STATES.FAILED_OPEN
-      this.lastFailOpenReason = FAIL_OPEN_REASONS.INVALID_PROJECTION
+      if (this.isCurrentRequest(requestId, sessionRevision, articleRevision)) {
+        this.status = PIPELINE_STATES.FAILED_OPEN
+        this.lastFailOpenReason = FAIL_OPEN_REASONS.INVALID_PROJECTION
+      }
       return {
         status: PIPELINE_STATES.FAILED_OPEN,
+        articleRevision,
+        sessionRevision,
         projections: null,
         failOpenReason: FAIL_OPEN_REASONS.INVALID_PROJECTION,
         error: validation.error,
@@ -261,11 +299,15 @@ export class StoryRequestController {
       }
     }
 
-    this.status = PIPELINE_STATES.READY
-    this.lastFailOpenReason = null
+    if (this.isCurrentRequest(requestId, sessionRevision, articleRevision)) {
+      this.status = PIPELINE_STATES.READY
+      this.lastFailOpenReason = null
+    }
 
     return {
       status: PIPELINE_STATES.READY,
+      articleRevision,
+      sessionRevision,
       projections: workerResult.projections,
       failOpenReason: null,
       timing: {

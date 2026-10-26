@@ -1,5 +1,5 @@
 import { useStore } from "@nanostores/react"
-import { useEffect } from "react"
+import { useEffect, useMemo } from "react"
 
 import ArticleEntry from "@/components/Article/ArticleEntry"
 import ArticleGridCard from "@/components/Article/ArticleGridCard"
@@ -52,10 +52,12 @@ const HomeRecent = ({
     return () => runtime.dispose()
   }, [identityKey, sessionRevision])
 
-  const entryById = new Map(
-    projectRecentEntries(entries, highlightIds).map((entry) => [entry.id, entry]),
-  )
-  const recentEntries = recentIds.map((id) => entryById.get(id)).filter(Boolean)
+  const recentEntries = useMemo(() => {
+    const entryById = new Map(
+      projectRecentEntries(entries, highlightIds).map((entry) => [entry.id, entry]),
+    )
+    return recentIds.map((id) => entryById.get(id)).filter(Boolean)
+  }, [entries, highlightIds, recentIds])
   const storyItems = useHomeStoryProjection({ recentEntries, sessionRevision })
   const effectiveEntries = storyItems
     ? storyItems.map((item) =>

@@ -340,3 +340,104 @@ test("request-controller fails open when worker emits invalid projection (INVALI
   assert.equal(res.failOpenReason, FAIL_OPEN_REASONS.INVALID_PROJECTION)
   assert.equal(res.projections, null)
 })
+
+test("request-controller: stale provider completion cannot overwrite latest controller state", async () => {
+  globalThis.process.env.VITE_STORY_IDENTITY_ENABLED = "1"
+
+  // Provider with custom per-request delays
+  class DelayScoreProvider {
+    async scorePairs(articles, context) {
+      const delay = context.requestId === "req_1" ? 60 : 10
+      await new Promise((resolve) => setTimeout(resolve, delay))
+      return {
+        version: "1.0",
+        articleRevision: context.articleRevision,
+        pairs: [{ articleAId: articles[0].id, articleBId: articles[1].id, score: 0.9 }],
+      }
+    }
+  }
+
+  const controller = new StoryRequestController({
+    scoreProvider: new DelayScoreProvider(),
+    workerFactory: () => new TestMockWorker({ delayMs: 5 }),
+  })
+
+  const articlesA = [
+    { id: 1, title: "A1", feedId: "f1", publishedAt: 100 },
+    { id: 2, title: "A2", feedId: "f2", publishedAt: 200 },
+  ]
+  const articlesB = [
+    { id: 3, title: "B1", feedId: "f3", publishedAt: 300 },
+    { id: 4, title: "B2", feedId: "f4", publishedAt: 400 },
+  ]
+
+  const promiseA = controller.processHomeArticles({ articles: articlesA, sessionRevision: 1 })
+  const promiseB = controller.processHomeArticles({ articles: articlesB, sessionRevision: 2 })
+
+  const [resA, resB] = await Promise.all([promiseA, promiseB])
+
+  // Request B was latest and finished READY
+  assert.equal(resB.status, PIPELINE_STATES.READY)
+  assert.equal(resB.failOpenReason, null)
+
+  // Request A finished late from provider and got STALE_RESULT
+  assert.equal(resA.status, PIPELINE_STATES.FAILED_OPEN)
+  assert.equal(resA.failOpenReason, FAIL_OPEN_REASONS.STALE_RESULT)
+
+  // Controller-global state MUST describe the latest active request (Request B: READY)
+  assert.equal(controller.status, PIPELINE_STATES.READY)
+  assert.equal(controller.lastFailOpenReason, null)
+})
+
+test("request-controller: stale worker completion cannot overwrite latest controller state", async () => {
+  globalThis.process.env.VITE_STORY_IDENTITY_ENABLED = "1"
+
+  class WorkerDelayScoreProvider {
+    async scorePairs(articles, context) {
+      return {
+        version: "1.0",
+        articleRevision: context.articleRevision,
+        pairs: [{ articleAId: articles[0].id, articleBId: articles[1].id, score: 0.9 }],
+      }
+    }
+  }
+
+  // Mock worker that delays based on request id
+  class RequestAwareMockWorker extends TestMockWorker {
+    postMessage(data) {
+      const delay = data.requestId === "req_1" ? 60 : 10
+      setTimeout(() => this._respond(data), delay)
+    }
+  }
+
+  const controller = new StoryRequestController({
+    scoreProvider: new WorkerDelayScoreProvider(),
+    workerFactory: () => new RequestAwareMockWorker(),
+  })
+
+  const articlesA = [
+    { id: 1, title: "A1", feedId: "f1", publishedAt: 100 },
+    { id: 2, title: "A2", feedId: "f2", publishedAt: 200 },
+  ]
+  const articlesB = [
+    { id: 3, title: "B1", feedId: "f3", publishedAt: 300 },
+    { id: 4, title: "B2", feedId: "f4", publishedAt: 400 },
+  ]
+
+  const promiseA = controller.processHomeArticles({ articles: articlesA, sessionRevision: 1 })
+  const promiseB = controller.processHomeArticles({ articles: articlesB, sessionRevision: 2 })
+
+  const [resA, resB] = await Promise.all([promiseA, promiseB])
+
+  // Request B was latest and finished READY
+  assert.equal(resB.status, PIPELINE_STATES.READY)
+  assert.equal(resB.failOpenReason, null)
+
+  // Request A finished late from worker and got STALE_RESULT
+  assert.equal(resA.status, PIPELINE_STATES.FAILED_OPEN)
+  assert.equal(resA.failOpenReason, FAIL_OPEN_REASONS.STALE_RESULT)
+
+  // Controller-global state MUST NOT be overwritten by Request A; remains READY from Request B
+  assert.equal(controller.status, PIPELINE_STATES.READY)
+  assert.equal(controller.lastFailOpenReason, null)
+})

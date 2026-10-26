@@ -164,8 +164,26 @@ test("Benchmark fixture plumbing across 25, 50, 100, 200 articles", async () => 
     assert.ok(homeItems.length <= count)
   }
 
-  // Calculate worker payload size for 200 articles (Section 61)
+  // 15 repeated runs for 200 articles to eliminate warmup noise and compute median / p90 (Section 31)
   const { articles: articles200, pairScores: pairs200 } = generateFixtureData(200)
+  const runs200 = []
+  for (let r = 0; r < 15; r++) {
+    const iterController = new StoryRequestController({
+      scoreProvider: new FixtureScoreProvider(pairs200),
+      workerFactory: () => new DirectWorker(),
+    })
+    const tStart = performance.now()
+    const iterRes = await iterController.processHomeArticles({ articles: articles200 })
+    applyStoryProjection(articles200, iterRes.projections)
+    const tEnd = performance.now()
+    runs200.push(Math.round((tEnd - tStart) * 1000) / 1000)
+  }
+  const sorted200 = runs200.toSorted((a, b) => a - b)
+  const median200 = sorted200[Math.floor(sorted200.length / 2)]
+  const p90Index = Math.min(Math.floor(sorted200.length * 0.9), sorted200.length - 1)
+  const p90_200 = sorted200[p90Index]
+
+  // Calculate worker payload size for 200 articles (Section 61)
   const minimized200 = articles200.map((a, idx) => ({
     id: a.id,
     feedId: a.feedId,
@@ -181,6 +199,9 @@ test("Benchmark fixture plumbing across 25, 50, 100, 200 articles", async () => 
   console.log("STORY IDENTITY A1 PLUMBING BENCHMARK REPORT")
   console.log("========================================================")
   console.log(JSON.stringify(benchmarkReport, null, 2))
+  console.log(`200 Articles Multi-Run Performance (15 iterations):`)
+  console.log(`  Median: ${median200} ms`)
+  console.log(`  P90:    ${p90_200} ms`)
   console.log(
     `Worker Payload Size (200 articles): ${payload200Bytes} bytes (${(payload200Bytes / 1024).toFixed(2)} KB)`,
   )
