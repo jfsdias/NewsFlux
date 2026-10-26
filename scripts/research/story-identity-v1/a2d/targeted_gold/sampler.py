@@ -31,6 +31,10 @@ EXPECTED_GOLD_ARTICLE_COUNT = 153
 EXPECTED_HOME_ARTICLE_COUNT = 200
 EXPECTED_PAIR_UNIVERSE_COUNT = 18953
 EXPECTED_NON_GOLD_PAIR_COUNT = 18720
+SEARCH_PRUNE_FIELDS = (
+    "prune_bucket_capacity", "prune_component_limit", "prune_chain_bridge",
+    "prune_source_cap", "prune_dev_infeasible", "prune_other",
+)
 
 HUMAN_REVIEW_COLUMNS = (
     "annotation_id",
@@ -1069,6 +1073,14 @@ def build_freeze_v2_artifacts(
         or Counter(row["primary_bucket"] for row in blind) != Counter(BLIND_QUOTAS)
     ):
         raise ValueError("EXACT_QUOTA_GATE=FAIL")
+    search = result.get("search")
+    if (
+        not isinstance(search, dict)
+        or search.get("status") != "FEASIBLE"
+        or search.get("search_complete") is not True
+        or not valid_search_certificate(search.get("certificate"), search.get("node_limit"))
+    ):
+        raise ValueError("SEARCH_CERTIFICATE_GATE=FAIL")
     groups = result["chain_groups"]
     validate_dataset_isolation(dev, blind, result["gold_article_ids"], result["gold_pair_keys"])
     validate_source_diversity(dev)
@@ -1100,6 +1112,12 @@ def build_freeze_v2_artifacts(
         "blind_component_diversity_gate": "PASS",
         "category_diversity_gate": "PASS",
         "exact_quota_gate": "PASS",
+        "search_algorithm": "DETERMINISTIC_JOINT_BRANCH_AND_BOUND",
+        "search_status": search["status"],
+        "search_complete": search["search_complete"],
+        "search_certificate": search["certificate"],
+        "search_node_limit": search["node_limit"],
+        "search_objective": search.get("objective"),
     })
     freeze["dev_blind_pair_overlap"] = len(
         {row["pair_key"] for row in dev} & {row["pair_key"] for row in blind}
@@ -1214,6 +1232,13 @@ def verify_freeze_artifacts(
             raise ValueError("FREEZE_V2_SUPERSESSION_REASON_GATE=FAIL")
         if freeze.get("human_labels_at_supersession") != 0:
             raise ValueError("FREEZE_V2_LABEL_COUNT_GATE=FAIL")
+        if (
+            freeze.get("search_algorithm") != "DETERMINISTIC_JOINT_BRANCH_AND_BOUND"
+            or freeze.get("search_status") != "FEASIBLE"
+            or freeze.get("search_complete") is not True
+            or not valid_search_certificate(freeze.get("search_certificate"), freeze.get("search_node_limit"))
+        ):
+            raise ValueError("FREEZE_V2_SEARCH_CERTIFICATE_GATE=FAIL")
         blind_rows = _pack_pair_rows(base / f"blind/annotation-pack-{version}.csv")
         blind_sidecar = json.loads((base / f"blind/audit-sidecar-{version}.json").read_text(encoding="utf-8"))
         groups_by_id: dict[str, dict[str, Any]] = defaultdict(lambda: {"article_ids": set(), "pair_keys": []})
@@ -1245,6 +1270,18 @@ def verify_freeze_artifacts(
         if freeze.get("dev_graph_component_stats") != dev_stats:
             raise ValueError("FREEZE_V2_DEV_GRAPH_STATS_GATE=FAIL")
     return True
+
+
+def valid_search_certificate(certificate: Any, node_limit: Any) -> bool:
+    required = ("nodes_explored", "nodes_pruned", *SEARCH_PRUNE_FIELDS)
+    if not isinstance(certificate, dict) or not isinstance(node_limit, int) or node_limit < 1:
+        return False
+    if any(type(certificate.get(key)) is not int or certificate[key] < 0 for key in required):
+        return False
+    return (
+        certificate["nodes_explored"] <= node_limit
+        and certificate["nodes_pruned"] == sum(certificate[key] for key in SEARCH_PRUNE_FIELDS)
+    )
 
 
 def _pair_articles(pair_key: str) -> tuple[int, int]:
@@ -1289,6 +1326,7 @@ def freeze_manifest(input_shas: dict[str, str], dev: dict[str, bytes], blind: di
 def run_canonical_audit(
     repo_root: str | Path, *, gold_path: str | Path, home_path: str | Path,
     pair_path: str | Path, human_label_hash_path: str | Path,
+    include_candidates: bool = False,
 ) -> dict[str, Any]:
     repo = Path(repo_root).resolve()
     verify_frozen_inputs(gold_path, home_path, pair_path)
@@ -1346,5 +1384,7 @@ def run_canonical_audit(
     result["human_label_hash"] = sha256_file(human_label_hash_path)
     result["gold_pair_keys"] = gold_pairs
     result["gold_article_ids"] = gold_articles
+    if include_candidates:
+        result["candidate_universe"] = candidates
     result["repo_root"] = str(repo)
     return result

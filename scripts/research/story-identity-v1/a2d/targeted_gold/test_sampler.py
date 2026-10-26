@@ -152,6 +152,18 @@ class TargetedGoldSamplerTests(unittest.TestCase):
             "chain_groups": groups,
             "gold_article_ids": set(),
             "gold_pair_keys": set(),
+            "search": {
+                "status": "FEASIBLE",
+                "search_complete": True,
+                "certificate": {
+                    "nodes_explored": 1, "nodes_pruned": 0,
+                    "prune_bucket_capacity": 0, "prune_component_limit": 0,
+                    "prune_chain_bridge": 0, "prune_source_cap": 0,
+                    "prune_dev_infeasible": 0, "prune_other": 0,
+                },
+                "node_limit": 10000,
+                "objective": (1, 2),
+            },
         }
 
     def test_blind_min_connected_components_gate(self):
@@ -311,12 +323,27 @@ class TargetedGoldSamplerTests(unittest.TestCase):
             manifest = json.loads((v2 / "freeze-manifest-v2.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["supersedes_freeze_sha256"], "1a263efa48392146c24c44069fd2f31ce8fcd70ddbae833e0d6f07f0e85b7c6b")
             self.assertEqual(manifest["human_labels_at_supersession"], 0)
+            self.assertEqual(manifest["search_status"], "FEASIBLE")
+            self.assertTrue(manifest["search_complete"])
             self.assertEqual(v1_freeze.read_bytes(), before)
 
     def test_v2_freeze_rechecks_exact_bucket_quotas(self):
         result = self._valid_v2_freeze_result()
         result["blind"].pop()
         with self.assertRaisesRegex(ValueError, "EXACT_QUOTA_GATE=FAIL"):
+            build_freeze_v2_artifacts(result, input_shas={"gold": "a"})
+
+    def test_v2_freeze_rejects_incomplete_search_even_with_witness(self):
+        result = self._valid_v2_freeze_result()
+        result["search"]["status"] = "SEARCH_LIMIT_REACHED"
+        result["search"]["search_complete"] = False
+        with self.assertRaisesRegex(ValueError, "SEARCH_CERTIFICATE_GATE=FAIL"):
+            build_freeze_v2_artifacts(result, input_shas={"gold": "a"})
+
+    def test_v2_freeze_rejects_incomplete_search_certificate(self):
+        result = self._valid_v2_freeze_result()
+        del result["search"]["certificate"]["prune_source_cap"]
+        with self.assertRaisesRegex(ValueError, "SEARCH_CERTIFICATE_GATE=FAIL"):
             build_freeze_v2_artifacts(result, input_shas={"gold": "a"})
 
     def test_v2_freeze_refuses_infeasible_result(self):

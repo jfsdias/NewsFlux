@@ -65,18 +65,25 @@ pairs with a gap over 8h.
 
 DEV target composition is `28/28/16/8`; BLIND target composition is `16/16/8/8`
 for positive seeking / hard-negative seeking / boundary-disagreement /
-diversity-control. DEV spillover is fixed before selection:
+diversity-control. The historical V1 selection allowed DEV spillover:
 
 - positive-seeking shortfall → boundary/disagreement, then diversity-control;
 - hard-negative-seeking shortfall → boundary/disagreement, then
   diversity-control.
 
-There is no blind spillover. A missing blind quota means the challenge is not
-freezeable on this corpus. The joint selector first reserves six vertex-
-disjoint two-edge chains from the rank-limited candidate graph for BLIND, then
-fills the frozen blind quotas. DEV is selected only after reserving all blind
-article IDs. Blind endpoints must be absent from Gold V2. Pair and article
-overlap are hard errors.
+There is no spillover in the R2 exact search. It jointly explores BLIND edges
+and DEV choices, with chain groups and independent pairs determined by the
+selected graph rather than fixed in advance. Six qualifying chains must occupy
+separate connected components. BLIND endpoints must be absent from Gold V2;
+DEV and BLIND must be article-disjoint. Pair, source, category, component,
+and exact bucket constraints remain hard gates.
+
+The bounded branch-and-bound search uses seed `20261026` and chooses the bucket
+with the smallest remaining raw-candidate-to-deficit ratio. It maximizes unique
+sources followed by unique articles over both packs, with a stable hash
+tie-break. Only a completed search can certify that objective. A node limit
+returns `SEARCH_LIMIT_REACHED`, even if a feasible witness was found; it is not
+a proof of infeasibility and cannot authorize a freeze.
 
 Selection is deterministic with seed `20261026`. The human review order is
 deterministically shuffled separately for DEV and BLIND. Reviewer CSVs expose
@@ -89,11 +96,14 @@ The BLIND state machine is:
 `SELECTED → FROZEN → ANNOTATED_SEALED → OPENED_FOR_FINAL_EVALUATION → RETIRED_AS_BLIND`.
 
 Only `OPENED_FOR_FINAL_EVALUATION` is consumable by final evaluation. A2D2
-stops at `FROZEN`; no human label file is generated.
+stops at `FROZEN` if all freeze gates pass; R2 has not frozen V2 and no human
+label file is generated.
 
 ## Private execution
 
-Run `run_design.py` for an aggregate-only feasibility report. Use `--freeze`
-only when all minimum, isolation, structure, and diversity gates pass. It
-writes artifacts only outside the repository. Never add private packs,
+Run `run_design.py` for an aggregate-only feasibility report. The deterministic
+node limit defaults to 500,000 and can be set with `--search-limit`. `--freeze`
+requires a completed feasible search, repeats the canonical run, compares
+selection and artifact bytes, and writes only to the separate V2 private path.
+The V1 freeze is verified before and after writing. Never add private packs,
 sidecars, manifests, pair IDs, titles, URLs, or labels to Git.
