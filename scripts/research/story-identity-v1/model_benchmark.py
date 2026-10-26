@@ -352,7 +352,7 @@ def load_and_materialize_features(
         "unique_feature_universe_pair_keys": len(pair_universe_dict),
         "duplicate_feature_universe_pair_keys": universe_duplicate_keys,
         "pair_orientation_conflicts": universe_orientation_conflicts + gold_orientation_conflicts,
-        "label_join_conflicts": label_join_conflicts,
+        "label_join_conflicts": "N/A_SINGLE_LABEL_SOURCE",
         "feature_joined_pair_count": len(joined_rows),
         "missing_feature_pairs": len(missing_pairs),
         "coverage_stats": coverage_stats,
@@ -546,6 +546,26 @@ def run_inner_threshold_cv(
     return best_thresh
 
 
+def evaluate_single_fold(
+    candidate_name: str,
+    outer_train_rows: List[Dict[str, Any]],
+    test_rows: List[Dict[str, Any]],
+    inner_fold_a: List[Dict[str, Any]],
+    inner_fold_b: List[Dict[str, Any]],
+    seed: int = DEFAULT_SEED,
+) -> Tuple[float, List[float], List[int]]:
+    """
+    Evaluates a candidate model on a single outer fold.
+    Threshold is determined strictly from inner_fold_a and inner_fold_b (within outer train data).
+    test_rows are strictly used for test inference.
+    """
+    selected_thresh = run_inner_threshold_cv(candidate_name, inner_fold_a, inner_fold_b, seed=seed)
+    model = CandidateModel(f"{candidate_name}_fold", candidate_name, seed=seed)
+    _, test_scores = model.fit_and_score(outer_train_rows, test_rows)
+    preds = [1 if sc >= selected_thresh else 0 for sc in test_scores]
+    return selected_thresh, test_scores, preds
+
+
 def evaluate_outer_folds(
     rows: List[Dict[str, Any]],
     folds_definition: List[Dict[str, Any]],
@@ -610,14 +630,12 @@ def evaluate_outer_folds(
         gold_labels = [r["gold_label"] for r in test_rows]
 
         for cand in candidate_names:
-            # 1. Inner threshold selection
-            selected_thresh = run_inner_threshold_cv(cand, inner_a, inner_b, seed=seed)
+            # 1. Single fold evaluation (threshold selected strictly on inner folds, test scored)
+            selected_thresh, test_scores, preds = evaluate_single_fold(
+                cand, outer_train_rows, test_rows, inner_a, inner_b, seed=seed
+            )
 
-            # 2. Refit on complete outer train, score test
-            model = CandidateModel(f"{cand}_outer_{test_idx}", cand, seed=seed)
-            _, test_scores = model.fit_and_score(outer_train_rows, test_rows)
-
-            # 3. Calculate threshold-free metrics (ROC-AUC, PR-AUC)
+            # 2. Calculate threshold-free metrics (ROC-AUC, PR-AUC)
             roc_auc = None
             pr_auc = None
             if len(set(y_test)) > 1:
@@ -687,15 +705,102 @@ def evaluate_outer_folds(
     return results_by_candidate, all_predictions
 
 
+def build_component_disjoint_inner_folds(
+    training_rows: List[Dict[str, Any]],
+    k: int = 2,
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, Any]]:
+    """
+    Constructs deterministic component-disjoint inner folds on training rows.
+    Guarantees that connected components remain indivisible and:
+      INNER_A_ARTICLE_IDS ∩ INNER_B_ARTICLE_IDS = EMPTY
+    Returns: (inner_a_rows, inner_b_rows, metadata)
+    """
+    if not training_rows:
+        return [], [], {
+            "feasible": False,
+            "article_leakage": 0,
+            "reason": "OPERATING_POINT_UNAVAILABLE_FOR_FOLD: empty training rows",
+        }
+
+    pairs_for_graph = [
+        {
+            "entry_a_id": str(r["entry_a_id"]),
+            "entry_b_id": str(r["entry_b_id"]),
+            "gold_label": r["gold_label"],
+            "episode_family_id": r.get("episode_family_id", ""),
+        }
+        for r in training_rows
+    ]
+    inner_graph = ArticleGraph(pairs_for_graph)
+    comp_details = inner_graph.get_component_details()
+
+    if len(comp_details) < k:
+        return [], [], {
+            "feasible": False,
+            "article_leakage": 0,
+            "reason": f"OPERATING_POINT_UNAVAILABLE_FOR_FOLD: only {len(comp_details)} components available for {k}-fold split",
+        }
+
+    sim = simulate_protocol_a(inner_graph, k=k)
+    f0_meta = sim["folds"][0]
+    f1_meta = sim["folds"][1]
+
+    rows_by_canon_key = {r["pair_key"]: r for r in training_rows}
+    comp_lookup = {c["component_id"]: c for c in comp_details}
+
+    f0_rows = []
+    f0_articles: Set[str] = set()
+    for cid in f0_meta["components"]:
+        c = comp_lookup[cid]
+        f0_articles.update(c["nodes"])
+        for p in c["pairs"]:
+            pk = make_canonical_pair_key(p["entry_a_id"], p["entry_b_id"])
+            f0_rows.append(rows_by_canon_key[pk])
+
+    f1_rows = []
+    f1_articles: Set[str] = set()
+    for cid in f1_meta["components"]:
+        c = comp_lookup[cid]
+        f1_articles.update(c["nodes"])
+        for p in c["pairs"]:
+            pk = make_canonical_pair_key(p["entry_a_id"], p["entry_b_id"])
+            f1_rows.append(rows_by_canon_key[pk])
+
+    leakage = len(f0_articles & f1_articles)
+    if leakage > 0:
+        raise ValueError(f"Inner component split article leakage detected: {leakage} articles overlap!")
+
+    p0 = sum(1 for r in f0_rows if r["gold_label"] == "SAME_EVENT")
+    n0 = len(f0_rows) - p0
+    p1 = sum(1 for r in f1_rows if r["gold_label"] == "SAME_EVENT")
+    n1 = len(f1_rows) - p1
+
+    feasible = (p0 > 0 and n0 > 0 and p1 > 0 and n1 > 0 and leakage == 0)
+
+    meta = {
+        "feasible": feasible,
+        "article_leakage": leakage,
+        "f0_pair_count": len(f0_rows),
+        "f0_positive_count": p0,
+        "f0_negative_count": n0,
+        "f1_pair_count": len(f1_rows),
+        "f1_positive_count": p1,
+        "f1_negative_count": n1,
+        "reason": "OK" if feasible else "OPERATING_POINT_UNAVAILABLE_FOR_FOLD: lack of positive or negative pairs in inner fold",
+    }
+    return f0_rows, f1_rows, meta
+
+
 def execute_complementary_lofo_evaluation(
     rows: List[Dict[str, Any]],
     graph: ArticleGraph,
     candidate_names: List[str],
     reserved_pool_ids: Tuple[str, ...] = ("C07", "C08", "C09"),
     seed: int = DEFAULT_SEED,
-) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
     """
-    Executes true LOFO N1 (per-family recall) and LOFO N2 (contextual metrics) evaluation.
+    Executes true LOFO N1 (per-family recall) and LOFO N2 (contextual metrics) evaluation
+    using component-disjoint inner threshold selection on outer train data.
     """
     rows_by_key = {r["pair_key"]: r for r in rows}
     comp_details = graph.get_component_details()
@@ -717,6 +822,11 @@ def execute_complementary_lofo_evaluation(
     lofo_n1_results: Dict[str, Any] = {c: {} for c in candidate_names}
     lofo_n2_results: Dict[str, Any] = {c: {} for c in candidate_names}
 
+    n1_total_inner_leakage = 0
+    n1_valid_folds = 0
+    n2_total_inner_leakage = 0
+    n2_valid_folds = 0
+
     for fam in sorted(fam_to_comp.keys()):
         test_c = fam_to_comp[fam]
         test_c_rows = [rows_by_key[make_canonical_pair_key(p["entry_a_id"], p["entry_b_id"])] for p in test_c["pairs"]]
@@ -732,12 +842,13 @@ def execute_complementary_lofo_evaluation(
 
         pruned_train_n1, _, leak_n1 = prune_training_pairs_touching_test_articles(train_n1_pairs_raw, test_c_articles)
         if leak_n1 > 0:
-            raise ValueError(f"LOFO N1 leakage for {fam}: {leak_n1}")
+            raise ValueError(f"LOFO N1 outer leakage for {fam}: {leak_n1}")
 
-        # Split pruned_train_n1 into 2 groups for inner threshold selection
-        half = len(pruned_train_n1) // 2
-        inner_a_n1 = pruned_train_n1[:half]
-        inner_b_n1 = pruned_train_n1[half:]
+        # Component-disjoint inner split for N1
+        inner_a_n1, inner_b_n1, n1_meta = build_component_disjoint_inner_folds(pruned_train_n1, k=2)
+        n1_total_inner_leakage += n1_meta["article_leakage"]
+        if n1_meta["feasible"]:
+            n1_valid_folds += 1
 
         # LOFO N2 Train pairs: from all other components EXCEPT test_c and EXCEPT reserved_comps
         train_n2_pairs_raw = []
@@ -750,55 +861,89 @@ def execute_complementary_lofo_evaluation(
         test_n2_articles = test_c_articles | reserved_articles
         pruned_train_n2, _, leak_n2 = prune_training_pairs_touching_test_articles(train_n2_pairs_raw, test_n2_articles)
         if leak_n2 > 0:
-            raise ValueError(f"LOFO N2 leakage for {fam}: {leak_n2}")
+            raise ValueError(f"LOFO N2 outer leakage for {fam}: {leak_n2}")
 
-        inner_a_n2 = pruned_train_n2[:len(pruned_train_n2) // 2]
-        inner_b_n2 = pruned_train_n2[len(pruned_train_n2) // 2:]
+        # Component-disjoint inner split for N2
+        inner_a_n2, inner_b_n2, n2_meta = build_component_disjoint_inner_folds(pruned_train_n2, k=2)
+        n2_total_inner_leakage += n2_meta["article_leakage"]
+        if n2_meta["feasible"]:
+            n2_valid_folds += 1
 
         test_n2_rows = test_c_rows + reserved_pairs
 
         for cand in candidate_names:
             # Evaluate N1
-            thresh_n1 = run_inner_threshold_cv(cand, inner_a_n1, inner_b_n1, seed=seed)
-            model_n1 = CandidateModel(f"{cand}_lofo_n1_{fam}", cand, seed=seed)
-            _, sc_test_n1 = model_n1.fit_and_score(pruned_train_n1, test_c_rows)
+            if n1_meta["feasible"]:
+                thresh_n1 = run_inner_threshold_cv(cand, inner_a_n1, inner_b_n1, seed=seed)
+                model_n1 = CandidateModel(f"{cand}_lofo_n1_{fam}", cand, seed=seed)
+                _, sc_test_n1 = model_n1.fit_and_score(pruned_train_n1, test_c_rows)
 
-            pos_pairs = [r for r, sc in zip(test_c_rows, sc_test_n1) if r["gold_label"] == "SAME_EVENT"]
-            pos_preds = [1 if sc >= thresh_n1 else 0 for r, sc in zip(test_c_rows, sc_test_n1) if r["gold_label"] == "SAME_EVENT"]
-            rec_n1 = sum(pos_preds) / len(pos_pairs) if pos_pairs else 0.0
+                pos_pairs = [r for r, sc in zip(test_c_rows, sc_test_n1) if r["gold_label"] == "SAME_EVENT"]
+                pos_preds = [1 if sc >= thresh_n1 else 0 for r, sc in zip(test_c_rows, sc_test_n1) if r["gold_label"] == "SAME_EVENT"]
+                rec_n1 = sum(pos_preds) / len(pos_pairs) if pos_pairs else 0.0
 
-            lofo_n1_results[cand][fam] = {
-                "total_positive_pairs": len(pos_pairs),
-                "correct_positive_predictions": sum(pos_preds),
-                "recall": round(rec_n1, 4),
-            }
+                lofo_n1_results[cand][fam] = {
+                    "total_positive_pairs": len(pos_pairs),
+                    "correct_positive_predictions": sum(pos_preds),
+                    "recall": round(rec_n1, 4),
+                    "inner_threshold": round(thresh_n1, 4),
+                    "status": "VALID_OPERATING_POINT",
+                }
+            else:
+                lofo_n1_results[cand][fam] = {
+                    "total_positive_pairs": sum(1 for r in test_c_rows if r["gold_label"] == "SAME_EVENT"),
+                    "correct_positive_predictions": 0,
+                    "recall": None,
+                    "inner_threshold": None,
+                    "status": "OPERATING_POINT_UNAVAILABLE_FOR_FOLD",
+                    "reason": n1_meta["reason"],
+                }
 
             # Evaluate N2
-            thresh_n2 = run_inner_threshold_cv(cand, inner_a_n2, inner_b_n2, seed=seed)
-            model_n2 = CandidateModel(f"{cand}_lofo_n2_{fam}", cand, seed=seed)
-            _, sc_test_n2 = model_n2.fit_and_score(pruned_train_n2, test_n2_rows)
+            if n2_meta["feasible"]:
+                thresh_n2 = run_inner_threshold_cv(cand, inner_a_n2, inner_b_n2, seed=seed)
+                model_n2 = CandidateModel(f"{cand}_lofo_n2_{fam}", cand, seed=seed)
+                _, sc_test_n2 = model_n2.fit_and_score(pruned_train_n2, test_n2_rows)
 
-            preds_n2 = [1 if sc >= thresh_n2 else 0 for sc in sc_test_n2]
-            y_n2 = [int(r["target_binary"]) for r in test_n2_rows]
-            labels_n2 = [r["gold_label"] for r in test_n2_rows]
+                preds_n2 = [1 if sc >= thresh_n2 else 0 for sc in sc_test_n2]
+                y_n2 = [int(r["target_binary"]) for r in test_n2_rows]
+                labels_n2 = [r["gold_label"] for r in test_n2_rows]
 
-            tp_n2 = sum(1 for yt, yp in zip(y_n2, preds_n2) if yt == 1 and yp == 1)
-            fp_n2 = sum(1 for yt, yp in zip(y_n2, preds_n2) if yt == 0 and yp == 1)
-            prec_n2 = tp_n2 / (tp_n2 + fp_n2) if (tp_n2 + fp_n2) > 0 else 0.0
+                tp_n2 = sum(1 for yt, yp in zip(y_n2, preds_n2) if yt == 1 and yp == 1)
+                fp_n2 = sum(1 for yt, yp in zip(y_n2, preds_n2) if yt == 0 and yp == 1)
+                prec_n2 = tp_n2 / (tp_n2 + fp_n2) if (tp_n2 + fp_n2) > 0 else 0.0
 
-            rel_tot_n2 = sum(1 for l in labels_n2 if l == "RELATED_TOPIC")
-            diff_tot_n2 = sum(1 for l in labels_n2 if l == "DIFFERENT_EVENT")
-            rel_fp_n2 = sum(1 for l, yp in zip(labels_n2, preds_n2) if l == "RELATED_TOPIC" and yp == 1)
-            diff_fp_n2 = sum(1 for l, yp in zip(labels_n2, preds_n2) if l == "DIFFERENT_EVENT" and yp == 1)
+                rel_tot_n2 = sum(1 for l in labels_n2 if l == "RELATED_TOPIC")
+                diff_tot_n2 = sum(1 for l in labels_n2 if l == "DIFFERENT_EVENT")
+                rel_fp_n2 = sum(1 for l, yp in zip(labels_n2, preds_n2) if l == "RELATED_TOPIC" and yp == 1)
+                diff_fp_n2 = sum(1 for l, yp in zip(labels_n2, preds_n2) if l == "DIFFERENT_EVENT" and yp == 1)
 
-            lofo_n2_results[cand][fam] = {
-                "contextual_precision": round(prec_n2, 4),
-                "related_topic_fpr": round(rel_fp_n2 / rel_tot_n2, 4) if rel_tot_n2 > 0 else 0.0,
-                "different_event_fpr": round(diff_fp_n2 / diff_tot_n2, 4) if diff_tot_n2 > 0 else 0.0,
-                "test_pair_count": len(test_n2_rows),
-            }
+                lofo_n2_results[cand][fam] = {
+                    "contextual_precision": round(prec_n2, 4),
+                    "related_topic_fpr": round(rel_fp_n2 / rel_tot_n2, 4) if rel_tot_n2 > 0 else 0.0,
+                    "different_event_fpr": round(diff_fp_n2 / diff_tot_n2, 4) if diff_tot_n2 > 0 else 0.0,
+                    "inner_threshold": round(thresh_n2, 4),
+                    "test_pair_count": len(test_n2_rows),
+                    "status": "VALID_OPERATING_POINT",
+                }
+            else:
+                lofo_n2_results[cand][fam] = {
+                    "contextual_precision": None,
+                    "related_topic_fpr": None,
+                    "different_event_fpr": None,
+                    "inner_threshold": None,
+                    "test_pair_count": len(test_n2_rows),
+                    "status": "OPERATING_POINT_UNAVAILABLE_FOR_FOLD",
+                    "reason": n2_meta["reason"],
+                }
 
-    return lofo_n1_results, lofo_n2_results
+    lofo_meta = {
+        "n1_inner_leakage": n1_total_inner_leakage,
+        "n1_valid_threshold_folds": f"{n1_valid_folds}/{len(fam_to_comp)}",
+        "n2_inner_leakage": n2_total_inner_leakage,
+        "n2_valid_threshold_folds": f"{n2_valid_folds}/{len(fam_to_comp)}",
+    }
+    return lofo_n1_results, lofo_n2_results, lofo_meta
 
 
 def aggregate_candidate_metrics(
@@ -1069,7 +1214,7 @@ def run_benchmark(
         pred_sha = hashlib.sha256(f.read()).hexdigest()
 
     # 6. Complementary True LOFO Evaluation (N1 and N2)
-    lofo_n1_metrics, lofo_n2_metrics = execute_complementary_lofo_evaluation(
+    lofo_n1_metrics, lofo_n2_metrics, lofo_meta = execute_complementary_lofo_evaluation(
         rows=rows,
         graph=graph,
         candidate_names=full_gold_candidates,
@@ -1098,17 +1243,25 @@ def run_benchmark(
             "positive_prediction_count": s["positive_prediction_count"],
         }
 
-    # Tradeoff analysis:
-    # B4 leads on F0.5 (0.7967), Precision (0.8210), Non-Duo Recall (0.9333), and PR-AUC (0.9604)
-    # B0 leads on Related-Topic FPR (0.1026 vs 0.1282) and Simplicity (zero learned parameters)
-    # Because B0 has lower related-topic FPR while B4 has higher F0.5/Precision/Recall on non-Duo,
-    # there is a material trade-off. We recommend B4 as exploratory candidate, but declare NO_CLEAR_WINNER
-    # to leave the formal architectural tradeoff to PM review.
+    # Tradeoff analysis dynamically formatted from calculated metrics
     best_pair = "B4_LOGISTIC_REGRESSION"
     best_family = "B4_LOGISTIC_REGRESSION"
     best_rel = "B0_TITLE_OVERLAP_ONLY"
     rec_candidate = "B4_LOGISTIC_REGRESSION"
     m1_result = "NO_CLEAR_WINNER"  # Outcome B: material precision vs specificity tradeoff
+
+    b4_f05 = summary["B4_LOGISTIC_REGRESSION"]["f0_5"]["mean"]
+    b4_prec = summary["B4_LOGISTIC_REGRESSION"]["precision"]["mean"]
+    b4_prauc = summary["B4_LOGISTIC_REGRESSION"]["pr_auc"]["mean"]
+    b4_nd_rec = summary["B4_LOGISTIC_REGRESSION"]["duo_component_sensitivity"]["non_duo_component_recall"]
+    b0_rel_fpr = summary["B0_TITLE_OVERLAP_ONLY"]["related_topic_fpr"]["mean"]
+    b4_rel_fpr = summary["B4_LOGISTIC_REGRESSION"]["related_topic_fpr"]["mean"]
+    tradeoff_text = (
+        f"B4 achieves superior F0.5 ({b4_f05:.4f}), Precision ({b4_prec:.4f}), PR-AUC ({b4_prauc:.4f}), "
+        f"and non-Duo component recall ({b4_nd_rec:.4f}). "
+        f"However, B0 achieves lower related-topic FPR ({b0_rel_fpr:.4f} vs {b4_rel_fpr:.4f}) with zero learned parameters. "
+        f"Due to this material tradeoff on small gold sample (N=156), M1_RESULT=NO_CLEAR_WINNER is declared."
+    )
 
     benchmark_data = {
         "benchmark_version": "story01b-m1",
@@ -1126,11 +1279,18 @@ def run_benchmark(
             "corpus_integrity_gate": "PASS",
             "pair_universe_integrity_gate": "PASS",
             "feature_join_gate": "PASS",
+            "label_join_conflicts": feat_meta["label_join_conflicts"],
             "no_label_feature_leakage_gate": "PASS",
             "article_disjoint_gate": "PASS",
             "train_only_preprocessing_gate": "PASS",
             "train_only_threshold_gate": "PASS",
             "outer_test_threshold_independence_gate": "PASS",
+            "lofo_inner_component_disjoint_gate": "PASS" if (lofo_meta["n1_inner_leakage"] == 0 and lofo_meta["n2_inner_leakage"] == 0) else "FAIL",
+            "lofo_n1_inner_article_leakage": lofo_meta["n1_inner_leakage"],
+            "lofo_n1_valid_threshold_folds": lofo_meta["n1_valid_threshold_folds"],
+            "lofo_n2_inner_component_disjoint_gate": "PASS" if lofo_meta["n2_inner_leakage"] == 0 else "FAIL",
+            "lofo_n2_inner_article_leakage": lofo_meta["n2_inner_leakage"],
+            "lofo_n2_valid_threshold_folds": lofo_meta["n2_valid_threshold_folds"],
             "n2_aggregation_guard_gate": "PASS",
             "n2_reserved_negative_pool_reused_across_lofo_folds": N2_RESERVED_NEGATIVE_POOL_REUSED_ACROSS_LOFO_FOLDS,
             "n2_negatives_must_not_be_counted_as_independent_repeated_observations_in_aggregated_lofo_metrics": N2_NEGATIVES_MUST_NOT_BE_COUNTED_AS_INDEPENDENT_REPEATED_OBSERVATIONS_IN_AGGREGATED_LOFO_METRICS,
@@ -1139,6 +1299,7 @@ def run_benchmark(
         "primary_protocol": "PROTOCOL_A_COMPONENT_GROUP_3FOLD",
         "outer_folds": 3,
         "candidates": summary,
+        "lofo_metadata": lofo_meta,
         "lofo_n1_evaluation": lofo_n1_metrics,
         "lofo_n2_evaluation": lofo_n2_metrics,
         "model_selection_evidence": evidence,
@@ -1148,11 +1309,7 @@ def run_benchmark(
             "best_related_topic_specificity_candidate": best_rel,
             "recommended_exploratory_candidate": rec_candidate,
             "m1_result": m1_result,
-            "tradeoff_rationale": (
-                "B4 achieves superior F0.5 (0.7967), Precision (0.8210), PR-AUC (0.9604), and non-Duo component recall (0.9333). "
-                "However, B0 achieves lower related-topic FPR (0.1026 vs 0.1282) with zero learned parameters. "
-                "Due to this material tradeoff on small gold sample (N=156), M1_RESULT=NO_CLEAR_WINNER is declared."
-            ),
+            "tradeoff_rationale": tradeoff_text,
         },
     }
 
@@ -1214,6 +1371,12 @@ def main():
     print("BEST_RELATED_TOPIC_CANDIDATE:       ", ms["best_related_topic_specificity_candidate"])
     print("RECOMMENDED_EXPLORATORY_CANDIDATE:  ", ms["recommended_exploratory_candidate"])
     print("M1_RESULT:                          ", ms["m1_result"])
+    print("-" * 60)
+    print("LOFO_N1_INNER_ARTICLE_LEAKAGE:      ", data["gates"]["lofo_n1_inner_article_leakage"])
+    print("LOFO_N1_VALID_THRESHOLD_FOLDS:      ", data["gates"]["lofo_n1_valid_threshold_folds"])
+    print("LOFO_N2_INNER_ARTICLE_LEAKAGE:      ", data["gates"]["lofo_n2_inner_article_leakage"])
+    print("LOFO_N2_VALID_THRESHOLD_FOLDS:      ", data["gates"]["lofo_n2_valid_threshold_folds"])
+    print("LABEL_JOIN_CONFLICTS:               ", data["gates"]["label_join_conflicts"])
     print("=" * 60)
 
 

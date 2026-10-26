@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Unit tests for model_benchmark.py (STORY-01B-M1)
+Unit tests for model_benchmark.py (STORY-01B-M1 R2)
 
 Verifies:
 - FEATURE_JOIN_156_OF_156 & FAIL-FAST GATES
@@ -9,12 +9,13 @@ Verifies:
 - NO_LABEL_FEATURE_LEAKAGE & RANK_FEATURES_EXCLUDED
 - OUTER_COMPONENT_SPLIT_ARTICLE_DISJOINT
 - TRAIN_ONLY_PREPROCESSING & TRAIN_ONLY_THRESHOLD_SELECTION
-- OUTER_TEST_NEVER_USED_FOR_THRESHOLD (mutating test labels/scores has zero effect)
+- OUTER_TEST_THRESHOLD_INDEPENDENCE_GATE (real orchestration path test rows independence)
+- LOFO_INNER_COMPONENT_DISJOINT_GATE (component indivisibility and zero inner leakage)
 - B3_SENTINEL_FREE & EXCLUSION_FROM_FULL_GOLD
 - TRUE_LOFO_N1_AND_N2_EVALUATION
 - DUO_COMPONENT_ISOLATION_SENSITIVITY (C02, 59 pairs: 42 pos, 17 neg)
 - MODEL_SELECTION_EVIDENCE_9_DIMENSIONS & NO_CLEAR_WINNER_OUTCOME
-- DETERMINISTIC_BENCHMARK
+- M1_DETERMINISM_GATE (exhaustive equality across 7 required dimensions)
 """
 
 import csv
@@ -38,7 +39,9 @@ try:
         FeatureJoinError,
         FrozenInputIntegrityError,
         aggregate_candidate_metrics,
+        build_component_disjoint_inner_folds,
         calculate_f_beta,
+        evaluate_single_fold,
         execute_complementary_lofo_evaluation,
         find_optimal_threshold_f05,
         load_and_materialize_features,
@@ -68,7 +71,9 @@ except ImportError:
         FeatureJoinError,
         FrozenInputIntegrityError,
         aggregate_candidate_metrics,
+        build_component_disjoint_inner_folds,
         calculate_f_beta,
+        evaluate_single_fold,
         execute_complementary_lofo_evaluation,
         find_optimal_threshold_f05,
         load_and_materialize_features,
@@ -151,10 +156,14 @@ class TestModelBenchmarkGates(unittest.TestCase):
         self.assertTrue(N2_RESERVED_NEGATIVE_POOL_REUSED_ACROSS_LOFO_FOLDS)
         self.assertTrue(N2_NEGATIVES_MUST_NOT_BE_COUNTED_AS_INDEPENDENT_REPEATED_OBSERVATIONS_IN_AGGREGATED_LOFO_METRICS)
 
-    def test_outer_test_threshold_independence(self):
+    def test_outer_test_threshold_independence_gate(self):
         """
-        Structural proof that test set labels and scores NEVER leak into threshold selection.
-        Mutating outer test rows/scores has bitwise zero effect on inner threshold selection.
+        Strengthened orchestration path test:
+        1. Identical outer train rows and inner folds.
+        2. Outer test version A.
+        3. Outer test version B with completely inverted/mutated labels, scores, and features.
+        4. Evaluates via evaluate_single_fold (the exact path used in outer evaluation).
+        5. Proves that selected threshold is bitwise identical and would fail if test rows leaked.
         """
         inner_a = [
             {"pair_key": "1:2", "title_overlap_coefficient": 0.85, "target_binary": 1},
@@ -164,30 +173,64 @@ class TestModelBenchmarkGates(unittest.TestCase):
             {"pair_key": "5:6", "title_overlap_coefficient": 0.75, "target_binary": 1},
             {"pair_key": "7:8", "title_overlap_coefficient": 0.20, "target_binary": 0},
         ]
+        outer_train = inner_a + inner_b
 
-        tau_baseline = run_inner_threshold_cv("B0_TITLE_OVERLAP_ONLY", inner_a, inner_b)
-
-        # Outer test rows with arbitrary labels/scores
-        test_rows_v1 = [
-            {"pair_key": "9:10", "title_overlap_coefficient": 0.95, "target_binary": 1},
-            {"pair_key": "11:12", "title_overlap_coefficient": 0.05, "target_binary": 0},
+        # Version A
+        test_rows_A = [
+            {"pair_key": "9:10", "title_overlap_coefficient": 0.95, "target_binary": 1, "gold_label": "SAME_EVENT"},
+            {"pair_key": "11:12", "title_overlap_coefficient": 0.05, "target_binary": 0, "gold_label": "DIFFERENT_EVENT"},
         ]
-        test_rows_v2_mutated = [
-            {"pair_key": "9:10", "title_overlap_coefficient": 0.02, "target_binary": 0},  # Flipped label and score
-            {"pair_key": "11:12", "title_overlap_coefficient": 0.99, "target_binary": 1},
+        # Version B: completely mutated
+        test_rows_B_mutated = [
+            {"pair_key": "9:10", "title_overlap_coefficient": 0.25, "target_binary": 1, "gold_label": "SAME_EVENT"},
+            {"pair_key": "11:12", "title_overlap_coefficient": 0.22, "target_binary": 1, "gold_label": "SAME_EVENT"},
         ]
 
-        # Inner threshold selection function takes ONLY training rows (inner_a, inner_b)
-        tau_after_test_mutation = run_inner_threshold_cv("B0_TITLE_OVERLAP_ONLY", inner_a, inner_b)
-        self.assertEqual(tau_baseline, tau_after_test_mutation)
+        # Evaluate B0
+        tau_A_b0, sc_A_b0, p_A_b0 = evaluate_single_fold("B0_TITLE_OVERLAP_ONLY", outer_train, test_rows_A, inner_a, inner_b)
+        tau_B_b0, sc_B_b0, p_B_b0 = evaluate_single_fold("B0_TITLE_OVERLAP_ONLY", outer_train, test_rows_B_mutated, inner_a, inner_b)
 
-        # Mutating training rows DOES affect threshold
-        inner_a_mutated = [
-            {"pair_key": "1:2", "title_overlap_coefficient": 0.35, "target_binary": 1},
-            {"pair_key": "3:4", "title_overlap_coefficient": 0.15, "target_binary": 0},
+        self.assertEqual(tau_A_b0, tau_B_b0)
+        self.assertNotEqual(sc_A_b0, sc_B_b0)
+        self.assertNotEqual(p_A_b0, p_B_b0)
+
+        # Buggy selector simulation: if someone mistakenly passed test rows to the threshold selector,
+        # the thresholds would diverge.
+        tau_buggy_A = run_inner_threshold_cv("B0_TITLE_OVERLAP_ONLY", inner_a, test_rows_A)
+        tau_buggy_B = run_inner_threshold_cv("B0_TITLE_OVERLAP_ONLY", inner_a, test_rows_B_mutated)
+        self.assertNotEqual(tau_buggy_A, tau_buggy_B)
+
+    def test_lofo_inner_component_disjoint_gate(self):
+        """
+        Explicit test for LOFO inner component-disjoint fold generation:
+        1. Synthetic fixture where row-half split divides a connected component (leakage > 0).
+        2. Proves build_component_disjoint_inner_folds keeps the component indivisible (leakage = 0).
+        """
+        synthetic_rows = [
+            {"entry_a_id": "1", "entry_b_id": "2", "pair_key": "1:2", "gold_label": "SAME_EVENT", "episode_family_id": "F1"},
+            {"entry_a_id": "2", "entry_b_id": "3", "pair_key": "2:3", "gold_label": "SAME_EVENT", "episode_family_id": "F1"},
+            {"entry_a_id": "1", "entry_b_id": "3", "pair_key": "1:3", "gold_label": "SAME_EVENT", "episode_family_id": "F1"},
+            {"entry_a_id": "4", "entry_b_id": "5", "pair_key": "4:5", "gold_label": "DIFFERENT_EVENT", "episode_family_id": ""},
+            {"entry_a_id": "6", "entry_b_id": "7", "pair_key": "6:7", "gold_label": "DIFFERENT_EVENT", "episode_family_id": ""},
         ]
-        tau_mutated_train = run_inner_threshold_cv("B0_TITLE_OVERLAP_ONLY", inner_a_mutated, inner_b)
-        self.assertNotEqual(tau_baseline, tau_mutated_train)
+        # Traditional row-half cut (5 // 2 = 2) splits Component 1 across folds
+        naive_f0 = synthetic_rows[:2]
+        naive_f1 = synthetic_rows[2:]
+        naive_f0_arts = {r["entry_a_id"] for r in naive_f0} | {r["entry_b_id"] for r in naive_f0}
+        naive_f1_arts = {r["entry_a_id"] for r in naive_f1} | {r["entry_b_id"] for r in naive_f1}
+        self.assertGreater(len(naive_f0_arts & naive_f1_arts), 0)
+
+        # build_component_disjoint_inner_folds preserves component indivisibility
+        f0, f1, meta = build_component_disjoint_inner_folds(synthetic_rows, k=2)
+        self.assertEqual(meta["article_leakage"], 0)
+        f0_arts = {r["entry_a_id"] for r in f0} | {r["entry_b_id"] for r in f0}
+        f1_arts = {r["entry_a_id"] for r in f1} | {r["entry_b_id"] for r in f1}
+        self.assertEqual(len(f0_arts & f1_arts), 0)
+
+        # Component 1 (pairs 1:2, 2:3, 1:3) is completely in one fold
+        c1_in_f0 = all(r["pair_key"] in {"1:2", "2:3", "1:3"} for r in f0)
+        c1_in_f1 = all(r["pair_key"] in {"1:2", "2:3", "1:3"} for r in f1)
+        self.assertTrue(c1_in_f0 or c1_in_f1)
 
     def test_corpus_verifier_fail_fast(self):
         """Negative test: verify load_and_materialize_features aborts if corpus is invalid."""
@@ -268,7 +311,7 @@ class TestModelBenchmarkExecution(unittest.TestCase):
         self.assertEqual(self.meta["unique_feature_universe_pair_keys"], 18953)
         self.assertEqual(self.meta["duplicate_feature_universe_pair_keys"], 0)
         self.assertEqual(self.meta["pair_orientation_conflicts"], 0)
-        self.assertEqual(self.meta["label_join_conflicts"], 0)
+        self.assertEqual(self.meta["label_join_conflicts"], "N/A_SINGLE_LABEL_SOURCE")
         self.assertEqual(self.meta["feature_joined_pair_count"], 156)
         self.assertEqual(self.meta["missing_feature_pairs"], 0)
 
@@ -347,8 +390,15 @@ class TestModelBenchmarkExecution(unittest.TestCase):
                     self.assertNotEqual(row["candidate_model"], "B3_RERANKER_MEAN_ONLY")
 
     def test_lofo_n1_and_n2_true_evaluation(self):
-        """Verify that true complementary LOFO N1 and N2 are evaluated across all 10 families."""
+        """Verify that true complementary LOFO N1 and N2 are evaluated across all 10 families with component-disjoint splits."""
         bench = run_benchmark(gold_path=DEFAULT_GOLD_PATH, seed=DEFAULT_SEED)
+
+        self.assertEqual(bench["gates"]["lofo_inner_component_disjoint_gate"], "PASS")
+        self.assertEqual(bench["gates"]["lofo_n1_inner_article_leakage"], 0)
+        self.assertEqual(bench["gates"]["lofo_n1_valid_threshold_folds"], "10/10")
+        self.assertEqual(bench["gates"]["lofo_n2_inner_component_disjoint_gate"], "PASS")
+        self.assertEqual(bench["gates"]["lofo_n2_inner_article_leakage"], 0)
+        self.assertEqual(bench["gates"]["lofo_n2_valid_threshold_folds"], "10/10")
 
         n1 = bench["lofo_n1_evaluation"]
         n2 = bench["lofo_n2_evaluation"]
@@ -399,10 +449,23 @@ class TestModelBenchmarkExecution(unittest.TestCase):
             self.assertIn("positive_prediction_count", e)
 
     def test_deterministic_benchmark(self):
-        """Verify that repeated benchmark runs produce bitwise identical outputs."""
+        """
+        Verify exhaustive determinism (M1_DETERMINISM_GATE=PASS) across two runs:
+        - feature matrix SHA
+        - prediction SHA
+        - fold allocation and protocol
+        - selected thresholds
+        - candidate metrics
+        - LOFO N1 metrics
+        - LOFO N2 metrics
+        - model selection evidence
+        - model selection outcome
+        - gates
+        """
         b1 = run_benchmark(gold_path=DEFAULT_GOLD_PATH, seed=DEFAULT_SEED)
         b2 = run_benchmark(gold_path=DEFAULT_GOLD_PATH, seed=DEFAULT_SEED)
 
+        # 1. Input receipts & SHAs
         self.assertEqual(
             b1["input_receipts"]["feature_matrix_sha256"],
             b2["input_receipts"]["feature_matrix_sha256"],
@@ -411,7 +474,33 @@ class TestModelBenchmarkExecution(unittest.TestCase):
             b1["input_receipts"]["fold_predictions_sha256"],
             b2["input_receipts"]["fold_predictions_sha256"],
         )
+
+        # 2. Fold allocation & protocol
+        self.assertEqual(b1["primary_protocol"], b2["primary_protocol"])
+        self.assertEqual(b1["outer_folds"], b2["outer_folds"])
+
+        # 3. Selected thresholds
+        thresh_1 = {
+            c: [f["selected_threshold"] for f in cdata["folds"]]
+            for c, cdata in b1["candidates"].items() if "folds" in cdata
+        }
+        thresh_2 = {
+            c: [f["selected_threshold"] for f in cdata["folds"]]
+            for c, cdata in b2["candidates"].items() if "folds" in cdata
+        }
+        self.assertEqual(thresh_1, thresh_2)
+
+        # 4. Candidate metrics
+        self.assertEqual(b1["candidates"], b2["candidates"])
+
+        # 5. LOFO N1 & N2 metrics
+        self.assertEqual(b1["lofo_n1_evaluation"], b2["lofo_n1_evaluation"])
+        self.assertEqual(b1["lofo_n2_evaluation"], b2["lofo_n2_evaluation"])
+
+        # 6. Model selection evidence and final decision
+        self.assertEqual(b1["model_selection_evidence"], b2["model_selection_evidence"])
         self.assertEqual(b1["model_selection"], b2["model_selection"])
+        self.assertEqual(b1["gates"], b2["gates"])
 
 
 if __name__ == "__main__":
