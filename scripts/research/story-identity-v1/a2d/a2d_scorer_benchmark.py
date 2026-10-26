@@ -7,7 +7,7 @@ import csv
 import json
 import statistics
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -490,6 +490,243 @@ def candidate_is_promotable(oof_metrics, fixed_point=None, home_metrics=None):
     )
 
 
+def build_per_fold_selection_audit(candidate, fold_data, published):
+    """Return aggregate train/test evidence without exposing private pair rows."""
+    records_by_fold: dict[int, list[dict[str, Any]]] = defaultdict(list)
+    for record in candidate["oof_predictions"]:
+        records_by_fold[int(record["test_fold"])].append(record)
+
+    audits = []
+    for fold_idx, test_fold in enumerate(fold_data):
+        test_rows = test_fold["rows"]
+        train_rows = [
+            row
+            for other_idx, fold in enumerate(fold_data)
+            if other_idx != fold_idx
+            for row in fold["rows"]
+        ]
+        train_labels = Counter(row["gold_label"] for row in train_rows)
+        train_positive_families = {
+            row.get("episode_family_id")
+            for row in train_rows
+            if row["gold_label"] == "SAME_EVENT" and row.get("episode_family_id")
+        }
+        fold_records = records_by_fold.get(fold_idx, [])
+        record_by_key = {record["pair_key"]: record for record in fold_records}
+        expected_keys = [row["pair_key"] for row in test_rows]
+        if len(record_by_key) != len(fold_records) or set(expected_keys) != set(record_by_key):
+            raise AssertionError("PER_FOLD_SELECTION_AUDIT_GATE=FAIL")
+        ordered_records = [record_by_key[key] for key in expected_keys]
+        predictions = [int(record["pred"]) for record in ordered_records]
+        pair = _pair_metrics(test_rows, predictions)
+        p3 = _p3_metrics(ordered_records, test_rows, published)
+        report = candidate["outer_folds"][fold_idx]
+        selected = report.get("parameters_selected_on_outer_train_only")
+        if selected is None:
+            selected = {"threshold": report["threshold_selected_on_inner_train_only"]}
+        inner = report["inner_train_only_selection_metrics"]
+        audits.append({
+            "outer_fold": fold_idx,
+            "outer_test_pair_count": len(test_rows),
+            "outer_train_pair_count": len(train_rows),
+            "outer_train_same_count": train_labels["SAME_EVENT"],
+            "outer_train_related_count": train_labels["RELATED_TOPIC"],
+            "outer_train_different_count": train_labels["DIFFERENT_EVENT"],
+            "outer_train_hard_negative_count": train_labels["RELATED_TOPIC"] + train_labels["DIFFERENT_EVENT"],
+            "outer_train_positive_family_count": len(train_positive_families),
+            "selected_parameters": dict(selected),
+            "inner_selected_same_capture": inner.get("same_event_capture"),
+            "inner_selected_hard_negatives": inner.get("cluster_hard_negative_contamination_count"),
+            "outer_test_pair_tp": pair["tp"],
+            "outer_test_pair_fp": pair["fp"],
+            "outer_test_pair_fn": pair["fn"],
+            "outer_test_p3_same_capture": p3["same_event_capture"],
+            "outer_test_p3_hard_negatives": p3["cluster_hard_negative_contamination_count"],
+        })
+    return audits
+
+
+def summarize_giant_component_diagnosis(fold_data, comp_map):
+    if not comp_map:
+        raise ValueError("component map is required")
+    component_id, component = max(comp_map.items(), key=lambda item: len(item[1]["pairs"]))
+    outer_fold = next(
+        (int(fold["fold_idx"]) for fold in fold_data if component_id in fold["components"]),
+        None,
+    )
+    if outer_fold is None:
+        raise AssertionError("GIANT_COMPONENT_DIAGNOSIS_GATE=FAIL")
+    labels = Counter(pair["gold_label"] for pair in component["pairs"])
+    train_rows = [
+        row
+        for fold in fold_data
+        if int(fold["fold_idx"]) != outer_fold
+        for row in fold["rows"]
+    ]
+    train_labels = Counter(row["gold_label"] for row in train_rows)
+    return {
+        "giant_component_outer_fold": outer_fold,
+        "giant_component_pair_count": len(component["pairs"]),
+        "giant_component_same_count": labels["SAME_EVENT"],
+        "train_size_when_giant_component_is_test": len(train_rows),
+        "train_same_count_when_giant_component_is_test": train_labels["SAME_EVENT"],
+        "train_hard_negative_count_when_giant_component_is_test": (
+            train_labels["RELATED_TOPIC"] + train_labels["DIFFERENT_EVENT"]
+        ),
+        "train_positive_family_count_when_giant_component_is_test": len({
+            row.get("episode_family_id")
+            for row in train_rows
+            if row["gold_label"] == "SAME_EVENT" and row.get("episode_family_id")
+        }),
+    }
+
+
+def summarize_parameter_stability(parameter_sets, preregistered_grids):
+    if not parameter_sets:
+        raise ValueError("parameter sets are required")
+    keys = tuple(parameter_sets[0])
+    values_by_fold = {key: [item[key] for item in parameter_sets] for key in keys}
+    ranges = {
+        key: [round(min(map(float, values)), 6), round(max(map(float, values)), 6)]
+        for key, values in values_by_fold.items()
+    }
+    medians = {
+        key: round(float(statistics.median(map(float, values))), 6)
+        for key, values in values_by_fold.items()
+    }
+    varying_axes = [key for key, values in values_by_fold.items() if len(set(values)) > 1]
+    grid_spans = {}
+    for key in varying_axes:
+        grid = preregistered_grids.get(key)
+        if not grid:
+            grid_spans[key] = None
+            continue
+        positions = {value: index for index, value in enumerate(grid)}
+        grid_spans[key] = max(positions[value] for value in values_by_fold[key]) - min(
+            positions[value] for value in values_by_fold[key]
+        )
+    if not varying_axes:
+        classification = "STABLE"
+    elif len(varying_axes) == 1 and grid_spans[varying_axes[0]] == 1:
+        classification = "MODERATELY_UNSTABLE"
+    else:
+        classification = "HIGHLY_UNSTABLE"
+    return {
+        "parameter_values_by_fold": values_by_fold,
+        "parameter_range": ranges,
+        "parameter_median": medians,
+        "grid_step_span": grid_spans,
+        "classification": classification,
+        "classification_basis": (
+            "stable=identical selections; moderate=one parameter varies by one preregistered grid step; "
+            "high=multiple parameters vary or any parameter spans more than one grid step"
+        ),
+    }
+
+
+def post_hoc_parameter_transfer_diagnostic(candidate, fold_data, published, score_function):
+    """Cross-apply selected rule parameters for diagnosis only, never selection."""
+    matrix = []
+    for train_fold, report in enumerate(candidate["outer_folds"]):
+        params = report["parameters_selected_on_outer_train_only"]
+        for eval_fold, fold in enumerate(fold_data):
+            rows = fold["rows"]
+            predictions, _ = _rule_score(score_function, rows, params)
+            records = _prediction_records(rows, predictions, predictions, params, eval_fold)
+            p3 = _p3_metrics(records, rows, published)
+            matrix.append({
+                "train_derived_parameter_fold": train_fold,
+                "evaluation_fold": eval_fold,
+                "same_capture": p3["same_event_capture"],
+                "hard_negatives": p3["cluster_hard_negative_contamination_count"],
+            })
+    return {
+        "label": "POST_HOC_PARAMETER_TRANSFER_DIAGNOSTIC_ONLY",
+        "used_for_parameter_selection": False,
+        "matrix": matrix,
+    }
+
+
+def validate_targeted_gold_protocol(dev_article_ids, blind_article_ids, dev_pair_keys, blind_pair_keys):
+    article_overlap = set(dev_article_ids) & set(blind_article_ids)
+    if article_overlap:
+        raise ValueError("ARTICLE_DISJOINT_TARGET=FAIL")
+    pair_overlap = set(dev_pair_keys) & set(blind_pair_keys)
+    if pair_overlap:
+        raise ValueError("PAIR_DISJOINT_TARGET=FAIL")
+    return {
+        "article_overlap": 0,
+        "pair_overlap": 0,
+        "tuning_evaluation_reuse": "NO",
+        "sampling_uses_unknown_human_labels": "NO",
+        "blind_challenge_used_for_tuning": "NO",
+    }
+
+
+def evaluate_qualified_home_shadow(oof_metrics, fixed_point, runner, *args):
+    """Exercise the gated candidate -> fixed point -> Home shadow path."""
+    if not candidate_is_promotable(oof_metrics, fixed_point.get("gold_fixed_point_p3"), {
+        "observed_home_hard_negative_merges": 0,
+        "observed_home_false_family_merges": 0,
+    }):
+        return None
+    return runner(fixed_point["parameters"], *args)
+
+
+def classify_limiting_factor(per_fold_audits, transfer_diagnostics, giant_component):
+    unsafe_folds = {
+        audit["outer_fold"]
+        for audits in per_fold_audits.values()
+        for audit in audits
+        if audit["outer_test_p3_hard_negatives"] > 0
+    }
+    safe_transfer_to_unsafe_fold = False
+    for candidate_name, audits in per_fold_audits.items():
+        candidate_unsafe_folds = {
+            audit["outer_fold"]
+            for audit in audits
+            if audit["outer_test_p3_hard_negatives"] > 0
+        }
+        diagnostic = transfer_diagnostics.get(candidate_name, {})
+        if any(
+            cell["evaluation_fold"] in candidate_unsafe_folds
+            and cell["train_derived_parameter_fold"] != cell["evaluation_fold"]
+            and cell["same_capture"] >= MIN_CAPTURE
+            and cell["hard_negatives"] == 0
+            for cell in diagnostic.get("matrix", [])
+        ):
+            safe_transfer_to_unsafe_fold = True
+            break
+    giant_fold = giant_component["giant_component_outer_fold"]
+    giant_is_the_unsafe_fold = giant_fold in unsafe_folds
+    giant_positive_concentration = (
+        giant_component["train_same_count_when_giant_component_is_test"]
+        < giant_component["giant_component_same_count"]
+    )
+    if safe_transfer_to_unsafe_fold and giant_is_the_unsafe_fold and giant_positive_concentration:
+        classification = "MIXED_THRESHOLD_AND_GOLD_LIMIT"
+        why = (
+            "A fold-specific threshold selected without the giant component produced an OOF hard negative; "
+            "a parameter set selected with the giant component transfers to that fold at useful capture with "
+            "zero observed hard negatives. The giant holdout also contains more SAME_EVENT evidence than its training remainder. "
+            "Transfer is post-hoc diagnostic evidence, not an unbiased estimate."
+        )
+    elif safe_transfer_to_unsafe_fold:
+        classification = "THRESHOLD_INSTABILITY"
+        why = "A different already-selected fold parameter transfers to an unsafe OOF fold with useful capture and zero observed hard negatives; transfer is diagnostic only."
+    else:
+        classification = "OTHER"
+        why = "The existing results do not establish feature separability or a safe transferable parameter region."
+    return {
+        "classification": classification,
+        "why": why,
+        "safe_transfer_to_unsafe_fold": safe_transfer_to_unsafe_fold,
+        "giant_is_the_unsafe_fold": giant_is_the_unsafe_fold,
+        "giant_positive_concentration": giant_positive_concentration,
+        "unsafe_oof_folds": sorted(unsafe_folds),
+    }
+
+
 def _load_full_inputs():
     input_results = gold.verify_input_artifacts()
     rows, meta = gold.load_gold_v2_materialized()
@@ -627,38 +864,87 @@ def run_a2d_benchmark(
         for name, candidate in candidate_results.items()
     }
 
+    per_fold_audits = {
+        name: build_per_fold_selection_audit(candidate, fold_data, published)
+        for name, candidate in candidate_results.items()
+    }
+    giant_component = summarize_giant_component_diagnosis(fold_data, comp_map)
+    direct_functions = {
+        "A_SEMANTIC_LEXICAL_CONFIRMATION": score_family_a,
+        "B_SEMANTIC_TEMPORAL_CONFIRMATION": score_family_b,
+        "C_SEMANTIC_LOW_CORROBORATION_VETO": score_family_c,
+    }
+    preregistered_grids = {
+        "A_SEMANTIC_LEXICAL_CONFIRMATION": {
+            "semantic_threshold": SEMANTIC_GRID, "lexical_threshold": LEXICAL_GRID,
+        },
+        "B_SEMANTIC_TEMPORAL_CONFIRMATION": {
+            "semantic_threshold": SEMANTIC_GRID, "max_delta_hours": TEMPORAL_GRID,
+        },
+        "C_SEMANTIC_LOW_CORROBORATION_VETO": {"semantic_threshold": SEMANTIC_GRID},
+    }
+    parameter_stability = {}
+    transfer_diagnostics = {}
+    for name, function in direct_functions.items():
+        parameter_sets = [
+            report["parameters_selected_on_outer_train_only"]
+            for report in candidate_results[name]["outer_folds"]
+        ]
+        parameter_stability[name] = summarize_parameter_stability(
+            parameter_sets, preregistered_grids[name]
+        )
+        transfer_diagnostics[name] = post_hoc_parameter_transfer_diagnostic(
+            candidate_results[name], fold_data, published, function
+        )
+    d_thresholds = [
+        float(report["threshold_selected_on_inner_train_only"])
+        for report in candidate_results["D_LIGHTWEIGHT_LOGISTIC_REFERENCE"]["outer_folds"]
+    ]
+    parameter_stability["D_LIGHTWEIGHT_LOGISTIC_REFERENCE"] = {
+        "thresholds_by_fold": d_thresholds,
+        "threshold_range": [round(min(d_thresholds), 6), round(max(d_thresholds), 6)],
+        "threshold_median": round(float(statistics.median(d_thresholds)), 6),
+        "threshold_selections_differ": len(set(d_thresholds)) > 1,
+        "classification_basis": "descriptive refit-specific probability thresholds; cross-fold calibration is not assumed",
+    }
+    limiting_factor_diagnosis = classify_limiting_factor(
+        per_fold_audits, transfer_diagnostics, giant_component
+    )
+    selection_stability_audit = {
+        "per_fold": per_fold_audits,
+        "giant_component": giant_component,
+        "parameter_stability": parameter_stability,
+        "parameter_transfer": transfer_diagnostics,
+        "limiting_factor_diagnosis": limiting_factor_diagnosis,
+    }
+
     home_articles = [json.loads(line) for line in open(gold.CANONICAL_HOME200_PATH, encoding="utf-8") if line.strip()]
     home_shadows = {}
     for name, candidate in candidate_results.items():
         summary = summaries[name]["oof_p3"]
-        oof_qualified = (
-            summary["same_event_capture"] >= MIN_CAPTURE
-            and summary["cluster_hard_negative_contamination_count"] == 0
-            and summary["false_family_merge_count"] == 0
-            and summary["cross_family_cluster_count"] == 0
-        )
-        if not oof_qualified:
-            continue
         if candidate["class"] != "DIRECT_RULE":
-            home_shadows[name] = {"status": "NO_FIXED_GLOBAL_POINT_FOR_LEARNED_CROSS_FOLD_MODELS"}
             continue
-        function = {
-            "A_SEMANTIC_LEXICAL_CONFIRMATION": score_family_a,
-            "B_SEMANTIC_TEMPORAL_CONFIRMATION": score_family_b,
-            "C_SEMANTIC_LOW_CORROBORATION_VETO": score_family_c,
-        }[name]
-        home_shadows[name] = {}
+        function = direct_functions[name]
+        candidate_home_shadows = {}
         for point_name in ("STRICT", "MEDIAN", "PERMISSIVE"):
             point = fixed_points[name].get(point_name)
             if not point:
                 continue
-            home_shadows[name][point_name] = _home_shadow_for_rule(
-                function, point["parameters"], home_articles, rows, corpus, gold.CANONICAL_PAIRS_PATH
+            result = evaluate_qualified_home_shadow(
+                summary,
+                point,
+                lambda params: _home_shadow_for_rule(
+                    function, params, home_articles, rows, corpus, gold.CANONICAL_PAIRS_PATH
+                ),
             )
+            if result is not None:
+                candidate_home_shadows[point_name] = result
+        if candidate_home_shadows:
+            home_shadows[name] = candidate_home_shadows
 
     retrieval = replay["retrieval_coverage"]
     public_result = {
-        "research_version": "STORY_02_A2D_V1",
+        "research_version": "STORY_02_A2D_R1",
         "inputs": {
             "gold_v2_sha256": meta["gold_v2_sha256"],
             "gold_v2_pairs": meta["pair_count"],
@@ -674,7 +960,8 @@ def run_a2d_benchmark(
         "candidate_summaries": summaries,
         "global_points": fixed_points,
         "home_shadows": home_shadows,
-        "decision": _decision(candidate_results, summaries, fixed_points, home_shadows),
+        "selection_stability_audit": selection_stability_audit,
+        "decision": _decision(candidate_results, summaries, fixed_points, home_shadows, limiting_factor_diagnosis),
     }
     gold.write_private_results(public_result, output_path)
     return {
@@ -722,12 +1009,13 @@ def run_a2d_benchmark(
             for name, points in fixed_points.items()
         },
         "home_shadows": home_shadows,
+        "selection_stability_audit": selection_stability_audit,
         "retrieval_coverage": retrieval,
         "decision": public_result["decision"],
     }
 
 
-def _decision(candidates, summaries, fixed_points, home_shadows):
+def _decision(candidates, summaries, fixed_points, home_shadows, limiting_factor_diagnosis=None):
     passing = []
     for name, summary in summaries.items():
         oof = summary["oof_p3"]
@@ -758,25 +1046,27 @@ def _decision(candidates, summaries, fixed_points, home_shadows):
             "next_recommended_track": "STORY_02_A2E_PROVIDER_CANDIDATE_FREEZE",
             "why": "All OOF, fixed Gold point, and observed Home safety/coverage gates passed; no product integration is implied.",
         }
-    all_oof_safe = [
-        name for name, summary in summaries.items()
-        if summary["oof_p3"]["same_event_capture"] >= MIN_CAPTURE
-        and summary["oof_p3"]["cluster_hard_negative_contamination_count"] == 0
-        and summary["oof_p3"]["false_family_merge_count"] == 0
-        and summary["oof_p3"]["cross_family_cluster_count"] == 0
-    ]
-    if all_oof_safe:
-        limiting = "THRESHOLD_INSTABILITY"
-        why = "At least one OOF scorer met coverage/safety, but no outer-train-derived fixed research point also passed the Gold and Home gates."
-    elif any(summary["oof_p3"]["cluster_hard_negative_contamination_count"] for summary in summaries.values()):
-        limiting = "FEATURE_SEPARABILITY_LIMIT"
-        why = "Observed hard-negative P3 merges remain on the frozen OOF evaluation."
-    elif max(summary["oof_p3"]["same_event_capture"] for summary in summaries.values()) < MIN_CAPTURE:
-        limiting = "MODEL_CLASS_LIMIT"
-        why = "All evaluated candidates remained below the existing minimum useful-coverage boundary."
-    else:
+    diagnosis = limiting_factor_diagnosis or {}
+    supported_classifications = {
+        "THRESHOLD_INSTABILITY",
+        "FEATURE_SEPARABILITY_LIMIT",
+        "GOLD_COVERAGE_LIMIT",
+        "MODEL_CLASS_LIMIT",
+        "MIXED_THRESHOLD_AND_GOLD_LIMIT",
+        "OTHER",
+    }
+    limiting = diagnosis.get("classification")
+    if limiting not in supported_classifications:
         limiting = "OTHER"
-        why = "No candidate passed the complete safety and coverage gates."
+    why = diagnosis.get("why") or "No candidate passed the complete safety and coverage gates, and the available diagnostic evidence is inconclusive."
+    next_track_by_limiting_factor = {
+        "THRESHOLD_INSTABILITY": "STORY_02_A2D2_TARGETED_GOLD_DESIGN",
+        "FEATURE_SEPARABILITY_LIMIT": "STORY_02_A2D2_TARGETED_GOLD_DESIGN",
+        "GOLD_COVERAGE_LIMIT": "STORY_02_A2D2_TARGETED_GOLD_DESIGN",
+        "MODEL_CLASS_LIMIT": "MORE_POSITIVE_GOLD_REQUIRED",
+        "MIXED_THRESHOLD_AND_GOLD_LIMIT": "STORY_02_A2D2_TARGETED_GOLD_DESIGN",
+        "OTHER": "HOLD_FOR_PM",
+    }
     return {
         "provider_candidate_found": "NO",
         "research_recommendation": "NO_CLEAR_WINNER",
@@ -786,6 +1076,7 @@ def _decision(candidates, summaries, fixed_points, home_shadows):
             summaries[name]["pair_f05"],
         )),
         "limiting_factor": limiting,
-        "next_recommended_track": "MORE_TARGETED_HARD_NEGATIVE_GOLD_REQUIRED" if limiting == "FEATURE_SEPARABILITY_LIMIT" else "MORE_POSITIVE_GOLD_REQUIRED" if limiting == "MODEL_CLASS_LIMIT" else "HOLD_FOR_PM",
+        "next_recommended_track": next_track_by_limiting_factor[limiting],
         "why": why,
+        "limiting_factor_evidence": diagnosis,
     }

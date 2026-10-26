@@ -1,6 +1,7 @@
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 HERE = Path(__file__).resolve().parent
 RESEARCH_DIR = HERE.parent
@@ -11,13 +12,21 @@ from a2d.a2d_scorer_benchmark import (
     assert_baseline_parity,
     assert_inner_outer_disjoint,
     candidate_is_promotable,
+    build_per_fold_selection_audit,
+    classify_limiting_factor,
+    evaluate_qualified_home_shadow,
     is_private_output_path,
+    post_hoc_parameter_transfer_diagnostic,
     score_family_a,
     score_family_b,
     score_family_c,
     summarize_direct_fold_parameters,
     verify_frozen_artifact_hash,
     verify_frozen_split_metadata,
+    summarize_giant_component_diagnosis,
+    summarize_parameter_stability,
+    validate_targeted_gold_protocol,
+    _decision,
     _p3_metrics,
 )
 
@@ -149,6 +158,199 @@ class A2DSafetyAwareScorerTests(unittest.TestCase):
         repo_root = HERE.parents[3]
         self.assertFalse(is_private_output_path(repo_root / "private-output.json", repo_root))
         self.assertTrue(is_private_output_path(Path("/tmp/a2d-output.json"), repo_root))
+
+    def test_per_fold_selection_audit_separates_outer_train_and_test(self):
+        fold_data = [
+            {"fold_idx": 0, "rows": [
+                {"pair_key": "1:2", "gold_label": "SAME_EVENT", "target_binary": 1, "episode_family_id": "F1"},
+                {"pair_key": "2:3", "gold_label": "DIFFERENT_EVENT", "target_binary": 0, "episode_family_id": ""},
+            ]},
+            {"fold_idx": 1, "rows": [
+                {"pair_key": "4:5", "gold_label": "SAME_EVENT", "target_binary": 1, "episode_family_id": "F2"},
+                {"pair_key": "5:6", "gold_label": "RELATED_TOPIC", "target_binary": 0, "episode_family_id": ""},
+            ]},
+        ]
+        candidate = {
+            "class": "DIRECT_RULE",
+            "outer_folds": [
+                {"outer_fold": 0, "parameters_selected_on_outer_train_only": {"threshold": 0.7},
+                 "inner_train_only_selection_metrics": {"same_event_capture": 1, "cluster_hard_negative_contamination_count": 0}},
+                {"outer_fold": 1, "parameters_selected_on_outer_train_only": {"threshold": 0.8},
+                 "inner_train_only_selection_metrics": {"same_event_capture": 1, "cluster_hard_negative_contamination_count": 0}},
+            ],
+            "oof_predictions": [
+                {"pair_key": "1:2", "pred": 1, "test_fold": 0}, {"pair_key": "2:3", "pred": 0, "test_fold": 0},
+                {"pair_key": "4:5", "pred": 1, "test_fold": 1}, {"pair_key": "5:6", "pred": 0, "test_fold": 1},
+            ],
+        }
+        with patch("a2d.a2d_scorer_benchmark._p3_metrics", return_value={
+            "same_event_capture": 1, "cluster_hard_negative_contamination_count": 0,
+        }):
+            audits = build_per_fold_selection_audit(candidate, fold_data, {})
+        self.assertEqual(audits[0]["outer_train_pair_count"], 2)
+        self.assertEqual(audits[0]["outer_train_same_count"], 1)
+        self.assertEqual(audits[0]["outer_train_related_count"], 1)
+        self.assertEqual(audits[0]["outer_train_different_count"], 0)
+        self.assertEqual(audits[0]["outer_train_positive_family_count"], 1)
+        self.assertEqual(audits[0]["selected_parameters"], {"threshold": 0.7})
+        self.assertEqual(audits[0]["outer_test_pair_tp"], 1)
+        self.assertEqual(audits[0]["outer_test_pair_fp"], 0)
+        self.assertEqual(audits[0]["outer_test_pair_fn"], 0)
+
+    def test_giant_component_diagnosis_reports_training_evidence(self):
+        fold_data = [
+            {"fold_idx": 0, "components": ["giant"], "rows": [
+                {"gold_label": "SAME_EVENT"}, {"gold_label": "SAME_EVENT"}, {"gold_label": "DIFFERENT_EVENT"},
+            ]},
+            {"fold_idx": 1, "components": ["small"], "rows": [
+                {"gold_label": "SAME_EVENT"}, {"gold_label": "RELATED_TOPIC"},
+            ]},
+        ]
+        comp_map = {
+            "giant": {"pairs": [{"gold_label": "SAME_EVENT"}, {"gold_label": "SAME_EVENT"}, {"gold_label": "DIFFERENT_EVENT"}]},
+            "small": {"pairs": [{"gold_label": "SAME_EVENT"}, {"gold_label": "RELATED_TOPIC"}]},
+        }
+        result = summarize_giant_component_diagnosis(fold_data, comp_map)
+        self.assertEqual(result["giant_component_outer_fold"], 0)
+        self.assertEqual(result["giant_component_pair_count"], 3)
+        self.assertEqual(result["giant_component_same_count"], 2)
+        self.assertEqual(result["train_size_when_giant_component_is_test"], 2)
+        self.assertEqual(result["train_same_count_when_giant_component_is_test"], 1)
+        self.assertEqual(result["train_hard_negative_count_when_giant_component_is_test"], 1)
+
+    def test_parameter_stability_uses_preregistered_grid_steps(self):
+        parameters = [
+            {"semantic_threshold": 0.625, "lexical_threshold": 0.30},
+            {"semantic_threshold": 0.625, "lexical_threshold": 0.35},
+            {"semantic_threshold": 0.625, "lexical_threshold": 0.35},
+        ]
+        grids = {
+            "semantic_threshold": [0.625, 0.65, 0.675],
+            "lexical_threshold": [0.25, 0.30, 0.35, 0.40],
+        }
+        result = summarize_parameter_stability(parameters, grids)
+        self.assertEqual(result["classification"], "MODERATELY_UNSTABLE")
+        self.assertEqual(result["parameter_range"]["lexical_threshold"], [0.30, 0.35])
+        self.assertEqual(result["parameter_median"]["lexical_threshold"], 0.35)
+
+    def test_post_hoc_parameter_transfer_is_marked_diagnostic_only(self):
+        folds = [
+            {"fold_idx": 0, "rows": [{"pair_key": "1:2", "entry_a_id": "1", "entry_b_id": "2", "target_binary": 1, "gold_label": "SAME_EVENT", "episode_family_id": "F1", "qwen_embedding_cosine": 0.8, "title_overlap_coefficient": 0.4}]},
+            {"fold_idx": 1, "rows": [{"pair_key": "3:4", "entry_a_id": "3", "entry_b_id": "4", "target_binary": 0, "gold_label": "DIFFERENT_EVENT", "episode_family_id": "", "qwen_embedding_cosine": 0.7, "title_overlap_coefficient": 0.3}]},
+        ]
+        candidate = {"outer_folds": [
+            {"parameters_selected_on_outer_train_only": {"semantic_threshold": 0.6, "lexical_threshold": 0.2}},
+            {"parameters_selected_on_outer_train_only": {"semantic_threshold": 0.7, "lexical_threshold": 0.3}},
+        ]}
+        with patch("a2d.a2d_scorer_benchmark._p3_metrics", return_value={
+            "same_event_capture": 1, "cluster_hard_negative_contamination_count": 0,
+        }):
+            transfer = post_hoc_parameter_transfer_diagnostic(
+                candidate, folds, {}, score_family_a,
+            )
+        self.assertEqual(transfer["label"], "POST_HOC_PARAMETER_TRANSFER_DIAGNOSTIC_ONLY")
+        self.assertEqual(len(transfer["matrix"]), 4)
+        self.assertEqual(transfer["matrix"][0]["train_derived_parameter_fold"], 0)
+        self.assertEqual(transfer["matrix"][0]["evaluation_fold"], 0)
+
+    def test_decision_uses_explicit_stability_diagnosis_not_any_oof_hard_negative(self):
+        candidates = {"A": {"class": "DIRECT_RULE"}}
+        summaries = {"A": {"oof_p3": {
+            "same_event_capture": 20,
+            "cluster_hard_negative_contamination_count": 1,
+            "false_family_merge_count": 0,
+            "cross_family_cluster_count": 0,
+        }, "pair_f05": 0.4}}
+        fixed_points = {"A": {"STRICT": {"gold_fixed_point_p3": {
+            "same_event_capture": 20, "cluster_hard_negative_contamination_count": 0,
+            "false_family_merge_count": 0, "cross_family_cluster_count": 0,
+        }}}}
+        diagnosis = {"classification": "MIXED_THRESHOLD_AND_GOLD_LIMIT", "evidence": ["fold-specific audit"]}
+        result = _decision(candidates, summaries, fixed_points, {}, diagnosis)
+        self.assertEqual(result["provider_candidate_found"], "NO")
+        self.assertEqual(result["limiting_factor"], "MIXED_THRESHOLD_AND_GOLD_LIMIT")
+        self.assertNotEqual(result["limiting_factor"], "FEATURE_SEPARABILITY_LIMIT")
+
+    def test_decision_without_supported_diagnosis_holds_and_uses_allowed_next_track(self):
+        summaries = {"A": {"oof_p3": {
+            "same_event_capture": 20,
+            "cluster_hard_negative_contamination_count": 1,
+            "false_family_merge_count": 0,
+            "cross_family_cluster_count": 0,
+        }, "pair_f05": 0.4}}
+        result = _decision({"A": {"class": "DIRECT_RULE"}}, summaries, {}, {})
+        self.assertEqual(result["limiting_factor"], "OTHER")
+        self.assertEqual(result["next_recommended_track"], "HOLD_FOR_PM")
+        self.assertIn(result["next_recommended_track"], {
+            "STORY_02_A2D2_TARGETED_GOLD_DESIGN",
+            "MORE_SCORER_RESEARCH",
+            "MORE_POSITIVE_GOLD_REQUIRED",
+            "HOLD_FOR_PM",
+        })
+
+    def test_feature_separability_recommendation_uses_approved_track_name(self):
+        summaries = {"A": {"oof_p3": {
+            "same_event_capture": 20,
+            "cluster_hard_negative_contamination_count": 1,
+            "false_family_merge_count": 0,
+            "cross_family_cluster_count": 0,
+        }, "pair_f05": 0.4}}
+        diagnosis = {"classification": "FEATURE_SEPARABILITY_LIMIT", "why": "supported fixture"}
+        result = _decision({"A": {"class": "DIRECT_RULE"}}, summaries, {}, {}, diagnosis)
+        self.assertEqual(result["next_recommended_track"], "STORY_02_A2D2_TARGETED_GOLD_DESIGN")
+
+    def test_limiting_factor_requires_transfer_and_component_coverage_evidence(self):
+        per_fold = {"A": [
+            {"outer_fold": 0, "outer_test_p3_hard_negatives": 1},
+            {"outer_fold": 1, "outer_test_p3_hard_negatives": 0},
+        ]}
+        transfer = {"A": {"matrix": [
+            {"train_derived_parameter_fold": 1, "evaluation_fold": 0, "same_capture": 20, "hard_negatives": 0},
+        ]}}
+        giant = {
+            "giant_component_outer_fold": 0,
+            "giant_component_same_count": 51,
+            "train_same_count_when_giant_component_is_test": 6,
+        }
+        result = classify_limiting_factor(per_fold, transfer, giant)
+        self.assertEqual(result["classification"], "MIXED_THRESHOLD_AND_GOLD_LIMIT")
+        self.assertTrue(result["safe_transfer_to_unsafe_fold"])
+        self.assertTrue(result["giant_positive_concentration"])
+        result_without_transfer = classify_limiting_factor(per_fold, {"A": {"matrix": []}}, giant)
+        self.assertEqual(result_without_transfer["classification"], "OTHER")
+
+    def test_targeted_gold_protocol_forbids_dev_blind_reuse(self):
+        accepted = validate_targeted_gold_protocol(
+            dev_article_ids={1, 2}, blind_article_ids={3, 4},
+            dev_pair_keys={"1:2"}, blind_pair_keys={"3:4"},
+        )
+        self.assertEqual(accepted["article_overlap"], 0)
+        self.assertEqual(accepted["pair_overlap"], 0)
+        self.assertEqual(accepted["tuning_evaluation_reuse"], "NO")
+        with self.assertRaisesRegex(ValueError, "ARTICLE_DISJOINT"):
+            validate_targeted_gold_protocol(
+                dev_article_ids={1, 2}, blind_article_ids={2, 3},
+                dev_pair_keys={"1:2"}, blind_pair_keys={"2:3"},
+            )
+        with self.assertRaisesRegex(ValueError, "PAIR_DISJOINT"):
+            validate_targeted_gold_protocol(
+                dev_article_ids={1, 2}, blind_article_ids={3, 4},
+                dev_pair_keys={"shared-pair"}, blind_pair_keys={"shared-pair"},
+            )
+
+    def test_qualified_home_shadow_path_uses_fixed_point_parameters(self):
+        oof = {"same_event_capture": 15, "cluster_hard_negative_contamination_count": 0,
+               "false_family_merge_count": 0, "cross_family_cluster_count": 0}
+        point = {"parameters": {"semantic_threshold": 0.7}, "gold_fixed_point_p3": dict(oof)}
+        observed = {"observed_home_hard_negative_merges": 0,
+                    "observed_home_false_family_merges": 0, "observed_home_cross_family_clusters": 0}
+        runner = unittest.mock.Mock(return_value=observed)
+        result = evaluate_qualified_home_shadow(oof, point, runner, "fixture")
+        self.assertEqual(result, observed)
+        runner.assert_called_once_with({"semantic_threshold": 0.7}, "fixture")
+        self.assertIsNone(evaluate_qualified_home_shadow(
+            {**oof, "cluster_hard_negative_contamination_count": 1}, point, runner, "fixture"
+        ))
 
 
 if __name__ == "__main__":
