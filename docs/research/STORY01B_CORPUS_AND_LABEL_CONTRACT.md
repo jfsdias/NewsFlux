@@ -3,7 +3,7 @@
 - **Track:** STORY-01B-R / STORY-01B-D / STORY-01B-D4
 - **Topic:** Story Identity Corpus Contract, Feature Taxonomy, Reconciled Label Specification, Gold Dataset Freeze, and Downstream Evaluation Contracts
 - **NewsFlux Base Commit:** `dc4154d7729204c65c8a1abaa50f9bfc9f92be64`
-- **Reconciliation Commit:** `84183b78e56dc4f20f5ff8e40c7944f35707b143`
+- **Reconciliation Base Commit:** `84183b78e56dc4f20f5ff8e40c7944f35707b143`
 - **Date:** 2026-10-25
 - **Status:** GOLD DATASET CURATION COMPLETE / CONTRACT RECONCILED / RESEARCH ONLY
 - **Runtime Activation:** NONE (`NO PRODUCT ACTIVATION`, `MERGE=NO`, `DEPLOY=NO`)
@@ -366,11 +366,11 @@ NON_DUO_SAME_EVENT_PAIR_COUNT=15 (26.32%)
 ### 7.2 Curation and Adjudication Audit Trail
 
 1. **Base 141-Pair Review Queue:** Labeled via local offline annotation UI under strict model-blinding (`ANNOTATOR_MODEL_BLINDING=PASS`).
-2. **Duo Boundary Audit:** Five borderline iPhone Duo pairs (`REV-116`, `REV-005`, `REV-067`, `REV-101`, `REV-120`) reviewed and preserved as `KEEP_ORIGINAL` (`DIFFERENT_EVENT`) under explicit user decisions (`decision_source=EXPLICIT_USER_DECISION`).
+2. **Duo Boundary Audit:** Five borderline iPhone Duo pairs (`REV-116`, `REV-005`, `REV-067`, `REV-101`, `REV-120`) were explicitly adjudicated by the user with `KEEP_ORIGINAL`: `REV-116` remained `RELATED_TOPIC`, while `REV-005`, `REV-067`, `REV-101`, and `REV-120` remained `DIFFERENT_EVENT` (`decision_source=EXPLICIT_USER_DECISION`).
 3. **Non-Duo Granularity Adjudication:** Thirteen candidate pairs from the base sample re-evaluated under the coherent developing episode standard: 10 pairs promoted to `SAME_EVENT`, 3 pairs preserved as `RELATED_TOPIC` (`decision_source=EXPLICIT_USER_DECISION`).
 4. **Supplemental Diversity Queue:** Fifteen model-blinded candidate pairs evaluated to test non-Duo coverage and negative boundary discrimination: 11 labeled `RELATED_TOPIC`, 4 labeled `DIFFERENT_EVENT` (`decision_source=EXPLICIT_USER_DECISION`).
 5. **Deduplication and Episode Families:** The union of 141 reviewed pairs and 15 supplemental pairs produced **156 distinct pairs** (zero overlap). `episode_family_id` was strictly assigned only to the 57 `SAME_EVENT` pairs; all 99 non-`SAME_EVENT` pairs carry an empty `episode_family_id`.
-6. **Data Privacy Guard:** Canonical private CSVs, individual article titles, and user notes remain strictly in private offline storage (`/tmp/newsflux-story01b-private/checkpoints/`) in read-only mode (`0444`) and are never tracked in git.
+6. **Data Privacy Guard:** Canonical private datasets and audit artifacts remain outside git under private offline storage. The final canonical gold artifact `story01b-gold-v1.csv` is frozen read-only (`0444`). Intermediate checkpoints retain their audited filesystem permissions and remain untracked by git.
 
 ---
 
