@@ -17,6 +17,7 @@ import {
 import { projectRecentEntries } from "@/utils/home-editorial-projection"
 import { getHomeIdentityKey } from "@/utils/home-page"
 import startHomeStoryCandidateRuntime from "@/utils/story-candidate-runtime"
+import { useHomeStoryProjection } from "@/utils/story-identity"
 
 import "@/components/Article/ArticleList.css"
 
@@ -55,13 +56,26 @@ const HomeRecent = ({
     projectRecentEntries(entries, highlightIds).map((entry) => [entry.id, entry]),
   )
   const recentEntries = recentIds.map((id) => entryById.get(id)).filter(Boolean)
+  const storyItems = useHomeStoryProjection({ recentEntries, sessionRevision })
+  const effectiveEntries = storyItems
+    ? storyItems.map((item) =>
+        item.type === "story"
+          ? {
+              ...item.representative,
+              _storyData: item.data,
+              _storyAlternatives: item.alternatives,
+            }
+          : item.data,
+      )
+    : recentEntries
+
   const { cardColumnCount, virtualItems: rows } = useArticleListLayout({
-    entries: recentEntries,
+    entries: effectiveEntries,
     layout: "card",
     scrollRootRef,
   })
 
-  if (recentEntries.length === 0) {
+  if (effectiveEntries.length === 0) {
     return null
   }
 
@@ -77,7 +91,13 @@ const HomeRecent = ({
             style={{ "--article-card-grid-columns": cardColumnCount }}
           >
             {row.map((entry) => (
-              <div key={entry.id} className="article-card-grid-cell" role="listitem">
+              <div
+                key={entry.id}
+                className="article-card-grid-cell"
+                data-story-id={entry._storyData?.storyId}
+                data-story-member-count={entry._storyData?.memberCount}
+                role="listitem"
+              >
                 <ArticleEntry
                   articleActivation={articleActivation}
                   entry={entry}
