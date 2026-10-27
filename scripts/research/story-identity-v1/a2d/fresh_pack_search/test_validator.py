@@ -139,3 +139,24 @@ class ComponentTests(unittest.TestCase):
     def test_six_chains_required(self):
         dev,blind,groups=fixture()
         with self.assertRaisesRegex(ValueError,'chain count'):v.validate(dev,blind,groups[:5])
+
+class AdditionalComponentTests(unittest.TestCase):
+    @staticmethod
+    def set_pair(row,a,b):
+        row.update(pair_key=f'{a}:{b}',article_a_id=a,article_b_id=b,feed_a_id=a,feed_b_id=b)
+    @staticmethod
+    def categories(blind):
+        ids=sorted({a for row in blind for a in v.vertices(row)})
+        cats={a:str(i%3) for i,a in enumerate(ids)}
+        for row in blind:
+            row['category_a']=cats[row['article_a_id']];row['category_b']=cats[row['article_b_id']]
+    def test_component_max_articles_rejected_even_with_eight_edges(self):
+        dev,blind,groups=fixture()
+        for i,row in enumerate(blind[:7],1): self.set_pair(row,1,8000+i)
+        self.set_pair(blind[-1],1,8008);self.categories(blind)
+        with self.assertRaisesRegex(ValueError,'components'):v.validate(dev,blind,groups)
+    def test_minimum_multi_pair_components_rejected(self):
+        dev,blind,groups=fixture()
+        for i,row in enumerate(blind[:6]): self.set_pair(row,9000+2*i,9001+2*i)
+        self.categories(blind)
+        with self.assertRaisesRegex(ValueError,'components'):v.validate(dev,blind,groups)
