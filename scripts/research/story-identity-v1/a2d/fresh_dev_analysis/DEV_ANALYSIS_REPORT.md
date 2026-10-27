@@ -23,6 +23,8 @@ B and C make no merge predictions; their zero false-split count is vacuous becau
 | HARD_NEGATIVE_SEEKING |    28 |    0 |       0 |        28 |         0 |
 | POSITIVE_SEEKING      |    28 |    0 |       1 |        27 |         0 |
 
+Within POSITIVE_SEEKING, 96.43% are DIFFERENT_EVENT and 3.57% are RELATED_TOPIC; the other three buckets are 100% DIFFERENT_EVENT. SAME_EVENT and UNCERTAIN are 0% in every bucket. These are challenge-sample proportions only.
+
 ## Overlapping strata
 
 Strata overlap; their totals must not be summed.
