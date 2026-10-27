@@ -29,6 +29,7 @@ from sampler import (
     verify_sha,
 )
 from joint_search import candidate_inventory, prepare_search_candidates, search_joint_packs
+from component_search import search_components, validate_witness
 
 
 DEFAULT_PRIVATE = V2_PRIVATE_ROOT
@@ -72,23 +73,41 @@ def canonical_search(args: argparse.Namespace) -> dict:
     inventory = candidate_inventory(blind_pool, BLIND_QUOTAS)
     if inventory["raw_bucket_capacity_gate"] != "PASS":
         return {"r1": r1, "inventory": inventory, "search": {
-            "status": "PROVEN_INFEASIBLE", "reason": "RAW_BUCKET_CAPACITY",
-            "search_complete": True, "node_limit": args.search_limit,
+            "status": "COMPONENT_SEARCH_PROVEN_INFEASIBLE" if args.method == "component" else "PROVEN_INFEASIBLE",
+            "reason": "RAW_BUCKET_CAPACITY",
+            "search_complete": True,
+            "node_limit": args.component_node_limit if args.method == "component" else args.search_limit,
             "certificate": {"nodes_explored": 0, "nodes_pruned": 0},
             "blind": [], "dev": [], "chain_groups": [], "feasible_witness_found": False,
         }}
-    search = search_joint_packs(
-        blind_pool, dev_pool, blind_quotas=BLIND_QUOTAS, dev_quotas=DEV_QUOTAS,
-        gold_pair_keys=r1["gold_pair_keys"], gold_article_ids=r1["gold_article_ids"],
-        node_limit=args.search_limit,
-    )
+    if args.method == "component":
+        search = search_components(
+            blind_pool, dev_pool, blind_quotas=BLIND_QUOTAS, dev_quotas=DEV_QUOTAS,
+            gold_pair_keys=r1["gold_pair_keys"], gold_article_ids=r1["gold_article_ids"],
+            node_limit=args.component_node_limit, restarts=args.restarts,
+            variants=args.variants, solver_seconds=args.solver_seconds,
+            max_candidate_attempts=args.max_candidate_attempts,
+        )
+        search.update({"method": "COMPONENT_FIRST", "global_optimality_required": False,
+                       "global_optimality_proven": False})
+    else:
+        search = search_joint_packs(
+            blind_pool, dev_pool, blind_quotas=BLIND_QUOTAS, dev_quotas=DEV_QUOTAS,
+            gold_pair_keys=r1["gold_pair_keys"], gold_article_ids=r1["gold_article_ids"],
+            node_limit=args.search_limit,
+        )
     return {"r1": r1, "inventory": inventory, "search": search}
 
 
 def freeze_result(run: dict) -> dict:
     search, r1 = run["search"], run["r1"]
-    if search["status"] != "FEASIBLE" or not search["search_complete"]:
+    component_witness = search.get("method") == "COMPONENT_FIRST" and search["status"] == "FEASIBLE_WITNESS_FOUND"
+    exhaustive_witness = search["status"] == "FEASIBLE" and search["search_complete"]
+    if not (component_witness or exhaustive_witness):
         raise ValueError("PACK_FREEZE_V2=NO")
+    if component_witness:
+        validate_witness(search["blind"], search["dev"], gold_pair_keys=r1["gold_pair_keys"],
+                         gold_article_ids=r1["gold_article_ids"])
     return {
         "feasible": True, "exact_quotas_feasible": True,
         "dev": search["dev"], "blind": search["blind"],
@@ -104,6 +123,12 @@ def main() -> int:
     parser.add_argument("--home", type=Path, default=DEFAULT_HOME)
     parser.add_argument("--pairs", type=Path, default=DEFAULT_PAIRS)
     parser.add_argument("--search-limit", type=int, default=500000)
+    parser.add_argument("--method", choices=("component", "edge"), default="component")
+    parser.add_argument("--component-node-limit", type=int, default=1000)
+    parser.add_argument("--restarts", type=int, default=3)
+    parser.add_argument("--variants", type=int, default=4)
+    parser.add_argument("--solver-seconds", type=float, default=20.0)
+    parser.add_argument("--max-candidate-attempts", type=int, default=4)
     parser.add_argument("--freeze", action="store_true")
     parser.add_argument("--output", type=Path, default=DEFAULT_PRIVATE)
     args = parser.parse_args()
@@ -119,11 +144,20 @@ def main() -> int:
     output = {
         "input_sha_gates": {"gold": "PASS", "human_label_hash_only": "PASS_CONTENT_NOT_PARSED", "home200": "PASS", "pair_universe": "PASS"},
         "inventory": run["inventory"],
-        "search_algorithm": "DETERMINISTIC_JOINT_BRANCH_AND_BOUND",
+        "search_algorithm": "COMPONENT_FIRST_FEASIBLE_WITNESS" if args.method == "component" else "DETERMINISTIC_JOINT_BRANCH_AND_BOUND",
         "search_status": result["status"],
         "search_complete": result["search_complete"],
-        "search_node_limit": result["node_limit"],
+        "search_node_limit": result.get("node_limit", args.component_node_limit),
         "search_certificate": result["certificate"],
+        "motif_inventory": result.get("inventory"),
+        "solver": result.get("solver"),
+        "solver_version": result.get("solver_version"),
+        "restart_count": result.get("restarts"),
+        "witness_restart_index": result.get("witness_restart_index"),
+        "global_optimality_required": False if args.method == "component" else True,
+        "global_optimality_proven": result.get("global_optimality_proven", False),
+        "independent_witness_validator": "PASS" if witness and args.method == "component" else "NOT_RUN",
+        "chain_group_bridging_count": result.get("validation", {}).get("chain_group_bridging_count"),
         "feasible_witness_found": result["feasible_witness_found"],
         "objective_optimality": result.get("objective_optimality", "NOT_APPLICABLE"),
         "dev": aggregate_pack(dev_rows, []) if dev_rows else None,
@@ -133,7 +167,9 @@ def main() -> int:
         "dev_gold_pair_overlap": len(dev_keys & r1["gold_pair_keys"]) if witness else None,
         "blind_gold_pair_overlap": len(blind_keys & r1["gold_pair_keys"]) if witness else None,
         "blind_gold_article_overlap": len(blind_articles & r1["gold_article_ids"]) if witness else None,
-        "pack_freeze_feasible": result["status"] == "FEASIBLE" and result["search_complete"],
+        "pack_freeze_feasible": result["status"] == "FEASIBLE_WITNESS_FOUND" or (
+            result["status"] == "FEASIBLE" and result["search_complete"]
+        ),
     }
     print(json.dumps(output, sort_keys=True, indent=2))
 

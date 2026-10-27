@@ -71,19 +71,21 @@ diversity-control. The historical V1 selection allowed DEV spillover:
 - hard-negative-seeking shortfall → boundary/disagreement, then
   diversity-control.
 
-There is no spillover in the R2 exact search. It jointly explores BLIND edges
-and DEV choices, with chain groups and independent pairs determined by the
-selected graph rather than fixed in advance. Six qualifying chains must occupy
-separate connected components. BLIND endpoints must be absent from Gold V2;
-DEV and BLIND must be article-disjoint. Pair, source, category, component,
-and exact bucket constraints remain hard gates.
+There is no spillover in R2 or R3. The R2 edge-level branch-and-bound remains
+available with `--method edge`; its bounded result cannot prove infeasibility.
+R3 generates a bounded, deterministic library of singleton and connected chain
+motifs and selects article-disjoint motifs under the exact bucket, component,
+source and category constraints. Motif contribution guides scarcity ordering;
+forward DEV capacity cuts reject blocking prefixes. A bounded DEV search then
+attempts the exact DEV quotas. An independent validator recomputes every hard
+gate from the selected rows. BLIND endpoints must be absent from Gold V2 and
+DEV and BLIND must be article-disjoint.
 
-The bounded branch-and-bound search uses seed `20261026` and chooses the bucket
-with the smallest remaining raw-candidate-to-deficit ratio. It maximizes unique
-sources followed by unique articles over both packs, with a stable hash
-tie-break. Only a completed search can certify that objective. A node limit
-returns `SEARCH_LIMIT_REACHED`, even if a feasible witness was found; it is not
-a proof of infeasibility and cannot authorize a freeze.
+R3 seeks one valid witness and does not require global optimality. A bounded
+motif library or solver limit cannot prove corpus infeasibility. A witness may
+be frozen only after independent validation and two identical canonical runs.
+The search uses the already available SciPy MILP solver and no new dependency;
+its time limit may affect the result, so replay identity is a mandatory gate.
 
 Selection is deterministic with seed `20261026`. The human review order is
 deterministically shuffled separately for DEV and BLIND. Reviewer CSVs expose
@@ -101,9 +103,9 @@ label file is generated.
 
 ## Private execution
 
-Run `run_design.py` for an aggregate-only feasibility report. The deterministic
-node limit defaults to 500,000 and can be set with `--search-limit`. `--freeze`
-requires a completed feasible search, repeats the canonical run, compares
+Run `run_design.py` for an aggregate-only component-first report. Node, time,
+restart, and motif-variant limits are explicit CLI options. `--freeze` requires
+an independently validated witness, repeats the canonical run, compares
 selection and artifact bytes, and writes only to the separate V2 private path.
 The V1 freeze is verified before and after writing. Never add private packs,
 sidecars, manifests, pair IDs, titles, URLs, or labels to Git.

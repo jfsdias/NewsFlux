@@ -35,6 +35,10 @@ SEARCH_PRUNE_FIELDS = (
     "prune_bucket_capacity", "prune_component_limit", "prune_chain_bridge",
     "prune_source_cap", "prune_dev_infeasible", "prune_other",
 )
+COMPONENT_PRUNE_FIELDS = (
+    "prune_bucket_capacity", "prune_component_requirement", "prune_article_overlap",
+    "prune_source_cap", "prune_category_cap", "prune_dev_capacity", "prune_other",
+)
 
 HUMAN_REVIEW_COLUMNS = (
     "annotation_id",
@@ -1074,14 +1078,30 @@ def build_freeze_v2_artifacts(
     ):
         raise ValueError("EXACT_QUOTA_GATE=FAIL")
     search = result.get("search")
-    if (
-        not isinstance(search, dict)
-        or search.get("status") != "FEASIBLE"
-        or search.get("search_complete") is not True
-        or not valid_search_certificate(search.get("certificate"), search.get("node_limit"))
-    ):
+    component_mode = isinstance(search, dict) and search.get("method") == "COMPONENT_FIRST"
+    if component_mode:
+        valid_search = (
+            search.get("status") == "FEASIBLE_WITNESS_FOUND"
+            and search.get("global_optimality_required") is False
+            and search.get("global_optimality_proven") is False
+            and valid_component_search_certificate(search.get("certificate"))
+        )
+    else:
+        valid_search = (
+            isinstance(search, dict) and search.get("status") == "FEASIBLE"
+            and search.get("search_complete") is True
+            and valid_search_certificate(search.get("certificate"), search.get("node_limit"))
+        )
+    if not valid_search:
         raise ValueError("SEARCH_CERTIFICATE_GATE=FAIL")
     groups = result["chain_groups"]
+    if component_mode:
+        from component_search import validate_witness
+        independent = validate_witness(
+            blind, dev, gold_pair_keys=result["gold_pair_keys"],
+            gold_article_ids=result["gold_article_ids"],
+        )
+        groups = independent["chain_groups"]
     validate_dataset_isolation(dev, blind, result["gold_article_ids"], result["gold_pair_keys"])
     validate_source_diversity(dev)
     validate_source_diversity(blind)
@@ -1112,13 +1132,24 @@ def build_freeze_v2_artifacts(
         "blind_component_diversity_gate": "PASS",
         "category_diversity_gate": "PASS",
         "exact_quota_gate": "PASS",
-        "search_algorithm": "DETERMINISTIC_JOINT_BRANCH_AND_BOUND",
+        "search_algorithm": "COMPONENT_FIRST_FEASIBLE_WITNESS" if component_mode else "DETERMINISTIC_JOINT_BRANCH_AND_BOUND",
         "search_status": search["status"],
         "search_complete": search["search_complete"],
         "search_certificate": search["certificate"],
         "search_node_limit": search["node_limit"],
         "search_objective": search.get("objective"),
     })
+    if component_mode:
+        freeze.update({
+            "search_method": "COMPONENT_FIRST", "feasible_witness_found": True,
+            "global_optimality_required": False, "global_optimality_proven": False,
+            "independent_validator": "PASS",
+            "search_solver": search.get("solver"), "search_solver_version": search.get("solver_version"),
+            "search_restart_count": search.get("restarts"),
+            "search_witness_restart_index": search.get("witness_restart_index"),
+            "search_solver_seconds": search.get("solver_seconds"),
+            "search_motif_inventory": search.get("inventory"),
+        })
     freeze["dev_blind_pair_overlap"] = len(
         {row["pair_key"] for row in dev} & {row["pair_key"] for row in blind}
     )
@@ -1232,12 +1263,24 @@ def verify_freeze_artifacts(
             raise ValueError("FREEZE_V2_SUPERSESSION_REASON_GATE=FAIL")
         if freeze.get("human_labels_at_supersession") != 0:
             raise ValueError("FREEZE_V2_LABEL_COUNT_GATE=FAIL")
-        if (
-            freeze.get("search_algorithm") != "DETERMINISTIC_JOINT_BRANCH_AND_BOUND"
-            or freeze.get("search_status") != "FEASIBLE"
-            or freeze.get("search_complete") is not True
-            or not valid_search_certificate(freeze.get("search_certificate"), freeze.get("search_node_limit"))
-        ):
+        if freeze.get("search_method") == "COMPONENT_FIRST":
+            valid_certificate = (
+                freeze.get("search_algorithm") == "COMPONENT_FIRST_FEASIBLE_WITNESS"
+                and freeze.get("search_status") == "FEASIBLE_WITNESS_FOUND"
+                and freeze.get("feasible_witness_found") is True
+                and freeze.get("global_optimality_required") is False
+                and freeze.get("global_optimality_proven") is False
+                and freeze.get("independent_validator") == "PASS"
+                and valid_component_search_certificate(freeze.get("search_certificate"))
+            )
+        else:
+            valid_certificate = (
+                freeze.get("search_algorithm") == "DETERMINISTIC_JOINT_BRANCH_AND_BOUND"
+                and freeze.get("search_status") == "FEASIBLE"
+                and freeze.get("search_complete") is True
+                and valid_search_certificate(freeze.get("search_certificate"), freeze.get("search_node_limit"))
+            )
+        if not valid_certificate:
             raise ValueError("FREEZE_V2_SEARCH_CERTIFICATE_GATE=FAIL")
         blind_rows = _pack_pair_rows(base / f"blind/annotation-pack-{version}.csv")
         blind_sidecar = json.loads((base / f"blind/audit-sidecar-{version}.json").read_text(encoding="utf-8"))
@@ -1282,6 +1325,15 @@ def valid_search_certificate(certificate: Any, node_limit: Any) -> bool:
         certificate["nodes_explored"] <= node_limit
         and certificate["nodes_pruned"] == sum(certificate[key] for key in SEARCH_PRUNE_FIELDS)
     )
+
+
+def valid_component_search_certificate(certificate: Any) -> bool:
+    required = ("nodes_explored", "nodes_pruned", *COMPONENT_PRUNE_FIELDS)
+    if not isinstance(certificate, dict):
+        return False
+    if any(type(certificate.get(key)) is not int or certificate[key] < 0 for key in required):
+        return False
+    return certificate["nodes_pruned"] == sum(certificate[key] for key in COMPONENT_PRUNE_FIELDS)
 
 
 def _pair_articles(pair_key: str) -> tuple[int, int]:

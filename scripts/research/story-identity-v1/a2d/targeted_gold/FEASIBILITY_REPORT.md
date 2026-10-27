@@ -173,3 +173,36 @@ constraints are infeasible. `PACK_FREEZE_V2=NO`; no V2 pack, sidecar, manifest,
 or label was written. The next research step is a search-method review, not a
 fresh-corpus requirement. The prior 8–24h coverage gap remains a non-blocking
 residual and was not forced into the sample.
+
+## R3 — component-first witness search
+
+R3 builds a bounded motif library from the same label-blind candidate pool.
+Singletons represent independent edges; chain motifs are connected expansions
+of rank-eligible two-edge seeds, capped at eight edges and eight articles.
+Motifs selected together must be article-disjoint. The MILP formulation applies
+exact bucket, source, category, and component constraints; deterministic
+forward DEV-capacity cuts exclude blocking prefixes. A separate validator must
+recompute the hard gates from any witness. Global optimality is not required.
+
+| Motif inventory                              |  Count |
+| -------------------------------------------- | -----: |
+| Singleton motifs                             |  1,003 |
+| Chain seeds                                  |    425 |
+| Chain-component motifs                       | 10,522 |
+| Distinct bucket vectors                      |    324 |
+| Maximum motifs per chain seed                |     25 |
+| Resource-equivalent dominated motifs removed |      3 |
+
+The search used the already available `scipy.optimize.milp` (SciPy `1.18.1`),
+four deterministic expansion variants per seed, and three restart orderings.
+Each solver call had a 1,000-node and 20-second limit. All three calls reported
+the **bounded motif library** infeasible at presolve, with zero branch nodes
+reported. Solver-internal prune counts are not exposed; no external DEV cut was
+needed. No complete BLIND or DEV witness was returned.
+
+`SEARCH_STATUS=COMPONENT_SEARCH_LIMIT_REACHED`: the library is deliberately
+bounded, so infeasibility of that library is not proof that the frozen corpus
+or full set of connected components is infeasible. `PACK_FREEZE_V2=NO`; no V2
+pack, manifest, or human label was written. Global optimality was not required
+or established. A search-method review is the next step; fresh corpus is not
+established as necessary.
