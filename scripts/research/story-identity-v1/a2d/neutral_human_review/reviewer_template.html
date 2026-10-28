@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Story review</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font:
+          16px system-ui,
+          sans-serif;
+      }
+      body {
+        max-width: 880px;
+        margin: auto;
+        padding: 1rem;
+        line-height: 1.5;
+      }
+      article {
+        border: 1px solid #888;
+        border-radius: 0.6rem;
+        padding: 1rem;
+        margin: 1rem 0;
+      }
+      button,
+      input {
+        font: inherit;
+        padding: 0.6rem;
+        margin: 0.25rem;
+      }
+      button {
+        cursor: pointer;
+      }
+      button[aria-pressed="true"] {
+        outline: 3px solid #517ee0;
+      }
+      .controls,
+      .nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.3rem;
+      }
+      .overview {
+        display: flex;
+        flex-wrap: wrap;
+      }
+      .overview button {
+        font-size: 0.85rem;
+      }
+      #message {
+        min-height: 1.5em;
+      }
+      small {
+        opacity: 0.8;
+      }
+      h2,
+      h3 {
+        margin: 0.5rem 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Story review</h1>
+    <p>
+      Compare the two articles using the <a href="REVIEW_GUIDE.md">review guide</a>. No answer is
+      selected for you.
+    </p>
+    <p id="progress" aria-live="polite"></p>
+    <h2 id="position"></h2>
+    <div id="cards"></div>
+    <fieldset>
+      <legend>Choose one decision</legend>
+      <div class="controls" id="decisions"></div>
+    </fieldset>
+    <div class="nav">
+      <button id="prev">Previous</button><button id="next">Next</button
+      ><button id="first">First unanswered</button>
+    </div>
+    <h2>Overview</h2>
+    <div id="overview" class="overview"></div>
+    <h2>Save and restore</h2>
+    <button id="export" disabled>Export completed CSV</button
+    ><button id="checkpoint">Export checkpoint</button
+    ><label
+      >Import completed review or checkpoint
+      <input id="import" type="file" accept=".csv,text/csv" /></label
+    ><button id="clear">Clear all decisions</button>
+    <p id="message" role="status"></p>
+    <script>
+      "use strict"
+      const rows = __DATA__
+      const storageKey = "__STORAGE__"
+      const labels = ["SAME_EVENT", "RELATED_TOPIC", "DIFFERENT_EVENT", "UNCERTAIN"]
+      const columns = [
+        "annotation_id",
+        "feed_a",
+        "feed_b",
+        "title_a",
+        "title_b",
+        "published_at_a",
+        "published_at_b",
+        "label_options",
+        "human_decision",
+      ]
+      let index = 0,
+        decisions = {}
+      try {
+        const saved = JSON.parse(localStorage.getItem(storageKey) || "{}")
+        if (saved && typeof saved === "object" && !Array.isArray(saved))
+          for (const [id, value] of Object.entries(saved))
+            if (rows.some((r) => r.annotation_id === id) && labels.includes(value))
+              decisions[id] = value
+      } catch (_) {}
+      const el = (id) => document.getElementById(id)
+      const text = (tag, value) => {
+        const n = document.createElement(tag)
+        n.textContent = value
+        return n
+      }
+      function persist() {
+        localStorage.setItem(storageKey, JSON.stringify(decisions))
+      }
+      function render() {
+        const r = rows[index],
+          count = Object.keys(decisions).length
+        el("progress").textContent =
+          `Reviewed ${count} / 40 · Remaining ${40 - count} · ${Math.round((count * 100) / 40)}%`
+        el("position").textContent = `${r.annotation_id} · Pair ${index + 1} of 40`
+        const cards = el("cards")
+        cards.replaceChildren()
+        for (const side of ["a", "b"]) {
+          const card = document.createElement("article")
+          card.append(
+            text("h3", `Article ${side.toUpperCase()}`),
+            text("p", r["feed_" + side]),
+            text("p", r["title_" + side]),
+            text("small", r["published_at_" + side]),
+          )
+          cards.append(card)
+        }
+        const box = el("decisions")
+        box.replaceChildren()
+        labels.forEach((label, i) => {
+          const b = text("button", `${i + 1} · ${label}`)
+          b.type = "button"
+          b.setAttribute("aria-pressed", String(decisions[r.annotation_id] === label))
+          b.addEventListener("click", () => choose(label))
+          box.append(b)
+        })
+        const list = el("overview")
+        list.replaceChildren()
+        rows.forEach((item, i) => {
+          const b = text(
+            "button",
+            `${item.annotation_id} · ${decisions[item.annotation_id] ? "answered" : "unanswered"}`,
+          )
+          b.type = "button"
+          b.addEventListener("click", () => {
+            index = i
+            render()
+          })
+          list.append(b)
+        })
+        el("prev").disabled = index === 0
+        el("next").disabled = index === 39
+        el("export").disabled = count !== 40
+      }
+      function choose(label) {
+        decisions[rows[index].annotation_id] = label
+        persist()
+        render()
+      }
+      function next() {
+        if (index < 39) {
+          index++
+          render()
+        }
+      }
+      function prev() {
+        if (index > 0) {
+          index--
+          render()
+        }
+      }
+      el("next").addEventListener("click", next)
+      el("prev").addEventListener("click", prev)
+      el("first").addEventListener("click", () => {
+        const found = rows.findIndex((r) => !decisions[r.annotation_id])
+        if (found >= 0) {
+          index = found
+          render()
+        } else el("message").textContent = "All pairs are answered."
+      })
+      document.addEventListener("keydown", (e) => {
+        if (e.target.matches("input,textarea,select") || e.altKey || e.ctrlKey || e.metaKey) return
+        if (labels[Number(e.key) - 1] && /^[1-4]$/.test(e.key)) {
+          e.preventDefault()
+          choose(labels[Number(e.key) - 1])
+        } else if (e.key === "ArrowLeft") {
+          e.preventDefault()
+          prev()
+        } else if (e.key === "ArrowRight") {
+          e.preventDefault()
+          next()
+        }
+      })
+      function quote(v) {
+        return '"' + String(v).replaceAll('"', '""') + '"'
+      }
+      function exportCsv(completed) {
+        if (completed && Object.keys(decisions).length !== 40) {
+          el("message").textContent = "Complete all 40 decisions before export."
+          return
+        }
+        const lines = [columns.map(quote).join(",")]
+        for (const r of rows)
+          lines.push(
+            columns
+              .map((k) => quote(k === "human_decision" ? decisions[r.annotation_id] || "" : r[k]))
+              .join(","),
+          )
+        const blob = new Blob([lines.join("\n") + "\n"], { type: "text/csv;charset=utf-8" })
+        const url = URL.createObjectURL(blob),
+          a = document.createElement("a")
+        a.href = url
+        a.download = completed ? "story02-d2b-human-completed.csv" : "story02-d2b-checkpoint.csv"
+        a.click()
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
+      }
+      el("export").addEventListener("click", () => exportCsv(true))
+      el("checkpoint").addEventListener("click", () => exportCsv(false))
+      function parseCsv(value) {
+        const out = []
+        let row = [],
+          cell = "",
+          quoted = false
+        for (let i = 0; i < value.length; i++) {
+          const c = value[i]
+          if (quoted) {
+            if (c === '"' && value[i + 1] === '"') {
+              cell += '"'
+              i++
+            } else if (c === '"') quoted = false
+            else cell += c
+          } else if (c === '"') {
+            if (cell) throw Error("Invalid CSV")
+            quoted = true
+          } else if (c === ",") {
+            row.push(cell)
+            cell = ""
+          } else if (c === "\n") {
+            row.push(cell.replace(/\r$/, ""))
+            out.push(row)
+            row = []
+            cell = ""
+          } else cell += c
+        }
+        if (quoted) throw Error("Invalid CSV")
+        if (cell || row.length) {
+          row.push(cell.replace(/\r$/, ""))
+          out.push(row)
+        }
+        return out
+      }
+      function importCsv(value) {
+        const parsed = parseCsv(value)
+        if (JSON.stringify(parsed.shift()) !== JSON.stringify(columns))
+          throw Error("Columns do not match")
+        if (parsed.length > 40) throw Error("Too many rows")
+        const seen = new Set(),
+          nextState = {}
+        for (const fields of parsed) {
+          if (fields.length !== columns.length) throw Error("Invalid row")
+          const item = Object.fromEntries(columns.map((k, i) => [k, fields[i]]))
+          const expected = rows.find((r) => r.annotation_id === item.annotation_id)
+          if (!expected || seen.has(item.annotation_id)) throw Error("Unknown or duplicate ID")
+          seen.add(item.annotation_id)
+          for (const k of columns.filter((k) => k !== "human_decision"))
+            if (item[k] !== expected[k]) throw Error("Article metadata differs")
+          if (item.human_decision && !labels.includes(item.human_decision))
+            throw Error("Invalid decision")
+          if (item.human_decision) nextState[item.annotation_id] = item.human_decision
+        }
+        decisions = nextState
+        persist()
+        render()
+      }
+      el("import").addEventListener("change", async (e) => {
+        try {
+          if (e.target.files[0]) {
+            importCsv(await e.target.files[0].text())
+            el("message").textContent = "Review restored."
+          }
+        } catch (err) {
+          el("message").textContent = "Import rejected: " + err.message
+        }
+        e.target.value = ""
+      })
+      el("clear").addEventListener("click", () => {
+        if (
+          confirm(
+            "Clear all 40 saved decisions? This cannot be undone unless you exported a checkpoint.",
+          )
+        ) {
+          decisions = {}
+          persist()
+          render()
+        }
+      })
+      render()
+    </script>
+  </body>
+</html>
