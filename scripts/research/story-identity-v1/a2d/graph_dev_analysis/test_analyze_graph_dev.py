@@ -73,3 +73,20 @@ class AnalysisTests(unittest.TestCase):
     def test_independent_rejects_bad_primary_gate(self):
         labs,side=self.fixture();rows=a.join(labs,side);x=a.analyze(rows);x['graph_dev_strict_positive_recovery_gate']='PASS'
         with self.assertRaises(ValueError):a.validate_analysis(rows,labs,side,x)
+
+    def test_pinned_inputs_manifest_and_old_aggregate(self):
+        import json,tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);old=root/'old';old.mkdir();d2c=root/'d2c';d2c.mkdir()
+            report=old/'DEV_ANALYSIS_REPORT.md';report.write_text('0 SAME_EVENT, 1 RELATED_TOPIC, 79 DIFFERENT_EVENT and 0 UNCERTAIN')
+            protocol=old/'DEV_ANALYSIS_PROTOCOL.md';protocol.write_text('at least eight SAME_EVENT, eight RELATED_TOPIC, 60 non-UNCERTAIN records')
+            manifest=d2c/'graph-human-label-ingestion-manifest-v1.json';state={'annotation_state':'ANNOTATED_INGESTED_FROZEN','analysis_state':'NOT_RUN','human_label_source':'MANUAL_HUMAN_REVIEW','agent_generated_labels':0,'row_count':40};manifest.write_text(json.dumps(state));manifest.chmod(0o444)
+            blobs={protocol.read_bytes():'d47e44013456c2252afa22d81afb0e282d8d23a4',report.read_bytes():'35d5ae17746771c139905d09a7854ce54debe7c6'};hashes={manifest:a.sha(manifest.read_bytes())}
+            with patch.object(a,'OLD',old),patch.object(a,'D2C',d2c),patch.object(a,'HASHES',hashes),patch.object(a,'gitblob',side_effect=lambda b:blobs[b]):
+                a.verify_inputs()
+                manifest.chmod(0o644);state['analysis_state']='ALREADY_RUN';manifest.write_text(json.dumps(state));manifest.chmod(0o444);hashes[manifest]=a.sha(manifest.read_bytes())
+                with self.assertRaisesRegex(ValueError,'ingestion state'):a.verify_inputs()
+                hashes[manifest]='0'*64
+                with self.assertRaisesRegex(ValueError,'input integrity'):a.verify_inputs()
