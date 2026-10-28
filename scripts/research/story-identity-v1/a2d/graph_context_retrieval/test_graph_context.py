@@ -247,7 +247,7 @@ class AuditTests(unittest.TestCase):
 
     def test_freeze_before_label_gate(self):
         with tempfile.TemporaryDirectory() as d:
-            root=Path(d); data=b'{"x":1}\n'
+            root=Path(d); data=b'{\"x\":1}\n'
             frozen=root/'context.json'
             with self.assertRaises(ValueError): a.require_frozen_match(frozen,data)
             a.freeze_bytes(frozen,data)
