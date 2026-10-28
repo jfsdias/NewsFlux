@@ -2,7 +2,7 @@
 from __future__ import annotations
 import csv,hashlib,json,os,sys
 from collections import Counter
-from datetime import datetime
+from datetime import datetime,timezone
 from pathlib import Path
 import graph_context as g
 
@@ -85,6 +85,14 @@ def historical_vectors():
  if len(set(matches))!=1:raise ValueError("historical vectors unresolved; set NEWSFLUX_HISTORICAL_VECTORS")
  return matches[0]
 def ts(x):
+ try:
+  value=float(x)
+ except (ValueError,TypeError):
+  value=None
+ if value is not None:
+  import math
+  if not math.isfinite(value):raise ValueError("timestamp must be finite")
+  return value
  d=datetime.fromisoformat(str(x).replace("Z","+00:00"))
  if d.tzinfo is None:raise ValueError("timestamp timezone")
  return d.timestamp()
@@ -100,7 +108,7 @@ def historical_features():
  for key in keys:
   ai,bi=map(int,key.split(":"));a,b=corpus[ai],corpus[bi];ta,tb=ts(a["published_at"]),ts(b["published_at"])
   inp={"id_a":str(ai),"id_b":str(bi),"feed_id_a":str(a["feed_id"]),"feed_id_b":str(b["feed_id"]),"title_a":a["title"],"title_b":b["title"],"feed_a":a.get("feed_title") or "","feed_b":b.get("feed_title") or "","published_at_a":str(ta),"published_at_b":str(tb),"qwen_score":"0"}; f=FeatureExtractor.extract_features(inp,corpus_lookup=corpus)
-  out.append({"pair_key":key,"article_a_id":ai,"article_b_id":bi,"feed_a_id":a["feed_id"],"feed_b_id":b["feed_id"],"category_a":str(a.get("category_id","")),"category_b":str(b.get("category_id","")),"published_at_a":a["published_at"],"published_at_b":b["published_at"],"qwen_score":cosine(vec[ai],vec[bi]),"lexical_overlap":f["title_overlap_coefficient"],"temporal_delta_hours":f["published_delta_hours"],"entity_anchor_overlap":f["entity_anchor_overlap"],"number_overlap":f["number_overlap"],"date_overlap":f["date_overlap"]})
+  out.append({"pair_key":key,"article_a_id":ai,"article_b_id":bi,"feed_a_id":a["feed_id"],"feed_b_id":b["feed_id"],"category_a":str(a.get("category_id","")),"category_b":str(b.get("category_id","")),"published_at_a":datetime.fromtimestamp(ta,timezone.utc).isoformat(),"published_at_b":datetime.fromtimestamp(tb,timezone.utc).isoformat(),"qwen_score":cosine(vec[ai],vec[bi]),"lexical_overlap":f["title_overlap_coefficient"],"temporal_delta_hours":f["published_delta_hours"],"entity_anchor_overlap":f["entity_anchor_overlap"],"number_overlap":f["number_overlap"],"date_overlap":f["date_overlap"]})
  return out
 
 def gold_rows(rows=None):
@@ -144,9 +152,12 @@ def old_dev_context(all_rows,excluded,labels):
   out.append(m)
  return out
 
+def validate_context_counts(fresh_source_count,historical_source_count,historical_context_count):
+ if fresh_source_count!=33135 or historical_source_count!=18953 or not 0<=historical_context_count<=historical_source_count:raise ValueError("context count")
+
 def derive_context():
- verify([FRESH_CORPUS,FEATURES,P2_MANIFEST,DEV_PACK,BLIND_PACK,INGEST,HCORPUS,HPAIRS]);bridge_gate();ingestion_gate();exc=exclusions();fresh=g.materialize_graph_context(load_jsonl(FEATURES),exc);hist=g.materialize_graph_context(historical_features(),set())
- if len(load_jsonl(FEATURES))!=33135 or len(hist)!=18953:raise ValueError("context count")
+ verify([FRESH_CORPUS,FEATURES,P2_MANIFEST,DEV_PACK,BLIND_PACK,INGEST,HCORPUS,HPAIRS]);bridge_gate();ingestion_gate();exc=exclusions();fresh_source=load_jsonl(FEATURES);historical_source=historical_features();fresh=g.materialize_graph_context(fresh_source,exc);hist=g.materialize_graph_context(historical_source,set())
+ validate_context_counts(len(fresh_source),len(historical_source),len(hist))
  return exc,fresh,hist
 
 def audit(fresh,hist,oldctx,hist_path,catalog_path):
@@ -171,7 +182,7 @@ def run(dest):
   def csvbytes(rows):
    import io
    fields=sorted({k for r in rows for k in r});o=io.StringIO(newline="");w=csv.DictWriter(o,fieldnames=fields,lineterminator="\n");w.writeheader();[w.writerow({k:r.get(k,"") for k in fields}) for r in rows];return o.getvalue().encode()
-  diag=[{"group":name,**r} for name in ("event_diagnostics","near_diagnostics","old_dev_event","old_dev_near","fresh_capacity") for r in a1[name]];dsha=freeze(dest/"graph-strategy-diagnostics-v1.csv",csvbytes(diag));psha=freeze(dest/"graph-pack-feasibility-v1.csv",csvbytes(a1["feasibility"]));public={**a1,"fresh_unused_article_count":500-len(exc),"fresh_eligible_pair_count":len(f1),"graph_strategy_catalog_sha256":csha,"gold_graph_compatibility_gate":"PASS","gold_context_features_frozen_before_label_join":True,"blind_state":"ANNOTATED_SEALED","blind_prelabel_identity_access":"EXCLUSION_ONLY","blind_human_label_access":"NO","blind_label_file_accesses":0,"blind_content_parsed":"NO","blind_evaluation_run":"NO","model_inference_calls":0,"external_ai_calls":0,"new_final_pair_selection":"NO","new_pack_frozen":"NO","new_human_labels":0};asha=freeze(dest/"graph-context-audit-v1.json",g.canonical_json_bytes(public));manifest={"version":"STORY_02_GRAPH_CONTEXT_RETRIEVAL_V1","p2_feature_universe_sha256":HASHES[FEATURES],"fresh_corpus_sha256":HASHES[FRESH_CORPUS],"historical_corpus_sha256":HASHES[HCORPUS],"historical_pair_universe_sha256":HASHES[HPAIRS],"gold_v2_sha256":HASHES[GOLD],"historical_vectors_sha256":HVECS_SHA,"bridge_report_sha256":BRIDGE_SHA,"fresh_graph_context_sha256":fsha,"historical_graph_context_sha256":hsha,"graph_strategy_catalog_sha256":csha,"strategy_diagnostics_sha256":dsha,"pack_feasibility_sha256":psha,"graph_context_audit_sha256":asha,"graph_context_replay_gate":"PASS","gold_context_features_frozen_before_label_join":True,"blind_state":"ANNOTATED_SEALED","blind_human_label_access":"NO","model_inference_calls":0};msha=freeze(dest/"graph-context-manifest-v1.json",g.canonical_json_bytes(manifest));return {**public,**manifest,"graph_context_manifest_sha256":msha}
+  diag=[{"group":name,**r} for name in ("event_diagnostics","near_diagnostics","old_dev_event","old_dev_near","fresh_capacity") for r in a1[name]];dsha=freeze(dest/"graph-strategy-diagnostics-v1.csv",csvbytes(diag));psha=freeze(dest/"graph-pack-feasibility-v1.csv",csvbytes(a1["feasibility"]));public={**a1,"historical_source_pair_count":18953,"historical_graph_context_pair_count":len(h1),"historical_24h_count_semantics_gate":"PASS","fresh_unused_article_count":500-len(exc),"fresh_eligible_pair_count":len(f1),"graph_strategy_catalog_sha256":csha,"gold_graph_compatibility_gate":"PASS","gold_context_features_frozen_before_label_join":True,"blind_state":"ANNOTATED_SEALED","blind_prelabel_identity_access":"EXCLUSION_ONLY","blind_human_label_access":"NO","blind_label_file_accesses":0,"blind_content_parsed":"NO","blind_evaluation_run":"NO","model_inference_calls":0,"external_ai_calls":0,"new_final_pair_selection":"NO","new_pack_frozen":"NO","new_human_labels":0};asha=freeze(dest/"graph-context-audit-v1.json",g.canonical_json_bytes(public));manifest={"version":"STORY_02_GRAPH_CONTEXT_RETRIEVAL_V1","p2_feature_universe_sha256":HASHES[FEATURES],"fresh_corpus_sha256":HASHES[FRESH_CORPUS],"historical_corpus_sha256":HASHES[HCORPUS],"historical_pair_universe_sha256":HASHES[HPAIRS],"gold_v2_sha256":HASHES[GOLD],"historical_vectors_sha256":HVECS_SHA,"bridge_report_sha256":BRIDGE_SHA,"fresh_graph_context_sha256":fsha,"historical_graph_context_sha256":hsha,"graph_strategy_catalog_sha256":csha,"strategy_diagnostics_sha256":dsha,"pack_feasibility_sha256":psha,"graph_context_audit_sha256":asha,"graph_context_replay_gate":"PASS","gold_context_features_frozen_before_label_join":True,"blind_state":"ANNOTATED_SEALED","blind_human_label_access":"NO","model_inference_calls":0};msha=freeze(dest/"graph-context-manifest-v1.json",g.canonical_json_bytes(manifest));return {**public,**manifest,"graph_context_manifest_sha256":msha}
 
 def find_unique_sha(root,expected):
  matches=[p for p in Path(root).rglob("*") if p.is_file() and g.SEALED_BLIND_NAME not in p.name and sha(p)==expected]

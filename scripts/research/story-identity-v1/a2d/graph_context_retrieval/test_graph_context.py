@@ -289,3 +289,15 @@ class AuditTests(unittest.TestCase):
 
 
 if __name__=='__main__': unittest.main()
+
+class HistoricalContextCountRegression(unittest.TestCase):
+    def test_historical_source_and_24h_context_are_distinct(self):
+        a.validate_context_counts(33135, 18953, 5000)
+        for counts in ((33134,18953,5000),(33135,18952,5000),(33135,18953,19000),(33135,18953,-1)):
+            with self.assertRaises(ValueError):
+                a.validate_context_counts(*counts)
+
+class HistoricalTimestampRegression(unittest.TestCase):
+    def test_epoch_and_iso_resolve_to_same_utc_time(self):
+        self.assertEqual(a.ts(1792792334.0), a.ts('2026-10-23T21:52:14+00:00'))
+        self.assertEqual(a.ts('1792792334.0'), a.ts('2026-10-23T21:52:14Z'))
