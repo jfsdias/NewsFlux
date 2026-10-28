@@ -1,0 +1,11 @@
+{
+  "base_main_sha": "4e29bf76d551d463ad553c051da6b87a7a1f1634",
+  "benchmark_run_performed": false,
+  "blind_access_performed": false,
+  "contract_sha256": "9d0b572b40e0c94d67e983676486461c0e6055f04e9fd8475809a35dbb1dafcf",
+  "label_access_performed": false,
+  "model_inference_performed": false,
+  "publisher_fetch_performed": false,
+  "scope": "DESIGN_ONLY",
+  "version": "STORY_02_D2F_BENCHMARK_DESIGN_MANIFEST_V1"
+}
