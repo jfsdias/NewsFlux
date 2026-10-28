@@ -4,6 +4,14 @@ Canonical audit completed with immutable private inputs and no model inference. 
 
 Historical feature and fresh feature derivations were repeated byte-for-byte, and both historical context and strategy catalog were frozen before Gold label parsing. The functional bridge verifies 200/200 historical vectors, 18,953 exact scores and Spearman 1.0. An additional comparison with the historical CSV matched all 18,953 stored scores after rounding to its eight decimal places; the maximum unrounded difference was approximately 5e-9. BLIND human labels remained sealed and unread.
 
+## R2A coverage evidence
+
+The original R2 run correctly measured the observed intersections, but its compatibility gate did not prove full Gold coverage. R2A adds that proof without changing the strategy catalog, graph features, or scientific results. All 233 distinct Gold pairs occur in both the historical source and historical graph context; all 153 Gold articles occur in Home-200 (200 articles). The coverage validator runs before family and strategy diagnostics. The immutable private receipt contains only aggregate counts and hashes of the identity sets.
+
+Historical vector/score compatibility, Gold pair coverage, and Gold article containment are independent gates. Gold containment in Home-200 supports a future transitive isolation proof using a fresh corpus independently verified disjoint from Home-200.
+
+R2A receipt SHA-256: `dc1eecd8b8ddf502ef3f2aa22ec7a23e2e6597f419f85ae80253f15f0cd966f3`.
+
 ## Historical Gold strategy diagnostics
 
 Gold contains 10 SAME_EVENT connected families. Counts are challenge-set diagnostics, not population or production performance estimates.
@@ -74,5 +82,5 @@ Existing DEV is a stratified challenge set with no SAME_EVENT labels, so absence
 - graph_strategy_catalog_sha256: `70dd2bcb55bbd36a9bf4327ef8bd3c980e5a10b9a5f4af0ade4e12472f2b8a9c`
 - strategy_diagnostics_sha256: `9214b1c5aecc308fae8d06344b291a20aedd77cb00786d0b439df16893fbeb35`
 - pack_feasibility_sha256: `42ab2a1d611183bf7a96d5873cfdff55b7dedc11a979e2277a249a5bc55ac815`
-- graph_context_audit_sha256: `5a6065abd3924a439a8d595370b490c24658085b60117286b48aaae2de9acdf4`
-- graph_context_manifest_sha256: `e9e044da24c8aecb6d5da289aa4fafebf6eb1f92efdaa7698709b6fd29a2f046`
+- graph_context_audit_sha256 (R2A): `2358b4f51c6b71f9cc5b0f36f0e662a46588812250cd8dba4970a5ca33892e8d`
+- graph_context_manifest_sha256 (R2A): `429c4c06b6c57ca52f2ea6d5cab707aadcdf2b95b8027ff2950943e054d901fb`

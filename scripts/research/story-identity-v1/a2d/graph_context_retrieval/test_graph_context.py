@@ -301,3 +301,30 @@ class HistoricalTimestampRegression(unittest.TestCase):
     def test_epoch_and_iso_resolve_to_same_utc_time(self):
         self.assertEqual(a.ts(1792792334.0), a.ts('2026-10-23T21:52:14+00:00'))
         self.assertEqual(a.ts('1792792334.0'), a.ts('2026-10-23T21:52:14Z'))
+
+class GoldCoverageRegression(unittest.TestCase):
+    def fixtures(self):
+        keys=[f'{1+i//152}:{2+i%152}' for i in range(233)]
+        ids={int(x) for k in keys for x in k.split(':')}
+        return keys,ids,set(range(1,201)),set(keys) | {f"{1000+i}:999999" for i in range(18953-len(keys))},set(keys)
+
+    def test_complete_coverage(self):
+        result=a.validate_gold_graph_coverage(*self.fixtures())
+        self.assertEqual(result['gold_graph_compatibility_gate'],'PASS')
+        self.assertEqual(result['gold_article_count'],153)
+
+    def test_missing_source_context_and_article_rejected(self):
+        keys,ids,home,source,ctx=self.fixtures()
+        for args in ((keys,ids,home,source-{keys[0]},ctx),(keys,ids,home,source,ctx-{keys[0]}),(keys,ids,home-{1},source,ctx),(keys[:-1]+keys[:1],ids,home,source,ctx),(keys,ids-{1},home,source,ctx)):
+            with self.assertRaises(ValueError): a.validate_gold_graph_coverage(*args)
+
+    def test_set_digests_are_order_independent(self):
+        keys,ids,*_=self.fixtures()
+        self.assertEqual(a.identity_digest(keys),a.identity_digest(reversed(keys)))
+        self.assertEqual(a.identity_digest(ids),a.identity_digest(reversed(sorted(ids))))
+
+    def test_failed_coverage_prevents_diagnostics(self):
+        from unittest.mock import patch
+        with patch.object(a,'frozen'),patch.object(a,'verify'),patch.object(a,'gold_rows',return_value=[{'pair_key':'1:2','human_decision':'SAME_EVENT'}]),patch.object(a,'validate_gold_graph_coverage',side_effect=ValueError('coverage'),create=True),patch.object(a,'diagnostic') as diag,patch.object(g,'same_event_families') as fam:
+            with self.assertRaises(ValueError): a.audit([],[],[], 'hist','catalog')
+            diag.assert_not_called();fam.assert_not_called()
