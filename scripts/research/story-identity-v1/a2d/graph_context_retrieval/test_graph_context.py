@@ -59,7 +59,7 @@ class GraphFeatureTests(unittest.TestCase):
             row('1:2',1,2,10,20,q=.40,hours=2),
             row('1:3',1,3,10,30,q=.50,hours=2),
             row('2:3',2,3,20,30,q=.50,hours=2),
-            row('1:4',1,4,10,10,q=.50,hours=2),
+            row('1:4',1,4,10,10,q=.50,hours=2),  # same feed as A: cannot support pair 1:2
             row('2:4',2,4,20,10,q=.50,hours=2),
         ]
         ctx = g.materialize_graph_context(rows, excluded_articles=set())
@@ -148,6 +148,7 @@ class GraphFeatureTests(unittest.TestCase):
 
     def test_pack_feasibility_exact_quota_and_no_spillover(self):
         rows=[]
+        # 4 event, 3 near, 3 control, all article disjoint, unique source pairs.
         for i in range(4):
             r=row(f'{2*i+1}:{2*i+2}',2*i+1,2*i+2,100+2*i,101+2*i,q=.6,hours=1)
             r.update(reciprocal_rank_max=1,shared_support_feed_count=1,common_top10_count=1)
@@ -206,7 +207,7 @@ class AuditTests(unittest.TestCase):
         good = (
             '# Story 02 V2 historical functional bridge\n\n'
             'The prospective pinned contract produced 200 vectors with 1,024 dimensions. '
-            'All 200 matched their corresponding stored historical vector values exactly. '
+            'All 200 matched their corresponding stored historical vector values exactly. '\
             'Minimum cosine was `0.9999999999999998`; median cosine was `1.0`; '
             'the maximum and p99 absolute component errors were `0.0`.\n\n'
             'For 18,953 historical cross-feed pairs, all cosine-score differences were `0.0` '
