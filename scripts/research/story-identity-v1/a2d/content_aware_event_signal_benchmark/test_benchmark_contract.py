@@ -64,6 +64,10 @@ class ContractTests(unittest.TestCase):
             value=copy.deepcopy(self.contract);value[key]=[]
             with self.subTest(key=key),self.assertRaises(ValueError):validator.validate(value)
 
+    def test_baseline_references_are_pinned(self):
+        value=copy.deepcopy(self.contract);value['baseline_references']['spec_git_blob']='0'*40
+        with self.assertRaises(ValueError):validator.validate(value)
+
     def test_pair_universe_frozen(self):
         value=copy.deepcopy(self.contract);value['pair_universe_policy']['artifact_sha256']='0'*64
         with self.assertRaises(ValueError):validator.validate(value)

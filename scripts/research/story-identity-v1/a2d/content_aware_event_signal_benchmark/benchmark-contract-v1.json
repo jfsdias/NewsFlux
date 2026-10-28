@@ -3,12 +3,15 @@
   "baseline_references": {
     "current": "FROZEN_TITLE_ONLY_QWEN_FEATURE_REFERENCE_NOT_PRODUCTION_POLICY",
     "event_identity_redesign": "scripts/research/story-identity-v1/a2d/event_identity_signal_redesign/SIGNAL_CANDIDATE_SPEC_V2.md",
+    "event_identity_redesign_git_blob": "890260b3305a5882b820b8ed55cfea35d939e649",
     "feature_pipeline": "scripts/research/story-identity-v1/a2d/fresh_feature_v2/FEATURE_PIPELINE_V2.md",
+    "feature_pipeline_git_blob": "67f65e0dc1cdc9b7609d60e93f61ce9bf9d091c2",
     "model": "qwen3-embedding:0.6b",
     "model_blob_sha256": "06507c7b42688469c4e7298b0a1e16deff06caf291cf0a5b278c308249c3e439",
     "model_manifest_digest": "ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50eb581914a15621d",
     "same_pair_comparison": true,
     "spec": "scripts/research/story-identity-v1/a2d/CANDIDATE_SPEC_V1.md",
+    "spec_git_blob": "6af88bfd4d54e67e8f844832ceeb3368051482d5",
     "threshold": "NO_FINAL_THRESHOLD_FROZEN; PM_APPROVAL_REQUIRED"
   },
   "benchmark_run_performed": false,
@@ -146,7 +149,8 @@
     "CONTENT_AVAILABILITY_COVERAGE",
     "PAIRED_BASELINE_COMPARISON",
     "COMPONENT_BOOTSTRAP_CI",
-    "STRATUM_DIAGNOSTICS"
+    "STRATUM_DIAGNOSTICS",
+    "F0_5_HISTORICAL_REFERENCE"
   ],
   "missing_content_policy": {
     "article_denominator": 500,

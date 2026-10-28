@@ -53,7 +53,8 @@ def validate(c):
         require(c['source_semantics']=='MINIFLUX_STORED_ENTRY_STATE_AT_RETRIEVAL' and c['publisher_policy']=='HOLD' and c['production_policy']=='NOT_FROZEN')
         require(c['privacy']['external_article_data'] is False and c['model_policy']['local_processing'] is True and c['model_policy']['model_download_authorized'] is False and c['model_policy']['model_selection_final'] is False)
         gates=c['next_authorization_gate']; require(all(gates[k] is True for k in ('pm_authorization_required','label_access_requires_separate_approval','model_execution_requires_separate_approval','numeric_acceptance_thresholds_require_pm_approval','fresh_positive_evidence_required')))
-        require(c['baseline_references']['same_pair_comparison'] is True)
+        ref=c['baseline_references']; require(ref['same_pair_comparison'] is True)
+        require(ref['spec_git_blob']=='6af88bfd4d54e67e8f844832ceeb3368051482d5' and ref['feature_pipeline_git_blob']=='67f65e0dc1cdc9b7609d60e93f61ce9bf9d091c2' and ref['event_identity_redesign_git_blob']=='890260b3305a5882b820b8ed55cfea35d939e649')
     except (KeyError,TypeError,AttributeError):
         raise ValueError('D2F contract schema invalid') from None
 

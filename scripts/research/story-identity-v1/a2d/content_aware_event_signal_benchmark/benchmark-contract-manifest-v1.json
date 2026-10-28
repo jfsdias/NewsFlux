@@ -2,7 +2,7 @@
   "base_main_sha": "4e29bf76d551d463ad553c051da6b87a7a1f1634",
   "benchmark_run_performed": false,
   "blind_access_performed": false,
-  "contract_sha256": "9d0b572b40e0c94d67e983676486461c0e6055f04e9fd8475809a35dbb1dafcf",
+  "contract_sha256": "adb4c5a670acab6292fce2c12343fc9bf8e40dc2ab365cda1cec06646c2f4317",
   "label_access_performed": false,
   "model_inference_performed": false,
   "publisher_fetch_performed": false,
