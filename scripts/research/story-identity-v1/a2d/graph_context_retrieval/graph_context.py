@@ -380,9 +380,11 @@ def pack_feasible(rows, event_strategy, near_strategy, quotas, time_limit=30):
     total = sum(quotas.values())
     constraints = []
 
+    # Exact lane quotas.
     for lane, target in quotas.items():
         constraints.append(({j: 1.0 for j, row in enumerate(classified) if row["selection_lane"] == lane}, float(target), float(target)))
 
+    # Article disjointness.
     groups = defaultdict(dict)
     for j, row in enumerate(classified):
         for side in ("a", "b"):
@@ -408,6 +410,7 @@ def pack_feasible(rows, event_strategy, near_strategy, quotas, time_limit=30):
         for j,value in coeff.items():
             rr.append(i); cc.append(j); vv.append(value)
     mat = coo_matrix((np.asarray(vv,dtype=float),(np.asarray(rr,dtype="int32"),np.asarray(cc,dtype="int32"))),shape=(len(constraints),len(classified))).tocsc()
+    # Tiny deterministic lexicographic tie-breaker; feasibility only.
     objective = np.arange(1, len(classified)+1, dtype=float) * 1e-12
     result = milp(objective, integrality=np.ones(len(classified)), bounds=Bounds(0,1), constraints=LinearConstraint(mat,np.asarray(lo),np.asarray(hi)), options={"time_limit":time_limit,"presolve":True})
     if result.status == 2:
@@ -423,6 +426,7 @@ def pack_feasible(rows, event_strategy, near_strategy, quotas, time_limit=30):
 def nondominated(configs):
     """Return the multi-objective frontier, retaining infeasible configs as a weaker objective."""
     def dominates(a, b):
+        # maximize same, families, related, feasible; minimize different
         av=(a["same"],a["families"],-a["different"],a["related"],int(bool(a["feasible"])))
         bv=(b["same"],b["families"],-b["different"],b["related"],int(bool(b["feasible"])))
         return all(x>=y for x,y in zip(av,bv)) and any(x>y for x,y in zip(av,bv))
