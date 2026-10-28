@@ -54,9 +54,10 @@ Event strategies are E0-E5 exactly as predeclared in the PM contract. Near-miss 
 4. freeze fresh context, historical context, and strategy catalog read-only;
 5. verify the frozen historical context and catalog again;
 6. only then parse open DEV labels and Gold V2;
-7. derive aggregate diagnostics, capacity, and G40/G48 feasibility twice;
-8. require identical aggregate bytes;
-9. freeze private diagnostics/audit/manifest read-only.
+7. validate all Gold pair identities against the historical source and context, and all Gold article identities against Home-200; fail before family or strategy diagnostics on any missing identity;
+8. derive aggregate diagnostics, capacity, and G40/G48 feasibility twice;
+9. require identical aggregate bytes;
+10. freeze the aggregate Gold coverage receipt, diagnostics, audit, and manifest read-only.
 
 ## Gold diagnostics
 
@@ -106,3 +107,7 @@ PASS recommends `STORY_02_A2D2C_P4_D2A_R3_GRAPH_RETRIEVAL_CONTRACT_FREEZE_AND_SE
 FAIL recommends `STORY_02_A2D2C_P4_D2A_R3_RICHER_EVENT_SIGNAL_DESIGN`.
 
 R2 itself never chooses or freezes the final retrieval configuration.
+
+## Gold identity containment
+
+The coverage receipt records aggregate counts and deterministic hashes of identity sets, without exposing identities. Gold article identities must be a subset of Home-200. A subsequent selection drawn from a fresh corpus independently verified disjoint from Home-200 is therefore also disjoint from Gold, without reading Gold labels during selection.
