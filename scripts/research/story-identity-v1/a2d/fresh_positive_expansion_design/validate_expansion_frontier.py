@@ -67,3 +67,34 @@ def validate(src, candidates, frontier):
         for field, inv in [('pairs','V07_RESIDUAL_UNIVERSE_CONSTRUCTION'),('articles','V07_RESIDUAL_UNIVERSE_CONSTRUCTION'),('components','V20_COMPONENT_CONSTRUCTION'),('largest_component_pairs','V20_COMPONENT_CONSTRUCTION'),('largest_component_share','V20_COMPONENT_CONSTRUCTION'),('matching','V21_MAX_MATCHING_CARDINALITY'),('feed_combinations','V22_FEED_PAIR_AGGREGATES'),('max_feed_share','V22_FEED_PAIR_AGGREGATES'),('category_combinations','V23_CATEGORY_PAIR_AGGREGATES'),('max_category_share','V23_CATEGORY_PAIR_AGGREGATES'),('title_equivalent_pairs','V24_TITLE_EQUIVALENCE_AGGREGATES'),('both_usable_rate','V06_BOTH_ENDPOINTS_USABLE'),('logical_capacity_gate','V25_LOGICAL_COUNT_CLOSURE_GATE')]:
             require(inv, summary[field]==independent[field])
     require('V25_LOGICAL_COUNT_CLOSURE_GATE', frontier['feasible']==any(x['matching']>=5 for x in frontier['strategies'].values()))
+
+
+def validate_input_pins(contract, manifest):
+    """Independently map scientific roles to allowed sources and recompute their hashes."""
+    import hashlib
+    import run_expansion as r
+    roles={
+        'pair_universe':r.F/'p3-crossfeed-24h-pairs.csv',
+        'p2_features':r.P2/'fresh-p3-feature-universe-v1.jsonl',
+        'p2_manifest':r.P2/'feature-p2-manifest-v1.json',
+        'p3_freeze_manifest':r.P3/'freeze-manifest-v1.json',
+        'old_dev_identities':r.P3/'dev/audit-sidecar-v1.json',
+        'blind_identities':r.P3/'blind/audit-sidecar-v1.json',
+        'graph_dev_identities':r.GD/'targeted-dev-graph-sidecar-v1.jsonl',
+        'graph_selection_manifest':r.GD/'targeted-dev-graph-selection-manifest-v1.json',
+        'graph_context_features':r.G/'fresh-graph-context-features-v1.jsonl',
+        'd2e2_capability':r.C/'miniflux-content-capability-v1.jsonl',
+        'd2e2_capability_summary':r.C/'miniflux-content-capability-summary-v1.json',
+        'd2f1_pool':r.POOL/'fresh-positive-candidate-pool-v1.jsonl',
+        'd2f1_capacity_frontier':r.POOL/'fresh-positive-capacity-frontier-v1.json',
+        'd2f1_receipt':r.POOL/'fresh-positive-pool-receipt-v1.json',
+        'd2f1_manifest':r.POOL/'fresh-positive-pool-manifest-v1.json',
+        'd2f2_selected_pack':r.PACK}
+    require('V30_MANIFEST_INPUT_PINS', len(roles)==len(set(roles.values())) and set(roles.values())==set(r.INPUTS))
+    expected={}
+    for role,path in roles.items():
+        require('V02_SOURCE_FILE_MODES',path.stat().st_mode & 0o777 == 0o444)
+        actual=hashlib.sha256(path.read_bytes()).hexdigest()
+        require('V01_SOURCE_HASHES',actual==r.INPUTS[path])
+        expected[role]=actual
+    require('V30_MANIFEST_INPUT_PINS',contract.get('input_sha256')==expected and manifest.get('input_sha256')==expected)

@@ -39,6 +39,28 @@ INPUTS={
  POOL/'fresh-positive-pool-manifest-v1.json':'bb11378dc3e9ef45c48b6049d9964801d3e245076e09d61d1c8455e48018bb61',
  PACK:'a2aea145956d42dca58907cc6f1f84bde16b6a3e21bdde3eb23a48777f160a90'}
 PRE='7e38bb7d06e04402d4f4f7ce24d6a4b248f01e40'
+SOURCE_ROLES={
+ 'pair_universe':F/'p3-crossfeed-24h-pairs.csv',
+ 'p2_features':P2/'fresh-p3-feature-universe-v1.jsonl',
+ 'p2_manifest':P2/'feature-p2-manifest-v1.json',
+ 'p3_freeze_manifest':P3/'freeze-manifest-v1.json',
+ 'old_dev_identities':P3/'dev/audit-sidecar-v1.json',
+ 'blind_identities':P3/'blind/audit-sidecar-v1.json',
+ 'graph_dev_identities':GD/'targeted-dev-graph-sidecar-v1.jsonl',
+ 'graph_selection_manifest':GD/'targeted-dev-graph-selection-manifest-v1.json',
+ 'graph_context_features':G/'fresh-graph-context-features-v1.jsonl',
+ 'd2e2_capability':C/'miniflux-content-capability-v1.jsonl',
+ 'd2e2_capability_summary':C/'miniflux-content-capability-summary-v1.json',
+ 'd2f1_pool':POOL/'fresh-positive-candidate-pool-v1.jsonl',
+ 'd2f1_capacity_frontier':POOL/'fresh-positive-capacity-frontier-v1.json',
+ 'd2f1_receipt':POOL/'fresh-positive-pool-receipt-v1.json',
+ 'd2f1_manifest':POOL/'fresh-positive-pool-manifest-v1.json',
+ 'd2f2_selected_pack':PACK}
+
+def source_pins(roles):
+    if len({str(path) for path,_ in roles.values()})!=len(roles): raise ValueError('duplicate source role path')
+    return {role:sha for role,(_,sha) in roles.items()}
+
 
 def enc(x):return (json.dumps(x,sort_keys=True,separators=(',',':'),allow_nan=False)+'\n').encode()
 def digest(x):return hashlib.sha256(x).hexdigest()
@@ -127,10 +149,10 @@ def main():
     if output.stat().st_mode & 0o077 or output.is_symlink():raise ValueError('unsafe output parent')
     attempt=output/('attempt-'+datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))
     attempt.mkdir(mode=0o700)
-    contract=enc({'version':'D2F6_V1','preregistration_sha':PRE,'design_sha256':digest(contract_data),'input_hashes':{p.name:h for p,h in INPUTS.items()}})
+    contract=enc({'version':'D2F6_V1','preregistration_sha':PRE,'design_sha256':digest(contract_data),'input_sha256':source_pins({role:(path,INPUTS[path]) for role,path in SOURCE_ROLES.items()})})
     receipt=enc({'version':'D2F6_V1','replay':'PASS','independent_validator':'PASS','prior_review_article_overlap':0,'human_label_accesses':0,'d2f5_private_analysis_accesses':0,'network_requests':0,'review_pack_created':False,'model_calls':0,'benchmark_runs':0})
     artifacts={'fresh-positive-expansion-contract-v1.json':contract,'fresh-positive-expansion-candidates-v1.jsonl':data,'fresh-positive-expansion-frontier-v1.json':frontier,'fresh-positive-expansion-receipt-v1.json':receipt}
-    manifest=enc({'version':'D2F6_V1','sha256':{name:digest(value) for name,value in artifacts.items()}})
+    manifest=enc({'version':'D2F6_V1','input_sha256':source_pins({role:(path,INPUTS[path]) for role,path in SOURCE_ROLES.items()}),'sha256':{name:digest(value) for name,value in artifacts.items()}})
     artifacts['fresh-positive-expansion-manifest-v1.json']=manifest
     with e.firewall(set(INPUTS)|{attempt/name for name in artifacts}):
         for name,value in artifacts.items():

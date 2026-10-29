@@ -86,3 +86,11 @@ class QuantileRegression(unittest.TestCase):
         import validate_expansion_frontier as validator
         scores=[0.00,0.01,0.02,0.03]
         self.assertEqual(validator.independent_quantile(scores,60),e.quantile(scores,.6))
+
+class ProvenanceCollisionRegression(unittest.TestCase):
+    def test_distinct_roles_with_same_basename_keep_both_pins(self):
+        from pathlib import Path
+        sources={'source_a_manifest':(Path('/private/a/manifest-v1.json'),'a'*64), 'source_b_manifest':(Path('/private/b/manifest-v1.json'),'b'*64)}
+        import run_expansion
+        pins=run_expansion.source_pins(sources)
+        self.assertEqual(len(pins),len(sources), 'both distinct logical roles must survive')
