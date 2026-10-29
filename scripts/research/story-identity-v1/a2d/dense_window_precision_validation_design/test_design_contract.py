@@ -19,3 +19,8 @@ class DesignTests(unittest.TestCase):
  def test_independent_units(self):self.bad('independent_units_from_pairs',True)
  def test_benchmark(self):self.bad('benchmark_authorized',True)
  def test_blind(self):self.bad('blind_open',True)
+
+ def test_checked_in_contract(self):
+  import json
+  from pathlib import Path
+  d.validate_design(json.loads(Path(__file__).with_name('validation-design-contract-v1.json').read_text()))

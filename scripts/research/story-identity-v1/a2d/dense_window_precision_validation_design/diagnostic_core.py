@@ -7,7 +7,7 @@ def verify_hash(data,expected):
 def verify_role(role):
  if role!='CANONICAL':raise ValueError('NONCANONICAL')
 def guard_name(path):
- if any(x in str(path).lower() for x in ('blind','gold-label','old-dev','graph-dev-human-label','normalized-content','source-payload')):raise PermissionError('FORBIDDEN_SOURCE')
+ if any(x in str(path).lower() for x in ('blind','gold-label','gold-v2','old-dev','dev-human-labels','graph-dev-human-label','normalized-content','source-payload')):raise PermissionError('FORBIDDEN_SOURCE')
 def forbid_network():raise PermissionError('NETWORK_FORBIDDEN')
 def forbid_review_pack():raise PermissionError('REVIEW_PACK_FORBIDDEN')
 def check_counts(counts):
@@ -19,6 +19,6 @@ def check_b1(a,b):
 def verify_excluded(rows,excluded):
  if any(r['a'] in excluded or r['b'] in excluded for r in rows):raise ValueError('EXCLUSION_FAILURE')
 def good_design():
- return {'legacy':'HISTORICAL_SUPERSEDED_FOR_FUTURE_READINESS','alpha':0.05,'delta':0.05,'production_threshold':None,'fixed_design_effect':None,'article_sampling':'ALL_ELIGIBLE','temporal_independence':True,'capture_after_merge':True,'independent_reviewers':2,'adjudication':True,'known_inclusion_probabilities':True,'independent_units_from_pairs':False,'benchmark_authorized':False,'blind_open':False}
+ return {'legacy':'HISTORICAL_SUPERSEDED_FOR_FUTURE_READINESS','alpha':0.05,'delta':0.05,'production_threshold':None,'fixed_design_effect':None,'article_sampling':'ALL_ELIGIBLE','temporal_independence':True,'capture_after_merge':True,'independent_reviewers':2,'adjudication':True,'known_inclusion_probabilities':True,'independent_units_from_pairs':False,'benchmark_authorized':False,'blind_open':False,'direction':'ONE_SIDED_UPPER_BOUND','primary_unit':'FROZEN_CANDIDATE_GRAPH_COMPONENT','primary_sampling':'SRSWOR_COMPONENTS_REVIEW_ALL_PREDICTED_EDGES_IN_EACH','primary_interval':'HYPERGEOMETRIC_COMPONENT_BOUND_TO_WORST_CASE_EDGE_BOUND','single_final_look':True,'capture_span_hours':48,'pair_window_hours':24,'uncertain':'UNCONFIRMED_COUNTS_AGAINST_SAFE','qwen':'RETRIEVAL_ONLY','graph_support':'RETRIEVAL_PRIORITIZATION_ONLY'}
 def validate_design(contract):
- if contract!=good_design():raise ValueError('DESIGN_CONTRACT_VIOLATION')
+ if any(contract.get(k)!=v for k,v in good_design().items()):raise ValueError('DESIGN_CONTRACT_VIOLATION')
