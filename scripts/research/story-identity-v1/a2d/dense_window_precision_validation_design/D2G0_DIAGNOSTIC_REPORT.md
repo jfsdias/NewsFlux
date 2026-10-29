@@ -1,0 +1,9 @@
+# D2G0 diagnostic — exploratory only
+
+The pinned review chain reconstructs 7 SAME_EVENT and 44 nonpositive decisions. Across the frozen raw P2 features, all seven positives had a nonzero entity/number/date overlap indicator; five of 44 nonpositives did. Median frozen lexical overlap was 0.1429 versus 0, and median frozen Qwen score approximately 0.607 versus 0.406. These are post-hoc, selected-sample hypotheses, not validated thresholds, performance estimates or population inference. Support-feed medians were 2 and 3; the two groups overlap in feature values.
+
+All eleven B1 reviewed pairs had no recorded entity/number/date overlap and had the shared-feed support required by B1. Their reviewed decisions were DIFFERENT_EVENT. The hypothesis that selection favored anchorless, highly supported candidates is partly supported, but the numeric evidence does not establish the semantic cause or prove a topic-hub relationship. The eleven causal taxonomy assignments remain UNEXPLAINED; no titles or article content were inspected to invent an explanation.
+
+After excluding the 102 reviewed articles, frozen strategies B0–B5 each have zero residual pairs and zero article-disjoint capacity. Therefore B5_REVIEW_NEXT=NO; no new ranking or review pack was produced. The old capacity figures were measured before the expansion review and are not contradicted by this later exclusion.
+
+The D2G0 diagnostic produced two noncanonical intermediate private attempts while feature-lineage, B1 crosschecks and conservative hypothesis wording were completed. The third attempt is the final diagnostic artifact; original inputs remained frozen. This is a post-hoc diagnostic, and the intermediate attempts are retained as provenance. The future validation design must not treat these observations as independent evidence.
