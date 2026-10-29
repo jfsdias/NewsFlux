@@ -18,6 +18,7 @@ def verify(target):
   names=('feature-lineage-v1.json','positive-profile-v1.json','b1-autopsy-v1.json','residual-capacity-v1.json')
   result=tuple(json.loads((target/name).read_bytes()) for name in names)
   independently_validate(data,result)
+  if source.c.canonical(result)!=source.c.canonical(source.derive(data)):raise ValueError('REPLAY_MISMATCH')
   source.load()
   return {'post_freeze_validator':'PASS','manifest_sha256':hashlib.sha256(raw).hexdigest()}
 if __name__=='__main__':print(json.dumps(verify(sys.argv[1]),sort_keys=True))

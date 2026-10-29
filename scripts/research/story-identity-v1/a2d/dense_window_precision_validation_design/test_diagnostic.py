@@ -41,3 +41,17 @@ class RuntimeFirewallTests(unittest.TestCase):
    with module.firewall(),self.assertRaises(PermissionError):Path('/tmp/blind-human-labels.csv').read_bytes()
  def test_gold_forbidden(self):
   with self.assertRaises(PermissionError):d.guard_name('story-identity-gold-v2.csv')
+
+class ResidualCapacityTests(unittest.TestCase):
+ def test_actual_residual_matching_replay_and_exclusion(self):
+  rows=[{'a':1,'b':2,'strategy_membership':['B1','B5']},{'a':2,'b':3,'strategy_membership':['B1','B5']},{'a':4,'b':5,'strategy_membership':['B0']}]
+  one=d.residual_capacities(rows,{4});two=d.residual_capacities(list(reversed(rows)),{4})
+  self.assertEqual(one,two)
+  self.assertEqual(one['B1'],{'pair_count':2,'unique_articles':3,'max_article_disjoint':1})
+  self.assertEqual(one['B0'],{'pair_count':0,'unique_articles':0,'max_article_disjoint':0})
+ def test_no_review_pack_writer_in_diagnostic(self):
+  import ast
+  from pathlib import Path
+  tree=ast.parse(Path(__file__).with_name('diagnose_private_evidence.py').read_text())
+  constants={node.value for node in ast.walk(tree) if isinstance(node,ast.Constant) and isinstance(node.value,str)}
+  self.assertTrue(all('review-pack' not in x.lower() for x in constants))
