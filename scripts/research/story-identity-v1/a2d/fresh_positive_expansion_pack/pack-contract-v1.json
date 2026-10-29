@@ -1,0 +1,21 @@
+{
+  "version": "D2F7_EXACT_K11_V1",
+  "base_sha": "874dcb82ae8efd50c6dfd4ab2f43432c1845f76e",
+  "strategy": "B1_GRAPH_Q70",
+  "pack_size": 11,
+  "selection_objective": "LEXICOGRAPHICALLY_MINIMUM_SORTED_B1_RANK_VECTOR",
+  "selection_algorithm": "LEXICOGRAPHIC_RANK_BY_FEASIBILITY_ORACLE",
+  "rank": "QWEN_DESC;SUPPORT_DESC;LEXICAL_DESC;HOURS_ASC;ARTICLE_A_NUMERIC_ASC;ARTICLE_B_NUMERIC_ASC",
+  "networkx_version": "3.4.2",
+  "expected_positive_yield": "NOT_ESTIMATED",
+  "pack_size_derivation": "FULL_B1_MAX_ARTICLE_DISJOINT_CAPACITY_NOT_YIELD_ESTIMATE",
+  "source_sha256": {
+    "contract": "24a1374a5d1cb5f21b19d0cc0576cf87ef784c05ec6e83e1123edb49aa865909",
+    "candidates": "80299b87e37ddbdca8d362c0aea2c34bb15d462f297fa48d512d66ba24073d0b",
+    "frontier": "38e23733bd7dcc14a89c930a3c9eb296084ecf354af1aeff0251d19c18910888",
+    "receipt": "88a54c0a6c917b9c4b45530a654354a0175a9468f980ad6ad67ae53814572e3c",
+    "manifest": "973bf1ef6fcb8d63ca1a67ad3805d823a67331105c07fa2d619502a098e28fd2"
+  },
+  "review": "IDENTITIES_ONLY_NO_REVIEW_SESSION_NO_HUMAN_DECISIONS",
+  "privacy": "NO_LABELS_NO_TITLES_NO_CONTENT_NO_NETWORK_NO_MODEL_NO_BENCHMARK"
+}
