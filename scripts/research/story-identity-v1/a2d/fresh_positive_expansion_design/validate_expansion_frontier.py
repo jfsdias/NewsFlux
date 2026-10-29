@@ -68,6 +68,8 @@ def validate(src, candidates, frontier):
         for field, inv in [('pairs','V07_RESIDUAL_UNIVERSE_CONSTRUCTION'),('articles','V07_RESIDUAL_UNIVERSE_CONSTRUCTION'),('components','V20_COMPONENT_CONSTRUCTION'),('largest_component_pairs','V20_COMPONENT_CONSTRUCTION'),('largest_component_share','V20_COMPONENT_CONSTRUCTION'),('matching','V21_MAX_MATCHING_CARDINALITY'),('feed_combinations','V22_FEED_PAIR_AGGREGATES'),('max_feed_share','V22_FEED_PAIR_AGGREGATES'),('category_combinations','V23_CATEGORY_PAIR_AGGREGATES'),('max_category_share','V23_CATEGORY_PAIR_AGGREGATES'),('title_equivalent_pairs','V24_TITLE_EQUIVALENCE_AGGREGATES'),('both_usable_rate','V06_BOTH_ENDPOINTS_USABLE'),('logical_capacity_gate','V25_LOGICAL_COUNT_CLOSURE_GATE')]:
             require(inv, summary[field]==independent[field])
     require('V25_LOGICAL_COUNT_CLOSURE_GATE', frontier['feasible']==any(x['matching']>=5 for x in frontier['strategies'].values()))
+    capacities={name:value['matching'] for name,value in frontier['strategies'].items()}
+    require('V26_DOMINANCE_FRONTIER',frontier['non_dominated']==independent_non_dominated(independent_dominance_descriptors(qs),capacities))
 
 
 def validate_input_pins(contract, manifest):
@@ -113,3 +115,30 @@ def validate_thresholds(strategies, independently_recomputed_quantiles):
     b5={'kind':'UNION_OF_STRATEGIES','constituents':['B1_GRAPH_Q70','B2_GRAPH_Q60_ANCHORED','B3_CONSENSUS_Q80','B4_PARAPHRASE_Q80']}
     for name,policy in [('B0',b0),('B5',b5)]:
         require('V07B_QWEN_THRESHOLD_POLICY_SEMANTIC_CORRECTNESS',strategies[name]['QWEN_THRESHOLD_USED'] is None and strategies[name]['QWEN_THRESHOLD_POLICY']==policy)
+
+
+def independent_non_dominated(descriptors, capacities):
+    require('V26_DOMINANCE_FRONTIER',set(descriptors)==set(capacities))
+    dominated=set()
+    for target in descriptors:
+        t=descriptors[target]
+        if t['kind']!='DIRECT':continue
+        for challenger in descriptors:
+            if target==challenger:continue
+            c=descriptors[challenger]
+            if c['kind']!='DIRECT' or c['lexical_family']!=t['lexical_family']:continue
+            if capacities[challenger]<capacities[target] or c['qwen']<t['qwen'] or c['support']<t['support'] or c['anchor']<t['anchor']:continue
+            if capacities[challenger]>capacities[target] or c['qwen']>t['qwen'] or c['support']>t['support'] or c['anchor']>t['anchor']:
+                dominated.add(target);break
+    return sorted(set(descriptors)-dominated)
+
+
+def independent_dominance_descriptors(q):
+    return {
+        'B0':{'kind':'INHERITED_D2F1_LANE_SPECIFIC'},
+        'B1':{'kind':'DIRECT','qwen':q['.7'],'support':2,'anchor':False,'lexical_family':'ANY'},
+        'B2':{'kind':'DIRECT','qwen':q['.6'],'support':2,'anchor':True,'lexical_family':'ANY'},
+        'B3':{'kind':'DIRECT','qwen':q['.8'],'support':0,'anchor':True,'lexical_family':'GE_FLOOR'},
+        'B4':{'kind':'DIRECT','qwen':q['.8'],'support':1,'anchor':True,'lexical_family':'LT_FLOOR'},
+        'B5':{'kind':'UNION_OF_STRATEGIES'},
+    }

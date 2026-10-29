@@ -83,3 +83,25 @@ def threshold_metadata(strategy, quantiles):
         policy={'kind':'UNION_OF_STRATEGIES','constituents':['B1_GRAPH_Q70','B2_GRAPH_Q60_ANCHORED','B3_CONSENSUS_Q80','B4_PARAPHRASE_Q80']}
     else:raise ValueError('unknown strategy')
     return {'QWEN_THRESHOLD_USED':None,'QWEN_THRESHOLD_POLICY':policy}
+
+
+def dominance_descriptors(quantiles):
+    return {
+        'B0': {'kind': 'INHERITED_D2F1_LANE_SPECIFIC'},
+        'B1': {'kind': 'DIRECT', 'qwen': quantiles['.7'], 'support': 2, 'anchor': False, 'lexical_family': 'ANY'},
+        'B2': {'kind': 'DIRECT', 'qwen': quantiles['.6'], 'support': 2, 'anchor': True, 'lexical_family': 'ANY'},
+        'B3': {'kind': 'DIRECT', 'qwen': quantiles['.8'], 'support': 0, 'anchor': True, 'lexical_family': 'GE_FLOOR'},
+        'B4': {'kind': 'DIRECT', 'qwen': quantiles['.8'], 'support': 1, 'anchor': True, 'lexical_family': 'LT_FLOOR'},
+        'B5': {'kind': 'UNION_OF_STRATEGIES'},
+    }
+
+
+def derive_non_dominated(descriptors, capacities):
+    if set(descriptors) != set(capacities): raise ValueError('strategy set mismatch')
+    def dominates(a,b):
+        left,right=descriptors[a],descriptors[b]
+        if left['kind']!='DIRECT' or right['kind']!='DIRECT' or left['lexical_family']!=right['lexical_family']:return False
+        x=(capacities[a],left['qwen'],left['support'],int(left['anchor']))
+        y=(capacities[b],right['qwen'],right['support'],int(right['anchor']))
+        return all(i>=j for i,j in zip(x,y)) and any(i>j for i,j in zip(x,y))
+    return sorted(b for b in descriptors if not any(a!=b and dominates(a,b) for a in descriptors))

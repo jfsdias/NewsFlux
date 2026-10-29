@@ -128,7 +128,7 @@ def calculate(src):
         sub=[x for x in rows if name in x['strategy_membership']]
         summaries[name]=e.safe_metrics(e.metrics(sub))
         summaries[name].update(e.threshold_metadata(name,q))
-    return rows,{'quantiles':q,'strategies':summaries,'non_dominated':['B0','B1','B2','B3','B4','B5'],'minimum_additional_positives_required':5,'expected_positive_yield':'NOT_ESTIMATED','feasible':any(x['logical_capacity_gate'] for x in summaries.values())}
+    return rows,{'quantiles':q,'strategies':summaries,'non_dominated':e.derive_non_dominated(e.dominance_descriptors(q),{name:result['matching'] for name,result in summaries.items()}),'minimum_additional_positives_required':5,'expected_positive_yield':'NOT_ESTIMATED','feasible':any(x['logical_capacity_gate'] for x in summaries.values())}
 
 
 def main():

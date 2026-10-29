@@ -121,3 +121,40 @@ class ThresholdSchemaTests(unittest.TestCase):
         for key in ('QWEN_THRESHOLD_USED','QWEN_THRESHOLD_POLICY'):
             case=copy.deepcopy(strategies);del case['B1'][key]
             with self.assertRaises(v.ValidationError):v.validate_thresholds(case,self.q)
+
+class DominanceTests(unittest.TestCase):
+    def direct(self,q=0.5,support=2,anchor=True,lexical='ANY'):
+        return {'kind':'DIRECT','qwen':q,'support':support,'anchor':anchor,'lexical_family':lexical}
+    def test_clear_dominance_removes_weaker(self):
+        descriptors={'A':self.direct(q=.8), 'B':self.direct(q=.7)}
+        self.assertEqual(e.derive_non_dominated(descriptors,{'A':5,'B':5}),['A'])
+    def test_capacity_prevents_dominance(self):
+        self.assertEqual(e.derive_non_dominated({'A':self.direct(q=.8),'B':self.direct(q=.7)},{'A':4,'B':5}),['A','B'])
+    def test_mixed_strictness_prevents_dominance(self):
+        self.assertEqual(e.derive_non_dominated({'A':self.direct(q=.8,anchor=False),'B':self.direct(q=.7,anchor=True)},{'A':5,'B':5}),['A','B'])
+    def test_lexical_families_incomparable(self):
+        self.assertEqual(e.derive_non_dominated({'A':self.direct(q=.8,lexical='GE_FLOOR'),'B':self.direct(q=.7,lexical='LT_FLOOR')},{'A':5,'B':5}),['A','B'])
+    def test_composite_and_inherited_are_incomparable(self):
+        policies={'A':self.direct(),'B0':{'kind':'INHERITED_D2F1_LANE_SPECIFIC'},'B5':{'kind':'UNION_OF_STRATEGIES'}}
+        self.assertEqual(e.derive_non_dominated(policies,{'A':10,'B0':1,'B5':1}),['A','B0','B5'])
+    def test_equal_dimensions_are_not_strict_dominance(self):
+        self.assertEqual(e.derive_non_dominated({'A':self.direct(),'B':self.direct()},{'A':5,'B':5}),['A','B'])
+    def test_capacity_improvement_counts_as_strict(self):
+        self.assertEqual(e.derive_non_dominated({'A':self.direct(),'B':self.direct()},{'A':6,'B':5}),['A'])
+    def test_validator_detects_wrong_frontier(self):
+        import validate_expansion_frontier as v
+        desc={'A':self.direct(q=.8),'B':self.direct(q=.7)}
+        self.assertEqual(v.independent_non_dominated(desc,{'A':5,'B':5}),['A'])
+
+    def test_independent_validator_synthetic_cases(self):
+        import validate_expansion_frontier as v
+        cases=[
+            ({'A':self.direct(q=.8),'B':self.direct(q=.7)},{'A':5,'B':5},['A']),
+            ({'A':self.direct(q=.8),'B':self.direct(q=.7)},{'A':4,'B':5},['A','B']),
+            ({'A':self.direct(q=.8,anchor=False),'B':self.direct(q=.7,anchor=True)},{'A':5,'B':5},['A','B']),
+            ({'A':self.direct(lexical='GE_FLOOR'),'B':self.direct(lexical='LT_FLOOR')},{'A':5,'B':5},['A','B']),
+            ({'A':self.direct(),'B0':{'kind':'INHERITED_D2F1_LANE_SPECIFIC'},'B5':{'kind':'UNION_OF_STRATEGIES'}},{'A':10,'B0':1,'B5':1},['A','B0','B5']),
+        ]
+        for desc,caps,expected in cases:
+            with self.subTest(expected=expected):
+                self.assertEqual(v.independent_non_dominated(desc,caps),expected)
