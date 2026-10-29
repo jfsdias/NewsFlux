@@ -79,3 +79,10 @@ class DisclosureTests(unittest.TestCase):
         tree=ast.parse(Path(e.__file__).read_text())
         modules={node.module for node in ast.walk(tree) if isinstance(node,ast.ImportFrom)} | {a.name for node in ast.walk(tree) if isinstance(node,ast.Import) for a in node.names}
         self.assertFalse(modules & {'openai','transformers','torch','requests'})
+
+
+class QuantileRegression(unittest.TestCase):
+    def test_independent_q60_float_evaluation_matches_preregistered_order(self):
+        import validate_expansion_frontier as validator
+        scores=[0.00,0.01,0.02,0.03]
+        self.assertEqual(validator.independent_quantile(scores,60),e.quantile(scores,.6))
