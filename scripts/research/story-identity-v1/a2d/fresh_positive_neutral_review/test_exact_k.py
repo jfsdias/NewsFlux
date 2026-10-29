@@ -49,7 +49,34 @@ class StaticGuardTests(unittest.TestCase):
     def test_no_truncated_maximum_matching(self):
         import ast
         from pathlib import Path
-        tree=ast.parse(Path(__file__).with_name('exact_k_matching.py').read_text())
-        for node in ast.walk(tree):
-            if isinstance(node,ast.Subscript) and isinstance(node.value,ast.Call):
-                self.assertNotIn('max_weight_matching',ast.unparse(node.value))
+        for name in ('exact_k_matching.py','select_review_pack.py'):
+            tree=ast.parse(Path(__file__).with_name(name).read_text())
+            for node in ast.walk(tree):
+                if isinstance(node,ast.Subscript) and isinstance(node.value,ast.Call):
+                    self.assertNotIn('max_weight_matching',ast.unparse(node.value))
+                    self.assertNotIn('maximum_matching',ast.unparse(node.value))
+
+class ShapeTests(unittest.TestCase):
+    def test_path(self):
+        self.assertEqual(ranks([row(1,2,1),row(2,3,2),row(3,4,3)],2),(1,3))
+    def test_cycle(self):
+        self.assertEqual(ranks([row(1,2,1),row(2,3,2),row(3,4,3),row(1,4,4)],2),(1,3))
+    def test_star_infeasible(self):
+        with self.assertRaises(ValueError):exact_k_matching([row(1,2,1),row(1,3,2),row(1,4,3)],2)
+    def test_disconnected(self):
+        self.assertEqual(ranks([row(1,2,3),row(3,4,1),row(5,6,2)],2),(1,2))
+    def test_conflicting_first_edge_must_be_rejected(self):
+        self.assertEqual(ranks([row(2,3,1),row(1,2,2),row(3,4,3)],2),(2,3))
+    def test_k_zero(self):self.assertEqual(ranks([row(1,2,1)],0),())
+    def test_k_one(self):self.assertEqual(ranks([row(1,2,2),row(3,4,1)],1),(1,))
+    def test_k_max(self):self.assertEqual(ranks([row(1,2,1),row(2,3,2),row(3,4,3)],2),(1,3))
+    def test_determinism(self):
+        edges=[row(1,2,1),row(2,3,2),row(3,4,3)]
+        self.assertEqual(exact_k_matching(edges,2),exact_k_matching(edges,2))
+    def test_dense_graph(self):
+        edges=[row(a,b,i) for i,(a,b) in enumerate(itertools.combinations(range(1,7),2),1)]
+        self.assertEqual(ranks(edges,3),brute(edges,3))
+    def test_duplicate_reverse_edge(self):
+        with self.assertRaises(ValueError):exact_k_matching([row(1,2,1),row(2,1,2)],1)
+    def test_duplicate_rank(self):
+        with self.assertRaises(ValueError):exact_k_matching([row(1,2,1),row(3,4,1)],1)
