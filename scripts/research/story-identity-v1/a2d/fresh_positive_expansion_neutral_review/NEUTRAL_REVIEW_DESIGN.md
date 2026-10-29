@@ -1,0 +1,11 @@
+# D2F8 neutral session preregistration
+
+Use the exact 11-pair D2F7 selected pack and pinned 500-article corpus. Verify all six input hashes and frozen modes before parsing. Join exact article identities to title, feed title and published timestamp only; retain title exactly, use SOURCE_UNAVAILABLE and PUBLISHED_AT_UNAVAILABLE where absent, and reject duplicates or missing selected titles. No body, URL, author, category, features, labels or noncanonical attempt may be read.
+
+After this commit, generate 32 bytes from the OS cryptographic random source. Compute HMAC-SHA256 keyed by this nonce over the UTF-8 pair key prefixed by `order|` for order and `side|` for orientation. Sort by order digest and pair key as deterministic tie-break; orientation uses the lowest bit of the first side digest byte. Reject a permutation identical to selection or rank order. Assign R001–R011 after permutation. The nonce and identity mapping are private; reload never reshuffles. No selection membership or rank may influence ordering beyond the explicit rank-order rejection.
+
+Visible CSV has exactly review_id, left_title, left_source, left_published_at, right_title, right_source, right_published_at, human_decision. All decisions initially blank. The private map retains only the identifiers and selection provenance needed to restore the pairs. Reviewer-visible surfaces contain no identities or research features.
+
+The standalone local HTML uses the prior review taxonomy, one pair at a time, 1–4 shortcuts and arrow navigation, unique session-specific localStorage, and completed-only CSV export. It has no import, external links, external assets, or network. SAME_EVENT alone is merge-positive; RELATED_TOPIC and UNCERTAIN are not. The guide emphasizes conservative title-only judgments and no web search. The UI is not opened during preparation.
+
+Validate source identities, exact metadata joins, randomization replay, blank decisions, private mapping, visible fields, fingerprints, HTML and export rules independently before and after writing to a fresh private 0700 attempt with 0444 artifacts. No human labels, article content, inference, benchmark, or human review are authorized. Stop on mismatch or leakage; do not repair inputs.
