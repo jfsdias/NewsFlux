@@ -1,0 +1,240 @@
+{
+  "base_main_sha": "4e29bf76d551d463ad553c051da6b87a7a1f1634",
+  "baseline_references": {
+    "current": "FROZEN_TITLE_ONLY_QWEN_FEATURE_REFERENCE_NOT_PRODUCTION_POLICY",
+    "event_identity_redesign": "scripts/research/story-identity-v1/a2d/event_identity_signal_redesign/SIGNAL_CANDIDATE_SPEC_V2.md",
+    "event_identity_redesign_git_blob": "890260b3305a5882b820b8ed55cfea35d939e649",
+    "feature_pipeline": "scripts/research/story-identity-v1/a2d/fresh_feature_v2/FEATURE_PIPELINE_V2.md",
+    "feature_pipeline_git_blob": "67f65e0dc1cdc9b7609d60e93f61ce9bf9d091c2",
+    "model": "qwen3-embedding:0.6b",
+    "model_blob_sha256": "06507c7b42688469c4e7298b0a1e16deff06caf291cf0a5b278c308249c3e439",
+    "model_manifest_digest": "ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50eb581914a15621d",
+    "same_pair_comparison": true,
+    "spec": "scripts/research/story-identity-v1/a2d/CANDIDATE_SPEC_V1.md",
+    "spec_git_blob": "6af88bfd4d54e67e8f844832ceeb3368051482d5",
+    "threshold": "NO_FINAL_THRESHOLD_FROZEN; PM_APPROVAL_REQUIRED"
+  },
+  "benchmark_run_performed": false,
+  "benchmark_scope": "DESIGN_ONLY",
+  "blind_access_performed": false,
+  "blind_policy": {
+    "maximum_evaluation_runs": 1,
+    "opening_requires": [
+      "PM_AUTHORIZATION",
+      "CANDIDATE_FROZEN",
+      "MODEL_AND_TOKENIZER_FROZEN",
+      "THRESHOLDS_FROZEN",
+      "CODE_SHA_FROZEN",
+      "PAIR_UNIVERSE_HASH_FROZEN",
+      "DEV_RESULTS_FROZEN"
+    ],
+    "state": "SEALED",
+    "tuning_from_blind": false
+  },
+  "candidate_families": {
+    "A_CONTENT_AWARE_SEMANTIC_CONFIRMATION": {
+      "cost_latency": "measure local CPU seconds, RAM and per-pair latency",
+      "failure_modes": ["topic similarity", "boilerplate", "truncation", "missing content"],
+      "hypothesis": "Content can corroborate event identity, but semantic similarity alone can conflate topic and event.",
+      "inputs": "normalized title + newline + D2E3 normalized content; full representation capped at 8192 Unicode codepoints",
+      "missing": "unavailable; named fallback is evaluated separately",
+      "privacy": "local only; features private",
+      "production_feasibility": "NOT_ASSESSED",
+      "representation": "local bi-encoder proposal; fixed preprocessing and model identity require approval",
+      "reproducibility": "pin model/tokenizer/digest, CPU backend, seeds and preprocessing",
+      "scoring": "similarity is candidate evidence, not standalone merge proof",
+      "status": "DESIGN_ONLY",
+      "threshold": "training folds only; numeric rule pending PM"
+    },
+    "B_EVENT_ANCHOR_FINGERPRINT": {
+      "cost_latency": "measure extraction CPU, RAM and pair comparison latency",
+      "failure_modes": [
+        "ambiguous events",
+        "shared entities",
+        "negation",
+        "multilingual morphology"
+      ],
+      "hypothesis": "Typed event-specific action, entity and contradiction evidence distinguishes same subject from same occurrence.",
+      "inputs": "title and frozen content; typed entities, actions, dates, identifiers, numbers and locations",
+      "missing": "missing is unknown, never positive evidence",
+      "privacy": "local only; anchors private",
+      "production_feasibility": "NOT_ASSESSED",
+      "representation": "versioned deterministic language-aware extraction proposed; NER requires separate approval",
+      "reproducibility": "freeze lexicon, pattern set, normalization and versions before labels",
+      "scoring": "typed agreement and explicit contradictions; no entity-only confirmation",
+      "status": "DESIGN_ONLY",
+      "threshold": "training folds only; numeric rule pending PM"
+    },
+    "C_CONTENT_EVENT_ANCHOR_HYBRID": {
+      "cost_latency": "measure combined CPU/RAM, per-pair latency",
+      "failure_modes": ["false veto", "missing anchors", "cross-source paraphrase"],
+      "hypothesis": "Semantic evidence plus independent event corroboration and contradiction veto may reduce false merges.",
+      "inputs": "A semantic evidence and B typed anchors",
+      "missing": "unavailable; named fallback separate",
+      "privacy": "local only; combined features private",
+      "production_feasibility": "NOT_ASSESSED",
+      "representation": "semantic gate + anchor confirmation + contradiction veto proposed",
+      "reproducibility": "pin A and B configurations, veto rules and versions before labels",
+      "scoring": "no positive result from missing anchors; alternative gates require preregistration",
+      "status": "DESIGN_ONLY",
+      "threshold": "training folds only; numeric rule pending PM"
+    },
+    "D_PAIRWISE_RERANKER_REFERENCE_HOLD": {
+      "cost_latency": "unknown; measure only after release",
+      "failure_modes": ["cost", "privacy", "calibration", "domain shift"],
+      "hypothesis": "A local cross-encoder might improve reference discrimination.",
+      "inputs": "same frozen paired representations",
+      "missing": "NOT_AUTHORIZED",
+      "privacy": "no external pair transmission",
+      "production_feasibility": "NOT_ASSESSED",
+      "representation": "no model selected",
+      "reproducibility": "pin model/tokenizer/digest and backend after approval",
+      "scoring": "NOT_AUTHORIZED",
+      "status": "HOLD",
+      "threshold": "NOT_AUTHORIZED"
+    }
+  },
+  "candidate_selection_policy": {
+    "fresh_graph_dev": "NEGATIVE_CHALLENGE_ONLY_AFTER_SELECTION",
+    "gold_full_fit": false,
+    "insufficient_positive_evidence": "STOP; PM_DECISION_REQUIRED",
+    "outer_test_leakage": false,
+    "selection_scope": "INNER_TRAINING_COMPONENT_FOLDS_ONLY"
+  },
+  "content_input_policy": {
+    "embedding_text": "normalized_title + newline + normalized_content; cap combined representation to 8192 Unicode codepoints under V2; additional model limits require PM-approved pinned preprocessing",
+    "live_refetch": false,
+    "missing_excludes_no_article": true,
+    "publisher": false,
+    "source": "D2E3_FROZEN_PRIVATE_CONTENT_ONLY"
+  },
+  "corpus_sha256": "3e84fa54b8d6b055334510ec992095fd634ae33ab7eebaa9546ecaf0b511a206",
+  "d2e1_contract_sha256": "6186c896b5f16398391f63387aae1018e5431d88ccd9a43b450c94fe0e2ae260",
+  "d2e1_manifest_sha256": "422b3140c8292c95feff864f262ee17ea0f74c27a575f3004a873dcb40dbf343",
+  "d2e2_capability_sha256": "510a9409470d45d700295e953149ed195a937cecdd646f81cfe241b87b745c91",
+  "d2e2_summary_sha256": "e7a1d00b589932e863b4382a7694e67ed6fde8395e78a807ce534ae14a6c1254",
+  "d2e3_manifest_sha256": "6a1decd66b4cdd139f71337b68ee39b95808c94b27acbc354e579aafb3597bf0",
+  "d2e3_receipt_sha256": "b4316ee8c80d1e3c80ff566adabbab468808de2036ad66839df6ae8999c01247",
+  "d2e3_sidecar_sha256": "53f86ce8ac20b9343f4b8ad6617463dbe5a914a0f4ef45d3330ceddd929caf69",
+  "error_taxonomy": [
+    "FALSE_MERGE_RELATED_TOPIC",
+    "FALSE_MERGE_SHARED_ENTITY",
+    "FALSE_MERGE_CONTINUING_STORY",
+    "FALSE_MERGE_NEAR_TIME_DIFFERENT_EVENT",
+    "FALSE_SPLIT_PARAPHRASE",
+    "FALSE_SPLIT_LOW_CONTENT",
+    "FALSE_SPLIT_CROSS_SOURCE",
+    "CONTENT_UNAVAILABLE",
+    "CONTENT_TITLE_EQUIVALENT"
+  ],
+  "label_access_performed": false,
+  "label_access_policy": {
+    "current": "NONE",
+    "fresh_positive_sufficiency": "UNRESOLVED_PM_GATE; prior 120 targeted fresh DEV pairs contained zero observed SAME_EVENT",
+    "graph_dev": "FROZEN_NEGATIVE_CHALLENGE_ONLY_AFTER_SELECTION",
+    "historical_gold": "SEPARATE_HISTORICAL_REFERENCE_ONLY; FRESH_CONTENT_DISJOINT",
+    "pm_approval_required": true,
+    "selection": "only authorized DEV training folds for candidate/threshold selection"
+  },
+  "metrics": [
+    "SAME_EVENT_PRECISION",
+    "SAME_EVENT_RECALL",
+    "F1",
+    "FALSE_MERGE_COUNT",
+    "FALSE_SPLIT_COUNT",
+    "RELATED_TOPIC_FALSE_MERGE_RATE",
+    "CONFUSION_MATRIX",
+    "PREDICTED_MERGE_RATE",
+    "SCOREABLE_PAIR_COVERAGE",
+    "CONTENT_AVAILABILITY_COVERAGE",
+    "PAIRED_BASELINE_COMPARISON",
+    "COMPONENT_BOOTSTRAP_CI",
+    "STRATUM_DIAGNOSTICS",
+    "F0_5_HISTORICAL_REFERENCE"
+  ],
+  "missing_content_policy": {
+    "article_denominator": 500,
+    "coverage": [
+      "FULL_CORPUS_COVERAGE",
+      "CONTENT_ELIGIBLE_PAIR_COVERAGE",
+      "SCOREABLE_PAIR_COVERAGE"
+    ],
+    "fallback_variant": "FALLBACK_TO_FROZEN_TITLE_REFERENCE_REPORTED_SEPARATELY",
+    "observed_nonusable": 14,
+    "observed_usable": 486,
+    "primary_variant": "CONTENT_CANDIDATE_UNAVAILABLE",
+    "silent_drop": false
+  },
+  "model_inference_performed": false,
+  "model_policy": {
+    "license_language_cost_latency": "PM_REVIEW_REQUIRED",
+    "local_processing": true,
+    "model_download_authorized": false,
+    "model_selection_final": false,
+    "status": "PROPOSED_FOR_FUTURE_BENCHMARK"
+  },
+  "next_authorization_gate": {
+    "fresh_positive_evidence_required": true,
+    "label_access_requires_separate_approval": true,
+    "model_execution_requires_separate_approval": true,
+    "numeric_acceptance_thresholds_require_pm_approval": true,
+    "pm_authorization_required": true
+  },
+  "pair_universe_policy": {
+    "artifact_sha256": "056d5bb76e5f0d4cf036fa7d3da8f973f5516bf006f7d4ac838a87ced742efec",
+    "cross_feed_only": true,
+    "deduplication": "canonical pair key unique",
+    "denominator_articles": 500,
+    "historical_disjointness": "fresh corpus excludes Home-200 and Gold V2 identities",
+    "no_generation_during_design": true,
+    "ordering": "frozen artifact ordering; do not regenerate during design",
+    "pair_count": 33135,
+    "pair_key": "min(article_id):max(article_id)",
+    "published_time_delta_max_hours": 24,
+    "selection": "reuse frozen pack identities, disjointness and provenance; lock pair-set hash before evaluation",
+    "source": "FROZEN_P3_CROSSFEED_24H"
+  },
+  "primary_decision_rule": {
+    "false_merge_cost_exceeds_false_split": true,
+    "numeric_acceptance_thresholds": "PM_DECISION_REQUIRED",
+    "related_topic_merge_negative": true,
+    "rule": "On identical eligible pair identities, advance only if event identification improves without unacceptable false-merge degradation; report paired uncertainty and abstention. Inadequate evidence means no advancement.",
+    "same_event_merge_positive": true
+  },
+  "privacy": {
+    "external_article_data": false,
+    "features_embeddings_pair_scores": "PRIVATE_IF_IDENTIFYING",
+    "raw_and_normalized_content": "PRIVATE_ONLY",
+    "tracked_reports": "AGGREGATES_HASHES_METHODOLOGY_ONLY"
+  },
+  "production_policy": "NOT_FROZEN",
+  "publisher_fetch_performed": false,
+  "publisher_policy": "HOLD",
+  "reproducibility": {
+    "data": "pin corpus, sidecar, pair and authorized label artifact hashes",
+    "live_source": "UNKNOWN; no live refetch",
+    "model": "pin model/tokenizer/version/digest and CPU backend",
+    "run": "pin code SHA, config, split fingerprints, seeds and thresholds"
+  },
+  "scientific_question": "Does frozen article content improve SAME_EVENT identification without unacceptable RELATED_TOPIC false merges on identical pair identities?",
+  "source_payload_index_sha256": "993636a23d3ed52be606917bda03ca9a090f1406e31b654b17b093c07ffe52f5",
+  "source_payload_set_digest": "9c93ecfe8bc40855e04dabddb15b029064e8ff91793529b9914b61de58973385",
+  "source_semantics": "MINIFLUX_STORED_ENTRY_STATE_AT_RETRIEVAL",
+  "threshold_selection_policy": {
+    "numeric_thresholds_require_pm_approval": true,
+    "rule": "predeclare grids and select using only training folds; freeze before held-out evaluation",
+    "selected_now": false
+  },
+  "title_equivalent_policy": {
+    "observed_count": 14,
+    "report": [
+      "CONTENT_EQUALS_TITLE_ARTICLE_COUNT",
+      "CONTENT_ELIGIBLE_COVERAGE",
+      "EFFECTIVE_INFORMATION_GAIN_COVERAGE",
+      "SCORE_DISTRIBUTION"
+    ],
+    "silent_drop": false
+  },
+  "track": "STORY_02_A2D2C_P4_D2F_CONTENT_AWARE_EVENT_SIGNAL_BENCHMARK",
+  "version": "STORY_02_D2F_BENCHMARK_DESIGN_V1"
+}
