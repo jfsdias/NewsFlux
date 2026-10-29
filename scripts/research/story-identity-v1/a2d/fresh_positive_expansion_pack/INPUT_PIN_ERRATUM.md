@@ -1,0 +1,25 @@
+# D2F7 pre-identity input pin erratum
+
+ERRATUM_TYPE=PRE_IDENTITY_INPUT_PIN_CORRECTION
+
+ORIGINAL_PREREGISTRATION_COMMIT=cd152ada39c4418ffc38a1bc58d420d72e2670c3
+
+INCORRECT_MANIFEST_SHA256=973bf1ef6fcb8d63ca1a67ad3805d823a67331105c07fa2d619502a098e28fd2
+
+CORRECT_MANIFEST_SHA256=973bf1ef6fcb6d63ca1a67ad3805d823a67331105c07fa2d619502a098e28fd2
+
+SOURCE_BYTES_CHANGED=NO
+
+REAL_IDENTITIES_PARSED_BEFORE_ERRATUM=NO
+
+SELECTION_STARTED_BEFORE_ERRATUM=NO
+
+SCIENTIFIC_RULE_CHANGE=NO
+
+PACK_SIZE_CHANGE=NO
+
+STRATEGY_CHANGE=NO
+
+RANKING_CHANGE=NO
+
+The frozen source bytes determine the correction. Integrity verification caught the transcription error before candidate parsing or selection. The original commit remains immutable; the effective preregistration is that commit plus this correction.
