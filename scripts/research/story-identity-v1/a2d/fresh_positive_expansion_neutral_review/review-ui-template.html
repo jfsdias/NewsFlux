@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline';"><title>Neutral headline review</title>
+<style>body{font:16px system-ui;max-width:840px;margin:auto;padding:1.5rem;line-height:1.5}section{border:1px solid #aaa;padding:1rem;margin:1rem 0}button{padding:.7rem;margin:.3rem}button[aria-pressed=true]{outline:3px solid #2563eb}</style></head>
+<body><h1>Neutral headline review</h1><p>Judge the same specific event, not merely the same topic. Use UNCERTAIN when titles are insufficient. Do not search the web or open articles. RELATED_TOPIC is merge-negative.</p><p id="progress"></p><h2 id="rid"></h2><section><h3 id="left"></h3><p id="leftmeta"></p></section><section><h3 id="right"></h3><p id="rightmeta"></p></section><div id="choices"></div><button id="prev">Previous</button><button id="next">Next</button><button id="export" disabled>Export completed CSV</button><p>Keys 1–4 select a decision; arrows navigate.</p>
+<script>
+const rows=__DATA__;
+const storageKey=__STORAGE__;
+const labels=['SAME_EVENT','RELATED_TOPIC','DIFFERENT_EVENT','UNCERTAIN'];
+const columns=['review_id','left_title','left_source','left_published_at','right_title','right_source','right_published_at','human_decision'];
+let index=0, decisions={};
+try { const saved=JSON.parse(localStorage.getItem(storageKey)||'{}'); for (const row of rows) if(labels.includes(saved[row.review_id])) decisions[row.review_id]=saved[row.review_id]; } catch (_) { decisions={}; }
+function show(){const row=rows[index];document.getElementById('rid').textContent=row.review_id;document.getElementById('left').textContent=row.left_title;document.getElementById('right').textContent=row.right_title;document.getElementById('leftmeta').textContent=row.left_source+' · '+row.left_published_at;document.getElementById('rightmeta').textContent=row.right_source+' · '+row.right_published_at;const count=rows.filter(x=>labels.includes(decisions[x.review_id])).length;document.getElementById('progress').textContent=`${index+1} / ${rows.length} — ${count} completed`;document.getElementById('export').disabled=count!==11;const choices=document.getElementById('choices');choices.replaceChildren();labels.forEach((label,i)=>{const b=document.createElement('button');b.textContent=`${i+1}. ${label}`;b.setAttribute('aria-pressed',String(decisions[row.review_id]===label));b.onclick=()=>choose(label);choices.appendChild(b)});}
+function choose(label){decisions[rows[index].review_id]=label;localStorage.setItem(storageKey,JSON.stringify(decisions));show()}
+function navigate(delta){index=Math.min(rows.length-1,Math.max(0,index+delta));show()}
+document.getElementById('prev').onclick=()=>navigate(-1);document.getElementById('next').onclick=()=>navigate(1);
+document.addEventListener('keydown',e=>{if(e.target instanceof HTMLButtonElement)return;if('1234'.includes(e.key)&&e.key.length===1)choose(labels[Number(e.key)-1]);if(e.key==='ArrowLeft')navigate(-1);if(e.key==='ArrowRight')navigate(1)});
+document.getElementById('export').onclick=()=>{if(rows.length!==11||!rows.every(x=>labels.includes(decisions[x.review_id])))return;const quote=x=>'"'+String(x).replaceAll('"','""')+'"';const csv=[columns.join(','),...rows.map(x=>columns.map(k=>quote(k==='human_decision'?decisions[x.review_id]:x[k])).join(','))].join('\n')+'\n';const link=document.createElement('a');link.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));link.download='neutral-review-completed.csv';link.click();URL.revokeObjectURL(link.href)};
+show();
+</script></body></html>

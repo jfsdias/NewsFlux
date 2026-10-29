@@ -1,0 +1,30 @@
+{
+  "version": "STORY_02_D2F8_NEUTRAL_REVIEW_V1",
+  "base_sha": "0321a697e02c2a69200570f5e01f144c806ca071",
+  "source_sha256": {
+    "selected_pack": "3ec8311246638bff569c4247c772ada37253860da8fed89c5d3e0f81766b4bb6",
+    "pack_contract": "68c84ced41e51bda934c106247dfff4298cd4e3974f4024f64e4b1769e66df69",
+    "proof": "40468d3d03288c300eed56828773938debab82c72b83057a0a8e65d675246cf9",
+    "receipt": "bb3552205a142828d248e24d3ab863c329ac08b7fe4886bcf8c71f3cc2a9fc8d",
+    "manifest": "5ca4cbdf68270146c29fe292d5cbb99b74a37a576cea49116647c685343ff4be",
+    "corpus": "3e84fa54b8d6b055334510ec992095fd634ae33ab7eebaa9546ecaf0b511a206"
+  },
+  "labels": ["SAME_EVENT", "RELATED_TOPIC", "DIFFERENT_EVENT", "UNCERTAIN"],
+  "visible_columns": [
+    "review_id",
+    "left_title",
+    "left_source",
+    "left_published_at",
+    "right_title",
+    "right_source",
+    "right_published_at",
+    "human_decision"
+  ],
+  "metadata": "EXACT_CORPUS_ID_JOIN_TITLE_FEED_TITLE_PUBLISHED_AT_ONLY",
+  "randomization": "OS_RANDOM_32_BYTES;HMAC_SHA256_DOMAIN_SEPARATED_ORDER_AND_ORIENTATION_BY_PAIR_KEY;REJECT_RANK_ORDER",
+  "review_ids": "POST_PERMUTATION_R001_TO_R011",
+  "ui": "LOCAL_STANDALONE_ONE_PAIR_KEYBOARD_1_TO_4_ARROWS_LOCALSTORAGE_EXPORT_ONLY_COMPLETE_NO_IMPORT",
+  "initial_decisions": 0,
+  "session_state": "PREPARED_UNOPENED",
+  "firewall": "NO_LABELS_NO_BODY_NO_NETWORK_NO_MODEL_NO_BENCHMARK_NO_NONCANONICAL_ATTEMPT"
+}
