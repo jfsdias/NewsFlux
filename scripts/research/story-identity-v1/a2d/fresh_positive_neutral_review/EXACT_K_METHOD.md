@@ -1,0 +1,7 @@
+# Preregistered exact-cardinality rank objective
+
+For a fixed graph with distinct ranks, select exactly k disjoint edges whose ascending rank vector is lexicographically minimal. Visit edges by increasing rank. Accept an unoccupied edge only when the graph of later edges with occupied vertices and this edge's vertices removed has matching capacity at least the number still required. Reject it otherwise. NetworkX 3.4.2 provides only the cardinality of a maximum matching; the identity or weight of that matching has no role in the decision.
+
+Proof: assume all prior choices agree with a lexicographically optimal feasible completion. If the current edge permits a completion, every matching that omits it has a later next rank, so including it is necessary for lexicographic optimality. If it does not permit a completion, no feasible matching consistent with prior choices can include it. By induction each decision preserves an optimal completion, and the final k ranks are lexicographically minimal. Capacity at least the number required suffices because a subset of a matching is itself a matching.
+
+The two largest components use targets 21 and 17, respectively; both singleton edges are mandatory. No titles, content, human labels or model calls inform selection. The implementation and synthetic tests must be committed before real source selection. Truncating any maximum-cardinality matching is not this objective.
