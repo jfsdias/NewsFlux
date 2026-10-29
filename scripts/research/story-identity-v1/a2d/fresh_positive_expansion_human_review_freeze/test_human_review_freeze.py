@@ -70,3 +70,21 @@ class AdditionalTests(unittest.TestCase):
             if mode=='missing':args[2].pop()
             else:args[2][0]['review_id']='R999'
             with self.assertRaises(ValueError):f.restore(*args)
+
+class IndependentTests(unittest.TestCase):
+    def test_independent_validator_and_rejections(self):
+        import csv,io
+        import validate_human_review_freeze as v
+        complete,visible,mapping,selected=fixture()
+        def csvbytes(rows):
+            text=io.StringIO(newline='');w=csv.DictWriter(text,fieldnames=f.COLUMNS,lineterminator='\n');w.writeheader();w.writerows(rows);return text.getvalue().encode()
+        export=csvbytes(complete);vis=csvbytes(visible);maps=b''.join(f.canonical(x) for x in mapping);select=b''.join(f.canonical(x) for x in selected);labels=b''.join(f.canonical(x) for x in f.restore(complete,visible,mapping,selected));meta,identity=f.fingerprints(visible,mapping)
+        contract={'export_bytes':len(export),'export_sha256':f.sha(export),'metadata_sha256':meta,'identity_map_sha256':identity}
+        audit={'row_count':11,'nonempty_decision_count':11,'unknown_decision_count':0,'review_id_count':11,'metadata_match':True,'identity_join_count':11}
+        receipt={'distribution_computed':False,'scientific_result_computed':False}
+        v.validate(export,vis,maps,select,labels,audit,receipt,contract)
+        altered=copy.deepcopy(receipt);altered['distribution_computed']=True
+        with self.assertRaises(ValueError):v.validate(export,vis,maps,select,labels,audit,altered,contract)
+        corrupt=copy.deepcopy(mapping);corrupt[0]['left_article_id']=999
+        with self.assertRaises(ValueError):v.validate(export,vis,b''.join(f.canonical(x) for x in corrupt),select,labels,audit,receipt,contract)
+        with self.assertRaises(ValueError):v.validate(export+b'x',vis,maps,select,labels,audit,receipt,contract)

@@ -23,7 +23,7 @@ def restore(completed, visible, mapping, selected):
     if len(completed)!=11 or len(visible)!=11 or len(mapping)!=11 or len(selected)!=11:raise ValueError('ROW_COUNT')
     if [x.get('review_id') for x in completed]!=ids or [x.get('review_id') for x in visible]!=ids or [x.get('review_id') for x in mapping]!=ids:raise ValueError('REVIEW_ID_ORDER')
     byid={x['review_id']:x for x in mapping}
-    if len(byid)!=11 or len({x['pair_key'] for x in mapping})!=11:raise ValueError('MAPPING_UNIQUENESS')
+    if len(byid)!=11 or len({x['pair_key'] for x in mapping})!=11 or len({z for x in mapping for z in (x['article_id_a'],x['article_id_b'])})!=22:raise ValueError('MAPPING_UNIQUENESS')
     expected={tuple(x[k] for k in IDENTITY_KEYS) for x in selected}
     actual={tuple(x[k] for k in IDENTITY_KEYS) for x in mapping}
     if len(expected)!=11 or expected!=actual:raise ValueError('PAIR_IDENTITY')
