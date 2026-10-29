@@ -58,3 +58,8 @@ or fail threshold. Lane quotas also remain undecided.
 
 No human decisions, D2E3 article content, source payload, model inference,
 benchmark, live source or publisher access occurred. BLIND remains sealed.
+
+The frozen R3B corpus audit is pinned by the capture manifest at SHA-256
+`f524be2a9ebc6ec32fae11a5c7c0ec71e09822b403bf884e6e9757d4cfb893c2`.
+Its aggregate Home-200 and Gold article-overlap counts are both zero. This
+reuses the recorded isolation evidence without opening historical labels.
