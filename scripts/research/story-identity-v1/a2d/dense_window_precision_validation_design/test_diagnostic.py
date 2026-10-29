@@ -1,0 +1,22 @@
+import unittest
+import diagnostic_core as d
+class DiagnosticTests(unittest.TestCase):
+ def test_hash_mismatch(self):
+  with self.assertRaises(ValueError):d.verify_hash(b'x','0'*64)
+ def test_noncanonical_attempt(self):
+  with self.assertRaises(ValueError):d.verify_role('OTHER')
+ def test_blind_path(self):
+  with self.assertRaises(PermissionError):d.guard_name('blind-human-labels.csv')
+ def test_network(self):
+  with self.assertRaises(PermissionError):d.forbid_network()
+ def test_bad_counts(self):
+  with self.assertRaises(ValueError):d.check_counts({'SAME_EVENT':8})
+ def test_review_pack_generation_forbidden(self):
+  with self.assertRaises(PermissionError):d.forbid_review_pack()
+ def test_feature_mismatch(self):
+  with self.assertRaises(ValueError):d.check_feature_semantics('incompatible')
+ def test_b1_mismatch(self):
+  with self.assertRaises(ValueError):d.check_b1({1},{2})
+ def test_exclusion(self):
+  with self.assertRaises(ValueError):d.verify_excluded([{'a':1,'b':2}],{1})
+ def test_replay(self):self.assertEqual(d.canonical({'x':1}),d.canonical({'x':1}))
