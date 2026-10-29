@@ -70,3 +70,16 @@ def safe_metrics(row):
     if set(row) != allowed: raise ValueError('non-aggregate output')
     if any(not isinstance(v,(int,float,bool,type(None))) for v in row.values()): raise ValueError('invalid aggregate value')
     return dict(row)
+
+
+def threshold_metadata(strategy, quantiles):
+    direct={'B1':('Q70','.7'),'B2':('Q60','.6'),'B3':('Q80','.8'),'B4':('Q80','.8')}
+    if strategy in direct:
+        label,key=direct[strategy]
+        return {'QWEN_THRESHOLD_USED':quantiles[key], 'QWEN_THRESHOLD_POLICY':{'kind':'DIRECT_RESIDUAL_QUANTILE','quantile_id':label}}
+    if strategy=='B0':
+        policy={'kind':'INHERITED_D2F1_LANE_SPECIFIC','source':'FROZEN_D2F1_POOL','lane_quantile_policy':{'STRONG_CONSENSUS':'D2F1_Q90','GRAPH_SUPPORTED_EVENT':'D2F1_Q75','CROSS_SOURCE_PARAPHRASE':'D2F1_Q90','POSITIVE_BOUNDARY':'D2F1_Q90'}}
+    elif strategy=='B5':
+        policy={'kind':'UNION_OF_STRATEGIES','constituents':['B1_GRAPH_Q70','B2_GRAPH_Q60_ANCHORED','B3_CONSENSUS_Q80','B4_PARAPHRASE_Q80']}
+    else:raise ValueError('unknown strategy')
+    return {'QWEN_THRESHOLD_USED':None,'QWEN_THRESHOLD_POLICY':policy}

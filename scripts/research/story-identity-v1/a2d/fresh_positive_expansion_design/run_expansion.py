@@ -127,6 +127,7 @@ def calculate(src):
     for name in ('B0','B1','B2','B3','B4','B5'):
         sub=[x for x in rows if name in x['strategy_membership']]
         summaries[name]=e.safe_metrics(e.metrics(sub))
+        summaries[name].update(e.threshold_metadata(name,q))
     return rows,{'quantiles':q,'strategies':summaries,'non_dominated':['B0','B1','B2','B3','B4','B5'],'minimum_additional_positives_required':5,'expected_positive_yield':'NOT_ESTIMATED','feasible':any(x['logical_capacity_gate'] for x in summaries.values())}
 
 
@@ -150,9 +151,9 @@ def main():
     attempt=output/('attempt-'+datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))
     attempt.mkdir(mode=0o700)
     contract=enc({'version':'D2F6_V1','preregistration_sha':PRE,'design_sha256':digest(contract_data),'input_sha256':source_pins({role:(path,INPUTS[path]) for role,path in SOURCE_ROLES.items()})})
-    receipt=enc({'version':'D2F6_V1','replay':'PASS','independent_validator':'PASS','prior_review_article_overlap':0,'human_label_accesses':0,'d2f5_private_analysis_accesses':0,'network_requests':0,'review_pack_created':False,'model_calls':0,'benchmark_runs':0})
+    receipt=enc({'version':'D2F6_V1','schema_version':'D2F6_THRESHOLD_REPORTING_V2','schema_erratum_commit_sha':'f58bee9870f11e30a1b26de2791d5b37838827ea','replay':'PASS','independent_validator':'PASS','prior_review_article_overlap':0,'human_label_accesses':0,'d2f5_private_analysis_accesses':0,'network_requests':0,'review_pack_created':False,'model_calls':0,'benchmark_runs':0})
     artifacts={'fresh-positive-expansion-contract-v1.json':contract,'fresh-positive-expansion-candidates-v1.jsonl':data,'fresh-positive-expansion-frontier-v1.json':frontier,'fresh-positive-expansion-receipt-v1.json':receipt}
-    manifest=enc({'version':'D2F6_V1','input_sha256':source_pins({role:(path,INPUTS[path]) for role,path in SOURCE_ROLES.items()}),'sha256':{name:digest(value) for name,value in artifacts.items()}})
+    manifest=enc({'version':'D2F6_V1','schema_version':'D2F6_THRESHOLD_REPORTING_V2','schema_erratum_commit_sha':'f58bee9870f11e30a1b26de2791d5b37838827ea', 'input_sha256':source_pins({role:(path,INPUTS[path]) for role,path in SOURCE_ROLES.items()}),'sha256':{name:digest(value) for name,value in artifacts.items()}})
     artifacts['fresh-positive-expansion-manifest-v1.json']=manifest
     with e.firewall(set(INPUTS)|{attempt/name for name in artifacts}):
         for name,value in artifacts.items():

@@ -31,6 +31,7 @@ def validate(src, candidates, frontier):
     for idx,n in enumerate((60,70,75,80,90),8):
         k='.'+str(n/100).split('.')[1]
         require(f'V{idx:02d}_QUANTILE_Q{n}', qs[k]==frontier['quantiles'][k])
+    validate_thresholds(frontier['strategies'],qs)
     expected={}
     for x in eligible:
         a,b=int(x['article_a_id']),int(x['article_b_id']);k=f'{a}:{b}';s=graph[k]['shared_support_feed_count'];v=x['qwen_score'];lex=x['lexical_overlap']
@@ -98,3 +99,17 @@ def validate_input_pins(contract, manifest):
         require('V01_SOURCE_HASHES',actual==r.INPUTS[path])
         expected[role]=actual
     require('V30_MANIFEST_INPUT_PINS',contract.get('input_sha256')==expected and manifest.get('input_sha256')==expected)
+
+
+def validate_thresholds(strategies, independently_recomputed_quantiles):
+    required={'pairs','articles','components','largest_component_pairs','largest_component_share','matching','feed_combinations','max_feed_share','category_combinations','max_category_share','title_equivalent_pairs','both_usable_rate','logical_capacity_gate','QWEN_THRESHOLD_USED','QWEN_THRESHOLD_POLICY'}
+    require('V07A_STRATEGY_METRICS_SCHEMA_COMPLETENESS',set(strategies)=={'B0','B1','B2','B3','B4','B5'})
+    for row in strategies.values():
+        require('V07A_STRATEGY_METRICS_SCHEMA_COMPLETENESS',set(row)==required)
+    for name, label, key in [('B1','Q70','.7'),('B2','Q60','.6'),('B3','Q80','.8'),('B4','Q80','.8')]:
+        row=strategies[name]
+        require('V07B_QWEN_THRESHOLD_POLICY_SEMANTIC_CORRECTNESS',type(row['QWEN_THRESHOLD_USED']) in (int,float) and row['QWEN_THRESHOLD_USED']==independently_recomputed_quantiles[key] and row['QWEN_THRESHOLD_POLICY']=={'kind':'DIRECT_RESIDUAL_QUANTILE','quantile_id':label})
+    b0={'kind':'INHERITED_D2F1_LANE_SPECIFIC','source':'FROZEN_D2F1_POOL','lane_quantile_policy':{'STRONG_CONSENSUS':'D2F1_Q90','GRAPH_SUPPORTED_EVENT':'D2F1_Q75','CROSS_SOURCE_PARAPHRASE':'D2F1_Q90','POSITIVE_BOUNDARY':'D2F1_Q90'}}
+    b5={'kind':'UNION_OF_STRATEGIES','constituents':['B1_GRAPH_Q70','B2_GRAPH_Q60_ANCHORED','B3_CONSENSUS_Q80','B4_PARAPHRASE_Q80']}
+    for name,policy in [('B0',b0),('B5',b5)]:
+        require('V07B_QWEN_THRESHOLD_POLICY_SEMANTIC_CORRECTNESS',strategies[name]['QWEN_THRESHOLD_USED'] is None and strategies[name]['QWEN_THRESHOLD_POLICY']==policy)

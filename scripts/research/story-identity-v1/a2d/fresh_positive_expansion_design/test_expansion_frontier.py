@@ -94,3 +94,30 @@ class ProvenanceCollisionRegression(unittest.TestCase):
         import run_expansion
         pins=run_expansion.source_pins(sources)
         self.assertEqual(len(pins),len(sources), 'both distinct logical roles must survive')
+
+class ThresholdSchemaTests(unittest.TestCase):
+    def setUp(self):
+        self.q={'.6':.2,'.7':.3,'.75':.4,'.8':.5,'.9':.6}
+    def test_direct_and_composite_policies(self):
+        for name,qid,key in [('B1','Q70','.7'),('B2','Q60','.6'),('B3','Q80','.8'),('B4','Q80','.8')]:
+            with self.subTest(name=name):
+                metadata=e.threshold_metadata(name,self.q)
+                self.assertEqual(metadata,{'QWEN_THRESHOLD_USED':self.q[key], 'QWEN_THRESHOLD_POLICY':{'kind':'DIRECT_RESIDUAL_QUANTILE','quantile_id':qid}})
+        b0=e.threshold_metadata('B0',self.q);b5=e.threshold_metadata('B5',self.q)
+        self.assertIsNone(b0['QWEN_THRESHOLD_USED'])
+        self.assertEqual(b0['QWEN_THRESHOLD_POLICY']['kind'],'INHERITED_D2F1_LANE_SPECIFIC')
+        self.assertEqual(b0['QWEN_THRESHOLD_POLICY']['lane_quantile_policy'],{'STRONG_CONSENSUS':'D2F1_Q90','GRAPH_SUPPORTED_EVENT':'D2F1_Q75','CROSS_SOURCE_PARAPHRASE':'D2F1_Q90','POSITIVE_BOUNDARY':'D2F1_Q90'})
+        self.assertIsNone(b5['QWEN_THRESHOLD_USED'])
+        self.assertEqual(b5['QWEN_THRESHOLD_POLICY'],{'kind':'UNION_OF_STRATEGIES','constituents':['B1_GRAPH_Q70','B2_GRAPH_Q60_ANCHORED','B3_CONSENSUS_Q80','B4_PARAPHRASE_Q80']})
+    def test_validator_rejects_schema_and_semantic_mutations(self):
+        import copy, validate_expansion_frontier as v
+        strategies={name:dict(e.metrics([]),**e.threshold_metadata(name,self.q)) for name in ('B0','B1','B2','B3','B4','B5')}
+        v.validate_thresholds(strategies,self.q)
+        mutations=[('B1','QWEN_THRESHOLD_USED',None),('B2','QWEN_THRESHOLD_USED',None),('B3','QWEN_THRESHOLD_USED',None),('B4','QWEN_THRESHOLD_USED',None),('B0','QWEN_THRESHOLD_USED',0.3),('B5','QWEN_THRESHOLD_USED',0.2),('B1','QWEN_THRESHOLD_USED',0.99),('B1','QWEN_THRESHOLD_POLICY',{'kind':'UNKNOWN'}),('B0','QWEN_THRESHOLD_POLICY',{'kind':'INHERITED_D2F1_LANE_SPECIFIC','lane_quantile_policy':{'GRAPH_SUPPORTED_EVENT':'Q75'}}),('B5','QWEN_THRESHOLD_POLICY',{'kind':'UNION_OF_STRATEGIES','constituents':['B1_GRAPH_Q70']})]
+        for name,key,value in mutations:
+            case=copy.deepcopy(strategies);case[name][key]=value
+            with self.subTest(name=name,key=key,value=value):
+                with self.assertRaises(v.ValidationError):v.validate_thresholds(case,self.q)
+        for key in ('QWEN_THRESHOLD_USED','QWEN_THRESHOLD_POLICY'):
+            case=copy.deepcopy(strategies);del case['B1'][key]
+            with self.assertRaises(v.ValidationError):v.validate_thresholds(case,self.q)
