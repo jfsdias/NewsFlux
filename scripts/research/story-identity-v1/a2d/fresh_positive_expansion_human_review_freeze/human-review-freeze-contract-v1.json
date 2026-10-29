@@ -1,0 +1,47 @@
+{
+  "version": "D2F9_HUMAN_REVIEW_FREEZE_V1",
+  "base_sha": "6a1564efb434d1dc54167fc43730b490a21a4684",
+  "export_sha256": "88810539eeed4750cdbea51580038eb5d2fcd1483e71c14e145b6e4f366b17ea",
+  "export_bytes": 2816,
+  "d2f8_sha256": {
+    "neutral-review-contract-v1.json": "573e02c06e4afd63a9814102b6adf11d15e20673b38aa137581ca7cbe090fe42",
+    "neutral-review-randomization-v1.json": "5a733221d0fc601761869f11a8321ae0bf92621baa79c0eda073073cd04d9607",
+    "neutral-review-identity-map-v1.jsonl": "43cb5ade3368e569e29e3ea3db8ea1714711c9a0aa912438475b2ca40146e16f",
+    "neutral-review-session-v1.csv": "2eef50795bbd20b9b6fdc42218e4cc965836254eebe41f6ae06a967c8af94078",
+    "neutral-review-guide-v1.md": "87557a50e74f5ab0873eb7ff019a435564662fe4a63c0e52737bc2422261014f",
+    "neutral-review-ui-v1.html": "b878cbd9300dc42c579133e892c7b30e18fffc75fe0d9c625e984c204122a464",
+    "neutral-review-receipt-v1.json": "1faa349c2662fd27334419582a475a0d2ba6232c9972aa293e740db6fc2e7281",
+    "neutral-review-manifest-v1.json": "2bda5f1687556178d81b5b11a14451a9c7d1eac8fc8906f018ce3a5c93aac2fc"
+  },
+  "d2f7_selected_pack_sha256": "3ec8311246638bff569c4247c772ada37253860da8fed89c5d3e0f81766b4bb6",
+  "metadata_sha256": "4c78298281826a7a034340d3b817d110f4885ba2aee75e8777777a5e83037e9b",
+  "identity_map_sha256": "aa13aab2b5d9acf1cccb19cb1cd40f99b91ac19590f68b33f52c6d50029c077d",
+  "csv_columns": [
+    "review_id",
+    "left_title",
+    "left_source",
+    "left_published_at",
+    "right_title",
+    "right_source",
+    "right_published_at",
+    "human_decision"
+  ],
+  "review_ids": "R001-R011_IN_ORDER",
+  "taxonomy": ["SAME_EVENT", "RELATED_TOPIC", "DIFFERENT_EVENT", "UNCERTAIN"],
+  "join": "EXACT_REVIEW_ID_ONE_TO_ONE_AND_COMPARE_D2F7_IDENTITY_PROJECTION",
+  "restored_keys": [
+    "review_id",
+    "pair_key",
+    "article_id_a",
+    "article_id_b",
+    "left_article_id",
+    "right_article_id",
+    "selection_position",
+    "b1_rank",
+    "human_decision"
+  ],
+  "analysis": "NO_DISTRIBUTION_NO_CLASS_COUNTS_NO_DISCOVERY_NO_CALIBRATION_NO_BENCHMARK",
+  "replay": "TWO_INDEPENDENT_GENERATIONS_EXACT_BYTES",
+  "privacy": "PRIVATE_ONLY_NO_LABELS_IDENTITIES_TITLES_IN_GIT_NO_BLIND_NO_MODEL_NO_NETWORK",
+  "stop": "HASH_SCHEMA_DECISION_METADATA_IDENTITY_REPLAY_VALIDATOR_OR_PRIVACY_FAILURE"
+}
