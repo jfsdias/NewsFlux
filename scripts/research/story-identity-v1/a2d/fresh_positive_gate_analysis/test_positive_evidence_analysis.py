@@ -101,3 +101,29 @@ class BoundaryTests(unittest.TestCase):
         with tempfile.NamedTemporaryFile() as f:
             os.chmod(f.name, 0o600)
             with self.assertRaises(ValueError): verified(f.name, hashlib.sha256(b'').hexdigest())
+
+class HashGateTests(unittest.TestCase):
+    def test_tampered_labels_and_selected_pack_are_rejected_before_parse(self):
+        import hashlib
+        import os
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        import analyze_positive_evidence as module
+        with tempfile.TemporaryDirectory() as directory:
+            paths = [Path(directory) / str(i) for i in range(5)]
+            blob = b'{"synthetic":true}\n'
+            digest = hashlib.sha256(blob).hexdigest()
+            for path in paths:
+                path.write_bytes(blob)
+                os.chmod(path, 0o444)
+            with patch.multiple(module, LABEL_HASH=digest, PACK_HASH=digest, AUDIT_HASH=digest, MANIFEST_HASH=digest, CONTRACT_HASH=digest):
+                for index in (0, 1):
+                    os.chmod(paths[index], 0o600)
+                    paths[index].write_bytes(b'tampered')
+                    os.chmod(paths[index], 0o444)
+                    with self.assertRaisesRegex(ValueError, 'hash mismatch'):
+                        module.load_inputs(*paths)
+                    os.chmod(paths[index], 0o600)
+                    paths[index].write_bytes(blob)
+                    os.chmod(paths[index], 0o444)
