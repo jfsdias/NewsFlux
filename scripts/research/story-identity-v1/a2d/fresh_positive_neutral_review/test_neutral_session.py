@@ -61,3 +61,32 @@ class SyntheticSelectionTests(unittest.TestCase):
     def test_deterministic_replay(self):self.assertEqual((self.selected,self.proof),s.select(self.rows))
     def test_source_component_drift_rejected(self):
         with self.assertRaises(ValueError):s.select(self.rows[:-1])
+
+class SyntheticValidatorTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        SyntheticSelectionTests.setUpClass()
+        cls.rows=SyntheticSelectionTests.rows
+        cls.selected=SyntheticSelectionTests.selected
+        cls.proof=SyntheticSelectionTests.proof
+    def make_fixture(self,path):
+        pool=path/'source';pool.mkdir()
+        (pool/next(iter(s.FILES))).write_bytes(b''.join(s.canon(x) for x in self.rows))
+        target=path/'target';target.mkdir()
+        (target/'selected-positive-review-pack-v1.jsonl').write_bytes(b''.join(s.canon(x) for x in self.selected))
+        (target/'exact-k-proof-v1.json').write_bytes(s.canon(self.proof))
+        return pool,target
+    def test_independent_selected_pack_validation(self):
+        from unittest.mock import patch
+        import validate_selected_pack as v
+        with tempfile.TemporaryDirectory() as d:
+            pool,target=self.make_fixture(pathlib.Path(d))
+            with patch.object(v,'source',return_value=pool):self.assertEqual(v.validate(target)['selected_pack_validator'],'PASS')
+    def test_source_pool_outsider_rejected(self):
+        from unittest.mock import patch
+        import validate_selected_pack as v
+        with tempfile.TemporaryDirectory() as d:
+            pool,target=self.make_fixture(pathlib.Path(d))
+            bad=[dict(x) for x in self.selected];bad[0]['pair_key']='9999:9998'
+            (target/'selected-positive-review-pack-v1.jsonl').write_bytes(b''.join(s.canon(x) for x in bad))
+            with patch.object(v,'source',return_value=pool),self.assertRaises(ValueError):v.validate(target)
