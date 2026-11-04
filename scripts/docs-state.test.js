@@ -24,14 +24,63 @@ const walkSources = (directory) =>
     return /\.(?:js|jsx)$/.test(entry.name) && !entry.name.endsWith(".test.js") ? [relative] : []
   })
 
+// History checks need a full clone. A shallow checkout (the default for CI checkouts) or a source
+// archive cannot resolve older commits, so only the format is verified there.
+const canResolveHistory = () => {
+  try {
+    const shallow = execFileSync("git", ["rev-parse", "--is-shallow-repository"], {
+      cwd: root,
+      encoding: "utf8",
+    })
+    return shallow.trim() === "false"
+  } catch {
+    return false
+  }
+}
+
 test("the current-state documents name the same audited commit, and it is in the repository history", () => {
   const commits = [PROJECT_STATE, ROADMAP, PWA].map((document) => auditedCommitOf(document))
 
   assert.ok(commits.every(Boolean), "every document must state an audited commit")
   assert.equal(new Set(commits).size, 1, "documents must agree on the audited commit")
-  assert.doesNotThrow(() =>
-    execFileSync("git", ["merge-base", "--is-ancestor", commits[0], "HEAD"], { cwd: root }),
-  )
+  assert.match(commits[0], /^[\da-f]{40}$/)
+  if (canResolveHistory()) {
+    assert.doesNotThrow(() =>
+      execFileSync("git", ["merge-base", "--is-ancestor", commits[0], "HEAD"], { cwd: root }),
+    )
+  }
+})
+
+const currentSection = (document, headingPattern) => {
+  const start = document.search(headingPattern)
+  assert.ok(start >= 0, `missing section ${headingPattern}`)
+  const rest = document.slice(start + 1)
+  const next = rest.search(/^## /m)
+  return next === -1 ? rest : rest.slice(0, next)
+}
+
+test("the tables of the current-state sections are well formed", () => {
+  const sections = [
+    currentSection(PROJECT_STATE, /^## Current state/m),
+    currentSection(ROADMAP, /^## 24\. Current canonical state/m),
+    currentSection(PWA, /^## 17\. Current implementation/m),
+  ]
+
+  for (const section of sections) {
+    const lines = section.split("\n")
+    let columns = 0
+    for (const line of lines) {
+      if (!line.startsWith("|")) {
+        columns = 0
+        continue
+      }
+      const count = line.split(/(?<!\\)\|/).length
+      if (columns === 0) {
+        columns = count
+      }
+      assert.equal(count, columns, `unescaped pipe or ragged row in a table: ${line.slice(0, 80)}`)
+    }
+  }
 })
 
 test("each document declares exactly one current state and points to it", () => {
