@@ -134,6 +134,13 @@ test("no-op and swallowed-error package script mutations are rejected", () => {
     )
   }
 
+  assert.ok(
+    validatePackageScripts({ ...scripts, "test:src": "node --test src/**/*.test.js" }).some(
+      (problem) => problem.includes("test:src"),
+    ),
+    "source test globs must stay quoted so the shell cannot expand them before Node",
+  )
+
   for (const [name, bypass] of [
     ["lint", "eslint || true"],
     ["format:check", "prettier --check .; exit 0"],

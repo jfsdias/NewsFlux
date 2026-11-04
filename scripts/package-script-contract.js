@@ -1,8 +1,8 @@
 const EXPECTED_PACKAGE_SCRIPTS = {
   lint: "eslint",
   "format:check": "prettier --check .",
-  "test:src": "node --test src/**/*.test.js",
-  "test:scripts": "node --test scripts/*.test.js",
+  "test:src": 'node --test "src/**/*.test.js"',
+  "test:scripts": 'node --test "scripts/*.test.js"',
   test: "pnpm run test:src && pnpm run test:scripts",
   build: "vite build",
   "knip:check": "node scripts/check-knip-baseline.js",
@@ -11,9 +11,7 @@ const EXPECTED_PACKAGE_SCRIPTS = {
 }
 
 const normalizeCommand = (command) =>
-  typeof command === "string"
-    ? command.replaceAll(/["']/g, "").trim().replaceAll(/\s+/g, " ")
-    : null
+  typeof command === "string" ? command.trim().replaceAll(/\s+/g, " ") : null
 
 const validatePackageScripts = (scripts) => {
   if (!scripts || typeof scripts !== "object" || Array.isArray(scripts)) {
