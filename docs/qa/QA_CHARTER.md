@@ -22,6 +22,7 @@ One person or agent may hold several roles over time, but not for the same chang
 2. When no independent reviewer was available, the review is reported as **incomplete**, and the change cannot be `QA_PASSED`; the best it can be is `QA_PASSED_WITH_LIMITATIONS` with that limitation written down.
 3. The reviewer re-runs the evidence rather than reading the author's summary: the failing test before the change, the passing test after it, and at least one meaningful negative case.
 4. Code review does not replace functional testing, and a passing test does not prove a requirement that the test does not express.
+5. **Independence is a rule of this charter, not something the repository can check.** No workflow or test can tell who wrote a change or who reviewed it. It is enforced by the reviewer recording their identity in the QA report and by the owner declining to approve a change whose report has no independent reviewer.
 
 ## Evidence
 
@@ -63,7 +64,7 @@ A behavior that nobody has specified is **not** a confirmed regression. When QA 
 
 1. Record it in the findings register as `REQUIREMENT_PENDING`.
 2. Write the proposed requirement and the options in `docs/qa/proposals/`.
-3. Add a test that documents the _current_ behavior and fails loudly when the behavior changes, so the decision is not silently pre-empted.
+3. Add a test that asserts the _proposed_ behavior inside the `requirementPending` wrapper (`e2e/support/classification.js`). The wrapper requires the assertion to fail for the recorded reason and reports the scenario as `REQUIREMENT_PENDING`, never as a pass. If the behavior starts to satisfy the proposal, or fails for another reason, the test fails, so the decision is neither silently pre-empted nor silently lost.
 4. Do not implement the proposed behavior until the owner approves it.
 
 ## Risk levels
@@ -76,7 +77,15 @@ A behavior that nobody has specified is **not** a confirmed regression. When QA 
 | **R3** | State, data, API, authentication, reading or writing Miniflux.  | Mark as read, API keys, pagination.       |
 | **R4** | Platform: PWA/service worker, headers, build, CI, dependencies. | `vite.config.js`, `Caddyfile`, workflows. |
 
-The minimum evidence per level is defined in the pull request template and enforced by review.
+The minimum evidence per level is the table below. The pull request template asks for the level and the evidence; review enforces the table, and no workflow checks it.
+
+| Level  | Minimum evidence                                                                                                                                                                                                    |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **R0** | The documents, tests or comments still agree with the repository (`pnpm test`, Prettier). No behavior claim without a command that was run.                                                                         |
+| **R1** | A failing test before the change, the same test passing after it, the full source and script suites on Node 22 and 24, and one negative case.                                                                       |
+| **R2** | All of R1, plus an automated browser check at the affected viewports and input modes (mouse and touch), labeled **Emulated**. A device is not implied.                                                              |
+| **R3** | All of R2, plus a failure-path case against the mock Miniflux (HTTP error, malformed body, empty body), and a check that no data is written wrongly.                                                                |
+| **R4** | All of R3, plus a production build on Node 22 and 24 and, for PWA or service-worker changes, an offline and update scenario. Physical-device or installed-PWA behavior stays "not verified" until a device is used. |
 
 ## Acceptance states
 

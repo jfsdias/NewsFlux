@@ -74,7 +74,7 @@ Earlier history (PRs #1 to #129) is summarized in the historical sections below.
 
 ### Engineering and QA state (STABILIZATION-01)
 
-- **Tests:** 594 source tests and 143 script tests pass on Node 22.23.4 and Node 24.22.0 (the Dockerfile uses Node 24.22.0). The `article-code-block-controls` test previously failed on Node 22 only; it is fixed. There is no Vitest; tests use `node --test`.
+- **Tests:** 594 source tests and 157 script tests pass on Node 22.23.4 and Node 24.22.1 (the Dockerfile pins Node 24.22.0). The `article-code-block-controls` test previously failed on Node 22 only; it is fixed. There is no Vitest; tests use `node --test`.
 - **CI:** `.github/workflows/quality.yaml` runs ESLint, Prettier, source and script tests (Node 22 and 24), the production build (Node 22 and 24) and the knip baseline. `.github/workflows/e2e.yaml` runs the Playwright scenarios. Both are read-only and are **not** marked as required; that is a repository setting. The deploy workflows still contain an `electh/ReactFlux` repository guard and do not run in this fork. The workflows have not yet run on a GitHub runner.
 - **knip:** `knip.json` declares the browser harness entries; `pnpm knip:check` compares findings with the accepted baseline (44 entries) and fails on any new or stale finding. See `docs/qa/KNIP_BASELINE.md`.
 - **E2E:** 46 Playwright scenarios against a synthetic Miniflux: 38 pass, 5 are recorded known defects (QA-001) and 3 are pending requirements (QA-002, QA-003, QA-004). Three independent runs agreed. See `docs/qa/E2E.md`.
