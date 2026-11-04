@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process"
 import { randomUUID } from "node:crypto"
-import { existsSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import process from "node:process"
 import { fileURLToPath } from "node:url"
@@ -18,6 +18,12 @@ import {
 import { validateInventory } from "./e2e-stability.js"
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
+
+const sanitizeDiagnostic = (value) =>
+  String(value)
+    .replaceAll(/\bBearer\s+\S+/gi, "Bearer [REDACTED]")
+    .replaceAll(/((?:token|password|api[_-]?key|authorization)=)[^&\s]+/gi, "$1[REDACTED]")
+    .replaceAll(/(authorization:\s*)[^\r\n]+/gi, "$1[REDACTED]")
 
 const parseInventory = (inventoryPath) => {
   if (!existsSync(inventoryPath)) {
@@ -104,6 +110,37 @@ const runVerifiedE2E = ({
   if (inventory) {
     const validation = validateInventory(inventory, expectedScenarios, { expectedRunId: runId })
     problems.push(...validation.problems)
+  }
+
+  const summary = {
+    version: 1,
+    runId,
+    exitCode,
+    signal,
+    verified: problems.length === 0,
+    counts: inventory?.counts ?? null,
+    validationErrors: [
+      ...problems,
+      ...(Array.isArray(inventory?.contractProblems) ? inventory.contractProblems : []),
+      ...(Array.isArray(inventory?.scenarios)
+        ? inventory.scenarios
+            .filter(
+              ({ state, note }) => state === "FAILED" && typeof note === "string" && note !== "",
+            )
+            .map(({ id, note }) => `${id}: ${note}`)
+        : []),
+    ].map((problem) => sanitizeDiagnostic(problem).slice(0, 2000)),
+    scenarios: Array.isArray(inventory?.scenarios)
+      ? inventory.scenarios.map(({ id, state, durationMs }) => ({ id, state, durationMs }))
+      : [],
+  }
+  try {
+    writeFileSync(
+      path.join(outputDirectory, "summary.json"),
+      `${JSON.stringify(summary, null, 2)}\n`,
+    )
+  } catch (error) {
+    console.error(`Could not write sanitized E2E summary: ${sanitizeDiagnostic(error.message)}`)
   }
 
   return {

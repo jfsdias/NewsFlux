@@ -27,6 +27,67 @@ export const elementAtCenter = (locator) =>
     return target?.closest("button")?.getAttribute("aria-label") ?? target?.tagName ?? null
   })
 
+/** Captures structured DOM hit-test evidence for the actual center of a target element. */
+export const inspectPointerAtCenter = (locator, inputMode = "touch") =>
+  locator.evaluate((closeElement, mode) => {
+    const closeButton = closeElement.closest("button") ?? closeElement
+    const rect = closeElement.getBoundingClientRect()
+    const center = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+    const target = document.elementFromPoint(center.x, center.y)
+    const stack = document.elementsFromPoint(center.x, center.y)
+
+    const accessibleName = (element) => {
+      const labelledBy = element.getAttribute("aria-labelledby")
+      if (labelledBy) {
+        const text = labelledBy
+          .split(/\s+/)
+          .map((id) => document.querySelector(`#${CSS.escape(id)}`)?.textContent ?? "")
+          .join(" ")
+          .trim()
+        if (text) {
+          return text
+        }
+      }
+      return (
+        element.getAttribute("aria-label") ??
+        element.textContent?.replaceAll(/\s+/g, " ").trim() ??
+        ""
+      )
+    }
+
+    const describe = (element, isCloseArticle = false) => ({
+      tagName: element.tagName,
+      role:
+        element.getAttribute("role") ??
+        { BUTTON: "button", A: "link", INPUT: "textbox" }[element.tagName] ??
+        "",
+      accessibleName: accessibleName(element),
+      isCloseArticle,
+      rect: (() => {
+        const bounds = element.getBoundingClientRect()
+        return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height }
+      })(),
+    })
+
+    const nearestButton = target?.closest("button") ?? null
+
+    return {
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      inputMode: mode,
+      closeButton: {
+        accessibleName: accessibleName(closeButton),
+        rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+      },
+      center,
+      hitTarget: target ? describe(target) : null,
+      hitTargetIsCloseArticle: (target?.closest("button") ?? target) === closeButton,
+      nearestInterceptingButton: nearestButton ? describe(nearestButton) : null,
+      elementsAtCenter: stack.map((element) =>
+        describe(element, element === closeButton || element.closest("button") === closeButton),
+      ),
+    }
+  }, inputMode)
+
 export const center = async (locator) => {
   const box = await locator.boundingBox()
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 }

@@ -195,6 +195,23 @@ test("the e2e workflow installs the pinned browser and runs the Playwright suite
   assert.ok(commands.has("pnpm test:e2e"))
 })
 
+test("failed E2E runs upload only their invocation-scoped diagnostics", () => {
+  const { workflow } = readE2eWorkflow()
+  const steps = stepsOf(workflow.jobs.e2e)
+  const upload = steps.find((step) => step.name === "Upload synthetic E2E diagnostics")
+
+  assert.ok(upload, "the failed run must preserve diagnostic evidence")
+  assert.equal(upload.if, "${{ failure() }}")
+  assert.equal(upload.uses, "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9")
+  assert.deepEqual(upload.with, {
+    name: "synthetic-e2e-diagnostics-${{ github.run_id }}",
+    path: "test-results/verified-e2e/",
+    "if-no-files-found": "ignore",
+    "retention-days": 3,
+  })
+  assert.equal(upload["continue-on-error"], undefined)
+})
+
 test("the e2e scripts exist and Playwright stays pinned", () => {
   const { scripts, devDependencies } = JSON.parse(readFileSync(PACKAGE_PATH, "utf8"))
 
@@ -255,11 +272,17 @@ const jobsAndSteps = (workflow) =>
   ])
 
 for (const [file, read] of WORKFLOW_FILES) {
-  test(`${file}: no gate can be skipped, ignored or made conditional`, () => {
+  test(`${file}: no gate can be skipped or ignored; only E2E diagnostics may be conditional`, () => {
     const { workflow } = read()
 
     for (const [where, node] of jobsAndSteps(workflow)) {
-      assert.ok(!("if" in node), `${where} must not be conditional`)
+      const allowedDiagnosticUpload =
+        file === ".github/workflows/e2e.yaml" && node.name === "Upload synthetic E2E diagnostics"
+      if (allowedDiagnosticUpload) {
+        assert.equal(node.if, "${{ failure() }}", `${where} must upload only after a failure`)
+      } else {
+        assert.ok(!("if" in node), `${where} must not be conditional`)
+      }
       assert.ok(!("continue-on-error" in node), `${where} must not set continue-on-error`)
     }
     for (const [name, job] of Object.entries(workflow.jobs)) {

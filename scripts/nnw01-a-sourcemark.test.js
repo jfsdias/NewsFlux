@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { existsSync } from "node:fs"
 import { createServer as createHttpServer } from "node:http"
 import path from "node:path"
 import test, { after } from "node:test"
@@ -9,24 +10,39 @@ import React from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { createServer } from "vite"
 
+import createViteTempCache from "./vite-temp-cache.js"
+
 const root = fileURLToPath(new URL("../", import.meta.url))
 const hmrServer = createHttpServer()
-const vite = await createServer({
-  appType: "custom",
-  configFile: false,
-  plugins: [react()],
-  optimizeDeps: { entries: [], include: [], noDiscovery: true },
-  resolve: { alias: [{ find: "@", replacement: path.resolve(root, "src") }] },
-  root,
-  cacheDir: "/private/tmp/newsflux-nnw01-a-vite-cache",
-  server: { middlewareMode: true, ws: { server: hmrServer } },
-})
-const { default: SourceMark } = await vite.ssrLoadModule("/src/components/ui/SourceMark.jsx")
-
-after(async () => {
-  await vite.close()
+const temporaryCache = createViteTempCache("newsflux-nnw01-a-vite-cache")
+let vite
+try {
+  vite = await createServer({
+    appType: "custom",
+    configFile: false,
+    plugins: [react()],
+    optimizeDeps: { entries: [], include: [], noDiscovery: true },
+    resolve: { alias: [{ find: "@", replacement: path.resolve(root, "src") }] },
+    root,
+    cacheDir: temporaryCache.cacheDir,
+    server: { middlewareMode: true, ws: { server: hmrServer } },
+  })
+} catch (error) {
   hmrServer.close()
+  temporaryCache.cleanup()
+  throw error
+}
+after(async () => {
+  try {
+    await vite.close()
+  } finally {
+    hmrServer.close()
+    temporaryCache.cleanup()
+    assert.equal(existsSync(temporaryCache.cacheDir), false, "the owned Vite cache is cleaned up")
+  }
 })
+
+const { default: SourceMark } = await vite.ssrLoadModule("/src/components/ui/SourceMark.jsx")
 
 const render = (props) => renderToStaticMarkup(React.createElement(SourceMark, props))
 const feed = (overrides = {}) => ({

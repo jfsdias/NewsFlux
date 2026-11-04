@@ -1,6 +1,6 @@
-import { elementAtCenter } from "./support/app.js"
-import { knownDefect } from "./support/classification.js"
+import { elementAtCenter, inspectPointerAtCenter } from "./support/app.js"
 import { expect, test } from "./support/fixtures.js"
+import { assertQa001CenterHit } from "./support/qa001-hit-test.js"
 
 /**
  * QA-001: with a coarse pointer the "Open sidebar" button can cover "Close article" in the reader
@@ -30,20 +30,15 @@ test.describe("QA-001 Close article hit-testing with a coarse pointer", () => {
       const close = page.getByRole("button", { name: "Close article" })
       await expect(close).toBeVisible()
 
-      const assertCloseReceivesPointer = async () => {
-        expect(
-          await elementAtCenter(close),
-          "QA-001: Close article must be the element at its own center",
-        ).toBe("Close article")
+      const diagnostics = await inspectPointerAtCenter(close, "touch")
+      await test.info().attach("qa001-center-hit.json", {
+        body: Buffer.from(`${JSON.stringify(diagnostics, null, 2)}\n`),
+        contentType: "application/json",
+      })
+      const result = assertQa001CenterHit(diagnostics, { knownDefectExpected: defect })
+      if (result.state === "KNOWN_DEFECT") {
+        test.info().annotations.push({ type: "known-defect", description: result.message })
       }
-
-      await (defect
-        ? knownDefect(
-            "QA-001",
-            /Expected: "Close article"[\s\S]*Received: "Open sidebar"/,
-            assertCloseReceivesPointer,
-          )
-        : assertCloseReceivesPointer())
     })
   }
 
