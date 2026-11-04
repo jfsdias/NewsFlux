@@ -146,3 +146,83 @@ test("the e2e scripts exist and Playwright stays pinned", () => {
   assert.equal(scripts["test:e2e:stability"], "pnpm run build && node scripts/run-e2e-stability.js")
   assert.match(devDependencies["@playwright/test"], /^\d+\.\d+\.\d+$/, "pin an exact version")
 })
+
+const WORKFLOW_FILES = [
+  [".github/workflows/quality.yaml", readWorkflow],
+  [".github/workflows/e2e.yaml", readE2eWorkflow],
+]
+const ALLOWED_TRIGGERS = new Set(["pull_request", "push"])
+const FORBIDDEN_TRIGGER_FILTERS = [
+  "paths",
+  "paths-ignore",
+  "branches-ignore",
+  "tags",
+  "tags-ignore",
+]
+const FORBIDDEN_COMMAND_PATTERNS = [/\|\|\s*true/, /;\s*true\b/, /set\s+\+e/, /\bexit\s+0\b/]
+const FORBIDDEN_SOURCE_PATTERNS = [
+  [/\bsecrets\b/, "secrets"],
+  [/github\.repository/, "a repository guard or repository context"],
+  [/pull_request_target/, "pull_request_target"],
+]
+
+const withoutComments = (source) => source.replaceAll(/(^|\s)#.*$/gm, "")
+
+const jobsAndSteps = (workflow) =>
+  Object.entries(workflow.jobs).flatMap(([name, job]) => [
+    [`job ${name}`, job],
+    ...stepsOf(job).map((step, index) => [`job ${name} step ${index + 1}`, step]),
+  ])
+
+for (const [file, read] of WORKFLOW_FILES) {
+  test(`${file}: no gate can be skipped, ignored or made conditional`, () => {
+    const { workflow } = read()
+
+    for (const [where, node] of jobsAndSteps(workflow)) {
+      assert.ok(!("if" in node), `${where} must not be conditional`)
+      assert.ok(!("continue-on-error" in node), `${where} must not set continue-on-error`)
+    }
+    for (const [name, job] of Object.entries(workflow.jobs)) {
+      assert.ok(!("needs" in job), `job ${name} must not depend on another job`)
+      for (const command of runCommands(job)) {
+        for (const pattern of FORBIDDEN_COMMAND_PATTERNS) {
+          assert.doesNotMatch(command, pattern, `job ${name} must not swallow failures`)
+        }
+      }
+    }
+  })
+
+  test(`${file}: only pull request and push triggers, without path or tag filters`, () => {
+    const { workflow } = read()
+
+    for (const trigger of Object.keys(workflow.on)) {
+      assert.ok(ALLOWED_TRIGGERS.has(trigger), `unexpected trigger ${trigger}`)
+      for (const filter of FORBIDDEN_TRIGGER_FILTERS) {
+        assert.ok(!(filter in (workflow.on[trigger] ?? {})), `${trigger} must not use ${filter}`)
+      }
+    }
+  })
+
+  test(`${file}: no secrets, repository guards or privileged triggers anywhere in the source`, () => {
+    const code = withoutComments(read().source)
+
+    for (const [pattern, label] of FORBIDDEN_SOURCE_PATTERNS) {
+      assert.doesNotMatch(code, pattern, `the workflow must not reference ${label}`)
+    }
+  })
+
+  test(`${file}: the Node version of every job is the one that is declared`, () => {
+    const { workflow } = read()
+
+    for (const [name, job] of Object.entries(workflow.jobs)) {
+      const matrix = job.strategy?.matrix
+      if (matrix) {
+        assert.deepEqual(Object.keys(matrix), ["node-version"], `job ${name}: no exclude/include`)
+      }
+      const setups = stepsOf(job).filter((step) => step.uses?.startsWith("actions/setup-node@"))
+      assert.equal(setups.length, 1, `job ${name} must set up Node once`)
+      const expected = matrix ? "${{ matrix.node-version }}" : "22"
+      assert.equal(String(setups[0].with["node-version"]), expected, `job ${name} Node version`)
+    }
+  })
+}
