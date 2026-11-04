@@ -1,7 +1,16 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "entry": ["scripts/tests/**/*.{js,jsx}", "scripts/*.js"],
-  "project": ["src/**/*.{js,jsx}", "scripts/**/*.{js,jsx}"],
+  "entry": [
+    "scripts/tests/**/*.{js,jsx}",
+    "scripts/*.js",
+    "e2e/**/*.spec.js",
+    "e2e/reporters/*.js",
+    "e2e/support/start-*.js",
+    "playwright.config.js"
+  ],
+  "project": ["src/**/*.{js,jsx}", "scripts/**/*.{js,jsx}", "e2e/**/*.js"],
   "ignore": ["scripts/research/**"],
-  "ignoreUnresolved": ["^/src/"]
+  "ignoreIssues": {
+    "scripts/tests/pwa-chunk-recovery-focus.js": ["unresolved"]
+  }
 }

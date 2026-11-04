@@ -50,7 +50,7 @@ test.describe("F02 Feed loading and refresh", () => {
     expect(await cards(page).count()).toBeGreaterThanOrEqual(3)
   })
 
-  test("F02-2: [touch] new entries while reading keep the article, and Close article is tappable", async ({
+  test("F02-2: [touch] Close article is tappable while new entries arrive (QA-001 known defect)", async ({
     openApp,
     mock,
   }) => {
@@ -58,7 +58,7 @@ test.describe("F02 Feed loading and refresh", () => {
     await expect(page.getByRole("button", { name: "Close article" })).toBeVisible()
     await mock.inject(3)
 
-    await knownDefect("QA-001", /intercepts pointer events/, async () => {
+    await knownDefect("QA-001", /Open sidebar[\s\S]*intercepts pointer events/, async () => {
       await page.getByRole("button", { name: "Close article" }).click({ timeout: 3000 })
     })
   })

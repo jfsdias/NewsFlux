@@ -89,7 +89,7 @@ test.describe("F15 Deep links and reopening", () => {
     await expect(cards(page).first()).toBeVisible()
   })
 
-  test("F15-2: a missing entry and an unknown route never leave a blank screen", async ({
+  test("F15-2: a missing entry and an unknown route render some text and no raw error (content not specified)", async ({
     openApp,
   }) => {
     const { page } = await openApp({ path: "/all/entry/999999" })

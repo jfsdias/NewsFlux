@@ -24,7 +24,7 @@ test.describe("F07 Search", () => {
 })
 
 test.describe("F08 Sorting and persistence", () => {
-  test("F08-1: toggling Newest/Oldest reverses the order and survives a reload", async ({
+  test("F08-1: toggling Newest/Oldest changes the first article and the choice survives a reload", async ({
     openApp,
   }) => {
     const { page } = await openApp({ path: "/all" })

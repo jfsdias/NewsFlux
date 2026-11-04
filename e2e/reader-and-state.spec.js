@@ -14,7 +14,7 @@ test.describe("F04 Opening and closing an article", () => {
     await expect(page).toHaveURL(/\/all\/entry\/\d+$/)
     await expect(closeArticle(page)).toBeVisible()
 
-    await knownDefect("QA-001", /intercepts pointer events/, async () => {
+    await knownDefect("QA-001", /Open sidebar[\s\S]*intercepts pointer events/, async () => {
       await closeArticle(page).click({ timeout: 3000 })
     })
   })
@@ -37,7 +37,7 @@ test.describe("F04 Opening and closing an article", () => {
     await expect(page).toHaveURL(/\/all\/entry\/\d+$/)
     const { x, y } = await center(closeArticle(page))
 
-    await knownDefect("QA-001", /\/all\/entry\/\d+/, async () => {
+    await knownDefect("QA-001", /toHaveURL[\s\S]*Received[^\n]*\/all\/entry\/\d+/, async () => {
       await page.touchscreen.tap(x, y)
       await expect(page).toHaveURL(/\/all$/, { timeout: 2000 })
     })

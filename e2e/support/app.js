@@ -27,27 +27,6 @@ export const elementAtCenter = (locator) =>
     return target?.closest("button")?.getAttribute("aria-label") ?? target?.tagName ?? null
   })
 
-/** How many of five points inside `locator` hit the element (or its descendants). */
-export const hitPoints = (locator) =>
-  locator.evaluate((element) => {
-    const box = element.getBoundingClientRect()
-    const fractions = [
-      [0.5, 0.5],
-      [0.2, 0.2],
-      [0.8, 0.2],
-      [0.2, 0.8],
-      [0.8, 0.8],
-    ]
-    let hits = 0
-    for (const [x, y] of fractions) {
-      const target = document.elementFromPoint(box.left + box.width * x, box.top + box.height * y)
-      if (target && (target === element || element.contains(target))) {
-        hits += 1
-      }
-    }
-    return hits
-  })
-
 export const center = async (locator) => {
   const box = await locator.boundingBox()
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 }

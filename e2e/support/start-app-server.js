@@ -26,7 +26,6 @@ const MIME_TYPES = {
   ".webmanifest": "application/manifest+json",
   ".woff2": "font/woff2",
 }
-const REVALIDATED = new Set(["index.html", "sw.js", "manifest.webmanifest"])
 
 const resolveFile = (pathname) => {
   const candidate = path.join(root, decodeURIComponent(pathname))
@@ -53,9 +52,6 @@ createServer((request, response) => {
   const headers = {
     "Content-Type": MIME_TYPES[path.extname(file)] ?? "application/octet-stream",
     "X-Content-Type-Options": "nosniff",
-  }
-  if (REVALIDATED.has(path.basename(file))) {
-    headers["Cache-Control"] = "no-cache"
   }
   response.writeHead(200, headers)
   createReadStream(file).pipe(response)

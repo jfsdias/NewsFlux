@@ -4,7 +4,7 @@ import { test as base } from "@playwright/test"
 
 export { expect } from "@playwright/test"
 
-export const MOCK_URL = `http://127.0.0.1:${process.env.E2E_API_PORT ?? 8081}`
+const MOCK_URL = `http://127.0.0.1:${process.env.E2E_API_PORT ?? 8081}`
 
 const control = async (path) => {
   const response = await fetch(`${MOCK_URL}${path}`)

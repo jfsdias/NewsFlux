@@ -27,7 +27,7 @@ test.describe("F12 Miniflux failures", () => {
 
       await page.goto("/all")
 
-      await expect.poll(async () => FAILURE_FEEDBACK.test(await bodyText(page))).toBe(true)
+      await expect(page.getByText("Failed to load articles").first()).toBeVisible()
       expect(errors).toEqual([])
       await mock.reset()
       await page.getByRole("button", { name: "Retry" }).click()
