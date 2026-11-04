@@ -4,6 +4,8 @@ import test from "node:test"
 
 import { parse } from "yaml"
 
+import validatePackageScripts from "./package-script-contract.js"
+
 const WORKFLOW_PATH = new URL("../.github/workflows/quality.yaml", import.meta.url)
 const E2E_WORKFLOW_PATH = new URL("../.github/workflows/e2e.yaml", import.meta.url)
 const PACKAGE_PATH = new URL("../package.json", import.meta.url)
@@ -107,6 +109,45 @@ test("package scripts cover every source and script test file", () => {
   assert.equal(scripts["knip:check"], "node scripts/check-knip-baseline.js")
 })
 
+test("package scripts invoked by CI retain effective verification commands", () => {
+  const { scripts } = JSON.parse(readFileSync(PACKAGE_PATH, "utf8"))
+  assert.deepEqual(validatePackageScripts(scripts), [])
+})
+
+test("no-op and swallowed-error package script mutations are rejected", () => {
+  const { scripts } = JSON.parse(readFileSync(PACKAGE_PATH, "utf8"))
+  const gatedScripts = [
+    "lint",
+    "format:check",
+    "test:src",
+    "test:scripts",
+    "build",
+    "knip:check",
+    "test:e2e",
+  ]
+
+  for (const name of gatedScripts) {
+    const noOp = { ...scripts, [name]: "echo fake" }
+    assert.ok(
+      validatePackageScripts(noOp).some((problem) => problem.includes(name)),
+      `${name} no-op must be rejected`,
+    )
+  }
+
+  for (const [name, bypass] of [
+    ["lint", "eslint || true"],
+    ["format:check", "prettier --check .; exit 0"],
+    ["build", "vite build >/dev/null || true"],
+    ["test:e2e", "pnpm run build && playwright test || true"],
+  ]) {
+    const mutated = { ...scripts, [name]: bypass }
+    assert.ok(
+      validatePackageScripts(mutated).some((problem) => problem.includes(name)),
+      `${name} bypass must be rejected`,
+    )
+  }
+})
+
 const readE2eWorkflow = () => {
   assert.ok(existsSync(E2E_WORKFLOW_PATH), ".github/workflows/e2e.yaml must exist")
   const source = readFileSync(E2E_WORKFLOW_PATH, "utf8")
@@ -145,6 +186,11 @@ test("the e2e scripts exist and Playwright stays pinned", () => {
   assert.equal(scripts["test:e2e"], "pnpm run build && playwright test")
   assert.equal(scripts["test:e2e:stability"], "pnpm run build && node scripts/run-e2e-stability.js")
   assert.match(devDependencies["@playwright/test"], /^\d+\.\d+\.\d+$/, "pin an exact version")
+})
+
+test("the e2e workflow uses the scenario-inventory reporter that can fail the run", () => {
+  const config = readFileSync(new URL("../playwright.config.js", import.meta.url), "utf8")
+  assert.match(config, /inventory-reporter\.js/)
 })
 
 const WORKFLOW_FILES = [
