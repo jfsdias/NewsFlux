@@ -12,6 +12,9 @@
     "preanalyze": "node src/scripts/version-info.js",
     "analyze": "vite build --mode analyze",
     "preview": "pnpm run build && vite preview",
+    "test": "pnpm run test:src && pnpm run test:scripts",
+    "test:src": "node --test \"src/**/*.test.js\"",
+    "test:scripts": "node --test \"scripts/*.test.js\"",
     "test:fonts": "node --test scripts/*.test.js",
     "validate:fonts": "node scripts/validate-fonts.js",
     "format": "prettier --write .",
@@ -82,6 +85,7 @@
     "rollup-plugin-visualizer": "^7.1.1",
     "vite": "^8.3.1",
     "vite-plugin-pwa": "^2.0.0",
-    "workbox-window": "^7.4.1"
+    "workbox-window": "^7.4.1",
+    "yaml": "2.9.1"
   }
 }
