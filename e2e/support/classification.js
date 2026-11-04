@@ -14,6 +14,9 @@ import { test } from "@playwright/test"
 
 const firstLine = (text) => stripVTControlCharacters(String(text)).split("\n", 1)[0]
 
+export const matchesFailureSignature = (failure, signature) =>
+  signature.test(String(failure?.message ?? failure))
+
 const expectRecordedFailure = async ({ type, id, signature }, action) => {
   let failure
   try {
@@ -29,7 +32,7 @@ const expectRecordedFailure = async ({ type, id, signature }, action) => {
   }
 
   const message = String(failure.message)
-  if (!signature.test(message)) {
+  if (!matchesFailureSignature(failure, signature)) {
     throw new Error(
       `${id}: the scenario failed, but not for the recorded reason (${signature}). Actual: ${firstLine(message)}`,
     )

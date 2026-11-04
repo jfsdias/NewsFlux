@@ -38,7 +38,11 @@ test.describe("QA-001 Close article hit-testing with a coarse pointer", () => {
       }
 
       await (defect
-        ? knownDefect("QA-001", /Open sidebar/, assertCloseReceivesPointer)
+        ? knownDefect(
+            "QA-001",
+            /Expected: "Close article"[\s\S]*Received: "Open sidebar"/,
+            assertCloseReceivesPointer,
+          )
         : assertCloseReceivesPointer())
     })
   }

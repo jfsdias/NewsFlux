@@ -1,4 +1,10 @@
-import { bodyTextLength, cards, center, horizontalOverflow } from "./support/app.js"
+import {
+  bodyTextLength,
+  cards,
+  center,
+  elementAtCenter,
+  horizontalOverflow,
+} from "./support/app.js"
 import { knownDefect, requirementPending } from "./support/classification.js"
 import { expect, test } from "./support/fixtures.js"
 
@@ -36,11 +42,25 @@ test.describe("F04 Opening and closing an article", () => {
     await cards(page).first().tap()
     await expect(page).toHaveURL(/\/all\/entry\/\d+$/)
     const { x, y } = await center(closeArticle(page))
+    const hitTarget = await elementAtCenter(closeArticle(page))
 
-    await knownDefect("QA-001", /toHaveURL[\s\S]*Received[^\n]*\/all\/entry\/\d+/, async () => {
-      await page.touchscreen.tap(x, y)
-      await expect(page).toHaveURL(/\/all$/, { timeout: 2000 })
-    })
+    if (hitTarget === "Open sidebar") {
+      await knownDefect(
+        "QA-001",
+        /Expected: "Close article"[\s\S]*Received: "Open sidebar"/,
+        async () => {
+          expect(
+            hitTarget,
+            "QA-001: the sidebar control must not intercept Close article's center",
+          ).toBe("Close article")
+        },
+      )
+      return
+    }
+
+    expect(hitTarget).toBe("Close article")
+    await page.touchscreen.tap(x, y)
+    await expect(page).toHaveURL(/\/all$/, { timeout: 2000 })
   })
 })
 
