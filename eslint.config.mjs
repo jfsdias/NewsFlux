@@ -149,10 +149,17 @@ export default [
     },
   },
   {
-    files: ["scripts/**/*.js"],
+    files: ["scripts/**/*.js", "e2e/**/*.js", "playwright.config.js"],
     languageOptions: { globals: globals.node },
     rules: {
       "import/extensions": "off",
+    },
+  },
+  {
+    // Playwright fixtures receive a `use` callback that is not a React hook.
+    files: ["e2e/**/*.js"],
+    rules: {
+      "react-hooks/rules-of-hooks": "off",
     },
   },
 ]

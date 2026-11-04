@@ -5,6 +5,7 @@ import test from "node:test"
 import { parse } from "yaml"
 
 const WORKFLOW_PATH = new URL("../.github/workflows/quality.yaml", import.meta.url)
+const E2E_WORKFLOW_PATH = new URL("../.github/workflows/e2e.yaml", import.meta.url)
 const PACKAGE_PATH = new URL("../package.json", import.meta.url)
 const PINNED_ACTION = /^[\w.-]+\/[\w.-]+@[\da-f]{40}$/
 const SUPPORTED_NODE_VERSIONS = ["22", "24"]
@@ -104,4 +105,44 @@ test("package scripts cover every source and script test file", () => {
   assert.equal(scripts["test:scripts"], 'node --test "scripts/*.test.js"')
   assert.equal(scripts.test, "pnpm run test:src && pnpm run test:scripts")
   assert.equal(scripts["knip:check"], "node scripts/check-knip-baseline.js")
+})
+
+const readE2eWorkflow = () => {
+  assert.ok(existsSync(E2E_WORKFLOW_PATH), ".github/workflows/e2e.yaml must exist")
+  const source = readFileSync(E2E_WORKFLOW_PATH, "utf8")
+  return { source, workflow: parse(source) }
+}
+
+test("the e2e workflow is read-only, runs in forks and pins its actions", () => {
+  const { source, workflow } = readE2eWorkflow()
+
+  assert.deepEqual(workflow.on.pull_request.branches, ["main"])
+  assert.deepEqual(workflow.permissions, { contents: "read" })
+  assert.doesNotMatch(source, /secrets\./)
+  assert.doesNotMatch(source, /github\.repository\s*==/)
+  assert.doesNotMatch(source, /continue-on-error/)
+  for (const job of Object.values(workflow.jobs)) {
+    for (const step of stepsOf(job)) {
+      if (step.uses) {
+        assert.match(step.uses.split(" ", 1)[0], PINNED_ACTION)
+      }
+    }
+  }
+})
+
+test("the e2e workflow installs the pinned browser and runs the Playwright suite", () => {
+  const { workflow } = readE2eWorkflow()
+  const commands = new Set(Object.values(workflow.jobs).flatMap((job) => runCommands(job)))
+
+  assert.ok(commands.has("pnpm install --frozen-lockfile"))
+  assert.ok(commands.has("pnpm exec playwright install --with-deps chromium"))
+  assert.ok(commands.has("pnpm test:e2e"))
+})
+
+test("the e2e scripts exist and Playwright stays pinned", () => {
+  const { scripts, devDependencies } = JSON.parse(readFileSync(PACKAGE_PATH, "utf8"))
+
+  assert.equal(scripts["test:e2e"], "pnpm run build && playwright test")
+  assert.equal(scripts["test:e2e:stability"], "pnpm run build && node scripts/run-e2e-stability.js")
+  assert.match(devDependencies["@playwright/test"], /^\d+\.\d+\.\d+$/, "pin an exact version")
 })
