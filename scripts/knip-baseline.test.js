@@ -6,11 +6,16 @@ import { collectFindings, compareToBaseline } from "./knip-baseline.js"
 const issue = (file, overrides = {}) => ({
   file,
   files: [],
-  exports: [],
-  duplicates: [],
-  types: [],
+  catalog: [],
+  catalogReferences: [],
   dependencies: [],
   devDependencies: [],
+  exports: [],
+  duplicates: [],
+  enumMembers: [],
+  namespaceMembers: [],
+  optionalPeerDependencies: [],
+  types: [],
   unlisted: [],
   unresolved: [],
   binaries: [],
@@ -88,4 +93,39 @@ test("compareToBaseline passes when findings equal the accepted baseline", () =>
   ])
 
   assert.equal(result.ok, true)
+})
+
+test("collectFindings rejects unknown issue categories instead of silently ignoring them", () => {
+  assert.throws(
+    () =>
+      collectFindings({
+        issues: [issue("src/unexpected.js", { futureIssueKind: [{ name: "orphan" }] })],
+      }),
+    /unknown issue category.*futureIssueKind/,
+  )
+})
+
+test("collectFindings rejects malformed or incomplete Knip report structures", () => {
+  assert.throws(() => collectFindings({}), /issues must be an array/)
+  assert.throws(() => collectFindings({ issues: {} }), /issues must be an array/)
+  assert.throws(() => collectFindings({ issues: [issue(null)] }), /file must be a non-empty string/)
+
+  const incomplete = issue("src/incomplete.js")
+  delete incomplete.optionalPeerDependencies
+  assert.throws(
+    () => collectFindings({ issues: [incomplete] }),
+    /missing issue category optionalPeerDependencies/,
+  )
+
+  assert.throws(
+    () => collectFindings({ issues: [issue("src/malformed.js", { exports: {} })] }),
+    /exports must be an array/,
+  )
+})
+
+test("collectFindings rejects malformed entries rather than emitting incomplete keys", () => {
+  assert.throws(
+    () => collectFindings({ issues: [issue("src/malformed.js", { exports: [{ line: 1 }] })] }),
+    /exports entries must include a non-empty name/,
+  )
 })
