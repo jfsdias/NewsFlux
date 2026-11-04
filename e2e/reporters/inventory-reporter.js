@@ -2,6 +2,11 @@ import { mkdirSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import process from "node:process"
 
+// eslint-disable-next-line import/no-relative-parent-imports -- the reporter consumes shared E2E contracts through the package import map.
+import { E2E_SCENARIO_CONTRACT_VERSION } from "#e2e/scenario-contract.js"
+// eslint-disable-next-line import/no-relative-parent-imports -- the reporter consumes the shared stability validator through the package import map.
+import { validateInventory } from "#scripts/e2e-stability.js"
+
 const CLASSIFICATIONS = {
   "known-defect": "KNOWN_DEFECT",
   "requirement-pending": "REQUIREMENT_PENDING",
@@ -51,18 +56,32 @@ export default class InventoryReporter {
     for (const { state } of rows) {
       counts[state] = (counts[state] ?? 0) + 1
     }
-    mkdirSync(path.dirname(this.outputFile), { recursive: true })
-    writeFileSync(this.outputFile, `${JSON.stringify({ counts, scenarios: rows }, null, 2)}\n`)
+    const inventory = { version: E2E_SCENARIO_CONTRACT_VERSION, counts, scenarios: rows }
+    const validation = validateInventory(inventory)
+    const receipt = { ...inventory, contractProblems: validation.problems }
+
+    try {
+      mkdirSync(path.dirname(this.outputFile), { recursive: true })
+      writeFileSync(this.outputFile, `${JSON.stringify(receipt, null, 2)}\n`)
+    } catch (error) {
+      console.error(`Could not write the E2E scenario inventory: ${error.message}`)
+      return { status: "failed" }
+    }
 
     console.log("\nScenario inventory")
     for (const row of rows.filter(({ state }) => state !== "PASSED")) {
       console.log(`  ${row.state.padEnd(20)} ${row.id}  ${row.note}`)
     }
     console.log(`  Totals: ${JSON.stringify(counts)}`)
+    for (const problem of validation.problems) {
+      console.error(`  INVALID SCENARIO INVENTORY: ${problem}`)
+    }
     if (counts.KNOWN_DEFECT || counts.REQUIREMENT_PENDING) {
       console.log(
         "  GREEN WITH KNOWN DEFECTS / PENDING REQUIREMENTS: see docs/qa/FINDINGS_REGISTER.md",
       )
     }
+
+    return validation.valid ? undefined : { status: "failed" }
   }
 }

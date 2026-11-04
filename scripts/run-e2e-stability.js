@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process"
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import process from "node:process"
 
-import { compareRuns, REQUIRED_RUNS } from "./e2e-stability.js"
+import { evaluateRuns, REQUIRED_RUNS } from "./e2e-stability.js"
 
 const OUTPUT_DIRECTORY = "test-results/stability"
 
@@ -25,15 +25,15 @@ const main = () => {
 
   // Each run is a fresh Playwright process with fresh servers: independent executions.
   const runs = Array.from({ length: REQUIRED_RUNS }, (_, index) => runOnce(index + 1))
-  const comparison = compareRuns(runs.map(({ inventory }) => inventory))
+  const evaluation = evaluateRuns(runs)
   const exitCodes = runs.map(({ exitCode }) => exitCode)
-  const stable = comparison.stable && exitCodes.every((code) => code === 0)
+  const { stable } = evaluation
   const summary = {
     requiredRuns: REQUIRED_RUNS,
     exitCodes,
     counts: runs.map(({ inventory }) => inventory.counts),
     stable,
-    problems: comparison.problems,
+    problems: evaluation.problems,
   }
 
   writeFileSync(`${OUTPUT_DIRECTORY}/summary.json`, `${JSON.stringify(summary, null, 2)}\n`)
