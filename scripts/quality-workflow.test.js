@@ -204,7 +204,7 @@ test("failed E2E runs upload only their invocation-scoped diagnostics", () => {
   assert.equal(upload.if, "${{ failure() }}")
   assert.equal(upload.uses, "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9")
   assert.deepEqual(upload.with, {
-    name: "synthetic-e2e-diagnostics-${{ github.run_id }}",
+    name: "synthetic-e2e-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}",
     path: "test-results/verified-e2e/",
     "if-no-files-found": "ignore",
     "retention-days": 3,
