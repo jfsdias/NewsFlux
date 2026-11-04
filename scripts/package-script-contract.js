@@ -6,7 +6,8 @@ const EXPECTED_PACKAGE_SCRIPTS = {
   test: "pnpm run test:src && pnpm run test:scripts",
   build: "vite build",
   "knip:check": "node scripts/check-knip-baseline.js",
-  "test:e2e": "pnpm run build && playwright test",
+  "test:e2e": "pnpm run build && node scripts/run-verified-e2e.js",
+  "test:e2e:run": "node scripts/run-verified-e2e.js",
   "test:e2e:stability": "pnpm run build && node scripts/run-e2e-stability.js",
 }
 

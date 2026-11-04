@@ -1,0 +1,247 @@
+import assert from "node:assert/strict"
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import path from "node:path"
+import test from "node:test"
+
+// eslint-disable-next-line import/no-relative-parent-imports -- mutate the loaded config in a focused runtime gate test.
+import playwrightConfig from "../playwright.config.js"
+
+import {
+  EXPECTED_INVENTORY_REPORTER_PATH,
+  validateInventoryReporterBinding,
+} from "./e2e-config-contract.js"
+import runVerifiedE2E from "./verified-e2e.js"
+
+const SCENARIOS = [
+  { id: "A", state: "PASSED" },
+  { id: "B", state: "KNOWN_DEFECT" },
+]
+
+const inventoryFor = (runId, scenarios = SCENARIOS) => {
+  const rows = scenarios.map(({ id, state }) => ({
+    id,
+    title: `${id}: verified test`,
+    file: "verified.spec.js",
+    durationMs: 1,
+    state,
+    note: "",
+  }))
+  const counts = Object.groupBy(rows, ({ state }) => state)
+
+  return {
+    version: 2,
+    runId,
+    counts: Object.fromEntries(
+      Object.entries(counts).map(([state, items]) => [state, items.length]),
+    ),
+    scenarios: rows,
+    contractProblems: [],
+  }
+}
+
+const withTemporaryRoot = (action) => {
+  const root = mkdtempSync(path.join(tmpdir(), "newsflux-verified-e2e-"))
+  try {
+    return action(root)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+}
+
+const writeCurrentInventory = (env, makeInventory = (runId) => inventoryFor(runId)) => {
+  mkdirSync(path.dirname(env.E2E_INVENTORY_PATH), { recursive: true })
+  writeFileSync(env.E2E_INVENTORY_PATH, JSON.stringify(makeInventory(env.E2E_RUN_ID)))
+}
+
+const makeSpawn =
+  (action = writeCurrentInventory, result) =>
+  (_command, _args, options) => {
+    action(options.env)
+    return result ?? { status: 0, signal: null, error: undefined }
+  }
+
+test("zero exit without current inventory cannot reuse a previous valid artifact", () => {
+  withTemporaryRoot((root) => {
+    const outputRoot = path.join(root, "runs")
+    mkdirSync(outputRoot, { recursive: true })
+    writeFileSync(path.join(outputRoot, "run-1.json"), JSON.stringify(inventoryFor("old-run")))
+
+    const result = runVerifiedE2E({
+      cwd: root,
+      outputRoot,
+      expectedScenarios: SCENARIOS,
+      spawnImpl: makeSpawn(() => {}),
+    })
+
+    assert.equal(result.verified, false)
+    assert.ok(result.problems.some((problem) => /current invocation.*inventory/i.test(problem)))
+    assert.equal(result.inventory, undefined)
+    assert.equal(existsSync(result.inventoryPath), false)
+  })
+})
+
+test("a fresh inventory correlated to its unique execution is accepted", () => {
+  withTemporaryRoot((root) => {
+    const outputRoot = path.join(root, "runs")
+    const first = runVerifiedE2E({
+      cwd: root,
+      outputRoot,
+      expectedScenarios: SCENARIOS,
+      spawnImpl: makeSpawn(),
+    })
+    const second = runVerifiedE2E({
+      cwd: root,
+      outputRoot,
+      expectedScenarios: SCENARIOS,
+      spawnImpl: makeSpawn(),
+    })
+
+    assert.equal(first.verified, true, first.problems.join("\n"))
+    assert.equal(second.verified, true, second.problems.join("\n"))
+    assert.notEqual(first.runId, second.runId)
+    assert.notEqual(first.inventoryPath, second.inventoryPath)
+    assert.equal(first.inventory.runId, first.runId)
+    assert.equal(second.inventory.runId, second.runId)
+    assert.ok(
+      first.outputDirectory.startsWith(outputRoot) && second.outputDirectory.startsWith(outputRoot),
+    )
+  })
+})
+
+test("missing, malformed, wrong-run, incomplete, and skipped evidence fail closed", () => {
+  withTemporaryRoot((root) => {
+    const cases = [
+      ["missing", () => {}, /current invocation.*inventory/i],
+      ["malformed", (env) => writeFileSync(env.E2E_INVENTORY_PATH, "{"), /valid JSON/i],
+      [
+        "wrong run identifier",
+        (env) => writeCurrentInventory(env, () => inventoryFor("stale-run")),
+        /run identifier/i,
+      ],
+      [
+        "incomplete scenario set",
+        (env) => writeCurrentInventory(env, (runId) => inventoryFor(runId, SCENARIOS.slice(0, 1))),
+        /missing expected scenario/i,
+      ],
+      [
+        "all skipped",
+        (env) =>
+          writeCurrentInventory(env, (runId) =>
+            inventoryFor(
+              runId,
+              SCENARIOS.map(({ id }) => ({ id, state: "SKIPPED" })),
+            ),
+          ),
+        /SKIPPED/i,
+      ],
+      [
+        "duplicate scenario identity",
+        (env) =>
+          writeCurrentInventory(env, (runId) =>
+            inventoryFor(runId, [SCENARIOS[0], SCENARIOS[0], SCENARIOS[1]]),
+          ),
+        /duplicate scenario ID/i,
+      ],
+      [
+        "wrong approved classification",
+        (env) =>
+          writeCurrentInventory(env, (runId) =>
+            inventoryFor(runId, [SCENARIOS[0], { id: "B", state: "PASSED" }]),
+          ),
+        /expected KNOWN_DEFECT, got PASSED/i,
+      ],
+    ]
+
+    for (const [label, writeEvidence, expectedProblem] of cases) {
+      const result = runVerifiedE2E({
+        cwd: root,
+        outputRoot: path.join(root, label.replaceAll(" ", "-")),
+        expectedScenarios: SCENARIOS,
+        spawnImpl: makeSpawn(writeEvidence),
+      })
+      assert.equal(result.verified, false, label)
+      assert.match(result.problems.join("\n"), expectedProblem, label)
+    }
+  })
+})
+
+test("runtime rejects a removed reporter even when its filename remains in comments", () => {
+  withTemporaryRoot((root) => {
+    const config = {
+      ...playwrightConfig,
+      reporter: playwrightConfig.reporter.filter((reporter) => {
+        const target = Array.isArray(reporter) ? reporter[0] : reporter
+        return target !== EXPECTED_INVENTORY_REPORTER_PATH
+      }),
+      comment: EXPECTED_INVENTORY_REPORTER_PATH,
+    }
+    let spawnInvoked = false
+    const result = runVerifiedE2E({
+      cwd: root,
+      outputRoot: path.join(root, "runs"),
+      expectedScenarios: SCENARIOS,
+      config,
+      spawnImpl: () => {
+        spawnInvoked = true
+        return { status: 0, signal: null }
+      },
+    })
+
+    assert.deepEqual(
+      validateInventoryReporterBinding(config, EXPECTED_INVENTORY_REPORTER_PATH).length > 0,
+      true,
+    )
+    assert.equal(spawnInvoked, false)
+    assert.equal(result.verified, false)
+    assert.match(result.problems.join("\n"), /bind the inventory reporter exactly once/)
+  })
+})
+
+test("spawn failures, interrupted work, and nonzero exits cannot validate stale evidence", () => {
+  withTemporaryRoot((root) => {
+    const outputRoot = path.join(root, "runs")
+    const stalePath = path.join(outputRoot, "run-1.json")
+    mkdirSync(outputRoot, { recursive: true })
+    writeFileSync(stalePath, JSON.stringify(inventoryFor("old-run")))
+
+    const spawnFailure = runVerifiedE2E({
+      cwd: root,
+      outputRoot,
+      expectedScenarios: SCENARIOS,
+      spawnImpl: () => ({ error: new Error("spawn failed"), status: null, signal: null }),
+    })
+    const interrupted = runVerifiedE2E({
+      cwd: root,
+      outputRoot,
+      expectedScenarios: SCENARIOS,
+      spawnImpl: makeSpawn(writeCurrentInventory, { status: null, signal: "SIGTERM" }),
+    })
+    const partial = runVerifiedE2E({
+      cwd: root,
+      outputRoot,
+      expectedScenarios: SCENARIOS,
+      spawnImpl: makeSpawn((env) => writeFileSync(env.E2E_INVENTORY_PATH, "{partial"), {
+        status: null,
+        signal: "SIGINT",
+      }),
+    })
+    const nonzero = runVerifiedE2E({
+      cwd: root,
+      outputRoot,
+      expectedScenarios: SCENARIOS,
+      spawnImpl: makeSpawn(writeCurrentInventory, { status: 1, signal: null }),
+    })
+
+    assert.equal(spawnFailure.verified, false)
+    assert.match(spawnFailure.problems.join("\n"), /spawn/i)
+    assert.equal(interrupted.verified, false)
+    assert.match(interrupted.problems.join("\n"), /SIGTERM|exit code/i)
+    assert.equal(partial.verified, false)
+    assert.match(partial.problems.join("\n"), /SIGINT/)
+    assert.match(partial.problems.join("\n"), /not valid JSON/i)
+    assert.equal(nonzero.verified, false)
+    assert.match(nonzero.problems.join("\n"), /got 1/i)
+    assert.ok(existsSync(stalePath), "old artifacts remain irrelevant to every unique run")
+  })
+})

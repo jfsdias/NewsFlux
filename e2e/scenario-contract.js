@@ -1,4 +1,4 @@
-export const E2E_SCENARIO_CONTRACT_VERSION = 1
+export const E2E_SCENARIO_CONTRACT_VERSION = 2
 
 // This reviewed inventory binds CI to the scenario IDs and currently approved outcome classes.
 // Additions, removals, or classification changes are intentional contract changes for review.

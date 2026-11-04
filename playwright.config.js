@@ -1,6 +1,12 @@
 import process from "node:process"
+import { fileURLToPath } from "node:url"
 
 import { defineConfig } from "@playwright/test"
+
+export const INVENTORY_REPORTER_PATH = fileURLToPath(
+  new URL("e2e/reporters/inventory-reporter.js", import.meta.url),
+)
+export const PLAYWRIGHT_CONFIG_PATH = fileURLToPath(import.meta.url)
 
 const apiPort = Number(process.env.E2E_API_PORT ?? 8081)
 const appPort = Number(process.env.E2E_APP_PORT ?? 4173)
@@ -16,7 +22,7 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   timeout: 60_000,
   expect: { timeout: 10_000 },
-  reporter: [["list"], ["./e2e/reporters/inventory-reporter.js"]],
+  reporter: [["list"], [INVENTORY_REPORTER_PATH]],
   outputDir: process.env.E2E_OUTPUT_DIR ?? "test-results/artifacts",
   use: {
     baseURL: `http://localhost:${appPort}`,

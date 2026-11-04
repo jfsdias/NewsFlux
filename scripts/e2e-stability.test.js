@@ -23,15 +23,42 @@ import { EXPECTED_SCENARIOS } from "#e2e/scenario-contract.js"
 
 import { compareRuns, evaluateRuns, validateInventory } from "./e2e-stability.js"
 
-const run = (scenarios) => inventory(scenarios)
 const scenario = (id, state) => ({ id, state })
 const SMALL_CONTRACT = [
   { id: "A", state: "PASSED" },
   { id: "B", state: "KNOWN_DEFECT" },
 ]
-const inventory = (scenarios) => ({ version: 1, scenarios })
-const completeSmallInventory = () =>
-  inventory([scenario("A", "PASSED"), scenario("B", "KNOWN_DEFECT")])
+let inventorySequence = 0
+const inventory = (scenarios, runId = `unit-run-${++inventorySequence}`) => {
+  const rows = scenarios.map(({ id, state }) => ({
+    id,
+    title: `${id}: simulated scenario`,
+    file: "simulated.spec.js",
+    durationMs: 0,
+    state,
+    note: "",
+  }))
+  const counts = {}
+  for (const { state } of rows) {
+    counts[state] = (counts[state] ?? 0) + 1
+  }
+  return { version: 2, runId, counts, scenarios: rows, contractProblems: [] }
+}
+const run = (scenarios) => inventory(scenarios)
+const completeSmallInventory = (runId) =>
+  inventory([scenario("A", "PASSED"), scenario("B", "KNOWN_DEFECT")], runId)
+const executionRun = (
+  index,
+  { runId = `run-${index}`, inventoryPath = `/tmp/${runId}.json`, exitCode = 0 } = {},
+) => ({
+  verified: true,
+  runId,
+  inventoryPath,
+  exitCode,
+  signal: null,
+  spawnError: undefined,
+  inventory: completeSmallInventory(runId),
+})
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 
 const withoutReporterOutput = (action) => {
@@ -187,7 +214,7 @@ test("three complete identical runs are eligible for PASS", () => {
 
 test("non-zero Playwright exit codes prevent a stability PASS", () => {
   const result = evaluateRuns(
-    [0, 0, 1].map((exitCode) => ({ exitCode, inventory: completeSmallInventory() })),
+    [executionRun(1), executionRun(2), executionRun(3, { exitCode: 1 })],
     SMALL_CONTRACT,
   )
 
@@ -195,12 +222,28 @@ test("non-zero Playwright exit codes prevent a stability PASS", () => {
   assert.match(result.problems.join("\n"), /non-zero exit code 1/)
 })
 
+test("three-run stability rejects reused execution identifiers or artifacts", () => {
+  const duplicateRunId = evaluateRuns(
+    [executionRun(1), executionRun(2, { runId: "run-1" }), executionRun(3)],
+    SMALL_CONTRACT,
+  )
+  const duplicateArtifact = evaluateRuns(
+    [executionRun(1), executionRun(2, { inventoryPath: "/tmp/run-1.json" }), executionRun(3)],
+    SMALL_CONTRACT,
+  )
+
+  assert.equal(duplicateRunId.stable, false)
+  assert.match(duplicateRunId.problems.join("\n"), /duplicate execution run identifier/)
+  assert.equal(duplicateArtifact.stable, false)
+  assert.match(duplicateArtifact.problems.join("\n"), /duplicate inventory artifact path/)
+})
+
 test("the actual Playwright reporter fails the run when zero scenarios execute", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "newsflux-e2e-empty-"))
   const outputFile = path.join(directory, "inventory.json")
 
   try {
-    const reporter = new InventoryReporter({ outputFile })
+    const reporter = new InventoryReporter({ outputFile, runId: "empty-run" })
     const result = withoutReporterOutput(() => reporter.onEnd({ status: "passed" }))
     const recorded = JSON.parse(readFileSync(outputFile, "utf8"))
 
@@ -212,12 +255,38 @@ test("the actual Playwright reporter fails the run when zero scenarios execute",
   }
 })
 
+test("the actual Playwright reporter returns failed when it cannot publish inventory", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "newsflux-e2e-reporter-write-failure-"))
+  const blockingFile = path.join(directory, "not-a-directory")
+
+  try {
+    writeFileSync(blockingFile, "file")
+    const reporter = new InventoryReporter({
+      outputFile: path.join(blockingFile, "inventory.json"),
+      runId: "write-failure-run",
+    })
+    const result = withoutReporterOutput(() => reporter.onEnd())
+
+    assert.deepEqual(result, { status: "failed" })
+    assert.equal(existsSync(path.join(blockingFile, "inventory.json")), false)
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+test("the actual Playwright reporter fails when invoked without a fresh output contract", () => {
+  const reporter = new InventoryReporter({})
+  const result = withoutReporterOutput(() => reporter.onEnd())
+
+  assert.deepEqual(result, { status: "failed" })
+})
+
 test("the actual Playwright reporter rejects an all-skipped scenario run", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "newsflux-e2e-skipped-"))
   const outputFile = path.join(directory, "inventory.json")
 
   try {
-    const reporter = new InventoryReporter({ outputFile })
+    const reporter = new InventoryReporter({ outputFile, runId: "skipped-run" })
     for (const { id } of EXPECTED_SCENARIOS) {
       reporter.onTestEnd(
         {
@@ -241,7 +310,7 @@ test("the actual Playwright reporter accepts the complete reviewed scenario cont
   const outputFile = path.join(directory, "inventory.json")
 
   try {
-    const reporter = new InventoryReporter({ outputFile })
+    const reporter = new InventoryReporter({ outputFile, runId: "complete-run" })
     for (const { id, state } of EXPECTED_SCENARIOS) {
       const annotations =
         state === "KNOWN_DEFECT"
@@ -328,7 +397,11 @@ test("the frozen scenario inventory exactly matches discovered Playwright test i
       {
         cwd: repositoryRoot,
         encoding: "utf8",
-        env: { ...process.env, E2E_INVENTORY_PATH: inventoryPath },
+        env: {
+          ...process.env,
+          E2E_INVENTORY_PATH: inventoryPath,
+          E2E_RUN_ID: "all-skipped-playwright-run",
+        },
         timeout: 30_000,
       },
     )

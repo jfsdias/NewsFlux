@@ -43,24 +43,32 @@ test.describe("F04 Opening and closing an article", () => {
     await expect(page).toHaveURL(/\/all\/entry\/\d+$/)
     const { x, y } = await center(closeArticle(page))
     const hitTarget = await elementAtCenter(closeArticle(page))
+    const tapCenterAndVerifyClose = async () => {
+      await page.touchscreen.tap(x, y)
+      try {
+        await expect(page).toHaveURL(/\/all$/, { timeout: 2000 })
+        await expect(closeArticle(page)).toBeHidden()
+      } catch (error) {
+        const routeAfterTouch = new URL(page.url()).pathname
+        const readerStillVisible = await closeArticle(page).isVisible()
+        throw new Error(
+          `QA-001 actual touch with hitTarget=${hitTarget} ended at ${routeAfterTouch}; readerStillVisible=${readerStillVisible}`,
+          { cause: error },
+        )
+      }
+    }
 
     if (hitTarget === "Open sidebar") {
       await knownDefect(
         "QA-001",
-        /Expected: "Close article"[\s\S]*Received: "Open sidebar"/,
-        async () => {
-          expect(
-            hitTarget,
-            "QA-001: the sidebar control must not intercept Close article's center",
-          ).toBe("Close article")
-        },
+        /QA-001 actual touch with hitTarget=Open sidebar ended at \/all\/entry\/\d+; readerStillVisible=true/,
+        tapCenterAndVerifyClose,
       )
       return
     }
 
     expect(hitTarget).toBe("Close article")
-    await page.touchscreen.tap(x, y)
-    await expect(page).toHaveURL(/\/all$/, { timeout: 2000 })
+    await tapCenterAndVerifyClose()
   })
 })
 

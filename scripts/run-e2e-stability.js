@@ -1,44 +1,48 @@
-import { spawnSync } from "node:child_process"
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { mkdirSync, writeFileSync } from "node:fs"
+import path from "node:path"
 import process from "node:process"
+import { fileURLToPath, pathToFileURL } from "node:url"
 
 import { evaluateRuns, REQUIRED_RUNS } from "./e2e-stability.js"
+import runVerifiedE2E from "./verified-e2e.js"
 
-const OUTPUT_DIRECTORY = "test-results/stability"
+const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
+const outputDirectory = path.join(repositoryRoot, "test-results", "stability")
 
-const runOnce = (index) => {
-  const inventory = `${OUTPUT_DIRECTORY}/run-${index}.json`
-  const result = spawnSync("pnpm", ["exec", "playwright", "test"], {
-    stdio: "inherit",
-    env: {
-      ...process.env,
-      E2E_INVENTORY_PATH: inventory,
-      E2E_OUTPUT_DIR: `${OUTPUT_DIRECTORY}/artifacts-${index}`,
-    },
-  })
-
-  return { exitCode: result.status, inventory: JSON.parse(readFileSync(inventory, "utf8")) }
+const runStabilityChecks = ({ run = runVerifiedE2E } = {}) => {
+  const runs = Array.from({ length: REQUIRED_RUNS }, () => run())
+  const evaluation = evaluateRuns(runs)
+  return { runs, evaluation }
 }
 
-const main = () => {
-  mkdirSync(OUTPUT_DIRECTORY, { recursive: true })
+export default runStabilityChecks
 
-  // Each run is a fresh Playwright process with fresh servers: independent executions.
-  const runs = Array.from({ length: REQUIRED_RUNS }, (_, index) => runOnce(index + 1))
-  const evaluation = evaluateRuns(runs)
-  const exitCodes = runs.map(({ exitCode }) => exitCode)
-  const { stable } = evaluation
+const main = () => {
+  mkdirSync(outputDirectory, { recursive: true })
+  const { runs, evaluation } = runStabilityChecks()
   const summary = {
     requiredRuns: REQUIRED_RUNS,
-    exitCodes,
-    counts: runs.map(({ inventory }) => inventory.counts),
-    stable,
+    runs: runs.map(
+      ({ runId, inventoryPath, exitCode, signal, spawnError, verified, problems, inventory }) => ({
+        runId,
+        inventoryPath,
+        exitCode,
+        signal,
+        spawnError: spawnError ?? null,
+        verified,
+        counts: inventory?.counts ?? null,
+        problems,
+      }),
+    ),
+    stable: evaluation.stable,
     problems: evaluation.problems,
   }
 
-  writeFileSync(`${OUTPUT_DIRECTORY}/summary.json`, `${JSON.stringify(summary, null, 2)}\n`)
+  writeFileSync(`${outputDirectory}/summary.json`, `${JSON.stringify(summary, null, 2)}\n`)
   console.log(`\nStability summary: ${JSON.stringify(summary)}`)
-  return stable ? 0 : 1
+  return evaluation.stable ? 0 : 1
 }
 
-process.exitCode = main()
+if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
+  process.exitCode = main()
+}

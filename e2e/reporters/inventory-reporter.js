@@ -34,8 +34,8 @@ const classify = (test, result) => {
  */
 export default class InventoryReporter {
   constructor(options = {}) {
-    this.outputFile =
-      options.outputFile ?? process.env.E2E_INVENTORY_PATH ?? "test-results/inventory.json"
+    this.outputFile = options.outputFile ?? process.env.E2E_INVENTORY_PATH
+    this.runId = options.runId ?? process.env.E2E_RUN_ID ?? ""
     this.rows = []
   }
 
@@ -51,12 +51,23 @@ export default class InventoryReporter {
   }
 
   onEnd() {
+    if (typeof this.outputFile !== "string" || this.outputFile.trim() === "") {
+      console.error("Could not write the E2E scenario inventory: invocation output path is missing")
+      return { status: "failed" }
+    }
+
     const rows = this.rows.toSorted((left, right) => left.id.localeCompare(right.id))
     const counts = {}
     for (const { state } of rows) {
       counts[state] = (counts[state] ?? 0) + 1
     }
-    const inventory = { version: E2E_SCENARIO_CONTRACT_VERSION, counts, scenarios: rows }
+    const inventory = {
+      version: E2E_SCENARIO_CONTRACT_VERSION,
+      runId: this.runId,
+      counts,
+      scenarios: rows,
+      contractProblems: [],
+    }
     const validation = validateInventory(inventory)
     const receipt = { ...inventory, contractProblems: validation.problems }
 

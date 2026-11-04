@@ -10,9 +10,9 @@ Playwright scenarios that exercise the real production build against a **synthet
 ```bash
 pnpm install --frozen-lockfile
 pnpm exec playwright install chromium   # once; CI does this too
-pnpm test:e2e                           # builds, then runs every scenario
-pnpm test:e2e:run                       # runs against the existing build/
-pnpm test:e2e:stability                 # three independent runs, compared
+pnpm test:e2e                           # builds, then runs one verified scenario set
+pnpm test:e2e:run                       # verifies scenarios against the existing build/
+pnpm test:e2e:stability                 # three independent verified runs, compared
 ```
 
 Set `E2E_API_PORT` (default 8081) or `E2E_APP_PORT` (default 4173) if those ports are busy, and `PLAYWRIGHT_BROWSERS_PATH` to use an existing browser install. The scenarios must use the Playwright version pinned in `package.json`, because it is tied to a browser revision.
@@ -32,11 +32,11 @@ A scenario whose subject is a known defect or an unapproved requirement is wrapp
 3. records an annotation, which `e2e/reporters/inventory-reporter.js` prints as `KNOWN_DEFECT` or `REQUIREMENT_PENDING`;
 4. fails the test when the behavior starts to pass, so the marker and the entry in [`FINDINGS_REGISTER.md`](./FINDINGS_REGISTER.md) are removed deliberately.
 
-A green run therefore reads "GREEN WITH KNOWN DEFECTS / PENDING REQUIREMENTS" and lists them. The inventory is also written to `test-results/inventory.json`.
+A green run therefore reads "GREEN WITH KNOWN DEFECTS / PENDING REQUIREMENTS" and lists them. Each executed run's evidence is preserved under `test-results/verified-e2e/run-*/inventory.json` with the matching run identifier.
 
 ## Stability
 
-`pnpm test:e2e:stability` runs the whole suite three times in fresh processes with fresh servers and compares every scenario's final state (`scripts/e2e-stability.js`). A gate is stable only if all runs agree and none ends in `FAILED`. Do not make a browser gate required before this passes, and do not mark GitHub checks as required automatically.
+Both the single-run CI command and `pnpm test:e2e:stability` use the shared verified executor. Every invocation receives a collision-resistant output directory, a unique run ID, and an explicit reporter output path. It passes only when Playwright exits zero and the exact artifact created for that invocation is valid against the frozen schema and scenario contract. The stability checker additionally requires three distinct verified run IDs and artifact paths. It never falls back to an older inventory file. Do not make a browser gate required before three-run stability passes, and do not mark GitHub checks as required automatically.
 
 ## Scenario inventory
 

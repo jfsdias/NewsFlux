@@ -4,6 +4,13 @@ import test from "node:test"
 
 import { parse } from "yaml"
 
+// eslint-disable-next-line import/no-relative-parent-imports -- verify the actual config object consumed by Playwright.
+import playwrightConfig from "../playwright.config.js"
+
+import {
+  EXPECTED_INVENTORY_REPORTER_PATH,
+  validateInventoryReporterBinding,
+} from "./e2e-config-contract.js"
 import validatePackageScripts from "./package-script-contract.js"
 
 const WORKFLOW_PATH = new URL("../.github/workflows/quality.yaml", import.meta.url)
@@ -124,6 +131,7 @@ test("no-op and swallowed-error package script mutations are rejected", () => {
     "build",
     "knip:check",
     "test:e2e",
+    "test:e2e:run",
   ]
 
   for (const name of gatedScripts) {
@@ -190,14 +198,33 @@ test("the e2e workflow installs the pinned browser and runs the Playwright suite
 test("the e2e scripts exist and Playwright stays pinned", () => {
   const { scripts, devDependencies } = JSON.parse(readFileSync(PACKAGE_PATH, "utf8"))
 
-  assert.equal(scripts["test:e2e"], "pnpm run build && playwright test")
+  assert.equal(scripts["test:e2e"], "pnpm run build && node scripts/run-verified-e2e.js")
+  assert.equal(scripts["test:e2e:run"], "node scripts/run-verified-e2e.js")
   assert.equal(scripts["test:e2e:stability"], "pnpm run build && node scripts/run-e2e-stability.js")
   assert.match(devDependencies["@playwright/test"], /^\d+\.\d+\.\d+$/, "pin an exact version")
 })
 
-test("the e2e workflow uses the scenario-inventory reporter that can fail the run", () => {
-  const config = readFileSync(new URL("../playwright.config.js", import.meta.url), "utf8")
-  assert.match(config, /inventory-reporter\.js/)
+test("the loaded Playwright config binds the inventory reporter implementation exactly once", () => {
+  assert.deepEqual(
+    validateInventoryReporterBinding(playwrightConfig, EXPECTED_INVENTORY_REPORTER_PATH),
+    [],
+  )
+})
+
+test("disabling the active reporter is rejected even when its filename remains as a comment", () => {
+  const withoutReporter = {
+    ...playwrightConfig,
+    reporter: playwrightConfig.reporter.filter((reporter) => {
+      const target = Array.isArray(reporter) ? reporter[0] : reporter
+      return target !== EXPECTED_INVENTORY_REPORTER_PATH
+    }),
+    comment: EXPECTED_INVENTORY_REPORTER_PATH,
+  }
+
+  assert.match(
+    validateInventoryReporterBinding(withoutReporter, EXPECTED_INVENTORY_REPORTER_PATH).join("\n"),
+    /bind the inventory reporter exactly once/,
+  )
 })
 
 const WORKFLOW_FILES = [
