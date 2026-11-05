@@ -29,7 +29,7 @@ A scenario whose subject is an unapproved requirement is wrapped by `requirement
 
 1. runs the scenario asserting the **correct or proposed** behavior;
 2. requires it to fail **for the recorded reason** (a message signature), so an unrelated failure is not hidden;
-3. records an annotation, which `e2e/reporters/inventory-reporter.js` prints as `KNOWN_DEFECT` or `REQUIREMENT_PENDING`;
+3. records a `REQUIREMENT_PENDING` annotation, which `e2e/reporters/inventory-reporter.js` includes in the scenario inventory;
 4. fails the test when the behavior starts to pass, so the marker and the entry in [`FINDINGS_REGISTER.md`](./FINDINGS_REGISTER.md) are removed deliberately.
 
 A green run lists any known-defect or pending-requirement classifications still present in the frozen contract. Contract version 3 keeps the same 46 scenario identities and expects 43 `PASSED`, zero `KNOWN_DEFECT`, and three `REQUIREMENT_PENDING` outcomes after the QA-001 emulated closure. Each executed run's evidence is preserved under `test-results/verified-e2e/run-*/inventory.json` with the matching run identifier.
