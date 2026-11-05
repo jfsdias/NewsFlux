@@ -4,6 +4,8 @@ import test from "node:test"
 
 // eslint-disable-next-line import/no-relative-parent-imports -- keep the generic fail-closed classifier matcher covered after QA-001 closes.
 import { matchesFailureSignature } from "#e2e/support/classification.js"
+// eslint-disable-next-line import/no-relative-parent-imports -- assert the helper module exports only active QA classification APIs.
+import * as classification from "#e2e/support/classification.js"
 // eslint-disable-next-line import/no-relative-parent-imports -- QA classification is shared with the E2E suite through the package import map.
 import { assertQa001CenterHit, classifyQa001CenterHit } from "#e2e/support/qa001-hit-test.js"
 
@@ -46,6 +48,13 @@ const diagnostic = (overrides = {}) => ({
     },
   ],
   ...overrides,
+})
+
+test("resolved defects do not retain an unused known-defect wrapper export", () => {
+  assert.deepEqual(Object.keys(classification).toSorted(), [
+    "matchesFailureSignature",
+    "requirementPending",
+  ])
 })
 
 test("failure signatures distinguish the recorded defect from unrelated failures", () => {

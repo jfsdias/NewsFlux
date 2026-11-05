@@ -41,10 +41,6 @@ const expectRecordedFailure = async ({ type, id, signature }, action) => {
   test.info().annotations.push({ type, description: `${id}: ${firstLine(message)}` })
 }
 
-/** A defect reproduced in the tested environment. The scenario asserts the CORRECT behavior. */
-export const knownDefect = (id, signature, action) =>
-  expectRecordedFailure({ type: "known-defect", id, signature }, action)
-
 /** A behavior with no approved requirement. The scenario asserts the PROPOSED behavior. */
 export const requirementPending = (id, signature, action) =>
   expectRecordedFailure({ type: "requirement-pending", id, signature }, action)

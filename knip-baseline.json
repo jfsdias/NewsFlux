@@ -10,7 +10,6 @@
     "duplicates|src/utils/story-identity/request-controller.js|StoryRequestController,default",
     "duplicates|src/utils/story-identity/story-engine.js|default,runP3Clustering",
     "duplicates|src/utils/story-identity/use-home-story-projection.js|default,useHomeStoryProjection",
-    "exports|e2e/support/classification.js|knownDefect",
     "exports|src/apis/categories.js|markCategoryAsRead",
     "exports|src/apis/entries.js|markStarredEntriesAsRead",
     "exports|src/apis/index.js|markAllAsRead",

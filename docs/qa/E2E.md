@@ -25,7 +25,7 @@ Set `E2E_API_PORT` (default 8081) or `E2E_APP_PORT` (default 4173) if those port
 
 ## Known defects and pending requirements are never plain passes
 
-A scenario whose subject is a known defect or an unapproved requirement is wrapped by `knownDefect(...)` or `requirementPending(...)` (`e2e/support/classification.js`). The wrapper:
+A scenario whose subject is an unapproved requirement is wrapped by `requirementPending(...)` (`e2e/support/classification.js`). The wrapper:
 
 1. runs the scenario asserting the **correct or proposed** behavior;
 2. requires it to fail **for the recorded reason** (a message signature), so an unrelated failure is not hidden;
