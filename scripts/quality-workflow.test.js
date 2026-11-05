@@ -188,7 +188,7 @@ test("the e2e workflow is read-only, runs in forks and pins its actions", () => 
 
 test("the e2e workflow installs the pinned browser and runs three verified stability passes", () => {
   const { workflow } = readE2eWorkflow()
-  const commands = new Set(Object.values(workflow.jobs).flatMap((job) => runCommands(job)))
+  const commands = new Set(runCommands(workflow.jobs.e2e))
 
   assert.ok(commands.has("pnpm install --frozen-lockfile"))
   assert.ok(commands.has("pnpm exec playwright install --with-deps chromium"))
@@ -197,6 +197,31 @@ test("the e2e workflow installs the pinned browser and runs three verified stabi
     !commands.has("pnpm test:e2e"),
     "the CI gate must run three distinct verified inventories",
   )
+})
+
+test("the blocking UX-REACH job builds and executes its isolated 11-test Playwright suite", () => {
+  const { workflow } = readE2eWorkflow()
+  const job = workflow.jobs.ux_reach
+  assert.ok(job, "the dedicated UX-REACH job must exist")
+  const commands = runCommands(job)
+
+  assert.ok(commands.includes("pnpm install --frozen-lockfile"))
+  assert.ok(commands.includes("pnpm exec playwright install --with-deps chromium"))
+  assert.ok(commands.includes("pnpm build"))
+  assert.ok(
+    commands.includes("pnpm exec playwright test --config=playwright.ux-reach-01.config.js"),
+  )
+
+  const upload = stepsOf(job).find((step) => step.name === "Upload UX-REACH diagnostics")
+  assert.ok(upload, "failed UX runs must preserve their diagnostics")
+  assert.equal(upload.if, "${{ failure() }}")
+  assert.equal(upload.uses, "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9")
+  assert.deepEqual(upload.with, {
+    name: "ux-reach-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}",
+    path: "test-results/ux-reach-01/",
+    "if-no-files-found": "warn",
+    "retention-days": 3,
+  })
 })
 
 test("failed E2E runs upload only their invocation-scoped diagnostics", () => {
@@ -281,7 +306,8 @@ for (const [file, read] of WORKFLOW_FILES) {
 
     for (const [where, node] of jobsAndSteps(workflow)) {
       const allowedDiagnosticUpload =
-        file === ".github/workflows/e2e.yaml" && node.name === "Upload synthetic E2E diagnostics"
+        file === ".github/workflows/e2e.yaml" &&
+        ["Upload synthetic E2E diagnostics", "Upload UX-REACH diagnostics"].includes(node.name)
       if (allowedDiagnosticUpload) {
         assert.equal(node.if, "${{ failure() }}", `${where} must upload only after a failure`)
       } else {
