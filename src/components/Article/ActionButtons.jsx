@@ -23,6 +23,7 @@ import { memo, useRef, useState } from "react"
 
 import ArticleTOC, { ArticleTOCPanel } from "./ArticleTOC"
 
+import { ReaderSidebarTrigger } from "@/components/Article/SidebarTrigger"
 import CustomTooltip from "@/components/ui/CustomTooltip"
 import useDesktopSidebar from "@/hooks/useDesktopSidebar"
 import useEntryActions from "@/hooks/useEntryActions"
@@ -54,9 +55,16 @@ const TITLE_ALIGNMENT_ICONS = {
 }
 
 const DesktopButtons = memo(
-  ({ commonButtons, hasIntegrations, handleSaveToThirdPartyServices, polyglot }) => (
+  ({
+    commonButtons,
+    hasIntegrations,
+    handleSaveToThirdPartyServices,
+    polyglot,
+    showSidebarTrigger,
+  }) => (
     <>
       <div className="left-side nf-glass-group">
+        {showSidebarTrigger && <ReaderSidebarTrigger placement="actionbar" />}
         {commonButtons.close}
         {commonButtons.navigationLeft}
         {commonButtons.navigationRight}
@@ -171,7 +179,7 @@ const ActionButtons = ({ isPhotoSliderVisible = false, scrollContainerRef = null
     navigateToPreviousArticle,
   } = useReaderCommands()
 
-  const { isBelowCompact, isBelowMedium } = useScreenWidth()
+  const { isBelowCompact, isBelowMedium, isBelowLarge } = useScreenWidth()
 
   const isUnread = activeContent.status === "unread"
   const isStarred = activeContent.starred
@@ -578,6 +586,7 @@ const ActionButtons = ({ isPhotoSliderVisible = false, scrollContainerRef = null
           handleSaveToThirdPartyServices={() => handleSaveToThirdPartyServices(activeContent)}
           hasIntegrations={hasIntegrations}
           polyglot={polyglot}
+          showSidebarTrigger={isBelowLarge && !isBelowMedium}
         />
       )}
     </div>

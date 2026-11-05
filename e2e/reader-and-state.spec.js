@@ -5,7 +5,7 @@ import {
   elementAtCenter,
   horizontalOverflow,
 } from "./support/app.js"
-import { knownDefect, requirementPending } from "./support/classification.js"
+import { requirementPending } from "./support/classification.js"
 import { expect, test } from "./support/fixtures.js"
 
 const closeArticle = (page) => page.getByRole("button", { name: "Close article" })
@@ -20,9 +20,9 @@ test.describe("F04 Opening and closing an article", () => {
     await expect(page).toHaveURL(/\/all\/entry\/\d+$/)
     await expect(closeArticle(page)).toBeVisible()
 
-    await knownDefect("QA-001", /Open sidebar[\s\S]*intercepts pointer events/, async () => {
-      await closeArticle(page).click({ timeout: 3000 })
-    })
+    const closeCenter = await center(closeArticle(page))
+    await page.touchscreen.tap(closeCenter.x, closeCenter.y)
+    await expect(page).toHaveURL(/\/all$/)
   })
 
   test("F04-2: [mouse] Close article closes the reader at 884 px", async ({ openApp }) => {
@@ -56,15 +56,6 @@ test.describe("F04 Opening and closing an article", () => {
           { cause: error },
         )
       }
-    }
-
-    if (hitTarget === "Open sidebar") {
-      await knownDefect(
-        "QA-001",
-        /QA-001 actual touch with hitTarget=Open sidebar ended at \/all\/entry\/\d+; readerStillVisible=true/,
-        tapCenterAndVerifyClose,
-      )
-      return
     }
 
     expect(hitTarget).toBe("Close article")

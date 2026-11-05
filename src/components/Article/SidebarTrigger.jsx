@@ -83,18 +83,26 @@ export default function SidebarTrigger() {
   )
 }
 
-export function ReaderSidebarTrigger() {
+export function ReaderSidebarTrigger({ placement = "overlay" } = {}) {
   const { isCompact, isMedium } = useWindowClass()
+  const { isBelowMedium } = useScreenWidth()
   const sidebarVisible = useStore(mobileSidebarVisibleState)
   const { polyglot } = useStore(polyglotState)
   const sidebarTriggerLabel = polyglot?.t("sidebar.open")
 
-  if (!isCompact && !isMedium) {
+  const isActionBarPlacement = placement === "actionbar"
+  const shouldRender = isActionBarPlacement
+    ? !isBelowMedium && isMedium
+    : isCompact || (isBelowMedium && isMedium)
+
+  if (!shouldRender) {
     return null
   }
 
   return (
-    <div className="brand reader-sidebar-trigger-wrapper">
+    <div
+      className={`brand ${isActionBarPlacement ? "reader-sidebar-trigger-actionbar" : "reader-sidebar-trigger-wrapper"}`}
+    >
       <CustomTooltip mini content={sidebarTriggerLabel}>
         <Button
           aria-controls="mobile-sidebar-drawer"

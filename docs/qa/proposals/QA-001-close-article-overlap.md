@@ -1,36 +1,34 @@
-# QA-001: "Close article" is covered by "Open sidebar" in the reader header with a coarse pointer
+# QA-001: Reader close and sidebar control overlap
 
-- **Status:** `KNOWN_DEFECT` reproduced in emulation; physical Fold8/iPhone Duo confirmation **pending**. The correction needs separate scope approval.
-- **Regression tests (already in the repository, currently recorded as known defects):** `F02-2`, `F04-1`, `F04-3`, `QA-001-884`, `QA-001-939` in `e2e/`. Guard cases at 466, 597, 704, 1024 and 1440 px pass today and must keep passing.
+## Status
 
-## What happens
+`RESOLVED_IN_EMULATION` in the QA-001 implementation candidate. The previous base reproduction and candidate regression evidence are recorded below. Physical Fold/iPhone, Safari/WebKit, and real-Miniflux behavior remain **unverified**; no physical-device approval is inferred.
 
-With a coarse pointer (touch) and a viewport width between 769 and 992 px, the reader header shows two buttons at the same position: the "Open sidebar" trigger and "Close article". `elementFromPoint` at the center of "Close article" returns "Open sidebar" (0 of 5 test points reach "Close article"), and a tap opens the sidebar instead of closing the article. With a mouse the overlap is small and "Close article" works. Reproduced at 884x1107 and 939x1271; not reproduced at 466, 597, 704, 1024 and 1440 px. The viewports are estimates derived from the official physical resolutions and assumed pixel ratios, except 884x1104, which the project documents as its critical viewport.
+## Base reproduction
 
-## Likely cause (supported by code, not yet proven on a device)
+The issue was reproduced on the exact base `5c890ce08fca69e7f0df376b50d2e31e7ab4d1b5` with a production build, Chromium touch emulation, and synthetic Miniflux. With the QA-001 assertions changed from expected-failure wrappers to ordinary assertions, all five affected scenarios failed:
 
-Two independent breakpoint decisions disagree in the 769-992 px band:
+- `QA-001-884` and `QA-001-939`: the close-button center hit returned `Open sidebar`.
+- `F04-1` and `F02-2`: Playwright reported that `Open sidebar` intercepted the close-button click.
+- `F04-3`: an actual center touchscreen tap left the route on `/all/entry/3` and the Reader visible.
 
-- `ReaderSidebarTrigger` (`src/components/Article/SidebarTrigger.jsx`) renders when `useWindowClass()` says Compact or Medium, which is below 993 px, and `.reader-sidebar-trigger-wrapper` is absolutely positioned at the top-left (`SidebarTrigger.css`). Under `@media (any-pointer: coarse)` the button grows to at least 48x48.
-- `ActionButtons` (`src/components/Article/ActionButtons.jsx`) switches to its compact "mobile" layout with `useScreenWidth().isBelowMedium`, which is 768 px or less. From 769 px it uses the wider layout whose left group also starts at the top-left, with no space reserved for the trigger.
+At 884×1107, the close button measured 32×32 px at (24,20), while the sidebar trigger measured 48×48 px at (8,8). `elementFromPoint(40,36)` returned the sidebar trigger. The 48 px trigger’s higher stacking layer overlapped the close control because the sidebar trigger was absolutely positioned by the Content wrapper while the desktop-style action bar independently began its left group at the same corner.
 
-## Narrow correction options (no change to global breakpoints)
+## Correction in the candidate
 
-| Option              | Change                                                                                                                                                                           | Layout position                                   | Stacking                                                                                       | Touch hit-testing                   | Risk                                                          |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------- |
-| **A (recommended)** | In the 769-992 px band render the sidebar trigger as the first control of the action bar's left group instead of an absolutely positioned wrapper.                               | Removes the overlap by construction.              | No competing layers.                                                                           | Each button keeps its own hit area. | Low to medium: touches two components, but only in that band. |
-| B                   | Keep the absolute trigger and reserve its width in the action bar (`padding-inline-start` of the left group) only when the trigger is shown and the bar is not in mobile layout. | Shifts the action bar right by the trigger width. | Unchanged.                                                                                     | Unchanged.                          | Low, but the reserved width must track the 48 px touch size.  |
-| C                   | Raise the z-index of "Close article".                                                                                                                                            | Unchanged.                                        | Fixes this report but only swaps which button is covered ("Open sidebar" becomes unreachable). | Worse.                              | Not recommended.                                              |
+In the 769–992 px range, `ReaderSidebarTrigger` is rendered as the first control in the Reader action bar’s left group. That group owns the trigger and close control in normal flex flow, preserving their separate button targets and spacing. At 768 px and below the trigger keeps its existing separate top-left placement. At 993 px and above it remains absent from the Reader. No global breakpoint, z-index, Reader scroll, navigation, or sidebar state behavior was changed.
 
-Changing the global breakpoints (unifying `useWindowClass` and `useScreenWidth`) is a separate, larger decision and is **not** proposed here.
+## Candidate evidence
 
-## Acceptance criteria
+Focused Chromium run against the production build and synthetic Miniflux:
 
-1. In every viewport of `e2e/qa-001-reader-header.spec.js`, with touch, "Close article" receives the pointer at its own center and "Open sidebar" remains reachable.
-2. `F02-2`, `F04-1`, `F04-3`, `QA-001-884` and `QA-001-939` stop being known defects: their markers are removed in the same change, and `docs/qa/FINDINGS_REGISTER.md` is updated.
-3. No change at 466, 597, 704, 1024 and 1440 px, and the existing real-browser gates still pass.
-4. **Physical confirmation** on a Fold8 and an iPhone Duo (open and closed) before and after the fix, with `innerWidth`, `devicePixelRatio`, browser and version recorded.
+- 10/10 targeted scenarios passed: the seven existing coarse-pointer viewport scenarios, `F02-2`, `F04-1`, and `F04-3`.
+- The 884×1107 scenario also exercises 768/769/992/993 while the Reader is open, verifies disjoint control hit regions, checks that the sidebar trigger remains reachable, tests Tab/Enter on Close article, and taps Close article after resizing back.
+- Actual touchscreen taps closed the Reader at 769, 884, 939, and 992 px; mouse closure remains covered by the existing F04-2 regression.
+- The scenario identities remain frozen at 46; QA-001’s five outcomes are changed to `PASSED` in scenario contract version 3. Three other scenarios remain `REQUIREMENT_PENDING`.
 
-## Out of scope
+This focused result is emulated/synthetic evidence only. Full repository gates, GitHub CI, and independent QA review must pass before the candidate is considered ready for PM review. No real device was used.
 
-Dual-pane reader (in HOLD), the global breakpoint model, and any visual redesign.
+## Historical options
+
+The earlier investigation considered three approaches: integrating the trigger into the action bar, reserving space for the absolute trigger, or raising the close button’s z-index. Integration into the action bar was selected because it removes the competing layout ownership and preserves both controls’ hit regions; a z-index swap would only make the sidebar unreachable.

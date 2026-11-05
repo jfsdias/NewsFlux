@@ -1,5 +1,4 @@
-import { cards, entriesRequests, entryIds } from "./support/app.js"
-import { knownDefect } from "./support/classification.js"
+import { cards, center, entriesRequests, entryIds } from "./support/app.js"
 import { expect, test } from "./support/fixtures.js"
 
 test.describe("F01 Startup", () => {
@@ -50,7 +49,7 @@ test.describe("F02 Feed loading and refresh", () => {
     expect(await cards(page).count()).toBeGreaterThanOrEqual(3)
   })
 
-  test("F02-2: [touch] Close article is tappable while new entries arrive (QA-001 known defect)", async ({
+  test("F02-2: [touch] Close article is tappable while new entries arrive", async ({
     openApp,
     mock,
   }) => {
@@ -58,9 +57,9 @@ test.describe("F02 Feed loading and refresh", () => {
     await expect(page.getByRole("button", { name: "Close article" })).toBeVisible()
     await mock.inject(3)
 
-    await knownDefect("QA-001", /Open sidebar[\s\S]*intercepts pointer events/, async () => {
-      await page.getByRole("button", { name: "Close article" }).click({ timeout: 3000 })
-    })
+    const closeCenter = await center(page.getByRole("button", { name: "Close article" }))
+    await page.touchscreen.tap(closeCenter.x, closeCenter.y)
+    await expect(page).toHaveURL(/\/all$/)
   })
 
   test("F02-3: [mouse] new entries while reading keep the article and appear after Refresh", async ({

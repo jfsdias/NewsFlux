@@ -19,7 +19,7 @@ import { fileURLToPath } from "node:url"
 // eslint-disable-next-line import/no-relative-parent-imports -- these tests exercise E2E package modules through the import map.
 import InventoryReporter from "#e2e/reporters/inventory-reporter.js"
 // eslint-disable-next-line import/no-relative-parent-imports -- these tests exercise E2E package modules through the import map.
-import { EXPECTED_SCENARIOS } from "#e2e/scenario-contract.js"
+import { E2E_SCENARIO_CONTRACT_VERSION, EXPECTED_SCENARIOS } from "#e2e/scenario-contract.js"
 
 import { compareRuns, evaluateRuns, validateInventory } from "./e2e-stability.js"
 
@@ -42,7 +42,7 @@ const inventory = (scenarios, runId = `unit-run-${++inventorySequence}`) => {
   for (const { state } of rows) {
     counts[state] = (counts[state] ?? 0) + 1
   }
-  return { version: 2, runId, counts, scenarios: rows, contractProblems: [] }
+  return { version: 3, runId, counts, scenarios: rows, contractProblems: [] }
 }
 const run = (scenarios) => inventory(scenarios)
 const completeSmallInventory = (runId) =>
@@ -146,6 +146,19 @@ test("the frozen expected scenario contract contains the reviewed 46 unique iden
   assert.equal(EXPECTED_SCENARIOS.length, 46)
   assert.equal(new Set(EXPECTED_SCENARIOS.map(({ id }) => id)).size, 46)
   assert.ok(EXPECTED_SCENARIOS.every(({ id, state }) => id && state))
+})
+
+test("QA-001 closure increments the scenario contract and preserves only pending requirements", () => {
+  const states = {}
+  for (const { state } of EXPECTED_SCENARIOS) {
+    states[state] = (states[state] ?? 0) + 1
+  }
+
+  assert.equal(E2E_SCENARIO_CONTRACT_VERSION, 3)
+  assert.deepEqual(states, { PASSED: 43, REQUIREMENT_PENDING: 3 })
+  for (const id of ["F02-2", "F04-1", "F04-3", "QA-001-884", "QA-001-939"]) {
+    assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === id)?.state, "PASSED")
+  }
 })
 
 test("empty, skipped, missing, duplicate, unexpected and misclassified scenarios fail closed", () => {

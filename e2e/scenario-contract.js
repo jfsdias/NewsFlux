@@ -1,4 +1,4 @@
-export const E2E_SCENARIO_CONTRACT_VERSION = 2
+export const E2E_SCENARIO_CONTRACT_VERSION = 3
 
 // This reviewed inventory binds CI to the scenario IDs and currently approved outcome classes.
 // Additions, removals, or classification changes are intentional contract changes for review.
@@ -7,13 +7,13 @@ export const EXPECTED_SCENARIOS = [
   { id: "F01-2", state: "PASSED" },
   { id: "F01-3", state: "PASSED" },
   { id: "F02-1", state: "PASSED" },
-  { id: "F02-2", state: "KNOWN_DEFECT" },
+  { id: "F02-2", state: "PASSED" },
   { id: "F02-3", state: "PASSED" },
   { id: "F03-1", state: "PASSED" },
   { id: "F03-2", state: "PASSED" },
-  { id: "F04-1", state: "KNOWN_DEFECT" },
+  { id: "F04-1", state: "PASSED" },
   { id: "F04-2", state: "PASSED" },
-  { id: "F04-3", state: "KNOWN_DEFECT" },
+  { id: "F04-3", state: "PASSED" },
   { id: "F05-1", state: "PASSED" },
   { id: "F06-1", state: "PASSED" },
   { id: "F06-2", state: "PASSED" },
@@ -44,8 +44,8 @@ export const EXPECTED_SCENARIOS = [
   { id: "QA-001-466", state: "PASSED" },
   { id: "QA-001-597", state: "PASSED" },
   { id: "QA-001-704", state: "PASSED" },
-  { id: "QA-001-884", state: "KNOWN_DEFECT" },
-  { id: "QA-001-939", state: "KNOWN_DEFECT" },
+  { id: "QA-001-884", state: "PASSED" },
+  { id: "QA-001-939", state: "PASSED" },
   { id: "QA-001-1024", state: "PASSED" },
   { id: "QA-001-1440", state: "PASSED" },
   { id: "QA-001-mouse", state: "PASSED" },

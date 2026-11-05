@@ -30,7 +30,7 @@ const inventoryFor = (runId, scenarios = SCENARIOS) => {
   const counts = Object.groupBy(rows, ({ state }) => state)
 
   return {
-    version: 2,
+    version: 3,
     runId,
     counts: Object.fromEntries(
       Object.entries(counts).map(([state, items]) => [state, items.length]),
