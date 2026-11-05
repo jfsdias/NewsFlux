@@ -42,3 +42,7 @@ dist-ssr
 .eslintcache
 stats.html
 src/version-info.json
+
+# Playwright
+/test-results
+/playwright-report

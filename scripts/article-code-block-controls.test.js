@@ -21,6 +21,10 @@ const vite = await createServer({
   resolve: {
     alias: [{ find: "@", replacement: path.resolve(root, "src") }],
   },
+  // Arco ships a CommonJS entry point. Node 22 cannot detect its named exports (for example
+  // `Select`) when Vite externalizes it for SSR, while Node 24 can. Inlining it makes the test
+  // independent of the Node version, as scripts/nnw01-b-sourcemark-adoption.test.js already does.
+  ssr: { noExternal: ["@arco-design/web-react"] },
   root,
   server: { middlewareMode: true, ws: { server: hmrServer } },
 })

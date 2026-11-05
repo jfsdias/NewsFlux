@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { existsSync } from "node:fs"
 import { readFile } from "node:fs/promises"
 import { createServer as createHttpServer } from "node:http"
 import path from "node:path"
@@ -11,23 +12,42 @@ import React from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { createServer } from "vite"
 
+import createViteTempCache from "./vite-temp-cache.js"
+
 const root = fileURLToPath(new URL("../", import.meta.url))
 const hmrServer = createHttpServer()
-const vite = await createServer({
-  appType: "custom",
-  configFile: false,
-  plugins: [react()],
-  optimizeDeps: { entries: [], include: [], noDiscovery: true },
-  resolve: {
-    alias: [
-      { find: /^@\/apis$/, replacement: path.resolve(root, "scripts/tests/nnw01-b-api-mock.js") },
-      { find: "@", replacement: path.resolve(root, "src") },
-    ],
-  },
-  root,
-  ssr: { noExternal: ["@arco-design/web-react"] },
-  cacheDir: "/private/tmp/newsflux-nnw01-b-vite-cache",
-  server: { middlewareMode: true, ws: { server: hmrServer } },
+const temporaryCache = createViteTempCache("newsflux-nnw01-b-vite-cache")
+let vite
+try {
+  vite = await createServer({
+    appType: "custom",
+    configFile: false,
+    plugins: [react()],
+    optimizeDeps: { entries: [], include: [], noDiscovery: true },
+    resolve: {
+      alias: [
+        { find: /^@\/apis$/, replacement: path.resolve(root, "scripts/tests/nnw01-b-api-mock.js") },
+        { find: "@", replacement: path.resolve(root, "src") },
+      ],
+    },
+    root,
+    ssr: { noExternal: ["@arco-design/web-react"] },
+    cacheDir: temporaryCache.cacheDir,
+    server: { middlewareMode: true, ws: { server: hmrServer } },
+  })
+} catch (error) {
+  hmrServer.close()
+  temporaryCache.cleanup()
+  throw error
+}
+after(async () => {
+  try {
+    await vite.close()
+  } finally {
+    hmrServer.close()
+    temporaryCache.cleanup()
+    assert.equal(existsSync(temporaryCache.cacheDir), false, "the owned Vite cache is cleaned up")
+  }
 })
 
 const [
@@ -62,11 +82,6 @@ const stores = {
   AppDataContext: appContext.default,
 }
 const { default: locales } = await vite.ssrLoadModule("/src/locales/en-US.json")
-
-after(async () => {
-  await vite.close()
-  hmrServer.close()
-})
 
 const {
   getDefaultSettings,

@@ -1,16 +1,16 @@
 # NewsFlux Roadmap
 
-- **Status:** canonical roadmap reconciled after PR #129 (STORY-01B-R); active track is STORY-01B-D (in progress at HUMAN_LABELING_GATE); current state and sequencing are in Section 23.
+- **Status:** canonical roadmap reconciled on 2026-11-04 against audited commit `1e7e39ce27ca15c0242e98d83e0c5d0ad865a1ba` (post-PR #177); the active engineering track is STABILIZATION-01 (reliability, QA and regression prevention); current state is in Section 24. Story research continued through PR #177 and remains off by default in the product.
 - **Created:** 2026-10-15.
-- **Last reconciled:** 2026-10-25.
-- **Reconciled against (current):** GitHub `main` at `de138bc961d665005fe3322082034963bf263b16`. The production baseline remains `dc4154d7729204c65c8a1abaa50f9bfc9f92be64` (image `newsflux-local:dc4154d77292`); main/production SHA parity is **NO**, while there is no application runtime delta since production and PR #129 requires no deployment. Open PR: #130 (documentation reconciliation, draft). Active track: STORY-01B-D (human labeling gate).
+- **Last reconciled:** 2026-11-04.
+- **Reconciled against (historical, post-PR #129):** GitHub `main` at `de138bc961d665005fe3322082034963bf263b16`. The production baseline remains `dc4154d7729204c65c8a1abaa50f9bfc9f92be64` (image `newsflux-local:dc4154d77292`); main/production SHA parity is **NO**, while there is no application runtime delta since production and PR #129 requires no deployment. Open PR: #130 (documentation reconciliation, draft). Active track: STORY-01B-D (human labeling gate).
 - **Previously reconciled against (historical, post-PR #128):** GitHub `main` at `dc4154d7729204c65c8a1abaa50f9bfc9f92be64`; production at `dc4154d7729204c65c8a1abaa50f9bfc9f92be64`. The earlier post-PR #120, post-PR #108 and post-PR #96 snapshots and prior states are preserved below; see Sections 19–22.
 - **Purpose:** preserve completed work, accepted findings, sequencing, architecture/product gates, upstream baseline, and the next recommended action without turning the roadmap into implementation authorization.
 - **Related planning documents:** [`PWA_ARCHITECTURE.md`](./PWA_ARCHITECTURE.md) (PWA Foundation architecture contract) and [`DESIGN_REFERENCES.md`](./DESIGN_REFERENCES.md) (NetNewsWire UX research track). Both are planning documents and authorize no implementation.
 
 This document is the canonical **roadmap**, not an implementation authorization. Detailed design decisions remain in the dedicated design documents and implementation plans remain in `docs/superpowers/plans/` where present.
 
-For present execution status, current PRs and audit outcomes, Section 23 is authoritative. Earlier status tables and snapshots, including Sections 18–22, are retained as historical records; they do not override Section 23.
+For present execution status, current PRs and audit outcomes, Section 24 is authoritative. Earlier status tables and snapshots, including Sections 18–23, are retained as historical records; they do not override Section 24.
 
 No roadmap item may bypass project governance: one identifiable purpose per PR; no merge without explicit user authorization; no blind upstream sync; upstream sync, redesign and functional changes stay isolated; incidental findings are reported, classified and routed to backlog; no new persistent NewsFlux state without an explicit architecture decision; and no incidental scope expansion.
 
@@ -1717,7 +1717,7 @@ The completed UPSTREAM_AUDIT_02 is removed from the ready/recommended queue. PWA
 
 The next step is a prioritization decision for PWA-VAL-01, not automatic execution. Every item remains subject to the project rules: one purpose per PR, no blind upstream sync, no new persistent state without architecture approval, and no merge without explicit user authorization.
 
-## 23. Current canonical state: post-PR #129 / STORY-01B-R (2026-10-25)
+## 23. Historical canonical state: post-PR #129 / STORY-01B-R (2026-10-25; superseded by Section 24)
 
 This section supersedes the historical post-NAV-02F-A state. GitHub main was live-verified at `de138bc961d665005fe3322082034963bf263b16` following the merge of STORY-01B-R (PR #129). Deployed production application revision remains `dc4154d7729204c65c8a1abaa50f9bfc9f92be64` (image `newsflux-local:dc4154d77292`). Main/production SHA parity is NO, but MAIN_PRODUCTION_PARITY_REQUIRED is NO: PR #129 was exclusively research documentation and offline harness tooling, introducing zero product runtime changes and zero production import changes. This divergence is intentional (`INTENTIONAL_DIVERGENCE=YES`, `DEPLOYMENT_DRIFT_REQUIRING_REMEDIATION=NO`); no deployment or canary is required (`DEPLOY_REQUIRED=NO`, `CANARY_REQUIRED=NO`).
 
@@ -1871,3 +1871,98 @@ With STORY-01B-R and PR #130 merged to main, and STORY-01B-D gold dataset curati
 | DOCKER_PUBLISHING_IDENTITY_01               | BACKLOG           | Decide whether to establish registry publishing before changing identity, guards, credentials or release topology.                                                          | Unordered                |
 
 The active track is STORY-01B-D4 (documentation reconciliation only). Downstream modeling, clustering, and runtime activation remain unauthorized. Every item remains subject to the project rules: one purpose per PR, no blind upstream sync, no new persistent state without architecture approval, and no merge without explicit user authorization.
+
+---
+
+## 24. Current canonical state: audited commit 1e7e39c, post-PR #177 (2026-11-04)
+
+**Reconciled:** 2026-11-04, as part of STABILIZATION-01, against the audited commit `1e7e39ce27ca15c0242e98d83e0c5d0ad865a1ba` (`main` at 2026-10-29, the merge of PR #177). The commit and the PR history below were verified against the GitHub API and a local checkout on 2026-11-04. This section supersedes every earlier "current" state in this document; earlier sections are historical records.
+
+### What this reconciliation does and does not claim
+
+- **Repository state (verified):** `main` is `1e7e39ce27ca15c0242e98d83e0c5d0ad865a1ba`. Open PRs: #134 to #140 (draft Story-01B research, open since 2026-10-26). PRs #78 and #80 were closed without merge. There are no open or closed GitHub issues; the backlog lives in these documents and in PRs. There are 50+ remote working branches, most already integrated; unintegrated work beyond the draft PRs was not audited branch by branch.
+- **Production (not verified here):** this reconciliation did not access production. The last PM-reported production revision is `dc4154d7729204c65c8a1abaa50f9bfc9f92be64` (PR #128; `newsflux-local:dc4154d77292`). **Main/production parity is unknown.** If that report is accurate, the only application runtime difference between production and `main` is PR #142 (Story identity plumbing, off by default): between `de138bc` (PR #129) and `1e7e39c`, `src/`, `public/`, `index.html`, `vite.config.js`, `package.json`, the lockfile, the `Dockerfile`, the `Caddyfile` and `.github/` changed in 21 files, all under `src/utils/story-identity/`, `src/workers/story-identity.worker.js` and `src/components/Home/HomeRecent.jsx`.
+- **Earlier statements corrected:** `APPLICATION_RUNTIME_DELTA_SINCE_PRODUCTION=NO` (post-PR #129 state) is no longer true because of PR #142; the post-PR #129 project state listed STORY-01B-D as in progress while the roadmap listed it completed (it is completed); the PWA baseline in `PWA_ARCHITECTURE.md` section 3.1 described `autoUpdate`, no maskable icons, no manifest `id` and theme `#1F2327`, whereas the code uses `registerType: "prompt"`, maskable icons, an `id` and theme `#0B0D10` (see section 17 of that document).
+- **Verification labels:** "QA evidence" below is emulated (Chromium) and synthetic (mock Miniflux) or static. **Nothing has been verified on a physical device, in Safari/WebKit, on an installed PWA, or against a real Miniflux.**
+
+### Product functionality at the audited commit
+
+| Area                                                                                                                           | State                                               | Notes                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Miniflux integration (feeds, categories, entries, counters, icons) and the version gate (Miniflux 2.3.2 or newer)              | IMPLEMENTED                                         | Source of truth stays Miniflux; mutations are not retried automatically (PR #96).                       |
+| Editorial Home (Highlights and Latest) with starred-affinity personalization                                                   | IMPLEMENTED                                         | Personalization affects Home selection only; All and Unread stay chronological.                         |
+| Layouts Card, Column and List                                                                                                  | Card IMPLEMENTED; Column and List UNVERIFIED in e2e | Unit-tested only.                                                                                       |
+| Reader (content, table of contents, code blocks, lightbox, enclosures, source identity)                                        | IMPLEMENTED                                         | Media/HLS paths are not covered by e2e.                                                                 |
+| Read and unread (mark on card click, toggle, mark all, older, relative, multi-select, undo)                                    | IMPLEMENTED                                         | An article opened by a direct link is not marked read (QA-002, requirement pending).                    |
+| Search, date and status filters, sorting, per-feed filter rules                                                                | IMPLEMENTED                                         | Search and sorting covered by e2e; filters unit-tested.                                                 |
+| Add feed from a website URL (Miniflux discover), feed health and retry                                                         | IMPLEMENTED                                         | Not covered by e2e.                                                                                     |
+| Authentication with dedicated API keys (create, verify, store, drop the password, revoke)                                      | IMPLEMENTED                                         | Token and API key id stay in `localStorage`; a legacy password is dropped on migration.                 |
+| Navigation by window class (compact bottom bar, medium rail, desktop sidebar)                                                  | IMPLEMENTED                                         | Breakpoints are not unified: JS uses 600/993, `useScreenWidth` 359/768/992, CSS mostly 768 and 769-992. |
+| PWA: installable manifest, service worker updated only after user consent, stale-chunk recovery, validated runtime asset cache | IMPLEMENTED                                         | Verified in emulation only; see `PWA_ARCHITECTURE.md` section 17.                                       |
+| OLED palette and restrained Liquid Glass chrome                                                                                | IMPLEMENTED                                         | Visual checks only.                                                                                     |
+| Accessibility baseline (landmarks, skip link, native navigation semantics, reduced motion and transparency)                    | PARTIAL                                             | axe reported no violations in emulation; no screen-reader, zoom or light-theme pass.                    |
+| Languages: de, en, es, fr, ja, zh                                                                                              | PARTIAL                                             | No Portuguese locale; `<html lang>` is fixed to `en`.                                                   |
+| Response headers: `nosniff` and `Referrer-Policy`                                                                              | IMPLEMENTED                                         | No CSP, no compression directive in the `Caddyfile`; production proxy headers unknown.                  |
+| **Close the reader by touch between 769 and 992 px**                                                                           | **BROKEN** (reproduced in emulation)                | QA-001: "Open sidebar" covers "Close article" with a coarse pointer. Physical confirmation pending.     |
+
+### Experimental research (not product functionality)
+
+| Item                                                                                    | State                                    | Notes                                                                                                                                                       |
+| --------------------------------------------------------------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Story identity runtime plumbing (PR #142): worker, projection, Home adapter             | EXPERIMENTAL, merged, **off by default** | `VITE_STORY_IDENTITY_ENABLED` enables it only with the value `1`. Runs in the Home render path (returns early when disabled). Activation is not authorized. |
+| Story candidate ranking (client and Python sidecar)                                     | HOLD, merged, **off by default**         | `VITE_STORY_CANDIDATE_RANKING` must be `1`.                                                                                                                 |
+| Story-01B and Story-02 research (gold datasets, A2D packs, content capture, benchmarks) | EXPERIMENTAL                             | Under `scripts/research/` and `docs/research/`; private data stays outside git. No product link.                                                            |
+| Draft PRs #134 to #140                                                                  | EXPERIMENTAL                             | Not to be promoted without separate authorization.                                                                                                          |
+
+### Planned and on hold
+
+| Item                                                              | State                                                                                                      |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Dual-pane reader and a Fold-specific open layout                  | HOLD (`SINGLE_PANE_REQUIRED` at 884x1104; multi-pane is a product decision)                                |
+| Offline reading and cached account data                           | HOLD (architecture decision)                                                                               |
+| Publisher HTTP fetch, Candidate D and reranker work               | HOLD                                                                                                       |
+| Self-hosted podcast                                               | UNVERIFIED: no implementation found                                                                        |
+| Content Security Policy, iframe sandbox, client-side sanitization | PLANNED (PR #111 added only the baseline response headers; the roadmap lists SECURITY_HEADERS_01 as ready) |
+| Push, background sync, share target                               | PLANNED, not scheduled                                                                                     |
+| Telemetry and observability                                       | PLANNED                                                                                                    |
+| Eight upstream dependency updates; Docker publishing identity     | HOLD / BACKLOG                                                                                             |
+
+### PR ledger after PR #129 (verified)
+
+| PRs          | Purpose                                                                                                                                                                                                                                                                                     | Runtime impact          |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| #130, #131   | Documentation reconciliation; Story identity contract and gold freeze metadata                                                                                                                                                                                                              | none                    |
+| #132, #133   | Offline split-feasibility test and pair-classifier benchmark (STORY-01B-M0, M1)                                                                                                                                                                                                             | none                    |
+| #141         | Story-02 runtime architecture reconciliation (A0)                                                                                                                                                                                                                                           | none                    |
+| **#142**     | **Home-only Story identity runtime plumbing (A1)**                                                                                                                                                                                                                                          | **yes, off by default** |
+| #143, #144   | Browser lifecycle gate harness (A2A); gold v2 annotation tooling                                                                                                                                                                                                                            | none (test and tooling) |
+| #145 to #177 | Story-02 research: gold v2 safety, safety-aware scorers, targeted and fresh gold packs, human review sessions and label ingestion, graph-context retrieval, Miniflux content capture, positive-evidence analysis, B1 expansion pack, outcome analysis, private diagnostic validation design | none                    |
+
+Earlier history (PRs #1 to #129) is summarized in the historical sections below. Notable product PRs in that range include editorial Home (#15, #16, #18), compact and medium navigation (#71, #105), API-key authentication (#112), PWA update safety and recovery (#90 to #96, #114), NAV-02F (#116, #128), and reader chrome (#117, #125).
+
+### Engineering and QA state (STABILIZATION-01)
+
+- **Tests:** 594 source tests and 157 script tests pass on Node 22.23.4 and Node 24.22.1 (the Dockerfile pins Node 24.22.0). The `article-code-block-controls` test previously failed on Node 22 only; it is fixed. There is no Vitest; tests use `node --test`.
+- **CI:** `.github/workflows/quality.yaml` runs ESLint, Prettier, source and script tests (Node 22 and 24), the production build (Node 22 and 24) and the knip baseline. `.github/workflows/e2e.yaml` runs the Playwright scenarios. Both are read-only and are **not** marked as required; that is a repository setting. The deploy workflows still contain an `electh/ReactFlux` repository guard and do not run in this fork. The workflows have not yet run on a GitHub runner.
+- **knip:** `knip.json` declares the browser harness entries; `pnpm knip:check` compares findings with the accepted baseline (44 entries) and fails on any new or stale finding. See `docs/qa/KNIP_BASELINE.md`.
+- **E2E:** 46 Playwright scenarios against a synthetic Miniflux: 38 pass, 5 are recorded known defects (QA-001) and 3 are pending requirements (QA-002, QA-003, QA-004). Three independent runs agreed. See `docs/qa/E2E.md`.
+- **QA policy:** `docs/qa/QA_CHARTER.md`, the pull request template and `docs/qa/FINDINGS_REGISTER.md` define evidence types, review states and acceptance. QA approval never authorizes a merge or a deploy.
+- **Real-browser gates under `scripts/tests/`:** not deterministic (QA-005); they are not part of CI.
+- **Pending decisions:** `docs/qa/proposals/` (QA-001 correction, QA-002, QA-003, QA-004).
+- **Pending physical validation:** Galaxy Z Fold8 and iPhone Duo (open and closed), PWA on Android and iOS, Safari/WebKit.
+
+### Current track and decision matrix
+
+This roadmap does not authorize implementation. Every item remains subject to the project rules: one purpose per PR, no blind upstream sync, no new persistent state without architecture approval, no merge or deploy without explicit authorization, and no reactivation of HOLD items.
+
+| Item                                                                                                    | Status                                        | Gate or decision                                                         | Order                        |
+| ------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------ | ---------------------------- |
+| STABILIZATION-01: quality CI, knip baseline, QA charter, Playwright suite, documentation reconciliation | Implemented locally; **awaiting PR approval** | Present the evidence per change set, then open PRs one purpose at a time | Current                      |
+| QA-001 narrow correction (reader header overlap, 769-992 px, touch)                                     | Proposal written; **not implemented**         | Physical Fold8 and iPhone Duo confirmation, then separate scope approval | After physical confirmation  |
+| QA-002, QA-003, QA-004                                                                                  | Requirements pending; **not implemented**     | Owner decisions on `docs/qa/proposals/`                                  | Owner decision               |
+| Physical validation of Fold8, iPhone Duo and the PWA on Android and iOS                                 | Pending                                       | Access to devices; protocol in `docs/qa/`                                | Parallel                     |
+| Load performance (compression, critical path)                                                           | Measured only on a synthetic stand-in         | Measure the production stack first                                       | After production measurement |
+| CSP, iframe sandbox, client sanitization                                                                | Planned                                       | Compatibility tests with Plyr, HLS, embeds and the lightbox              | After production measurement |
+| Story identity and candidate ranking activation                                                         | HOLD                                          | Explicit authorization; runtime stays off                                | Not authorized               |
+| Dual-pane reader, offline data, Publisher HTTP, Candidate D, podcast                                    | HOLD / UNVERIFIED                             | Product or architecture decision                                         | Not authorized               |
+| Eight upstream dependency updates; Docker publishing identity                                           | HOLD / BACKLOG                                | Assess each independently                                                | Unordered                    |
