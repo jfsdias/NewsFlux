@@ -1,8 +1,8 @@
 name: E2E
 
-# Playwright scenarios against the production build and a synthetic Miniflux. Read-only: no
-# secrets and no deployment permissions. Making this check required is a repository setting and is
-# intentionally not done here; run `pnpm test:e2e:stability` locally before relying on it.
+# Three-run Playwright stability against the production build and a synthetic Miniflux. Read-only:
+# no secrets and no deployment permissions. Making this check required is a repository setting and
+# is intentionally not done here.
 
 on:
   pull_request:
@@ -40,7 +40,7 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Run the e2e scenarios
-        run: pnpm test:e2e
+        run: pnpm test:e2e:stability
 
       - name: Upload synthetic E2E diagnostics
         if: ${{ failure() }}

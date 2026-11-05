@@ -186,13 +186,17 @@ test("the e2e workflow is read-only, runs in forks and pins its actions", () => 
   }
 })
 
-test("the e2e workflow installs the pinned browser and runs the Playwright suite", () => {
+test("the e2e workflow installs the pinned browser and runs three verified stability passes", () => {
   const { workflow } = readE2eWorkflow()
   const commands = new Set(Object.values(workflow.jobs).flatMap((job) => runCommands(job)))
 
   assert.ok(commands.has("pnpm install --frozen-lockfile"))
   assert.ok(commands.has("pnpm exec playwright install --with-deps chromium"))
-  assert.ok(commands.has("pnpm test:e2e"))
+  assert.ok(commands.has("pnpm test:e2e:stability"))
+  assert.ok(
+    !commands.has("pnpm test:e2e"),
+    "the CI gate must run three distinct verified inventories",
+  )
 })
 
 test("failed E2E runs upload only their invocation-scoped diagnostics", () => {
