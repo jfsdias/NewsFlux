@@ -42,7 +42,13 @@ const inventory = (scenarios, runId = `unit-run-${++inventorySequence}`) => {
   for (const { state } of rows) {
     counts[state] = (counts[state] ?? 0) + 1
   }
-  return { version: 3, runId, counts, scenarios: rows, contractProblems: [] }
+  return {
+    version: E2E_SCENARIO_CONTRACT_VERSION,
+    runId,
+    counts,
+    scenarios: rows,
+    contractProblems: [],
+  }
 }
 const run = (scenarios) => inventory(scenarios)
 const completeSmallInventory = (runId) =>
@@ -148,17 +154,18 @@ test("the frozen expected scenario contract contains the reviewed 46 unique iden
   assert.ok(EXPECTED_SCENARIOS.every(({ id, state }) => id && state))
 })
 
-test("QA-001 closure increments the scenario contract and preserves only pending requirements", () => {
+test("QA-002 closure increments the scenario contract and preserves only other pending requirements", () => {
   const states = {}
   for (const { state } of EXPECTED_SCENARIOS) {
     states[state] = (states[state] ?? 0) + 1
   }
 
-  assert.equal(E2E_SCENARIO_CONTRACT_VERSION, 3)
-  assert.deepEqual(states, { PASSED: 43, REQUIREMENT_PENDING: 3 })
+  assert.equal(E2E_SCENARIO_CONTRACT_VERSION, 4)
+  assert.deepEqual(states, { PASSED: 44, REQUIREMENT_PENDING: 2 })
   for (const id of ["F02-2", "F04-1", "F04-3", "QA-001-884", "QA-001-939"]) {
     assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === id)?.state, "PASSED")
   }
+  assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === "F06-3")?.state, "PASSED")
 })
 
 test("empty, skipped, missing, duplicate, unexpected and misclassified scenarios fail closed", () => {

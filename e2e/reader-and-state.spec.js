@@ -5,7 +5,6 @@ import {
   elementAtCenter,
   horizontalOverflow,
 } from "./support/app.js"
-import { requirementPending } from "./support/classification.js"
 import { expect, test } from "./support/fixtures.js"
 
 const closeArticle = (page) => page.getByRole("button", { name: "Close article" })
@@ -110,21 +109,161 @@ test.describe("F06 Read and unread", () => {
       .toBe(true)
   })
 
-  test("F06-3: an article opened by a direct link is marked as read (proposed behavior)", async ({
-    openApp,
-    mock,
-  }) => {
-    const { page } = await openApp({ path: "/all/entry/14" })
+  test("F06-3: a direct link marks the displayed article as read", async ({ openApp, mock }) => {
+    const { context, page } = await openApp({ path: "/all/entry/14" })
     await expect(page.getByText("Notícia 14").first()).toBeVisible()
-    // The negative claim needs a fixed window: nothing is expected to happen.
-    await page.waitForTimeout(3000)
+    await expect
+      .poll(() => mock.mutations())
+      .toEqual([{ entryIds: [14], status: "read", outcome: "applied" }])
+    await expect.poll(() => mock.readIds()).toContain(14)
 
-    await requirementPending("QA-002", /QA-002/, async () => {
-      expect(
-        await mock.readIds(),
-        "QA-002: a deep-linked article should be marked read once displayed",
-      ).toContain(14)
+    await readToggle(page).click()
+    await expect.poll(() => mock.readIds()).not.toContain(14)
+    await expect
+      .poll(() => mock.mutations())
+      .toEqual([
+        { entryIds: [14], status: "read", outcome: "applied" },
+        { entryIds: [14], status: "unread", outcome: "applied" },
+      ])
+    await page.waitForTimeout(250)
+    expect(await mock.mutations()).toHaveLength(2)
+
+    const storageState = await context.storageState()
+    const reopened = await openApp({
+      path: "/all/entry/14",
+      authenticated: false,
+      storageState,
     })
+    await expect(reopened.page.getByText("Notícia 14").first()).toBeVisible()
+    await expect.poll(() => mock.readIds()).toContain(14)
+    await expect.poll(() => mock.mutations()).toHaveLength(3)
+
+    await reopened.page.reload()
+    await expect(reopened.page.getByText("Notícia 14").first()).toBeVisible()
+    await page.waitForTimeout(250)
+    expect(await mock.mutations()).toHaveLength(3)
+
+    const manual = await openApp({
+      path: "/all/entry/15",
+      settings: { markReadBy: "manually" },
+    })
+    await expect(manual.page.getByText("Notícia 15").first()).toBeVisible()
+    await expect
+      .poll(() =>
+        manual.page.evaluate(() => JSON.parse(localStorage.getItem("settings")).markReadBy),
+      )
+      .toBe("manually")
+    await manual.page.waitForTimeout(250)
+    expect(await mock.readIds()).not.toContain(15)
+    const manualMutations = await mock.mutations()
+    expect(manualMutations.some(({ entryIds }) => entryIds.includes(15))).toBe(false)
+
+    const missing = await openApp({ path: "/all/entry/999999" })
+    await expect(missing.page).toHaveURL(/\/all$/)
+    await expect(missing.page.getByText("Notícia 999999")).toBeHidden()
+    const missingMutations = await mock.mutations()
+    expect(missingMutations.some(({ entryIds }) => entryIds.includes(999_999))).toBe(false)
+
+    await mock.fault("entry", "500")
+    const failed = await openApp({ path: "/all/entry/16" })
+    await expect(failed.page.getByText("Notícia 16")).toBeHidden()
+    const failedMutations = await mock.mutations()
+    expect(failedMutations.some(({ entryIds }) => entryIds.includes(16))).toBe(false)
+
+    await mock.fault("entry", "emptyobject")
+    const malformed = await openApp({ path: "/all/entry/17" })
+    await expect(malformed.page.getByRole("button", { name: "Back to Home" })).toBeVisible()
+    const malformedMutations = await mock.mutations()
+    expect(malformedMutations.some(({ entryIds }) => entryIds.includes(17))).toBe(false)
+    await mock.fault("entry", "ok")
+
+    const routeRace = await openApp({ path: "/all" })
+    await expect(cards(routeRace.page).first()).toBeVisible()
+    let releaseStaleEntry
+    let resolveStaleRequest
+    const staleRequestReached = new Promise((resolve) => {
+      resolveStaleRequest = resolve
+    })
+    const staleRequestRelease = new Promise((resolve) => {
+      releaseStaleEntry = resolve
+    })
+    await routeRace.context.route(`${mock.url}/v1/entries/149`, async (route) => {
+      resolveStaleRequest()
+      await staleRequestRelease
+      await route.continue()
+    })
+    await routeRace.page.evaluate(() => {
+      history.pushState(null, "", "/all/entry/149")
+      dispatchEvent(new PopStateEvent("popstate"))
+    })
+    await staleRequestReached
+    await routeRace.page.evaluate(() => {
+      history.pushState(null, "", "/all/entry/148")
+      dispatchEvent(new PopStateEvent("popstate"))
+    })
+    await expect(routeRace.page.getByText("Notícia 148").first()).toBeVisible()
+    await expect.poll(() => mock.readIds()).toContain(148)
+    releaseStaleEntry()
+    await routeRace.page.waitForTimeout(250)
+    const routeMutations = await mock.mutations()
+    expect(routeMutations.filter(({ entryIds }) => entryIds.includes(149))).toEqual([])
+
+    const sessionRace = await openApp({ path: "/all" })
+    await expect(cards(sessionRace.page).first()).toBeVisible()
+    let releaseSessionEntry
+    let resolveSessionRequest
+    const sessionRequestReached = new Promise((resolve) => {
+      resolveSessionRequest = resolve
+    })
+    const sessionRequestRelease = new Promise((resolve) => {
+      releaseSessionEntry = resolve
+    })
+    await sessionRace.context.route(`${mock.url}/v1/entries/147`, async (route) => {
+      resolveSessionRequest()
+      await sessionRequestRelease
+      await route.continue()
+    })
+    await sessionRace.page.evaluate(() => {
+      history.pushState(null, "", "/all/entry/147")
+      dispatchEvent(new PopStateEvent("popstate"))
+    })
+    await sessionRequestReached
+    await sessionRace.page.evaluate(() => {
+      history.pushState(null, "", "/all")
+      dispatchEvent(new PopStateEvent("popstate"))
+    })
+    await expect(cards(sessionRace.page).first()).toBeVisible()
+    await mock.fault("entries", "401")
+    await sessionRace.page.getByRole("button", { name: "Refresh" }).first().click()
+    await expect(sessionRace.page).toHaveURL(/\/login$/)
+    releaseSessionEntry()
+    await sessionRace.page.waitForTimeout(250)
+    const sessionMutations = await mock.mutations()
+    expect(sessionMutations.filter(({ entryIds }) => entryIds.includes(147))).toEqual([])
+
+    await mock.fault("entries", "ok")
+    await mock.fault("status-mutation", "500")
+    const mutationFailure = await openApp({ path: "/all/entry/21" })
+    await expect(mutationFailure.page.getByText("Notícia 21").first()).toBeVisible()
+    await expect.poll(() => mock.requests()).toContain("PUT /v1/entries")
+    await expect
+      .poll(() => mock.mutations())
+      .toContainEqual({
+        entryIds: [21],
+        status: "read",
+        outcome: "rejected",
+      })
+    await expect.poll(() => mock.readIds()).not.toContain(21)
+    await expect(readToggle(mutationFailure.page)).toHaveAttribute("aria-label", /Mark as read/i)
+    expect(mutationFailure.errors).toEqual([])
+    expect(await mock.mutations()).toEqual([
+      { entryIds: [14], status: "read", outcome: "applied" },
+      { entryIds: [14], status: "unread", outcome: "applied" },
+      { entryIds: [14], status: "read", outcome: "applied" },
+      { entryIds: [148], status: "read", outcome: "applied" },
+      { entryIds: [21], status: "read", outcome: "rejected" },
+    ])
+    await mock.fault("status-mutation", "ok")
   })
 })
 
