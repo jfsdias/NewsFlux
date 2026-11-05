@@ -204,6 +204,7 @@
     "mark_all_as_read_error": "Impossible de marquer tous les articles comme lus",
     "mark_all_as_read_confirm": "Marquer tous les articles comme lus ?",
     "mark_all_as_read_tooltip": "Marquer tous les articles comme lus",
+    "mark_all_as_read_position_help": "Déplacez avec Maj+flèches ; appuyez sur Début pour réinitialiser la position.",
     "mark_older_as_read_tooltip": "Marquer les articles plus anciens comme lus",
     "mark_older_as_read_preset": "Plus anciens que %{age}",
     "mark_older_as_read_confirm": "Marquer comme lus les articles non lus plus anciens que %{age} ? Les articles correspondants qui ne sont pas encore chargés sont aussi inclus.",

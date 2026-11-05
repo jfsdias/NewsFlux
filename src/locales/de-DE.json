@@ -204,6 +204,7 @@
     "mark_all_as_read_error": "Alles als gelesen markieren fehlgeschlagen",
     "mark_all_as_read_confirm": "Alles als gelesen markieren?",
     "mark_all_as_read_tooltip": "Alles als gelesen markieren",
+    "mark_all_as_read_position_help": "Mit Umschalt+Pfeiltasten verschieben; mit Pos1 die Position zurücksetzen.",
     "mark_older_as_read_tooltip": "Ältere Artikel als gelesen markieren",
     "mark_older_as_read_preset": "Älter als %{age}",
     "mark_older_as_read_confirm": "Ungelesene Artikel, die älter als %{age} sind, als gelesen markieren? Auch passende, noch nicht geladene Artikel werden einbezogen.",
