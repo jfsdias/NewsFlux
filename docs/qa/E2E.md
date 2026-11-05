@@ -19,7 +19,7 @@ Set `E2E_API_PORT` (default 8081) or `E2E_APP_PORT` (default 4173) if those port
 
 ## How it is built
 
-- **Synthetic Miniflux** (`e2e/support/mock-miniflux.js`): 150 entries, 8 feeds, 4 categories, icons and SVG images, `before_entry_id` pagination, and a control API under `/__e2e/` to reset state, inject faults (`500`, `401`, `badjson`, `html200`, `empty`, `missing`, `emptyobject`, `nullcontent`, `dup`, `slow`), switch the whole backend `down` and inject new entries. A missing entry answers 404 as a real Miniflux does.
+- **Synthetic Miniflux** (`e2e/support/mock-miniflux.js`): 150 entries, 8 feeds, 4 categories, icons and SVG images, `before_entry_id` pagination, a mutation ledger, and a control API under `/__e2e/` to reset state, inject faults (`500`, `401`, `badjson`, `html200`, `empty`, `missing`, `emptyobject`, `nullcontent`, `dup`, `slow`), switch the whole backend `down` and inject new entries. A missing entry answers 404 as a real Miniflux does.
 - **App server** (`e2e/support/start-app-server.js`): serves `build/` like the repository `Caddyfile` (SPA fallback, real 404 for missing assets, no CORS headers). `vite preview` is not used because its `Vary: Origin` header broke the offline PWA scenario.
 - **One worker, no retries.** The scenarios share one backend, and retries would hide flakiness. A scenario must end in the same state on every run.
 
@@ -32,7 +32,7 @@ A scenario whose subject is an unapproved requirement is wrapped by `requirement
 3. records a `REQUIREMENT_PENDING` annotation, which `e2e/reporters/inventory-reporter.js` includes in the scenario inventory;
 4. fails the test when the behavior starts to pass, so the marker and the entry in [`FINDINGS_REGISTER.md`](./FINDINGS_REGISTER.md) are removed deliberately.
 
-A green run lists any known-defect or pending-requirement classifications still present in the frozen contract. Contract version 3 keeps the same 46 scenario identities and expects 43 `PASSED`, zero `KNOWN_DEFECT`, and three `REQUIREMENT_PENDING` outcomes after the QA-001 emulated closure. Each executed run's evidence is preserved under `test-results/verified-e2e/run-*/inventory.json` with the matching run identifier.
+A green run lists any known-defect or pending-requirement classifications still present in the frozen contract. Contract version 4 keeps the same 46 scenario identities and expects 44 `PASSED`, zero `KNOWN_DEFECT`, and two `REQUIREMENT_PENDING` outcomes after the QA-002 emulated closure. Each executed run's evidence is preserved under `test-results/verified-e2e/run-*/inventory.json` with the matching run identifier.
 
 ## Stability
 
@@ -47,7 +47,7 @@ Both the single-run CI command and `pnpm test:e2e:stability` use the shared veri
 | F03 Categories and feeds           | F03-1, F03-2                                                                                          |
 | F04 Opening and closing an article | F04-1, F04-2, F04-3                                                                                   |
 | F05 Full content                   | F05-1                                                                                                 |
-| F06 Read and unread                | F06-1, F06-2, F06-3 (QA-002 pending)                                                                  |
+| F06 Read and unread                | F06-1, F06-2, F06-3 (QA-002 direct-link read-state)                                                   |
 | F07 Search                         | F07-1                                                                                                 |
 | F08 Sorting and persistence        | F08-1                                                                                                 |
 | F09 Images and fallbacks           | F09-1                                                                                                 |

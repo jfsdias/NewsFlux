@@ -1,4 +1,4 @@
-import { Divider, Tag, Typography } from "@arco-design/web-react"
+import { Divider, Message, Tag, Typography } from "@arco-design/web-react"
 import { useStore } from "@nanostores/react"
 import ReactHtmlParser, { attributesToProps, domToReact } from "html-react-parser"
 import { littlefoot } from "littlefoot"
@@ -14,7 +14,7 @@ import {
   useRef,
   useState,
 } from "react"
-import { Link, useNavigate } from "react-router"
+import { Link, useLocation, useNavigate, useParams } from "react-router"
 
 import ActionButtons from "./ActionButtons"
 import ArticleEnclosures from "./ArticleEnclosures"
@@ -28,11 +28,12 @@ import AdaptiveScrollArea from "@/components/ui/AdaptiveScrollArea"
 import FadeTransition from "@/components/ui/FadeTransition"
 import FeedSourceMark from "@/components/ui/FeedSourceMark"
 import PlyrPlayer from "@/components/ui/LazyPlyrPlayer"
+import { updateEntriesStatusOptimistically } from "@/hooks/useEntryActions"
 import { polyglotState } from "@/hooks/useLanguage"
 import usePhotoSlider from "@/hooks/usePhotoSlider"
 import useScreenWidth, { prefersReducedMotionState } from "@/hooks/useScreenWidth"
-import { activeContentState } from "@/store/contentState"
-import { catalogFeedsByIdState } from "@/store/dataState"
+import { activeContentState, contentState } from "@/store/contentState"
+import { catalogFeedsByIdState, dataState } from "@/store/dataState"
 import { articleDetailSettingsState } from "@/store/settingsState"
 import returnToArticleImage from "@/utils/article-image-return"
 import extractCodeContent from "@/utils/code-content"
@@ -360,11 +361,14 @@ const getHtmlParserOptions = (getImageIndex, togglePhotoSlider) => {
 
 const ArticleDetail = forwardRef((_, ref) => {
   const navigate = useNavigate()
+  const location = useLocation()
+  const { entryId: routeEntryId } = useParams()
   const { isBelowMedium } = useScreenWidth()
   const prefersReducedMotion = useStore(prefersReducedMotionState)
   const { polyglot } = useStore(polyglotState)
 
   const activeContent = useStore(activeContentState)
+  const { sessionRevision } = useStore(dataState, { keys: ["sessionRevision"] })
   const catalogFeedsById = useStore(catalogFeedsByIdState)
   const resolvedFeed = catalogFeedsById.get(String(activeContent.feed.id)) ?? activeContent.feed
   const readerSourceIdentity = getReaderSourceIdentity(resolvedFeed)
@@ -389,15 +393,75 @@ const ArticleDetail = forwardRef((_, ref) => {
     fontFamily,
     fontSize,
     lightboxSlideAnimation,
+    markReadBy,
     showFeedIcon,
     titleAlignment,
   } = useStore(articleDetailSettingsState)
   const scrollContainerRef = useRef(null)
+  const readPresentationRef = useRef({ handled: false, key: null })
   const photoSliderSessionRef = useRef(null)
   const preparedPhotoSliderSessionRef = useRef(false)
   const previousPhotoSliderVisibleRef = useRef(false)
   const [enclosuresOpenState, setEnclosuresOpenState] = useState({ articleId: null, open: false })
   const [hasOpenedPhotoSlider, setHasOpenedPhotoSlider] = useState(false)
+
+  useEffect(() => {
+    if (!routeEntryId) {
+      readPresentationRef.current = { handled: false, key: null }
+      return
+    }
+
+    const numericRouteEntryId = Number(routeEntryId)
+    const presentationKey = `${sessionRevision}:${location.pathname}:${routeEntryId}`
+    if (readPresentationRef.current.key !== presentationKey) {
+      readPresentationRef.current = { handled: false, key: presentationKey }
+    }
+
+    let frameId = null
+    const scheduleReadCheck = () => {
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId)
+      }
+      frameId = requestAnimationFrame(() => {
+        frameId = null
+        if (
+          document.visibilityState !== "visible" ||
+          readPresentationRef.current.key !== presentationKey ||
+          readPresentationRef.current.handled ||
+          !Number.isSafeInteger(numericRouteEntryId) ||
+          numericRouteEntryId <= 0
+        ) {
+          return
+        }
+
+        const currentSessionRevision = dataState.get().sessionRevision
+        const currentActiveContent = contentState.get().activeContent
+        if (
+          currentSessionRevision !== sessionRevision ||
+          currentActiveContent?.id !== numericRouteEntryId ||
+          activeContent.id !== numericRouteEntryId
+        ) {
+          return
+        }
+
+        readPresentationRef.current.handled = true
+        if (markReadBy === "view" && currentActiveContent.status === "unread") {
+          updateEntriesStatusOptimistically([currentActiveContent], "read", () => {
+            Message.error(polyglot.t("content.mark_as_read_error"))
+          })
+        }
+      })
+    }
+
+    scheduleReadCheck()
+    document.addEventListener("visibilitychange", scheduleReadCheck)
+    return () => {
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId)
+      }
+      document.removeEventListener("visibilitychange", scheduleReadCheck)
+    }
+  }, [activeContent, location.pathname, markReadBy, polyglot, routeEntryId, sessionRevision])
 
   const {
     completePhotoSliderClose,

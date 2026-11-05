@@ -72,6 +72,7 @@ export const articleDetailSettingsState = selectShallowSettings(
     fontFamily,
     fontSize,
     lightboxSlideAnimation,
+    markReadBy,
     showFeedIcon,
     titleAlignment,
   }) => ({
@@ -81,6 +82,7 @@ export const articleDetailSettingsState = selectShallowSettings(
     fontFamily,
     fontSize,
     lightboxSlideAnimation,
+    markReadBy,
     showFeedIcon,
     titleAlignment,
   }),

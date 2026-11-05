@@ -190,6 +190,7 @@ const createMockMiniflux = ({ port }) => {
   let entries = buildEntries(now, feeds, imageBase)
   const faults = {}
   const hits = []
+  const mutations = []
   let mode = "ok"
 
   const reset = () => {
@@ -201,6 +202,7 @@ const createMockMiniflux = ({ port }) => {
       .filter((entry) => entry.id < INJECTED_ID_BASE)
       .map((entry) => ({ ...entry, status: "unread", starred: entry.id % 13 === 0 }))
     hits.length = 0
+    mutations.length = 0
   }
 
   const inject = (count) => {
@@ -235,7 +237,8 @@ const createMockMiniflux = ({ port }) => {
     read: entries.filter((entry) => entry.status === "read").map((entry) => entry.id),
     unread: entries.filter((entry) => entry.status === "unread").length,
     starred: entries.filter((entry) => entry.starred).map((entry) => entry.id),
-    hits: hits.slice(-60),
+    hits: hits.toSpliced(0, Math.max(0, hits.length - 60)),
+    mutations: [...mutations],
   })
 
   const control = (url, response) => {
@@ -255,7 +258,9 @@ const createMockMiniflux = ({ port }) => {
   const faultFor = (request, url) => {
     const { pathname } = url
     let target
-    if (pathname === "/v1/entries") {
+    if (pathname === "/v1/entries" && request.method === "PUT") {
+      target = "status-mutation"
+    } else if (pathname === "/v1/entries") {
       target = "entries"
     } else if (pathname === "/v1/feeds") {
       target = "feeds"
@@ -271,6 +276,9 @@ const createMockMiniflux = ({ port }) => {
     const query = url.searchParams
     switch (kind) {
       case "500": {
+        if (target === "status-mutation") {
+          return false
+        }
         send(response, 500, { error_message: "boom" })
         return true
       }
@@ -385,6 +393,16 @@ const createMockMiniflux = ({ port }) => {
       send(response, 200, filterEntries(searchParams, source, entries))
     } else if (request.method === "PUT" && pathname === "/v1/entries") {
       const payload = JSON.parse((await readBody(request)) || "{}")
+      const mutation = {
+        entryIds: [...payload.entry_ids],
+        status: payload.status,
+        outcome: faults["status-mutation"] === "500" ? "rejected" : "applied",
+      }
+      mutations.push(mutation)
+      if (mutation.outcome === "rejected") {
+        send(response, 500, { error_message: "mutation rejected by synthetic backend" })
+        return
+      }
       for (const entry of entries) {
         if (payload.entry_ids.includes(entry.id)) {
           entry.status = payload.status ?? entry.status

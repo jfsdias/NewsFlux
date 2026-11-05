@@ -4,6 +4,9 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import test from "node:test"
 
+// eslint-disable-next-line import/no-relative-parent-imports -- test fixture must use the frozen inventory version.
+import { E2E_SCENARIO_CONTRACT_VERSION } from "#e2e/scenario-contract.js"
+
 // eslint-disable-next-line import/no-relative-parent-imports -- mutate the loaded config in a focused runtime gate test.
 import playwrightConfig from "../playwright.config.js"
 
@@ -30,7 +33,7 @@ const inventoryFor = (runId, scenarios = SCENARIOS) => {
   const counts = Object.groupBy(rows, ({ state }) => state)
 
   return {
-    version: 3,
+    version: E2E_SCENARIO_CONTRACT_VERSION,
     runId,
     counts: Object.fromEntries(
       Object.entries(counts).map(([state, items]) => [state, items.length]),
