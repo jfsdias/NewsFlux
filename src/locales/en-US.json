@@ -204,6 +204,7 @@
     "mark_all_as_read_error": "Failed to mark all as read",
     "mark_all_as_read_confirm": "Mark all as read?",
     "mark_all_as_read_tooltip": "Mark all as read",
+    "mark_all_as_read_position_help": "Move with Shift+arrow keys; press Home to reset the position.",
     "mark_older_as_read_tooltip": "Mark older articles as read",
     "mark_older_as_read_preset": "Older than %{age}",
     "mark_older_as_read_confirm": "Mark unread articles older than %{age} as read? This includes matching articles outside the loaded list.",
