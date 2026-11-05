@@ -50,6 +50,10 @@
   margin-left: 0;
 }
 
+.reader-sidebar-trigger-actionbar {
+  margin-left: 0;
+}
+
 .reader-sidebar-trigger.arco-btn {
   display: inline-flex;
 }

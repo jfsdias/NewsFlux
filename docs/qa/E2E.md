@@ -25,14 +25,14 @@ Set `E2E_API_PORT` (default 8081) or `E2E_APP_PORT` (default 4173) if those port
 
 ## Known defects and pending requirements are never plain passes
 
-A scenario whose subject is a known defect or an unapproved requirement is wrapped by `knownDefect(...)` or `requirementPending(...)` (`e2e/support/classification.js`). The wrapper:
+A scenario whose subject is an unapproved requirement is wrapped by `requirementPending(...)` (`e2e/support/classification.js`). The wrapper:
 
 1. runs the scenario asserting the **correct or proposed** behavior;
 2. requires it to fail **for the recorded reason** (a message signature), so an unrelated failure is not hidden;
-3. records an annotation, which `e2e/reporters/inventory-reporter.js` prints as `KNOWN_DEFECT` or `REQUIREMENT_PENDING`;
+3. records a `REQUIREMENT_PENDING` annotation, which `e2e/reporters/inventory-reporter.js` includes in the scenario inventory;
 4. fails the test when the behavior starts to pass, so the marker and the entry in [`FINDINGS_REGISTER.md`](./FINDINGS_REGISTER.md) are removed deliberately.
 
-A green run therefore reads "GREEN WITH KNOWN DEFECTS / PENDING REQUIREMENTS" and lists them. Each executed run's evidence is preserved under `test-results/verified-e2e/run-*/inventory.json` with the matching run identifier.
+A green run lists any known-defect or pending-requirement classifications still present in the frozen contract. Contract version 3 keeps the same 46 scenario identities and expects 43 `PASSED`, zero `KNOWN_DEFECT`, and three `REQUIREMENT_PENDING` outcomes after the QA-001 emulated closure. Each executed run's evidence is preserved under `test-results/verified-e2e/run-*/inventory.json` with the matching run identifier.
 
 ## Stability
 
@@ -40,24 +40,24 @@ Both the single-run CI command and `pnpm test:e2e:stability` use the shared veri
 
 ## Scenario inventory
 
-| Group                              | IDs                                                                              |
-| ---------------------------------- | -------------------------------------------------------------------------------- |
-| F01 Startup                        | F01-1, F01-2, F01-3                                                              |
-| F02 Feed loading and refresh       | F02-1, F02-2 (QA-001), F02-3                                                     |
-| F03 Categories and feeds           | F03-1, F03-2                                                                     |
-| F04 Opening and closing an article | F04-1 (QA-001), F04-2, F04-3 (QA-001)                                            |
-| F05 Full content                   | F05-1                                                                            |
-| F06 Read and unread                | F06-1, F06-2, F06-3 (QA-002 pending)                                             |
-| F07 Search                         | F07-1                                                                            |
-| F08 Sorting and persistence        | F08-1                                                                            |
-| F09 Images and fallbacks           | F09-1                                                                            |
-| F11 Navigation and history         | F11-1                                                                            |
-| F12 Miniflux failures              | F12-1 to F12-11, F12-10b (QA-003 pending)                                        |
-| F13 PWA                            | F13-1                                                                            |
-| F14 Fold and unfold                | F14-1                                                                            |
-| F15 Deep links and reopening       | F15-1, F15-2, F15-3, F15-4 (QA-004 pending)                                      |
-| F16 Long feed                      | F16-1                                                                            |
-| QA-001 viewport matrix             | QA-001-466, -597, -704, -884 (defect), -939 (defect), -1024, -1440, QA-001-mouse |
+| Group                              | IDs                                                                                                   |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| F01 Startup                        | F01-1, F01-2, F01-3                                                                                   |
+| F02 Feed loading and refresh       | F02-1, F02-2, F02-3                                                                                   |
+| F03 Categories and feeds           | F03-1, F03-2                                                                                          |
+| F04 Opening and closing an article | F04-1, F04-2, F04-3                                                                                   |
+| F05 Full content                   | F05-1                                                                                                 |
+| F06 Read and unread                | F06-1, F06-2, F06-3 (QA-002 pending)                                                                  |
+| F07 Search                         | F07-1                                                                                                 |
+| F08 Sorting and persistence        | F08-1                                                                                                 |
+| F09 Images and fallbacks           | F09-1                                                                                                 |
+| F11 Navigation and history         | F11-1                                                                                                 |
+| F12 Miniflux failures              | F12-1 to F12-11, F12-10b (QA-003 pending)                                                             |
+| F13 PWA                            | F13-1                                                                                                 |
+| F14 Fold and unfold                | F14-1                                                                                                 |
+| F15 Deep links and reopening       | F15-1, F15-2, F15-3, F15-4 (QA-004 pending)                                                           |
+| F16 Long feed                      | F16-1                                                                                                 |
+| QA-001 viewport matrix             | QA-001-466, -597, -704, -884 (also resizes through 768/769/992/993), -939, -1024, -1440, QA-001-mouse |
 
 (The original suite had no F10: persistence is covered by F08-1.)
 
