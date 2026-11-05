@@ -16,6 +16,10 @@ Evidence for every finding below is **emulated and synthetic** (Chromium against
 | QA-009 | LOW      | `KNOWN_DEFECT`                             | Server URLs without a TLD (`http://localhost:8081`, `http://miniflux:8080`) are rejected at login by `validator.isURL`.                                                                                                                       | Not yet automated                              | Separate change with its own requirement                                                                                                               |
 | QA-010 | LOW      | Open (cleanup candidate)                   | Unused exports and duplicate exports remain as an accepted knip baseline; `FeedIcon.jsx` is used only by a harness.                                                                                                                           | `pnpm knip:check`                              | Separately authorized cleanup                                                                                                                          |
 
+## Non-blocking operational follow-up
+
+- Verify whether the canonical `/dockerdata/compose/newsflux/compose.yaml` persistently selects the promoted production image. Production was reported at `newsflux-local:5c890ce08fca`; this QA-001 work did not inspect or modify the compose configuration, runtime, or deployment.
+
 ## Recently resolved in emulation
 
 | ID     | Classification          | Summary                                                                                                                                                                                                                       | Evidence                                                                                                                              | Limitation                                                                               |
