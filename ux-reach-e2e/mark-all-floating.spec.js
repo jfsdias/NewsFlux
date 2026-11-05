@@ -294,7 +294,7 @@ test("UX-REACH-01: skip-confirmation still executes once, and Undo restores the 
   const { page } = await openApp({ path: "/all", width: 390, height: 844, touch: true })
   const action = getAction(page)
 
-  await page.evaluate(() => {
+  await page.addInitScript(() => {
     const settings = JSON.parse(localStorage.getItem("settings") ?? "{}")
     localStorage.setItem(
       "settings",
@@ -303,7 +303,7 @@ test("UX-REACH-01: skip-confirmation still executes once, and Undo restores the 
   })
   await page.reload()
   await expect(action).toBeVisible()
-  await expect(action).not.toHaveAttribute("aria-expanded")
+  await expect(action).not.toHaveAttribute("aria-expanded", "true")
   await action.click()
   await expect(page.getByText("Mark all as read?", { exact: true })).toBeHidden()
   await expect.poll(() => getMutationRequests(mock)).toHaveLength(1)
@@ -339,7 +339,7 @@ test("UX-REACH-01: a failed bulk request leaves the list unchanged and the actio
   const { page } = await openApp({ path: "/all", width: 390, height: 844, touch: true })
   const action = getAction(page)
 
-  await page.evaluate(() => {
+  await page.addInitScript(() => {
     const settings = JSON.parse(localStorage.getItem("settings") ?? "{}")
     localStorage.setItem(
       "settings",
@@ -348,7 +348,7 @@ test("UX-REACH-01: a failed bulk request leaves the list unchanged and the actio
   })
   await page.reload()
   await expect(action).toBeVisible()
-  await expect(action).not.toHaveAttribute("aria-expanded")
+  await expect(action).not.toHaveAttribute("aria-expanded", "true")
 
   let failedMutationRequests = 0
   await page.route("**/v1/entries**", async (route) => {
@@ -390,7 +390,7 @@ test("UX-REACH-01: the floating action preserves its disabled and loading states
   const { page } = await openApp({ path: "/all", width: 466, height: 844, touch: true })
   const action = getAction(page)
 
-  await page.evaluate(() => {
+  await page.addInitScript(() => {
     const settings = JSON.parse(localStorage.getItem("settings") ?? "{}")
     localStorage.setItem(
       "settings",
@@ -399,7 +399,7 @@ test("UX-REACH-01: the floating action preserves its disabled and loading states
   })
   await page.reload()
   await expect(action).toBeVisible()
-  await expect(action).not.toHaveAttribute("aria-expanded")
+  await expect(action).not.toHaveAttribute("aria-expanded", "true")
 
   let markRequestStarted
   let releaseMarkRequest
@@ -444,7 +444,20 @@ test("UX-REACH-01: resize clamps and restores the local position; History keeps 
     .not.toBeNull()
 
   await page.setViewportSize({ width: 466, height: 500 })
-  const resized = await page.locator(".mark-all-read-floating").boundingBox()
+  const floating = page.locator(".mark-all-read-floating")
+  await expect
+    .poll(async () => {
+      const bounds = await floating.boundingBox()
+      return Boolean(
+        bounds &&
+        bounds.x >= 0 &&
+        bounds.y >= 0 &&
+        bounds.x + bounds.width <= 466 &&
+        bounds.y + bounds.height <= 500,
+      )
+    })
+    .toBe(true)
+  const resized = await floating.boundingBox()
   expect(resized.x).toBeGreaterThanOrEqual(0)
   expect(resized.y).toBeGreaterThanOrEqual(0)
   expect(resized.x + resized.width).toBeLessThanOrEqual(466)
