@@ -1,33 +1,27 @@
-# QA-002: should an article opened by a direct link be marked as read?
+# QA-002: direct-link read-state consistency
 
-- **Status:** `REQUIREMENT_PENDING`. It is **not** a confirmed regression.
-- **Documenting test:** `F06-3` in `e2e/reader-and-state.spec.js` asserts the proposed behavior and is recorded as a pending requirement.
+- **Status:** `APPROVED_AND_IMPLEMENTED` by the product owner in the QA-002 implementation authorization.
+- **Classification:** Resolved in emulated Chromium against the synthetic Miniflux; physical-device, WebKit and real-Miniflux behavior are not claimed.
+- **Scenario:** `F06-3` is an ordinary `PASSED` scenario in E2E scenario contract version 4. The contract retains all 46 scenario identities.
 
-## Current behavior
+## Behavior at the approved base
 
-`markReadBy` defaults to `view`. The mark-as-read call lives in `handleEntryClick` (`src/components/Content/ContentContext.jsx`), which runs when a card is clicked or the reader moves with the keyboard. A reader opened through its URL (a shared link, a reload, relaunching the installed PWA on `/all/entry/N`) loads the entry in `fetchSingleEntry` (`src/components/Content/Content.jsx`) and does not mark it. In the e2e run, `/all/entry/14` stayed unread on the server after 3 seconds; opening a card or pressing `j` marks the entry.
+`markReadBy` defaults to `view`. The mark-as-read mutation ran from `handleEntryClick` when a card was opened or the reader moved with the keyboard. A direct route (including a reload or PWA reopen on `/all/entry/N`) fetched and displayed the article without marking it read. This was the QA-002 behavior approved for correction.
 
-## Question for the owner
+## Approved requirement
 
-When the setting is `view`, does "viewed" mean only entries opened from the list, or also any entry that is actually displayed?
+When `markReadBy = view`, mark a valid unread entry as read after the matching Reader route has rendered a visible article and the route and data session are still current. Reuse the existing optimistic status-mutation coordinator, count updates, error notification and rollback.
 
-## Proposal (recommended: mark when displayed)
+- `markReadBy = manually` does not auto-mark.
+- Already-read entries do not produce a status mutation.
+- A failed, missing, malformed or obsolete entry load does not produce a status mutation.
+- A route transition or data-session change before display prevents the stale entry from being marked.
+- The automatic action occurs once per Reader presentation. Re-renders and duplicate effects do not repeat it.
+- If the user explicitly marks the article unread during that presentation, re-renders do not automatically mark it read again. Closing the Reader ends that presentation; a later direct reopen is a new presentation.
+- Existing card-click and keyboard behavior remains unchanged and does not gain a duplicate status write.
 
-- With `markReadBy = view`, an entry loaded by direct link is marked as read **once its content is displayed** (not while loading and not if loading fails), using the same optimistic update and error message as `handleEntryClick`.
-- With `markReadBy = manually`, nothing changes.
-- An entry that is already read is not touched, and an entry the user explicitly marked unread in the same session is not re-marked by a re-render.
+## Verification
 
-Why: the PWA relaunches into the last article, so users read an article that stays "unread" in the list and in the counters.
+`F06-3` uses the synthetic Miniflux mutation ledger to check exact entry IDs, statuses and outcomes for direct display, explicit unread, reopen/reload, manual mode and rejected writes. It also checks no status writes for missing (404), HTTP 500, malformed payload, stale route or 401-driven session change. `F06-1` and `F06-2` remain unchanged.
 
-Alternative: keep the current behavior and document that deep links never mark as read. Safer for shared links opened for a glance.
-
-## Acceptance criteria if approved
-
-1. `F06-3` stops being a pending requirement: the marker is removed and the test asserts the server marks the entry once displayed.
-2. A failed fetch (404, 500) marks nothing.
-3. `F06-1` (click path) and `F06-2` (toggle consistency) are unchanged and pass.
-4. `markReadBy = manually` leaves the entry unread (new negative test).
-
-## Risks
-
-A second mark path can double-mark: the change must share the existing deduplicating helper and be covered by a test that opens an entry by click and by link in the same session.
+Full Node, lint, Prettier, Knip and production-build evidence is recorded in the QA report attached to the implementation PR. E2E stability requires three independently executed, uniquely inventoried Chromium runs. This evidence is synthetic/emulated only and does not establish physical-device, installed-PWA, Safari/WebKit or real-Miniflux verification.

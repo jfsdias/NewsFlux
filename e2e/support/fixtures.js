@@ -36,6 +36,10 @@ const createMockClient = () => ({
     const body = await control("/__e2e/state")
     return body.state.hits
   },
+  mutations: async () => {
+    const body = await control("/__e2e/state")
+    return body.state.mutations
+  },
   json: async (path) => {
     const response = await fetch(`${MOCK_URL}${path}`)
     return response.json()
@@ -63,6 +67,7 @@ export const test = base.extend({
       serviceWorkers = "block",
       deviceScaleFactor = 2,
       storageState,
+      settings,
     } = {}) => {
       const context = await browser.newContext({
         baseURL,
@@ -77,6 +82,11 @@ export const test = base.extend({
       contexts.push(context)
       if (authenticated) {
         await context.addInitScript(seedAuth, mock.url)
+      }
+      if (settings) {
+        await context.addInitScript((value) => {
+          localStorage.setItem("settings", JSON.stringify(value))
+        }, settings)
       }
       const page = await context.newPage()
       const errors = []
