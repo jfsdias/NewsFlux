@@ -9,6 +9,7 @@ import {
   incrementArticleListSnapshotRevision,
   reconcileArticleListFilters,
   setArticleListError,
+  setArticleListErrorCategory,
   setEntries,
   setHomePaginationBoundary,
   setIsArticleListReady,
@@ -43,6 +44,7 @@ import {
   deduplicateHomeEntriesById,
   mergeHomeSessionEntries,
 } from "@/utils/home-editorial-session"
+import { getRequestErrorCategory, getSafeRequestErrorDetails } from "@/utils/safe-request-error"
 import {
   createTemporalPaginationState,
   getArticleListTemporalSortProperty,
@@ -151,6 +153,7 @@ const useArticleList = (source, sourceId, getEntries) => {
 
     currentRequestKey.current = automaticRequestKey
     setArticleListError(false)
+    setArticleListErrorCategory(null)
     setLoadMoreError(false)
     setIsArticleListReady(false)
   }, [automaticRequestKey])
@@ -193,6 +196,7 @@ const useArticleList = (source, sourceId, getEntries) => {
         })
 
     setArticleListError(false)
+    setArticleListErrorCategory(null)
     setLoadMoreError(false)
     setIsArticleListReady(false)
 
@@ -314,7 +318,7 @@ const useArticleList = (source, sourceId, getEntries) => {
         return
       }
 
-      console.error("Error fetching articles:", error)
+      console.error("Error fetching articles:", getSafeRequestErrorDetails(error, "article-list"))
       const snapshot = committedHomeSnapshot.current
       const preservesHomeSnapshot =
         source === "home" &&
@@ -335,6 +339,7 @@ const useArticleList = (source, sourceId, getEntries) => {
         }
       }
       setArticleListError(true)
+      setArticleListErrorCategory(getRequestErrorCategory(error))
     } finally {
       if (requestId === latestRequestId.current && loadingRequestKey.current === loadingKey) {
         loadingRequestKey.current = null

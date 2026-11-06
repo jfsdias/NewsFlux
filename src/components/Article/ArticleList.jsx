@@ -41,6 +41,14 @@ const EMPTY_MESSAGE_KEYS = {
   "no-unread-articles": "article_list.no_unread_articles",
 }
 
+const LOAD_ERROR_MESSAGE_KEYS = {
+  forbidden: "article_list.load_error_forbidden",
+  "invalid-response": "article_list.load_error_invalid_response",
+  "rate-limited": "article_list.load_error_rate_limited",
+  server: "article_list.load_error_server",
+  network: "article_list.load_error_network",
+}
+
 const getEmptyStateSummary = ({ date, query, status }, polyglot) => {
   if (!query && !date) {
     return null
@@ -81,6 +89,7 @@ const ArticleList = forwardRef(
     const listState = useStore(contentState, {
       keys: [
         "articleListError",
+        "articleListErrorCategory",
         "articleListRevision",
         "articleListSnapshotIdentity",
         "filterDate",
@@ -90,7 +99,12 @@ const ArticleList = forwardRef(
         "isArticleListReady",
       ],
     })
-    const { articleListError, isArticleListReady, articleListSnapshotIdentity } = listState
+    const {
+      articleListError,
+      articleListErrorCategory,
+      isArticleListReady,
+      articleListSnapshotIdentity,
+    } = listState
     const requestSettings = useStore(articleListRequestSettingsState)
     const { sessionRevision } = useStore(dataState, { keys: ["sessionRevision"] })
     const currentSnapshotIdentity = createArticleListSnapshotIdentity({
@@ -144,7 +158,11 @@ const ArticleList = forwardRef(
         {showBlockingError && (
           <div className="article-list-state" role="alert">
             <IconExclamationCircle aria-hidden="true" className="article-list-state-icon" />
-            <Typography.Text>{polyglot.t("article_list.load_error")}</Typography.Text>
+            <Typography.Text>
+              {polyglot.t(
+                LOAD_ERROR_MESSAGE_KEYS[articleListErrorCategory] ?? "article_list.load_error",
+              )}
+            </Typography.Text>
             <Button type="primary" onClick={() => void retryArticleList()}>
               {polyglot.t("actions.retry")}
             </Button>

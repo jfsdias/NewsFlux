@@ -11,8 +11,29 @@ import {
 import { get24HoursAgoTimestamp, getDayEndTimestamp, getTimestamp } from "@/utils/date"
 import { updateEntryIdsInBatches as updateEntryIdsInBatchesWithAcknowledgement } from "@/utils/entry-id-batches"
 import { buildHomeEntryRequest } from "@/utils/home-entry-request"
+import {
+  validateMinifluxEntry,
+  validateMinifluxEntryList,
+} from "@/utils/miniflux-response-validation"
+import { createInvalidResponseError } from "@/utils/safe-request-error"
 
-export const getEntry = async (entryId) => apiClient.get(`/v1/entries/${entryId}`)
+const getValidatedEntryList = async (url) => {
+  const response = await apiClient.get(url)
+  try {
+    return validateMinifluxEntryList(response)
+  } catch {
+    throw createInvalidResponseError("article-list")
+  }
+}
+
+export const getEntry = async (entryId) => {
+  const response = await apiClient.get(`/v1/entries/${entryId}`)
+  try {
+    return validateMinifluxEntry(response, entryId)
+  } catch {
+    throw createInvalidResponseError("reader")
+  }
+}
 
 const updateEntries = async (entryIds, updates, options) =>
   apiClient.put(
@@ -265,7 +286,7 @@ export const getHomeEntries = async ({
     tieDrain,
   })
 
-  return apiClient.get(
+  return getValidatedEntryList(
     buildEntriesUrl(
       { baseUrl: "/v1/entries", orderField: order, status, direction, limit },
       { ...filters, filterDate: null },
@@ -290,7 +311,7 @@ export const getAllEntries = async (status = null, filterParams = {}) => {
     ...filterParams,
   }
 
-  return apiClient.get(buildEntriesUrl(baseParams, extraParams))
+  return getValidatedEntryList(buildEntriesUrl(baseParams, extraParams))
 }
 
 const fetchTodayEntries = async (status, filterParams, applyDateFilter) => {
@@ -311,7 +332,7 @@ const fetchTodayEntries = async (status, filterParams, applyDateFilter) => {
     ...filterParams,
   }
 
-  return apiClient.get(buildEntriesUrl(baseParams, extraParams, applyDateFilter))
+  return getValidatedEntryList(buildEntriesUrl(baseParams, extraParams, applyDateFilter))
 }
 
 export const getTodayEntries = async (status = null, filterParams = {}) =>
@@ -333,7 +354,7 @@ const fetchStarredEntries = async (status, filterParams, applyDateFilter = true)
     ...filterParams,
   }
 
-  return apiClient.get(buildEntriesUrl(baseParams, extraParams, applyDateFilter))
+  return getValidatedEntryList(buildEntriesUrl(baseParams, extraParams, applyDateFilter))
 }
 
 export const getStarredEntries = async (status = null, filterParams = {}) =>
@@ -382,7 +403,7 @@ export const getHistoryEntries = async (filterParams = {}) => {
     ...filterParams,
   }
 
-  return apiClient.get(buildEntriesUrl(baseParams, extraParams))
+  return getValidatedEntryList(buildEntriesUrl(baseParams, extraParams))
 }
 
 export const getCategoryEntries = async (
@@ -410,7 +431,7 @@ export const getCategoryEntries = async (
     extraParams.starred = starred
   }
 
-  return apiClient.get(buildEntriesUrl(baseParams, extraParams))
+  return getValidatedEntryList(buildEntriesUrl(baseParams, extraParams))
 }
 
 export const getFeedEntries = async (feedId, status = null, starred = false, filterParams = {}) => {
@@ -430,5 +451,5 @@ export const getFeedEntries = async (feedId, status = null, starred = false, fil
     extraParams.starred = starred
   }
 
-  return apiClient.get(buildEntriesUrl(baseParams, extraParams))
+  return getValidatedEntryList(buildEntriesUrl(baseParams, extraParams))
 }

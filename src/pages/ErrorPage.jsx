@@ -1,13 +1,39 @@
 import { Button, Result } from "@arco-design/web-react"
+import { useStore } from "@nanostores/react"
 import { useEffect } from "react"
 import { useNavigate, useRouteError } from "react-router"
 
+import { polyglotState } from "@/hooks/useLanguage"
 import hideSpinner from "@/utils/loading"
+import { getSafeRequestErrorDetails } from "@/utils/safe-request-error"
 
 const ErrorPage = () => {
   const navigate = useNavigate()
   const error = useRouteError()
-  console.error(error)
+  const { polyglot } = useStore(polyglotState)
+  const errorDetails = getSafeRequestErrorDetails(error, "route")
+  const pageKey =
+    errorDetails.status === 404
+      ? "not_found"
+      : errorDetails.status === 401
+        ? "authentication"
+        : errorDetails.status === 403
+          ? "forbidden"
+          : errorDetails.status !== null && errorDetails.status >= 500
+            ? "server"
+            : "generic"
+  const resultStatus =
+    pageKey === "not_found"
+      ? "404"
+      : pageKey === "forbidden"
+        ? "403"
+        : pageKey === "server"
+          ? "500"
+          : "error"
+  const recoveryPath = pageKey === "authentication" ? "/login" : "/"
+  const recoveryLabel = pageKey === "authentication" ? "error_page.sign_in" : "error_page.back_home"
+
+  console.error("Route error:", errorDetails)
 
   useEffect(() => {
     hideSpinner()
@@ -16,11 +42,12 @@ const ErrorPage = () => {
   return (
     <div id="error-page" style={{ top: "30%", position: "relative" }}>
       <Result
-        status="404"
-        subTitle={error.statusText || error.message}
+        status={resultStatus}
+        subTitle={polyglot?.t(`error_page.${pageKey}_description`) ?? "Return home and try again."}
+        title={polyglot?.t(`error_page.${pageKey}_title`) ?? "Page could not be opened"}
         extra={[
-          <Button key="back" type="primary" onClick={() => navigate("/")}>
-            Back to Home
+          <Button key="back" type="primary" onClick={() => navigate(recoveryPath)}>
+            {polyglot?.t(recoveryLabel) ?? "Back to Home"}
           </Button>,
         ]}
       />

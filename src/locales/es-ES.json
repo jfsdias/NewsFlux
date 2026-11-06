@@ -224,7 +224,12 @@
     "no_filter_results": "Ningún artículo coincide con los filtros",
     "no_search_results": "No hay artículos coincidentes",
     "no_starred_articles": "No hay artículos favoritos",
-    "no_unread_articles": "No hay artículos sin leer"
+    "no_unread_articles": "No hay artículos sin leer",
+    "load_error_invalid_response": "El servidor devolvió una respuesta inesperada.",
+    "load_error_forbidden": "No tiene permiso para ver estos artículos.",
+    "load_error_rate_limited": "El servidor está limitando las solicitudes temporalmente. Inténtelo de nuevo en breve.",
+    "load_error_server": "El servidor no pudo cargar estos artículos. Inténtelo de nuevo.",
+    "load_error_network": "No se pudo conectar con el servidor. Compruebe la conexión e inténtelo de nuevo."
   },
   "article_toc": {
     "tooltip": "Tabla de contenidos",
@@ -244,7 +249,14 @@
   },
   "content": {
     "mark_as_read_error": "No se pudo marcar como leído, por favor intente de nuevo más tarde",
-    "entry_unavailable": "Este artículo ya no está disponible."
+    "entry_unavailable": "Este artículo ya no está disponible.",
+    "invalid_response": "El servidor devolvió una respuesta inesperada.",
+    "access_denied": "No tiene permiso para ver este artículo.",
+    "rate_limited": "El servidor está limitando las solicitudes temporalmente. Inténtelo de nuevo en breve.",
+    "server_error": "El servidor no pudo cargar este artículo. Inténtelo de nuevo.",
+    "network_error": "No se pudo conectar con el servidor. Compruebe la conexión e inténtelo de nuevo.",
+    "request_error": "No se pudo cargar este artículo. Inténtelo de nuevo.",
+    "back_to_list": "Volver a la lista"
   },
   "deduplicate": {
     "mark_as_read_error": "No se pudo marcar los artículos duplicados como leídos"
@@ -594,5 +606,17 @@
     "no_categories": "No hay categorías disponibles",
     "expand_category": "Expandir %{name}",
     "collapse_category": "Contraer %{name}"
+  },
+  "error_page": {
+    "not_found_title": "Página no encontrada",
+    "not_found_description": "No se encontró esta página. Vuelva al inicio para continuar.",
+    "authentication_title": "Se requiere iniciar sesión",
+    "authentication_description": "La sesión ya no es válida. Inicie sesión para continuar.",
+    "forbidden_title": "Acceso denegado",
+    "forbidden_description": "No tiene permiso para abrir esta página.",
+    "generic_title": "Se produjo un error",
+    "generic_description": "No se pudo abrir esta página. Vuelva al inicio e inténtelo de nuevo.",
+    "back_home": "Volver al inicio",
+    "sign_in": "Iniciar sesión"
   }
 }

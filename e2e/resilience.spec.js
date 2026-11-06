@@ -11,14 +11,34 @@ const isArticleEntriesRequest = (url) =>
   url.pathname === "/v1/entries" && url.searchParams.has("limit")
 
 const serverFailures = [
-  ["F12-1", "500", "an HTTP 500 from /v1/entries"],
-  ["F12-2", "badjson", "malformed JSON from /v1/entries"],
-  ["F12-3", "html200", "an HTML page with status 200 (proxy or captive portal)"],
-  ["F12-4", "missing", "a JSON body without the entries field"],
+  [
+    "F12-1",
+    "500",
+    "an HTTP 500 from /v1/entries",
+    "The server could not load these articles. Please try again.",
+  ],
+  [
+    "F12-2",
+    "badjson",
+    "malformed JSON from /v1/entries",
+    "The server returned an unexpected response.",
+  ],
+  [
+    "F12-3",
+    "html200",
+    "an HTML page with status 200 (proxy or captive portal)",
+    "The server returned an unexpected response.",
+  ],
+  [
+    "F12-4",
+    "missing",
+    "a JSON body without the entries field",
+    "The server returned an unexpected response.",
+  ],
 ]
 
 test.describe("F12 Miniflux failures", () => {
-  for (const [id, kind, description] of serverFailures) {
+  for (const [id, kind, description, safeMessage] of serverFailures) {
     test(`${id}: ${description} shows feedback, stays usable and recovers`, async ({
       openApp,
       mock,
@@ -29,7 +49,7 @@ test.describe("F12 Miniflux failures", () => {
 
       await page.goto("/all")
 
-      await expect(page.getByText("Failed to load articles").first()).toBeVisible()
+      await expect(page.getByText(safeMessage).first()).toBeVisible()
       expect(errors).toEqual([])
       await mock.reset()
       await page.getByRole("button", { name: "Retry" }).click()
@@ -148,8 +168,21 @@ test.describe("F12 Miniflux failures", () => {
     const refreshGate = new Promise((resolve) => {
       releaseRefresh = resolve
     })
+    let refreshResponseCount = 0
 
     await context.route(isArticleEntriesRequest, async (route) => {
+      refreshResponseCount += 1
+      if (refreshResponseCount > 1) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            total: 151,
+            entries: [{ id: 0, title: "Malformed refresh entry", content: null }],
+          }),
+        })
+        return
+      }
       markRefreshStarted()
       await refreshGate
       await route.fulfill({
@@ -177,6 +210,13 @@ test.describe("F12 Miniflux failures", () => {
     const mutationsAfterRefresh = await mock.mutations()
     expect(mutationsAfterRefresh.length).toBe(mutationCount)
     await expect(page.getByRole("alert")).toHaveCount(0)
+
+    await refreshButton.click()
+    await expect(page.getByRole("status")).toContainText(
+      "Could not refresh. Showing the articles already loaded.",
+    )
+    expect(await entryIds(page), "malformed HTTP 200 keeps the committed list").toEqual(loadedIds)
+    expect(await mock.mutations()).toHaveLength(mutationCount)
 
     await context.unroute(isArticleEntriesRequest)
     const staleCard = cards(page).first()

@@ -224,7 +224,12 @@
     "no_filter_results": "フィルターに一致する記事がありません",
     "no_search_results": "一致する記事がありません",
     "no_starred_articles": "スター付きの記事がありません",
-    "no_unread_articles": "未読の記事がありません"
+    "no_unread_articles": "未読の記事がありません",
+    "load_error_invalid_response": "サーバーから予期しない応答がありました。",
+    "load_error_forbidden": "これらの記事を表示する権限がありません。",
+    "load_error_rate_limited": "サーバーが一時的にリクエストを制限しています。しばらくしてから再試行してください。",
+    "load_error_server": "サーバーがこれらの記事を読み込めませんでした。再試行してください。",
+    "load_error_network": "サーバーに接続できませんでした。接続を確認して再試行してください。"
   },
   "article_toc": {
     "tooltip": "目次",
@@ -244,7 +249,14 @@
   },
   "content": {
     "mark_as_read_error": "既読への変更に失敗しました。後で再試行してください",
-    "entry_unavailable": "この記事は利用できなくなりました。"
+    "entry_unavailable": "この記事は利用できなくなりました。",
+    "invalid_response": "サーバーから予期しない応答がありました。",
+    "access_denied": "この記事を表示する権限がありません。",
+    "rate_limited": "サーバーが一時的にリクエストを制限しています。しばらくしてから再試行してください。",
+    "server_error": "サーバーがこの記事を読み込めませんでした。再試行してください。",
+    "network_error": "サーバーに接続できませんでした。接続を確認して再試行してください。",
+    "request_error": "この記事を読み込めませんでした。再試行してください。",
+    "back_to_list": "一覧に戻る"
   },
   "deduplicate": {
     "mark_as_read_error": "重複記事の既読化に失敗しました"
@@ -594,5 +606,17 @@
     "no_categories": "利用可能なカテゴリはありません",
     "expand_category": "%{name} を展開",
     "collapse_category": "%{name} を折りたたむ"
+  },
+  "error_page": {
+    "not_found_title": "ページが見つかりません",
+    "not_found_description": "このページは見つかりませんでした。ホームに戻って続行してください。",
+    "authentication_title": "ログインが必要です",
+    "authentication_description": "セッションが無効です。続行するにはログインしてください。",
+    "forbidden_title": "アクセスが拒否されました",
+    "forbidden_description": "このページを開く権限がありません。",
+    "generic_title": "問題が発生しました",
+    "generic_description": "このページを開けませんでした。ホームに戻って再試行してください。",
+    "back_home": "ホームに戻る",
+    "sign_in": "ログイン"
   }
 }

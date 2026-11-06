@@ -53,11 +53,10 @@ const useMarkSelectedRead = (selection) => {
         },
         onConsume: (consumedToken) =>
           Notification.remove(getMarkAllReadUndoNotificationId(consumedToken)),
-        onError: (error) => {
+        onError: () => {
           if (sessionRevision === getDataSessionRevision()) {
             Notification.error({
               title: polyglot.t("article_selection.undo_error"),
-              content: error.message,
             })
           }
         },

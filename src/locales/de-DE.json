@@ -224,7 +224,12 @@
     "no_filter_results": "Keine Artikel entsprechen den Filtern",
     "no_search_results": "Keine passenden Artikel",
     "no_starred_articles": "Keine Artikel mit Lesezeichen",
-    "no_unread_articles": "Keine ungelesenen Artikel"
+    "no_unread_articles": "Keine ungelesenen Artikel",
+    "load_error_invalid_response": "Der Server hat eine unerwartete Antwort zurückgegeben.",
+    "load_error_forbidden": "Sie haben keine Berechtigung, diese Artikel anzusehen.",
+    "load_error_rate_limited": "Der Server begrenzt Anfragen vorübergehend. Bitte versuchen Sie es in Kürze erneut.",
+    "load_error_server": "Der Server konnte diese Artikel nicht laden. Bitte versuchen Sie es erneut.",
+    "load_error_network": "Verbindung zum Server fehlgeschlagen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
   },
   "article_toc": {
     "tooltip": "Inhaltsverzeichnis",
@@ -244,7 +249,14 @@
   },
   "content": {
     "mark_as_read_error": "Als gelesen markieren fehlgeschlagen, bitte später erneut versuchen",
-    "entry_unavailable": "Dieser Artikel ist nicht mehr verfügbar."
+    "entry_unavailable": "Dieser Artikel ist nicht mehr verfügbar.",
+    "invalid_response": "Der Server hat eine unerwartete Antwort zurückgegeben.",
+    "access_denied": "Sie haben keine Berechtigung, diesen Artikel anzusehen.",
+    "rate_limited": "Der Server begrenzt Anfragen vorübergehend. Bitte versuchen Sie es in Kürze erneut.",
+    "server_error": "Der Server konnte diesen Artikel nicht laden. Bitte versuchen Sie es erneut.",
+    "network_error": "Verbindung zum Server fehlgeschlagen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+    "request_error": "Dieser Artikel konnte nicht geladen werden. Bitte versuchen Sie es erneut.",
+    "back_to_list": "Zur Liste zurück"
   },
   "deduplicate": {
     "mark_as_read_error": "Duplikate als gelesen markieren fehlgeschlagen"
@@ -594,5 +606,17 @@
     "no_categories": "Keine Kategorien verfügbar",
     "expand_category": "%{name} aufklappen",
     "collapse_category": "%{name} einklappen"
+  },
+  "error_page": {
+    "not_found_title": "Seite nicht gefunden",
+    "not_found_description": "Diese Seite wurde nicht gefunden. Kehren Sie zur Startseite zurück.",
+    "authentication_title": "Anmeldung erforderlich",
+    "authentication_description": "Ihre Sitzung ist nicht mehr gültig. Melden Sie sich an, um fortzufahren.",
+    "forbidden_title": "Zugriff verweigert",
+    "forbidden_description": "Sie haben keine Berechtigung, diese Seite zu öffnen.",
+    "generic_title": "Ein Fehler ist aufgetreten",
+    "generic_description": "Diese Seite konnte nicht geöffnet werden. Kehren Sie zur Startseite zurück und versuchen Sie es erneut.",
+    "back_home": "Zur Startseite",
+    "sign_in": "Anmelden"
   }
 }

@@ -74,8 +74,62 @@ Object.defineProperty(globalThis, "localStorage", {
   },
 })
 
-const [{ default: apiClient }, { deleteFeed, discoverFeeds, updateFeed }, { getOriginalContent }] =
-  await Promise.all([import("./ofetch"), import("./feeds"), import("./entries")])
+const [
+  { default: apiClient },
+  { deleteFeed, discoverFeeds, updateFeed },
+  { getAllEntries, getEntry, getOriginalContent },
+] = await Promise.all([import("./ofetch"), import("./feeds"), import("./entries")])
+
+const validEntryResponse = (overrides = {}) => ({
+  id: 42,
+  title: "Example",
+  content: "<p>Example</p>",
+  feed: { id: 3, category: null },
+  ...overrides,
+})
+
+test("entry API rejects malformed and mismatched HTTP 200 payloads as safe response errors", async () => {
+  try {
+    for (const response of [
+      {},
+      validEntryResponse({ id: 43 }),
+      validEntryResponse({ feed: null }),
+    ]) {
+      fetchImplementation = async () => Response.json(response)
+
+      await assert.rejects(getEntry(42), (error) => {
+        assert.equal(error.name, "SafeRequestError")
+        assert.equal(error.category, "invalid-response")
+        assert.equal(error.status, 200)
+        assert.equal(error.message, "Invalid server response")
+        return true
+      })
+    }
+  } finally {
+    fetchImplementation = null
+  }
+})
+
+test("entry API accepts nullable and empty article fields while validating list members", async () => {
+  try {
+    const entry = validEntryResponse({ title: null, content: "" })
+    fetchImplementation = async () => Response.json(entry)
+    assert.deepEqual(await getEntry(42), entry)
+
+    fetchImplementation = async () =>
+      Response.json({
+        total: 2,
+        entries: [validEntryResponse(), { ...validEntryResponse(), id: 0 }],
+      })
+    await assert.rejects(getAllEntries(), (error) => {
+      assert.equal(error.category, "invalid-response")
+      assert.equal(error.status, 200)
+      return true
+    })
+  } finally {
+    fetchImplementation = null
+  }
+})
 
 test("mutating requests are not replayed after a transport failure", async () => {
   let attempts = 0

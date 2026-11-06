@@ -224,7 +224,12 @@
     "no_filter_results": "没有符合筛选条件的文章",
     "no_search_results": "没有匹配的文章",
     "no_starred_articles": "没有收藏文章",
-    "no_unread_articles": "没有未读文章"
+    "no_unread_articles": "没有未读文章",
+    "load_error_invalid_response": "服务器返回了意外的响应。",
+    "load_error_forbidden": "您没有权限查看这些文章。",
+    "load_error_rate_limited": "服务器正在暂时限制请求，请稍后重试。",
+    "load_error_server": "服务器无法加载这些文章，请重试。",
+    "load_error_network": "无法连接到服务器。请检查连接后重试。"
   },
   "article_toc": {
     "tooltip": "目录大纲",
@@ -244,7 +249,14 @@
   },
   "content": {
     "mark_as_read_error": "标记为已读失败，请稍后再试",
-    "entry_unavailable": "这篇文章已无法访问。"
+    "entry_unavailable": "这篇文章已无法访问。",
+    "invalid_response": "服务器返回了意外的响应。",
+    "access_denied": "您没有权限查看此文章。",
+    "rate_limited": "服务器正在暂时限制请求，请稍后重试。",
+    "server_error": "服务器无法加载此文章，请重试。",
+    "network_error": "无法连接到服务器。请检查连接后重试。",
+    "request_error": "无法加载此文章，请重试。",
+    "back_to_list": "返回列表"
   },
   "deduplicate": {
     "mark_as_read_error": "标记重复文章为已读失败"
@@ -594,5 +606,17 @@
     "no_categories": "暂无分类",
     "expand_category": "展开「%{name}」",
     "collapse_category": "折叠「%{name}」"
+  },
+  "error_page": {
+    "not_found_title": "页面未找到",
+    "not_found_description": "找不到此页面。请返回首页继续。",
+    "authentication_title": "需要登录",
+    "authentication_description": "会话已失效。请登录后继续。",
+    "forbidden_title": "访问被拒绝",
+    "forbidden_description": "您没有权限打开此页面。",
+    "generic_title": "发生错误",
+    "generic_description": "无法打开此页面。请返回首页后重试。",
+    "back_home": "返回首页",
+    "sign_in": "登录"
   }
 }

@@ -600,7 +600,8 @@ const ArticleDetail = forwardRef((_, ref) => {
     setEnclosuresOpenState({ articleId: activeContent.id, open })
   }
 
-  const { id: categoryId, title: categoryTitle } = activeContent.feed.category
+  const categoryId = activeContent.feed.category?.id
+  const categoryTitle = activeContent.feed.category?.title
 
   const { coverSource } = activeContent
   const sourceUrl = getSafeExternalUrl(activeContent.url)
@@ -731,15 +732,17 @@ const ArticleDetail = forwardRef((_, ref) => {
               </Typography.Title>
               <div className="article-meta">
                 {activeContent.author && <Typography.Text>{activeContent.author}</Typography.Text>}
-                <Typography.Text>
-                  <Tag
-                    size="small"
-                    style={{ marginLeft: "10px", cursor: "pointer" }}
-                    onClick={() => navigate(`/category/${categoryId}`)}
-                  >
-                    {categoryTitle}
-                  </Tag>
-                </Typography.Text>
+                {categoryId && categoryTitle && (
+                  <Typography.Text>
+                    <Tag
+                      size="small"
+                      style={{ marginLeft: "10px", cursor: "pointer" }}
+                      onClick={() => navigate(`/category/${categoryId}`)}
+                    >
+                      {categoryTitle}
+                    </Tag>
+                  </Typography.Text>
+                )}
               </div>
               <Typography.Text className="article-date">
                 {generateReadableDate(activeContent.published_at)}

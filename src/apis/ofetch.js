@@ -4,6 +4,7 @@ import router from "@/routes"
 import { authState } from "@/store/authState"
 import { getDataSessionRevision } from "@/store/dataState"
 import * as authModule from "@/utils/auth"
+import { createSafeRequestError, getSafeRequestErrorDetails } from "@/utils/safe-request-error"
 import { clearSession } from "@/utils/session"
 
 const isValidAuth = (auth) => authModule.default(auth)
@@ -13,14 +14,6 @@ const getAuthHeaders = (auth = {}) =>
     : auth.token
       ? { "X-Auth-Token": auth.token }
       : { Authorization: `Basic ${btoa(`${auth.username ?? ""}:${auth.password ?? ""}`)}` }
-const getSafeAuthErrorDetails = (error, secrets = []) =>
-  typeof authModule.getSafeAuthErrorDetails === "function"
-    ? authModule.getSafeAuthErrorDetails(error, secrets)
-    : {
-        message: error instanceof Error ? error.message : String(error ?? "Unknown error"),
-        status: error?.status ?? error?.response?.status,
-      }
-
 const REQUEST_AUTH_SESSION_KEY = Symbol("requestAuth")
 const MUTATING_HTTP_METHODS = new Set(["DELETE", "PATCH", "POST", "PUT"])
 
@@ -70,9 +63,7 @@ const createApiClient = () => {
       options.headers = getAuthHeaders(auth)
     },
     onRequestError({ _request, _options, error }) {
-      const auth = authState.get()
-      // 处理请求错误
-      console.error("Request error:", getSafeAuthErrorDetails(error, [auth.password, auth.token]))
+      console.error("Request error:", getSafeRequestErrorDetails(createSafeRequestError(error)))
     },
     onResponse({ options }) {
       if (!isCurrentRequestSession(options[REQUEST_AUTH_SESSION_KEY], authState.get())) {
@@ -90,30 +81,32 @@ const createApiClient = () => {
         clearSession()
         await router.navigate("/login", { replace: true, state: { from } })
       }
-      // 处理响应错误
-      const auth = authState.get()
-      const rawErrorMessage = response._data?.error_message ?? response.statusText
-      const safeErrorDetails = getSafeAuthErrorDetails(
-        { message: rawErrorMessage, status: statusCode },
-        [auth.password, auth.token],
+      console.error(
+        "Response error:",
+        getSafeRequestErrorDetails(createSafeRequestError({ status: statusCode })),
       )
-      console.error("Response error:", safeErrorDetails.message)
-      const responseError = new Error(safeErrorDetails.message)
-      responseError.status = statusCode
-      responseError.data = response._data
-      throw responseError
     },
   })
 }
 
+const withSafeRequestError = (request) =>
+  request.catch((error) => {
+    throw createSafeRequestError(error)
+  })
+
 const apiClient = createApiClient()
 const rawRequest = apiClient.raw
-apiClient.raw = (url, options = {}) => rawRequest(url, applyRawMutationRetryPolicy(options))
+apiClient.raw = (url, options = {}) =>
+  withSafeRequestError(rawRequest(url, applyRawMutationRetryPolicy(options)))
 apiClient.get = (url, options = {}) =>
-  apiClient(url, { ...options, retry: options.retry ?? 3, method: "GET" })
+  withSafeRequestError(apiClient(url, { ...options, retry: options.retry ?? 3, method: "GET" }))
 apiClient.post = (url, body, options = {}) =>
-  apiClient(url, { ...options, retry: options.retry ?? false, method: "POST", body })
+  withSafeRequestError(
+    apiClient(url, { ...options, retry: options.retry ?? false, method: "POST", body }),
+  )
 apiClient.put = (url, body, options = {}) =>
-  apiClient(url, { ...options, retry: options.retry ?? false, method: "PUT", body })
+  withSafeRequestError(
+    apiClient(url, { ...options, retry: options.retry ?? false, method: "PUT", body }),
+  )
 
 export default apiClient

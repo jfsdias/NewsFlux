@@ -25,6 +25,11 @@
   margin: 10px 10px 10px 0;
 }
 
+.article-load-error {
+  flex: 1;
+  justify-content: center;
+}
+
 .entry-col {
   display: flex;
   flex-direction: column;

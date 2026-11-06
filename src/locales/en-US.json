@@ -224,7 +224,12 @@
     "no_filter_results": "No articles match the filters",
     "no_search_results": "No matching articles",
     "no_starred_articles": "No starred articles",
-    "no_unread_articles": "No unread articles"
+    "no_unread_articles": "No unread articles",
+    "load_error_invalid_response": "The server returned an unexpected response.",
+    "load_error_forbidden": "You do not have permission to view these articles.",
+    "load_error_rate_limited": "The server is temporarily limiting requests. Please try again shortly.",
+    "load_error_server": "The server could not load these articles. Please try again.",
+    "load_error_network": "Could not connect to the server. Check your connection and try again."
   },
   "article_toc": {
     "tooltip": "Table of Contents",
@@ -244,7 +249,14 @@
   },
   "content": {
     "mark_as_read_error": "Failed to mark as read, please try again later",
-    "entry_unavailable": "This article is no longer available."
+    "entry_unavailable": "This article is no longer available.",
+    "invalid_response": "The server returned an unexpected response.",
+    "access_denied": "You do not have permission to view this article.",
+    "rate_limited": "The server is temporarily limiting requests. Please try again shortly.",
+    "server_error": "The server could not load this article. Please try again.",
+    "network_error": "Could not connect to the server. Check your connection and try again.",
+    "request_error": "Could not load this article. Please try again.",
+    "back_to_list": "Back to list"
   },
   "deduplicate": {
     "mark_as_read_error": "Failed to mark duplicate articles as read"
@@ -594,5 +606,17 @@
     "no_categories": "No categories available",
     "expand_category": "Expand %{name}",
     "collapse_category": "Collapse %{name}"
+  },
+  "error_page": {
+    "not_found_title": "Page not found",
+    "not_found_description": "This page could not be found. Return home to continue.",
+    "authentication_title": "Sign in required",
+    "authentication_description": "Your session is no longer valid. Sign in to continue.",
+    "forbidden_title": "Access denied",
+    "forbidden_description": "You do not have permission to open this page.",
+    "generic_title": "Something went wrong",
+    "generic_description": "We could not open this page. Return home and try again.",
+    "back_home": "Back to Home",
+    "sign_in": "Sign in"
   }
 }

@@ -282,8 +282,23 @@ const createMockMiniflux = ({ port }) => {
         send(response, 500, { error_message: "boom" })
         return true
       }
+      case "secret500": {
+        send(response, 500, {
+          error_message:
+            "Bearer synthetic-secret https://user:password@mock.invalid/path?token=synthetic-secret",
+        })
+        return true
+      }
       case "401": {
         send(response, 401, { error_message: "Access Unauthorized" })
+        return true
+      }
+      case "403": {
+        send(response, 403, { error_message: "Access Forbidden" })
+        return true
+      }
+      case "429": {
+        send(response, 429, { error_message: "Too many requests" })
         return true
       }
       case "badjson": {

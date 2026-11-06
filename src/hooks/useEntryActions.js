@@ -534,7 +534,6 @@ const useEntryActions = () => {
       console.error("Failed to save to third-party services:", error)
       Notification.error({
         title: polyglot.t("actions.saved_to_third-party_services_error"),
-        content: error.message,
       })
     }
   }
