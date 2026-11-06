@@ -274,6 +274,7 @@ const createMockMiniflux = ({ port }) => {
 
   const applyFault = (response, url, { target, kind }) => {
     const query = url.searchParams
+    const requestedEntryId = url.pathname.match(/^\/v1\/entries\/(\d+)$/)?.[1]
     switch (kind) {
       case "500": {
         if (target === "status-mutation") {
@@ -319,6 +320,18 @@ const createMockMiniflux = ({ port }) => {
       }
       case "emptyobject": {
         send(response, 200, {})
+        return true
+      }
+      case "missingstatus": {
+        const entry = entries.find(({ id }) => String(id) === requestedEntryId) ?? entries[0]
+        const { status: _status, ...malformedEntry } = entry
+        send(response, 200, malformedEntry)
+        return true
+      }
+      case "missingstarred": {
+        const entry = entries.find(({ id }) => String(id) === requestedEntryId) ?? entries[0]
+        const { starred: _starred, ...malformedEntry } = entry
+        send(response, 200, malformedEntry)
         return true
       }
       case "nullcontent": {

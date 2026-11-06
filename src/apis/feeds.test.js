@@ -82,6 +82,8 @@ const [
 
 const validEntryResponse = (overrides = {}) => ({
   id: 42,
+  status: "unread",
+  starred: false,
   title: "Example",
   content: "<p>Example</p>",
   feed: { id: 3, category: null },
@@ -94,6 +96,8 @@ test("entry API rejects malformed and mismatched HTTP 200 payloads as safe respo
       {},
       validEntryResponse({ id: 43 }),
       validEntryResponse({ feed: null }),
+      validEntryResponse({ status: undefined }),
+      validEntryResponse({ starred: undefined }),
     ]) {
       fetchImplementation = async () => Response.json(response)
 
@@ -119,7 +123,7 @@ test("entry API accepts nullable and empty article fields while validating list 
     fetchImplementation = async () =>
       Response.json({
         total: 2,
-        entries: [validEntryResponse(), { ...validEntryResponse(), id: 0 }],
+        entries: [validEntryResponse(), { ...validEntryResponse(), starred: undefined }],
       })
     await assert.rejects(getAllEntries(), (error) => {
       assert.equal(error.category, "invalid-response")

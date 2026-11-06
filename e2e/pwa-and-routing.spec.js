@@ -147,6 +147,20 @@ test.describe("F15 Deep links and reopening", () => {
     await expect(page.getByText("Notícia 5").first()).toBeVisible()
 
     const mutationsAfterRetry = await mock.mutations()
+    for (const [id, malformedField] of [
+      [10, "missingstatus"],
+      [11, "missingstarred"],
+    ]) {
+      await mock.fault("entry", malformedField)
+      await page.goto(`/all/entry/${id}`)
+      await expect(page.getByRole("alert")).toContainText(
+        "The server returned an unexpected response.",
+      )
+      await expect(page).toHaveURL(new RegExp(`/all/entry/${id}$`))
+      expect(await mock.mutations()).toEqual(mutationsAfterRetry)
+    }
+    await mock.fault("entry", "ok")
+
     await mock.fault("entry", "403")
     await page.goto("/all/entry/6")
     await expect(page.getByRole("alert")).toContainText(

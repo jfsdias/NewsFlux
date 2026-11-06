@@ -31,6 +31,12 @@ export const validateMinifluxEntry = (entry, expectedId) => {
   if (!isRecord(entry) || !isPositiveInteger(entry.id)) {
     throw new TypeError("Invalid entry response")
   }
+  if (entry.status !== "read" && entry.status !== "unread") {
+    throw new TypeError("Invalid entry response")
+  }
+  if (typeof entry.starred !== "boolean") {
+    throw new TypeError("Invalid entry response")
+  }
   if (
     expectedId !== undefined &&
     (!isPositiveInteger(Number(expectedId)) || entry.id !== Number(expectedId))

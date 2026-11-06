@@ -8,6 +8,8 @@ const { validateMinifluxEntry, validateMinifluxEntryList } = await import(
 
 const validEntry = (overrides = {}) => ({
   id: 5,
+  status: "unread",
+  starred: false,
   title: "A valid article",
   content: "<p>Article body</p>",
   feed: {
@@ -21,6 +23,7 @@ test("validates a Reader entry and returns the original entry", () => {
   const entry = validEntry()
 
   assert.equal(validateMinifluxEntry(entry, 5), entry)
+  assert.equal(validateMinifluxEntry(validEntry({ status: "read" }), 5).status, "read")
 })
 
 test("rejects missing, non-positive and non-integer entry IDs", () => {
@@ -31,6 +34,18 @@ test("rejects missing, non-positive and non-integer entry IDs", () => {
 
 test("rejects an entry whose ID does not match the requested article", () => {
   assert.throws(() => validateMinifluxEntry(validEntry({ id: 6 }), 5), TypeError)
+})
+
+test("rejects entries with missing or unsupported read state", () => {
+  for (const status of [undefined, null, "archived"]) {
+    assert.throws(() => validateMinifluxEntry(validEntry({ status }), 5), TypeError)
+  }
+})
+
+test("rejects entries without a boolean starred state", () => {
+  for (const starred of [undefined, null, "false", 0]) {
+    assert.throws(() => validateMinifluxEntry(validEntry({ starred }), 5), TypeError)
+  }
 })
 
 test("rejects null, array, and Reader-incomplete entry structures", () => {
