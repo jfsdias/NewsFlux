@@ -1,6 +1,6 @@
 # QA-004: safe user-facing errors for unexpected server responses
 
-- **Status:** Product requirement approved; implementation is in the QA-004 Draft PR. Final Chromium/CI evidence is required before merge readiness.
+- **Status:** Product requirement approved; implementation is validated in QA-004 Draft PR #183 at `ddae32a92bd5a2fb12f9deea89d01209aa6f19f7`. Exact-head CI and independent review passed; the candidate remains outside `main` pending PM integration decision.
 - **Severity:** LOW.
 - **Scenario:** `F15-4` retains its identity and is expected to be `PASSED` by the candidate's version 6 scenario contract. The synthetic E2E and GitHub Actions evidence are the acceptance gate.
 
@@ -21,6 +21,6 @@ The original failure was reproduced with a synthetic HTTP 200 `{}` response and 
 
 ## Implemented candidate coverage
 
-The candidate adds pure response validators and safe error classification tests, API-boundary tests, and synthetic E2E coverage for invalid 200, missing/wrong IDs, malformed list members, nullable fields, 404, unknown routes, 401/403/429/5xx/network recovery, secret redaction, QA-003 snapshot preservation, stale-response fencing and mutation-ledger safety. These checks remain subject to exact-HEAD GitHub CI and independent review.
+The candidate adds pure response validators and safe error classification tests, API-boundary tests, and synthetic E2E coverage for invalid 200, missing/wrong IDs, malformed list members, nullable fields, 404, unknown routes, 401/403/429/5xx/network recovery, secret redaction, QA-003 snapshot preservation, stale-response fencing and mutation-ledger safety. On exact HEAD `ddae32a92bd5a2fb12f9deea89d01209aa6f19f7`, GitHub run [42217749004](https://github.com/jfsdias/NewsFlux/actions/runs/42217749004) verified three distinct Chromium runs, each with 46 `PASSED`, 0 `FAILED`, and 0 `SKIPPED`; independent review returned `PASS`.
 
 No test in this proposal claims a physical-device, Safari/WebKit or real-Miniflux malformed-response result.
