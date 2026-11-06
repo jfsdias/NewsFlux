@@ -43,6 +43,7 @@ export const redactSensitiveAuthText = (input, secrets = []) => {
     .replaceAll(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [REDACTED]")
     .replaceAll(/([?&](?:password|token|api_key|apiKey)=)[^&#\s]+/gi, "$1[REDACTED]")
     .replaceAll(/(https?:\/\/[^/\s:@]+:)[^@\s/]+@/gi, "$1[REDACTED]@")
+    .replaceAll(/https?:\/\/[^\s"'<>]+/gi, "[URL REDACTED]")
 
   for (const secret of secrets) {
     if (typeof secret === "string" && secret.length > 0) {
