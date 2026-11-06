@@ -74,6 +74,7 @@ const handleFilterChange = (value) => {
 
 const MARK_ALL_READ_POSITION_STORAGE_KEY = "newsflux:ux-reach-01:mark-all-read-position"
 const FLOATING_MARK_ALL_MEDIA = "(any-pointer: coarse) and (max-width: 1114px)"
+const FLOATING_DIAGNOSTIC_QUERY_PARAM = "ux_reach_02_diag"
 const readPositionPreference = () => {
   try {
     return parseFloatingPositionPreference(
@@ -99,6 +100,13 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
   const positionHelp = polyglot.t("article_list.mark_all_as_read_position_help")
   const [confirmVisible, setConfirmVisible] = useState(false)
   const [isFloating, setIsFloating] = useState(false)
+  const [diagnosticsEnabled] = useState(
+    () =>
+      new URLSearchParams(globalThis.location?.search ?? "").get(
+        FLOATING_DIAGNOSTIC_QUERY_PARAM,
+      ) === "1",
+  )
+  const [diagnosticSnapshot, setDiagnosticSnapshot] = useState(null)
   const [position, setPosition] = useState(null)
   const triggerRef = useRef(null)
   const floatingControlRef = useRef(null)
@@ -106,6 +114,7 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
   const defaultPositionRatiosRef = useRef(null)
   const isFloatingRef = useRef(false)
   const pointerDragRef = useRef(null)
+  const diagnosticPointerEventsRef = useRef({ down: 0, move: 0, up: 0, cancel: 0, lostCapture: 0 })
   const suppressNextClickRef = useRef(false)
   const suppressClickTimerRef = useRef(null)
   const getScopedListIdentity = useCallback(
@@ -122,6 +131,156 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
   )
   const scopedListIdentity = getScopedListIdentity()
   const [pendingFocusReturn, setPendingFocusReturn] = useState(null)
+
+  const captureFloatingDiagnostics = useCallback(() => {
+    const control = floatingControlRef.current
+    const button = control?.querySelector(".arco-btn-shape-circle")
+    const handle = control?.querySelector(".mark-all-read-drag-handle")
+    const sidebar = globalThis.document.querySelector(".desktop-sidebar-slot .sidebar")
+    const rect = (element) => {
+      if (!element) {
+        return null
+      }
+      const { bottom, height, left, right, top, width } = element.getBoundingClientRect()
+      return { left, top, right, bottom, width, height }
+    }
+    const handleRect = rect(handle)
+    const handleCenter =
+      handleRect?.width > 0 &&
+      handleRect.height > 0 &&
+      globalThis.document.elementFromPoint(
+        handleRect.left + handleRect.width / 2,
+        handleRect.top + handleRect.height / 2,
+      )
+    const handleStyle = handle ? globalThis.getComputedStyle(handle) : null
+    const topHit = handleCenter
+      ? {
+          tag: handleCenter.tagName.toLowerCase(),
+          classes:
+            typeof handleCenter.className === "string"
+              ? handleCenter.className.trim().split(/\s+/).filter(Boolean).slice(0, 4)
+              : [],
+          insideHandle: Boolean(handle?.contains(handleCenter)),
+        }
+      : null
+    const media = (query) => globalThis.matchMedia(query).matches
+
+    setDiagnosticSnapshot({
+      viewport: {
+        innerWidth: globalThis.innerWidth,
+        innerHeight: globalThis.innerHeight,
+        visualViewportWidth: globalThis.visualViewport?.width ?? null,
+        visualViewportHeight: globalThis.visualViewport?.height ?? null,
+        devicePixelRatio: globalThis.devicePixelRatio,
+        screenWidth: globalThis.screen.width,
+        screenHeight: globalThis.screen.height,
+      },
+      pointerMedia: {
+        anyPointerCoarse: media("(any-pointer: coarse)"),
+        pointerCoarse: media("(pointer: coarse)"),
+        anyPointerFine: media("(any-pointer: fine)"),
+        maxWidth1024: media("(max-width: 1024px)"),
+        maxWidth1114: media("(max-width: 1114px)"),
+        activationQueryMatches: media(FLOATING_MARK_ALL_MEDIA),
+      },
+      floating: {
+        reactStateActive: isFloating,
+        classActive: Boolean(control?.classList.contains("mark-all-read-floating--active")),
+        rootDisplay: control ? globalThis.getComputedStyle(control).display : "NOT_MOUNTED",
+        handleDisplay: handleStyle?.display ?? "NOT_MOUNTED",
+        handleRect,
+        buttonRect: rect(button),
+        sidebarRect: rect(sidebar),
+        handleHitTestAvailable: Boolean(handleCenter),
+        handleCenterHit: topHit,
+        pointerEvents: { ...diagnosticPointerEventsRef.current },
+      },
+    })
+  }, [isFloating])
+
+  useEffect(() => {
+    if (!diagnosticsEnabled) {
+      return
+    }
+
+    let frame = null
+    const scheduleCapture = () => {
+      if (frame !== null) {
+        globalThis.cancelAnimationFrame(frame)
+      }
+      frame = globalThis.requestAnimationFrame(() => {
+        frame = null
+        captureFloatingDiagnostics()
+      })
+    }
+    const viewport = globalThis.visualViewport
+    const mediaQueries = [
+      globalThis.matchMedia("(any-pointer: coarse)"),
+      globalThis.matchMedia("(pointer: coarse)"),
+      globalThis.matchMedia("(any-pointer: fine)"),
+      globalThis.matchMedia("(max-width: 1024px)"),
+      globalThis.matchMedia("(max-width: 1114px)"),
+      globalThis.matchMedia(FLOATING_MARK_ALL_MEDIA),
+    ]
+    const handle = floatingControlRef.current?.querySelector(".mark-all-read-drag-handle")
+    const pointerEvents = diagnosticPointerEventsRef.current
+    const eventTypes = [
+      ["pointerdown", "down"],
+      ["pointermove", "move"],
+      ["pointerup", "up"],
+      ["pointercancel", "cancel"],
+      ["lostpointercapture", "lostCapture"],
+    ]
+    const listeners = eventTypes.map(([type, key]) => {
+      const listener = () => {
+        pointerEvents[key] += 1
+        if (key !== "move") {
+          scheduleCapture()
+        }
+      }
+      handle?.addEventListener(type, listener, { capture: true, passive: true })
+      return [type, listener]
+    })
+    const rootObserver = new MutationObserver(scheduleCapture)
+    if (floatingControlRef.current) {
+      rootObserver.observe(floatingControlRef.current, {
+        attributes: true,
+        attributeFilter: ["class"],
+      })
+    }
+    const sizeObserver = new ResizeObserver(scheduleCapture)
+    sizeObserver.observe(globalThis.document.documentElement)
+    if (floatingControlRef.current) {
+      sizeObserver.observe(floatingControlRef.current)
+    }
+
+    globalThis.addEventListener("resize", scheduleCapture)
+    globalThis.addEventListener("orientationchange", scheduleCapture)
+    viewport?.addEventListener("resize", scheduleCapture)
+    viewport?.addEventListener("scroll", scheduleCapture)
+    for (const query of mediaQueries) {
+      query.addEventListener?.("change", scheduleCapture)
+    }
+    scheduleCapture()
+
+    return () => {
+      globalThis.removeEventListener("resize", scheduleCapture)
+      globalThis.removeEventListener("orientationchange", scheduleCapture)
+      viewport?.removeEventListener("resize", scheduleCapture)
+      viewport?.removeEventListener("scroll", scheduleCapture)
+      for (const query of mediaQueries) {
+        query.removeEventListener?.("change", scheduleCapture)
+      }
+      for (const [type, listener] of listeners) {
+        handle?.removeEventListener(type, listener, { capture: true })
+      }
+      rootObserver.disconnect()
+      sizeObserver.disconnect()
+      if (frame !== null) {
+        globalThis.cancelAnimationFrame(frame)
+      }
+    }
+  }, [captureFloatingDiagnostics, diagnosticsEnabled])
 
   const getFloatingBounds = useCallback(() => {
     const control = floatingControlRef.current
@@ -537,6 +696,36 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
         pointerEvents: isHidden ? "none" : undefined,
       }}
     >
+      {diagnosticsEnabled && (
+        <pre
+          aria-hidden="true"
+          data-testid="ux-reach-02-diagnostic-panel"
+          style={{
+            position: "fixed",
+            zIndex: 2_147_483_647,
+            top: 8,
+            left: 8,
+            boxSizing: "border-box",
+            width: "min(360px, calc(100vw - 16px))",
+            maxHeight: "45vh",
+            margin: 0,
+            padding: 8,
+            overflow: "hidden",
+            border: "1px solid #8892a0",
+            borderRadius: 6,
+            background: "rgba(12, 16, 22, 0.94)",
+            color: "#f4f6f8",
+            font: "10px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace",
+            whiteSpace: "pre-wrap",
+            overflowWrap: "anywhere",
+            pointerEvents: "none",
+          }}
+        >
+          {diagnosticSnapshot
+            ? JSON.stringify(diagnosticSnapshot, null, 2)
+            : "Collecting viewport diagnostics…"}
+        </pre>
+      )}
       {isFloating && (
         <span className="visually-hidden" id="mark-all-read-position-help">
           {positionHelp}
