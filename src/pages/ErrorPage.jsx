@@ -46,12 +46,16 @@ const ErrorPage = () => {
       <Result
         status={resultStatus}
         subTitle={polyglot?.t(`error_page.${pageKey}_description`) ?? "Return home and try again."}
-        title={polyglot?.t(`error_page.${pageKey}_title`) ?? "Page could not be opened"}
         extra={[
           <Button key="back" type="primary" onClick={() => navigate(recoveryPath)}>
             {polyglot?.t(recoveryLabel) ?? "Back to Home"}
           </Button>,
         ]}
+        title={
+          <h1 style={{ color: "inherit", font: "inherit", margin: 0 }}>
+            {polyglot?.t(`error_page.${pageKey}_title`) ?? "Page could not be opened"}
+          </h1>
+        }
       />
     </div>
   )
