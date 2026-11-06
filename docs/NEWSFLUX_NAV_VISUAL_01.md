@@ -1,7 +1,7 @@
 # NAV-VISUAL-01 — Adaptive navigation contract
 
-- **Status:** approved contract; PR0 and PR1 implemented; remaining NAV-VISUAL slices are deferred.
-- **Reconciled:** 2026-10-20, against GitHub `main` at `32244fa07b57c8bb3f5682f27b4d94917384ce63` and product/production at `d01e34fc2eb76da39467d1de9799b12194faec9c`; PR #72 was docs-only and did not require deployment.
+- **Status:** approved historical contract with implementation baseline recorded below. PR0, PR1, PR4 and scoped PR5 follow-ups are complete; PR6 remains an evidence gap and PR7 remains product-held. NEWSFLUX_ROADMAP.md §24 is the current disposition.
+- **Historical contract snapshot:** 2026-10-20. The compact solid-surface direction and PR decomposition below are preserved as historical design evidence; they do not override the post-PR71 accepted baseline or later PR #105 medium-rail completion.
 - **Implementation authorization:** PR0 / PR1 are completed; future slices remain unauthorized by this document.
 - **Product implementation authorization:** NO for remaining slices.
 - **Merge authorization:** NO.
@@ -13,9 +13,9 @@ This document preserves the approved historical design contract and separately r
 ## Post-PR71 implementation state
 
 - PR0 / #69 completed the window-class foundation (`cf37807a4d3b9da39d3c438861fac358d936fdaa`).
-- PR1 / #71 completed the compact-navigation renderer and Reader/Drawer focus and resize hardening; merge and current production baseline are `d01e34fc2eb76da39467d1de9799b12194faec9c`.
-- The compact bar currently uses `--nf-glass-*` tokens and `backdrop-filter`.
-- Medium Rail / PR4, including the 884×1104 slice and `TABLET-HEADER-WIDTH-01`, was completed in PR #105 (`feat(nav): add medium navigation rail`) and PR #76.
+- PR1 / #71 completed the compact-navigation renderer and Reader/Drawer focus and resize hardening; merge SHA was `d01e34fc2eb76da39467d1de9799b12194faec9c` (historical production baseline; superseded by the current state in NEWSFLUX_ROADMAP.md §24).
+- The compact bar baseline uses --nf-glass-* tokens and backdrop-filter; NAV_CONTRACT_DRIFT_01 records the accepted exception to the earlier solid-surface contract.
+- Medium Rail / PR4, including the 884×1104 slice and TABLET-HEADER-WIDTH-01, was completed in PR #105; PR #76 separately closed the tablet header-width finding.
 - `NAV-PR1-HARNESS-DESKTOP-MODEL-01` remains a P3 finding.
 - `NAV-PR1-ROUTE-FOCUS-01` remains a P3 finding.
 - `MOBILE-SCROLL-FLICKER-01` remains a distinct open finding. It and future glass-expansion gates are not waived by PR #71 acceptance.
