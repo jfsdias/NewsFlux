@@ -106,16 +106,17 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
   const [isSwipingLeft, setIsSwipingLeft] = useState(false)
   const [isSwipingRight, setIsSwipingRight] = useState(false)
   const [entryLoadError, setEntryLoadError] = useState(null)
+  const { entryId: routeEntryId } = useParams()
+  const entryId = entryIdOverride ?? routeEntryId
   const currentEntryLoadError =
-    entryLoadError?.entryId === Number(entryId) ? entryLoadError.category : null
+    entryLoadError?.entryId === Number(entryId) && activeContent?.id !== Number(entryId)
+      ? entryLoadError.category
+      : null
   const { polyglot } = useStore(polyglotState)
   const cardsRef = useRef(null)
   const entryRequestIdRef = useRef(0)
   const ignoreSwipeRef = useRef(false)
   const swipeDirectionRef = useRef(null)
-
-  const { entryId: routeEntryId } = useParams()
-  const entryId = entryIdOverride ?? routeEntryId
 
   const pageTitle = useDocumentTitle()
 
@@ -206,7 +207,6 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
       const numericEntryId = Number(entryId)
       const existingEntry = contentState.get().entries.find((entry) => entry.id === numericEntryId)
 
-      setEntryLoadError(null)
       if (existingEntry) {
         setIsArticleLoading(false)
         setActiveContent(existingEntry)

@@ -125,7 +125,8 @@ test.describe("F15 Deep links and reopening", () => {
     mock,
   }) => {
     await mock.fault("entry", "emptyobject")
-    const { page } = await openApp({ path: "" })
+    const { page } = await openApp({ path: "/all" })
+    await expect(cards(page).first()).toBeVisible()
     const consoleErrors = []
     page.on("console", (message) => {
       if (message.type() === "error") {
