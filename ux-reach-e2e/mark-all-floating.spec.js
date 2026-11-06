@@ -11,6 +11,7 @@ const getMutationRequests = async (mock) => {
 
 const COARSE_VIEWPORTS = [
   { width: 390, height: 844 },
+  { width: 449, height: 682 },
   { width: 466, height: 844 },
   { width: 597, height: 880 },
   { width: 704, height: 869 },
@@ -22,8 +23,10 @@ const COARSE_VIEWPORTS = [
   { width: 992, height: 1200 },
   { width: 993, height: 1200 },
   { width: 1024, height: 768 },
-  // The unfolded Surface Duo browser viewport is wider than the existing 1024px cutoff.
   { width: 1114, height: 720 },
+  { width: 1119, height: 611 },
+  { width: 1280, height: 800 },
+  { width: 1920, height: 1080 },
 ]
 
 test("UX-REACH-01: coarse-pointer control stays reachable without blocking article hits or navigation", async ({
@@ -35,7 +38,6 @@ test("UX-REACH-01: coarse-pointer control stays reachable without blocking artic
     const action = getAction(page)
     await expect(action).toBeVisible()
     await expect(page.locator('button[aria-label="Mark all as read"]')).toHaveCount(1)
-    await expect(page.getByTestId("ux-reach-02-diagnostic-panel")).toHaveCount(0)
 
     const pointerState = await page.evaluate(() => ({
       innerWidth: globalThis.innerWidth,
@@ -112,86 +114,43 @@ test("UX-REACH-01: coarse-pointer control stays reachable without blocking artic
     await expect(action).toBeVisible()
   }
 
-  const { page: diagnosticPage } = await openApp({
-    path: "/all?ux_reach_02_diag=1",
-    width: 1114,
-    height: 720,
+  const { page: wideTouchPage } = await openApp({
+    path: "/all",
+    width: 1280,
+    height: 800,
     touch: true,
   })
-  const diagnosticPanel = diagnosticPage.getByTestId("ux-reach-02-diagnostic-panel")
-  await expect(diagnosticPanel).toBeVisible()
-  const summary = diagnosticPage.getByTestId("ux-reach-02-diagnostic-summary")
-  await expect(summary).toContainText("innerWidth: 1114")
-  await expect(summary).toContainText("innerHeight: 720")
-  await expect(summary).toContainText("visualViewport.width: 1114")
-  await expect(summary).toContainText("anyPointerCoarse: true")
-  await expect(summary).toContainText("maxWidth1114: true")
-  await expect(summary).toContainText("activationQueryMatches: true")
-  await expect(summary).toContainText("reactStateActive: true")
-  await expect(summary).toContainText("classActive: true")
-  await expect(summary).toContainText("handleDisplay: flex")
-  await expect(summary).toContainText(/handleCenterHit\.insideHandle: (true|false|null)/)
-
-  const diagnosticAction = getAction(diagnosticPage)
-  const diagnosticHandleBounds = await getDragHandle(diagnosticPage).boundingBox()
-  const diagnosticActionBounds = await diagnosticAction.boundingBox()
-  const diagnosticPanelBounds = await diagnosticPanel.boundingBox()
-  const panelIntersectsActionOrHandle = await diagnosticPage.evaluate(
-    ({ action, handle, panel }) =>
-      [action, handle].some(
-        (target) =>
-          target.x < panel.x + panel.width &&
-          target.x + target.width > panel.x &&
-          target.y < panel.y + panel.height &&
-          target.y + target.height > panel.y,
-      ),
-    {
-      action: diagnosticActionBounds,
-      handle: diagnosticHandleBounds,
-      panel: diagnosticPanelBounds,
-    },
-  )
-  expect(panelIntersectsActionOrHandle).toBe(false)
-
-  const copyJson = diagnosticPage.getByRole("button", { name: "Copy full diagnostic JSON" })
-  await expect(copyJson).toBeVisible()
-  await diagnosticPage.evaluate(() => {
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: { writeText: async (text) => (globalThis.__uxReachCopiedJson = text) },
-    })
+  const wideTouchHandle = getDragHandle(wideTouchPage)
+  const wideTouchControl = wideTouchPage.locator(".mark-all-read-floating")
+  const wideTouchBefore = await wideTouchControl.boundingBox()
+  const wideTouchGrip = await wideTouchHandle.boundingBox()
+  const wideTouchClient = await wideTouchPage.context().newCDPSession(wideTouchPage)
+  await wideTouchClient.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [
+      {
+        id: 1,
+        x: wideTouchGrip.x + wideTouchGrip.width / 2,
+        y: wideTouchGrip.y + wideTouchGrip.height / 2,
+      },
+    ],
   })
-  await copyJson.click()
-  const copiedJson = await diagnosticPage.evaluate(() => globalThis.__uxReachCopiedJson)
-  expect(JSON.parse(copiedJson).pointerMedia.activationQueryMatches).toBe(true)
-  await expect(diagnosticPage.getByTestId("ux-reach-02-copy-status")).toHaveText("Copied")
-
-  await diagnosticPage.evaluate(() => {
-    Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined })
-    document.execCommand = (command) => {
-      if (command === "copy") {
-        globalThis.__uxReachFallbackCopied = document.activeElement?.value
-        return Boolean(globalThis.__uxReachFallbackCopied)
-      }
-      return false
-    }
+  await wideTouchClient.send("Input.dispatchTouchEvent", {
+    type: "touchMove",
+    touchPoints: [
+      {
+        id: 1,
+        x: wideTouchGrip.x + wideTouchGrip.width / 2 + 64,
+        y: wideTouchGrip.y + wideTouchGrip.height / 2 + 24,
+      },
+    ],
   })
-  await copyJson.click()
-  const fallbackJson = await diagnosticPage.evaluate(() => globalThis.__uxReachFallbackCopied)
-  expect(JSON.parse(fallbackJson).floating.handleDisplay).toBe("flex")
-  await expect(diagnosticPage.getByTestId("ux-reach-02-copy-status")).toHaveText("Copied")
-
-  await diagnosticPage.evaluate(() => {
-    document.execCommand = () => false
-  })
-  await copyJson.click()
-  const manualCopy = diagnosticPage.getByRole("textbox", {
-    name: "Diagnostic JSON for manual copy",
-  })
-  await expect(manualCopy).toBeVisible()
-  expect(JSON.parse(await manualCopy.inputValue()).floating.handleDisplay).toBe("flex")
-  await expect(diagnosticPage.getByText("Mark all as read?", { exact: true })).toBeHidden()
+  await wideTouchClient.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] })
+  const wideTouchAfter = await wideTouchControl.boundingBox()
+  expect(wideTouchAfter.x).toBeGreaterThan(wideTouchBefore.x + 32)
   expect(await getMutationRequests(mock)).toHaveLength(0)
+  await expect(wideTouchPage.getByText("Mark all as read?", { exact: true })).toBeHidden()
+  await wideTouchClient.detach()
 })
 
 test("UX-REACH-01: dragging moves the control but emits no bulk mutation or confirmation", async ({
@@ -543,7 +502,7 @@ test("UX-REACH-01: resize clamps and restores the local position; History keeps 
       JSON.stringify({ version: 1, x: 0, y: 0.5 }),
     )
   })
-  await page.setViewportSize({ width: 1114, height: 720 })
+  await page.setViewportSize({ width: 1119, height: 611 })
   await expect(handle).toBeVisible()
   const unfoldedFloating = page.locator(".mark-all-read-floating")
   const unfoldedBounds = await unfoldedFloating.boundingBox()
@@ -551,7 +510,7 @@ test("UX-REACH-01: resize clamps and restores the local position; History keeps 
   expect(unfoldedBounds).not.toBeNull()
   expect(desktopSidebar).not.toBeNull()
   expect(unfoldedBounds.x).toBeGreaterThanOrEqual(desktopSidebar.x + desktopSidebar.width)
-  expect(unfoldedBounds.x + unfoldedBounds.width).toBeLessThanOrEqual(1114)
+  expect(unfoldedBounds.x + unfoldedBounds.width).toBeLessThanOrEqual(1119)
 
   const unfoldedGrip = await handle.boundingBox()
   const unfoldedBeforeDrag = await unfoldedFloating.boundingBox()
@@ -633,16 +592,81 @@ test("UX-REACH-01: resize clamps and restores the local position; History keeps 
 
 test("UX-REACH-01: fine-pointer desktop retains the existing conventional FooterPanel control", async ({
   openApp,
+  mock,
 }) => {
-  const { page } = await openApp({ path: "/all", width: 1440, height: 900 })
-  const action = getAction(page)
+  for (const { width, height, expectedControlSize } of [
+    { width: 390, height: 844, expectedControlSize: 48 },
+    { width: 1440, height: 900, expectedControlSize: 32 },
+  ]) {
+    const { page } = await openApp({ path: "/all", width, height })
+    const action = getAction(page)
+    const handle = getDragHandle(page)
+    const floating = page.locator(".mark-all-read-floating")
 
-  await expect(action).toBeVisible()
-  await expect(page.locator(".mark-all-read-floating")).toHaveCSS("position", "static")
-  await expect(getDragHandle(page)).toBeHidden()
-  const bounds = await action.boundingBox()
-  // The exact base revision renders this untouched Arco control at 32×32 on desktop.
-  // Preserve that fine-pointer geometry instead of enlarging desktop chrome.
-  expect(bounds.width).toBe(32)
-  expect(bounds.height).toBe(32)
+    await expect(action).toBeVisible()
+    await expect(floating).toHaveCSS("position", "fixed")
+    await expect(floating).toHaveClass(/mark-all-read-floating--active/)
+    await expect(handle).toBeVisible()
+    const bounds = await action.boundingBox()
+    const initialPosition = await floating.boundingBox()
+    expect(bounds.width).toBe(expectedControlSize)
+    expect(bounds.height).toBe(expectedControlSize)
+    expect(bounds.x).toBe(initialPosition.x)
+    expect(bounds.y).toBe(initialPosition.y)
+
+    const grip = await handle.boundingBox()
+    await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(grip.x + grip.width / 2 + 72, grip.y + grip.height / 2 - 48, {
+      steps: 6,
+    })
+    await page.mouse.up()
+
+    const afterMouseDrag = await floating.boundingBox()
+    expect(afterMouseDrag.x).toBeGreaterThan(initialPosition.x + 32)
+    expect(afterMouseDrag.y).toBeLessThan(initialPosition.y - 16)
+    expect(await getMutationRequests(mock)).toHaveLength(0)
+    await expect(page.getByText("Mark all as read?", { exact: true })).toBeHidden()
+
+    if (width === 1440) {
+      const penGrip = await handle.boundingBox()
+      const penX = penGrip.x + penGrip.width / 2
+      const penY = penGrip.y + penGrip.height / 2
+      const client = await page.context().newCDPSession(page)
+      await client.send("Input.dispatchMouseEvent", {
+        type: "mouseMoved",
+        x: penX,
+        y: penY,
+        pointerType: "pen",
+      })
+      await client.send("Input.dispatchMouseEvent", {
+        type: "mousePressed",
+        button: "left",
+        buttons: 1,
+        x: penX,
+        y: penY,
+        pointerType: "pen",
+      })
+      await client.send("Input.dispatchMouseEvent", {
+        type: "mouseMoved",
+        buttons: 1,
+        x: penX + 56,
+        y: penY + 24,
+        pointerType: "pen",
+      })
+      await client.send("Input.dispatchMouseEvent", {
+        type: "mouseReleased",
+        button: "left",
+        buttons: 0,
+        x: penX + 56,
+        y: penY + 24,
+        pointerType: "pen",
+      })
+      const afterPenDrag = await floating.boundingBox()
+      expect(afterPenDrag.x).toBeGreaterThan(afterMouseDrag.x + 24)
+      expect(await getMutationRequests(mock)).toHaveLength(0)
+      await expect(page.getByText("Mark all as read?", { exact: true })).toBeHidden()
+      await client.detach()
+    }
+  }
 })

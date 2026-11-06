@@ -344,3 +344,21 @@ body[arco-theme="dark"]
     pointer-events: auto;
   }
 }
+
+@media (pointer: fine) {
+  .mark-all-read-floating--active .arco-btn-shape-circle {
+    flex: 0 0 32px;
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+  }
+}
+
+@media (pointer: fine) and (max-width: 768px) {
+  .mark-all-read-floating--active .arco-btn-shape-circle {
+    flex-basis: var(--mobile-edge-control-size);
+    width: var(--mobile-edge-control-size);
+    min-width: var(--mobile-edge-control-size);
+    height: var(--mobile-edge-control-size);
+  }
+}

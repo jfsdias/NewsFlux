@@ -73,8 +73,6 @@ const handleFilterChange = (value) => {
 }
 
 const MARK_ALL_READ_POSITION_STORAGE_KEY = "newsflux:ux-reach-01:mark-all-read-position"
-const FLOATING_MARK_ALL_MEDIA = "(any-pointer: coarse) and (max-width: 1114px)"
-const FLOATING_DIAGNOSTIC_QUERY_PARAM = "ux_reach_02_diag"
 const readPositionPreference = () => {
   try {
     return parseFloatingPositionPreference(
@@ -89,220 +87,6 @@ const stopDragHandleClick = (event) => {
   event.stopPropagation()
 }
 
-const formatFloatingDiagnosticSummary = (snapshot) =>
-  [
-    `innerWidth: ${snapshot.viewport.innerWidth}`,
-    `innerHeight: ${snapshot.viewport.innerHeight}`,
-    `visualViewport.width: ${snapshot.viewport.visualViewportWidth}`,
-    `anyPointerCoarse: ${snapshot.pointerMedia.anyPointerCoarse}`,
-    `maxWidth1114: ${snapshot.pointerMedia.maxWidth1114}`,
-    `activationQueryMatches: ${snapshot.pointerMedia.activationQueryMatches}`,
-    `reactStateActive: ${snapshot.floating.reactStateActive}`,
-    `classActive: ${snapshot.floating.classActive}`,
-    `handleDisplay: ${snapshot.floating.handleDisplay}`,
-    `handleCenterHit.insideHandle: ${snapshot.floating.handleCenterHit?.insideHandle ?? null}`,
-  ].join("\n")
-
-const rectanglesIntersect = (a, b, gap = 8) =>
-  a.left < b.right + gap &&
-  a.right > b.left - gap &&
-  a.top < b.bottom + gap &&
-  a.bottom > b.top - gap
-
-const FloatingDiagnosticsPanel = ({ controlRef, snapshot }) => {
-  const panelRef = useRef(null)
-  const manualCopyRef = useRef(null)
-  const [position, setPosition] = useState(null)
-  const [copyStatus, setCopyStatus] = useState("")
-  const [showManualCopy, setShowManualCopy] = useState(false)
-  const diagnosticJson = JSON.stringify(snapshot, null, 2)
-
-  useLayoutEffect(() => {
-    const panel = panelRef.current
-    if (!panel) {
-      return
-    }
-
-    const panelRect = panel.getBoundingClientRect()
-    const viewportWidth = globalThis.innerWidth
-    const viewportHeight = globalThis.innerHeight
-    const inset = 8
-    const maxLeft = Math.max(inset, viewportWidth - panelRect.width - inset)
-    const maxTop = Math.max(inset, viewportHeight - panelRect.height - inset)
-    const candidates = [
-      { top: inset, left: inset },
-      { top: inset, left: maxLeft },
-      { top: maxTop, left: inset },
-      { top: maxTop, left: maxLeft },
-    ]
-    const blockers = [
-      controlRef.current?.querySelector(".arco-btn-shape-circle"),
-      controlRef.current?.querySelector(".mark-all-read-drag-handle"),
-      globalThis.document.querySelector(".desktop-sidebar-slot .sidebar"),
-      globalThis.document.querySelector(".compact-nav-bar"),
-      globalThis.document.querySelector(".medium-navigation-rail"),
-    ]
-      .filter(Boolean)
-      .map((element) => element.getBoundingClientRect())
-      .filter((rect) => rect.width > 0 && rect.height > 0)
-    const scoreCandidate = ({ top, left }) => {
-      const candidateRect = {
-        left,
-        top,
-        right: left + panelRect.width,
-        bottom: top + panelRect.height,
-      }
-      return blockers.reduce(
-        (score, blocker) => score + (rectanglesIntersect(candidateRect, blocker) ? 1 : 0),
-        0,
-      )
-    }
-    const selected = candidates
-      .map((candidate) => ({ ...candidate, collisions: scoreCandidate(candidate) }))
-      .toSorted((a, b) => a.collisions - b.collisions)[0]
-
-    setPosition({ top: selected.top, left: selected.left })
-  }, [controlRef, copyStatus, showManualCopy, snapshot])
-
-  useEffect(() => {
-    if (showManualCopy) {
-      manualCopyRef.current?.focus({ preventScroll: true })
-      manualCopyRef.current?.select()
-    }
-  }, [showManualCopy])
-
-  const handleCopyJson = async (event) => {
-    event.preventDefault()
-    event.stopPropagation()
-    setCopyStatus("")
-    setShowManualCopy(false)
-
-    try {
-      const writeText = globalThis.navigator.clipboard?.writeText
-      if (typeof writeText === "function") {
-        await writeText.call(globalThis.navigator.clipboard, diagnosticJson)
-        setCopyStatus("Copied")
-        return
-      }
-    } catch {
-      // Use the local selection fallback below when clipboard permission is unavailable.
-    }
-
-    let copied = false
-    try {
-      const textarea = globalThis.document.createElement("textarea")
-      textarea.value = diagnosticJson
-      textarea.readOnly = true
-      textarea.setAttribute("aria-hidden", "true")
-      Object.assign(textarea.style, {
-        position: "fixed",
-        top: "-10000px",
-        left: "-10000px",
-        opacity: "0",
-      })
-      globalThis.document.body.append(textarea)
-      textarea.focus({ preventScroll: true })
-      textarea.select()
-      copied = Boolean(globalThis.document.execCommand?.("copy"))
-      textarea.remove()
-    } catch {
-      copied = false
-    }
-
-    if (copied) {
-      setCopyStatus("Copied")
-      return
-    }
-
-    setCopyStatus("Select the JSON below to copy manually")
-    setShowManualCopy(true)
-  }
-
-  return (
-    <section
-      ref={panelRef}
-      aria-label="UX-REACH-02 viewport diagnostics"
-      data-testid="ux-reach-02-diagnostic-panel"
-      role="region"
-      style={{
-        position: "fixed",
-        zIndex: 2_147_483_647,
-        top: position?.top ?? 8,
-        left: position?.left ?? 8,
-        boxSizing: "border-box",
-        width: "min(360px, calc(100vw - 16px))",
-        maxHeight: "min(360px, calc(100vh - 16px))",
-        margin: 0,
-        padding: 10,
-        overflow: "auto",
-        border: "1px solid #8892a0",
-        borderRadius: 6,
-        background: "rgba(12, 16, 22, 0.96)",
-        color: "#f4f6f8",
-        boxShadow: "0 4px 18px rgba(0, 0, 0, 0.35)",
-        font: "12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace",
-        pointerEvents: "auto",
-        touchAction: "pan-y",
-        visibility: position ? "visible" : "hidden",
-      }}
-    >
-      <pre
-        data-testid="ux-reach-02-diagnostic-summary"
-        style={{
-          margin: "0 0 8px",
-          overflowWrap: "anywhere",
-          whiteSpace: "pre-wrap",
-        }}
-      >
-        {formatFloatingDiagnosticSummary(snapshot)}
-      </pre>
-      <button
-        aria-label="Copy full diagnostic JSON"
-        type="button"
-        style={{
-          minHeight: 36,
-          padding: "6px 10px",
-          border: "1px solid #8892a0",
-          borderRadius: 5,
-          background: "#202833",
-          color: "#f4f6f8",
-          font: "inherit",
-          cursor: "pointer",
-          touchAction: "manipulation",
-        }}
-        onClick={handleCopyJson}
-      >
-        Copy full diagnostic JSON
-      </button>
-      <span
-        aria-live="polite"
-        data-testid="ux-reach-02-copy-status"
-        style={{ marginInlineStart: 8 }}
-      >
-        {copyStatus}
-      </span>
-      {showManualCopy && (
-        <textarea
-          ref={manualCopyRef}
-          readOnly
-          aria-label="Diagnostic JSON for manual copy"
-          value={diagnosticJson}
-          style={{
-            display: "block",
-            boxSizing: "border-box",
-            width: "100%",
-            minHeight: 100,
-            marginTop: 8,
-            padding: 6,
-            font: "inherit",
-            touchAction: "auto",
-          }}
-        />
-      )}
-    </section>
-  )
-}
-
 const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConfirm }) => {
   const { polyglot } = useStore(polyglotState)
   const { skipMarkAllReadConfirmation } = useStore(settingsState, {
@@ -314,13 +98,6 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
   const positionHelp = polyglot.t("article_list.mark_all_as_read_position_help")
   const [confirmVisible, setConfirmVisible] = useState(false)
   const [isFloating, setIsFloating] = useState(false)
-  const [diagnosticsEnabled] = useState(
-    () =>
-      new URLSearchParams(globalThis.location?.search ?? "").get(
-        FLOATING_DIAGNOSTIC_QUERY_PARAM,
-      ) === "1",
-  )
-  const [diagnosticSnapshot, setDiagnosticSnapshot] = useState(null)
   const [position, setPosition] = useState(null)
   const triggerRef = useRef(null)
   const floatingControlRef = useRef(null)
@@ -328,7 +105,6 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
   const defaultPositionRatiosRef = useRef(null)
   const isFloatingRef = useRef(false)
   const pointerDragRef = useRef(null)
-  const diagnosticPointerEventsRef = useRef({ down: 0, move: 0, up: 0, cancel: 0, lostCapture: 0 })
   const suppressNextClickRef = useRef(false)
   const suppressClickTimerRef = useRef(null)
   const getScopedListIdentity = useCallback(
@@ -345,156 +121,6 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
   )
   const scopedListIdentity = getScopedListIdentity()
   const [pendingFocusReturn, setPendingFocusReturn] = useState(null)
-
-  const captureFloatingDiagnostics = useCallback(() => {
-    const control = floatingControlRef.current
-    const button = control?.querySelector(".arco-btn-shape-circle")
-    const handle = control?.querySelector(".mark-all-read-drag-handle")
-    const sidebar = globalThis.document.querySelector(".desktop-sidebar-slot .sidebar")
-    const rect = (element) => {
-      if (!element) {
-        return null
-      }
-      const { bottom, height, left, right, top, width } = element.getBoundingClientRect()
-      return { left, top, right, bottom, width, height }
-    }
-    const handleRect = rect(handle)
-    const handleCenter =
-      handleRect?.width > 0 &&
-      handleRect.height > 0 &&
-      globalThis.document.elementFromPoint(
-        handleRect.left + handleRect.width / 2,
-        handleRect.top + handleRect.height / 2,
-      )
-    const handleStyle = handle ? globalThis.getComputedStyle(handle) : null
-    const topHit = handleCenter
-      ? {
-          tag: handleCenter.tagName.toLowerCase(),
-          classes:
-            typeof handleCenter.className === "string"
-              ? handleCenter.className.trim().split(/\s+/).filter(Boolean).slice(0, 4)
-              : [],
-          insideHandle: Boolean(handle?.contains(handleCenter)),
-        }
-      : null
-    const media = (query) => globalThis.matchMedia(query).matches
-
-    setDiagnosticSnapshot({
-      viewport: {
-        innerWidth: globalThis.innerWidth,
-        innerHeight: globalThis.innerHeight,
-        visualViewportWidth: globalThis.visualViewport?.width ?? null,
-        visualViewportHeight: globalThis.visualViewport?.height ?? null,
-        devicePixelRatio: globalThis.devicePixelRatio,
-        screenWidth: globalThis.screen.width,
-        screenHeight: globalThis.screen.height,
-      },
-      pointerMedia: {
-        anyPointerCoarse: media("(any-pointer: coarse)"),
-        pointerCoarse: media("(pointer: coarse)"),
-        anyPointerFine: media("(any-pointer: fine)"),
-        maxWidth1024: media("(max-width: 1024px)"),
-        maxWidth1114: media("(max-width: 1114px)"),
-        activationQueryMatches: media(FLOATING_MARK_ALL_MEDIA),
-      },
-      floating: {
-        reactStateActive: isFloating,
-        classActive: Boolean(control?.classList.contains("mark-all-read-floating--active")),
-        rootDisplay: control ? globalThis.getComputedStyle(control).display : "NOT_MOUNTED",
-        handleDisplay: handleStyle?.display ?? "NOT_MOUNTED",
-        handleRect,
-        buttonRect: rect(button),
-        sidebarRect: rect(sidebar),
-        handleHitTestAvailable: Boolean(handleCenter),
-        handleCenterHit: topHit,
-        pointerEvents: { ...diagnosticPointerEventsRef.current },
-      },
-    })
-  }, [isFloating])
-
-  useEffect(() => {
-    if (!diagnosticsEnabled) {
-      return
-    }
-
-    let frame = null
-    const scheduleCapture = () => {
-      if (frame !== null) {
-        globalThis.cancelAnimationFrame(frame)
-      }
-      frame = globalThis.requestAnimationFrame(() => {
-        frame = null
-        captureFloatingDiagnostics()
-      })
-    }
-    const viewport = globalThis.visualViewport
-    const mediaQueries = [
-      globalThis.matchMedia("(any-pointer: coarse)"),
-      globalThis.matchMedia("(pointer: coarse)"),
-      globalThis.matchMedia("(any-pointer: fine)"),
-      globalThis.matchMedia("(max-width: 1024px)"),
-      globalThis.matchMedia("(max-width: 1114px)"),
-      globalThis.matchMedia(FLOATING_MARK_ALL_MEDIA),
-    ]
-    const handle = floatingControlRef.current?.querySelector(".mark-all-read-drag-handle")
-    const pointerEvents = diagnosticPointerEventsRef.current
-    const eventTypes = [
-      ["pointerdown", "down"],
-      ["pointermove", "move"],
-      ["pointerup", "up"],
-      ["pointercancel", "cancel"],
-      ["lostpointercapture", "lostCapture"],
-    ]
-    const listeners = eventTypes.map(([type, key]) => {
-      const listener = () => {
-        pointerEvents[key] += 1
-        if (key !== "move") {
-          scheduleCapture()
-        }
-      }
-      handle?.addEventListener(type, listener, { capture: true, passive: true })
-      return [type, listener]
-    })
-    const rootObserver = new MutationObserver(scheduleCapture)
-    if (floatingControlRef.current) {
-      rootObserver.observe(floatingControlRef.current, {
-        attributes: true,
-        attributeFilter: ["class"],
-      })
-    }
-    const sizeObserver = new ResizeObserver(scheduleCapture)
-    sizeObserver.observe(globalThis.document.documentElement)
-    if (floatingControlRef.current) {
-      sizeObserver.observe(floatingControlRef.current)
-    }
-
-    globalThis.addEventListener("resize", scheduleCapture)
-    globalThis.addEventListener("orientationchange", scheduleCapture)
-    viewport?.addEventListener("resize", scheduleCapture)
-    viewport?.addEventListener("scroll", scheduleCapture)
-    for (const query of mediaQueries) {
-      query.addEventListener?.("change", scheduleCapture)
-    }
-    scheduleCapture()
-
-    return () => {
-      globalThis.removeEventListener("resize", scheduleCapture)
-      globalThis.removeEventListener("orientationchange", scheduleCapture)
-      viewport?.removeEventListener("resize", scheduleCapture)
-      viewport?.removeEventListener("scroll", scheduleCapture)
-      for (const query of mediaQueries) {
-        query.removeEventListener?.("change", scheduleCapture)
-      }
-      for (const [type, listener] of listeners) {
-        handle?.removeEventListener(type, listener, { capture: true })
-      }
-      rootObserver.disconnect()
-      sizeObserver.disconnect()
-      if (frame !== null) {
-        globalThis.cancelAnimationFrame(frame)
-      }
-    }
-  }, [captureFloatingDiagnostics, diagnosticsEnabled])
 
   const getFloatingBounds = useCallback(() => {
     const control = floatingControlRef.current
@@ -583,7 +209,6 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
   )
 
   useLayoutEffect(() => {
-    const mediaQuery = globalThis.matchMedia(FLOATING_MARK_ALL_MEDIA)
     const activateFloatingControl = () => {
       const control = floatingControlRef.current
       const bounds = getFloatingBounds()
@@ -609,17 +234,7 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
       applyFloatingPosition(nextPosition)
     }
 
-    const reconcileModeAndPosition = () => {
-      if (!mediaQuery.matches) {
-        if (isFloatingRef.current) {
-          isFloatingRef.current = false
-          setIsFloating(false)
-          setPosition(null)
-          floatingPositionRef.current = null
-        }
-        return
-      }
-
+    const reconcilePosition = () => {
       if (!isFloatingRef.current) {
         activateFloatingControl()
         return
@@ -647,22 +262,20 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
 
     let resizeFrame = null
     const handleResize = () => {
-      reconcileModeAndPosition()
+      reconcilePosition()
       if (resizeFrame !== null) {
         globalThis.cancelAnimationFrame(resizeFrame)
       }
       resizeFrame = globalThis.requestAnimationFrame(() => {
         resizeFrame = null
-        reconcileModeAndPosition()
+        reconcilePosition()
       })
     }
 
-    reconcileModeAndPosition()
+    reconcilePosition()
     globalThis.addEventListener("resize", handleResize)
-    mediaQuery.addEventListener?.("change", reconcileModeAndPosition)
     return () => {
       globalThis.removeEventListener("resize", handleResize)
-      mediaQuery.removeEventListener?.("change", reconcileModeAndPosition)
       if (resizeFrame !== null) {
         globalThis.cancelAnimationFrame(resizeFrame)
       }
@@ -910,9 +523,6 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
         pointerEvents: isHidden ? "none" : undefined,
       }}
     >
-      {diagnosticsEnabled && !isHidden && diagnosticSnapshot && (
-        <FloatingDiagnosticsPanel controlRef={floatingControlRef} snapshot={diagnosticSnapshot} />
-      )}
       {isFloating && (
         <span className="visually-hidden" id="mark-all-read-position-help">
           {positionHelp}
