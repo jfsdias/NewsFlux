@@ -606,10 +606,9 @@ const FooterPanel = ({
       invalidateArticleList,
       onConsume: (consumedToken) =>
         Notification.remove(getMarkAllReadUndoNotificationId(consumedToken)),
-      onError: (error) => {
+      onError: () => {
         Notification.error({
           title: polyglot.t("article_list.mark_all_as_read_error"),
-          content: error.message,
         })
       },
     })
@@ -624,10 +623,9 @@ const FooterPanel = ({
       invalidateArticleList,
       onConsume: (consumedToken) =>
         Notification.remove(getMarkAllReadUndoNotificationId(consumedToken)),
-      onError: (error) => {
+      onError: () => {
         Notification.error({
           title: polyglot.t("article_list.mark_older_as_read_error"),
-          content: error.message,
         })
       },
     })
@@ -766,7 +764,6 @@ const FooterPanel = ({
       if (isCurrentSession()) {
         Notification.error({
           title: polyglot.t("article_list.mark_all_as_read_error"),
-          content: error.message,
         })
       }
     } finally {

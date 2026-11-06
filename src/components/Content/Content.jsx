@@ -1,9 +1,10 @@
+import { Button } from "@arco-design/web-react"
 import { IconLeft, IconRight } from "@arco-design/web-react/icon"
 import { useStore } from "@nanostores/react"
 import classNames from "classnames"
 import { AnimatePresence } from "framer-motion"
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
-import { useParams } from "react-router"
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
+import { useLocation, useNavigate, useParams } from "react-router"
 import { useSwipeable } from "react-swipeable"
 
 import FooterPanel from "./FooterPanel"
@@ -21,6 +22,7 @@ import useContentContext from "@/hooks/useContentContext"
 import useContentHotkeys from "@/hooks/useContentHotkeys"
 import useDocumentTitle from "@/hooks/useDocumentTitle"
 import useKeyHandlers from "@/hooks/useKeyHandlers"
+import { polyglotState } from "@/hooks/useLanguage"
 import useMarkSelectedRead from "@/hooks/useMarkSelectedRead"
 import useReaderNavigation from "@/hooks/useReaderNavigation"
 import useScreenWidth from "@/hooks/useScreenWidth"
@@ -30,7 +32,7 @@ import {
   setArticleListSource,
   setIsArticleLoading,
 } from "@/store/contentState"
-import { dataState } from "@/store/dataState"
+import { dataState, getDataSessionRevision } from "@/store/dataState"
 import {
   articleListLayoutState,
   articleListRequestSettingsState,
@@ -39,6 +41,8 @@ import {
 import createArticleListRequestKey from "@/utils/article-list-request-key"
 import { isRightToLeftBrowsing } from "@/utils/content-browsing-direction"
 import prepareEntry from "@/utils/entry-presentation"
+import { getRequestErrorCategory, getSafeRequestErrorDetails } from "@/utils/safe-request-error"
+import { extractBasePath } from "@/utils/url"
 
 import "./Content.css"
 
@@ -64,8 +68,20 @@ const isInHorizontalScrollable = (element) => {
 const shouldIgnoreSwipe = (element) =>
   isInHorizontalScrollable(element) || Boolean(element?.closest?.(".plyr, audio, video"))
 
+const ENTRY_LOAD_ERROR_KEYS = {
+  forbidden: "access_denied",
+  "invalid-response": "invalid_response",
+  network: "network_error",
+  "rate-limited": "rate_limited",
+  server: "server_error",
+}
+
+const getEntryLoadErrorKey = (category) => ENTRY_LOAD_ERROR_KEYS[category] ?? "request_error"
+
 const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }) => {
   const { from: source, id: sourceId } = info
+  const navigate = useNavigate()
+  const location = useLocation()
   const contentSnapshot = useStore(contentState, {
     keys: [
       "activeContent",
@@ -90,13 +106,18 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
 
   const [isSwipingLeft, setIsSwipingLeft] = useState(false)
   const [isSwipingRight, setIsSwipingRight] = useState(false)
+  const [entryLoadError, setEntryLoadError] = useState(null)
+  const { entryId: routeEntryId } = useParams()
+  const entryId = entryIdOverride ?? routeEntryId
+  const currentEntryLoadError =
+    entryLoadError?.entryId === Number(entryId) && activeContent?.id !== Number(entryId)
+      ? entryLoadError.category
+      : null
+  const { polyglot } = useStore(polyglotState)
   const cardsRef = useRef(null)
   const entryRequestIdRef = useRef(0)
   const ignoreSwipeRef = useRef(false)
   const swipeDirectionRef = useRef(null)
-
-  const { entryId: routeEntryId } = useParams()
-  const entryId = entryIdOverride ?? routeEntryId
 
   const pageTitle = useDocumentTitle()
 
@@ -180,7 +201,10 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
   const fetchSingleEntry = useCallback(
     async (entryId) => {
       const requestId = ++entryRequestIdRef.current
-      const isCurrentRequest = () => entryRequestIdRef.current === requestId
+      const requestSessionRevision = getDataSessionRevision()
+      const isCurrentRequest = () =>
+        entryRequestIdRef.current === requestId &&
+        requestSessionRevision === getDataSessionRevision()
       const numericEntryId = Number(entryId)
       const existingEntry = contentState.get().entries.find((entry) => entry.id === numericEntryId)
 
@@ -198,8 +222,11 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
         }
       } catch (error) {
         if (isCurrentRequest()) {
-          console.error("Failed to fetch entry:", error)
-          handleEntryUnavailable(error, isCurrentRequest)
+          console.error("Failed to fetch entry:", getSafeRequestErrorDetails(error, "reader"))
+          const wasUnavailable = handleEntryUnavailable(error, isCurrentRequest)
+          if (!wasUnavailable) {
+            setEntryLoadError({ entryId: numericEntryId, category: getRequestErrorCategory(error) })
+          }
         }
       } finally {
         if (isCurrentRequest()) {
@@ -277,10 +304,17 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
   useEffect(() => {
     if (source === "category") {
       refreshFeedData().catch((error) => {
-        console.error("Failed to refresh category feed data:", error)
+        console.error(
+          "Failed to refresh category feed data:",
+          getSafeRequestErrorDetails(error, "article-list"),
+        )
       })
     }
   }, [refreshFeedData, source, sourceId])
+
+  useLayoutEffect(() => {
+    entryRequestIdRef.current += 1
+  }, [entryId, location.pathname])
 
   useEffect(() => {
     const currentActiveContent = contentState.get().activeContent
@@ -299,7 +333,7 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
     }
   }, [entryId, fetchSingleEntry, restoreEntryListFocus, source, sourceId])
 
-  const isDetailLayerActive = Boolean(activeContent)
+  const isDetailLayerActive = Boolean(activeContent || currentEntryLoadError)
   const isEntryColFullWidth = isFullWidthLayout || !isDetailLayerActive
 
   return (
@@ -365,13 +399,31 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
             </>
           )}
         </div>
-        {activeContent ? (
+        {activeContent || currentEntryLoadError ? (
           <div
             className="article-container article-container-full-size content-wrapper"
             {...handlers}
           >
-            <ReaderSidebarTrigger />
-            {isArticleLoading ? (
+            {activeContent && <ReaderSidebarTrigger />}
+            {currentEntryLoadError ? (
+              <div className="article-list-state article-load-error" role="alert">
+                <h1>{polyglot.t(`content.${getEntryLoadErrorKey(currentEntryLoadError)}`)}</h1>
+                <div className="article-list-state-copy">
+                  <Button
+                    type="primary"
+                    onClick={() => {
+                      setEntryLoadError(null)
+                      void fetchSingleEntry(entryId)
+                    }}
+                  >
+                    {polyglot.t("actions.retry")}
+                  </Button>
+                  <Button onClick={() => navigate(extractBasePath(location.pathname))}>
+                    {polyglot.t("content.back_to_list")}
+                  </Button>
+                </div>
+              </div>
+            ) : isArticleLoading ? (
               <div style={{ flex: 1 }} />
             ) : (
               <>

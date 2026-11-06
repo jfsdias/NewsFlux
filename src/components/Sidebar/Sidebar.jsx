@@ -846,10 +846,9 @@ const MoreOptionsDropdown = () => {
           title: polyglot.t("sidebar.import_opml_error"),
         })
       }
-    } catch (error) {
+    } catch {
       Notification.error({
         title: polyglot.t("sidebar.import_opml_error"),
-        content: error.message,
       })
     }
   }
@@ -861,10 +860,9 @@ const MoreOptionsDropdown = () => {
       Notification.success({
         title: polyglot.t("sidebar.export_opml_success"),
       })
-    } catch (error) {
+    } catch {
       Notification.error({
         title: polyglot.t("sidebar.export_opml_error"),
-        content: error.message,
       })
     }
   }
@@ -1063,10 +1061,9 @@ const Sidebar = ({ headerAction, isDrawer = false, onNavigate }) => {
       invalidateArticleList,
       onConsume: (consumedToken) =>
         Notification.remove(getMarkAllReadUndoNotificationId(consumedToken)),
-      onError: (error) => {
+      onError: () => {
         Notification.error({
           title: polyglot.t("article_list.mark_all_as_read_error"),
-          content: error.message,
         })
       },
     })
@@ -1155,7 +1152,6 @@ const Sidebar = ({ headerAction, isDrawer = false, onNavigate }) => {
       if (isCurrentSession()) {
         Notification.error({
           title: polyglot.t("article_list.mark_all_as_read_error"),
-          content: error.message,
         })
       }
     } finally {

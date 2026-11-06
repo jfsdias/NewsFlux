@@ -166,13 +166,18 @@ test.describe("F06 Read and unread", () => {
 
     await mock.fault("entry", "500")
     const failed = await openApp({ path: "/all/entry/16" })
-    await expect(failed.page.getByText("Notícia 16")).toBeHidden()
+    await expect(failed.page.getByRole("alert")).toContainText(
+      "The server could not load this article. Please try again.",
+    )
     const failedMutations = await mock.mutations()
     expect(failedMutations.some(({ entryIds }) => entryIds.includes(16))).toBe(false)
 
     await mock.fault("entry", "emptyobject")
     const malformed = await openApp({ path: "/all/entry/17" })
-    await expect(malformed.page.getByRole("button", { name: "Back to Home" })).toBeVisible()
+    await expect(malformed.page.getByRole("alert")).toContainText(
+      "The server returned an unexpected response.",
+    )
+    await expect(malformed.page.getByRole("button", { name: "Retry" })).toBeVisible()
     const malformedMutations = await mock.mutations()
     expect(malformedMutations.some(({ entryIds }) => entryIds.includes(17))).toBe(false)
     await mock.fault("entry", "ok")

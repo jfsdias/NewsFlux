@@ -707,6 +707,22 @@ test("NO_PASSWORD_LOGGING & NO_TOKEN_LOGGING: getSafeAuthErrorDetails redacts cr
   assert.equal(Object.hasOwn(safeDetails, "options"), false)
 })
 
+test("safe auth diagnostics redact a complete private server URL from ofetch errors", () => {
+  const rawError = new Error(
+    "fetch failed for https://user:private-password@miniflux.private/v1/api-keys?debug=private&token=private-token",
+  )
+  rawError.status = 503
+
+  const safeDetails = getSafeAuthErrorDetails(rawError)
+
+  assert.equal(safeDetails.status, 503)
+  assert.match(safeDetails.message, /\[URL REDACTED\]/)
+  assert.doesNotMatch(
+    safeDetails.message,
+    /miniflux\.private|private-password|\/v1\/api-keys|debug=private|private-token/,
+  )
+})
+
 test("buildDedicatedApiKeyDescription produces unique non-empty descriptions and normalizeApiKeyId validates positive safe integers", () => {
   const desc1 = buildDedicatedApiKeyDescription({ server: SERVER_A })
   const desc2 = buildDedicatedApiKeyDescription({ server: SERVER_A })

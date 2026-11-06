@@ -224,7 +224,12 @@
     "no_filter_results": "Aucun article ne correspond aux filtres",
     "no_search_results": "Aucun article correspondant",
     "no_starred_articles": "Aucun article favori",
-    "no_unread_articles": "Aucun article non lu"
+    "no_unread_articles": "Aucun article non lu",
+    "load_error_invalid_response": "Le serveur a renvoyé une réponse inattendue.",
+    "load_error_forbidden": "Vous n’avez pas l’autorisation de consulter ces articles.",
+    "load_error_rate_limited": "Le serveur limite temporairement les requêtes. Veuillez réessayer bientôt.",
+    "load_error_server": "Le serveur n’a pas pu charger ces articles. Veuillez réessayer.",
+    "load_error_network": "Connexion au serveur impossible. Vérifiez votre connexion et réessayez."
   },
   "article_toc": {
     "tooltip": "Table des matières",
@@ -244,7 +249,14 @@
   },
   "content": {
     "mark_as_read_error": "Impossible de marquer comme lu, veuillez réessayer plus tard",
-    "entry_unavailable": "Cet article n’est plus disponible."
+    "entry_unavailable": "Cet article n’est plus disponible.",
+    "invalid_response": "Le serveur a renvoyé une réponse inattendue.",
+    "access_denied": "Vous n’avez pas l’autorisation de consulter cet article.",
+    "rate_limited": "Le serveur limite temporairement les requêtes. Veuillez réessayer bientôt.",
+    "server_error": "Le serveur n’a pas pu charger cet article. Veuillez réessayer.",
+    "network_error": "Connexion au serveur impossible. Vérifiez votre connexion et réessayez.",
+    "request_error": "Impossible de charger cet article. Veuillez réessayer.",
+    "back_to_list": "Retour à la liste"
   },
   "deduplicate": {
     "mark_as_read_error": "Impossible de marquer les articles en double comme lus"
@@ -594,5 +606,17 @@
     "no_categories": "Aucune catégorie disponible",
     "expand_category": "Développer %{name}",
     "collapse_category": "Réduire %{name}"
+  },
+  "error_page": {
+    "not_found_title": "Page introuvable",
+    "not_found_description": "Cette page est introuvable. Retournez à l’accueil pour continuer.",
+    "authentication_title": "Connexion requise",
+    "authentication_description": "Votre session n’est plus valide. Connectez-vous pour continuer.",
+    "forbidden_title": "Accès refusé",
+    "forbidden_description": "Vous n’avez pas l’autorisation d’ouvrir cette page.",
+    "generic_title": "Une erreur est survenue",
+    "generic_description": "Impossible d’ouvrir cette page. Retournez à l’accueil et réessayez.",
+    "back_home": "Retour à l’accueil",
+    "sign_in": "Se connecter"
   }
 }

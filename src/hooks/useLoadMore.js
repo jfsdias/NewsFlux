@@ -30,6 +30,7 @@ import {
 } from "@/utils/home-editorial-session"
 import createSetter from "@/utils/nanostores"
 import { buildPaginationCursorParams } from "@/utils/pagination-cursor"
+import { getSafeRequestErrorDetails } from "@/utils/safe-request-error"
 import {
   appendTemporalCanonicalEntries,
   getArticleListTemporalSortProperty,
@@ -503,7 +504,10 @@ const useLoadMore = () => {
         setLoadMoreVisible(false)
       }
     } catch (error) {
-      console.error("Error fetching more articles:", error)
+      console.error(
+        "Error fetching more articles:",
+        getSafeRequestErrorDetails(error, "article-list"),
+      )
       if (!isCurrentRequest()) {
         return
       }

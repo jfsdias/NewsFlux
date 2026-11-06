@@ -274,6 +274,7 @@ const createMockMiniflux = ({ port }) => {
 
   const applyFault = (response, url, { target, kind }) => {
     const query = url.searchParams
+    const requestedEntryId = url.pathname.match(/^\/v1\/entries\/(\d+)$/)?.[1]
     switch (kind) {
       case "500": {
         if (target === "status-mutation") {
@@ -282,8 +283,23 @@ const createMockMiniflux = ({ port }) => {
         send(response, 500, { error_message: "boom" })
         return true
       }
+      case "secret500": {
+        send(response, 500, {
+          error_message:
+            "Bearer synthetic-secret https://user:password@mock.invalid/path?token=synthetic-secret",
+        })
+        return true
+      }
       case "401": {
         send(response, 401, { error_message: "Access Unauthorized" })
+        return true
+      }
+      case "403": {
+        send(response, 403, { error_message: "Access Forbidden" })
+        return true
+      }
+      case "429": {
+        send(response, 429, { error_message: "Too many requests" })
         return true
       }
       case "badjson": {
@@ -304,6 +320,18 @@ const createMockMiniflux = ({ port }) => {
       }
       case "emptyobject": {
         send(response, 200, {})
+        return true
+      }
+      case "missingstatus": {
+        const entry = entries.find(({ id }) => String(id) === requestedEntryId) ?? entries[0]
+        const { status: _status, ...malformedEntry } = entry
+        send(response, 200, malformedEntry)
+        return true
+      }
+      case "missingstarred": {
+        const entry = entries.find(({ id }) => String(id) === requestedEntryId) ?? entries[0]
+        const { starred: _starred, ...malformedEntry } = entry
+        send(response, 200, malformedEntry)
         return true
       }
       case "nullcontent": {

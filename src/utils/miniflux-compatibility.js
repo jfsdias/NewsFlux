@@ -13,8 +13,8 @@ const MINIMUM_MINIFLUX_MAJOR_MINOR_VERSION = MINIMUM_MINIFLUX_VERSION.split(".")
 const getAuthHeaders = ({ token, username, password }) =>
   token ? { "X-Auth-Token": token } : { Authorization: `Basic ${btoa(`${username}:${password}`)}` }
 
-const createCompatibilityRequestError = (error) => {
-  const requestError = new Error(error instanceof Error ? error.message : String(error))
+export const createCompatibilityRequestError = (error) => {
+  const requestError = new Error("Compatibility request failed")
   requestError.name = "MinifluxCompatibilityError"
   requestError.status = error?.response?.status ?? error?.status
   return requestError

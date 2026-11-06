@@ -18,6 +18,7 @@ import createSetter, { selectStore } from "@/utils/nanostores"
 const defaultValue = {
   activeContent: null, // 当前打开的文章
   articleListError: false,
+  articleListErrorCategory: null,
   articleListRevision: 0,
   articleListSnapshotIdentity: null,
   articleListSnapshotRevision: 0,
@@ -151,6 +152,7 @@ export const setActiveContent = (updater) => {
   })
 }
 export const setArticleListError = createSetter(contentState, "articleListError")
+export const setArticleListErrorCategory = createSetter(contentState, "articleListErrorCategory")
 export const incrementArticleListSnapshotRevision = () =>
   contentState.setKey(
     "articleListSnapshotRevision",

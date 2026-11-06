@@ -1,5 +1,4 @@
-import { bodyText, bodyTextLength, cards, entryIds } from "./support/app.js"
-import { requirementPending } from "./support/classification.js"
+import { bodyText, cards, entryIds } from "./support/app.js"
 import { expect, test } from "./support/fixtures.js"
 
 test.describe("F13 PWA", () => {
@@ -89,16 +88,19 @@ test.describe("F15 Deep links and reopening", () => {
     await expect(cards(page).first()).toBeVisible()
   })
 
-  test("F15-2: a missing entry and an unknown route render some text and no raw error (content not specified)", async ({
+  test("F15-2: missing entries and unknown routes show localized recovery without raw errors", async ({
     openApp,
   }) => {
     const { page } = await openApp({ path: "/all/entry/999999" })
-    await expect.poll(() => bodyTextLength(page)).toBeGreaterThan(40)
+    await expect(page.getByText("This article is no longer available.")).toBeVisible()
+    await expect(page).toHaveURL(/\/all$/)
     expect(await bodyText(page)).not.toMatch(/Cannot read properties|TypeError/)
 
     await page.goto("/does-not-exist")
 
-    await expect.poll(() => bodyTextLength(page)).toBeGreaterThan(20)
+    await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible()
+    await expect(page.getByRole("button", { name: "Back to Home" })).toBeVisible()
+    expect(await bodyText(page)).not.toMatch(/Unexpected Application Error|TypeError|Error:/)
   })
 
   test("F15-3: reopening the app with saved storage keeps the session and the route", async ({
@@ -118,20 +120,81 @@ test.describe("F15 Deep links and reopening", () => {
     await expect(reopened.page.getByText("Notícia 20").first()).toBeVisible()
   })
 
-  test("F15-4: an unexpected server payload shows a safe message (proposed behavior)", async ({
+  test("F15-4: an invalid successful response shows a safe retry path without becoming a 404", async ({
     openApp,
     mock,
   }) => {
     await mock.fault("entry", "emptyobject")
-    const { page } = await openApp({ path: "/all/entry/5" })
-    await expect(page.getByRole("button", { name: "Back to Home" })).toBeVisible()
-
-    await requirementPending("QA-004", /QA-004/, async () => {
-      expect(
-        await bodyText(page),
-        "QA-004: unexpected payloads should not surface raw technical text",
-      ).not.toMatch(/Cannot read properties|TypeError/)
+    const { page } = await openApp({ path: "/all" })
+    await expect(cards(page).first()).toBeVisible()
+    const consoleErrors = []
+    page.on("console", (message) => {
+      if (message.type() === "error") {
+        consoleErrors.push(message.text())
+      }
     })
+    await page.goto("/all/entry/5")
+    await expect(page.getByRole("alert")).toContainText(
+      "The server returned an unexpected response.",
+    )
+    await expect(page.getByRole("button", { name: "Retry" })).toBeVisible()
+    await expect(page.getByRole("button", { name: "Back to list" })).toBeVisible()
+    await expect(page).toHaveURL(/\/all\/entry\/5$/)
+    expect(await bodyText(page)).not.toMatch(/Cannot read properties|TypeError|emptyobject/)
+
+    expect(await mock.mutations()).toEqual([])
+    await mock.fault("entry", "ok")
+    await page.getByRole("button", { name: "Retry" }).click()
+    await expect(page.getByText("Notícia 5").first()).toBeVisible()
+
+    const mutationsAfterRetry = await mock.mutations()
+    for (const [id, malformedField] of [
+      [10, "missingstatus"],
+      [11, "missingstarred"],
+    ]) {
+      await mock.fault("entry", malformedField)
+      await page.goto(`/all/entry/${id}`)
+      await expect(page.getByRole("alert")).toContainText(
+        "The server returned an unexpected response.",
+      )
+      await expect(page).toHaveURL(new RegExp(`/all/entry/${id}$`))
+      expect(await mock.mutations()).toEqual(mutationsAfterRetry)
+    }
+    await mock.fault("entry", "ok")
+
+    await mock.fault("entry", "403")
+    await page.goto("/all/entry/6")
+    await expect(page.getByRole("alert")).toContainText(
+      "You do not have permission to view this article.",
+    )
+    await expect(page).toHaveURL(/\/all\/entry\/6$/)
+    expect(await mock.mutations()).toEqual(mutationsAfterRetry)
+
+    await mock.fault("entry", "secret500")
+    await page.goto("/all/entry/9")
+    await expect(page.getByRole("alert")).toContainText(
+      "The server could not load this article. Please try again.",
+    )
+    expect(await bodyText(page)).not.toMatch(/synthetic-secret|password@|mock\.invalid/)
+    expect(consoleErrors.join("\n")).not.toMatch(/synthetic-secret|password@|mock\.invalid/)
+
+    await mock.fault("entry", "429")
+    await page.goto("/all/entry/7")
+    await expect(page.getByRole("alert")).toContainText(
+      "The server is temporarily limiting requests. Please try again shortly.",
+    )
+    await mock.fault("entry", "ok")
+    await page.getByRole("button", { name: "Retry" }).click()
+    await expect(page.getByText("Notícia 7").first()).toBeVisible()
+
+    await page.route(`${mock.url}/v1/entries/8`, (route) => route.abort())
+    await page.goto("/all/entry/8")
+    await expect(page.getByRole("alert")).toContainText(
+      "Could not connect to the server. Check your connection and try again.",
+    )
+    await page.unroute(`${mock.url}/v1/entries/8`)
+    await page.getByRole("button", { name: "Retry" }).click()
+    await expect(page.getByText("Notícia 8").first()).toBeVisible()
   })
 })
 

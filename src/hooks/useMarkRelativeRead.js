@@ -55,10 +55,9 @@ const useMarkRelativeRead = () => {
         invalidateArticleList,
         onConsume: (consumedToken) =>
           Notification.remove(getMarkAllReadUndoNotificationId(consumedToken)),
-        onError: (error) => {
+        onError: () => {
           Notification.error({
             title: polyglot.t("article_list.mark_relative_as_read_error"),
-            content: error.message,
           })
         },
       })
