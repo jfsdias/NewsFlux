@@ -154,18 +154,23 @@ test("the frozen expected scenario contract contains the reviewed 46 unique iden
   assert.ok(EXPECTED_SCENARIOS.every(({ id, state }) => id && state))
 })
 
-test("QA-002 closure increments the scenario contract and preserves only other pending requirements", () => {
+test("QA-003 closure increments the scenario contract and preserves only QA-004 as pending", () => {
   const states = {}
   for (const { state } of EXPECTED_SCENARIOS) {
     states[state] = (states[state] ?? 0) + 1
   }
 
-  assert.equal(E2E_SCENARIO_CONTRACT_VERSION, 4)
-  assert.deepEqual(states, { PASSED: 44, REQUIREMENT_PENDING: 2 })
+  assert.equal(E2E_SCENARIO_CONTRACT_VERSION, 5)
+  assert.deepEqual(states, { PASSED: 45, REQUIREMENT_PENDING: 1 })
   for (const id of ["F02-2", "F04-1", "F04-3", "QA-001-884", "QA-001-939"]) {
     assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === id)?.state, "PASSED")
   }
   assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === "F06-3")?.state, "PASSED")
+  assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === "F12-10b")?.state, "PASSED")
+  assert.equal(
+    EXPECTED_SCENARIOS.find((scenario) => scenario.id === "F15-4")?.state,
+    "REQUIREMENT_PENDING",
+  )
 })
 
 test("empty, skipped, missing, duplicate, unexpected and misclassified scenarios fail closed", () => {

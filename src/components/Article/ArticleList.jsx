@@ -19,7 +19,9 @@ import { polyglotState } from "@/hooks/useLanguage"
 import useReadOnScroll from "@/hooks/useReadOnScroll"
 import articleListEmptyState from "@/store/articleListEmptyState"
 import { contentState, filteredEntriesState } from "@/store/contentState"
-import { articleListLayoutState } from "@/store/settingsState"
+import { dataState } from "@/store/dataState"
+import { articleListLayoutState, articleListRequestSettingsState } from "@/store/settingsState"
+import createArticleListSnapshotIdentity from "@/utils/article-list-snapshot-identity"
 import { formatLocalizedDate } from "@/utils/date"
 
 import "./ArticleList.css"
@@ -76,9 +78,29 @@ const ArticleList = forwardRef(
     },
     ref,
   ) => {
-    const { articleListError, isArticleListReady } = useStore(contentState, {
-      keys: ["articleListError", "isArticleListReady"],
+    const listState = useStore(contentState, {
+      keys: [
+        "articleListError",
+        "articleListRevision",
+        "articleListSnapshotIdentity",
+        "filterDate",
+        "filterString",
+        "infoFrom",
+        "infoId",
+        "isArticleListReady",
+      ],
     })
+    const { articleListError, isArticleListReady, articleListSnapshotIdentity } = listState
+    const requestSettings = useStore(articleListRequestSettingsState)
+    const { sessionRevision } = useStore(dataState, { keys: ["sessionRevision"] })
+    const currentSnapshotIdentity = createArticleListSnapshotIdentity({
+      content: listState,
+      settings: requestSettings,
+      info: { from: listState.infoFrom, id: listState.infoId },
+      sessionRevision,
+    })
+    const hasCurrentSnapshot =
+      currentSnapshotIdentity !== null && articleListSnapshotIdentity === currentSnapshotIdentity
     const emptyState = useStore(articleListEmptyState)
     const filteredEntries = useStore(filteredEntriesState)
     const { polyglot } = useStore(polyglotState)
@@ -87,7 +109,10 @@ const ArticleList = forwardRef(
     const observeRead = useReadOnScroll(cardsRef)
     const isWaitingForCatalog = emptyState?.phase === "waiting-for-catalog"
     const showEmptyState = emptyState?.phase === "empty"
-    const canRenderResults = isArticleListReady && !articleListError && !isWaitingForCatalog
+    const canRenderResults =
+      hasCurrentSnapshot || (isArticleListReady && !articleListError && !isWaitingForCatalog)
+    const showStaleRefreshError = hasCurrentSnapshot && isArticleListReady && articleListError
+    const showBlockingError = !hasCurrentSnapshot && isArticleListReady && articleListError
     const emptyMessageKey = EMPTY_MESSAGE_KEYS[emptyState?.reason] ?? "article_list.no_articles"
     const emptySummary = showEmptyState ? getEmptyStateSummary(emptyState.filters, polyglot) : null
     const EntryPresenter = ENTRY_PRESENTERS[articleListLayout] ?? ArticleCard
@@ -114,15 +139,24 @@ const ArticleList = forwardRef(
         <LoadingCards
           cardColumnCount={cardColumnCount}
           layout={articleListLayout}
-          loading={!isArticleListReady || isWaitingForCatalog}
+          loading={!hasCurrentSnapshot && (!isArticleListReady || isWaitingForCatalog)}
         />
-        {isArticleListReady && articleListError && (
+        {showBlockingError && (
           <div className="article-list-state" role="alert">
             <IconExclamationCircle aria-hidden="true" className="article-list-state-icon" />
             <Typography.Text>{polyglot.t("article_list.load_error")}</Typography.Text>
             <Button type="primary" onClick={() => void retryArticleList()}>
               {polyglot.t("actions.retry")}
             </Button>
+          </div>
+        )}
+        {showStaleRefreshError && (
+          <div className="article-list-state article-list-stale-state" role="status">
+            <IconExclamationCircle aria-hidden="true" className="article-list-state-icon" />
+            <Typography.Text>
+              {polyglot.t("article_list.refresh_failed_showing_loaded")}
+            </Typography.Text>
+            <Button onClick={() => void retryArticleList()}>{polyglot.t("actions.retry")}</Button>
           </div>
         )}
         {canRenderResults && showEmptyState && !suppressEmptyState && (

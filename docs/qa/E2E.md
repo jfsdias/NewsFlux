@@ -32,7 +32,7 @@ A scenario whose subject is an unapproved requirement is wrapped by `requirement
 3. records a `REQUIREMENT_PENDING` annotation, which `e2e/reporters/inventory-reporter.js` includes in the scenario inventory;
 4. fails the test when the behavior starts to pass, so the marker and the entry in [`FINDINGS_REGISTER.md`](./FINDINGS_REGISTER.md) are removed deliberately.
 
-A green run lists any known-defect or pending-requirement classifications still present in the frozen contract. Contract version 4 keeps the same 46 scenario identities and expects 44 `PASSED`, zero `KNOWN_DEFECT`, and two `REQUIREMENT_PENDING` outcomes after the QA-002 emulated closure. Each executed run's evidence is preserved under `test-results/verified-e2e/run-*/inventory.json` with the matching run identifier.
+A green run lists any known-defect or pending-requirement classifications still present in the frozen contract. Contract version 5 keeps the same 46 scenario identities and expects 45 `PASSED`, zero `KNOWN_DEFECT`, and one `REQUIREMENT_PENDING` outcome after the QA-003 emulated closure. Each executed run's evidence is preserved under `test-results/verified-e2e/run-*/inventory.json` with the matching run identifier.
 
 ## Stability
 
@@ -52,7 +52,7 @@ Both the single-run CI command and `pnpm test:e2e:stability` use the shared veri
 | F08 Sorting and persistence        | F08-1                                                                                                 |
 | F09 Images and fallbacks           | F09-1                                                                                                 |
 | F11 Navigation and history         | F11-1                                                                                                 |
-| F12 Miniflux failures              | F12-1 to F12-11, F12-10b (QA-003 pending)                                                             |
+| F12 Miniflux failures              | F12-1 to F12-11, F12-10b (QA-003 retained-list recovery)                                              |
 | F13 PWA                            | F13-1                                                                                                 |
 | F14 Fold and unfold                | F14-1                                                                                                 |
 | F15 Deep links and reopening       | F15-1, F15-2, F15-3, F15-4 (QA-004 pending)                                                           |

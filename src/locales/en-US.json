@@ -217,6 +217,7 @@
     "refresh_tooltip": "Refresh",
     "load_error": "Failed to load articles",
     "loading_more": "Loading more...",
+    "refresh_failed_showing_loaded": "Could not refresh. Showing the articles already loaded.",
     "load_more_error": "Failed to load more articles. Please try again.",
     "no_articles": "No articles",
     "no_feeds": "No feeds",

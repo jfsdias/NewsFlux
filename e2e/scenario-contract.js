@@ -1,4 +1,4 @@
-export const E2E_SCENARIO_CONTRACT_VERSION = 4
+export const E2E_SCENARIO_CONTRACT_VERSION = 5
 
 // This reviewed inventory binds CI to the scenario IDs and currently approved outcome classes.
 // Additions, removals, or classification changes are intentional contract changes for review.
@@ -32,7 +32,7 @@ export const EXPECTED_SCENARIOS = [
   { id: "F12-8", state: "PASSED" },
   { id: "F12-9", state: "PASSED" },
   { id: "F12-10", state: "PASSED" },
-  { id: "F12-10b", state: "REQUIREMENT_PENDING" },
+  { id: "F12-10b", state: "PASSED" },
   { id: "F12-11", state: "PASSED" },
   { id: "F13-1", state: "PASSED" },
   { id: "F14-1", state: "PASSED" },

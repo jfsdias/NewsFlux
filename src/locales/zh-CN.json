@@ -217,6 +217,7 @@
     "refresh_tooltip": "刷新",
     "load_error": "文章加载失败",
     "loading_more": "正在加载更多...",
+    "refresh_failed_showing_loaded": "刷新失败。正在显示已加载的文章。",
     "load_more_error": "加载更多文章失败，请重试",
     "no_articles": "没有文章",
     "no_feeds": "没有订阅源",

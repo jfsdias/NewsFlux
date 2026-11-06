@@ -217,6 +217,7 @@
     "refresh_tooltip": "更新",
     "load_error": "記事の読み込みに失敗しました",
     "loading_more": "さらに読み込み中...",
+    "refresh_failed_showing_loaded": "更新できませんでした。読み込み済みの記事を表示しています。",
     "load_more_error": "記事の追加読み込みに失敗しました。再試行してください。",
     "no_articles": "記事がありません",
     "no_feeds": "フィードがありません",

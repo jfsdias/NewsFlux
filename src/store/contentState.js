@@ -19,6 +19,7 @@ const defaultValue = {
   activeContent: null, // 当前打开的文章
   articleListError: false,
   articleListRevision: 0,
+  articleListSnapshotIdentity: null,
   articleListSnapshotRevision: 0,
   entries: [], // 接口返回的所有文章
   filterDate: null, // 搜索日期
@@ -155,6 +156,47 @@ export const incrementArticleListSnapshotRevision = () =>
     "articleListSnapshotRevision",
     (contentState.get().articleListSnapshotRevision ?? 0) + 1,
   )
+export const commitArticleListSnapshot = ({
+  entries: nextEntries,
+  loadMoreVisible,
+  snapshotIdentity,
+  temporalPaginationState,
+  total,
+}) => {
+  const current = contentState.get()
+  const { infoFrom } = current
+  const { removeDuplicates } = settingsState.get()
+  let entries = nextEntries
+  let duplicates = []
+
+  if (removeDuplicates !== "none" && !["starred", "history"].includes(infoFrom)) {
+    const result = removeDuplicateEntries(nextEntries, removeDuplicates)
+    entries = result.entries
+    duplicates = result.duplicates
+  }
+
+  contentState.set({
+    ...current,
+    articleListSnapshotIdentity: snapshotIdentity,
+    articleListSnapshotRevision: (current.articleListSnapshotRevision ?? 0) + 1,
+    entries,
+    loadMoreVisible,
+    temporalPaginationState,
+    total,
+  })
+  return duplicates
+}
+export const clearArticleListSnapshot = () => {
+  const current = contentState.get()
+  contentState.set({
+    ...current,
+    articleListSnapshotIdentity: null,
+    entries: [],
+    loadMoreVisible: false,
+    temporalPaginationState: null,
+    total: 0,
+  })
+}
 export const setEntries = createSetter(contentState, "entries")
 export const setHomePaginationBoundary = createSetter(contentState, "homePaginationBoundary")
 export const setTemporalPaginationState = createSetter(contentState, "temporalPaginationState")

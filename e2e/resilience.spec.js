@@ -1,5 +1,4 @@
-import { bodyText, cards, entryIds, FAILURE_FEEDBACK } from "./support/app.js"
-import { requirementPending } from "./support/classification.js"
+import { cards, entryIds } from "./support/app.js"
 import { expect, test } from "./support/fixtures.js"
 
 const authToken = (page) =>
@@ -7,6 +6,9 @@ const authToken = (page) =>
     const raw = localStorage.getItem("auth")
     return raw ? (JSON.parse(raw).token ?? "") : ""
   })
+
+const isArticleEntriesRequest = (url) =>
+  url.pathname === "/v1/entries" && url.searchParams.has("limit")
 
 const serverFailures = [
   ["F12-1", "500", "an HTTP 500 from /v1/entries"],
@@ -49,13 +51,14 @@ test.describe("F12 Miniflux failures", () => {
     openApp,
     mock,
   }) => {
-    const { page } = await openApp({ path: "/" })
-    await expect(page.getByText("Highlights").first()).toBeVisible()
+    const { page } = await openApp({ path: "/all" })
+    await expect(cards(page).first()).toBeVisible()
     await mock.fault("entries", "401")
 
-    await page.goto("/all")
+    await page.getByRole("button", { name: "Refresh" }).first().click()
 
     await expect(page).toHaveURL(/\/login$/)
+    await expect(cards(page)).toHaveCount(0)
     expect(await authToken(page)).toBe("")
   })
 
@@ -109,36 +112,99 @@ test.describe("F12 Miniflux failures", () => {
   }) => {
     const { context, page } = await openApp({ path: "/all" })
     await expect(cards(page).first()).toBeVisible()
+    const loadedIds = await entryIds(page)
 
     // Only the Miniflux origin becomes unreachable; the application's own files keep loading, so
     // the scenario does not depend on which lazy chunks were fetched before the outage.
     await context.route(`${mock.url}/**`, (route) => route.abort("connectionfailed"))
     await page.getByRole("button", { name: "Refresh" }).first().click()
-    await expect.poll(async () => FAILURE_FEEDBACK.test(await bodyText(page))).toBe(true)
+    await expect(page.getByRole("status")).toContainText(
+      "Could not refresh. Showing the articles already loaded.",
+    )
+    expect(await entryIds(page)).toEqual(loadedIds)
+    expect(await page.getByRole("alert").count()).toBe(0)
 
     await context.unroute(`${mock.url}/**`)
     await page.getByRole("button", { name: "Retry" }).click()
     await expect(cards(page).first()).toBeVisible()
   })
 
-  test("F12-10b: a failed Refresh keeps the already loaded list (proposed behavior)", async ({
+  test("F12-10b: a failed Refresh keeps the already loaded list and offers accessible Retry", async ({
     openApp,
     mock,
   }) => {
-    const { page } = await openApp({ path: "/all" })
+    const { context, page } = await openApp({ path: "/all" })
     await expect(cards(page).first()).toBeVisible()
-    const loaded = await cards(page).count()
-    await mock.fault("entries", "500")
-
-    await page.getByRole("button", { name: "Refresh" }).first().click()
-    await expect(page.getByText("Failed to load articles")).toBeVisible()
-
-    await requirementPending("QA-003", /QA-003/, async () => {
-      expect(
-        await cards(page).count(),
-        "QA-003: a failed refresh should keep the loaded entries",
-      ).toBe(loaded)
+    const loadedIds = await entryIds(page)
+    const loadedCount = await cards(page).count()
+    const mutationsBefore = await mock.mutations()
+    const mutationCount = mutationsBefore.length
+    const refreshButton = page.getByRole("button", { name: "Refresh" }).first()
+    let releaseRefresh
+    let markRefreshStarted
+    const refreshStarted = new Promise((resolve) => {
+      markRefreshStarted = resolve
     })
+    const refreshGate = new Promise((resolve) => {
+      releaseRefresh = resolve
+    })
+
+    await context.route(isArticleEntriesRequest, async (route) => {
+      markRefreshStarted()
+      await refreshGate
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ error_message: "synthetic refresh failure" }),
+      })
+    })
+
+    await refreshButton.focus()
+    await refreshButton.press("Enter")
+    await refreshStarted
+
+    expect(await entryIds(page), "the committed list remains visible while refreshing").toEqual(
+      loadedIds,
+    )
+    await expect(page.getByRole("button", { name: "Refresh" }).first()).toBeFocused()
+
+    releaseRefresh()
+    await expect(page.getByRole("status")).toContainText(
+      "Could not refresh. Showing the articles already loaded.",
+    )
+    expect(await cards(page).count()).toBe(loadedCount)
+    expect(await entryIds(page)).toEqual(loadedIds)
+    const mutationsAfterRefresh = await mock.mutations()
+    expect(mutationsAfterRefresh.length).toBe(mutationCount)
+    await expect(page.getByRole("alert")).toHaveCount(0)
+
+    await context.unroute(isArticleEntriesRequest)
+    const staleCard = cards(page).first()
+    const staleEntryId = Number(await staleCard.getAttribute("data-entry-id"))
+    await mock.fault("status-mutation", "500")
+    await staleCard.click({ button: "right" })
+    await page.getByText("Mark as read", { exact: true }).click()
+    await expect
+      .poll(() => mock.mutations())
+      .toContainEqual({
+        entryIds: [staleEntryId],
+        status: "read",
+        outcome: "rejected",
+      })
+    await expect(page.locator(`a.article-entry[data-entry-id="${staleEntryId}"]`)).toHaveClass(
+      /unread/,
+    )
+    await mock.fault("status-mutation", "ok")
+
+    await context.unrouteAll()
+    await mock.inject(1)
+    const retryButton = page.getByRole("status").getByRole("button", { name: "Retry" })
+    await retryButton.focus()
+    await retryButton.press("Enter")
+    await expect(cards(page).first()).toHaveAttribute("data-entry-id", /1\d{3}/)
+    await expect(page.getByRole("status")).toHaveCount(0)
+    const mutationsAfterRetry = await mock.mutations()
+    expect(mutationsAfterRetry.length).toBe(mutationCount + 1)
   })
 
   test("F12-11: a 503 at startup shows a gate with Retry that recovers", async ({

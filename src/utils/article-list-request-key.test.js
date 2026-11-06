@@ -16,6 +16,7 @@ const settings = {
   pageSize: 20,
   showHiddenFeeds: false,
   showStatus: "all",
+  removeDuplicates: "none",
   orderBy: "created_at",
   orderDirection: "asc",
 }
@@ -55,7 +56,13 @@ test("ordinary list keys still include their existing filters and sort settings"
     for (const field of ["filterString", "filterDate", "articleListRevision", "infoId"]) {
       assert.notEqual(key({ content: { ...ordinary, [field]: "different" } }), baseline, field)
     }
-    for (const field of ["showStatus", "orderBy", "orderDirection", "pageSize"]) {
+    for (const field of [
+      "showStatus",
+      "orderBy",
+      "orderDirection",
+      "pageSize",
+      "removeDuplicates",
+    ]) {
       assert.notEqual(
         key({ content: ordinary, settings: { ...settings, [field]: "different" } }),
         baseline,
@@ -63,5 +70,15 @@ test("ordinary list keys still include their existing filters and sort settings"
       )
     }
     assert.equal(key({ content: ordinary, sessionRevision: 2 }), baseline)
+  }
+})
+
+test("Starred and History retain their existing duplicate-exclusion semantics", () => {
+  for (const infoFrom of ["starred", "history"]) {
+    const scope = { ...content, infoFrom }
+    assert.equal(
+      key({ content: scope, settings: { ...settings, removeDuplicates: "hash" } }),
+      key({ content: scope, settings: { ...settings, removeDuplicates: "none" } }),
+    )
   }
 })
