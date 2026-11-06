@@ -71,6 +71,7 @@ const shouldIgnoreSwipe = (element) =>
 const ENTRY_LOAD_ERROR_KEYS = {
   forbidden: "access_denied",
   "invalid-response": "invalid_response",
+  network: "network_error",
   "rate-limited": "rate_limited",
   server: "server_error",
 }

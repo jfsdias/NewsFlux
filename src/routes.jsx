@@ -43,6 +43,7 @@ const router = createBrowserRouter(
           lazy: loadAuthenticatedRoute,
           children: [
             ...routes,
+            { path: "*", lazy: lazyRoute(() => import("./pages/ErrorPage")) },
             {
               path: "/",
               lazy: lazyRoute(() => import("./pages/Home")),

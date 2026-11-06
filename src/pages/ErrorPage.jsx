@@ -13,7 +13,7 @@ const ErrorPage = () => {
   const { polyglot } = useStore(polyglotState)
   const errorDetails = getSafeRequestErrorDetails(error, "route")
   const pageKey =
-    errorDetails.status === 404
+    !error || errorDetails.status === 404
       ? "not_found"
       : errorDetails.status === 401
         ? "authentication"
@@ -33,7 +33,9 @@ const ErrorPage = () => {
   const recoveryPath = pageKey === "authentication" ? "/login" : "/"
   const recoveryLabel = pageKey === "authentication" ? "error_page.sign_in" : "error_page.back_home"
 
-  console.error("Route error:", errorDetails)
+  if (error) {
+    console.error("Route error:", errorDetails)
+  }
 
   useEffect(() => {
     hideSpinner()
