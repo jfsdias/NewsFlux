@@ -16,11 +16,14 @@ const COARSE_VIEWPORTS = [
   { width: 704, height: 869 },
   { width: 768, height: 1024 },
   { width: 769, height: 1024 },
+  { width: 884, height: 1104 },
   { width: 884, height: 1107 },
   { width: 939, height: 1271 },
   { width: 992, height: 1200 },
   { width: 993, height: 1200 },
   { width: 1024, height: 768 },
+  // The unfolded Surface Duo browser viewport is wider than the existing 1024px cutoff.
+  { width: 1114, height: 720 },
 ]
 
 test("UX-REACH-01: coarse-pointer control stays reachable without blocking article hits or navigation", async ({
@@ -31,17 +34,33 @@ test("UX-REACH-01: coarse-pointer control stays reachable without blocking artic
     const action = getAction(page)
     await expect(action).toBeVisible()
     await expect(page.locator('button[aria-label="Mark all as read"]')).toHaveCount(1)
+
+    const pointerState = await page.evaluate(() => ({
+      innerWidth: globalThis.innerWidth,
+      innerHeight: globalThis.innerHeight,
+      visualViewportWidth: globalThis.visualViewport?.width,
+      visualViewportHeight: globalThis.visualViewport?.height,
+      anyPointerCoarse: globalThis.matchMedia("(any-pointer: coarse)").matches,
+      floatingMode: document
+        .querySelector(".mark-all-read-floating")
+        ?.classList.contains("mark-all-read-floating--active"),
+    }))
+    expect(pointerState.innerWidth).toBe(width)
+    expect(pointerState.visualViewportWidth).toBe(width)
+    expect(pointerState.anyPointerCoarse).toBe(true)
+    expect(pointerState.floatingMode, `floating mode at ${width}x${height}`).toBe(true)
+
     await expect(getDragHandle(page)).toBeVisible()
 
     const floating = page.locator(".mark-all-read-floating")
     await expect(floating).toHaveCSS("position", "fixed")
     const bounds = await floating.boundingBox()
     const navBounds = await page
-      .locator(".compact-nav-bar, .medium-navigation-rail")
+      .locator(".compact-nav-bar, .medium-navigation-rail, .desktop-sidebar-slot")
       .evaluateAll((elements) =>
         elements.map((element) => {
           const { bottom, left, right, top } = element.getBoundingClientRect()
-          return { bottom, left, right, top }
+          return { bottom, left, right, top, width: element.getBoundingClientRect().width }
         }),
       )
 
@@ -76,7 +95,7 @@ test("UX-REACH-01: coarse-pointer control stays reachable without blocking artic
     }, bounds)
     expect(articleHitRemainsAvailable).toBe(true)
 
-    for (const nav of navBounds) {
+    for (const nav of navBounds.filter(({ width }) => width > 0)) {
       const intersectsNavigation =
         bounds.x < nav.right &&
         bounds.x + bounds.width > nav.left &&
@@ -427,11 +446,67 @@ test("UX-REACH-01: the floating action preserves its disabled and loading states
 
 test("UX-REACH-01: resize clamps and restores the local position; History keeps Mark All hidden", async ({
   openApp,
+  mock,
 }) => {
-  const { page } = await openApp({ path: "/all", width: 884, height: 1107, touch: true })
+  const { page } = await openApp({ path: "/all", width: 540, height: 720, touch: true })
   const action = getAction(page)
   const handle = getDragHandle(page)
   await expect(handle).toBeVisible()
+
+  // Simulate a Duo closed → open → closed viewport transition without claiming physical-device coverage.
+  await page.evaluate(() => {
+    localStorage.setItem(
+      "newsflux:ux-reach-01:mark-all-read-position",
+      JSON.stringify({ version: 1, x: 0, y: 0.5 }),
+    )
+  })
+  await page.setViewportSize({ width: 1114, height: 720 })
+  await expect(handle).toBeVisible()
+  const unfoldedFloating = page.locator(".mark-all-read-floating")
+  const unfoldedBounds = await unfoldedFloating.boundingBox()
+  const desktopSidebar = await page.locator(".desktop-sidebar-slot").boundingBox()
+  expect(unfoldedBounds).not.toBeNull()
+  expect(desktopSidebar).not.toBeNull()
+  expect(unfoldedBounds.x).toBeGreaterThanOrEqual(desktopSidebar.x + desktopSidebar.width)
+  expect(unfoldedBounds.x + unfoldedBounds.width).toBeLessThanOrEqual(1114)
+
+  const unfoldedGrip = await handle.boundingBox()
+  const unfoldedBeforeDrag = await unfoldedFloating.boundingBox()
+  const client = await page.context().newCDPSession(page)
+  await client.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [
+      {
+        id: 1,
+        x: unfoldedGrip.x + unfoldedGrip.width / 2,
+        y: unfoldedGrip.y + unfoldedGrip.height / 2,
+      },
+    ],
+  })
+  await client.send("Input.dispatchTouchEvent", {
+    type: "touchMove",
+    touchPoints: [
+      {
+        id: 1,
+        x: unfoldedGrip.x + unfoldedGrip.width / 2 + 64,
+        y: unfoldedGrip.y + unfoldedGrip.height / 2 + 24,
+      },
+    ],
+  })
+  await client.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] })
+  const unfoldedAfterDrag = await unfoldedFloating.boundingBox()
+  expect(unfoldedAfterDrag.x).toBeGreaterThan(unfoldedBeforeDrag.x + 32)
+  expect(await getMutationRequests(mock)).toHaveLength(0)
+  await expect(page.getByText("Mark all as read?", { exact: true })).toBeHidden()
+  await client.detach()
+
+  await page.setViewportSize({ width: 540, height: 720 })
+  await expect(handle).toBeVisible()
+  const refoldedBounds = await unfoldedFloating.boundingBox()
+  expect(refoldedBounds.x).toBeGreaterThanOrEqual(0)
+  expect(refoldedBounds.x + refoldedBounds.width).toBeLessThanOrEqual(540)
+  expect(await getMutationRequests(mock)).toHaveLength(0)
+
   const grip = await handle.boundingBox()
   await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2)
   await page.mouse.down()
