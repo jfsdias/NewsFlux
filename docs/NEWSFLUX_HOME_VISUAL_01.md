@@ -1,6 +1,6 @@
 # HOME-VISUAL-01 — Primary editorial dominance
 
-- **Status:** design candidate, not merged. Branch `claude/home-visual-01-primary-hierarchy`, based on the pre-R2 Phase 2D candidate `2f75fe3`. Not eligible for a PR as-is; reapply onto `main` after Phase 2D merges and rerun every gate.
+- **Current implementation status:** COMPLETED, merged by PR #18 at 8127c6ee99b2adb301c98c0466ee1311a92d2b32. The branch and candidate metadata below describe the historical pre-integration design review, not current Git state. Current validation gaps and follow-up decisions are tracked in NEWSFLUX_ROADMAP.md §24.
 - **Approved:** 2026-10-14 (design gate approved by product owner, including the scoped 4:3 Secondary thumbnail exception).
 - **Critical viewport:** 884 × 1104.
 
@@ -78,9 +78,9 @@ Run it with the dev server: open `/scripts/tests/phase2c-editorial-home.html`, c
 
 `REAL_DEVICE_GATE` remains pending: the perceptual gates in the harness (`EDITORIAL_HIERARCHY_CLEAR`, `PRIMARY_NOT_OVERSIZED`, `SECONDARIES_BALANCED`, `TEXT_ONLY_PRIMARY_FEELS_INTENTIONAL`, `OLED_SURFACE_SEPARATION`) need review on real devices, including an open foldable at 884 × 1104 and an OLED panel.
 
-## Pending
+## Historical candidate findings — not a current defect register
 
-Out of scope for HOME-VISUAL-01 and still open (see the UX red-team audit, UXRT-xxx):
+The following observations were recorded in the original candidate review. They are retained as historical evidence, not all asserted as current defects. Their current dispositions and next steps are reconciled in NEWSFLUX_ROADMAP.md §24; recheck before reopening any item.
 
 - Home loading skeleton still uses the previous Primary/Secondary shapes (small layout shift on first render).
 - Text-only cards outside Highlights (Recent) keep the pre-existing deck-probe width mismatch: the deck fitter measures with padding included, so a deck can occasionally be cut with an ellipsis. Fixing it belongs in `ArticleGridCard` (measure the content box), not in Home CSS.
@@ -94,4 +94,4 @@ Out of scope for HOME-VISUAL-01 and still open (see the UX red-team audit, UXRT-
 - Reader measure and mobile previous/next (UXRT-014/015).
 - Accessibility baseline (UXRT-007/016/017); branding and issue routing (UXRT-023).
 - Future product states from the references above: Later, Saved/Bookmarks, tags, multi-select mark-read. Each needs a storage and sync decision before implementation, per `NEWSFLUX_DESIGN_DIRECTION_V1`.
-- Integration: after Phase 2D merges, reapply the HOME-VISUAL-01 commits onto `main` and rerun all gates.
+- Integration note (historical): the instruction to reapply after Phase 2D was superseded when PR #18 merged this work. Do not reapply or reopen it; physical perceptual validation remains a separate evidence gap.
