@@ -272,12 +272,27 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
       applyFloatingPosition(nextPosition)
     }
 
+    let resizeFrame = null
+    const handleResize = () => {
+      reconcileModeAndPosition()
+      if (resizeFrame !== null) {
+        globalThis.cancelAnimationFrame(resizeFrame)
+      }
+      resizeFrame = globalThis.requestAnimationFrame(() => {
+        resizeFrame = null
+        reconcileModeAndPosition()
+      })
+    }
+
     reconcileModeAndPosition()
-    globalThis.addEventListener("resize", reconcileModeAndPosition)
+    globalThis.addEventListener("resize", handleResize)
     mediaQuery.addEventListener?.("change", reconcileModeAndPosition)
     return () => {
-      globalThis.removeEventListener("resize", reconcileModeAndPosition)
+      globalThis.removeEventListener("resize", handleResize)
       mediaQuery.removeEventListener?.("change", reconcileModeAndPosition)
+      if (resizeFrame !== null) {
+        globalThis.cancelAnimationFrame(resizeFrame)
+      }
       if (suppressClickTimerRef.current !== null) {
         globalThis.clearTimeout(suppressClickTimerRef.current)
       }
