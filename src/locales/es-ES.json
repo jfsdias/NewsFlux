@@ -217,6 +217,7 @@
     "refresh_tooltip": "Actualizar",
     "load_error": "No se pudieron cargar los artículos",
     "loading_more": "Cargando más...",
+    "refresh_failed_showing_loaded": "No se pudo actualizar. Se muestran los artículos ya cargados.",
     "load_more_error": "No se pudieron cargar más artículos. Inténtelo de nuevo.",
     "no_articles": "No hay artículos",
     "no_feeds": "No hay feeds",

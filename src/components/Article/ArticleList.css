@@ -63,6 +63,18 @@
   color: var(--nf-text-tertiary, var(--color-text-3));
 }
 
+.article-list-stale-state {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+}
+
+.article-list-stale-state .article-list-state-icon {
+  font-size: 16px;
+}
+
 .article-list-state-copy {
   display: flex;
   flex-direction: column;

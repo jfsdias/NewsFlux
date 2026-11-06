@@ -10,6 +10,7 @@ const articleListSettingsKeyFields = [
   "orderBy",
   "orderDirection",
   "pageSize",
+  "removeDuplicates",
   "showHiddenFeeds",
   "showStatus",
 ]
@@ -45,6 +46,7 @@ const createArticleListRequestKey = ({ content, settings, info, sessionRevision 
 
   if (["starred", "history"].includes(contentKey.infoFrom)) {
     settingsKey.orderBy = null
+    settingsKey.removeDuplicates = null
   }
   if (contentKey.infoFrom === "feed") {
     settingsKey.showHiddenFeeds = null

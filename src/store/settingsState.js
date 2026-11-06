@@ -97,10 +97,11 @@ export const contentGestureSettingsState = selectShallowSettings(
 )
 
 export const articleListRequestSettingsState = selectShallowSettings(
-  ({ orderBy, orderDirection, pageSize, showHiddenFeeds, showStatus }) => ({
+  ({ orderBy, orderDirection, pageSize, removeDuplicates, showHiddenFeeds, showStatus }) => ({
     orderBy,
     orderDirection,
     pageSize,
+    removeDuplicates,
     showHiddenFeeds,
     showStatus,
   }),

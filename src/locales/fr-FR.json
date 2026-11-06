@@ -217,6 +217,7 @@
     "refresh_tooltip": "Rafraîchir",
     "load_error": "Impossible de charger les articles",
     "loading_more": "Chargement d’autres articles...",
+    "refresh_failed_showing_loaded": "Actualisation impossible. Les articles déjà chargés restent affichés.",
     "load_more_error": "Impossible de charger davantage d’articles. Veuillez réessayer.",
     "no_articles": "Aucun article",
     "no_feeds": "Aucun flux",

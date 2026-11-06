@@ -217,6 +217,7 @@
     "refresh_tooltip": "Neu laden",
     "load_error": "Artikel konnten nicht geladen werden",
     "loading_more": "Weitere Artikel werden geladen...",
+    "refresh_failed_showing_loaded": "Aktualisierung fehlgeschlagen. Die bereits geladenen Artikel werden angezeigt.",
     "load_more_error": "Weitere Artikel konnten nicht geladen werden. Bitte erneut versuchen.",
     "no_articles": "Keine Artikel",
     "no_feeds": "Keine Abonnements",

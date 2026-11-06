@@ -3,17 +3,17 @@ import { useCallback, useEffect, useLayoutEffect, useRef } from "react"
 
 import { markDuplicatesAsRead } from "@/hooks/useEntryActions"
 import {
+  clearArticleListSnapshot,
+  commitArticleListSnapshot,
   contentState,
   incrementArticleListSnapshotRevision,
   reconcileArticleListFilters,
   setArticleListError,
   setEntries,
-  setEntriesWithDeduplication,
   setHomePaginationBoundary,
   setIsArticleListReady,
   setLoadMoreError,
   setLoadMoreVisible,
-  setTemporalPaginationState,
   setTotal,
 } from "@/store/contentState"
 import {
@@ -30,6 +30,7 @@ import { reconcileArticleListFilterScope } from "@/utils/article-list-filter-sco
 import { hasArticleListFilters } from "@/utils/article-list-filters"
 import createArticleListRequestKey from "@/utils/article-list-request-key"
 import { createArticleListSearchScopeKey } from "@/utils/article-list-search-scope"
+import createArticleListSnapshotIdentity from "@/utils/article-list-snapshot-identity"
 import subscribeArticleListTotalRefresh from "@/utils/article-list-total-refresh"
 import {
   getEntryMutationSnapshot,
@@ -53,6 +54,7 @@ const handleResponses = (
   preserveHomeSession = false,
   homePaginationSession = null,
   temporalPaginationSession = null,
+  articleListSnapshotIdentity = null,
 ) => {
   const isValidResponse =
     Array.isArray(response?.entries) && Number.isFinite(response?.total) && response.total >= 0
@@ -77,20 +79,25 @@ const handleResponses = (
       }),
     })
   } else {
-    const duplicateEntries = setEntriesWithDeduplication(preparedEntries)
-    markDuplicatesAsRead(duplicateEntries)
-    setTemporalPaginationState(
-      createTemporalPaginationState({
+    const duplicateEntries = commitArticleListSnapshot({
+      entries: preparedEntries,
+      loadMoreVisible: canonicalEntries.length < response.total,
+      snapshotIdentity: articleListSnapshotIdentity,
+      temporalPaginationState: createTemporalPaginationState({
         entries: response.entries,
         total: response.total,
         ...temporalPaginationSession,
         snapshotRevision: contentState.get().articleListSnapshotRevision + 1,
       }),
-    )
+      total: response.total,
+    })
+    markDuplicatesAsRead(duplicateEntries)
   }
-  setTotal(response.total)
-  setLoadMoreVisible(canonicalEntries.length < response.total)
-  incrementArticleListSnapshotRevision()
+  if (isHome) {
+    setTotal(response.total)
+    setLoadMoreVisible(canonicalEntries.length < response.total)
+    incrementArticleListSnapshotRevision()
+  }
 }
 
 const useArticleList = (source, sourceId, getEntries) => {
@@ -154,6 +161,12 @@ const useArticleList = (source, sourceId, getEntries) => {
     const info = { from: source, id: sourceId }
     const requestSessionRevision = getDataSessionRevision()
     const requestKey = createArticleListRequestKey({
+      content,
+      settings,
+      info,
+      sessionRevision: requestSessionRevision,
+    })
+    const articleListSnapshotIdentity = createArticleListSnapshotIdentity({
       content,
       settings,
       info,
@@ -254,6 +267,7 @@ const useArticleList = (source, sourceId, getEntries) => {
           sessionRevision: requestSessionRevision,
           sortProperty: getArticleListTemporalSortProperty(source, settings.orderBy),
         },
+        articleListSnapshotIdentity,
       )
       if (source === "home") {
         committedHomeSnapshot.current = {
@@ -307,10 +321,18 @@ const useArticleList = (source, sourceId, getEntries) => {
         snapshot?.sessionRevision === requestSessionRevision &&
         snapshot.pageSize === settings.pageSize &&
         snapshot.showHiddenFeeds === settings.showHiddenFeeds
-      if (!preservesHomeSnapshot) {
-        setEntries([])
-        setTotal(0)
-        setLoadMoreVisible(false)
+      const preservesNonHomeSnapshot =
+        source !== "home" &&
+        articleListSnapshotIdentity !== null &&
+        contentState.get().articleListSnapshotIdentity === articleListSnapshotIdentity
+      if (!preservesHomeSnapshot && !preservesNonHomeSnapshot) {
+        if (source === "home") {
+          setEntries([])
+          setTotal(0)
+          setLoadMoreVisible(false)
+        } else {
+          clearArticleListSnapshot()
+        }
       }
       setArticleListError(true)
     } finally {
