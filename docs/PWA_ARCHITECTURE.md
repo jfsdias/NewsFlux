@@ -2,7 +2,7 @@
 
 - **Status:** planning and architecture contract. This document does not authorize implementation, merge or deployment.
 - **Created:** 2026-10-22, against GitHub `main` at `d7c0fc8e4ab7b5f0d959bea96cc04b086deb36fc`.
-- **Last reconciled:** 2026-11-04, against audited commit `1e7e39ce27ca15c0242e98d83e0c5d0ad865a1ba`; the current implementation is recorded in §17. §3.1 and §16 are historical records of the 2026-10-22/23 baselines.
+- **Last reconciled:** 2026-11-06, against audited commit `fbbd2357caaa2d9d4a0a6b4cf3ed1bc2e8f71063`; the current implementation is recorded in §17. §3.1 and §16 are historical records of the 2026-10-22/23 baselines.
 - **Track:** PWA Foundation architecture; the PWA-03A2 runtime sequence remains in production at `96bd1fe563571bfa322b2fd79f6fc12f49107a76`. PR #96 advanced `main` to `fa27a4cec1cae1e887041ee3999622c5b8f76681` but was not deployed. Installability decisions remain open.
 - **Amended:** 2026-10-22, after the PM review of PR #86 (PASS WITH DOCUMENTATION AMENDMENTS): the production topology is partially recorded (D4, `PM_REPORTED`), the authorization state of PWA-00 and PWA-01A is recorded, and a priority rule for PWA-03A is added. No product code changed.
 - **Companion documents:** [`NEWSFLUX_ROADMAP.md`](./NEWSFLUX_ROADMAP.md) (sequencing), [`NEWSFLUX_PROJECT_STATE.md`](./NEWSFLUX_PROJECT_STATE.md) (operational state), [`DESIGN_REFERENCES.md`](./DESIGN_REFERENCES.md) (NetNewsWire UX research track), [`NEWSFLUX_NAV_VISUAL_01.md`](./NEWSFLUX_NAV_VISUAL_01.md) (window classes and navigation contract), [`PWA_00_BASELINE.md`](./PWA_00_BASELINE.md) (PWA-00 measurement record).
@@ -597,9 +597,9 @@ DEPLOY_AUTHORIZED=NO
 
 PR #96's API retry correction is a functional main change, not a PWA deployment. The PWA-03A2 sequence remains active in production at the PR #95 baseline. D1 (manifest ID), D2 (manifest theme/background policy), and D3 (maskable icon art) remain product decisions; this architecture document authorizes no implementation, merge or deployment.
 
-## 17. Current implementation at the audited commit (2026-11-04)
+## 17. Current implementation at the audited commit (2026-11-06)
 
-Verified by reading `vite.config.js`, `src/main.jsx`, `src/utils/pwa-*.js`, `Caddyfile`, `index.html` and by building the commit `1e7e39ce27ca15c0242e98d83e0c5d0ad865a1ba` (Node 22.23.4 and 24.22.0; `vite build` reports `precache 14 entries (914.66 KiB)`). This table supersedes the facts in §3.1; the evidence type is **static and emulated (Chromium) only**. No installed-PWA behavior has been observed on Android or iOS in this reconciliation.
+Verified by reading `vite.config.js`, `src/main.jsx`, `src/utils/pwa-*.js`, `Caddyfile`, `index.html` and by building the commit `fbbd2357caaa2d9d4a0a6b4cf3ed1bc2e8f71063` (Node 22.23.4 and 24.22.0). This table supersedes the facts in §3.1; the evidence type is **static and emulated (Chromium) only**. No installed-PWA behavior has been observed on Android or iOS in this reconciliation.
 
 | Area                    | Current state                                                                                                                                                                                                                                                                                                  |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -15,7 +15,7 @@ This document preserves the approved historical design contract and separately r
 - PR0 / #69 completed the window-class foundation (`cf37807a4d3b9da39d3c438861fac358d936fdaa`).
 - PR1 / #71 completed the compact-navigation renderer and Reader/Drawer focus and resize hardening; merge and current production baseline are `d01e34fc2eb76da39467d1de9799b12194faec9c`.
 - The compact bar currently uses `--nf-glass-*` tokens and `backdrop-filter`.
-- Medium Rail / PR4, including the 884×1104 slice and `TABLET-HEADER-WIDTH-01`, remains deferred until PR #70 closes.
+- Medium Rail / PR4, including the 884×1104 slice and `TABLET-HEADER-WIDTH-01`, was completed in PR #105 (`feat(nav): add medium navigation rail`) and PR #76.
 - `NAV-PR1-HARNESS-DESKTOP-MODEL-01` remains a P3 finding.
 - `NAV-PR1-ROUTE-FOCUS-01` remains a P3 finding.
 - `MOBILE-SCROLL-FLICKER-01` remains a distinct open finding. It and future glass-expansion gates are not waived by PR #71 acceptance.
@@ -30,7 +30,7 @@ FUTURE_GLASS_GATES_WAIVED=NO
 MOBILE_SCROLL_FLICKER_01=OPEN
 PR0_STATUS=COMPLETED / PR #69
 PR1_STATUS=COMPLETED / PR #71
-MEDIUM_RAIL_STATUS=DEFERRED / PR4 / AFTER_PR70
+MEDIUM_RAIL_STATUS=COMPLETED / PR #105
 NAV-PR1-HARNESS-DESKTOP-MODEL-01=OPEN_P3
 NAV-PR1-ROUTE-FOCUS-01=OPEN_P3
 FUTURE_SLICES_AUTHORIZED=NO

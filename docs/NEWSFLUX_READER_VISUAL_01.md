@@ -1,6 +1,6 @@
 # READER-VISUAL-01 — Long-form reading ergonomics
 
-- **Status:** READER-VISUAL-01 design reference. READER-MEASURE-01 was implemented in PR #44, merged and promoted at exact SHA `118ecb2c63f7df3583d0f2524b5cc8c62bd518c1` on 2026-10-16. READER-VISUAL-02A, including 02A2 / Quiet Column, completed in PR #49 (head `cafe47e1ae19b6a203e8aef35339931015614c7c`, merge `e4752d290bdfb4961d379dd05548ef3da5da42ba`).
+- **Status:** READER-VISUAL-01 design reference. READER-MEASURE-01 was implemented in PR #44, merged and promoted at exact SHA `118ecb2c63f7df3583d0f2524b5cc8c62bd518c1` on 2026-10-16. READER-VISUAL-02A, including 02A2 / Quiet Column, completed in PR #49 (head `cafe47e1ae19b6a203e8aef35339931015614c7c`, merge `e4752d290bdfb4961d379dd05548ef3da5da42ba`). READER-VISUAL-02B (interaction-aware reader chrome auto-hide and immediate return) completed in PR #125 (merge `99f108643f7bd4d31a991c868f2e66e66e519421`).
 - **Approved:** 2026-10-14 by the product owner, including the Article-width-as-frame model.
 - **Critical viewport:** 884 × 1104.
 
