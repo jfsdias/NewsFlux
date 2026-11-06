@@ -52,12 +52,14 @@ test("UX-REACH-01: coarse-pointer control stays reachable without blocking artic
     expect(pointerState.innerWidth).toBe(width)
     expect(pointerState.visualViewportWidth).toBe(width)
     expect(pointerState.anyPointerCoarse).toBe(true)
-    expect(pointerState.floatingMode, `floating mode at ${width}x${height}`).toBe(true)
+    expect(pointerState.floatingMode, `unused preference stays docked at ${width}x${height}`).toBe(
+      false,
+    )
 
     await expect(getDragHandle(page)).toBeVisible()
 
     const floating = page.locator(".mark-all-read-floating")
-    await expect(floating).toHaveCSS("position", "fixed")
+    await expect(floating).toHaveCSS("position", "relative")
     const bounds = await floating.boundingBox()
     const navBounds = await page
       .locator(".compact-nav-bar, .medium-navigation-rail, .desktop-sidebar-slot .sidebar")
@@ -185,6 +187,17 @@ test("UX-REACH-01: dragging moves the control but emits no bulk mutation or conf
   await page.mouse.down()
   await page.mouse.move(smallMovementStart.x + 2, smallMovementStart.y + 2)
   await page.mouse.up()
+  const restorePosition = page.getByRole("button", { name: "Restore position", exact: true })
+  await expect(restorePosition).toBeVisible()
+  await restorePosition.click()
+  await expect(page.locator(".mark-all-read-floating")).not.toHaveClass(
+    /mark-all-read-floating--active/,
+  )
+  await expect
+    .poll(() =>
+      page.evaluate(() => localStorage.getItem("newsflux:ux-reach-01:mark-all-read-position")),
+    )
+    .toBeNull()
   await expect(page.getByText("Mark all as read?", { exact: true })).toBeHidden()
   expect(await getMutationRequests(mock)).toHaveLength(0)
 })
@@ -217,6 +230,23 @@ test("UX-REACH-01: a real touch drag on the grip never activates Mark All", asyn
   const after = await floating.boundingBox()
   expect(after.x).toBeGreaterThan(before.x + 32)
   expect(after.y).toBeLessThan(before.y - 16)
+  expect(await getMutationRequests(mock)).toHaveLength(0)
+  await expect(page.getByText("Mark all as read?", { exact: true })).toBeHidden()
+
+  const gripAfterDrag = await handle.boundingBox()
+  await page.touchscreen.tap(
+    gripAfterDrag.x + gripAfterDrag.width / 2,
+    gripAfterDrag.y + gripAfterDrag.height / 2,
+  )
+  const restorePosition = page.getByRole("button", { name: "Restore position", exact: true })
+  await expect(restorePosition).toBeVisible()
+  await restorePosition.tap()
+  await expect(floating).not.toHaveClass(/mark-all-read-floating--active/)
+  await expect
+    .poll(() =>
+      page.evaluate(() => localStorage.getItem("newsflux:ux-reach-01:mark-all-read-position")),
+    )
+    .toBeNull()
   expect(await getMutationRequests(mock)).toHaveLength(0)
   await expect(page.getByText("Mark all as read?", { exact: true })).toBeHidden()
   await client.detach()
@@ -323,20 +353,66 @@ test("UX-REACH-01: keyboard can reposition and reset without losing action activ
 }) => {
   const { page } = await openApp({ path: "/all", width: 884, height: 1107, touch: true })
   const action = getAction(page)
-  const initial = await page.locator(".mark-all-read-floating").boundingBox()
+  const floating = page.locator(".mark-all-read-floating")
+  const initial = await floating.boundingBox()
+  const normalLayoutOrigin = await page.evaluate(() => {
+    const wrapper = document.querySelector(".mark-all-read-floating")
+    const actionButton = wrapper.querySelector(".arco-btn-shape-circle")
+    const hadFloatingClass = wrapper.classList.contains("mark-all-read-floating--active")
+    const { left, top } = wrapper.style
+
+    wrapper.classList.remove("mark-all-read-floating--active")
+    wrapper.style.removeProperty("left")
+    wrapper.style.removeProperty("top")
+    const rect = actionButton.getBoundingClientRect()
+    const origin = { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+
+    if (hadFloatingClass) {
+      wrapper.classList.add("mark-all-read-floating--active")
+    }
+    wrapper.style.left = left
+    wrapper.style.top = top
+    return origin
+  })
+  expect(initial.x, "default position follows the live FooterPanel origin").toBeCloseTo(
+    normalLayoutOrigin.x,
+    0,
+  )
+  expect(initial.y, "default position follows the live FooterPanel origin").toBeCloseTo(
+    normalLayoutOrigin.y,
+    0,
+  )
+  await expect(floating).not.toHaveClass(/mark-all-read-floating--active/)
 
   await action.focus()
   await page.keyboard.press("Shift+ArrowRight")
   expect(await action.evaluate((element) => getComputedStyle(element).outlineWidth)).toBe("2px")
   await expect(action).toHaveAttribute("aria-describedby", "mark-all-read-position-help")
-  const moved = await page.locator(".mark-all-read-floating").boundingBox()
+  const moved = await floating.boundingBox()
   expect(moved.x).toBeGreaterThan(initial.x)
   expect(await getMutationRequests(mock)).toHaveLength(0)
 
-  await page.keyboard.press("Home")
-  const reset = await page.locator(".mark-all-read-floating").boundingBox()
-  expect(Math.abs(reset.x - initial.x)).toBeLessThanOrEqual(1)
-  expect(Math.abs(reset.y - initial.y)).toBeLessThanOrEqual(1)
+  await page.keyboard.press("Shift+F10")
+  const restorePosition = page.getByRole("button", { name: "Restore position", exact: true })
+  await expect(restorePosition).toBeVisible()
+  await expect(restorePosition).toBeFocused()
+  await page.keyboard.press("Enter")
+  await expect(floating).not.toHaveClass(/mark-all-read-floating--active/)
+  await expect(floating).toHaveCSS("position", "relative")
+  await expect
+    .poll(() =>
+      page.evaluate(() => localStorage.getItem("newsflux:ux-reach-01:mark-all-read-position")),
+    )
+    .toBeNull()
+  const reset = await action.boundingBox()
+  expect(Math.abs(reset.x - normalLayoutOrigin.x)).toBeLessThanOrEqual(1)
+  expect(Math.abs(reset.y - normalLayoutOrigin.y)).toBeLessThanOrEqual(1)
+  expect(await getMutationRequests(mock)).toHaveLength(0)
+  await expect(page.getByText("Mark all as read?", { exact: true })).toBeHidden()
+
+  await page.reload()
+  await expect(floating).not.toHaveClass(/mark-all-read-floating--active/)
+  await expect(floating).toHaveCSS("position", "relative")
 
   await action.focus()
   await page.keyboard.press("Enter")
@@ -493,7 +569,15 @@ test("UX-REACH-01: resize clamps and restores the local position; History keeps 
   const { page } = await openApp({ path: "/all", width: 540, height: 720, touch: true })
   const action = getAction(page)
   const handle = getDragHandle(page)
+  const floating = page.locator(".mark-all-read-floating")
   await expect(handle).toBeVisible()
+  await expect(floating).not.toHaveClass(/mark-all-read-floating--active/)
+
+  await page.evaluate(() => {
+    localStorage.setItem("newsflux:ux-reach-01:mark-all-read-position", "not-json")
+  })
+  await page.reload()
+  await expect(floating).not.toHaveClass(/mark-all-read-floating--active/)
 
   // Simulate a Duo closed → open → closed viewport transition without claiming physical-device coverage.
   await page.evaluate(() => {
@@ -504,7 +588,7 @@ test("UX-REACH-01: resize clamps and restores the local position; History keeps 
   })
   await page.setViewportSize({ width: 1119, height: 611 })
   await expect(handle).toBeVisible()
-  const unfoldedFloating = page.locator(".mark-all-read-floating")
+  const unfoldedFloating = floating
   const unfoldedBounds = await unfoldedFloating.boundingBox()
   const desktopSidebar = await page.locator(".desktop-sidebar-slot .sidebar").boundingBox()
   expect(unfoldedBounds).not.toBeNull()
@@ -561,7 +645,6 @@ test("UX-REACH-01: resize clamps and restores the local position; History keeps 
     .not.toBeNull()
 
   await page.setViewportSize({ width: 466, height: 500 })
-  const floating = page.locator(".mark-all-read-floating")
   await expect
     .poll(async () => {
       const bounds = await floating.boundingBox()
@@ -582,6 +665,37 @@ test("UX-REACH-01: resize clamps and restores the local position; History keeps 
 
   await page.reload()
   await expect(action).toBeVisible()
+  await expect(floating).toHaveClass(/mark-all-read-floating--active/)
+  await handle.click()
+  const restoredAfterReload = page.getByRole("button", { name: "Restore position", exact: true })
+  await expect(restoredAfterReload).toBeVisible()
+  await restoredAfterReload.click()
+  await expect(floating).not.toHaveClass(/mark-all-read-floating--active/)
+  await expect
+    .poll(() =>
+      page.evaluate(() => localStorage.getItem("newsflux:ux-reach-01:mark-all-read-position")),
+    )
+    .toBeNull()
+
+  for (const viewport of [
+    { width: 1119, height: 611 },
+    { width: 540, height: 720 },
+  ]) {
+    await page.setViewportSize(viewport)
+    await expect(floating).not.toHaveClass(/mark-all-read-floating--active/)
+    const dockedOrigin = await page.evaluate(() => {
+      const button = document.querySelector(".mark-all-read-floating .arco-btn-shape-circle")
+      const root = document.querySelector(".mark-all-read-floating")
+      const buttonRect = button.getBoundingClientRect()
+      const rootRect = root.getBoundingClientRect()
+      return { buttonX: buttonRect.x, buttonY: buttonRect.y, rootX: rootRect.x, rootY: rootRect.y }
+    })
+    expect(dockedOrigin.rootX).toBe(dockedOrigin.buttonX)
+    expect(dockedOrigin.rootY).toBe(dockedOrigin.buttonY)
+  }
+
+  await page.reload()
+  await expect(floating).not.toHaveClass(/mark-all-read-floating--active/)
   await page.goto("/feed/1")
   await expect(action).toBeVisible()
   await page.goto("/all/entry/1")
@@ -604,8 +718,8 @@ test("UX-REACH-01: fine-pointer desktop retains the existing conventional Footer
     const floating = page.locator(".mark-all-read-floating")
 
     await expect(action).toBeVisible()
-    await expect(floating).toHaveCSS("position", "fixed")
-    await expect(floating).toHaveClass(/mark-all-read-floating--active/)
+    await expect(floating).toHaveCSS("position", "relative")
+    await expect(floating).not.toHaveClass(/mark-all-read-floating--active/)
     await expect(handle).toBeVisible()
     const bounds = await action.boundingBox()
     const initialPosition = await floating.boundingBox()
@@ -622,6 +736,8 @@ test("UX-REACH-01: fine-pointer desktop retains the existing conventional Footer
     })
     await page.mouse.up()
 
+    await expect(floating).toHaveCSS("position", "fixed")
+    await expect(floating).toHaveClass(/mark-all-read-floating--active/)
     const afterMouseDrag = await floating.boundingBox()
     expect(afterMouseDrag.x).toBeGreaterThan(initialPosition.x + 32)
     expect(afterMouseDrag.y).toBeLessThan(initialPosition.y - 16)

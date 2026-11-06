@@ -1,4 +1,12 @@
-import { Button, Dropdown, Menu, Notification, Popconfirm, Radio } from "@arco-design/web-react"
+import {
+  Button,
+  Dropdown,
+  Menu,
+  Notification,
+  Popconfirm,
+  Popover,
+  Radio,
+} from "@arco-design/web-react"
 import {
   IconAlignLeft,
   IconCheck,
@@ -82,11 +90,6 @@ const readPositionPreference = () => {
     return null
   }
 }
-const stopDragHandleClick = (event) => {
-  event.preventDefault()
-  event.stopPropagation()
-}
-
 const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConfirm }) => {
   const { polyglot } = useStore(polyglotState)
   const { skipMarkAllReadConfirmation } = useStore(settingsState, {
@@ -96,13 +99,16 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
   const isHidden = hidden || from === "history"
   const markAllReadLabel = polyglot.t("article_list.mark_all_as_read_tooltip")
   const positionHelp = polyglot.t("article_list.mark_all_as_read_position_help")
+  const resetPositionLabel = polyglot.t("article_list.mark_all_as_read_reset_position")
+  const positionActionsLabel = polyglot.t("article_list.mark_all_as_read_position_actions")
   const [confirmVisible, setConfirmVisible] = useState(false)
+  const [positionActionsVisible, setPositionActionsVisible] = useState(false)
   const [isFloating, setIsFloating] = useState(false)
   const [position, setPosition] = useState(null)
   const triggerRef = useRef(null)
   const floatingControlRef = useRef(null)
+  const restorePositionButtonRef = useRef(null)
   const floatingPositionRef = useRef(null)
-  const defaultPositionRatiosRef = useRef(null)
   const isFloatingRef = useRef(false)
   const pointerDragRef = useRef(null)
   const suppressNextClickRef = useRef(false)
@@ -165,6 +171,29 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
     setPosition(nextPosition)
   }, [])
 
+  const setFloatingMode = useCallback(
+    (nextPosition) => {
+      isFloatingRef.current = true
+      setIsFloating(true)
+      applyFloatingPosition(nextPosition)
+    },
+    [applyFloatingPosition],
+  )
+
+  const resetToDocked = useCallback(() => {
+    pointerDragRef.current = null
+    isFloatingRef.current = false
+    setIsFloating(false)
+    applyFloatingPosition(null)
+    setPositionActionsVisible(false)
+    try {
+      globalThis.localStorage.removeItem(MARK_ALL_READ_POSITION_STORAGE_KEY)
+    } catch {
+      // The live layout remains the docked source of truth when storage is unavailable.
+    }
+    globalThis.requestAnimationFrame(() => triggerRef.current?.focus({ preventScroll: true }))
+  }, [applyFloatingPosition])
+
   const persistFloatingPosition = useCallback(
     (nextPosition) => {
       const bounds = getFloatingBounds()
@@ -195,7 +224,13 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
       }
 
       pointerDragRef.current = null
-      applyFloatingPosition(drag.origin)
+      if (drag.wasFloating) {
+        applyFloatingPosition(drag.origin)
+      } else {
+        isFloatingRef.current = false
+        setIsFloating(false)
+        applyFloatingPosition(null)
+      }
       suppressNextClickRef.current = true
       if (suppressClickTimerRef.current !== null) {
         globalThis.clearTimeout(suppressClickTimerRef.current)
@@ -208,41 +243,35 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
     [applyFloatingPosition],
   )
 
-  useLayoutEffect(() => {
-    const activateFloatingControl = () => {
-      const control = floatingControlRef.current
-      const bounds = getFloatingBounds()
-      if (!control || !bounds) {
-        return
-      }
-
-      const actionButton = control.querySelector(".arco-btn-shape-circle")
-      if (!actionButton) {
-        return
-      }
-
-      const rect = actionButton.getBoundingClientRect()
-      const defaultPosition = clampFloatingPosition({ x: rect.left, y: rect.top }, bounds)
-      defaultPositionRatiosRef.current = normalizeFloatingPosition(defaultPosition, bounds)
-      const storedPosition = readPositionPreference()
-      const nextPosition = storedPosition
-        ? denormalizeFloatingPosition(storedPosition, bounds)
-        : defaultPosition
-
-      isFloatingRef.current = true
-      setIsFloating(true)
-      applyFloatingPosition(nextPosition)
+  useEffect(() => {
+    if (!isHidden) {
+      return
     }
-
-    const reconcilePosition = () => {
-      if (!isFloatingRef.current) {
-        activateFloatingControl()
-        return
+    const activeDrag = pointerDragRef.current
+    const frame = globalThis.requestAnimationFrame(() => {
+      setPositionActionsVisible(false)
+      if (activeDrag) {
+        cancelPointerDrag(activeDrag.pointerId)
       }
+    })
+    return () => globalThis.cancelAnimationFrame(frame)
+  }, [cancelPointerDrag, isHidden])
 
+  useLayoutEffect(() => {
+    const reconcilePosition = () => {
       const activeDrag = pointerDragRef.current
       if (activeDrag) {
         cancelPointerDrag(activeDrag.pointerId)
+      }
+
+      const storedPosition = readPositionPreference()
+      if (!storedPosition) {
+        if (isFloatingRef.current) {
+          isFloatingRef.current = false
+          setIsFloating(false)
+          applyFloatingPosition(null)
+        }
+        return
       }
 
       const bounds = getFloatingBounds()
@@ -250,14 +279,7 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
         return
       }
 
-      const storedPosition = readPositionPreference()
-      const defaultPosition = defaultPositionRatiosRef.current
-        ? denormalizeFloatingPosition(defaultPositionRatiosRef.current, bounds)
-        : floatingPositionRef.current
-      const nextPosition = storedPosition
-        ? denormalizeFloatingPosition(storedPosition, bounds)
-        : clampFloatingPosition(defaultPosition, bounds)
-      applyFloatingPosition(nextPosition)
+      setFloatingMode(denormalizeFloatingPosition(storedPosition, bounds))
     }
 
     let resizeFrame = null
@@ -283,14 +305,24 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
         globalThis.clearTimeout(suppressClickTimerRef.current)
       }
     }
-  }, [applyFloatingPosition, cancelPointerDrag, getFloatingBounds])
+  }, [applyFloatingPosition, cancelPointerDrag, getFloatingBounds, setFloatingMode])
 
   const handleDragPointerDown = (event) => {
-    if (!isFloatingRef.current || disabled || loading || event.button !== 0) {
+    if (disabled || loading || event.button !== 0) {
       return
     }
 
-    const origin = floatingPositionRef.current
+    if (suppressClickTimerRef.current !== null) {
+      globalThis.clearTimeout(suppressClickTimerRef.current)
+      suppressClickTimerRef.current = null
+    }
+    suppressNextClickRef.current = false
+
+    const actionButton = triggerRef.current
+    const rect = actionButton?.getBoundingClientRect()
+    const origin = isFloatingRef.current
+      ? floatingPositionRef.current
+      : rect && { x: rect.left, y: rect.top }
     if (!origin) {
       return
     }
@@ -298,6 +330,7 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
     pointerDragRef.current = {
       pointerId: event.pointerId,
       origin,
+      wasFloating: isFloatingRef.current,
       startX: event.clientX,
       startY: event.clientY,
       moved: false,
@@ -324,7 +357,7 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
     drag.moved = true
     const bounds = getFloatingBounds()
     if (bounds) {
-      applyFloatingPosition(
+      setFloatingMode(
         clampFloatingPosition({ x: drag.origin.x + deltaX, y: drag.origin.y + deltaY }, bounds),
       )
     }
@@ -366,24 +399,49 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
     }
   }
 
-  const handleActionKeyDown = (event) => {
-    if (!isFloatingRef.current) {
+  const handleDragHandleClick = (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    if (suppressNextClickRef.current && event.detail > 0) {
+      suppressNextClickRef.current = false
+      return
+    }
+    setPositionActionsVisible(true)
+  }
+
+  useEffect(() => {
+    if (!positionActionsVisible) {
       return
     }
 
+    const frame = globalThis.requestAnimationFrame(() =>
+      restorePositionButtonRef.current?.focus({ preventScroll: true }),
+    )
+    return () => globalThis.cancelAnimationFrame(frame)
+  }, [positionActionsVisible])
+
+  const handlePositionActionsKeyDown = (event) => {
+    if (event.key !== "Escape") {
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    setPositionActionsVisible(false)
+    globalThis.requestAnimationFrame(() => triggerRef.current?.focus({ preventScroll: true }))
+  }
+
+  const handleActionKeyDown = (event) => {
     if (event.key === "Home") {
       event.preventDefault()
       event.stopPropagation()
-      const bounds = getFloatingBounds()
-      if (bounds && defaultPositionRatiosRef.current) {
-        const resetPosition = denormalizeFloatingPosition(defaultPositionRatiosRef.current, bounds)
-        applyFloatingPosition(resetPosition)
-        try {
-          globalThis.localStorage.removeItem(MARK_ALL_READ_POSITION_STORAGE_KEY)
-        } catch {
-          // The visible control remains reset even when storage is unavailable.
-        }
-      }
+      resetToDocked()
+      return
+    }
+
+    if ((event.key === "F10" && event.shiftKey) || event.key === "ContextMenu") {
+      event.preventDefault()
+      event.stopPropagation()
+      setPositionActionsVisible(true)
       return
     }
 
@@ -398,7 +456,11 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
       ArrowUp: { x: 0, y: -16 },
     }[event.key]
     const bounds = getFloatingBounds()
-    if (!delta || !bounds || !floatingPositionRef.current) {
+    const rect = triggerRef.current?.getBoundingClientRect()
+    const currentPosition = isFloatingRef.current
+      ? floatingPositionRef.current
+      : rect && { x: rect.left, y: rect.top }
+    if (!delta || !bounds || !currentPosition) {
       return
     }
 
@@ -406,12 +468,12 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
     event.stopPropagation()
     const nextPosition = clampFloatingPosition(
       {
-        x: floatingPositionRef.current.x + delta.x,
-        y: floatingPositionRef.current.y + delta.y,
+        x: currentPosition.x + delta.x,
+        y: currentPosition.y + delta.y,
       },
       bounds,
     )
-    applyFloatingPosition(nextPosition)
+    setFloatingMode(nextPosition)
     persistFloatingPosition(nextPosition)
   }
 
@@ -454,15 +516,14 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
     scopedListIdentity,
   ])
 
-  const positionKeyboardShortcuts = isFloating
-    ? "Shift+ArrowUp Shift+ArrowDown Shift+ArrowLeft Shift+ArrowRight Home"
-    : undefined
+  const positionKeyboardShortcuts =
+    "Shift+ArrowUp Shift+ArrowDown Shift+ArrowLeft Shift+ArrowRight Shift+F10 ContextMenu Home"
   const button = (
     <CustomTooltip mini content={markAllReadLabel}>
       <Button
         ref={triggerRef}
         aria-busy={loading}
-        aria-describedby={isFloating ? "mark-all-read-position-help" : undefined}
+        aria-describedby="mark-all-read-position-help"
         aria-expanded={skipMarkAllReadConfirmation ? undefined : confirmVisible}
         aria-keyshortcuts={positionKeyboardShortcuts}
         aria-label={markAllReadLabel}
@@ -473,21 +534,7 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
         shape="circle"
         onClick={handleActionClick}
         onKeyDown={handleActionKeyDown}
-      >
-        <span
-          aria-hidden="true"
-          className="mark-all-read-drag-handle"
-          data-testid="mark-all-read-drag-handle"
-          onClick={stopDragHandleClick}
-          onLostPointerCapture={cancelPointerDrag}
-          onPointerCancel={cancelPointerDrag}
-          onPointerDown={handleDragPointerDown}
-          onPointerMove={handleDragPointerMove}
-          onPointerUp={finishPointerDrag}
-        >
-          <IconDragDot aria-hidden="true" />
-        </span>
-      </Button>
+      />
     </CustomTooltip>
   )
 
@@ -523,12 +570,52 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
         pointerEvents: isHidden ? "none" : undefined,
       }}
     >
-      {isFloating && (
-        <span className="visually-hidden" id="mark-all-read-position-help">
-          {positionHelp}
-        </span>
-      )}
-      <span className="mark-all-read-floating-trigger">{confirmationWrappedButton}</span>
+      <span className="visually-hidden" id="mark-all-read-position-help">
+        {positionHelp}
+      </span>
+      <span className="mark-all-read-floating-trigger">
+        {confirmationWrappedButton}
+        <Popover
+          className="mark-all-read-position-popover"
+          getPopupContainer={() => document.body}
+          popupVisible={positionActionsVisible && !isHidden}
+          position="top"
+          trigger={[]}
+          triggerProps={{ escToClose: true }}
+          content={
+            <div
+              aria-label={positionActionsLabel}
+              className="mark-all-read-position-actions"
+              role="group"
+              onKeyDownCapture={handlePositionActionsKeyDown}
+            >
+              <Button
+                ref={restorePositionButtonRef}
+                htmlType="button"
+                size="small"
+                onClick={resetToDocked}
+              >
+                {resetPositionLabel}
+              </Button>
+            </div>
+          }
+          onVisibleChange={setPositionActionsVisible}
+        >
+          <span
+            aria-hidden="true"
+            className="mark-all-read-drag-handle"
+            data-testid="mark-all-read-drag-handle"
+            onClick={handleDragHandleClick}
+            onLostPointerCapture={cancelPointerDrag}
+            onPointerCancel={cancelPointerDrag}
+            onPointerDown={handleDragPointerDown}
+            onPointerMove={handleDragPointerMove}
+            onPointerUp={finishPointerDrag}
+          >
+            <IconDragDot aria-hidden="true" />
+          </span>
+        </Popover>
+      </span>
     </div>
   )
 }
