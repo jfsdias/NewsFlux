@@ -56,7 +56,7 @@ test("UX-REACH-01: coarse-pointer control stays reachable without blocking artic
     await expect(floating).toHaveCSS("position", "fixed")
     const bounds = await floating.boundingBox()
     const navBounds = await page
-      .locator(".compact-nav-bar, .medium-navigation-rail, .desktop-sidebar-slot")
+      .locator(".compact-nav-bar, .medium-navigation-rail, .desktop-sidebar-slot .sidebar")
       .evaluateAll((elements) =>
         elements.map((element) => {
           const { bottom, left, right, top } = element.getBoundingClientRect()
@@ -464,7 +464,7 @@ test("UX-REACH-01: resize clamps and restores the local position; History keeps 
   await expect(handle).toBeVisible()
   const unfoldedFloating = page.locator(".mark-all-read-floating")
   const unfoldedBounds = await unfoldedFloating.boundingBox()
-  const desktopSidebar = await page.locator(".desktop-sidebar-slot").boundingBox()
+  const desktopSidebar = await page.locator(".desktop-sidebar-slot .sidebar").boundingBox()
   expect(unfoldedBounds).not.toBeNull()
   expect(desktopSidebar).not.toBeNull()
   expect(unfoldedBounds.x).toBeGreaterThanOrEqual(desktopSidebar.x + desktopSidebar.width)

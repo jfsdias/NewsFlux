@@ -73,7 +73,7 @@ const handleFilterChange = (value) => {
 }
 
 const MARK_ALL_READ_POSITION_STORAGE_KEY = "newsflux:ux-reach-01:mark-all-read-position"
-const FLOATING_MARK_ALL_MEDIA = "(any-pointer: coarse) and (max-width: 1024px)"
+const FLOATING_MARK_ALL_MEDIA = "(any-pointer: coarse) and (max-width: 1114px)"
 const readPositionPreference = () => {
   try {
     return parseFloatingPositionPreference(
@@ -141,7 +141,9 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
 
     const mediumNavigation = globalThis.document.querySelector(".medium-navigation-rail")
     const compactNavigation = globalThis.document.querySelector(".compact-nav-bar")
+    const desktopSidebar = globalThis.document.querySelector(".desktop-sidebar-slot .sidebar")
     const mediumNavigationRight = mediumNavigation?.getBoundingClientRect().right ?? 0
+    const desktopSidebarRight = desktopSidebar?.getBoundingClientRect().right ?? 0
     const compactNavigationHeight = compactNavigation?.getBoundingClientRect().height ?? 0
     const safeBottom = readSafeArea("bottom")
 
@@ -154,7 +156,7 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
         top: readSafeArea("top"),
         right: readSafeArea("right"),
         bottom: Math.max(safeBottom, compactNavigationHeight),
-        left: Math.max(readSafeArea("left"), mediumNavigationRight),
+        left: Math.max(readSafeArea("left"), mediumNavigationRight, desktopSidebarRight),
       },
     })
   }, [])
