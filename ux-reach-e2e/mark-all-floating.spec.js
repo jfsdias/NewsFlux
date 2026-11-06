@@ -28,12 +28,14 @@ const COARSE_VIEWPORTS = [
 
 test("UX-REACH-01: coarse-pointer control stays reachable without blocking article hits or navigation", async ({
   openApp,
+  mock,
 }) => {
   for (const { width, height } of COARSE_VIEWPORTS) {
     const { page } = await openApp({ path: "/all", width, height, touch: true })
     const action = getAction(page)
     await expect(action).toBeVisible()
     await expect(page.locator('button[aria-label="Mark all as read"]')).toHaveCount(1)
+    await expect(page.getByTestId("ux-reach-02-diagnostic-panel")).toHaveCount(0)
 
     const pointerState = await page.evaluate(() => ({
       innerWidth: globalThis.innerWidth,
@@ -109,6 +111,87 @@ test("UX-REACH-01: coarse-pointer control stays reachable without blocking artic
     })
     await expect(action).toBeVisible()
   }
+
+  const { page: diagnosticPage } = await openApp({
+    path: "/all?ux_reach_02_diag=1",
+    width: 1114,
+    height: 720,
+    touch: true,
+  })
+  const diagnosticPanel = diagnosticPage.getByTestId("ux-reach-02-diagnostic-panel")
+  await expect(diagnosticPanel).toBeVisible()
+  const summary = diagnosticPage.getByTestId("ux-reach-02-diagnostic-summary")
+  await expect(summary).toContainText("innerWidth: 1114")
+  await expect(summary).toContainText("innerHeight: 720")
+  await expect(summary).toContainText("visualViewport.width: 1114")
+  await expect(summary).toContainText("anyPointerCoarse: true")
+  await expect(summary).toContainText("maxWidth1114: true")
+  await expect(summary).toContainText("activationQueryMatches: true")
+  await expect(summary).toContainText("reactStateActive: true")
+  await expect(summary).toContainText("classActive: true")
+  await expect(summary).toContainText("handleDisplay: flex")
+  await expect(summary).toContainText(/handleCenterHit\.insideHandle: (true|false|null)/)
+
+  const diagnosticAction = getAction(diagnosticPage)
+  const diagnosticHandleBounds = await getDragHandle(diagnosticPage).boundingBox()
+  const diagnosticActionBounds = await diagnosticAction.boundingBox()
+  const diagnosticPanelBounds = await diagnosticPanel.boundingBox()
+  const panelIntersectsActionOrHandle = await diagnosticPage.evaluate(
+    ({ action, handle, panel }) =>
+      [action, handle].some(
+        (target) =>
+          target.x < panel.x + panel.width &&
+          target.x + target.width > panel.x &&
+          target.y < panel.y + panel.height &&
+          target.y + target.height > panel.y,
+      ),
+    {
+      action: diagnosticActionBounds,
+      handle: diagnosticHandleBounds,
+      panel: diagnosticPanelBounds,
+    },
+  )
+  expect(panelIntersectsActionOrHandle).toBe(false)
+
+  const copyJson = diagnosticPage.getByRole("button", { name: "Copy full diagnostic JSON" })
+  await expect(copyJson).toBeVisible()
+  await diagnosticPage.evaluate(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async (text) => (globalThis.__uxReachCopiedJson = text) },
+    })
+  })
+  await copyJson.click()
+  const copiedJson = await diagnosticPage.evaluate(() => globalThis.__uxReachCopiedJson)
+  expect(JSON.parse(copiedJson).pointerMedia.activationQueryMatches).toBe(true)
+  await expect(diagnosticPage.getByTestId("ux-reach-02-copy-status")).toHaveText("Copied")
+
+  await diagnosticPage.evaluate(() => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined })
+    document.execCommand = (command) => {
+      if (command === "copy") {
+        globalThis.__uxReachFallbackCopied = document.activeElement?.value
+        return Boolean(globalThis.__uxReachFallbackCopied)
+      }
+      return false
+    }
+  })
+  await copyJson.click()
+  const fallbackJson = await diagnosticPage.evaluate(() => globalThis.__uxReachFallbackCopied)
+  expect(JSON.parse(fallbackJson).floating.handleDisplay).toBe("flex")
+  await expect(diagnosticPage.getByTestId("ux-reach-02-copy-status")).toHaveText("Copied")
+
+  await diagnosticPage.evaluate(() => {
+    document.execCommand = () => false
+  })
+  await copyJson.click()
+  const manualCopy = diagnosticPage.getByRole("textbox", {
+    name: "Diagnostic JSON for manual copy",
+  })
+  await expect(manualCopy).toBeVisible()
+  expect(JSON.parse(await manualCopy.inputValue()).floating.handleDisplay).toBe("flex")
+  await expect(diagnosticPage.getByText("Mark all as read?", { exact: true })).toBeHidden()
+  expect(await getMutationRequests(mock)).toHaveLength(0)
 })
 
 test("UX-REACH-01: dragging moves the control but emits no bulk mutation or confirmation", async ({

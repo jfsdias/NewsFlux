@@ -89,6 +89,220 @@ const stopDragHandleClick = (event) => {
   event.stopPropagation()
 }
 
+const formatFloatingDiagnosticSummary = (snapshot) =>
+  [
+    `innerWidth: ${snapshot.viewport.innerWidth}`,
+    `innerHeight: ${snapshot.viewport.innerHeight}`,
+    `visualViewport.width: ${snapshot.viewport.visualViewportWidth}`,
+    `anyPointerCoarse: ${snapshot.pointerMedia.anyPointerCoarse}`,
+    `maxWidth1114: ${snapshot.pointerMedia.maxWidth1114}`,
+    `activationQueryMatches: ${snapshot.pointerMedia.activationQueryMatches}`,
+    `reactStateActive: ${snapshot.floating.reactStateActive}`,
+    `classActive: ${snapshot.floating.classActive}`,
+    `handleDisplay: ${snapshot.floating.handleDisplay}`,
+    `handleCenterHit.insideHandle: ${snapshot.floating.handleCenterHit?.insideHandle ?? null}`,
+  ].join("\n")
+
+const rectanglesIntersect = (a, b, gap = 8) =>
+  a.left < b.right + gap &&
+  a.right > b.left - gap &&
+  a.top < b.bottom + gap &&
+  a.bottom > b.top - gap
+
+const FloatingDiagnosticsPanel = ({ controlRef, snapshot }) => {
+  const panelRef = useRef(null)
+  const manualCopyRef = useRef(null)
+  const [position, setPosition] = useState(null)
+  const [copyStatus, setCopyStatus] = useState("")
+  const [showManualCopy, setShowManualCopy] = useState(false)
+  const diagnosticJson = JSON.stringify(snapshot, null, 2)
+
+  useLayoutEffect(() => {
+    const panel = panelRef.current
+    if (!panel) {
+      return
+    }
+
+    const panelRect = panel.getBoundingClientRect()
+    const viewportWidth = globalThis.innerWidth
+    const viewportHeight = globalThis.innerHeight
+    const inset = 8
+    const maxLeft = Math.max(inset, viewportWidth - panelRect.width - inset)
+    const maxTop = Math.max(inset, viewportHeight - panelRect.height - inset)
+    const candidates = [
+      { top: inset, left: inset },
+      { top: inset, left: maxLeft },
+      { top: maxTop, left: inset },
+      { top: maxTop, left: maxLeft },
+    ]
+    const blockers = [
+      controlRef.current?.querySelector(".arco-btn-shape-circle"),
+      controlRef.current?.querySelector(".mark-all-read-drag-handle"),
+      globalThis.document.querySelector(".desktop-sidebar-slot .sidebar"),
+      globalThis.document.querySelector(".compact-nav-bar"),
+      globalThis.document.querySelector(".medium-navigation-rail"),
+    ]
+      .filter(Boolean)
+      .map((element) => element.getBoundingClientRect())
+      .filter((rect) => rect.width > 0 && rect.height > 0)
+    const scoreCandidate = ({ top, left }) => {
+      const candidateRect = {
+        left,
+        top,
+        right: left + panelRect.width,
+        bottom: top + panelRect.height,
+      }
+      return blockers.reduce(
+        (score, blocker) => score + (rectanglesIntersect(candidateRect, blocker) ? 1 : 0),
+        0,
+      )
+    }
+    const selected = candidates
+      .map((candidate) => ({ ...candidate, collisions: scoreCandidate(candidate) }))
+      .toSorted((a, b) => a.collisions - b.collisions)[0]
+
+    setPosition({ top: selected.top, left: selected.left })
+  }, [controlRef, copyStatus, showManualCopy, snapshot])
+
+  useEffect(() => {
+    if (showManualCopy) {
+      manualCopyRef.current?.focus({ preventScroll: true })
+      manualCopyRef.current?.select()
+    }
+  }, [showManualCopy])
+
+  const handleCopyJson = async (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setCopyStatus("")
+    setShowManualCopy(false)
+
+    try {
+      const writeText = globalThis.navigator.clipboard?.writeText
+      if (typeof writeText === "function") {
+        await writeText.call(globalThis.navigator.clipboard, diagnosticJson)
+        setCopyStatus("Copied")
+        return
+      }
+    } catch {
+      // Use the local selection fallback below when clipboard permission is unavailable.
+    }
+
+    let copied = false
+    try {
+      const textarea = globalThis.document.createElement("textarea")
+      textarea.value = diagnosticJson
+      textarea.readOnly = true
+      textarea.setAttribute("aria-hidden", "true")
+      Object.assign(textarea.style, {
+        position: "fixed",
+        top: "-10000px",
+        left: "-10000px",
+        opacity: "0",
+      })
+      globalThis.document.body.append(textarea)
+      textarea.focus({ preventScroll: true })
+      textarea.select()
+      copied = Boolean(globalThis.document.execCommand?.("copy"))
+      textarea.remove()
+    } catch {
+      copied = false
+    }
+
+    if (copied) {
+      setCopyStatus("Copied")
+      return
+    }
+
+    setCopyStatus("Select the JSON below to copy manually")
+    setShowManualCopy(true)
+  }
+
+  return (
+    <section
+      ref={panelRef}
+      aria-label="UX-REACH-02 viewport diagnostics"
+      data-testid="ux-reach-02-diagnostic-panel"
+      role="region"
+      style={{
+        position: "fixed",
+        zIndex: 2_147_483_647,
+        top: position?.top ?? 8,
+        left: position?.left ?? 8,
+        boxSizing: "border-box",
+        width: "min(360px, calc(100vw - 16px))",
+        maxHeight: "min(360px, calc(100vh - 16px))",
+        margin: 0,
+        padding: 10,
+        overflow: "auto",
+        border: "1px solid #8892a0",
+        borderRadius: 6,
+        background: "rgba(12, 16, 22, 0.96)",
+        color: "#f4f6f8",
+        boxShadow: "0 4px 18px rgba(0, 0, 0, 0.35)",
+        font: "12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace",
+        pointerEvents: "auto",
+        touchAction: "pan-y",
+        visibility: position ? "visible" : "hidden",
+      }}
+    >
+      <pre
+        data-testid="ux-reach-02-diagnostic-summary"
+        style={{
+          margin: "0 0 8px",
+          overflowWrap: "anywhere",
+          whiteSpace: "pre-wrap",
+        }}
+      >
+        {formatFloatingDiagnosticSummary(snapshot)}
+      </pre>
+      <button
+        aria-label="Copy full diagnostic JSON"
+        type="button"
+        style={{
+          minHeight: 36,
+          padding: "6px 10px",
+          border: "1px solid #8892a0",
+          borderRadius: 5,
+          background: "#202833",
+          color: "#f4f6f8",
+          font: "inherit",
+          cursor: "pointer",
+          touchAction: "manipulation",
+        }}
+        onClick={handleCopyJson}
+      >
+        Copy full diagnostic JSON
+      </button>
+      <span
+        aria-live="polite"
+        data-testid="ux-reach-02-copy-status"
+        style={{ marginInlineStart: 8 }}
+      >
+        {copyStatus}
+      </span>
+      {showManualCopy && (
+        <textarea
+          ref={manualCopyRef}
+          readOnly
+          aria-label="Diagnostic JSON for manual copy"
+          value={diagnosticJson}
+          style={{
+            display: "block",
+            boxSizing: "border-box",
+            width: "100%",
+            minHeight: 100,
+            marginTop: 8,
+            padding: 6,
+            font: "inherit",
+            touchAction: "auto",
+          }}
+        />
+      )}
+    </section>
+  )
+}
+
 const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConfirm }) => {
   const { polyglot } = useStore(polyglotState)
   const { skipMarkAllReadConfirmation } = useStore(settingsState, {
@@ -696,35 +910,8 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
         pointerEvents: isHidden ? "none" : undefined,
       }}
     >
-      {diagnosticsEnabled && (
-        <pre
-          aria-hidden="true"
-          data-testid="ux-reach-02-diagnostic-panel"
-          style={{
-            position: "fixed",
-            zIndex: 2_147_483_647,
-            top: 8,
-            left: 8,
-            boxSizing: "border-box",
-            width: "min(360px, calc(100vw - 16px))",
-            maxHeight: "45vh",
-            margin: 0,
-            padding: 8,
-            overflow: "hidden",
-            border: "1px solid #8892a0",
-            borderRadius: 6,
-            background: "rgba(12, 16, 22, 0.94)",
-            color: "#f4f6f8",
-            font: "10px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace",
-            whiteSpace: "pre-wrap",
-            overflowWrap: "anywhere",
-            pointerEvents: "none",
-          }}
-        >
-          {diagnosticSnapshot
-            ? JSON.stringify(diagnosticSnapshot, null, 2)
-            : "Collecting viewport diagnostics…"}
-        </pre>
+      {diagnosticsEnabled && !isHidden && diagnosticSnapshot && (
+        <FloatingDiagnosticsPanel controlRef={floatingControlRef} snapshot={diagnosticSnapshot} />
       )}
       {isFloating && (
         <span className="visually-hidden" id="mark-all-read-position-help">
