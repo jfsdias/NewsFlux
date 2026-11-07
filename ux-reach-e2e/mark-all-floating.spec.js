@@ -234,6 +234,16 @@ test("UX-REACH-01: a real touch drag on the grip never activates Mark All", asyn
   await expect(page.getByText("Mark all as read?", { exact: true })).toBeHidden()
 
   const gripAfterDrag = await handle.boundingBox()
+  await handle.evaluate((element) => {
+    element.addEventListener(
+      "click",
+      (event) => {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+      },
+      { capture: true, once: true },
+    )
+  })
   await page.touchscreen.tap(
     gripAfterDrag.x + gripAfterDrag.width / 2,
     gripAfterDrag.y + gripAfterDrag.height / 2,

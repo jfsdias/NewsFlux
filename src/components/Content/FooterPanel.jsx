@@ -371,6 +371,7 @@ const MarkAllReadButton = ({ disabled, from, hidden = false, id, loading, onConf
 
     pointerDragRef.current = null
     if (!drag.moved) {
+      setPositionActionsVisible(true)
       return
     }
 
