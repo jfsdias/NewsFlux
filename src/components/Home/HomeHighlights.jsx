@@ -15,7 +15,7 @@ const HomeHighlights = ({
   entries,
   highlightIds,
   observeRead,
-  personalizationApplied = false,
+  disclosureVisible = false,
 }) => {
   const { polyglot } = useStore(polyglotState)
   const [explanationOpen, setExplanationOpen] = useState(false)
@@ -72,7 +72,7 @@ const HomeHighlights = ({
     <section aria-label={polyglot.t("home_page.section_highlights")} className="home-highlights">
       <div className="home-highlights-heading-row">
         <h2 className="home-section-heading">{polyglot.t("home_page.section_highlights")}</h2>
-        {personalizationApplied && (
+        {disclosureVisible && (
           <button
             ref={infoButtonRef}
             aria-controls={PERSONALIZATION_EXPLANATION_ID}
@@ -86,7 +86,7 @@ const HomeHighlights = ({
           </button>
         )}
       </div>
-      {personalizationApplied && (
+      {disclosureVisible && (
         <div
           className="home-personalization-explanation"
           hidden={!explanationOpen}

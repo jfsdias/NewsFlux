@@ -45,6 +45,7 @@ const snapshot = (generation, values = {}) =>
     ...generationContext(generation),
     baselineProjection: baseline,
     personalizedProjection: personalized,
+    disclosureVisible: true,
     ...values,
   })
 
@@ -60,9 +61,33 @@ test("uses a profile resolved before the canonical snapshot", () => {
   assert.equal(committed.committed, true)
   assert.deepEqual(committed.projection, personalized)
   assert.equal(committed.generation.status, "committed")
-  assert.equal(committed.generation.personalizationApplied, true)
+  assert.equal(committed.generation.projectionApplied, true)
+  assert.equal(committed.generation.disclosureVisible, true)
   assert.equal(Object.isFrozen(committed.projection), true)
   assert.equal(Object.isFrozen(committed.projection.highlightIds), true)
+})
+
+test("keeps projection application separate from visible disclosure for a committed generation", () => {
+  const generation = createGeneration()
+  const ready = resolveHomePersonalizationProfile(generation, {
+    ...generationContext(generation),
+    profile: { sourceCounts: new Map([["20", 2]]) },
+  })
+  const committed = snapshot(ready, { disclosureVisible: false })
+
+  assert.equal(committed.committed, true)
+  assert.deepEqual(committed.projection, personalized)
+  assert.equal(committed.generation.projectionApplied, true)
+  assert.equal(committed.generation.disclosureVisible, false)
+})
+
+test("fallback generations suppress disclosure even when a caller supplies a visible difference", () => {
+  const committed = snapshot(createGeneration(), { disclosureVisible: true })
+
+  assert.equal(committed.committed, true)
+  assert.deepEqual(committed.projection, baseline)
+  assert.equal(committed.generation.projectionApplied, false)
+  assert.equal(committed.generation.disclosureVisible, false)
 })
 
 test("PROFILE_TIMEOUT_FALLS_BACK immediately and discards a late profile without recomposition", () => {
@@ -71,7 +96,8 @@ test("PROFILE_TIMEOUT_FALLS_BACK immediately and discards a late profile without
 
   assert.equal(committed.committed, true)
   assert.deepEqual(committed.projection, baseline)
-  assert.equal(committed.generation.personalizationApplied, false)
+  assert.equal(committed.generation.projectionApplied, false)
+  assert.equal(committed.generation.disclosureVisible, false)
 
   const late = resolveHomePersonalizationProfile(committed.generation, {
     ...generationContext(committed.generation),
