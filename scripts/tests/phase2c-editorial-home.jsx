@@ -2987,6 +2987,10 @@ const Harness = () => {
           "Ordinal category ID prefix remained visible in the Home lane label",
         )
         assert(
+          lanes.find(({ categoryId }) => categoryId === 10)?.categoryTitle === "World",
+          "Home did not format an editorial ordinal that differs from the category ID",
+        )
+        assert(
           sections.every((section) =>
             section
               .getAttribute("aria-label")
