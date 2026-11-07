@@ -35,22 +35,67 @@
 }
 
 .mark-all-read-floating {
-  display: contents;
+  --mark-all-safe-top: env(safe-area-inset-top, 0px);
+  --mark-all-safe-right: env(safe-area-inset-right, 0px);
+  --mark-all-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --mark-all-safe-left: env(safe-area-inset-left, 0px);
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 48px;
+  align-items: flex-start;
+  justify-content: flex-start;
+  box-sizing: border-box;
+  width: 48px;
+  height: 48px;
 }
 
 .mark-all-read-floating-trigger {
   display: contents;
 }
 
+.mark-all-read-floating:not(.mark-all-read-floating--active) .arco-btn-shape-circle {
+  box-sizing: border-box;
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  padding: 0;
+}
+
 .mark-all-read-drag-handle {
-  display: none;
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: var(--nf-text-secondary, var(--color-text-2));
+  cursor: grab;
+  opacity: 0.82;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.mark-all-read-floating .arco-btn-shape-circle {
+  position: relative;
+}
+
+.mark-all-read-drag-handle:active {
+  cursor: grabbing;
+}
+
+.mark-all-read-drag-handle .arco-icon {
+  width: 14px;
+  height: 14px;
+  font-size: 14px;
 }
 
 .mark-all-read-floating--active {
-  --mark-all-safe-top: env(safe-area-inset-top, 0px);
-  --mark-all-safe-right: env(safe-area-inset-right, 0px);
-  --mark-all-safe-bottom: env(safe-area-inset-bottom, 0px);
-  --mark-all-safe-left: env(safe-area-inset-left, 0px);
   position: fixed;
   z-index: 20;
   display: block;
@@ -79,35 +124,15 @@
 }
 
 .mark-all-read-floating--active .mark-all-read-drag-handle {
-  position: absolute;
-  top: 1px;
-  right: 1px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  color: var(--nf-text-secondary, var(--color-text-2));
   cursor: grab;
-  opacity: 0.82;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
+  pointer-events: auto;
 }
 
-.mark-all-read-floating--active .mark-all-read-drag-handle:active {
-  cursor: grabbing;
+.mark-all-read-position-actions {
+  padding: 4px;
 }
 
-.mark-all-read-floating--active .mark-all-read-drag-handle .arco-icon {
-  width: 14px;
-  height: 14px;
-  font-size: 14px;
-}
-
-.mark-all-read-floating--active .arco-btn-shape-circle:focus-visible {
+.mark-all-read-floating .arco-btn-shape-circle:focus-visible {
   outline: 2px solid var(--nf-accent-focus, var(--nf-focus-ring));
   outline-offset: 3px;
 }
@@ -342,5 +367,37 @@ body[arco-theme="dark"]
     inset: -9px -3px;
     content: "";
     pointer-events: auto;
+  }
+}
+
+@media (pointer: fine) {
+  .mark-all-read-floating:not(.mark-all-read-floating--active) {
+    flex-basis: 32px;
+    width: 32px;
+    height: 32px;
+  }
+
+  .mark-all-read-floating:not(.mark-all-read-floating--active) .arco-btn-shape-circle,
+  .mark-all-read-floating--active .arco-btn-shape-circle {
+    flex: 0 0 32px;
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+  }
+}
+
+@media (pointer: fine) and (max-width: 768px) {
+  .mark-all-read-floating:not(.mark-all-read-floating--active) {
+    flex-basis: var(--mobile-edge-control-size);
+    width: var(--mobile-edge-control-size);
+    height: var(--mobile-edge-control-size);
+  }
+
+  .mark-all-read-floating:not(.mark-all-read-floating--active) .arco-btn-shape-circle,
+  .mark-all-read-floating--active .arco-btn-shape-circle {
+    flex-basis: var(--mobile-edge-control-size);
+    width: var(--mobile-edge-control-size);
+    min-width: var(--mobile-edge-control-size);
+    height: var(--mobile-edge-control-size);
   }
 }
