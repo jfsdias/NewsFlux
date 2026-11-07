@@ -97,7 +97,7 @@ export const personalizationFixtures = {
 }
 
 const categoryLaneCategories = [
-  { id: 10, name: "World" },
+  { id: 10, ordinal: 13, name: "World" },
   { id: 20, name: "Technology" },
   { id: 30, name: "Science" },
   { id: 40, name: "Culture" },
@@ -120,7 +120,10 @@ export const homeCategoryLaneFixtures = [
           ...fixtureFeed,
           id: category.id,
           title: `${category.name} source`,
-          category: { id: category.id, title: `${category.id} · ${category.name}` },
+          category: {
+            id: category.id,
+            title: `${category.ordinal ?? category.id} · ${category.name}`,
+          },
         },
       }
     }),

@@ -8,10 +8,11 @@ const { createHomeCategoryLanes } = await import(
   new URL("home-category-projection.js", import.meta.url)
 )
 
-test("removes an ordinal prefix only when it matches the category id", () => {
+test("removes a supported editorial ordinal independently of the category id", () => {
+  assert.equal(formatCategoryDisplayName({ id: 5, title: "13 · Viagem" }), "Viagem")
   assert.equal(formatCategoryDisplayName({ id: 13, title: "13 · Viagem" }), "Viagem")
   assert.equal(
-    formatCategoryDisplayName({ id: "14", title: "14 · Notícias & Atualidades" }),
+    formatCategoryDisplayName({ id: "46", title: "14 · Notícias & Atualidades" }),
     "Notícias & Atualidades",
   )
 })
@@ -26,7 +27,7 @@ test("preserves names without the confirmed prefix pattern", () => {
     formatCategoryDisplayName({ id: 13, title: "2026 · Election coverage" }),
     "2026 · Election coverage",
   )
-  assert.equal(formatCategoryDisplayName({ id: 13, title: "12 · Travel" }), "12 · Travel")
+  assert.equal(formatCategoryDisplayName({ id: 13, title: "100 · Travel" }), "100 · Travel")
 })
 
 test("preserves empty and invalid category names safely", () => {
@@ -37,35 +38,37 @@ test("preserves empty and invalid category names safely", () => {
 })
 
 test("formats only the display value without mutating source metadata", () => {
-  const category = { id: 13, title: "13 · Viagem", userDefined: true }
+  const category = { id: 5, title: "13 · Viagem", userDefined: true }
+  const originalMetadata = JSON.stringify(category)
 
   assert.equal(formatCategoryDisplayName(category), "Viagem")
-  assert.deepEqual(category, { id: 13, title: "13 · Viagem", userDefined: true })
+  assert.equal(JSON.stringify(category), originalMetadata)
+  assert.deepEqual(category, { id: 5, title: "13 · Viagem", userDefined: true })
 })
 
 test("does not use formatted-name collisions as category identity", () => {
   const entries = [
     {
       id: 1,
-      feed: { category: { id: 13, title: "13 · News" } },
+      feed: { category: { id: 39, title: "13 · News" } },
       status: "unread",
       published_at: "2026-11-01T00:00:00Z",
     },
     {
       id: 2,
-      feed: { category: { id: 13, title: "13 · News" } },
+      feed: { category: { id: 39, title: "13 · News" } },
       status: "unread",
       published_at: "2026-11-01T00:00:00Z",
     },
     {
       id: 3,
-      feed: { category: { id: 14, title: "14 · News" } },
+      feed: { category: { id: 46, title: "14 · News" } },
       status: "unread",
       published_at: "2026-11-01T00:00:00Z",
     },
     {
       id: 4,
-      feed: { category: { id: 14, title: "14 · News" } },
+      feed: { category: { id: 46, title: "14 · News" } },
       status: "unread",
       published_at: "2026-11-01T00:00:00Z",
     },
@@ -82,8 +85,8 @@ test("does not use formatted-name collisions as category identity", () => {
       formatCategoryDisplayName({ id: lane.categoryId, title: lane.categoryTitle }),
     ]),
     [
-      [13, "News"],
-      [14, "News"],
+      [39, "News"],
+      [46, "News"],
     ],
   )
 })
