@@ -43,6 +43,10 @@ _SKIP_TAGS = {
     "form", "button", "select", "option", "textarea", "noscript", "canvas",
     "video", "audio", "dialog",
 }
+_VOID_TAGS = {
+    "area", "base", "br", "col", "embed", "hr", "img", "input", "link",
+    "meta", "param", "source", "track", "wbr",
+}
 _SKIP_CLASS_RE = re.compile(
     r"(?:^|[-_ ])(?:nav|menu|sidebar|toolbar|breadcrumb|cookie|advert|promo|social|"
     r"related|subscribe|paywall|subscription|modal|dialog|masthead)(?:$|[-_ ])",
@@ -81,7 +85,6 @@ class _HTMLTextExtractor(HTMLParser):
         self._article_bodies: list[str] = []
         self._jsonld_chunks: list[str] | None = None
         self._read_jsonld = read_jsonld
-        self._skip_depth = 0
         self._skip_tag: str | None = None
         self._skip_stack: list[str] = []
         self._has_article_element = False
@@ -105,22 +108,24 @@ class _HTMLTextExtractor(HTMLParser):
             self.blocks.append(text)
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag = tag.casefold()
         attributes = {key.casefold(): value or "" for key, value in attrs}
         if self._read_jsonld and tag == "script" and "ld+json" in attributes.get("type", "").casefold():
             self._jsonld_chunks = []
-            self._skip_depth += 1
+            if not self._skip_stack:
+                self._skip_tag = tag
             self._skip_stack.append(tag)
             return
-        if self._skip_depth:
-            self._skip_depth += 1
-            self._skip_stack.append(tag)
+        if self._skip_stack:
+            if tag not in _VOID_TAGS:
+                self._skip_stack.append(tag)
             return
         classes = f"{attributes.get('class', '')} {attributes.get('id', '')}"
         hidden = "hidden" in attributes or attributes.get("aria-hidden", "").casefold() == "true"
         if tag in _SKIP_TAGS or hidden or _SKIP_CLASS_RE.search(classes):
-            self._skip_depth = 1
             self._skip_tag = tag
-            self._skip_stack.append(tag)
+            if tag not in _VOID_TAGS:
+                self._skip_stack.append(tag)
             return
         if tag in {"article", "main"}:
             self._has_article_element = True
@@ -132,16 +137,19 @@ class _HTMLTextExtractor(HTMLParser):
             self._current.append(" ")
 
     def handle_endtag(self, tag: str) -> None:
-        if self._skip_depth:
-            if self._skip_stack:
-                self._skip_stack.pop()
-            self._skip_depth = max(0, self._skip_depth - 1)
-            if self._skip_depth == 0:
-                if self._jsonld_chunks is not None and tag == "script":
-                    raw = "".join(self._jsonld_chunks).strip()
-                    self._jsonld_chunks = None
-                    self._article_bodies.extend(_jsonld_article_bodies(raw))
-                self._skip_tag = None
+        tag = tag.casefold()
+        if self._skip_stack:
+            if tag in _VOID_TAGS or tag not in self._skip_stack:
+                return
+            index = len(self._skip_stack) - 1 - self._skip_stack[::-1].index(tag)
+            removed = self._skip_stack[index:]
+            del self._skip_stack[index:]
+            if self._jsonld_chunks is not None and "script" in removed:
+                chunks = self._jsonld_chunks
+                self._jsonld_chunks = None
+                if tag == "script":
+                    self._article_bodies.extend(_jsonld_article_bodies("".join(chunks).strip()))
+            self._skip_tag = self._skip_stack[0] if self._skip_stack else None
             return
         if tag in _BLOCK_TAGS:
             self._commit()
@@ -150,7 +158,7 @@ class _HTMLTextExtractor(HTMLParser):
         if self._jsonld_chunks is not None:
             self._jsonld_chunks.append(data)
             return
-        if self._skip_depth:
+        if self._skip_stack:
             if self._skip_tag not in {"script", "style", "svg"}:
                 self._diagnostic.append(data)
             return

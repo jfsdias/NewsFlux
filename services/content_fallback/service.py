@@ -284,8 +284,14 @@ class ContentFallbackService:
             return {**cached, "cache_hit": True}
 
         stored = self._get_stored(entry)
+        expected_stored_provider = (
+            "wallhop.io" if decision.policy.provider == "wallhop" else "miniflux"
+        )
+        if stored is not None and stored.provider != expected_stored_provider:
+            self._delete_stored(entry.id)
+            stored = None
         stored_assessment = None
-        if stored is not None and stored.provider in {"wallhop.io", "miniflux"}:
+        if stored is not None:
             stored_assessment = assess_content(entry.title, stored.content_html)
             if not passes_recovery(original, stored_assessment):
                 self._delete_stored(entry.id)
@@ -332,9 +338,9 @@ class ContentFallbackService:
         try:
             selected_provider = self.provider if decision.policy.provider == "wallhop" else self.miniflux_provider
             provider_result = selected_provider.recover(entry, original)
-            # A feed refresh, status update, star update, or URL change while the
-            # third-party request is in flight makes the result stale. The sidecar does
-            # not write anything; it returns the latest Miniflux version instead.
+            # A feed refresh or article identity/content change while the provider is
+            # in flight makes the result stale. Read/star state is user state and does
+            # not change which article the recovered text belongs to.
             try:
                 current = self.miniflux.get_entry(entry.id)
             except MinifluxError:
@@ -344,7 +350,7 @@ class ContentFallbackService:
                     "reason": "unable_to_confirm_entry_snapshot",
                 }
             else:
-                if current.fingerprint != entry.fingerprint:
+                if current.content_fingerprint != entry.content_fingerprint:
                     current_assessment = assess_content(current.title, current.content)
                     result = {
                         **self._base_response(current, current_assessment),

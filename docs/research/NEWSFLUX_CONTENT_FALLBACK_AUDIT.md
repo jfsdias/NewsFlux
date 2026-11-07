@@ -6,11 +6,11 @@ Date: 2026-11-07
 
 GitHub API and local checkouts were used because the MCP REA exploration tool was not available in this session.
 
-| Repository | Current `main` | Reference checked | Open PRs checked |
-|---|---|---|---|
-| NewsFlux | `4c691bc549d48daf6fea7e090f1b41e9113841a7` | branch head before work | 7, all STORY-01B research drafts (#134–#140) |
-| Audicle | `951821b06e15c542c0b7784037c08af84f9fa60f` | `951821b06e15c542c0b7784037c08af84f9fa60f`, identical to current `main` | 14, dependency updates; no content-fallback PR |
-| Miniflux | `ba40f99f66ccd8362628d7140abb0ab8a82e9f5f` | installed release tag `v2.3.5`, source commit `faecfa2fac61a91f4f69550bb1afd506c4b51749` | 19; checked entry-content, feed refresh, and API-related PR titles |
+| Repository | Current `main`                             | Reference checked                                                                        | Open PRs checked                                                   |
+| ---------- | ------------------------------------------ | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| NewsFlux   | `4c691bc549d48daf6fea7e090f1b41e9113841a7` | branch head before work                                                                  | 7, all STORY-01B research drafts (#134–#140)                       |
+| Audicle    | `951821b06e15c542c0b7784037c08af84f9fa60f` | `951821b06e15c542c0b7784037c08af84f9fa60f`, identical to current `main`                  | 14, dependency updates; no content-fallback PR                     |
+| Miniflux   | `ba40f99f66ccd8362628d7140abb0ab8a82e9f5f` | installed release tag `v2.3.5`, source commit `faecfa2fac61a91f4f69550bb1afd506c4b51749` | 19; checked entry-content, feed refresh, and API-related PR titles |
 
 No open NewsFlux PR overlapped this P0 service scope. Miniflux's open PRs do not change the 2.3.5 source facts below; implementation targets the installed tag.
 
@@ -37,16 +37,16 @@ These behaviors rule out storing P0 recovery into Miniflux. The service uses its
 
 ## Architecture comparison
 
-| Criterion | A. Miniflux configuration | B. Independent sidecar | C. NewsFlux integration |
-|---|---|---|---|
-| Simplicity | Lowest operational cost, but feed scraper rules cannot select WallHop by source policy. | Adds one small service and API token; provider and validation behavior stays in one place. | Adds app API, UI, provider, and network-security paths. |
-| Security | Uses Miniflux's fetcher controls, but URL rewrite rules can change the request URL. | Explicit source policies, public-address checks, bounded redirects, sanitization, and read-only Miniflux calls. | Must reproduce the sidecar's SSRF and provider controls inside the app boundary. |
-| Maintenance and upstream compatibility | Few components, but behavior follows Miniflux feed configuration and may change with upgrades. | Miniflux and NewsFlux can upgrade independently through public APIs; SQLite schema belongs to the sidecar. | Couples fallback work to NewsFlux backend and ArticleDetail changes. |
-| Persistence | `update_content=true` mutates Miniflux; later feed refreshes can overwrite that content. | Sanitized overlay persists in bounded SQLite; Miniflux remains the source of truth. | Can persist in the app, but creates another content store inside the main product. |
-| Mobile latency | One Miniflux scrape request when explicitly requested. | One app-to-sidecar call plus Miniflux/WallHop work; cache avoids repeated provider calls. | Can remove the sidecar hop, while still waiting for the provider. |
-| Duplicate requests | No cross-client deduplication for separate API calls. | Per-entry in-flight dedup, 15-minute memory cache, and persistent result cache. | Can deduplicate in the app, but shares capacity with product requests. |
-| Isolation | Fetching remains in the Miniflux runtime. | Provider logic and credentials are isolated in a private service. | Fetching shares the app runtime and deployment lifecycle. |
-| Reliability after updates | Most exposed to Miniflux feed-rule and refresh behavior. | Depends on stable public Miniflux API fields; no Miniflux code or schema changes. | Depends on NewsFlux internal API and UI structure. |
+| Criterion                              | A. Miniflux configuration                                                                      | B. Independent sidecar                                                                                          | C. NewsFlux integration                                                            |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Simplicity                             | Lowest operational cost, but feed scraper rules cannot select WallHop by source policy.        | Adds one small service and API token; provider and validation behavior stays in one place.                      | Adds app API, UI, provider, and network-security paths.                            |
+| Security                               | Uses Miniflux's fetcher controls, but URL rewrite rules can change the request URL.            | Explicit source policies, public-address checks, bounded redirects, sanitization, and read-only Miniflux calls. | Must reproduce the sidecar's SSRF and provider controls inside the app boundary.   |
+| Maintenance and upstream compatibility | Few components, but behavior follows Miniflux feed configuration and may change with upgrades. | Miniflux and NewsFlux can upgrade independently through public APIs; SQLite schema belongs to the sidecar.      | Couples fallback work to NewsFlux backend and ArticleDetail changes.               |
+| Persistence                            | `update_content=true` mutates Miniflux; later feed refreshes can overwrite that content.       | Sanitized overlay persists in bounded SQLite; Miniflux remains the source of truth.                             | Can persist in the app, but creates another content store inside the main product. |
+| Mobile latency                         | One Miniflux scrape request when explicitly requested.                                         | One app-to-sidecar call plus Miniflux/WallHop work; cache avoids repeated provider calls.                       | Can remove the sidecar hop, while still waiting for the provider.                  |
+| Duplicate requests                     | No cross-client deduplication for separate API calls.                                          | Per-entry in-flight dedup, 15-minute memory cache, and persistent result cache.                                 | Can deduplicate in the app, but shares capacity with product requests.             |
+| Isolation                              | Fetching remains in the Miniflux runtime.                                                      | Provider logic and credentials are isolated in a private service.                                               | Fetching shares the app runtime and deployment lifecycle.                          |
+| Reliability after updates              | Most exposed to Miniflux feed-rule and refresh behavior.                                       | Depends on stable public Miniflux API fields; no Miniflux code or schema changes.                               | Depends on NewsFlux internal API and UI structure.                                 |
 
 Option A's native scraper is still used by B for explicitly configured public feeds, with `update_content=false` and URL-rewrite checks. The standalone A path is not sufficient for the full policy behavior. B is selected; C is deferred.
 
@@ -60,11 +60,11 @@ Deterministic tests cover content classification, JSON-LD, WallHop full/partial/
 
 One public article URL from each candidate publisher was requested once through the documented `https://wallhop.io/raw/{url}` path, without credentials or Miniflux access:
 
-| Publisher | Public article checked | Workspace result | Full-text verdict |
-|---|---|---|---|
-| NYT | [Briefing: Stephen Miller and Trump](https://www.nytimes.com/2026/11/06/briefing/stephen-miller-trump.html) | HTTP 403, `That address isn't allowed.` | Not evaluated |
-| Bloomberg | [Wall Street Sees Risks to AI Boom After the Democratic Sweep](https://www.bloomberg.com/news/articles/2026-11-04/wall-street-sees-risks-to-ai-boom-after-the-democratic-sweep) | HTTP 403, `That address isn't allowed.` | Not evaluated |
-| WSJ | [U.S. Stocks Mixed After Jobs Data, Muted AI Rebound](https://www.wsj.com/finance/stocks/u-s-stocks-mixed-after-jobs-data-muted-ai-rebound-945344f6) | HTTP 403, `That address isn't allowed.` | Not evaluated |
-| Folha | [Governo Lula lança plano de transição energética](https://www1.folha.uol.com.br/ambiente/2026/11/governo-lula-lanca-plano-de-transicao-energetica-e-diretrizes-para-reduzir-combustiveis-fosseis.shtml) | HTTP 403, `That address isn't allowed.` | Not evaluated |
+| Publisher | Public article checked                                                                                                                                                                                   | Workspace result                        | Full-text verdict |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- | ----------------- |
+| NYT       | [Briefing: Stephen Miller and Trump](https://www.nytimes.com/2026/11/06/briefing/stephen-miller-trump.html)                                                                                              | HTTP 403, `That address isn't allowed.` | Not evaluated     |
+| Bloomberg | [Wall Street Sees Risks to AI Boom After the Democratic Sweep](https://www.bloomberg.com/news/articles/2026-11-04/wall-street-sees-risks-to-ai-boom-after-the-democratic-sweep)                          | HTTP 403, `That address isn't allowed.` | Not evaluated     |
+| WSJ       | [U.S. Stocks Mixed After Jobs Data, Muted AI Rebound](https://www.wsj.com/finance/stocks/u-s-stocks-mixed-after-jobs-data-muted-ai-rebound-945344f6)                                                     | HTTP 403, `That address isn't allowed.` | Not evaluated     |
+| Folha     | [Governo Lula lança plano de transição energética](https://www1.folha.uol.com.br/ambiente/2026/11/governo-lula-lanca-plano-de-transicao-energetica-e-diretrizes-para-reduzir-combustiveis-fosseis.shtml) | HTTP 403, `That address isn't allowed.` | Not evaluated     |
 
 The managed workspace denied access to `wallhop.io`; the response was not an article page. No result is counted as `OPEN_PASS` or `FULL_TEXT_PASS`. The domain-level live gate stays blocked until the same URLs can be checked from an authorized isolated deployment/test network. No Miniflux, production, Compose, or publisher-origin request was made by this live check.

@@ -20,6 +20,20 @@ def full_article_html() -> str:
 
 
 class ContentAssessmentTests(unittest.TestCase):
+    def test_void_tags_inside_nested_skip_regions_do_not_hide_article(self) -> None:
+        raw = (
+            "<header><img src='/logo.png'><nav>Home<br><input></header>"
+            "<footer><a href='/about'>About</a></footer>"
+            + full_article_html()
+        )
+
+        result = assess_content("Research Update", raw)
+
+        self.assertEqual(result.state, "SUFFICIENT")
+        self.assertNotIn("Home", result.safe_html)
+        self.assertNotIn("About", result.safe_html)
+        self.assertIn("Researchers reported", result.safe_html)
+
     def test_content_already_complete_requires_prose_and_structure(self) -> None:
         result = assess_content("Research Update", full_article_html())
         self.assertEqual(result.state, "SUFFICIENT")

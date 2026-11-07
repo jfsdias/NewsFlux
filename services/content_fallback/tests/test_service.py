@@ -233,6 +233,105 @@ class ServiceTests(unittest.TestCase):
             self.assertEqual(second_provider.calls, 0)
             second_store.close()
 
+    def test_persisted_wallhop_recovery_is_not_reused_for_miniflux_policy(self) -> None:
+        item = entry()
+        miniflux = FakeMiniflux({item.id: item})
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "content-fallback.sqlite3"
+            first_store = SQLiteRecoveryStore(path)
+            first = ContentFallbackService(
+                miniflux=miniflux,
+                policies=enabled_registry(),
+                provider=FakeProvider(),
+                store=first_store,
+            ).recover(item.id)
+            self.assertEqual(first["status"], "recovered")
+            first_store.close()
+
+            second_store = SQLiteRecoveryStore(path)
+            native = MinifluxScraperProvider(
+                miniflux,
+                resolver=lambda _host, _port, _allow_private: "93.184.216.34",
+            )
+            second = ContentFallbackService(
+                miniflux=miniflux,
+                policies=native_registry(),
+                miniflux_provider=native,
+                store=second_store,
+            ).recover(item.id)
+            self.assertEqual(second["status"], "recovered")
+            self.assertEqual(second["provenance"]["provider"], "miniflux")
+            self.assertFalse(second["cache_hit"])
+            self.assertEqual(miniflux.native_calls[1], ("GET_FETCH_CONTENT", item.id))
+            second_store.close()
+
+    def test_persisted_miniflux_recovery_is_not_reused_for_wallhop_policy(self) -> None:
+        item = entry()
+        miniflux = FakeMiniflux({item.id: item})
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "content-fallback.sqlite3"
+            first_store = SQLiteRecoveryStore(path)
+            native = MinifluxScraperProvider(
+                miniflux,
+                resolver=lambda _host, _port, _allow_private: "93.184.216.34",
+            )
+            first = ContentFallbackService(
+                miniflux=miniflux,
+                policies=native_registry(),
+                miniflux_provider=native,
+                store=first_store,
+            ).recover(item.id)
+            self.assertEqual(first["status"], "recovered")
+            first_store.close()
+
+            second_store = SQLiteRecoveryStore(path)
+            wallhop = FakeProvider()
+            second = ContentFallbackService(
+                miniflux=miniflux,
+                policies=enabled_registry(),
+                provider=wallhop,
+                store=second_store,
+            ).recover(item.id)
+            self.assertEqual(second["status"], "recovered")
+            self.assertEqual(second["provenance"]["provider"], "wallhop.io")
+            self.assertFalse(second["cache_hit"])
+            self.assertEqual(wallhop.calls, 1)
+            second_store.close()
+
+    def test_disabled_policy_blocks_and_invalidates_persisted_recovery(self) -> None:
+        item = entry()
+        miniflux = FakeMiniflux({item.id: item})
+        store = MemoryRecoveryStore()
+        ContentFallbackService(
+            miniflux=miniflux,
+            policies=enabled_registry(),
+            provider=FakeProvider(),
+            store=store,
+        ).recover(item.id)
+        disabled = PolicyRegistry.from_dict(
+            {"enabled": True, "domains": {"nytimes.com": {"state": "DISABLED"}}}
+        )
+        blocked_provider = FakeProvider()
+        blocked = ContentFallbackService(
+            miniflux=miniflux,
+            policies=disabled,
+            provider=blocked_provider,
+            store=store,
+        ).recover(item.id)
+        self.assertEqual(blocked["status"], "disabled")
+        self.assertEqual(blocked_provider.calls, 0)
+
+        next_provider = FakeProvider()
+        retried = ContentFallbackService(
+            miniflux=miniflux,
+            policies=enabled_registry(),
+            provider=next_provider,
+            store=store,
+        ).recover(item.id)
+        self.assertEqual(retried["status"], "recovered")
+        self.assertFalse(retried["cache_hit"])
+        self.assertEqual(next_provider.calls, 1)
+
     def test_saved_recovery_is_invalidated_when_miniflux_content_changes(self) -> None:
         item = entry()
         miniflux = FakeMiniflux({item.id: item})
@@ -340,14 +439,59 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(original["content_origin"], "miniflux")
         self.assertIn("Short feed teaser", original["content_html"])
 
-    def test_stale_session_status_or_star_change_discards_recovery(self) -> None:
-        before = entry(status="unread", starred=False)
-        after = entry(status="read", starred=True)
-        miniflux = FakeMiniflux({42: [before, after]})
-        provider = FakeProvider()
-        result = ContentFallbackService(miniflux=miniflux, policies=enabled_registry(), provider=provider).recover(42)
-        self.assertEqual(result["status"], "stale")
-        self.assertEqual(result["content_origin"], "miniflux")
+    def test_read_and_star_changes_during_recovery_preserve_recovered_content(self) -> None:
+        transitions = (
+            ("unread", "read", False, False),
+            ("read", "unread", False, False),
+            ("unread", "unread", False, True),
+            ("read", "unread", False, True),
+        )
+        for before_status, after_status, before_starred, after_starred in transitions:
+            with self.subTest(
+                before=(before_status, before_starred),
+                after=(after_status, after_starred),
+            ):
+                before = entry(status=before_status, starred=before_starred)
+                after = entry(status=after_status, starred=after_starred)
+                miniflux = FakeMiniflux({42: [before, after]})
+                release = threading.Event()
+                provider = FakeProvider(block=release)
+                service = ContentFallbackService(
+                    miniflux=miniflux,
+                    policies=enabled_registry(),
+                    provider=provider,
+                )
+                result: dict[str, object] = {}
+                thread = threading.Thread(target=lambda: result.update(service.recover(42)))
+                thread.start()
+                self.assertTrue(provider.started.wait(1))
+                release.set()
+                thread.join(1)
+
+                self.assertFalse(thread.is_alive())
+                self.assertEqual(result["status"], "recovered")
+                self.assertEqual(result["content_origin"], "wallhop")
+
+    def test_identity_and_content_changes_during_recovery_remain_stale(self) -> None:
+        original = entry()
+        changed = (
+            entry(content="<article><p>New feed content.</p></article>"),
+            entry(url="https://www.nytimes.com/updated"),
+            EntrySnapshot(**{**original.__dict__, "title": "Updated title"}),
+            EntrySnapshot(**{**original.__dict__, "published_at": "2026-11-08T10:00:00Z"}),
+            EntrySnapshot(**{**original.__dict__, "feed_id": 8}),
+            entry(entry_id=43),
+        )
+        for latest in changed:
+            with self.subTest(latest=latest):
+                miniflux = FakeMiniflux({original.id: [original, latest]})
+                result = ContentFallbackService(
+                    miniflux=miniflux,
+                    policies=enabled_registry(),
+                    provider=FakeProvider(),
+                ).recover(original.id)
+                self.assertEqual(result["status"], "stale")
+                self.assertEqual(result["content_origin"], "miniflux")
 
     def test_cache_deduplicates_repeated_entry_request(self) -> None:
         item = entry()
