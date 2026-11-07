@@ -10,6 +10,7 @@ import {
   resetCurrentHomeTargetIfMatches,
 } from "@/store/homePageState"
 import { currentRoutePathState } from "@/store/locationState"
+import formatCategoryDisplayName from "@/utils/category-display-name"
 import { confirmDialogProps, destructiveConfirmButtonProps } from "@/utils/confirm-dialog"
 import { createEntityHomeTarget, isSameHomeTarget } from "@/utils/home-page"
 
@@ -102,7 +103,7 @@ const useCategoryOperations = (useNotification = false) => {
       }
 
       const successMessage = polyglot.t("category_list.remove_category_success", {
-        title: category.title,
+        title: formatCategoryDisplayName(category),
       })
       showMessage(successMessage)
       if (homePageWasReset) {
@@ -113,7 +114,7 @@ const useCategoryOperations = (useNotification = false) => {
       console.error(`Failed to delete category: ${category.title}`, error)
 
       const errorMessage = polyglot.t("category_list.remove_category_error", {
-        title: category.title,
+        title: formatCategoryDisplayName(category),
       })
       showMessage(errorMessage, "error")
       return false
@@ -128,7 +129,7 @@ const useCategoryOperations = (useNotification = false) => {
     }
 
     const confirmation = polyglot.t("sidebar.delete_category_confirm_content", {
-      title: category.title,
+      title: formatCategoryDisplayName(category),
     })
     Modal.confirm({
       ...confirmDialogProps,

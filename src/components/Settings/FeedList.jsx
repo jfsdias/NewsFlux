@@ -40,6 +40,7 @@ import useRefreshCounts from "@/hooks/useRefreshCounts"
 import { invalidateArticleList } from "@/store/contentState"
 import { dataState, setFeedsData } from "@/store/dataState"
 import { settingsState } from "@/store/settingsState"
+import formatCategoryDisplayName from "@/utils/category-display-name"
 import { generateRelativeTime } from "@/utils/date"
 import filterFeedsByQuery from "@/utils/feed-search"
 import createSetter from "@/utils/nanostores"
@@ -404,7 +405,7 @@ const BulkOperationsModal = ({ visible, setVisible, selectedFeeds, onComplete })
           >
             {categoriesData.map((category) => (
               <Select.Option key={category.id} value={category.id}>
-                {category.title}
+                {formatCategoryDisplayName(category)}
               </Select.Option>
             ))}
           </Select>
@@ -608,7 +609,7 @@ const FeedList = () => {
             style={{ cursor: "pointer" }}
             onClick={() => navigate(`/category/${feed.category.id}`)}
           >
-            {category}
+            {formatCategoryDisplayName(feed.category)}
           </Tag>
         </Typography.Ellipsis>
       ),
