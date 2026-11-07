@@ -51,6 +51,9 @@ import {
   projectHomeSession,
   transitionHomeSession,
 } from "@/utils/home-editorial-session"
+import { HOME_PERSONALIZATION_FRESHNESS_WINDOW } from "@/utils/home-personalization-constants"
+import { createHomePersonalizationProfile } from "@/utils/home-personalization-profile"
+import { projectHomePersonalization } from "@/utils/home-personalization-projection"
 import "@arco-design/web-react/dist/css/arco.css"
 import "simplebar-react/dist/simplebar.min.css"
 import "@/index.css"
@@ -112,7 +115,7 @@ apiClient.get = async (url) => {
       if (starredProfileMode === "deferred" && deferredStarredProfile) {
         return deferredStarredProfile.promise
       }
-      return { entries: starredProfileEntries }
+      return { entries: starredProfileEntries, total: starredProfileEntries.length }
     }
     if (articleFailure) {
       throw new Error("Expected local article query failure")
@@ -303,6 +306,14 @@ const assert = (condition, message) => {
     throw new Error(message)
   }
 }
+const homeCompositionShape = ({ highlightIds, categoryLanes, latestIds }) => ({
+  highlightIds,
+  categoryLanes: categoryLanes.map(({ categoryId, entryIds }) => ({
+    categoryId,
+    entryIds,
+  })),
+  latestIds,
+})
 const settle = () => new Promise((resolve) => setTimeout(resolve, 70))
 const createDeferred = () => {
   let release
@@ -4544,6 +4555,165 @@ const Harness = () => {
             `Unavailable, hidden-only, or no-effect profile did not preserve Phase 2C: ${ids().join(",")}`,
           )
         }
+      },
+    ],
+    [
+      "PERSONALIZATION_INTERMEDIATE_ORDER_WITHOUT_FINAL_COMPOSITION_CHANGE",
+      async () => {
+        const entries = personalizationFixtures.disclosureInvisibleHome
+        const baselineSession = createHomeEditorialSession({
+          requestKey: "disclosure-invisible",
+          sessionRevision: 1,
+          entries,
+        })
+        const baseline = projectHomeSession(baselineSession, entries)
+        const profile = createHomePersonalizationProfile({
+          entries: personalizationFixtures.disclosureInvisibleProfile,
+          hiddenFeedIds: new Set(),
+        })
+        const intermediate = projectHomePersonalization({
+          entries,
+          baselineHighlightIds: baseline.highlightIds,
+          baselineRecentIds: baseline.recentIds,
+          profile,
+          freshnessWindow: HOME_PERSONALIZATION_FRESHNESS_WINDOW,
+        })
+        const personalizedSession = createHomeEditorialSession({
+          requestKey: "disclosure-invisible",
+          sessionRevision: 1,
+          entries,
+          initialProjection: intermediate,
+        })
+        const personalized = projectHomeSession(personalizedSession, entries)
+        assert(
+          intermediate.personalizationApplied,
+          "Fixture did not change the intermediate projection",
+        )
+        assert(
+          JSON.stringify(intermediate.recentIds) !== JSON.stringify(baseline.recentIds),
+          "Fixture did not change the intermediate projection",
+        )
+        assert(
+          JSON.stringify(homeCompositionShape(personalized)) ===
+            JSON.stringify(homeCompositionShape(baseline)),
+          "Fixture changed the final visible Home composition",
+        )
+
+        await mount("/", {
+          deferInitial: true,
+          entries,
+          total: entries.length,
+          personalization: { entries: personalizationFixtures.disclosureInvisibleProfile },
+        })
+        await waitFor(
+          () => starredProfileRequests().length === 1,
+          "Disclosure-invisible profile query did not start",
+        )
+        await settle()
+        deferredArticleQuery.resolve()
+        await waitFor(
+          () =>
+            contentState.get().isArticleListReady &&
+            homeRoot().querySelectorAll(".home-category-section").length === 3,
+          "Disclosure-invisible Home did not render its three category lanes",
+        )
+
+        assert(
+          ids().join(",") === "7001,7002,7003" &&
+            recentIds().join(",") === "7004,7007,7010,7005,7008,7011,7006,7009,7012" &&
+            !homeRoot().querySelector(".home-personalization-info-button"),
+          `Intermediate-only reordering changed the final Home or showed a false disclosure: highlights=${ids().join(",")}; recent=${recentIds().join(",")}; disclosure=${Boolean(homeRoot().querySelector(".home-personalization-info-button"))}`,
+        )
+      },
+    ],
+    [
+      "PERSONALIZATION_CATEGORY_LANE_COMPOSITION_CHANGE_SHOWS_DISCLOSURE",
+      async () => {
+        const entries = personalizationFixtures.disclosureVisibleCategoryHome
+        const baselineSession = createHomeEditorialSession({
+          requestKey: "category-change-fixture",
+          sessionRevision: 1,
+          entries,
+        })
+        const baseline = projectHomeSession(baselineSession, entries)
+        const candidateProjection = projectHomePersonalization({
+          entries,
+          baselineHighlightIds: baseline.highlightIds,
+          baselineRecentIds: baseline.recentIds,
+          profile: createHomePersonalizationProfile({ entries: [], hiddenFeedIds: new Set() }),
+          freshnessWindow: HOME_PERSONALIZATION_FRESHNESS_WINDOW,
+        })
+        const candidate = projectHomeSession(
+          createHomeEditorialSession({
+            requestKey: "category-change-fixture",
+            sessionRevision: 1,
+            entries,
+            initialProjection: candidateProjection,
+          }),
+          entries,
+        )
+        assert(
+          JSON.stringify(candidate.highlightIds) === JSON.stringify(baseline.highlightIds) &&
+            JSON.stringify(candidate.categoryLanes) !== JSON.stringify(baseline.categoryLanes),
+          "Fixture did not isolate a Category Lane-only composition change",
+        )
+        await mount("/", {
+          deferInitial: true,
+          entries,
+          total: entries.length,
+          personalization: { entries: [] },
+        })
+        await waitFor(
+          () => starredProfileRequests().length === 1,
+          "Category-change profile query did not start",
+        )
+        await settle()
+        deferredArticleQuery.resolve()
+        await waitFor(
+          () =>
+            contentState.get().isArticleListReady &&
+            homeRoot().querySelectorAll(".home-category-section").length === 3,
+          "Category-change Home did not render its category lanes",
+        )
+        const actualEntries = contentState.get().entries
+        const actualBaseline = projectHomeSession(
+          createHomeEditorialSession({
+            requestKey: "category-change-diagnostic",
+            sessionRevision: 1,
+            entries: actualEntries,
+          }),
+          actualEntries,
+        )
+        const expectedProjection = projectHomePersonalization({
+          entries: actualEntries,
+          baselineHighlightIds: actualBaseline.highlightIds,
+          baselineRecentIds: actualBaseline.recentIds,
+          profile: createHomePersonalizationProfile({
+            entries: starredProfileEntries,
+            hiddenFeedIds: new Set(),
+          }),
+          freshnessWindow: HOME_PERSONALIZATION_FRESHNESS_WINDOW,
+        })
+
+        assert(
+          ids().join(",") === "7001,7002,7003" &&
+            [...homeRoot().querySelectorAll(".home-category-section")]
+              .map((section) => section.dataset.categoryId)
+              .join(",") === "701,702,703" &&
+            [
+              ...homeRoot().querySelectorAll(
+                ".home-category-section[data-category-id='701'] .article-entry",
+              ),
+            ]
+              .map((node) => Number(node.dataset.entryId))
+              .includes(7019) &&
+            homeRoot().querySelector(".home-personalization-info-button") &&
+            canonicalEntryRequests().length === 1 &&
+            starredProfileRequests().length === 1 &&
+            statusMutationRequests === 0 &&
+            starMutationRequests === 0,
+          `A visible Category Lane composition change did not show the disclosure: highlights=${ids().join(",")}; categories=${[...homeRoot().querySelectorAll(".home-category-section")].map((section) => section.dataset.categoryId).join(",")}; disclosure=${Boolean(homeRoot().querySelector(".home-personalization-info-button"))}; expectedProjection=${JSON.stringify(expectedProjection)}; profileRequests=${starredProfileRequests().length}; entry7005=${JSON.stringify(actualEntries.find(({ id }) => id === 7005))}`,
+        )
       },
     ],
     [

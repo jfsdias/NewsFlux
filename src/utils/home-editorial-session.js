@@ -26,6 +26,64 @@ export const deduplicateHomeEntriesById = (entries) => {
 export const createHomeSessionKey = ({ identityKey, showHiddenFeeds, pageSize, sessionRevision }) =>
   JSON.stringify({ identityKey, showHiddenFeeds, pageSize, sessionRevision })
 
+const isOrderedIdSequence = (values) =>
+  Array.isArray(values) &&
+  values.every(
+    (value) =>
+      (typeof value === "number" && Number.isFinite(value)) ||
+      (typeof value === "string" && value.length > 0),
+  )
+
+const sameOrderedIds = (left, right) =>
+  isOrderedIdSequence(left) &&
+  isOrderedIdSequence(right) &&
+  left.length === right.length &&
+  left.every((id, index) => String(id) === String(right[index]))
+
+const isCategoryLaneSequence = (lanes) =>
+  Array.isArray(lanes) &&
+  lanes.every(
+    (lane) =>
+      lane &&
+      ((typeof lane.categoryId === "number" && Number.isFinite(lane.categoryId)) ||
+        (typeof lane.categoryId === "string" && lane.categoryId.length > 0)) &&
+      isOrderedIdSequence(lane.entryIds),
+  )
+
+const sameCategoryLanes = (left, right) =>
+  isCategoryLaneSequence(left) &&
+  isCategoryLaneSequence(right) &&
+  left.length === right.length &&
+  left.every(
+    (lane, index) =>
+      String(lane.categoryId) === String(right[index].categoryId) &&
+      sameOrderedIds(lane.entryIds, right[index].entryIds),
+  )
+
+// Disclosure follows the final rendered Home, not the intermediate personalized Recent order.
+export const hasHomeEditorialCompositionChanged = (baseline, candidate) => {
+  if (!baseline || !candidate) {
+    return false
+  }
+
+  if (
+    !isOrderedIdSequence(baseline.highlightIds) ||
+    !isOrderedIdSequence(candidate.highlightIds) ||
+    !isCategoryLaneSequence(baseline.categoryLanes) ||
+    !isCategoryLaneSequence(candidate.categoryLanes) ||
+    !isOrderedIdSequence(baseline.latestIds) ||
+    !isOrderedIdSequence(candidate.latestIds)
+  ) {
+    return false
+  }
+
+  return (
+    !sameOrderedIds(baseline.highlightIds, candidate.highlightIds) ||
+    !sameCategoryLanes(baseline.categoryLanes, candidate.categoryLanes) ||
+    !sameOrderedIds(baseline.latestIds, candidate.latestIds)
+  )
+}
+
 // A canonical refresh updates entries returned by Miniflux while retaining older members
 // of the committed Home session that fell outside the refreshed page.
 export const mergeHomeSessionEntries = (previousEntries, refreshedEntries) => {
@@ -114,6 +172,8 @@ export const createHomeEditorialSession = ({
   sessionRevision,
   entries,
   initialProjection,
+  projectionApplied = false,
+  disclosureVisible = false,
   scrollRoot = null,
 }) => {
   const highlightIds = initialProjection?.highlightIds ?? selectInitialHighlightIds(entries)
@@ -141,6 +201,8 @@ export const createHomeEditorialSession = ({
     // IDs in the initial canonical page cannot be inserted later by status settlement.
     observedEntryIds: deduplicateHomeEntriesById(entries).map(({ id }) => id),
     pendingStatusById: {},
+    projectionApplied: Boolean(projectionApplied),
+    disclosureVisible: Boolean(projectionApplied && disclosureVisible),
     scrollRoot,
   }
 }

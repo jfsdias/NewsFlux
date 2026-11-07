@@ -9,6 +9,7 @@ const {
   createHomeSessionKey,
   deduplicateHomeEntriesById,
   getHomePaginationBoundary,
+  hasHomeEditorialCompositionChanged,
   mergeHomeSessionEntries,
   projectHomeSession,
   transitionHomeSession,
@@ -474,6 +475,147 @@ test("retains an explicitly committed personalized projection", () => {
     projection(session, loaded),
     projectedShape({ highlightIds: [1, 3, 2], recentIds: [5, 4] }),
   )
+})
+
+test("intermediate Recent reordering is not a visible Home composition change when lanes absorb it", () => {
+  const entries = Array.from({ length: 12 }, (_, index) => {
+    const categoryId = (index % 3) + 701
+    return {
+      ...entry(7001 + index, 12 - index, categoryId),
+      feed: { id: categoryId, category: { id: categoryId, title: `Category ${categoryId}` } },
+    }
+  })
+  const baselineSession = createHomeEditorialSession({
+    requestKey: key,
+    sessionRevision: 1,
+    entries,
+  })
+  const baseline = projectHomeSession(baselineSession, entries)
+  const reorderedRecentIds = [7004, 7007, 7010, 7005, 7008, 7011, 7006, 7009, 7012]
+  const personalizedSession = createHomeEditorialSession({
+    requestKey: key,
+    sessionRevision: 1,
+    entries,
+    initialProjection: {
+      highlightIds: baseline.highlightIds,
+      recentIds: reorderedRecentIds,
+    },
+  })
+  const personalized = projectHomeSession(personalizedSession, entries)
+
+  assert.notDeepEqual(reorderedRecentIds, baseline.recentIds)
+  assert.deepEqual(personalized.categoryLanes, baseline.categoryLanes)
+  assert.deepEqual(personalized.latestIds, baseline.latestIds)
+  assert.equal(hasHomeEditorialCompositionChanged(baseline, personalized), false)
+})
+
+test("visible Secondary and Category Lane changes are part of the final Home comparison", () => {
+  const entries = [
+    ...[1, 2, 3].map((id) => entry(id, 12 - id, id)),
+    ...[4, 5].map((id) => ({
+      ...entry(id, 12 - id, 10),
+      feed: { id: 10, category: { id: 10, title: "World" } },
+    })),
+    ...[6, 7].map((id) => ({
+      ...entry(id, 12 - id, 20),
+      feed: { id: 20, category: { id: 20, title: "Science" } },
+    })),
+  ]
+  const baselineSession = createHomeEditorialSession({
+    requestKey: key,
+    sessionRevision: 1,
+    entries,
+    initialProjection: { highlightIds: [1, 2, 3], recentIds: [4, 5, 6, 7] },
+  })
+  const baseline = projectHomeSession(baselineSession, entries)
+  const secondarySession = createHomeEditorialSession({
+    requestKey: key,
+    sessionRevision: 1,
+    entries,
+    initialProjection: { highlightIds: [1, 3, 2], recentIds: [4, 5, 6, 7] },
+  })
+  const secondary = projectHomeSession(secondarySession, entries)
+  const laneSession = createHomeEditorialSession({
+    requestKey: key,
+    sessionRevision: 1,
+    entries,
+    initialProjection: { highlightIds: [1, 2, 4], recentIds: [3, 5, 6, 7] },
+  })
+  const laneChange = projectHomeSession(laneSession, entries)
+
+  assert.equal(hasHomeEditorialCompositionChanged(baseline, secondary), true)
+  assert.notDeepEqual(laneChange.categoryLanes, baseline.categoryLanes)
+  assert.equal(hasHomeEditorialCompositionChanged(baseline, laneChange), true)
+})
+
+test("category lane order, lane entries, and Latest order each affect disclosure", () => {
+  const baseline = {
+    highlightIds: [1, 2, 3],
+    categoryLanes: [
+      { categoryId: 10, entryIds: [4, 5] },
+      { categoryId: 20, entryIds: [6, 7] },
+    ],
+    latestIds: [8, 9],
+  }
+
+  assert.equal(
+    hasHomeEditorialCompositionChanged(baseline, {
+      ...baseline,
+      categoryLanes: baseline.categoryLanes.toReversed(),
+    }),
+    true,
+  )
+  assert.equal(
+    hasHomeEditorialCompositionChanged(baseline, {
+      ...baseline,
+      categoryLanes: [{ categoryId: 10, entryIds: [5, 4] }, baseline.categoryLanes[1]],
+    }),
+    true,
+  )
+  assert.equal(
+    hasHomeEditorialCompositionChanged(baseline, { ...baseline, latestIds: [9, 8] }),
+    true,
+  )
+  assert.equal(
+    hasHomeEditorialCompositionChanged(baseline, {
+      ...baseline,
+      categoryLanes: [{ categoryId: 10, entryIds: [4, null] }],
+    }),
+    false,
+  )
+})
+
+test("Home session accepts one committed disclosure decision and defaults it off", () => {
+  const withoutDisclosure = start()
+  const withDisclosure = createHomeEditorialSession({
+    requestKey: key,
+    sessionRevision: 1,
+    entries: loaded,
+    initialProjection: defaultProjection,
+    projectionApplied: true,
+    disclosureVisible: true,
+  })
+
+  assert.equal(withoutDisclosure.projectionApplied, false)
+  assert.equal(withoutDisclosure.disclosureVisible, false)
+  assert.equal(withDisclosure.projectionApplied, true)
+  assert.equal(withDisclosure.disclosureVisible, true)
+})
+
+test("Home session mutations and Load More preserve the committed disclosure decision", () => {
+  const initial = {
+    ...start(),
+    projectionApplied: true,
+    disclosureVisible: false,
+  }
+  const appended = appendHomeSessionEntries(initial, [...loaded, entry(6, 7)])
+  const transitioned = transitionHomeSession(appended, event(1, "read", "confirmed"), loaded)
+  const projected = projection(transitioned, loaded)
+
+  assert.equal(transitioned.projectionApplied, true)
+  assert.equal(transitioned.disclosureVisible, false)
+  assert.deepEqual(projected.highlightIds, initial.highlightIds)
+  assert.deepEqual(transitioned.recentIds, [4, 5, 6])
 })
 
 test("load-more ignores already observed IDs and read entries", () => {
