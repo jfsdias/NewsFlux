@@ -45,7 +45,7 @@
 }
 
 .home-highlights,
-.home-recent {
+.home-article-section {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 16px;
@@ -113,9 +113,9 @@
 .home-highlight-slot,
 .home-highlight-secondaries,
 .home-highlight-secondaries > .home-highlight-slot,
-.home-recent [role="list"],
-.home-recent .article-card-grid-row,
-.home-recent .article-card-grid-cell {
+.home-article-section [role="list"],
+.home-article-section .article-card-grid-row,
+.home-article-section .article-card-grid-cell {
   min-width: 0;
 }
 
@@ -125,17 +125,25 @@
   gap: 16px;
 }
 
-.home-recent [role="list"] {
+.home-article-section [role="list"] {
   display: flex;
   flex-direction: column;
   gap: 18px;
 }
 
-.home-recent .article-card-grid-row {
+.home-category-section [role="list"] {
+  gap: 12px;
+}
+
+.home-article-section .article-card-grid-row {
   width: 100%;
 }
 
-.home-recent .article-card-grid-cell > .article-entry {
+.home-category-section .article-card-grid-row {
+  padding-bottom: 10px;
+}
+
+.home-article-section .article-card-grid-cell > .article-entry {
   flex: 1;
   height: 100%;
 }
@@ -152,12 +160,70 @@
   }
 
   .home-highlights,
-  .home-recent {
+  .home-article-section {
     gap: 20px;
   }
 
   .home-highlight-secondaries {
     gap: 20px;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1179px) {
+  .home-category-section .article-card-grid-row {
+    gap: 8px;
+    padding-bottom: 10px;
+  }
+
+  .home-category-section .article-entry.grid-card-wrapper {
+    min-height: 72px;
+  }
+
+  .home-category-section .grid-card-content {
+    min-height: 72px;
+    flex-direction: row;
+  }
+
+  .home-category-section .grid-card-media {
+    flex: 0 0 72px;
+    width: 72px;
+    height: 72px;
+    aspect-ratio: 1;
+  }
+
+  .home-category-section .grid-card-copy,
+  .home-category-section .grid-card-content-no-cover .grid-card-copy {
+    justify-content: center;
+    gap: 4px;
+    min-height: 72px;
+    padding: 6px 8px;
+  }
+
+  .home-category-section .grid-card-meta {
+    gap: 4px;
+    font-size: 0.6875rem;
+  }
+
+  .home-category-section .grid-card-feed-icon {
+    flex-basis: 16px;
+    width: 16px;
+    height: 16px;
+  }
+
+  .home-category-section .grid-card-title {
+    font-size: 0.9375rem;
+    line-height: 1.25;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+  }
+
+  .home-category-section .grid-card-summary:not(.grid-card-summary-measure-probe) {
+    display: none;
+  }
+
+  .home-category-section .grid-card-footer {
+    min-height: 14px;
+    font-size: 0.6875rem;
   }
 }
 

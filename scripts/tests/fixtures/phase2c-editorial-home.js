@@ -96,6 +96,54 @@ export const personalizationFixtures = {
   ],
 }
 
+const categoryLaneCategories = [
+  { id: 10, title: "World" },
+  { id: 20, title: "Technology" },
+  { id: 30, title: "Science" },
+  { id: 40, title: "Culture" },
+]
+
+export const homeCategoryLaneFixtures = [
+  ...Array.from({ length: 12 }, (_, index) =>
+    categoryLaneCategories.map((category, categoryIndex) => {
+      const id = 20_000 + index * categoryLaneCategories.length + categoryIndex
+      const minutesAgo = index * categoryLaneCategories.length + categoryIndex
+      return {
+        ...routeEntries[0],
+        id,
+        title: `${category.title} category article ${id}`,
+        published_at: new Date(Date.UTC(2026, 10, 6, 12) - minutesAgo * 60_000).toISOString(),
+        url: `https://example.invalid/${id}`,
+        hash: `category-${id}`,
+        content: `<p>Local category article ${id}. ${"Editorial fixture content. ".repeat(20)}</p>`,
+        feed: {
+          ...fixtureFeed,
+          id: category.id,
+          title: `${category.title} source`,
+          category,
+        },
+      }
+    }),
+  ).flat(),
+  {
+    ...routeEntries[0],
+    id: 20_100,
+    title: "Single item category article 20100",
+    published_at: "2026-11-06T10:00:00Z",
+    feed: { ...fixtureFeed, id: 50, category: { id: 50, title: "Single item" } },
+  },
+  {
+    ...routeEntries[0],
+    id: 20_101,
+    title: "Uncategorized article 20101",
+    published_at: "2026-11-06T09:00:00Z",
+    feed: { ...fixtureFeed, id: 51, category: null },
+  },
+].toSorted(
+  (left, right) =>
+    Date.parse(right.published_at) - Date.parse(left.published_at) || left.id - right.id,
+)
+
 // Unique timestamps make the existing overlap cursor deterministic across large pages.
 export const paginationEntries = (count, offset = 0) =>
   Array.from({ length: count }, (_, index) => {
@@ -137,6 +185,7 @@ export const phase2cEditorialHomeMatrix = {
     "HOME_SESSION_STABLE_AFTER_READER_READ",
     "HOME_NO_OVERFLOW",
     "HOME_SECTION_HIERARCHY",
+    "HOME_EDITORIAL_02_CATEGORY_LANE_COVERAGE_AND_READER_ORDER",
     "HOME_PRIMARY_TEXT_ONLY",
     "HOME_SECONDARY_LAYOUT",
     "HOME_RECENT_GRID",
@@ -229,6 +278,11 @@ export const phase2cEditorialHomeMatrix = {
       id: "DIVERSE_SOURCE_AND_CATEGORY",
       covers: ["HOME_SECONDARIES_BALANCED_ORDER"],
       fixtures: ["highlightFixtures.image"],
+    },
+    {
+      id: "CATEGORY_LANES_WITH_SPARSE_AND_UNCATEGORIZED_ENTRIES",
+      covers: ["HOME_EDITORIAL_02_CATEGORY_LANE_COVERAGE_AND_READER_ORDER"],
+      fixtures: ["homeCategoryLaneFixtures"],
     },
     {
       id: "SAME_SOURCE_AND_CATEGORY",

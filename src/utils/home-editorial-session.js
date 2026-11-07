@@ -1,6 +1,10 @@
+// eslint-disable-next-line import/extensions
+import { createHomeCategoryLanes, projectHomeCategoryEntries } from "./home-category-projection.js"
 // Node's direct unit runner requires the extension; Vite resolves the same module.
 // eslint-disable-next-line import/extensions
 import { selectInitialHighlightIds } from "./home-editorial-projection.js"
+
+const HOME_CATEGORY_LANE_MAX_ENTRIES = 3
 
 const byPublishedAt = (left, right) =>
   Date.parse(right.published_at) - Date.parse(left.published_at) ||
@@ -126,6 +130,14 @@ export const createHomeEditorialSession = ({
     sessionRevision,
     highlightIds: [...highlightIds],
     recentIds: [...recentIds],
+    categoryLanes:
+      initialProjection?.categoryLanes ??
+      createHomeCategoryLanes({
+        entries,
+        highlightIds,
+        recentIds,
+        maxEntriesPerCategory: HOME_CATEGORY_LANE_MAX_ENTRIES,
+      }),
     // IDs in the initial canonical page cannot be inserted later by status settlement.
     observedEntryIds: deduplicateHomeEntriesById(entries).map(({ id }) => id),
     pendingStatusById: {},
@@ -185,6 +197,7 @@ export const projectHomeSession = (session, entries) => {
   return {
     highlightIds: [...session.highlightIds],
     recentIds,
+    ...projectHomeCategoryEntries({ recentIds, categoryLanes: session.categoryLanes }),
   }
 }
 

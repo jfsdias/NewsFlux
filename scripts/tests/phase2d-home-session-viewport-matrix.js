@@ -1,4 +1,4 @@
-const VIEWPORTS = [
+const DEFAULT_VIEWPORTS = [
   { width: 390, height: 844 },
   { width: 768, height: 1024 },
   { width: 884, height: 1104 },
@@ -6,7 +6,19 @@ const VIEWPORTS = [
   { width: 1280, height: 800 },
   { width: 1440, height: 900 },
 ]
+const viewportByKey = new Map(
+  DEFAULT_VIEWPORTS.map((viewport) => [`${viewport.width}x${viewport.height}`, viewport]),
+)
+const requestedViewports = new URLSearchParams(location.search).get("viewports")
+const VIEWPORTS = requestedViewports
+  ? requestedViewports
+      .split(",")
+      .map((key) => viewportByKey.get(key.trim()))
+      .filter(Boolean)
+  : DEFAULT_VIEWPORTS
 const THEMES = ["light", "dark"]
+const TOTAL_RUNS = VIEWPORTS.length * THEMES.length
+document.querySelector("#matrix-status").textContent = `Starting ${TOTAL_RUNS} viewport/theme runs…`
 const RUN_TIMEOUT_MS = 120_000
 const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 
@@ -56,10 +68,19 @@ const runPair = async (viewport, theme) => {
   document.querySelector("#runs").replaceChildren(frame)
   const routeRun = await waitForRun(frame, "Run route scenario")
   const highlightRun = await waitForRun(frame, "Run Highlights scenario")
+  const categoryRun = await waitForRun(frame, "Run HOME-EDITORIAL-02 category scenario")
+  const recentRun = await waitForRun(frame, "Run Recent pagination scenario")
+  const sentinelRun = await waitForRun(frame, "Run shared list sentinel regression")
   const visualRun = await waitForRun(frame, "Run Home responsive visual gates")
   const routeFailures = routeRun.results.filter(({ status }) => status !== "PASS")
   const highlightFailures = highlightRun.results.filter(({ status }) => status !== "PASS")
+  const categoryFailures = categoryRun.results.filter(({ status }) => status !== "PASS")
+  const recentFailures = recentRun.results.filter(({ status }) => status !== "PASS")
+  const sentinelFailures = sentinelRun.results.filter(({ status }) => status !== "PASS")
   const visualFailures = visualRun.results.filter(({ status }) => status !== "PASS")
+  const categoryProductGate = categoryRun.results.find(
+    ({ name }) => name === "HOME_EDITORIAL_02_CATEGORY_LANE_COVERAGE_AND_READER_ORDER",
+  )?.productMetrics
   const stability = routeRun.results.find(
     ({ name }) => name === "HOME_SESSION_STABLE_AFTER_READER_READ",
   )
@@ -96,19 +117,28 @@ const runPair = async (viewport, theme) => {
     passed:
       routeFailures.length === 0 &&
       highlightFailures.length === 0 &&
+      categoryFailures.length === 0 &&
+      recentFailures.length === 0 &&
+      sentinelFailures.length === 0 &&
       visualFailures.length === 0 &&
+      categoryProductGate?.passed === true &&
       missingVisualGates.length === 0 &&
       missingHighlightGates.length === 0 &&
       viewportMatches &&
       stabilityPassed,
-    failed: [...routeFailures, ...highlightFailures, ...visualFailures].map(({ name, error }) => ({
-      name,
-      error,
-    })),
+    failed: [
+      ...routeFailures,
+      ...highlightFailures,
+      ...categoryFailures,
+      ...recentFailures,
+      ...sentinelFailures,
+      ...visualFailures,
+    ].map(({ name, error }) => ({ name, error })),
     missingGates: [...missingVisualGates, ...missingHighlightGates],
     viewportMatches,
     readerReturnStable: stabilityPassed,
     readerReturn: stability?.readerReturn ?? null,
+    categoryProductGate: categoryProductGate ?? null,
     firstSectionGap:
       visualRun.results.find(({ name }) => name === "HOME_FIRST_SECTION_CLEAR_OF_CHROME")?.metrics
         ?.firstSectionClearance?.gap ?? null,
@@ -122,13 +152,13 @@ try {
       const result = await runPair(viewport, theme)
       results.push(result)
       document.querySelector("#matrix-status").textContent =
-        `${results.length}/12 complete — ${result.viewport} ${theme}: ${result.passed ? "PASS" : "FAIL"}`
+        `${results.length}/${TOTAL_RUNS} complete — ${result.viewport} ${theme}: ${result.passed ? "PASS" : "FAIL"}`
       document.querySelector("#matrix-report").textContent = JSON.stringify(results, null, 2)
     }
   }
   const failCount = results.filter(({ passed }) => !passed).length
   document.querySelector("#matrix-status").textContent =
-    `EMULATED_VIEWPORT_GATE=${failCount === 0 ? "PASS" : "FAIL"} (${12 - failCount}/12)`
+    `EMULATED_VIEWPORT_GATE=${failCount === 0 ? "PASS" : "FAIL"} (${TOTAL_RUNS - failCount}/${TOTAL_RUNS})`
 } catch (error) {
   document.querySelector("#matrix-status").textContent =
     `EMULATED_VIEWPORT_GATE=ERROR: ${error.message}`

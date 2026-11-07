@@ -9,6 +9,7 @@ import {
   emptyHomeFixtures,
   fixtureFeed,
   highlightFixtures,
+  homeCategoryLaneFixtures,
   paginationEntries,
   personalizationFixtures,
   phase2cEditorialHomeMatrix,
@@ -336,16 +337,26 @@ const clickLabel = (label) => {
   const button = [...document.querySelectorAll("button")].find(
     (node) => node.getAttribute("aria-label") === label || node.textContent.trim() === label,
   )
-  assert(button && !button.disabled, `Missing enabled ${label} action`)
+  assert(
+    button && !button.disabled,
+    `Missing enabled ${label} action; candidates=${JSON.stringify(
+      [...document.querySelectorAll("button")].map((node) => ({
+        label: node.getAttribute("aria-label") ?? node.textContent.trim(),
+        disabled: node.disabled,
+      })),
+    )}; path=${router?.state.location.pathname}; activeId=${contentState.get().activeContent?.id}; source=${contentState.get().infoFrom}; swipe=${settingsState.get().enableSwipeGesture}`,
+  )
   button.click()
 }
 
 const cards = () => [...document.querySelectorAll(".home-highlights .article-entry")]
 const ids = () => cards().map((card) => Number(card.dataset.entryId))
 const recentIds = () =>
-  [...document.querySelectorAll(".home-recent .article-entry")].map((node) =>
-    Number(node.dataset.entryId),
-  )
+  [
+    ...document.querySelectorAll(
+      ".home-category-section .article-entry, .home-recent .article-entry",
+    ),
+  ].map((node) => Number(node.dataset.entryId))
 const starredProfileRequests = () =>
   requests.filter(
     (url) => new URL(url, "https://fixture.invalid").searchParams.get("starred") === "true",
@@ -1846,7 +1857,11 @@ const captureHomeHarnessMetrics = (theme) => {
   const countQueries = listRequests()
     .map((request) => Object.fromEntries(new URL(request, "https://fixture.invalid").searchParams))
     .filter((params) => params.limit === "1")
-  const recentRows = [...document.querySelectorAll(".home-recent .article-card-grid-row")]
+  const recentRows = [
+    ...document.querySelectorAll(
+      ".home-category-section .article-card-grid-row, .home-recent .article-card-grid-row",
+    ),
+  ]
   const recentColumns = recentRows.map((row) => {
     const value = Number.parseInt(row.style.getPropertyValue("--article-card-grid-columns"), 10)
     return Number.isFinite(value)
@@ -2589,6 +2604,114 @@ const Harness = () => {
       "Home session did not become ready",
     )
   }
+  const measureHomeCategoryDisplacement = (lanes) => {
+    const home = homeRoot()
+    const root = scrollRoot()
+    const content = home?.querySelector(".home-editorial-content")
+    const highlights = home?.querySelector(".home-highlights")
+    assert(home && root && content && highlights, "Home category measurement roots missing")
+
+    const rootRect = root.getBoundingClientRect()
+    const contentRect = content.getBoundingClientRect()
+    const highlightIds = new Set(
+      [...highlights.querySelectorAll(".article-entry[data-entry-id]")].map((node) =>
+        Number(node.dataset.entryId),
+      ),
+    )
+    const articleNodes = new Map(
+      [...home.querySelectorAll(".article-entry[data-entry-id]")].map((node) => [
+        Number(node.dataset.entryId),
+        node,
+      ]),
+    )
+    const baselineRecentEntries = contentState
+      .get()
+      .entries.filter((entry) => entry.status === "unread" && !highlightIds.has(entry.id))
+      .toSorted(
+        (left, right) =>
+          Date.parse(right.published_at) - Date.parse(left.published_at) || left.id - right.id,
+      )
+    const columns = Number.parseInt(
+      home
+        .querySelector(".home-article-section .article-card-grid-row")
+        ?.style.getPropertyValue("--article-card-grid-columns") ?? "1",
+      10,
+    )
+    const baselineContent = document.createElement("div")
+    baselineContent.setAttribute("aria-hidden", "true")
+    baselineContent.className = "home-editorial-content"
+    Object.assign(baselineContent.style, {
+      position: "fixed",
+      top: `${rootRect.top}px`,
+      left: "-20000px",
+      width: `${contentRect.width}px`,
+      maxWidth: "none",
+      margin: "0",
+      visibility: "hidden",
+      pointerEvents: "none",
+    })
+    baselineContent.append(highlights.cloneNode(true))
+
+    const baselineRecent = document.createElement("section")
+    baselineRecent.className = "home-article-section home-recent"
+    baselineRecent.setAttribute("aria-label", "Latest")
+    const heading = document.createElement("h2")
+    heading.className = "home-section-heading"
+    heading.textContent = "Latest"
+    baselineRecent.append(heading)
+    const list = document.createElement("div")
+    list.setAttribute("role", "list")
+
+    for (let index = 0; index < baselineRecentEntries.length; index += columns) {
+      const row = document.createElement("div")
+      row.className = "article-card-grid-row"
+      row.setAttribute("role", "presentation")
+      row.style.setProperty("--article-card-grid-columns", String(columns))
+      for (const entry of baselineRecentEntries.slice(index, index + columns)) {
+        const source = articleNodes.get(entry.id)
+        assert(source, `Baseline fixture lost Home article ${entry.id}`)
+        const cell = document.createElement("div")
+        cell.className = "article-card-grid-cell"
+        cell.setAttribute("role", "listitem")
+        cell.append(source.cloneNode(true))
+        row.append(cell)
+      }
+      list.append(row)
+    }
+    baselineRecent.append(list)
+    baselineContent.append(baselineRecent)
+    document.body.append(baselineContent)
+
+    try {
+      const measurements = lanes.map((lane) => {
+        // Measure category browsing by reaching its third-newest item, which is spread
+        // across chronological Recent but contiguous in the category lane.
+        const targetId = lane.entryIds.at(-1)
+        const candidate = articleNodes.get(targetId)
+        const baseline = [
+          ...baselineContent.querySelectorAll(".article-entry[data-entry-id]"),
+        ].find((node) => Number(node.dataset.entryId) === targetId)
+        assert(candidate && baseline, `Category target ${targetId} missing from comparison`)
+        const candidateDistance = candidate.getBoundingClientRect().top - rootRect.top
+        const baselineDistance = baseline.getBoundingClientRect().top - rootRect.top
+        return {
+          categoryId: lane.categoryId,
+          categoryTitle: lane.categoryTitle,
+          task: "browse to third-newest category article",
+          targetEntryId: targetId,
+          baselineDistance: Math.round(baselineDistance),
+          candidateDistance: Math.round(candidateDistance),
+          reduction: Number(((baselineDistance - candidateDistance) / baselineDistance).toFixed(3)),
+        }
+      })
+      return {
+        tasks: measurements,
+        passed: measurements.filter(({ reduction }) => reduction >= 0.2).length >= 2,
+      }
+    } finally {
+      baselineContent.remove()
+    }
+  }
   const highlightScenarios = [
     [
       "HOME_PRIMARY_NEWEST",
@@ -2816,6 +2939,175 @@ const Harness = () => {
         assert(
           ids().join(",") === "101,202,303",
           "Shared feed/category incorrectly deduped distinct IDs",
+        )
+      },
+    ],
+  ]
+  const categoryScenarios = [
+    [
+      "HOME_EDITORIAL_02_CATEGORY_LANE_COVERAGE_AND_READER_ORDER",
+      async () => {
+        const entries = homeCategoryLaneFixtures
+        await mount("/", {
+          entries,
+          total: entries.length,
+          pageSize: 60,
+          markReadBy: "manually",
+          enableSwipeGesture: false,
+        })
+        await waitFor(
+          () => homeRoot()?.getAttribute("aria-busy") === "false",
+          "Home category session did not commit",
+        )
+        await waitFor(
+          () => homeRoot()?.querySelectorAll(".home-category-section").length === 3,
+          "Home category lanes did not render",
+        )
+
+        const sections = [...homeRoot().querySelectorAll(".home-category-section")]
+        const lanes = sections.map((section) => ({
+          categoryId: Number(section.dataset.categoryId),
+          categoryTitle: section.querySelector(".home-section-heading")?.textContent.trim(),
+          entryIds: [...section.querySelectorAll(".article-entry[data-entry-id]")].map((node) =>
+            Number(node.dataset.entryId),
+          ),
+        }))
+        assert(
+          JSON.stringify(lanes.map(({ categoryId }) => categoryId)) === "[40,10,20]",
+          `Unexpected deterministic category selection: ${lanes.map(({ categoryId }) => categoryId).join(",")}`,
+        )
+        assert(
+          lanes.every(
+            ({ categoryTitle, entryIds }) => Boolean(categoryTitle) && entryIds.length === 3,
+          ),
+          "Category lane heading or three-article cap contract changed",
+        )
+        assert(
+          sections.every((section) =>
+            section
+              .getAttribute("aria-label")
+              .includes(section.querySelector(".home-section-heading").textContent.trim()),
+          ),
+          "Category sections do not expose localized accessible names",
+        )
+
+        const visibleEntries = [
+          ...homeRoot().querySelectorAll(".home-editorial-content .article-entry[data-entry-id]"),
+        ]
+        const visibleIds = visibleEntries.map((node) => Number(node.dataset.entryId))
+        const expectedIds = entries.map(({ id }) => id)
+        assert(
+          visibleIds.length === new Set(visibleIds).size,
+          "Home category projection duplicated an article ID",
+        )
+        assert(
+          JSON.stringify([...visibleIds].toSorted((left, right) => left - right)) ===
+            JSON.stringify([...expectedIds].toSorted((left, right) => left - right)),
+          "Home category projection lost or introduced an eligible unread article",
+        )
+        assert(
+          visibleIds.includes(20_100) && visibleIds.includes(20_101),
+          "Single-item or uncategorized articles disappeared from Latest",
+        )
+        const selectedCategoryIds = new Set(lanes.map(({ categoryId }) => categoryId))
+        const laneIds = new Set(lanes.flatMap(({ entryIds }) => entryIds))
+        const latestIds = [
+          ...homeRoot().querySelectorAll(".home-recent .article-entry[data-entry-id]"),
+        ].map((node) => Number(node.dataset.entryId))
+        const eligibleCategoryRemainders = entries
+          .filter(
+            (entry) =>
+              selectedCategoryIds.has(entry.feed?.category?.id) &&
+              !ids().includes(entry.id) &&
+              !laneIds.has(entry.id),
+          )
+          .map(({ id }) => id)
+        assert(
+          eligibleCategoryRemainders.every((id) => latestIds.includes(id)),
+          "Category articles beyond the lane cap were not retained in Latest",
+        )
+
+        const firstLaneId = lanes[0].entryIds[0]
+        const lastHighlightId = ids().at(-1)
+        cards().at(-1).click()
+        await waitFor(() => readerIs(lastHighlightId), "Last Highlight reader did not open")
+        clickLabel(englishPhrases.article_card.next_tooltip)
+        await waitFor(
+          () => contentState.get().activeContent?.id === firstLaneId,
+          "Reader Next skipped the first category lane article",
+        )
+        clickLabel(englishPhrases.article_card.close_tooltip)
+        await waitFor(
+          () => !contentState.get().activeContent,
+          "Reader did not return to the Home session after category navigation",
+        )
+
+        const firstLatestId = latestIds[0]
+        const lastLaneId = lanes.at(-1).entryIds.at(-1)
+        document
+          .querySelector(`.article-entry[data-entry-id="${CSS.escape(String(lastLaneId))}"]`)
+          ?.click()
+        await waitFor(() => readerIs(lastLaneId), "Last category lane reader did not open")
+        clickLabel(englishPhrases.article_card.next_tooltip)
+        await waitFor(
+          () => contentState.get().activeContent?.id === firstLatestId,
+          `Reader Next did not continue from category lanes into Latest; expected=${firstLatestId}; active=${contentState.get().activeContent?.id}; lastLane=${lastLaneId}; latest=${latestIds.slice(0, 8).join(",")}; currentEntries=${contentState
+            .get()
+            .entries.map(({ id }) => id)
+            .join(",")}; path=${router?.state.location.pathname}`,
+        )
+        clickLabel(englishPhrases.article_card.previous_tooltip)
+        await waitFor(
+          () => contentState.get().activeContent?.id === lastLaneId,
+          "Reader Previous did not return from Latest to the last category lane article",
+        )
+        clickLabel(englishPhrases.article_card.close_tooltip)
+        await waitFor(
+          () => !contentState.get().activeContent,
+          "Reader did not close after category-to-Latest navigation parity check",
+        )
+
+        document
+          .querySelector(`.article-entry[data-entry-id="${CSS.escape(String(firstLaneId))}"]`)
+          ?.click()
+        await waitFor(() => readerIs(firstLaneId), "First category lane Reader did not open")
+        clickLabel(englishPhrases.article_card.previous_tooltip)
+        await waitFor(
+          () => contentState.get().activeContent?.id === lastHighlightId,
+          "Reader Previous did not return from the first category lane to the final Highlight",
+        )
+        clickLabel(englishPhrases.article_card.close_tooltip)
+        await waitFor(
+          () => !contentState.get().activeContent,
+          "Reader did not close after category-to-Highlights navigation parity check",
+        )
+
+        const root = scrollRoot()
+        root.scrollTop = 0
+        await settle()
+        const productMetrics = measureHomeCategoryDisplacement(lanes)
+        globalThis.__homeEditorial02ProductMetrics = productMetrics
+        assert(
+          productMetrics.passed,
+          `Category task displacement gate failed: ${JSON.stringify(productMetrics.tasks)}`,
+        )
+
+        const newestId = entries[0].id
+        assert(
+          Number(cards()[0]?.dataset.entryId) === newestId,
+          "Newest article left the lead slot",
+        )
+        cards()[0].click()
+        await waitFor(() => readerIs(newestId), "Newest Home article no longer opens correctly")
+        clickLabel(englishPhrases.article_card.close_tooltip)
+        await waitFor(
+          () => !contentState.get().activeContent,
+          "Newest article Reader did not close",
+        )
+        assert(statusMutationRequests === 0, "Home category navigation caused a status mutation")
+        assert(
+          document.documentElement.scrollWidth <= window.innerWidth,
+          "Home category sections caused horizontal overflow",
         )
       },
     ],
@@ -4860,6 +5152,7 @@ const Harness = () => {
           "HOME_SESSION_STABLE_AFTER_READER_READ",
           "HOME_NO_OVERFLOW",
           "HOME_SECTION_HIERARCHY",
+          "HOME_EDITORIAL_02_CATEGORY_LANE_COVERAGE_AND_READER_ORDER",
           "HOME_PRIMARY_TEXT_ONLY",
           "HOME_SECONDARY_LAYOUT",
           "HOME_RECENT_GRID",
@@ -4899,6 +5192,7 @@ const Harness = () => {
           "MIXED_IMAGE_AND_TEXT_ONLY",
           "DIVERSE_SOURCE_AND_CATEGORY",
           "SAME_SOURCE_AND_CATEGORY",
+          "CATEGORY_LANES_WITH_SPARSE_AND_UNCATEGORIZED_ENTRIES",
           "LOADING",
           "INITIAL_ERROR",
           "REFRESH_ERROR_RETAINS_CONTENT",
@@ -4930,6 +5224,7 @@ const Harness = () => {
         const allScenarios = [
           ...scenarios,
           ...highlightScenarios,
+          ...categoryScenarios,
           ...recentScenarios,
           ...listSentinelScenarios,
           ...stateScenarios,
@@ -4990,6 +5285,7 @@ const Harness = () => {
   const scenarioSuites = [
     { name: "routes", scenarios },
     { name: "highlights", scenarios: highlightScenarios },
+    { name: "home-editorial-02-category-lanes", scenarios: categoryScenarios },
     { name: "recent", scenarios: recentScenarios },
     { name: "list-sentinel-regression", scenarios: listSentinelScenarios },
     { name: "states-and-recovery", scenarios: stateScenarios },
@@ -5010,6 +5306,7 @@ const Harness = () => {
       for (const { name: suite, scenarios: selectedScenarios } of selectedSuites) {
         const responsiveMode = [
           responsiveScenarios,
+          categoryScenarios,
           primaryHierarchyScenarios,
           readerScenarios,
           readerTypographyScenarios,
@@ -5037,6 +5334,9 @@ const Harness = () => {
                 status: "PASS",
                 gateClass: "AUTOMATED",
                 metrics: captureHomeHarnessMetrics(selectedTheme),
+                ...(name === "HOME_EDITORIAL_02_CATEGORY_LANE_COVERAGE_AND_READER_ORDER"
+                  ? { productMetrics: globalThis.__homeEditorial02ProductMetrics }
+                  : {}),
                 ...(name === "HOME_SECONDARY_LAYOUT" || name === "HOME_RECENT_GRID"
                   ? { responsive: globalThis.__phase2cHomeResponsive }
                   : {}),
@@ -5065,6 +5365,9 @@ const Harness = () => {
                 activeId: contentState.get().activeContent?.id,
                 readerText: document.querySelector(".article-body")?.textContent,
                 metrics: captureHomeHarnessMetrics(selectedTheme),
+                ...(name === "HOME_EDITORIAL_02_CATEGORY_LANE_COVERAGE_AND_READER_ORDER"
+                  ? { productMetrics: globalThis.__homeEditorial02ProductMetrics }
+                  : {}),
               })
             }
             setResults([...next])
@@ -5125,6 +5428,13 @@ const Harness = () => {
         </button>
         <button disabled={running} onClick={() => void run(highlightScenarios)}>
           Run Highlights scenario
+        </button>
+        <button
+          data-testid="run-home-editorial-02"
+          disabled={running}
+          onClick={() => void run(categoryScenarios)}
+        >
+          Run HOME-EDITORIAL-02 category scenario
         </button>
         <button disabled={running} onClick={() => void run(recentScenarios)}>
           Run Recent pagination scenario

@@ -60,6 +60,13 @@ const event = (
 const setStatus = (entries, ids, status) =>
   entries.map((item) => (ids.includes(item.id) ? { ...item, status } : item))
 const projection = (session, entries) => projectHomeSession(session, entries)
+const projectedShape = ({ highlightIds, recentIds }) => ({
+  highlightIds,
+  recentIds,
+  categoryLanes: [],
+  latestIds: recentIds,
+  readerRecentIds: recentIds,
+})
 
 test("home session key ignores refresh generation", () => {
   assert.equal(
@@ -116,7 +123,7 @@ test("CONFIRMED_UNREAD_DOES_NOT_INSERT_NONCOMMITTED_ENTRY", () => {
     unreadEntries,
   )
 
-  assert.deepEqual(projection(confirmed, unreadEntries), defaultProjection)
+  assert.deepEqual(projection(confirmed, unreadEntries), projectedShape(defaultProjection))
 })
 
 test("REJECTED_READ_DOES_NOT_CHANGE_PROJECTION after status rollback", () => {
@@ -124,7 +131,7 @@ test("REJECTED_READ_DOES_NOT_CHANGE_PROJECTION after status rollback", () => {
   const pending = transitionHomeSession(initial, event(1, "read", "intent"), loaded)
   const rolledBack = transitionHomeSession(pending, event(1, "read", "rejected"), loaded)
 
-  assert.deepEqual(projection(rolledBack, loaded), defaultProjection)
+  assert.deepEqual(projection(rolledBack, loaded), projectedShape(defaultProjection))
 })
 
 test("BATCHED_READS_DO_NOT_BACKFILL — exact committed Highlight order remains", () => {
@@ -142,7 +149,7 @@ test("ZERO_UNREAD_SESSION_RETAINS_COMMITTED_PROJECTION", () => {
     readEntries,
   )
 
-  assert.deepEqual(projection(confirmed, readEntries), defaultProjection)
+  assert.deepEqual(projection(confirmed, readEntries), projectedShape(defaultProjection))
 })
 
 test("LOAD_MORE_APPENDS_WITHOUT_REORDER — newly loaded canonical entries follow committed Recent", () => {
@@ -158,6 +165,108 @@ test("LOAD_MORE_APPENDS_WITHOUT_REORDER — newly loaded canonical entries follo
   assert.deepEqual(projection(confirmed, readSix).recentIds, [5, 4, 6, 7])
 })
 
+test("HOME_CATEGORY_LANES_FREEZE_ON_INITIAL_SNAPSHOT_AND_LOAD_MORE_GOES_TO_LATEST", () => {
+  const categoryEntries = [
+    { ...entry(1, 12), feed: { id: 1, category: { id: 1, title: "Highlights" } } },
+    { ...entry(2, 11), feed: { id: 2, category: { id: 2, title: "Highlights" } } },
+    { ...entry(3, 10), feed: { id: 3, category: { id: 3, title: "Highlights" } } },
+    { ...entry(4, 9), feed: { id: 4, category: { id: 10, title: "World" } } },
+    { ...entry(5, 8), feed: { id: 5, category: { id: 10, title: "World" } } },
+    { ...entry(6, 7), feed: { id: 6, category: { id: 20, title: "Technology" } } },
+  ]
+  const initial = start(categoryEntries, { highlightIds: [1, 2, 3], recentIds: [4, 5, 6] })
+  const laterEntries = [
+    ...categoryEntries,
+    { ...entry(7, 6), feed: { id: 7, category: { id: 10, title: "Renamed World" } } },
+    { ...entry(8, 5), feed: { id: 8, category: { id: 30, title: "Science" } } },
+    { ...entry(9, 4), feed: { id: 9, category: { id: 30, title: "Science" } } },
+  ]
+  const appended = appendHomeSessionEntries(initial, laterEntries)
+  const projected = projection(appended, laterEntries)
+
+  assert.deepEqual(appended.categoryLanes, [
+    { categoryId: 10, categoryTitle: "World", entryIds: [4, 5] },
+  ])
+  assert.deepEqual(projected.categoryLanes, appended.categoryLanes)
+  assert.deepEqual(projected.latestIds, [6, 7, 8, 9])
+  assert.deepEqual(projected.readerRecentIds, [4, 5, 6, 7, 8, 9])
+})
+
+test("HOME_CATEGORY_LANE_CAP_SENDS_OTHER_INITIAL_ARTICLES_TO_LATEST", () => {
+  const entries = [
+    { ...entry(1, 12), feed: { id: 1, category: { id: 10, title: "World" } } },
+    { ...entry(2, 11), feed: { id: 2, category: { id: 10, title: "World" } } },
+    { ...entry(3, 10), feed: { id: 3, category: { id: 10, title: "World" } } },
+    { ...entry(4, 9), feed: { id: 4, category: { id: 10, title: "World" } } },
+  ]
+  const session = createHomeEditorialSession({
+    requestKey: key,
+    sessionRevision: 7,
+    entries,
+    initialProjection: { highlightIds: [], recentIds: [1, 2, 3, 4] },
+  })
+
+  assert.deepEqual(session.categoryLanes, [
+    { categoryId: 10, categoryTitle: "World", entryIds: [1, 2, 3] },
+  ])
+  assert.deepEqual(projection(session, entries).latestIds, [4])
+  assert.deepEqual(projection(session, entries).readerRecentIds, [1, 2, 3, 4])
+})
+
+test("HOME_CATEGORY_LANES_DO_NOT_REORDER_AFTER_EXISTING_ENTRY_METADATA_REFRESH", () => {
+  const categoryEntries = [
+    { ...entry(1, 12), feed: { id: 1, category: { id: 10, title: "World" } } },
+    { ...entry(2, 11), feed: { id: 2, category: { id: 10, title: "World" } } },
+    { ...entry(3, 10), feed: { id: 3, category: { id: 20, title: "Science" } } },
+    { ...entry(4, 9), feed: { id: 4, category: { id: 20, title: "Science" } } },
+  ]
+  const initial = start(categoryEntries, { highlightIds: [], recentIds: [1, 2, 3, 4] })
+  const refreshedMetadata = categoryEntries.map((item) => ({
+    ...item,
+    published_at: item.id > 2 ? "2026-10-30T00:00:00Z" : "2026-10-01T00:00:00Z",
+    feed: {
+      ...item.feed,
+      category: { id: item.id > 2 ? 10 : 20, title: "Renamed category" },
+    },
+  }))
+
+  assert.deepEqual(initial.categoryLanes, [
+    { categoryId: 10, categoryTitle: "World", entryIds: [1, 2] },
+    { categoryId: 20, categoryTitle: "Science", entryIds: [3, 4] },
+  ])
+  assert.deepEqual(projection(initial, refreshedMetadata).categoryLanes, initial.categoryLanes)
+  assert.deepEqual(projection(initial, refreshedMetadata).readerRecentIds, [1, 2, 3, 4])
+})
+
+test("HOME_CATEGORY_LANES_RETAINED_THROUGH_STATUS_AND_STALE_SESSION_EVENTS", () => {
+  const categoryEntries = [
+    { ...entry(1, 12), feed: { id: 1, category: { id: 10, title: "World" } } },
+    { ...entry(2, 11), feed: { id: 2, category: { id: 10, title: "World" } } },
+    { ...entry(3, 10), feed: { id: 3, category: { id: 20, title: "Science" } } },
+  ]
+  const initial = createHomeEditorialSession({
+    requestKey: key,
+    sessionRevision: 7,
+    entries: categoryEntries,
+    initialProjection: { highlightIds: [], recentIds: [1, 2, 3] },
+  })
+  const stale = transitionHomeSession(
+    initial,
+    event(1, "read", "confirmed", "unread", 6),
+    categoryEntries,
+  )
+  const readUpdate = setStatus(categoryEntries, [1], "read")
+  const current = transitionHomeSession(
+    initial,
+    event(1, "read", "confirmed", "unread", 7),
+    readUpdate,
+  )
+
+  assert.equal(stale, initial)
+  assert.deepEqual(current.categoryLanes, initial.categoryLanes)
+  assert.deepEqual(projection(current, readUpdate).categoryLanes, initial.categoryLanes)
+})
+
 test("STAR_UNSTAR_NO_RECOMPOSE — star-only state keeps the committed projection", () => {
   const initial = start()
   const afterStar = transitionHomeSession(initial, event(1, "starred", "confirmed"), loaded)
@@ -165,7 +274,7 @@ test("STAR_UNSTAR_NO_RECOMPOSE — star-only state keeps the committed projectio
 
   assert.equal(afterStar, initial)
   assert.equal(afterUnstar, initial)
-  assert.deepEqual(projection(afterUnstar, loaded), defaultProjection)
+  assert.deepEqual(projection(afterUnstar, loaded), projectedShape(defaultProjection))
 })
 
 test("LATE_PROFILE_NO_RECOMPOSE — a late profile result cannot change a committed projection", () => {
@@ -174,7 +283,7 @@ test("LATE_PROFILE_NO_RECOMPOSE — a late profile result cannot change a commit
   const afterLateProfile = projection(initial, loaded)
 
   assert.deepEqual(afterLateProfile, before)
-  assert.deepEqual(afterLateProfile, defaultProjection)
+  assert.deepEqual(afterLateProfile, projectedShape(defaultProjection))
 })
 
 test("NEW_SESSION_REBUILDS_FROM_CURRENT_UNREAD", () => {
@@ -199,6 +308,9 @@ test("MANUAL_REFRESH_PRESERVES_PROJECTION_AND_APPENDS_NEW_UNREAD_TO_RECENT", () 
   assert.deepEqual(projection(refreshedSession, refreshedEntries), {
     highlightIds: [1, 3, 2],
     recentIds: [5, 4, 6],
+    categoryLanes: [],
+    latestIds: [5, 4, 6],
+    readerRecentIds: [5, 4, 6],
   })
   assert.equal(refreshedEntries.find(({ id }) => id === 1).status, "read")
 })
@@ -353,12 +465,15 @@ test("a new Home session retains canonical Phase 2C order before personalization
     sessionRevision: 1,
     entries: loaded,
   })
-  assert.deepEqual(projection(session, loaded), defaultProjection)
+  assert.deepEqual(projection(session, loaded), projectedShape(defaultProjection))
 })
 
 test("retains an explicitly committed personalized projection", () => {
   const session = start(loaded, { highlightIds: [1, 3, 2], recentIds: [5, 4] })
-  assert.deepEqual(projection(session, loaded), { highlightIds: [1, 3, 2], recentIds: [5, 4] })
+  assert.deepEqual(
+    projection(session, loaded),
+    projectedShape({ highlightIds: [1, 3, 2], recentIds: [5, 4] }),
+  )
 })
 
 test("load-more ignores already observed IDs and read entries", () => {
