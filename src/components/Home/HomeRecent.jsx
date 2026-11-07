@@ -82,7 +82,10 @@ const HomeRecent = ({
   }
 
   return (
-    <section aria-label={polyglot.t("home_page.section_recent")} className="home-recent">
+    <section
+      aria-label={polyglot.t("home_page.section_recent")}
+      className="home-article-section home-recent"
+    >
       <h2 className="home-section-heading">{polyglot.t("home_page.section_recent")}</h2>
       <div role="list">
         {rows.map((row) => (

@@ -1,6 +1,7 @@
 import { useStore } from "@nanostores/react"
 import { useEffect, useRef, useState } from "react"
 
+import HomeCategorySections from "./HomeCategorySections"
 import HomeHighlights from "./HomeHighlights"
 import HomeRecent from "./HomeRecent"
 import HomeStates from "./HomeStates"
@@ -402,7 +403,7 @@ const HomeEditorial = ({
             }),
             sessionRevision,
             highlightIds: projection.highlightIds,
-            recentIds: projection.recentIds,
+            recentIds: projection.readerRecentIds,
           }
         : null,
     )
@@ -433,12 +434,19 @@ const HomeEditorial = ({
                 observeRead={observeRead}
                 personalizationApplied={Boolean(activeSession.personalizationApplied)}
               />
+              <HomeCategorySections
+                articleActivation={articleActivation}
+                categoryLanes={projection.categoryLanes}
+                entries={entries}
+                observeRead={observeRead}
+                scrollRootRef={cardsRef}
+              />
               <HomeRecent
                 articleActivation={articleActivation}
                 entries={entries}
                 highlightIds={projection.highlightIds}
                 observeRead={observeRead}
-                recentIds={projection.recentIds}
+                recentIds={projection.latestIds}
                 scrollRootRef={cardsRef}
               />
               <LoadMoreSentinel getEntries={getEntries} scrollRootRef={cardsRef} />
