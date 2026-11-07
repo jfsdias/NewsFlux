@@ -87,7 +87,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Run content fallback unit tests
+      - name: Run content fallback and pinned DNS tests
         run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s services/content_fallback/tests -p 'test_*.py' -v
 
   build:

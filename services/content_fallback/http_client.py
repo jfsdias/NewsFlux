@@ -77,7 +77,9 @@ def resolve_host(host: str, port: int, allow_private: bool = False) -> str:
             address = ipaddress.ip_address(raw_address)
         except ValueError as exc:
             raise UnsafeURL("DNS returned an invalid address") from exc
-        classified = address.ipv4_mapped or address
+        classified = address
+        if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+            classified = address.ipv4_mapped
         if not allow_private and (not classified.is_global or classified.is_multicast):
             raise UnsafeURL("URL resolves to a non-public address")
         addresses.append(str(address))
