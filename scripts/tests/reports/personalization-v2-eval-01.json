@@ -1,0 +1,2193 @@
+{
+  "metadata": {
+    "mainSha": "430026000f2fe8c7f4e823e17ab39b38254198bf",
+    "baseline": "Phase 2C projection composed through current Home category/session helpers",
+    "candidate": "Current Phase 2D V1 personalization projection composed through the same helpers",
+    "topN": 12,
+    "topNDefinition": "first 12 article IDs in final visual order (up to 3 Highlights + 9 category-lane slots)",
+    "compositionSamples": 101,
+    "freshnessWindowMs": 3600000,
+    "starredProfileLimit": 75,
+    "data": "synthetic fixtures only; no Miniflux access",
+    "caveat": "latency measures local projection/composition only; excludes network and browser rendering"
+  },
+  "scenarios": [
+    {
+      "name": "balanced_sources_and_categories",
+      "profileState": "ready",
+      "baseline": {
+        "primaryId": 1000,
+        "highlightIds": [1000, 1001, 1002],
+        "categoryLanes": [
+          {
+            "categoryId": 10,
+            "categoryTitle": "Category 10",
+            "entryIds": [1003, 1006, 1009]
+          },
+          {
+            "categoryId": 11,
+            "categoryTitle": "Category 11",
+            "entryIds": [1004, 1007, 1010]
+          },
+          {
+            "categoryId": 12,
+            "categoryTitle": "Category 12",
+            "entryIds": [1005, 1008, 1011]
+          }
+        ],
+        "sectionOrder": ["Highlights", "category:10", "category:11", "category:12", "Latest"],
+        "sectionCounts": {
+          "highlights": 3,
+          "categories": [
+            {
+              "categoryId": 10,
+              "count": 3
+            },
+            {
+              "categoryId": 11,
+              "count": 3
+            },
+            {
+              "categoryId": 12,
+              "count": 3
+            }
+          ],
+          "latest": 6
+        },
+        "latestIds": [1012, 1013, 1014, 1015, 1016, 1017],
+        "visibleIds": [
+          1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011, 1012, 1013, 1014,
+          1015, 1016, 1017
+        ],
+        "topN": {
+          "n": 12,
+          "articleIds": [1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011],
+          "distinctSources": 6,
+          "distinctCategories": 3,
+          "consecutiveSameSourcePairs": 0,
+          "longestSameSourceRun": 1
+        },
+        "readerIds": [
+          1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011, 1012, 1013, 1014,
+          1015, 1016, 1017
+        ],
+        "readerVisualOrderParity": true,
+        "eligibleCount": 18,
+        "visibleCount": 18,
+        "uniqueVisibleCount": 18,
+        "missingIds": [],
+        "extraIds": []
+      },
+      "v1": {
+        "primaryId": 1000,
+        "highlightIds": [1000, 1001, 1002],
+        "categoryLanes": [
+          {
+            "categoryId": 10,
+            "categoryTitle": "Category 10",
+            "entryIds": [1003, 1006, 1009]
+          },
+          {
+            "categoryId": 11,
+            "categoryTitle": "Category 11",
+            "entryIds": [1004, 1007, 1010]
+          },
+          {
+            "categoryId": 12,
+            "categoryTitle": "Category 12",
+            "entryIds": [1005, 1008, 1011]
+          }
+        ],
+        "sectionOrder": ["Highlights", "category:10", "category:11", "category:12", "Latest"],
+        "sectionCounts": {
+          "highlights": 3,
+          "categories": [
+            {
+              "categoryId": 10,
+              "count": 3
+            },
+            {
+              "categoryId": 11,
+              "count": 3
+            },
+            {
+              "categoryId": 12,
+              "count": 3
+            }
+          ],
+          "latest": 6
+        },
+        "latestIds": [1012, 1013, 1014, 1015, 1016, 1017],
+        "visibleIds": [
+          1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011, 1012, 1013, 1014,
+          1015, 1016, 1017
+        ],
+        "topN": {
+          "n": 12,
+          "articleIds": [1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011],
+          "distinctSources": 6,
+          "distinctCategories": 3,
+          "consecutiveSameSourcePairs": 0,
+          "longestSameSourceRun": 1
+        },
+        "readerIds": [
+          1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011, 1012, 1013, 1014,
+          1015, 1016, 1017
+        ],
+        "readerVisualOrderParity": true,
+        "eligibleCount": 18,
+        "visibleCount": 18,
+        "uniqueVisibleCount": 18,
+        "missingIds": [],
+        "extraIds": []
+      },
+      "comparison": {
+        "primaryUnchanged": true,
+        "finalPresentationChanged": false,
+        "intermediateOrderChanged": false,
+        "personalizationApplied": false,
+        "disclosureMatchesFinalComposition": true,
+        "disclosureMismatch": false,
+        "topNDelta": {
+          "distinctSources": 0,
+          "distinctCategories": 0,
+          "consecutiveSameSourcePairs": 0
+        },
+        "measuredTopNBenefit": false,
+        "disclosureCase": "NO_PERSONALIZATION_CHANGE",
+        "categoryLaneMembershipChanged": false,
+        "categoryLaneOrderChanged": false,
+        "readerOrderParity": true,
+        "candidateCoveragePass": true,
+        "noDuplicateArticleIds": true,
+        "categoryIdentityPass": true,
+        "ageDisplacement": {
+          "promoted": [],
+          "rankPositionAgeComparisons": [],
+          "maximumOlderByMinutesAtSameRank": 0
+        }
+      },
+      "offlineCompositionLatency": {
+        "phase2c": {
+          "repetitions": 101,
+          "medianMs": 0.1018,
+          "p95Ms": 0.2055
+        },
+        "personalizationV1": {
+          "repetitions": 101,
+          "medianMs": 0.2066,
+          "p95Ms": 0.3618
+        }
+      }
+    },
+    {
+      "name": "star_profile_concentrated_in_one_source",
+      "profileState": "ready",
+      "baseline": {
+        "primaryId": 2000,
+        "highlightIds": [2000, 2013, 2014],
+        "categoryLanes": [
+          {
+            "categoryId": 21,
+            "categoryTitle": "Category 21",
+            "entryIds": [2001, 2004, 2007]
+          },
+          {
+            "categoryId": 22,
+            "categoryTitle": "Category 22",
+            "entryIds": [2002, 2005, 2008]
+          },
+          {
+            "categoryId": 20,
+            "categoryTitle": "Category 20",
+            "entryIds": [2003, 2006, 2009]
+          }
+        ],
+        "sectionOrder": ["Highlights", "category:21", "category:22", "category:20", "Latest"],
+        "sectionCounts": {
+          "highlights": 3,
+          "categories": [
+            {
+              "categoryId": 21,
+              "count": 3
+            },
+            {
+              "categoryId": 22,
+              "count": 3
+            },
+            {
+              "categoryId": 20,
+              "count": 3
+            }
+          ],
+          "latest": 12
+        },
+        "latestIds": [2010, 2011, 2012, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023],
+        "visibleIds": [
+          2000, 2013, 2014, 2001, 2004, 2007, 2002, 2005, 2008, 2003, 2006, 2009, 2010, 2011, 2012,
+          2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023
+        ],
+        "topN": {
+          "n": 12,
+          "articleIds": [2000, 2013, 2014, 2001, 2004, 2007, 2002, 2005, 2008, 2003, 2006, 2009],
+          "distinctSources": 3,
+          "distinctCategories": 3,
+          "consecutiveSameSourcePairs": 8,
+          "longestSameSourceRun": 9
+        },
+        "readerIds": [
+          2000, 2013, 2014, 2001, 2004, 2007, 2002, 2005, 2008, 2003, 2006, 2009, 2010, 2011, 2012,
+          2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023
+        ],
+        "readerVisualOrderParity": true,
+        "eligibleCount": 24,
+        "visibleCount": 24,
+        "uniqueVisibleCount": 24,
+        "missingIds": [],
+        "extraIds": []
+      },
+      "v1": {
+        "primaryId": 2000,
+        "highlightIds": [2000, 2013, 2014],
+        "categoryLanes": [
+          {
+            "categoryId": 21,
+            "categoryTitle": "Category 21",
+            "entryIds": [2001, 2004, 2007]
+          },
+          {
+            "categoryId": 22,
+            "categoryTitle": "Category 22",
+            "entryIds": [2002, 2005, 2008]
+          },
+          {
+            "categoryId": 20,
+            "categoryTitle": "Category 20",
+            "entryIds": [2012, 2015, 2021]
+          }
+        ],
+        "sectionOrder": ["Highlights", "category:21", "category:22", "category:20", "Latest"],
+        "sectionCounts": {
+          "highlights": 3,
+          "categories": [
+            {
+              "categoryId": 21,
+              "count": 3
+            },
+            {
+              "categoryId": 22,
+              "count": 3
+            },
+            {
+              "categoryId": 20,
+              "count": 3
+            }
+          ],
+          "latest": 12
+        },
+        "latestIds": [2003, 2006, 2009, 2010, 2011, 2018, 2016, 2017, 2019, 2020, 2022, 2023],
+        "visibleIds": [
+          2000, 2013, 2014, 2001, 2004, 2007, 2002, 2005, 2008, 2012, 2015, 2021, 2003, 2006, 2009,
+          2010, 2011, 2018, 2016, 2017, 2019, 2020, 2022, 2023
+        ],
+        "topN": {
+          "n": 12,
+          "articleIds": [2000, 2013, 2014, 2001, 2004, 2007, 2002, 2005, 2008, 2012, 2015, 2021],
+          "distinctSources": 6,
+          "distinctCategories": 3,
+          "consecutiveSameSourcePairs": 5,
+          "longestSameSourceRun": 6
+        },
+        "readerIds": [
+          2000, 2013, 2014, 2001, 2004, 2007, 2002, 2005, 2008, 2012, 2015, 2021, 2003, 2006, 2009,
+          2010, 2011, 2018, 2016, 2017, 2019, 2020, 2022, 2023
+        ],
+        "readerVisualOrderParity": true,
+        "eligibleCount": 24,
+        "visibleCount": 24,
+        "uniqueVisibleCount": 24,
+        "missingIds": [],
+        "extraIds": []
+      },
+      "comparison": {
+        "primaryUnchanged": true,
+        "finalPresentationChanged": true,
+        "intermediateOrderChanged": true,
+        "personalizationApplied": true,
+        "disclosureMatchesFinalComposition": true,
+        "disclosureMismatch": false,
+        "topNDelta": {
+          "distinctSources": 3,
+          "distinctCategories": 0,
+          "consecutiveSameSourcePairs": 3
+        },
+        "measuredTopNBenefit": true,
+        "disclosureCase": "APPLIED_WITH_FINAL_PRESENTATION_CHANGE",
+        "categoryLaneMembershipChanged": true,
+        "categoryLaneOrderChanged": false,
+        "readerOrderParity": true,
+        "candidateCoveragePass": true,
+        "noDuplicateArticleIds": true,
+        "categoryIdentityPass": true,
+        "ageDisplacement": {
+          "promoted": [
+            {
+              "id": 2012,
+              "fromRank": 15,
+              "toRank": 10,
+              "ageFromPrimaryMinutes": 24
+            },
+            {
+              "id": 2015,
+              "fromRank": 16,
+              "toRank": 11,
+              "ageFromPrimaryMinutes": 30
+            },
+            {
+              "id": 2021,
+              "fromRank": 22,
+              "toRank": 12,
+              "ageFromPrimaryMinutes": 42
+            },
+            {
+              "id": 2018,
+              "fromRank": 19,
+              "toRank": 18,
+              "ageFromPrimaryMinutes": 36
+            }
+          ],
+          "rankPositionAgeComparisons": [
+            {
+              "rank": 10,
+              "baselineId": 2003,
+              "personalizedId": 2012,
+              "personalizedOlderByMinutes": 18
+            },
+            {
+              "rank": 11,
+              "baselineId": 2006,
+              "personalizedId": 2015,
+              "personalizedOlderByMinutes": 18
+            },
+            {
+              "rank": 12,
+              "baselineId": 2009,
+              "personalizedId": 2021,
+              "personalizedOlderByMinutes": 24
+            },
+            {
+              "rank": 13,
+              "baselineId": 2010,
+              "personalizedId": 2003,
+              "personalizedOlderByMinutes": -14
+            },
+            {
+              "rank": 14,
+              "baselineId": 2011,
+              "personalizedId": 2006,
+              "personalizedOlderByMinutes": -10
+            },
+            {
+              "rank": 15,
+              "baselineId": 2012,
+              "personalizedId": 2009,
+              "personalizedOlderByMinutes": -6
+            },
+            {
+              "rank": 16,
+              "baselineId": 2015,
+              "personalizedId": 2010,
+              "personalizedOlderByMinutes": -10
+            },
+            {
+              "rank": 17,
+              "baselineId": 2016,
+              "personalizedId": 2011,
+              "personalizedOlderByMinutes": -10
+            },
+            {
+              "rank": 18,
+              "baselineId": 2017,
+              "personalizedId": 2018,
+              "personalizedOlderByMinutes": 2
+            },
+            {
+              "rank": 19,
+              "baselineId": 2018,
+              "personalizedId": 2016,
+              "personalizedOlderByMinutes": -4
+            },
+            {
+              "rank": 20,
+              "baselineId": 2019,
+              "personalizedId": 2017,
+              "personalizedOlderByMinutes": -4
+            },
+            {
+              "rank": 21,
+              "baselineId": 2020,
+              "personalizedId": 2019,
+              "personalizedOlderByMinutes": -2
+            },
+            {
+              "rank": 22,
+              "baselineId": 2021,
+              "personalizedId": 2020,
+              "personalizedOlderByMinutes": -2
+            }
+          ],
+          "maximumOlderByMinutesAtSameRank": 24
+        }
+      },
+      "offlineCompositionLatency": {
+        "phase2c": {
+          "repetitions": 101,
+          "medianMs": 0.1042,
+          "p95Ms": 0.1565
+        },
+        "personalizationV1": {
+          "repetitions": 101,
+          "medianMs": 0.2725,
+          "p95Ms": 0.3769
+        }
+      }
+    },
+    {
+      "name": "star_profile_concentrated_in_one_category",
+      "profileState": "ready",
+      "baseline": {
+        "primaryId": 2000,
+        "highlightIds": [2000, 2013, 2014],
+        "categoryLanes": [
+          {
+            "categoryId": 21,
+            "categoryTitle": "Category 21",
+            "entryIds": [2001, 2004, 2007]
+          },
+          {
+            "categoryId": 22,
+            "categoryTitle": "Category 22",
+            "entryIds": [2002, 2005, 2008]
+          },
+          {
+            "categoryId": 20,
+            "categoryTitle": "Category 20",
+            "entryIds": [2003, 2006, 2009]
+          }
+        ],
+        "sectionOrder": ["Highlights", "category:21", "category:22", "category:20", "Latest"],
+        "sectionCounts": {
+          "highlights": 3,
+          "categories": [
+            {
+              "categoryId": 21,
+              "count": 3
+            },
+            {
+              "categoryId": 22,
+              "count": 3
+            },
+            {
+              "categoryId": 20,
+              "count": 3
+            }
+          ],
+          "latest": 12
+        },
+        "latestIds": [2010, 2011, 2012, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023],
+        "visibleIds": [
+          2000, 2013, 2014, 2001, 2004, 2007, 2002, 2005, 2008, 2003, 2006, 2009, 2010, 2011, 2012,
+          2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023
+        ],
+        "topN": {
+          "n": 12,
+          "articleIds": [2000, 2013, 2014, 2001, 2004, 2007, 2002, 2005, 2008, 2003, 2006, 2009],
+          "distinctSources": 3,
+          "distinctCategories": 3,
+          "consecutiveSameSourcePairs": 8,
+          "longestSameSourceRun": 9
+        },
+        "readerIds": [
+          2000, 2013, 2014, 2001, 2004, 2007, 2002, 2005, 2008, 2003, 2006, 2009, 2010, 2011, 2012,
+          2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023
+        ],
+        "readerVisualOrderParity": true,
+        "eligibleCount": 24,
+        "visibleCount": 24,
+        "uniqueVisibleCount": 24,
+        "missingIds": [],
+        "extraIds": []
+      },
+      "v1": {
+        "primaryId": 2000,
+        "highlightIds": [2000, 2013, 2014],
+        "categoryLanes": [
+          {
+            "categoryId": 21,
+            "categoryTitle": "Category 21",
+            "entryIds": [2016, 2019, 2022]
+          },
+          {
+            "categoryId": 22,
+            "categoryTitle": "Category 22",
+            "entryIds": [2017, 2020, 2023]
+          },
+          {
+            "categoryId": 20,
+            "categoryTitle": "Category 20",
+            "entryIds": [2012, 2015, 2021]
+          }
+        ],
+        "sectionOrder": ["Highlights", "category:21", "category:22", "category:20", "Latest"],
+        "sectionCounts": {
+          "highlights": 3,
+          "categories": [
+            {
+              "categoryId": 21,
+              "count": 3
+            },
+            {
+              "categoryId": 22,
+              "count": 3
+            },
+            {
+              "categoryId": 20,
+              "count": 3
+            }
+          ],
+          "latest": 12
+        },
+        "latestIds": [2018, 2003, 2006, 2009, 2001, 2002, 2004, 2005, 2007, 2008, 2010, 2011],
+        "visibleIds": [
+          2000, 2013, 2014, 2016, 2019, 2022, 2017, 2020, 2023, 2012, 2015, 2021, 2018, 2003, 2006,
+          2009, 2001, 2002, 2004, 2005, 2007, 2008, 2010, 2011
+        ],
+        "topN": {
+          "n": 12,
+          "articleIds": [2000, 2013, 2014, 2016, 2019, 2022, 2017, 2020, 2023, 2012, 2015, 2021],
+          "distinctSources": 6,
+          "distinctCategories": 3,
+          "consecutiveSameSourcePairs": 1,
+          "longestSameSourceRun": 2
+        },
+        "readerIds": [
+          2000, 2013, 2014, 2016, 2019, 2022, 2017, 2020, 2023, 2012, 2015, 2021, 2018, 2003, 2006,
+          2009, 2001, 2002, 2004, 2005, 2007, 2008, 2010, 2011
+        ],
+        "readerVisualOrderParity": true,
+        "eligibleCount": 24,
+        "visibleCount": 24,
+        "uniqueVisibleCount": 24,
+        "missingIds": [],
+        "extraIds": []
+      },
+      "comparison": {
+        "primaryUnchanged": true,
+        "finalPresentationChanged": true,
+        "intermediateOrderChanged": true,
+        "personalizationApplied": true,
+        "disclosureMatchesFinalComposition": true,
+        "disclosureMismatch": false,
+        "topNDelta": {
+          "distinctSources": 3,
+          "distinctCategories": 0,
+          "consecutiveSameSourcePairs": 7
+        },
+        "measuredTopNBenefit": true,
+        "disclosureCase": "APPLIED_WITH_FINAL_PRESENTATION_CHANGE",
+        "categoryLaneMembershipChanged": true,
+        "categoryLaneOrderChanged": false,
+        "readerOrderParity": true,
+        "candidateCoveragePass": true,
+        "noDuplicateArticleIds": true,
+        "categoryIdentityPass": true,
+        "ageDisplacement": {
+          "promoted": [
+            {
+              "id": 2016,
+              "fromRank": 17,
+              "toRank": 4,
+              "ageFromPrimaryMinutes": 32
+            },
+            {
+              "id": 2019,
+              "fromRank": 20,
+              "toRank": 5,
+              "ageFromPrimaryMinutes": 38
+            },
+            {
+              "id": 2022,
+              "fromRank": 23,
+              "toRank": 6,
+              "ageFromPrimaryMinutes": 44
+            },
+            {
+              "id": 2017,
+              "fromRank": 18,
+              "toRank": 7,
+              "ageFromPrimaryMinutes": 34
+            },
+            {
+              "id": 2020,
+              "fromRank": 21,
+              "toRank": 8,
+              "ageFromPrimaryMinutes": 40
+            },
+            {
+              "id": 2023,
+              "fromRank": 24,
+              "toRank": 9,
+              "ageFromPrimaryMinutes": 46
+            },
+            {
+              "id": 2012,
+              "fromRank": 15,
+              "toRank": 10,
+              "ageFromPrimaryMinutes": 24
+            },
+            {
+              "id": 2015,
+              "fromRank": 16,
+              "toRank": 11,
+              "ageFromPrimaryMinutes": 30
+            },
+            {
+              "id": 2021,
+              "fromRank": 22,
+              "toRank": 12,
+              "ageFromPrimaryMinutes": 42
+            },
+            {
+              "id": 2018,
+              "fromRank": 19,
+              "toRank": 13,
+              "ageFromPrimaryMinutes": 36
+            }
+          ],
+          "rankPositionAgeComparisons": [
+            {
+              "rank": 4,
+              "baselineId": 2001,
+              "personalizedId": 2016,
+              "personalizedOlderByMinutes": 30
+            },
+            {
+              "rank": 5,
+              "baselineId": 2004,
+              "personalizedId": 2019,
+              "personalizedOlderByMinutes": 30
+            },
+            {
+              "rank": 6,
+              "baselineId": 2007,
+              "personalizedId": 2022,
+              "personalizedOlderByMinutes": 30
+            },
+            {
+              "rank": 7,
+              "baselineId": 2002,
+              "personalizedId": 2017,
+              "personalizedOlderByMinutes": 30
+            },
+            {
+              "rank": 8,
+              "baselineId": 2005,
+              "personalizedId": 2020,
+              "personalizedOlderByMinutes": 30
+            },
+            {
+              "rank": 9,
+              "baselineId": 2008,
+              "personalizedId": 2023,
+              "personalizedOlderByMinutes": 30
+            },
+            {
+              "rank": 10,
+              "baselineId": 2003,
+              "personalizedId": 2012,
+              "personalizedOlderByMinutes": 18
+            },
+            {
+              "rank": 11,
+              "baselineId": 2006,
+              "personalizedId": 2015,
+              "personalizedOlderByMinutes": 18
+            },
+            {
+              "rank": 12,
+              "baselineId": 2009,
+              "personalizedId": 2021,
+              "personalizedOlderByMinutes": 24
+            },
+            {
+              "rank": 13,
+              "baselineId": 2010,
+              "personalizedId": 2018,
+              "personalizedOlderByMinutes": 16
+            },
+            {
+              "rank": 14,
+              "baselineId": 2011,
+              "personalizedId": 2003,
+              "personalizedOlderByMinutes": -16
+            },
+            {
+              "rank": 15,
+              "baselineId": 2012,
+              "personalizedId": 2006,
+              "personalizedOlderByMinutes": -12
+            },
+            {
+              "rank": 16,
+              "baselineId": 2015,
+              "personalizedId": 2009,
+              "personalizedOlderByMinutes": -12
+            },
+            {
+              "rank": 17,
+              "baselineId": 2016,
+              "personalizedId": 2001,
+              "personalizedOlderByMinutes": -30
+            },
+            {
+              "rank": 18,
+              "baselineId": 2017,
+              "personalizedId": 2002,
+              "personalizedOlderByMinutes": -30
+            },
+            {
+              "rank": 19,
+              "baselineId": 2018,
+              "personalizedId": 2004,
+              "personalizedOlderByMinutes": -28
+            },
+            {
+              "rank": 20,
+              "baselineId": 2019,
+              "personalizedId": 2005,
+              "personalizedOlderByMinutes": -28
+            },
+            {
+              "rank": 21,
+              "baselineId": 2020,
+              "personalizedId": 2007,
+              "personalizedOlderByMinutes": -26
+            },
+            {
+              "rank": 22,
+              "baselineId": 2021,
+              "personalizedId": 2008,
+              "personalizedOlderByMinutes": -26
+            },
+            {
+              "rank": 23,
+              "baselineId": 2022,
+              "personalizedId": 2010,
+              "personalizedOlderByMinutes": -24
+            },
+            {
+              "rank": 24,
+              "baselineId": 2023,
+              "personalizedId": 2011,
+              "personalizedOlderByMinutes": -24
+            }
+          ],
+          "maximumOlderByMinutesAtSameRank": 30
+        }
+      },
+      "offlineCompositionLatency": {
+        "phase2c": {
+          "repetitions": 101,
+          "medianMs": 0.1018,
+          "p95Ms": 0.141
+        },
+        "personalizationV1": {
+          "repetitions": 101,
+          "medianMs": 0.2713,
+          "p95Ms": 0.3342
+        }
+      }
+    },
+    {
+      "name": "different_sources_covering_the_same_category",
+      "profileState": "ready",
+      "baseline": {
+        "primaryId": 3000,
+        "highlightIds": [3000, 3001, 3002],
+        "categoryLanes": [
+          {
+            "categoryId": 60,
+            "categoryTitle": "Shared topic",
+            "entryIds": [3003, 3004, 3005]
+          }
+        ],
+        "sectionOrder": ["Highlights", "category:60", "Latest"],
+        "sectionCounts": {
+          "highlights": 3,
+          "categories": [
+            {
+              "categoryId": 60,
+              "count": 3
+            }
+          ],
+          "latest": 6
+        },
+        "latestIds": [3006, 3007, 3008, 3009, 3010, 3011],
+        "visibleIds": [3000, 3001, 3002, 3003, 3004, 3005, 3006, 3007, 3008, 3009, 3010, 3011],
+        "topN": {
+          "n": 12,
+          "articleIds": [3000, 3001, 3002, 3003, 3004, 3005, 3006, 3007, 3008, 3009, 3010, 3011],
+          "distinctSources": 6,
+          "distinctCategories": 1,
+          "consecutiveSameSourcePairs": 0,
+          "longestSameSourceRun": 1
+        },
+        "readerIds": [3000, 3001, 3002, 3003, 3004, 3005, 3006, 3007, 3008, 3009, 3010, 3011],
+        "readerVisualOrderParity": true,
+        "eligibleCount": 12,
+        "visibleCount": 12,
+        "uniqueVisibleCount": 12,
+        "missingIds": [],
+        "extraIds": []
+      },
+      "v1": {
+        "primaryId": 3000,
+        "highlightIds": [3000, 3001, 3002],
+        "categoryLanes": [
+          {
+            "categoryId": 60,
+            "categoryTitle": "Shared topic",
+            "entryIds": [3003, 3004, 3005]
+          }
+        ],
+        "sectionOrder": ["Highlights", "category:60", "Latest"],
+        "sectionCounts": {
+          "highlights": 3,
+          "categories": [
+            {
+              "categoryId": 60,
+              "count": 3
+            }
+          ],
+          "latest": 6
+        },
+        "latestIds": [3006, 3007, 3008, 3009, 3010, 3011],
+        "visibleIds": [3000, 3001, 3002, 3003, 3004, 3005, 3006, 3007, 3008, 3009, 3010, 3011],
+        "topN": {
+          "n": 12,
+          "articleIds": [3000, 3001, 3002, 3003, 3004, 3005, 3006, 3007, 3008, 3009, 3010, 3011],
+          "distinctSources": 6,
+          "distinctCategories": 1,
+          "consecutiveSameSourcePairs": 0,
+          "longestSameSourceRun": 1
+        },
+        "readerIds": [3000, 3001, 3002, 3003, 3004, 3005, 3006, 3007, 3008, 3009, 3010, 3011],
+        "readerVisualOrderParity": true,
+        "eligibleCount": 12,
+        "visibleCount": 12,
+        "uniqueVisibleCount": 12,
+        "missingIds": [],
+        "extraIds": []
+      },
+      "comparison": {
+        "primaryUnchanged": true,
+        "finalPresentationChanged": false,
+        "intermediateOrderChanged": false,
+        "personalizationApplied": false,
+        "disclosureMatchesFinalComposition": true,
+        "disclosureMismatch": false,
+        "topNDelta": {
+          "distinctSources": 0,
+          "distinctCategories": 0,
+          "consecutiveSameSourcePairs": 0
+        },
+        "measuredTopNBenefit": false,
+        "disclosureCase": "NO_PERSONALIZATION_CHANGE",
+        "categoryLaneMembershipChanged": false,
+        "categoryLaneOrderChanged": false,
+        "readerOrderParity": true,
+        "candidateCoveragePass": true,
+        "noDuplicateArticleIds": true,
+        "categoryIdentityPass": true,
+        "ageDisplacement": {
+          "promoted": [],
+          "rankPositionAgeComparisons": [],
+          "maximumOlderByMinutesAtSameRank": 0
+        }
+      },
+      "offlineCompositionLatency": {
+        "phase2c": {
+          "repetitions": 101,
+          "medianMs": 0.0449,
+          "p95Ms": 0.0543
+        },
+        "personalizationV1": {
+          "repetitions": 101,
+          "medianMs": 0.0943,
+          "p95Ms": 0.151
+        }
+      }
+    },
+    {
+      "name": "exact_60_minute_freshness_boundary",
+      "profileState": "ready",
+      "baseline": {
+        "primaryId": 4001,
+        "highlightIds": [4001, 4002, 4003],
+        "categoryLanes": [],
+        "sectionOrder": ["Highlights", "Latest"],
+        "sectionCounts": {
+          "highlights": 3,
+          "categories": [],
+          "latest": 3
+        },
+        "latestIds": [4004, 4005, 4006],
+        "visibleIds": [4001, 4002, 4003, 4004, 4005, 4006],
+        "topN": {
+          "n": 12,
+          "articleIds": [4001, 4002, 4003, 4004, 4005, 4006],
+          "distinctSources": 6,
+          "distinctCategories": 6,
+          "consecutiveSameSourcePairs": 0,
+          "longestSameSourceRun": 1
+        },
+        "readerIds": [4001, 4002, 4003, 4004, 4005, 4006],
+        "readerVisualOrderParity": true,
+        "eligibleCount": 6,
+        "visibleCount": 6,
+        "uniqueVisibleCount": 6,
+        "missingIds": [],
+        "extraIds": []
+      },
+      "v1": {
+        "primaryId": 4001,
+        "highlightIds": [4001, 4003, 4002],
+        "categoryLanes": [],
+        "sectionOrder": ["Highlights", "Latest"],
+        "sectionCounts": {
+          "highlights": 3,
+          "categories": [],
+          "latest": 3
+        },
+        "latestIds": [4004, 4005, 4006],
+        "visibleIds": [4001, 4003, 4002, 4004, 4005, 4006],
+        "topN": {
+          "n": 12,
+          "articleIds": [4001, 4003, 4002, 4004, 4005, 4006],
+          "distinctSources": 6,
+          "distinctCategories": 6,
+          "consecutiveSameSourcePairs": 0,
+          "longestSameSourceRun": 1
+        },
+        "readerIds": [4001, 4003, 4002, 4004, 4005, 4006],
+        "readerVisualOrderParity": true,
+        "eligibleCount": 6,
+        "visibleCount": 6,
+        "uniqueVisibleCount": 6,
+        "missingIds": [],
+        "extraIds": []
+      },
+      "comparison": {
+        "primaryUnchanged": true,
+        "finalPresentationChanged": true,
+        "intermediateOrderChanged": true,
+        "personalizationApplied": true,
+        "disclosureMatchesFinalComposition": true,
+        "disclosureMismatch": false,
+        "topNDelta": {
+          "distinctSources": 0,
+          "distinctCategories": 0,
+          "consecutiveSameSourcePairs": 0
+        },
+        "measuredTopNBenefit": false,
+        "disclosureCase": "APPLIED_WITH_FINAL_PRESENTATION_CHANGE",
+        "categoryLaneMembershipChanged": false,
+        "categoryLaneOrderChanged": false,
+        "readerOrderParity": true,
+        "candidateCoveragePass": true,
+        "noDuplicateArticleIds": true,
+        "categoryIdentityPass": true,
+        "ageDisplacement": {
+          "promoted": [
+            {
+              "id": 4003,
+              "fromRank": 3,
+              "toRank": 2,
+              "ageFromPrimaryMinutes": 60
+            }
+          ],
+          "rankPositionAgeComparisons": [
+            {
+              "rank": 2,
+              "baselineId": 4002,
+              "personalizedId": 4003,
+              "personalizedOlderByMinutes": 50
+            },
+            {
+              "rank": 3,
+              "baselineId": 4003,
+              "personalizedId": 4002,
+              "personalizedOlderByMinutes": -50
+            }
+          ],
+          "maximumOlderByMinutesAtSameRank": 50
+        }
+      },
+      "offlineCompositionLatency": {
+        "phase2c": {
+          "repetitions": 101,
+          "medianMs": 0.0192,
+          "p95Ms": 0.0228
+        },
+        "personalizationV1": {
+          "repetitions": 101,
+          "medianMs": 0.0327,
+          "p95Ms": 0.0423
+        }
+      }
+    },
+    {
+      "name": "secondary_highlight_changed_by_current_star",
+      "profileState": "ready",
+      "baseline": {
+        "primaryId": 5001,
+        "highlightIds": [5001, 5002, 5004],
+        "categoryLanes": [],
+        "sectionOrder": ["Highlights", "Latest"],
+        "sectionCounts": {
+          "highlights": 3,
+          "categories": [],
+          "latest": 4
+        },
+        "latestIds": [5003, 5005, 5006, 5007],
+        "visibleIds": [5001, 5002, 5004, 5003, 5005, 5006, 5007],
+        "topN": {
+          "n": 12,
+          "articleIds": [5001, 5002, 5004, 5003, 5005, 5006, 5007],
+          "distinctSources": 6,
+          "distinctCategories": 6,
+          "consecutiveSameSourcePairs": 0,
+          "longestSameSourceRun": 1
+        },
+        "readerIds": [5001, 5002, 5004, 5003, 5005, 5006, 5007],
+        "readerVisualOrderParity": true,
+        "eligibleCount": 7,
+        "visibleCount": 7,
+        "uniqueVisibleCount": 7,
+        "missingIds": [],
+        "extraIds": []
+      },
+      "v1": {
+        "primaryId": 5001,
+        "highlightIds": [5001, 5007, 5004],
+        "categoryLanes": [
+          {
+            "categoryId": 200,
+            "categoryTitle": "Category 200",
+            "entryIds": [5002, 5003]
+          }
+        ],
+        "sectionOrder": ["Highlights", "category:200", "Latest"],
+        "sectionCounts": {
+          "highlights": 3,
+          "categories": [
+            {
+              "categoryId": 200,
+              "count": 2
+            }
+          ],
+          "latest": 2
+        },
+        "latestIds": [5005, 5006],
+        "visibleIds": [5001, 5007, 5004, 5002, 5003, 5005, 5006],
+        "topN": {
+          "n": 12,
+          "articleIds": [5001, 5007, 5004, 5002, 5003, 5005, 5006],
+          "distinctSources": 6,
+          "distinctCategories": 6,
+          "consecutiveSameSourcePairs": 1,
+          "longestSameSourceRun": 2
+        },
+        "readerIds": [5001, 5007, 5004, 5002, 5003, 5005, 5006],
+        "readerVisualOrderParity": true,
+        "eligibleCount": 7,
+        "visibleCount": 7,
+        "uniqueVisibleCount": 7,
+        "missingIds": [],
+        "extraIds": []
+      },
+      "comparison": {
+        "primaryUnchanged": true,
+        "finalPresentationChanged": true,
+        "intermediateOrderChanged": true,
+        "personalizationApplied": true,
+        "disclosureMatchesFinalComposition": true,
+        "disclosureMismatch": false,
+        "topNDelta": {
+          "distinctSources": 0,
+          "distinctCategories": 0,
+          "consecutiveSameSourcePairs": -1
+        },
+        "measuredTopNBenefit": false,
+        "disclosureCase": "APPLIED_WITH_FINAL_PRESENTATION_CHANGE",
+        "categoryLaneMembershipChanged": true,
+        "categoryLaneOrderChanged": true,
+        "readerOrderParity": true,
+        "candidateCoveragePass": true,
+        "noDuplicateArticleIds": true,
+        "categoryIdentityPass": true,
+        "ageDisplacement": {
+          "promoted": [
+            {
+              "id": 5007,
+              "fromRank": 7,
+              "toRank": 2,
+              "ageFromPrimaryMinutes": 30
+            }
+          ],
+          "rankPositionAgeComparisons": [
+            {
+              "rank": 2,
+              "baselineId": 5002,
+              "personalizedId": 5007,
+              "personalizedOlderByMinutes": 25
+            },
+            {
+              "rank": 4,
+              "baselineId": 5003,
+              "personalizedId": 5002,
+              "personalizedOlderByMinutes": -5
+            },
+            {
+              "rank": 5,
+              "baselineId": 5005,
+              "personalizedId": 5003,
+              "personalizedOlderByMinutes": -10
+            },
+            {
+              "rank": 6,
+              "baselineId": 5006,
+              "personalizedId": 5005,
+              "personalizedOlderByMinutes": -5
+            },
+            {
+              "rank": 7,
+              "baselineId": 5007,
+              "personalizedId": 5006,
+              "personalizedOlderByMinutes": -5
+            }
+          ],
+          "maximumOlderByMinutesAtSameRank": 25
+        }
+      },
+      "offlineCompositionLatency": {
+        "phase2c": {
+          "repetitions": 101,
+          "medianMs": 0.0207,
+          "p95Ms": 0.0435
+        },
+        "personalizationV1": {
+          "repetitions": 101,
+          "medianMs": 0.0355,
+          "p95Ms": 0.048
+        }
+      }
+    },
+    {
+      "name": "empty_star_profile",
+      "profileState": "ready",
+      "baseline": {
+        "primaryId": 1000,
+        "highlightIds": [1000, 1001, 1002],
+        "categoryLanes": [
+          {
+            "categoryId": 10,
+            "categoryTitle": "Category 10",
+            "entryIds": [1003, 1006, 1009]
+          },
+          {
+            "categoryId": 11,
+            "categoryTitle": "Category 11",
+            "entryIds": [1004, 1007, 1010]
+          },
+          {
+            "categoryId": 12,
+            "categoryTitle": "Category 12",
+            "entryIds": [1005, 1008, 1011]
+          }
+        ],
+        "sectionOrder": ["Highlights", "category:10", "category:11", "category:12", "Latest"],
+        "sectionCounts": {
+          "highlights": 3,
+          "categories": [
+            {
+              "categoryId": 10,
+              "count": 3
+            },
+            {
+              "categoryId": 11,
+              "count": 3
+            },
+            {
+              "categoryId": 12,
+              "count": 3
+            }
+          ],
+          "latest": 6
+        },
+        "latestIds": [1012, 1013, 1014, 1015, 1016, 1017],
+        "visibleIds": [
+          1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011, 1012, 1013, 1014,
+          1015, 1016, 1017
+        ],
+        "topN": {
+          "n": 12,
+          "articleIds": [1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011],
+          "distinctSources": 6,
+          "distinctCategories": 3,
+          "consecutiveSameSourcePairs": 0,
+          "longestSameSourceRun": 1
+        },
+        "readerIds": [
+          1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011, 1012, 1013, 1014,
+          1015, 1016, 1017
+        ],
+        "readerVisualOrderParity": true,
+        "eligibleCount": 18,
+        "visibleCount": 18,
+        "uniqueVisibleCount": 18,
+        "missingIds": [],
+        "extraIds": []
+      },
+      "v1": {
+        "primaryId": 1000,
+        "highlightIds": [1000, 1001, 1002],
+        "categoryLanes": [
+          {
+            "categoryId": 10,
+            "categoryTitle": "Category 10",
+            "entryIds": [1003, 1006, 1009]
+          },
+          {
+            "categoryId": 11,
+            "categoryTitle": "Category 11",
+            "entryIds": [1004, 1007, 1010]
+          },
+          {
+            "categoryId": 12,
+            "categoryTitle": "Category 12",
+            "entryIds": [1005, 1008, 1011]
+          }
+        ],
+        "sectionOrder": ["Highlights", "category:10", "category:11", "category:12", "Latest"],
+        "sectionCounts": {
+          "highlights": 3,
+          "categories": [
+            {
+              "categoryId": 10,
+              "count": 3
+            },
+            {
+              "categoryId": 11,
+              "count": 3
+            },
+            {
+              "categoryId": 12,
+              "count": 3
+            }
+          ],
+          "latest": 6
+        },
+        "latestIds": [1012, 1013, 1014, 1015, 1016, 1017],
+        "visibleIds": [
+          1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011, 1012, 1013, 1014,
+          1015, 1016, 1017
+        ],
+        "topN": {
+          "n": 12,
+          "articleIds": [1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011],
+          "distinctSources": 6,
+          "distinctCategories": 3,
+          "consecutiveSameSourcePairs": 0,
+          "longestSameSourceRun": 1
+        },
+        "readerIds": [
+          1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011, 1012, 1013, 1014,
+          1015, 1016, 1017
+        ],
+        "readerVisualOrderParity": true,
+        "eligibleCount": 18,
+        "visibleCount": 18,
+        "uniqueVisibleCount": 18,
+        "missingIds": [],
+        "extraIds": []
+      },
+      "comparison": {
+        "primaryUnchanged": true,
+        "finalPresentationChanged": false,
+        "intermediateOrderChanged": false,
+        "personalizationApplied": false,
+        "disclosureMatchesFinalComposition": true,
+        "disclosureMismatch": false,
+        "topNDelta": {
+          "distinctSources": 0,
+          "distinctCategories": 0,
+          "consecutiveSameSourcePairs": 0
+        },
+        "measuredTopNBenefit": false,
+        "disclosureCase": "NO_PERSONALIZATION_CHANGE",
+        "categoryLaneMembershipChanged": false,
+        "categoryLaneOrderChanged": false,
+        "readerOrderParity": true,
+        "candidateCoveragePass": true,
+        "noDuplicateArticleIds": true,
+        "categoryIdentityPass": true,
+        "ageDisplacement": {
+          "promoted": [],
+          "rankPositionAgeComparisons": [],
+          "maximumOlderByMinutesAtSameRank": 0
+        }
+      },
+      "offlineCompositionLatency": {
+        "phase2c": {
+          "repetitions": 101,
+          "medianMs": 0.0736,
+          "p95Ms": 0.1076
+        },
+        "personalizationV1": {
+          "repetitions": 101,
+          "medianMs": 0.1088,
+          "p95Ms": 0.1721
+        }
+      }
+    },
+    {
+      "name": "invalid_profile_fallback",
+      "profileState": "invalid",
+      "baseline": {
+        "primaryId": 1000,
+        "highlightIds": [1000, 1001, 1002],
+        "categoryLanes": [
+          {
+            "categoryId": 10,
+            "categoryTitle": "Category 10",
+            "entryIds": [1003, 1006, 1009]
+          },
+          {
+            "categoryId": 11,
+            "categoryTitle": "Category 11",
+            "entryIds": [1004, 1007, 1010]
+          },
+          {
+            "categoryId": 12,
+            "categoryTitle": "Category 12",
+            "entryIds": [1005, 1008, 1011]
+          }
+        ],
+        "sectionOrder": ["Highlights", "category:10", "category:11", "category:12", "Latest"],
+        "sectionCounts": {
+          "highlights": 3,
+          "categories": [
+            {
+              "categoryId": 10,
+              "count": 3
+            },
+            {
+              "categoryId": 11,
+              "count": 3
+            },
+            {
+              "categoryId": 12,
+              "count": 3
+            }
+          ],
+          "latest": 6
+        },
+        "latestIds": [1012, 1013, 1014, 1015, 1016, 1017],
+        "visibleIds": [
+          1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011, 1012, 1013, 1014,
+          1015, 1016, 1017
+        ],
+        "topN": {
+          "n": 12,
+          "articleIds": [1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011],
+          "distinctSources": 6,
+          "distinctCategories": 3,
+          "consecutiveSameSourcePairs": 0,
+          "longestSameSourceRun": 1
+        },
+        "readerIds": [
+          1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011, 1012, 1013, 1014,
+          1015, 1016, 1017
+        ],
+        "readerVisualOrderParity": true,
+        "eligibleCount": 18,
+        "visibleCount": 18,
+        "uniqueVisibleCount": 18,
+        "missingIds": [],
+        "extraIds": []
+      },
+      "v1": {
+        "primaryId": 1000,
+        "highlightIds": [1000, 1001, 1002],
+        "categoryLanes": [
+          {
+            "categoryId": 10,
+            "categoryTitle": "Category 10",
+            "entryIds": [1003, 1006, 1009]
+          },
+          {
+            "categoryId": 11,
+            "categoryTitle": "Category 11",
+            "entryIds": [1004, 1007, 1010]
+          },
+          {
+            "categoryId": 12,
+            "categoryTitle": "Category 12",
+            "entryIds": [1005, 1008, 1011]
+          }
+        ],
+        "sectionOrder": ["Highlights", "category:10", "category:11", "category:12", "Latest"],
+        "sectionCounts": {
+          "highlights": 3,
+          "categories": [
+            {
+              "categoryId": 10,
+              "count": 3
+            },
+            {
+              "categoryId": 11,
+              "count": 3
+            },
+            {
+              "categoryId": 12,
+              "count": 3
+            }
+          ],
+          "latest": 6
+        },
+        "latestIds": [1012, 1013, 1014, 1015, 1016, 1017],
+        "visibleIds": [
+          1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011, 1012, 1013, 1014,
+          1015, 1016, 1017
+        ],
+        "topN": {
+          "n": 12,
+          "articleIds": [1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011],
+          "distinctSources": 6,
+          "distinctCategories": 3,
+          "consecutiveSameSourcePairs": 0,
+          "longestSameSourceRun": 1
+        },
+        "readerIds": [
+          1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011, 1012, 1013, 1014,
+          1015, 1016, 1017
+        ],
+        "readerVisualOrderParity": true,
+        "eligibleCount": 18,
+        "visibleCount": 18,
+        "uniqueVisibleCount": 18,
+        "missingIds": [],
+        "extraIds": []
+      },
+      "comparison": {
+        "primaryUnchanged": true,
+        "finalPresentationChanged": false,
+        "intermediateOrderChanged": false,
+        "personalizationApplied": false,
+        "disclosureMatchesFinalComposition": true,
+        "disclosureMismatch": false,
+        "topNDelta": {
+          "distinctSources": 0,
+          "distinctCategories": 0,
+          "consecutiveSameSourcePairs": 0
+        },
+        "measuredTopNBenefit": false,
+        "disclosureCase": "NO_PERSONALIZATION_CHANGE",
+        "categoryLaneMembershipChanged": false,
+        "categoryLaneOrderChanged": false,
+        "readerOrderParity": true,
+        "candidateCoveragePass": true,
+        "noDuplicateArticleIds": true,
+        "categoryIdentityPass": true,
+        "ageDisplacement": {
+          "promoted": [],
+          "rankPositionAgeComparisons": [],
+          "maximumOlderByMinutesAtSameRank": 0
+        }
+      },
+      "offlineCompositionLatency": {
+        "phase2c": {
+          "repetitions": 101,
+          "medianMs": 0.074,
+          "p95Ms": 0.1217
+        },
+        "personalizationV1": {
+          "repetitions": 101,
+          "medianMs": 0.0736,
+          "p95Ms": 0.0974
+        }
+      }
+    },
+    {
+      "name": "late_profile_fallback",
+      "profileState": "late",
+      "baseline": {
+        "primaryId": 1000,
+        "highlightIds": [1000, 1001, 1002],
+        "categoryLanes": [
+          {
+            "categoryId": 10,
+            "categoryTitle": "Category 10",
+            "entryIds": [1003, 1006, 1009]
+          },
+          {
+            "categoryId": 11,
+            "categoryTitle": "Category 11",
+            "entryIds": [1004, 1007, 1010]
+          },
+          {
+            "categoryId": 12,
+            "categoryTitle": "Category 12",
+            "entryIds": [1005, 1008, 1011]
+          }
+        ],
+        "sectionOrder": ["Highlights", "category:10", "category:11", "category:12", "Latest"],
+        "sectionCounts": {
+          "highlights": 3,
+          "categories": [
+            {
+              "categoryId": 10,
+              "count": 3
+            },
+            {
+              "categoryId": 11,
+              "count": 3
+            },
+            {
+              "categoryId": 12,
+              "count": 3
+            }
+          ],
+          "latest": 6
+        },
+        "latestIds": [1012, 1013, 1014, 1015, 1016, 1017],
+        "visibleIds": [
+          1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011, 1012, 1013, 1014,
+          1015, 1016, 1017
+        ],
+        "topN": {
+          "n": 12,
+          "articleIds": [1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011],
+          "distinctSources": 6,
+          "distinctCategories": 3,
+          "consecutiveSameSourcePairs": 0,
+          "longestSameSourceRun": 1
+        },
+        "readerIds": [
+          1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011, 1012, 1013, 1014,
+          1015, 1016, 1017
+        ],
+        "readerVisualOrderParity": true,
+        "eligibleCount": 18,
+        "visibleCount": 18,
+        "uniqueVisibleCount": 18,
+        "missingIds": [],
+        "extraIds": []
+      },
+      "v1": {
+        "primaryId": 1000,
+        "highlightIds": [1000, 1001, 1002],
+        "categoryLanes": [
+          {
+            "categoryId": 10,
+            "categoryTitle": "Category 10",
+            "entryIds": [1003, 1006, 1009]
+          },
+          {
+            "categoryId": 11,
+            "categoryTitle": "Category 11",
+            "entryIds": [1004, 1007, 1010]
+          },
+          {
+            "categoryId": 12,
+            "categoryTitle": "Category 12",
+            "entryIds": [1005, 1008, 1011]
+          }
+        ],
+        "sectionOrder": ["Highlights", "category:10", "category:11", "category:12", "Latest"],
+        "sectionCounts": {
+          "highlights": 3,
+          "categories": [
+            {
+              "categoryId": 10,
+              "count": 3
+            },
+            {
+              "categoryId": 11,
+              "count": 3
+            },
+            {
+              "categoryId": 12,
+              "count": 3
+            }
+          ],
+          "latest": 6
+        },
+        "latestIds": [1012, 1013, 1014, 1015, 1016, 1017],
+        "visibleIds": [
+          1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011, 1012, 1013, 1014,
+          1015, 1016, 1017
+        ],
+        "topN": {
+          "n": 12,
+          "articleIds": [1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011],
+          "distinctSources": 6,
+          "distinctCategories": 3,
+          "consecutiveSameSourcePairs": 0,
+          "longestSameSourceRun": 1
+        },
+        "readerIds": [
+          1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011, 1012, 1013, 1014,
+          1015, 1016, 1017
+        ],
+        "readerVisualOrderParity": true,
+        "eligibleCount": 18,
+        "visibleCount": 18,
+        "uniqueVisibleCount": 18,
+        "missingIds": [],
+        "extraIds": []
+      },
+      "comparison": {
+        "primaryUnchanged": true,
+        "finalPresentationChanged": false,
+        "intermediateOrderChanged": false,
+        "personalizationApplied": false,
+        "disclosureMatchesFinalComposition": true,
+        "disclosureMismatch": false,
+        "topNDelta": {
+          "distinctSources": 0,
+          "distinctCategories": 0,
+          "consecutiveSameSourcePairs": 0
+        },
+        "measuredTopNBenefit": false,
+        "disclosureCase": "NO_PERSONALIZATION_CHANGE",
+        "categoryLaneMembershipChanged": false,
+        "categoryLaneOrderChanged": false,
+        "readerOrderParity": true,
+        "candidateCoveragePass": true,
+        "noDuplicateArticleIds": true,
+        "categoryIdentityPass": true,
+        "ageDisplacement": {
+          "promoted": [],
+          "rankPositionAgeComparisons": [],
+          "maximumOlderByMinutesAtSameRank": 0
+        }
+      },
+      "offlineCompositionLatency": {
+        "phase2c": {
+          "repetitions": 101,
+          "medianMs": 0.0734,
+          "p95Ms": 0.0812
+        },
+        "personalizationV1": {
+          "repetitions": 101,
+          "medianMs": 0.0733,
+          "p95Ms": 0.0939
+        }
+      }
+    },
+    {
+      "name": "stale_session_profile_fallback",
+      "profileState": "stale",
+      "baseline": {
+        "primaryId": 1000,
+        "highlightIds": [1000, 1001, 1002],
+        "categoryLanes": [
+          {
+            "categoryId": 10,
+            "categoryTitle": "Category 10",
+            "entryIds": [1003, 1006, 1009]
+          },
+          {
+            "categoryId": 11,
+            "categoryTitle": "Category 11",
+            "entryIds": [1004, 1007, 1010]
+          },
+          {
+            "categoryId": 12,
+            "categoryTitle": "Category 12",
+            "entryIds": [1005, 1008, 1011]
+          }
+        ],
+        "sectionOrder": ["Highlights", "category:10", "category:11", "category:12", "Latest"],
+        "sectionCounts": {
+          "highlights": 3,
+          "categories": [
+            {
+              "categoryId": 10,
+              "count": 3
+            },
+            {
+              "categoryId": 11,
+              "count": 3
+            },
+            {
+              "categoryId": 12,
+              "count": 3
+            }
+          ],
+          "latest": 6
+        },
+        "latestIds": [1012, 1013, 1014, 1015, 1016, 1017],
+        "visibleIds": [
+          1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011, 1012, 1013, 1014,
+          1015, 1016, 1017
+        ],
+        "topN": {
+          "n": 12,
+          "articleIds": [1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011],
+          "distinctSources": 6,
+          "distinctCategories": 3,
+          "consecutiveSameSourcePairs": 0,
+          "longestSameSourceRun": 1
+        },
+        "readerIds": [
+          1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011, 1012, 1013, 1014,
+          1015, 1016, 1017
+        ],
+        "readerVisualOrderParity": true,
+        "eligibleCount": 18,
+        "visibleCount": 18,
+        "uniqueVisibleCount": 18,
+        "missingIds": [],
+        "extraIds": []
+      },
+      "v1": {
+        "primaryId": 1000,
+        "highlightIds": [1000, 1001, 1002],
+        "categoryLanes": [
+          {
+            "categoryId": 10,
+            "categoryTitle": "Category 10",
+            "entryIds": [1003, 1006, 1009]
+          },
+          {
+            "categoryId": 11,
+            "categoryTitle": "Category 11",
+            "entryIds": [1004, 1007, 1010]
+          },
+          {
+            "categoryId": 12,
+            "categoryTitle": "Category 12",
+            "entryIds": [1005, 1008, 1011]
+          }
+        ],
+        "sectionOrder": ["Highlights", "category:10", "category:11", "category:12", "Latest"],
+        "sectionCounts": {
+          "highlights": 3,
+          "categories": [
+            {
+              "categoryId": 10,
+              "count": 3
+            },
+            {
+              "categoryId": 11,
+              "count": 3
+            },
+            {
+              "categoryId": 12,
+              "count": 3
+            }
+          ],
+          "latest": 6
+        },
+        "latestIds": [1012, 1013, 1014, 1015, 1016, 1017],
+        "visibleIds": [
+          1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011, 1012, 1013, 1014,
+          1015, 1016, 1017
+        ],
+        "topN": {
+          "n": 12,
+          "articleIds": [1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011],
+          "distinctSources": 6,
+          "distinctCategories": 3,
+          "consecutiveSameSourcePairs": 0,
+          "longestSameSourceRun": 1
+        },
+        "readerIds": [
+          1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011, 1012, 1013, 1014,
+          1015, 1016, 1017
+        ],
+        "readerVisualOrderParity": true,
+        "eligibleCount": 18,
+        "visibleCount": 18,
+        "uniqueVisibleCount": 18,
+        "missingIds": [],
+        "extraIds": []
+      },
+      "comparison": {
+        "primaryUnchanged": true,
+        "finalPresentationChanged": false,
+        "intermediateOrderChanged": false,
+        "personalizationApplied": false,
+        "disclosureMatchesFinalComposition": true,
+        "disclosureMismatch": false,
+        "topNDelta": {
+          "distinctSources": 0,
+          "distinctCategories": 0,
+          "consecutiveSameSourcePairs": 0
+        },
+        "measuredTopNBenefit": false,
+        "disclosureCase": "NO_PERSONALIZATION_CHANGE",
+        "categoryLaneMembershipChanged": false,
+        "categoryLaneOrderChanged": false,
+        "readerOrderParity": true,
+        "candidateCoveragePass": true,
+        "noDuplicateArticleIds": true,
+        "categoryIdentityPass": true,
+        "ageDisplacement": {
+          "promoted": [],
+          "rankPositionAgeComparisons": [],
+          "maximumOlderByMinutesAtSameRank": 0
+        }
+      },
+      "offlineCompositionLatency": {
+        "phase2c": {
+          "repetitions": 101,
+          "medianMs": 0.0735,
+          "p95Ms": 0.1003
+        },
+        "personalizationV1": {
+          "repetitions": 101,
+          "medianMs": 0.0743,
+          "p95Ms": 0.1088
+        }
+      }
+    },
+    {
+      "name": "same_category_title_different_ids",
+      "profileState": "ready",
+      "baseline": {
+        "primaryId": 6001,
+        "highlightIds": [6001, 6003, 6002],
+        "categoryLanes": [
+          {
+            "categoryId": 72,
+            "categoryTitle": "Local",
+            "entryIds": [6004, 6006]
+          }
+        ],
+        "sectionOrder": ["Highlights", "category:72", "Latest"],
+        "sectionCounts": {
+          "highlights": 3,
+          "categories": [
+            {
+              "categoryId": 72,
+              "count": 2
+            }
+          ],
+          "latest": 1
+        },
+        "latestIds": [6005],
+        "visibleIds": [6001, 6003, 6002, 6004, 6006, 6005],
+        "topN": {
+          "n": 12,
+          "articleIds": [6001, 6003, 6002, 6004, 6006, 6005],
+          "distinctSources": 6,
+          "distinctCategories": 2,
+          "consecutiveSameSourcePairs": 0,
+          "longestSameSourceRun": 1
+        },
+        "readerIds": [6001, 6003, 6002, 6004, 6006, 6005],
+        "readerVisualOrderParity": true,
+        "eligibleCount": 6,
+        "visibleCount": 6,
+        "uniqueVisibleCount": 6,
+        "missingIds": [],
+        "extraIds": []
+      },
+      "v1": {
+        "primaryId": 6001,
+        "highlightIds": [6001, 6003, 6004],
+        "categoryLanes": [
+          {
+            "categoryId": 71,
+            "categoryTitle": "Local",
+            "entryIds": [6002, 6005]
+          }
+        ],
+        "sectionOrder": ["Highlights", "category:71", "Latest"],
+        "sectionCounts": {
+          "highlights": 3,
+          "categories": [
+            {
+              "categoryId": 71,
+              "count": 2
+            }
+          ],
+          "latest": 1
+        },
+        "latestIds": [6006],
+        "visibleIds": [6001, 6003, 6004, 6002, 6005, 6006],
+        "topN": {
+          "n": 12,
+          "articleIds": [6001, 6003, 6004, 6002, 6005, 6006],
+          "distinctSources": 6,
+          "distinctCategories": 2,
+          "consecutiveSameSourcePairs": 0,
+          "longestSameSourceRun": 1
+        },
+        "readerIds": [6001, 6003, 6004, 6002, 6005, 6006],
+        "readerVisualOrderParity": true,
+        "eligibleCount": 6,
+        "visibleCount": 6,
+        "uniqueVisibleCount": 6,
+        "missingIds": [],
+        "extraIds": []
+      },
+      "comparison": {
+        "primaryUnchanged": true,
+        "finalPresentationChanged": true,
+        "intermediateOrderChanged": true,
+        "personalizationApplied": true,
+        "disclosureMatchesFinalComposition": true,
+        "disclosureMismatch": false,
+        "topNDelta": {
+          "distinctSources": 0,
+          "distinctCategories": 0,
+          "consecutiveSameSourcePairs": 0
+        },
+        "measuredTopNBenefit": false,
+        "disclosureCase": "APPLIED_WITH_FINAL_PRESENTATION_CHANGE",
+        "categoryLaneMembershipChanged": true,
+        "categoryLaneOrderChanged": true,
+        "readerOrderParity": true,
+        "candidateCoveragePass": true,
+        "noDuplicateArticleIds": true,
+        "categoryIdentityPass": true,
+        "ageDisplacement": {
+          "promoted": [
+            {
+              "id": 6004,
+              "fromRank": 4,
+              "toRank": 3,
+              "ageFromPrimaryMinutes": 6
+            },
+            {
+              "id": 6005,
+              "fromRank": 6,
+              "toRank": 5,
+              "ageFromPrimaryMinutes": 8
+            }
+          ],
+          "rankPositionAgeComparisons": [
+            {
+              "rank": 3,
+              "baselineId": 6002,
+              "personalizedId": 6004,
+              "personalizedOlderByMinutes": 4
+            },
+            {
+              "rank": 4,
+              "baselineId": 6004,
+              "personalizedId": 6002,
+              "personalizedOlderByMinutes": -4
+            },
+            {
+              "rank": 5,
+              "baselineId": 6006,
+              "personalizedId": 6005,
+              "personalizedOlderByMinutes": -2
+            },
+            {
+              "rank": 6,
+              "baselineId": 6005,
+              "personalizedId": 6006,
+              "personalizedOlderByMinutes": 2
+            }
+          ],
+          "maximumOlderByMinutesAtSameRank": 4
+        }
+      },
+      "offlineCompositionLatency": {
+        "phase2c": {
+          "repetitions": 101,
+          "medianMs": 0.0169,
+          "p95Ms": 0.0203
+        },
+        "personalizationV1": {
+          "repetitions": 101,
+          "medianMs": 0.0325,
+          "p95Ms": 0.0453
+        }
+      }
+    },
+    {
+      "name": "intermediate_order_change_without_final_composition_change",
+      "profileState": "ready",
+      "baseline": {
+        "primaryId": 7001,
+        "highlightIds": [7001, 7002, 7003],
+        "categoryLanes": [
+          {
+            "categoryId": 701,
+            "categoryTitle": "Category 701",
+            "entryIds": [7004, 7007, 7010]
+          },
+          {
+            "categoryId": 702,
+            "categoryTitle": "Category 702",
+            "entryIds": [7005, 7008, 7011]
+          },
+          {
+            "categoryId": 703,
+            "categoryTitle": "Category 703",
+            "entryIds": [7006, 7009, 7012]
+          }
+        ],
+        "sectionOrder": ["Highlights", "category:701", "category:702", "category:703"],
+        "sectionCounts": {
+          "highlights": 3,
+          "categories": [
+            {
+              "categoryId": 701,
+              "count": 3
+            },
+            {
+              "categoryId": 702,
+              "count": 3
+            },
+            {
+              "categoryId": 703,
+              "count": 3
+            }
+          ],
+          "latest": 0
+        },
+        "latestIds": [],
+        "visibleIds": [7001, 7002, 7003, 7004, 7007, 7010, 7005, 7008, 7011, 7006, 7009, 7012],
+        "topN": {
+          "n": 12,
+          "articleIds": [7001, 7002, 7003, 7004, 7007, 7010, 7005, 7008, 7011, 7006, 7009, 7012],
+          "distinctSources": 3,
+          "distinctCategories": 3,
+          "consecutiveSameSourcePairs": 6,
+          "longestSameSourceRun": 3
+        },
+        "readerIds": [7001, 7002, 7003, 7004, 7007, 7010, 7005, 7008, 7011, 7006, 7009, 7012],
+        "readerVisualOrderParity": true,
+        "eligibleCount": 12,
+        "visibleCount": 12,
+        "uniqueVisibleCount": 12,
+        "missingIds": [],
+        "extraIds": []
+      },
+      "v1": {
+        "primaryId": 7001,
+        "highlightIds": [7001, 7002, 7003],
+        "categoryLanes": [
+          {
+            "categoryId": 701,
+            "categoryTitle": "Category 701",
+            "entryIds": [7004, 7007, 7010]
+          },
+          {
+            "categoryId": 702,
+            "categoryTitle": "Category 702",
+            "entryIds": [7005, 7008, 7011]
+          },
+          {
+            "categoryId": 703,
+            "categoryTitle": "Category 703",
+            "entryIds": [7006, 7009, 7012]
+          }
+        ],
+        "sectionOrder": ["Highlights", "category:701", "category:702", "category:703"],
+        "sectionCounts": {
+          "highlights": 3,
+          "categories": [
+            {
+              "categoryId": 701,
+              "count": 3
+            },
+            {
+              "categoryId": 702,
+              "count": 3
+            },
+            {
+              "categoryId": 703,
+              "count": 3
+            }
+          ],
+          "latest": 0
+        },
+        "latestIds": [],
+        "visibleIds": [7001, 7002, 7003, 7004, 7007, 7010, 7005, 7008, 7011, 7006, 7009, 7012],
+        "topN": {
+          "n": 12,
+          "articleIds": [7001, 7002, 7003, 7004, 7007, 7010, 7005, 7008, 7011, 7006, 7009, 7012],
+          "distinctSources": 3,
+          "distinctCategories": 3,
+          "consecutiveSameSourcePairs": 6,
+          "longestSameSourceRun": 3
+        },
+        "readerIds": [7001, 7002, 7003, 7004, 7007, 7010, 7005, 7008, 7011, 7006, 7009, 7012],
+        "readerVisualOrderParity": true,
+        "eligibleCount": 12,
+        "visibleCount": 12,
+        "uniqueVisibleCount": 12,
+        "missingIds": [],
+        "extraIds": []
+      },
+      "comparison": {
+        "primaryUnchanged": true,
+        "finalPresentationChanged": false,
+        "intermediateOrderChanged": true,
+        "personalizationApplied": true,
+        "disclosureMatchesFinalComposition": false,
+        "disclosureMismatch": true,
+        "topNDelta": {
+          "distinctSources": 0,
+          "distinctCategories": 0,
+          "consecutiveSameSourcePairs": 0
+        },
+        "measuredTopNBenefit": false,
+        "disclosureCase": "APPLIED_WITHOUT_FINAL_PRESENTATION_CHANGE",
+        "categoryLaneMembershipChanged": false,
+        "categoryLaneOrderChanged": false,
+        "readerOrderParity": true,
+        "candidateCoveragePass": true,
+        "noDuplicateArticleIds": true,
+        "categoryIdentityPass": true,
+        "ageDisplacement": {
+          "promoted": [],
+          "rankPositionAgeComparisons": [],
+          "maximumOlderByMinutesAtSameRank": 0
+        }
+      },
+      "offlineCompositionLatency": {
+        "phase2c": {
+          "repetitions": 101,
+          "medianMs": 0.0455,
+          "p95Ms": 0.0533
+        },
+        "personalizationV1": {
+          "repetitions": 101,
+          "medianMs": 0.0886,
+          "p95Ms": 0.1333
+        }
+      }
+    }
+  ],
+  "sessionStability": {
+    "loadMoreAppendsOnlyToLatest": true,
+    "readMutationDoesNotRecompose": true,
+    "refreshDoesNotRecompose": true,
+    "readerReturnDoesNotRecompose": true,
+    "starDoesNotRecompose": true,
+    "unstarDoesNotRecompose": true,
+    "lateProfileDoesNotRecompose": true,
+    "staleRevisionIgnored": true
+  }
+}
