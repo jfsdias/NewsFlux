@@ -1,0 +1,11 @@
+{
+  "enabled": false,
+  "domains": {
+    "nytimes.com": {"state": "ON_DEMAND", "provider": "wallhop"},
+    "bloomberg.com": {"state": "ON_DEMAND", "provider": "wallhop"},
+    "wsj.com": {"state": "ON_DEMAND", "provider": "wallhop"},
+    "folha.uol.com.br": {"state": "ON_DEMAND", "provider": "wallhop"},
+    "economist.com": {"state": "DISABLED", "provider": "wallhop"}
+  },
+  "feeds": {}
+}
