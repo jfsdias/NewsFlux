@@ -14,6 +14,7 @@ import {
   homeIdentityState,
   setCurrentHomeTarget,
 } from "@/store/homePageState"
+import formatCategoryDisplayName from "@/utils/category-display-name"
 import { getHomeTargetPath, isHomeTargetInCatalog } from "@/utils/home-page"
 
 const getViewLabel = (polyglot, id) => polyglot.t(`settings.post_login_page_option_${id}`)
@@ -29,7 +30,7 @@ export const describeHomeTarget = ({ categories, feeds, polyglot, target }) => {
 
   if (target.type === "category") {
     const category = categories.find((item) => item.id === target.id)
-    const name = category?.title ?? polyglot.t("home_page.loading")
+    const name = category ? formatCategoryDisplayName(category) : polyglot.t("home_page.loading")
     return {
       label: `${polyglot.t("home_page.type_category")} · ${name}`,
       name,
@@ -37,7 +38,7 @@ export const describeHomeTarget = ({ categories, feeds, polyglot, target }) => {
   }
 
   const feed = feeds.find((item) => item.id === target.id)
-  const categoryName = feed?.category?.title
+  const categoryName = formatCategoryDisplayName(feed?.category)
   const feedName = feed?.title
   const name =
     categoryName && feedName ? `${categoryName} / ${feedName}` : polyglot.t("home_page.loading")

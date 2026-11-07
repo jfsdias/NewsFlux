@@ -37,6 +37,7 @@ import {
   createArticleListSearchScopeKey,
   resolveArticleListSearchInputValue,
 } from "@/utils/article-list-search-scope"
+import formatCategoryDisplayName from "@/utils/category-display-name"
 import { getStartOfToday } from "@/utils/date"
 import "./SearchAndSortBar.css"
 
@@ -254,7 +255,7 @@ const SearchAndSortBar = ({
     if (id) {
       if (infoFrom === "category") {
         const category = categories.find((c) => c.id === Number(id))
-        return { feed: null, title: category?.title, count: dynamicCount }
+        return { feed: null, title: formatCategoryDisplayName(category), count: dynamicCount }
       }
       if (infoFrom === "feed") {
         const feed = feeds.find((f) => f.id === Number(id))

@@ -97,10 +97,10 @@ export const personalizationFixtures = {
 }
 
 const categoryLaneCategories = [
-  { id: 10, title: "World" },
-  { id: 20, title: "Technology" },
-  { id: 30, title: "Science" },
-  { id: 40, title: "Culture" },
+  { id: 10, name: "World" },
+  { id: 20, name: "Technology" },
+  { id: 30, name: "Science" },
+  { id: 40, name: "Culture" },
 ]
 
 export const homeCategoryLaneFixtures = [
@@ -111,7 +111,7 @@ export const homeCategoryLaneFixtures = [
       return {
         ...routeEntries[0],
         id,
-        title: `${category.title} category article ${id}`,
+        title: `${category.name} category article ${id}`,
         published_at: new Date(Date.UTC(2026, 10, 6, 12) - minutesAgo * 60_000).toISOString(),
         url: `https://example.invalid/${id}`,
         hash: `category-${id}`,
@@ -119,8 +119,8 @@ export const homeCategoryLaneFixtures = [
         feed: {
           ...fixtureFeed,
           id: category.id,
-          title: `${category.title} source`,
-          category,
+          title: `${category.name} source`,
+          category: { id: category.id, title: `${category.id} · ${category.name}` },
         },
       }
     }),

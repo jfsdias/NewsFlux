@@ -12,6 +12,7 @@ import { polyglotState } from "@/hooks/useLanguage"
 import useModalToggle from "@/hooks/useModalToggle"
 import useScreenWidth from "@/hooks/useScreenWidth"
 import { catalogCategoriesState, catalogFeedsState } from "@/store/dataState"
+import formatCategoryDisplayName from "@/utils/category-display-name"
 import { discoverAndSubscribeFeed } from "@/utils/feed-discovery"
 import includesIgnoreCase from "@/utils/filter"
 import { DEFAULT_SETTINGS_TAB } from "@/utils/settings-navigation"
@@ -344,7 +345,7 @@ const AddFeedModal = () => {
             >
               {categories.map((category) => (
                 <Select.Option key={category.id} value={category.id}>
-                  {category.title}
+                  {formatCategoryDisplayName(category)}
                 </Select.Option>
               ))}
             </Select>

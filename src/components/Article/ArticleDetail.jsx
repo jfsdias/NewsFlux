@@ -36,6 +36,7 @@ import { activeContentState, contentState } from "@/store/contentState"
 import { catalogFeedsByIdState, dataState } from "@/store/dataState"
 import { articleDetailSettingsState } from "@/store/settingsState"
 import returnToArticleImage from "@/utils/article-image-return"
+import formatCategoryDisplayName from "@/utils/category-display-name"
 import extractCodeContent from "@/utils/code-content"
 import { getCodeLanguage } from "@/utils/code-languages"
 import { generateReadableDate, generateReadingTime } from "@/utils/date"
@@ -601,7 +602,7 @@ const ArticleDetail = forwardRef((_, ref) => {
   }
 
   const categoryId = activeContent.feed.category?.id
-  const categoryTitle = activeContent.feed.category?.title
+  const categoryTitle = formatCategoryDisplayName(activeContent.feed.category)
 
   const { coverSource } = activeContent
   const sourceUrl = getSafeExternalUrl(activeContent.url)

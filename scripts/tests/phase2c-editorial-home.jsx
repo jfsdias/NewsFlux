@@ -2983,6 +2983,10 @@ const Harness = () => {
           "Category lane heading or three-article cap contract changed",
         )
         assert(
+          lanes.every(({ categoryTitle }) => !/^\d+\s+·\s+/u.test(categoryTitle)),
+          "Ordinal category ID prefix remained visible in the Home lane label",
+        )
+        assert(
           sections.every((section) =>
             section
               .getAttribute("aria-label")

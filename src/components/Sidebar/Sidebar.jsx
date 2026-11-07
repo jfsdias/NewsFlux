@@ -79,6 +79,7 @@ import {
 } from "@/store/dataState"
 import { settingsState, updateSettings } from "@/store/settingsState"
 import { expandedCategoriesState, setExpandedCategories } from "@/store/sidebarState"
+import formatCategoryDisplayName from "@/utils/category-display-name"
 import { confirmDialogProps } from "@/utils/confirm-dialog"
 import { PRODUCT_NAME } from "@/utils/constants"
 import { generateReadableDate } from "@/utils/date"
@@ -139,6 +140,7 @@ const CategoryTitle = ({
 
   const canDelete = !feedsGroupedById[category.id] || feedsGroupedById[category.id].length === 0
   const categoryTarget = createEntityHomeTarget("category", category.id)
+  const displayCategoryTitle = formatCategoryDisplayName(category)
   const isHomePage = isSameHomeTarget(homeTarget, categoryTarget)
   const categoryPath = `/category/${category.id}`
   const isCategoryActive = path === categoryPath || path.startsWith(`${categoryPath}/`)
@@ -195,7 +197,7 @@ const CategoryTitle = ({
           <MenuItem
             key="set-home-page"
             disabled={!homePageReady || isHomePage}
-            onClick={() => onSetHomePage(categoryTarget, category.title)}
+            onClick={() => onSetHomePage(categoryTarget, displayCategoryTitle)}
           >
             <div className="settings-menu-item">
               <span>
@@ -219,7 +221,7 @@ const CategoryTitle = ({
         id={`category-link-${category.id}`}
         style={{ cursor: "pointer" }}
         to={categoryPath}
-        aria-label={formatNavigationCountLabel(category.title, unreadCount, {
+        aria-label={formatNavigationCountLabel(displayCategoryTitle, unreadCount, {
           countType: "unread",
           polyglot,
         })}
@@ -236,7 +238,7 @@ const CategoryTitle = ({
             fontWeight: 500,
           }}
         >
-          {category.title}
+          {displayCategoryTitle}
         </Typography.Ellipsis>
         {unreadCount > 0 && (
           <Typography.Ellipsis
@@ -738,6 +740,7 @@ const CategoryGroup = ({
     const categoryPath = `/category/${category.id}`
     const contentId = `category-feeds-${category.id}`
     const isExpanded = displayedExpandedCategories.includes(categoryPath)
+    const displayCategoryTitle = formatCategoryDisplayName(category)
 
     return (
       <div
@@ -751,7 +754,7 @@ const CategoryGroup = ({
           <button
             aria-controls={contentId}
             aria-expanded={isExpanded}
-            aria-label={category.title}
+            aria-label={displayCategoryTitle}
             className="arco-collapse-item-icon-hover category-disclosure-button"
             data-category-disclosure={category.id}
             type="button"
@@ -1334,34 +1337,38 @@ const Sidebar = ({ headerAction, isDrawer = false, onNavigate }) => {
                       <Typography.Title className="section-title source-list-title" heading={6}>
                         {polyglot.t("sidebar.unread_sources")}
                       </Typography.Title>
-                      {groupedUnreadNavigationFeeds.map(({ category, feeds }) => (
-                        <section
-                          key={category.id}
-                          aria-label={category.title}
-                          className="unread-category-group"
-                        >
-                          <div className="unread-category-header">
-                            <Typography.Title className="unread-category-title" heading={6}>
-                              {category.title}
-                            </Typography.Title>
-                          </div>
-                          {feeds.map((feed) => (
-                            <FeedMenuItem
-                              key={feed.id}
-                              feed={feed}
-                              homePageReady={homePageReady}
-                              homeTarget={homeTarget}
-                              retryingFeedIds={retryingFeedIds}
-                              onDeleteFeed={handleDeleteFeed}
-                              onEditFeed={handleEditFeed}
-                              onMarkAllAsRead={handleMarkAllAsReadFeed}
-                              onRefreshFeed={handleRefreshFeed}
-                              onRetryFeedHealth={retryFeedHealth}
-                              onSetHomePage={handleSetHomePage}
-                            />
-                          ))}
-                        </section>
-                      ))}
+                      {groupedUnreadNavigationFeeds.map(({ category, feeds }) => {
+                        const displayCategoryTitle = formatCategoryDisplayName(category)
+
+                        return (
+                          <section
+                            key={category.id}
+                            aria-label={displayCategoryTitle}
+                            className="unread-category-group"
+                          >
+                            <div className="unread-category-header">
+                              <Typography.Title className="unread-category-title" heading={6}>
+                                {displayCategoryTitle}
+                              </Typography.Title>
+                            </div>
+                            {feeds.map((feed) => (
+                              <FeedMenuItem
+                                key={feed.id}
+                                feed={feed}
+                                homePageReady={homePageReady}
+                                homeTarget={homeTarget}
+                                retryingFeedIds={retryingFeedIds}
+                                onDeleteFeed={handleDeleteFeed}
+                                onEditFeed={handleEditFeed}
+                                onMarkAllAsRead={handleMarkAllAsReadFeed}
+                                onRefreshFeed={handleRefreshFeed}
+                                onRetryFeedHealth={retryFeedHealth}
+                                onSetHomePage={handleSetHomePage}
+                              />
+                            ))}
+                          </section>
+                        )
+                      })}
                     </section>
                   ) : (
                     <div className="source-navigation-empty" role="status">

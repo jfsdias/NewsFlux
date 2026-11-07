@@ -19,6 +19,7 @@ import useRefreshCounts from "@/hooks/useRefreshCounts"
 import { authState } from "@/store/authState"
 import { invalidateArticleList } from "@/store/contentState"
 import { catalogCategoriesState, getDataSessionRevision, setFeedsData } from "@/store/dataState"
+import formatCategoryDisplayName from "@/utils/category-display-name"
 import { confirmDialogProps } from "@/utils/confirm-dialog"
 import "./EditFeedModal.css"
 
@@ -489,7 +490,7 @@ const EditFeedModal = ({
           <Select>
             {categories.map((category) => (
               <Select.Option key={category.id} value={category.id}>
-                {category.title}
+                {formatCategoryDisplayName(category)}
               </Select.Option>
             ))}
           </Select>

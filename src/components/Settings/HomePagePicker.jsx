@@ -21,6 +21,7 @@ import { polyglotState } from "@/hooks/useLanguage"
 import useScreenWidth from "@/hooks/useScreenWidth"
 import { dataState } from "@/store/dataState"
 import { settingsState } from "@/store/settingsState"
+import formatCategoryDisplayName from "@/utils/category-display-name"
 import includesIgnoreCase from "@/utils/filter"
 import {
   createEntityHomeTarget,
@@ -188,10 +189,11 @@ const HomePagePicker = ({ visible, onClose }) => {
 
     for (const category of categories) {
       if (includesIgnoreCase(category.title, searchText)) {
+        const displayCategoryTitle = formatCategoryDisplayName(category)
         results.push({
           hidden: category.hide_globally,
           icon: IconFolder,
-          label: category.title,
+          label: displayCategoryTitle,
           target: createEntityHomeTarget("category", category.id),
           typeLabel: polyglot.t("home_page.type_category"),
         })
@@ -202,7 +204,7 @@ const HomePagePicker = ({ visible, onClose }) => {
       const searchLabel = `${feed.category.title} / ${feed.title}`
       if (includesIgnoreCase(searchLabel, searchText)) {
         results.push({
-          categoryLabel: feed.category.title,
+          categoryLabel: formatCategoryDisplayName(feed.category),
           feed,
           hidden: feed.hide_globally || feed.category.hide_globally,
           label: feed.title,
@@ -341,6 +343,7 @@ const HomePagePicker = ({ visible, onClose }) => {
               const expanded = activeExpandedCategoryIds.has(category.id)
               const categoryTarget = createEntityHomeTarget("category", category.id)
               const feedGroupId = `home-page-category-${category.id}-feeds`
+              const displayCategoryTitle = formatCategoryDisplayName(category)
 
               return (
                 <div key={category.id} className="home-page-category-group">
@@ -349,7 +352,7 @@ const HomePagePicker = ({ visible, onClose }) => {
                       current={isSameHomeTarget(target, categoryTarget)}
                       hiddenLabel={category.hide_globally ? hiddenLabel : null}
                       icon={IconFolder}
-                      label={category.title}
+                      label={displayCategoryTitle}
                       target={categoryTarget}
                       onSelect={selectTarget}
                     />
@@ -361,7 +364,7 @@ const HomePagePicker = ({ visible, onClose }) => {
                       type="button"
                       aria-label={polyglot.t(
                         expanded ? "home_page.collapse_category" : "home_page.expand_category",
-                        { name: category.title },
+                        { name: displayCategoryTitle },
                       )}
                       onClick={() => toggleCategory(category.id)}
                     >

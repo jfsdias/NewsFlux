@@ -5,6 +5,7 @@ import ArticleEntry from "@/components/Article/ArticleEntry"
 import ArticleGridCard from "@/components/Article/ArticleGridCard"
 import useArticleListLayout from "@/hooks/useArticleListLayout"
 import { polyglotState } from "@/hooks/useLanguage"
+import formatCategoryDisplayName from "@/utils/category-display-name"
 
 import "@/components/Article/ArticleList.css"
 
@@ -26,17 +27,21 @@ const HomeCategorySection = ({ articleActivation, entries, lane, observeRead, sc
   }
 
   const headingId = `home-category-${lane.categoryId}-heading`
+  const displayCategoryTitle = formatCategoryDisplayName({
+    id: lane.categoryId,
+    title: lane.categoryTitle,
+  })
 
   return (
     <section
       className="home-article-section home-category-section"
       data-category-id={lane.categoryId}
       aria-label={polyglot.t("home_page.category_section_label", {
-        category: lane.categoryTitle,
+        category: displayCategoryTitle,
       })}
     >
       <h2 className="home-section-heading" id={headingId}>
-        {lane.categoryTitle}
+        {displayCategoryTitle}
       </h2>
       <div role="list">
         {rows.map((row) => (

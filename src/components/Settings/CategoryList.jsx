@@ -7,6 +7,7 @@ import EditCategoryModal from "@/components/ui/EditCategoryModal"
 import useCategoryOperations from "@/hooks/useCategoryOperations"
 import { polyglotState } from "@/hooks/useLanguage"
 import { categoriesState } from "@/store/dataState"
+import formatCategoryDisplayName from "@/utils/category-display-name"
 import "./CategoryList.css"
 
 const CategoryList = () => {
@@ -57,7 +58,7 @@ const CategoryList = () => {
               type="button"
               onClick={() => handleSelectCategory(category)}
             >
-              {category.title}
+              {formatCategoryDisplayName(category)}
             </button>
           </Tag>
         ))}
