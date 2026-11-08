@@ -96,13 +96,31 @@ test("knip runs as a gate against the accepted baseline", () => {
   assert.ok(runCommands(workflow.jobs.knip).includes("pnpm knip:check"))
 })
 
-test("every job installs from the frozen lockfile", () => {
+test("the Python suite runs independently on the supported interpreter", () => {
+  const { workflow } = readWorkflow()
+  const job = workflow.jobs.python
+  const pythonSetups = stepsOf(job).filter((step) => step.uses?.startsWith("actions/setup-python@"))
+  const nodeSetups = stepsOf(job).filter((step) => step.uses?.startsWith("actions/setup-node@"))
+
+  assert.equal(job["runs-on"], "ubuntu-latest")
+  assert.equal(pythonSetups.length, 1)
+  assert.equal(String(pythonSetups[0].with["python-version"]), "3.12")
+  assert.equal(nodeSetups.length, 0)
+  assert.deepEqual(runCommands(job), [
+    "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s services/content_fallback/tests -p 'test_*.py' -v",
+  ])
+})
+
+test("each Node job installs from the frozen lockfile", () => {
   const { workflow } = readWorkflow()
 
-  for (const job of Object.values(workflow.jobs)) {
+  for (const [name, job] of Object.entries(workflow.jobs)) {
+    if (name === "python") {
+      continue
+    }
     assert.ok(
       runCommands(job).includes("pnpm install --frozen-lockfile"),
-      "jobs must use pnpm install --frozen-lockfile",
+      `Node job ${name} must use pnpm install --frozen-lockfile`,
     )
   }
 })
@@ -353,6 +371,10 @@ for (const [file, read] of WORKFLOW_FILES) {
         assert.deepEqual(Object.keys(matrix), ["node-version"], `job ${name}: no exclude/include`)
       }
       const setups = stepsOf(job).filter((step) => step.uses?.startsWith("actions/setup-node@"))
+      if (name === "python") {
+        assert.equal(setups.length, 0, "the Python job must not set up Node")
+        continue
+      }
       assert.equal(setups.length, 1, `job ${name} must set up Node once`)
       const expected = matrix ? "${{ matrix.node-version }}" : "22"
       assert.equal(String(setups[0].with["node-version"]), expected, `job ${name} Node version`)
