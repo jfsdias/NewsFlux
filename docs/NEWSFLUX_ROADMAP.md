@@ -2046,10 +2046,24 @@ DESIGN-CLOSE-00 is the first visual activity and is a read-only audit. No token 
 | Saved / Bookmarks / Later / Boards / Tags / Smart folders                 | HOLD_ARCHITECTURE | No approved source-of-truth, persistence, export or sync architecture.                                                                               |
 | PWA expansion (push, background sync, share target, offline account data) | HOLD_ARCHITECTURE | Separate storage, lifecycle and privacy decision required.                                                                                           |
 | SECURITY_HEADERS_01 hardening beyond baseline headers                     | PLANNED           | CSP, iframe sandbox and full-content sanitization need a scoped threat model and compatibility/security tests; after visual and upstream priorities. |
+| ARTICLE-INTEL-01 — On-open grounded article summary and action points    | PLANNED           | Functional Reader Intelligence track; dependency: Content Fallback quality/security gate. Architecture/privacy/cache ownership and local-first model benchmark before implementation. No auto-created tasks, no speculative action points, no batch article summarization; separate PR(s). |
 | Podcast/self-hosted audio                                                 | BACKLOG           | No implementation commitment.                                                                                                                        |
 | Personalization V2 / ML expansion                                         | HOLD_ARCHITECTURE | Do not broaden ranking or add persistent signals without product and privacy authorization.                                                          |
 | Docker publishing identity                                                | BACKLOG           | Separate architecture decision before changing registry, identity, credentials or release topology.                                                  |
 | PWA installability/device follow-up                                       | EVIDENCE_GAP      | Preserve the current runtime; collect physical-device evidence without treating it as a release/deploy gate for this docs task.                      |
+
+
+#### ARTICLE-INTEL-01 — On-open Article Intelligence (planning addendum, 2026-11-08)
+
+**Status: PLANNED (research/architecture only).** This addition records the user-approved product direction; it does **not** authorize implementation, cloud inference expenditure, persistence, production enablement, deployment, or merge. This is **not** part of the Content Fallback PR #188.
+
+- **Content:** When an article is opened, use Miniflux content if adequate; if incomplete, request content only through approved and bounded Content Fallback policies, then fail back safely to the source. Do not prefetch or summarize an entire subscription corpus merely because a feed refreshes.
+- **Trigger and UI:** Only for explicitly opened articles with eligible, validated content, generate a grounded PT-BR summary asynchronously and display it **after the article body**, without blocking reading. Include key points and **action points only where supported**; otherwise state that no concrete action was identified. Use references to source paragraphs; distinguish factual claims, interpretations and suggestions.
+- **Providers:** Benchmark existing local Ollama/LiteLLM and reusable projects before custom code, with local-first cost/latency/fidelity measurements. Paid/cloud inference requires a separate privacy/cost decision.
+- **Persistence:** Before any cache implementation, decide source-of-truth, retention, sensitive data policy and cache ownership. A proposed key is entry identity + validated content fingerprint + model/prompt version; invalidate on article change and prevent stale responses from rendering. Miniflux retains ownership of feeds, categories, read and starred status, and its article content must not be rewritten.
+- **Safety and gates:** Evidence-backed summarization, abstention rather than invented actions, prompt-injection handling, incomplete/contaminated article protections, paragraph traceability, timeout/concurrency/budget limits, data egress and secret protection, deterministic lifecycle and cache invalidation, rollback/feature-off, Reader accessibility/responsive/browser tests and physical device gates when applicable.
+- **Sequencing:** First stabilize Content Fallback #188 or an equivalent content interface, then perform offline architectural evaluation/benchmark, then a dedicated functional PR and separate reader presentation gate. No unrelated upstream synchronization, redesign, task auto-creation or All/Unread ranking changes.
+
 
 ### Current ordering and governance
 
