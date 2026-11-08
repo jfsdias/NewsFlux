@@ -12,6 +12,8 @@ If this study is later approved, you may choose broad topic interests and, if yo
 
 The temporary study profile is created only from your explicit study choices. It is not connected to your NewsFlux or Miniflux account and is not your real reading or starred history. The study will not ask for passwords, account access, or private feeds.
 
+Your session order and neutral X/Y labels are assigned before you make those choices. After your choices, both arrangements are generated from the frozen public article set and study rules, then checked and frozen before either is shown to you. Your choices can affect the V1 arrangement, but do not affect which version is X or Y or which one is shown first.
+
 ## Information collected
 
 The proposed study record contains a random study code, optional broad topic selections, study-only public sample-item choices, the ratings you choose to provide, and the version/order assignment needed to audit the comparison. It will not intentionally collect your name, email, NewsFlux username, Miniflux credentials, private reading history, or account data. Do not put personal or identifying details in an optional comment.

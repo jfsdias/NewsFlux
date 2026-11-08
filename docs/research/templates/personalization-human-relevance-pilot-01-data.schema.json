@@ -11,6 +11,7 @@
     "sessionCode",
     "consentAccepted",
     "completionStatus",
+    "sessionManifestHash",
     "scenarioRatings",
     "overallPreference",
     "allocationKey"
@@ -34,6 +35,11 @@
     "completionStatus": {
       "enum": ["COMPLETE", "PARTIAL", "WITHDRAWN"]
     },
+    "sessionManifestHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 of the frozen per-session receipt binding profile-seed references, both arm compositions, renderer, assignment, and scenario order."
+    },
     "declaredContextTags": {
       "type": "array",
       "uniqueItems": true,
@@ -54,8 +60,12 @@
       "description": "Optional keys for public frozen sample items the participant chose as study-only save/star examples; never Miniflux IDs."
     },
     "scenarioRatings": {
-      "type": "array",
-      "items": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z0-9_-]{1,80}$"
+      },
+      "additionalProperties": {
         "$ref": "#/$defs/scenarioRating"
       }
     },
@@ -95,14 +105,19 @@
     "scenarioRating": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["scenarioCode", "presentationOrder", "X", "Y"],
+      "required": ["pairReceiptHash", "presentationOrder", "scenarioPreference", "X", "Y"],
       "properties": {
-        "scenarioCode": {
+        "pairReceiptHash": {
           "type": "string",
-          "pattern": "^[a-z0-9_-]{1,80}$"
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "SHA-256 of the frozen X/Y pair output and integrity metadata for this scenario."
         },
         "presentationOrder": {
-          "enum": ["X_THEN_Y", "Y_THEN_X", null]
+          "enum": ["X_THEN_Y", "Y_THEN_X"]
+        },
+        "scenarioPreference": {
+          "enum": ["X", "Y", "TIE", "NEITHER", "CANNOT_JUDGE", null],
+          "description": "Preference for this scenario only. Null means omitted; CANNOT_JUDGE is an explicit response."
         },
         "X": {
           "$ref": "#/$defs/armRating"
