@@ -14,9 +14,8 @@ def wallhop_response(body: str, status: int = 200, content_type: str = "text/htm
 
 
 PROVIDER_FOOTER = (
-    "Technical attribution: WaffleHacker and everywall maintain ladder, released under "
-    "GPL-3.0, for the rendering service. Credits identify the intermediary version used "
-    "to provide this captured article to the public reader."
+    "☕ Help keep WallHop running on Ko-fi a wafflehacker.dev project Heavily modified "
+    "and tuned by WaffleHacker, built on the open-source everywall/ladder (GPL-3.0)."
 )
 
 
@@ -61,6 +60,26 @@ class WallHopProviderTests(unittest.TestCase):
 
         self.assertEqual(reason, "ambiguous_provider_chrome")
         self.assertIn(final_paragraph, cleaned)
+
+    def test_exact_provider_footer_away_from_tail_is_not_removed(self) -> None:
+        page = f"<p>{PROVIDER_FOOTER}</p>" + full_article_html()
+
+        cleaned, reason = content_module.clean_wallhop_content(page)
+
+        self.assertEqual(reason, "ambiguous_provider_chrome")
+        self.assertIn("Ko-fi", cleaned)
+        self.assertIn("everywall/ladder", cleaned)
+
+    def test_header_source_structure_mismatch_is_preserved_as_ambiguous(self) -> None:
+        body = full_article_html()
+        sanitized_blocks = "<p>WallHop</p>" + body
+
+        cleaned, reason = content_module.clean_wallhop_content(
+            sanitized_blocks, source_html=body
+        )
+
+        self.assertEqual(reason, "ambiguous_provider_chrome")
+        self.assertIn("<p>WallHop</p>", cleaned)
 
     def test_isolated_provider_header_is_removed_after_fetch(self) -> None:
         page = "<p>wallhop</p>" + full_article_html()

@@ -62,7 +62,12 @@ _WALLHOP_FOOTER_MARKERS = (
 )
 _WALLHOP_FOOTER_WINDOW = 6
 _WALLHOP_FOOTER_MAX_WORDS = 60
-_WALLHOP_FOOTER_CONTEXT = ("technical attribution", "rendering service")
+_WALLHOP_FOOTER_CONTEXT = (
+    "help keep wallhop running on ko fi",
+    "wafflehacker dev project",
+    "heavily modified and tuned by wafflehacker",
+    "built on the open source everywall ladder",
+)
 
 
 def _clean_text(value: str) -> str:
@@ -250,15 +255,7 @@ def _is_wallhop_provider_footer(block: str) -> bool:
         return False
     normalized = _normalized(block)
     return (
-        normalized.startswith("technical attribution")
-        and all(context in normalized for context in _WALLHOP_FOOTER_CONTEXT)
-        and (
-            (
-                "intermediary version" in normalized
-                and "captured article" in normalized
-            )
-            or "captured intermediary output" in normalized
-        )
+        all(context in normalized for context in _WALLHOP_FOOTER_CONTEXT)
     )
 
 
@@ -310,12 +307,21 @@ def clean_wallhop_content(
         if in_content or source_tag in {"h1", "h2", "h3", "h4", "h5", "h6"}:
             continue
         has_article_following = any(source.block_in_content[index + 1 :])
-        paired_with_provider_footer = bool(footer_positions)
+        legacy_body_end = footer_positions[0] if footer_positions else len(blocks)
+        has_legacy_article_body = sum(
+            len(_words(block)) >= MIN_PARAGRAPH_WORDS
+            for block in blocks[index + 1 : legacy_body_end]
+        ) >= 2
         if source_tag == "p" and has_article_following:
             remove.add(index)
-        elif paired_with_provider_footer and index == 0:
+        elif (
+            footer_positions
+            and index == 1
+            and has_legacy_article_body
+        ):
             # Legacy cache HTML has already lost its article wrapper. The exact
-            # provider footer signature is the additional evidence for its banner.
+            # funding, project, and license footer signature corroborates the
+            # isolated paragraph-two banner before a substantive cached article.
             remove.add(index)
         else:
             return _safe_html_from_blocks(blocks), "ambiguous_provider_chrome"

@@ -21,6 +21,11 @@ from services.content_fallback.service import (
 )
 from services.content_fallback.store import MemoryRecoveryStore, SQLiteRecoveryStore, StoredRecovery
 
+REAL_WALLHOP_FOOTER = (
+    "☕ Help keep WallHop running on Ko-fi a wafflehacker.dev project Heavily modified "
+    "and tuned by WaffleHacker, built on the open-source everywall/ladder (GPL-3.0)."
+)
+
 
 def full_article_html() -> str:
     return "<article>" + "".join(
@@ -31,6 +36,28 @@ def full_article_html() -> str:
         "can be made about the evidence.</p>"
         for index in range(8)
     ) + "</article>"
+
+
+def _synthetic_legacy_article_paragraph(section: int) -> str:
+    return (
+        f"Section {section} reports that monitoring teams compared new coastal current "
+        "readings with records from three independent observation sites. The measurements "
+        "showed a consistent seasonal shift, while analysts emphasized that more fieldwork "
+        "is needed before drawing broader conclusions about regional conditions."
+    )
+
+
+def synthetic_legacy_wallhop_cache_content() -> str:
+    first_paragraph = _synthetic_legacy_article_paragraph(1)
+    paragraphs = [
+        first_paragraph,
+        "wallhop",
+        _synthetic_legacy_article_paragraph(3),
+        first_paragraph,
+        *(_synthetic_legacy_article_paragraph(section) for section in range(5, 44)),
+        REAL_WALLHOP_FOOTER,
+    ]
+    return "".join(f"<p>{paragraph}</p>" for paragraph in paragraphs)
 
 
 def entry(
@@ -150,14 +177,18 @@ class ServiceTests(unittest.TestCase):
             ["GET_FEED", "GET_FETCH_CONTENT", "GET_FEED"],
         )
 
-    def test_legacy_wallhop_cache_is_cleaned_in_memory_before_return(self) -> None:
-        item = entry()
-        footer = (
-            "Technical attribution: WaffleHacker and everywall maintain ladder, released under "
-            "GPL-3.0, for the rendering service. Credits identify the intermediary version "
-            "used to provide this captured article to the public reader."
-        )
-        contaminated = "<p>wallhop</p>" + full_article_html() + f"<p>{footer}</p>"
+    def test_real_topology_legacy_cache_is_cleaned_and_reused_without_provider_call(self) -> None:
+        item = entry(entry_id=26626)
+        contaminated = synthetic_legacy_wallhop_cache_content()
+        paragraphs = [
+            paragraph.removeprefix("<p>").removesuffix("</p>")
+            for paragraph in contaminated.split("</p>")
+            if paragraph
+        ]
+        self.assertEqual(len(paragraphs), 44)
+        self.assertEqual(paragraphs[1], "wallhop")
+        self.assertEqual(paragraphs[0], paragraphs[3])
+        self.assertEqual(paragraphs[-1], REAL_WALLHOP_FOOTER)
         old_assessment = assess_content(item.title, contaminated)
         self.assertTrue(old_assessment.sufficient)
         with tempfile.TemporaryDirectory() as directory:
@@ -186,13 +217,18 @@ class ServiceTests(unittest.TestCase):
             ).recover(item.id)
 
             self.assertEqual(result["status"], "recovered")
+            self.assertEqual(result["content_origin"], "wallhop")
             self.assertTrue(result["cache_hit"])
             self.assertNotIn("wallhop", result["content_html"].casefold())
             self.assertNotIn("wafflehacker", result["content_html"].casefold())
+            self.assertNotIn("ko-fi", result["content_html"].casefold())
+            self.assertEqual(result["validation"]["state"], "SUFFICIENT")
+            self.assertEqual(result["content_html"].count(f"<p>{paragraphs[0]}</p>"), 2)
+            self.assertIn("Section 43 reports", result["content_html"])
             self.assertEqual(provider.calls, 0)
             legacy_row = store.get(item.id, item.content_fingerprint)
             self.assertIsNotNone(legacy_row)
-            self.assertIn("wafflehacker", legacy_row.content_html.casefold())
+            self.assertEqual(legacy_row.content_html, old_assessment.safe_html)
             store.close()
 
     def test_insufficient_legacy_cache_falls_back_without_returning_provider_chrome(self) -> None:
@@ -201,11 +237,7 @@ class ServiceTests(unittest.TestCase):
         body = "<article>" + "".join(
             f"<p>Section {index}. {sentence * 4}</p>" for index in range(4)
         ) + "</article>"
-        footer = (
-            "Technical attribution: WaffleHacker and everywall maintain ladder, released under "
-            "GPL-3.0, for the rendering service. Credits describe the captured intermediary output."
-        )
-        old_content = body + f"<p>{footer}</p>"
+        old_content = body + f"<p>{REAL_WALLHOP_FOOTER}</p>"
         old_assessment = assess_content(item.title, old_content)
         self.assertTrue(old_assessment.sufficient)
         store = MemoryRecoveryStore()
