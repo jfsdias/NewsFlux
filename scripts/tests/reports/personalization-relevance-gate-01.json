@@ -1,0 +1,1135 @@
+{
+  "metadata": {
+    "schemaVersion": 1,
+    "baseSha": "0faedf939f6c97867d6fac6c019f48476163d629",
+    "sourceEvaluator": "scripts/tests/personalization-v2-eval-01.js",
+    "sourceEvaluatorHistoricalScenarioCount": 12,
+    "scenarioCount": 12,
+    "topN": 12,
+    "topNDefinition": "first 12 article IDs in final visual order (up to 3 Highlights + 9 category-lane slots)",
+    "dataClass": "DETERMINISTIC_SYNTHETIC_ONLY",
+    "humanRelevanceGate": "NOT_MEASURED",
+    "allUnreadChronology": "UNCHANGED_NOT_RANKED_BY_THIS_EVALUATOR",
+    "externalServicesUsed": false
+  },
+  "scenarios": [
+    {
+      "name": "balanced_sources_and_categories",
+      "baseline": {
+        "topNArticleIds": [1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011],
+        "eligibleArticleCount": 18,
+        "sourceMetrics": {
+          "topNSlots": 12,
+          "knownSourceSlots": 12,
+          "unidentifiedSourceSlots": 0,
+          "distinctSources": 6,
+          "eligibleDistinctSources": 6,
+          "representedEligibleSources": 6,
+          "eligibleSourceRepresentation": 1,
+          "sourceShares": [
+            { "sourceId": "1", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "2", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "3", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "4", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "5", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "6", "articleCount": 2, "share": 0.166667 }
+          ],
+          "largestSourceShare": 0.166667,
+          "concentrationHhi": 0.166667
+        },
+        "categoryMetrics": {
+          "topNSlots": 12,
+          "unidentifiedCategorySlots": 0,
+          "distinctCategories": 3,
+          "eligibleDistinctCategories": 3,
+          "representedEligibleCategories": 3,
+          "eligibleCategoryRepresentation": 1
+        },
+        "adjacentSameSourcePairs": 0,
+        "longestSameSourceRun": 1
+      },
+      "v1": {
+        "topNArticleIds": [1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011],
+        "eligibleArticleCount": 18,
+        "sourceMetrics": {
+          "topNSlots": 12,
+          "knownSourceSlots": 12,
+          "unidentifiedSourceSlots": 0,
+          "distinctSources": 6,
+          "eligibleDistinctSources": 6,
+          "representedEligibleSources": 6,
+          "eligibleSourceRepresentation": 1,
+          "sourceShares": [
+            { "sourceId": "1", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "2", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "3", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "4", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "5", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "6", "articleCount": 2, "share": 0.166667 }
+          ],
+          "largestSourceShare": 0.166667,
+          "concentrationHhi": 0.166667
+        },
+        "categoryMetrics": {
+          "topNSlots": 12,
+          "unidentifiedCategorySlots": 0,
+          "distinctCategories": 3,
+          "eligibleDistinctCategories": 3,
+          "representedEligibleCategories": 3,
+          "eligibleCategoryRepresentation": 1
+        },
+        "adjacentSameSourcePairs": 0,
+        "longestSameSourceRun": 1
+      },
+      "delta": {
+        "distinctSources": 0,
+        "distinctCategories": 0,
+        "eligibleSourceRepresentation": 0,
+        "eligibleCategoryRepresentation": 0,
+        "largestSourceShare": 0,
+        "sourceConcentrationHhi": 0,
+        "adjacentSameSourcePairs": 0,
+        "longestSameSourceRun": 0
+      },
+      "ageDisplacement": { "promoted": [], "maximumV1OlderByMinutesAtSameRank": 0 },
+      "functionalGuardrails": {
+        "primaryHighlightPreserved": true,
+        "eligibleCoveragePreserved": true,
+        "noDuplicateArticleIds": true,
+        "categoryIdentityPreserved": true,
+        "readerOrderParity": true,
+        "disclosureParity": true
+      }
+    },
+    {
+      "name": "star_profile_concentrated_in_one_source",
+      "baseline": {
+        "topNArticleIds": [2000, 2013, 2014, 2001, 2004, 2007, 2002, 2005, 2008, 2003, 2006, 2009],
+        "eligibleArticleCount": 24,
+        "sourceMetrics": {
+          "topNSlots": 12,
+          "knownSourceSlots": 12,
+          "unidentifiedSourceSlots": 0,
+          "distinctSources": 3,
+          "eligibleDistinctSources": 6,
+          "representedEligibleSources": 3,
+          "eligibleSourceRepresentation": 0.5,
+          "sourceShares": [
+            { "sourceId": "1", "articleCount": 10, "share": 0.833333 },
+            { "sourceId": "5", "articleCount": 1, "share": 0.083333 },
+            { "sourceId": "6", "articleCount": 1, "share": 0.083333 }
+          ],
+          "largestSourceShare": 0.833333,
+          "concentrationHhi": 0.708333
+        },
+        "categoryMetrics": {
+          "topNSlots": 12,
+          "unidentifiedCategorySlots": 0,
+          "distinctCategories": 3,
+          "eligibleDistinctCategories": 3,
+          "representedEligibleCategories": 3,
+          "eligibleCategoryRepresentation": 1
+        },
+        "adjacentSameSourcePairs": 8,
+        "longestSameSourceRun": 9
+      },
+      "v1": {
+        "topNArticleIds": [2000, 2013, 2014, 2001, 2004, 2007, 2002, 2005, 2008, 2012, 2015, 2021],
+        "eligibleArticleCount": 24,
+        "sourceMetrics": {
+          "topNSlots": 12,
+          "knownSourceSlots": 12,
+          "unidentifiedSourceSlots": 0,
+          "distinctSources": 6,
+          "eligibleDistinctSources": 6,
+          "representedEligibleSources": 6,
+          "eligibleSourceRepresentation": 1,
+          "sourceShares": [
+            { "sourceId": "1", "articleCount": 7, "share": 0.583333 },
+            { "sourceId": "2", "articleCount": 1, "share": 0.083333 },
+            { "sourceId": "3", "articleCount": 1, "share": 0.083333 },
+            { "sourceId": "4", "articleCount": 1, "share": 0.083333 },
+            { "sourceId": "5", "articleCount": 1, "share": 0.083333 },
+            { "sourceId": "6", "articleCount": 1, "share": 0.083333 }
+          ],
+          "largestSourceShare": 0.583333,
+          "concentrationHhi": 0.375
+        },
+        "categoryMetrics": {
+          "topNSlots": 12,
+          "unidentifiedCategorySlots": 0,
+          "distinctCategories": 3,
+          "eligibleDistinctCategories": 3,
+          "representedEligibleCategories": 3,
+          "eligibleCategoryRepresentation": 1
+        },
+        "adjacentSameSourcePairs": 5,
+        "longestSameSourceRun": 6
+      },
+      "delta": {
+        "distinctSources": 3,
+        "distinctCategories": 0,
+        "eligibleSourceRepresentation": 0.5,
+        "eligibleCategoryRepresentation": 0,
+        "largestSourceShare": -0.25,
+        "sourceConcentrationHhi": -0.333333,
+        "adjacentSameSourcePairs": -3,
+        "longestSameSourceRun": -3
+      },
+      "ageDisplacement": {
+        "promoted": [
+          { "id": 2012, "fromRank": 15, "toRank": 10, "ageFromPrimaryMinutes": 24 },
+          { "id": 2015, "fromRank": 16, "toRank": 11, "ageFromPrimaryMinutes": 30 },
+          { "id": 2021, "fromRank": 22, "toRank": 12, "ageFromPrimaryMinutes": 42 },
+          { "id": 2018, "fromRank": 19, "toRank": 18, "ageFromPrimaryMinutes": 36 }
+        ],
+        "maximumV1OlderByMinutesAtSameRank": 24
+      },
+      "functionalGuardrails": {
+        "primaryHighlightPreserved": true,
+        "eligibleCoveragePreserved": true,
+        "noDuplicateArticleIds": true,
+        "categoryIdentityPreserved": true,
+        "readerOrderParity": true,
+        "disclosureParity": true
+      }
+    },
+    {
+      "name": "star_profile_concentrated_in_one_category",
+      "baseline": {
+        "topNArticleIds": [2000, 2013, 2014, 2001, 2004, 2007, 2002, 2005, 2008, 2003, 2006, 2009],
+        "eligibleArticleCount": 24,
+        "sourceMetrics": {
+          "topNSlots": 12,
+          "knownSourceSlots": 12,
+          "unidentifiedSourceSlots": 0,
+          "distinctSources": 3,
+          "eligibleDistinctSources": 6,
+          "representedEligibleSources": 3,
+          "eligibleSourceRepresentation": 0.5,
+          "sourceShares": [
+            { "sourceId": "1", "articleCount": 10, "share": 0.833333 },
+            { "sourceId": "5", "articleCount": 1, "share": 0.083333 },
+            { "sourceId": "6", "articleCount": 1, "share": 0.083333 }
+          ],
+          "largestSourceShare": 0.833333,
+          "concentrationHhi": 0.708333
+        },
+        "categoryMetrics": {
+          "topNSlots": 12,
+          "unidentifiedCategorySlots": 0,
+          "distinctCategories": 3,
+          "eligibleDistinctCategories": 3,
+          "representedEligibleCategories": 3,
+          "eligibleCategoryRepresentation": 1
+        },
+        "adjacentSameSourcePairs": 8,
+        "longestSameSourceRun": 9
+      },
+      "v1": {
+        "topNArticleIds": [2000, 2013, 2014, 2016, 2019, 2022, 2017, 2020, 2023, 2012, 2015, 2021],
+        "eligibleArticleCount": 24,
+        "sourceMetrics": {
+          "topNSlots": 12,
+          "knownSourceSlots": 12,
+          "unidentifiedSourceSlots": 0,
+          "distinctSources": 6,
+          "eligibleDistinctSources": 6,
+          "representedEligibleSources": 6,
+          "eligibleSourceRepresentation": 1,
+          "sourceShares": [
+            { "sourceId": "1", "articleCount": 1, "share": 0.083333 },
+            { "sourceId": "2", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "3", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "4", "articleCount": 3, "share": 0.25 },
+            { "sourceId": "5", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "6", "articleCount": 2, "share": 0.166667 }
+          ],
+          "largestSourceShare": 0.25,
+          "concentrationHhi": 0.180556
+        },
+        "categoryMetrics": {
+          "topNSlots": 12,
+          "unidentifiedCategorySlots": 0,
+          "distinctCategories": 3,
+          "eligibleDistinctCategories": 3,
+          "representedEligibleCategories": 3,
+          "eligibleCategoryRepresentation": 1
+        },
+        "adjacentSameSourcePairs": 1,
+        "longestSameSourceRun": 2
+      },
+      "delta": {
+        "distinctSources": 3,
+        "distinctCategories": 0,
+        "eligibleSourceRepresentation": 0.5,
+        "eligibleCategoryRepresentation": 0,
+        "largestSourceShare": -0.583333,
+        "sourceConcentrationHhi": -0.527777,
+        "adjacentSameSourcePairs": -7,
+        "longestSameSourceRun": -7
+      },
+      "ageDisplacement": {
+        "promoted": [
+          { "id": 2016, "fromRank": 17, "toRank": 4, "ageFromPrimaryMinutes": 32 },
+          { "id": 2019, "fromRank": 20, "toRank": 5, "ageFromPrimaryMinutes": 38 },
+          { "id": 2022, "fromRank": 23, "toRank": 6, "ageFromPrimaryMinutes": 44 },
+          { "id": 2017, "fromRank": 18, "toRank": 7, "ageFromPrimaryMinutes": 34 },
+          { "id": 2020, "fromRank": 21, "toRank": 8, "ageFromPrimaryMinutes": 40 },
+          { "id": 2023, "fromRank": 24, "toRank": 9, "ageFromPrimaryMinutes": 46 },
+          { "id": 2012, "fromRank": 15, "toRank": 10, "ageFromPrimaryMinutes": 24 },
+          { "id": 2015, "fromRank": 16, "toRank": 11, "ageFromPrimaryMinutes": 30 },
+          { "id": 2021, "fromRank": 22, "toRank": 12, "ageFromPrimaryMinutes": 42 },
+          { "id": 2018, "fromRank": 19, "toRank": 13, "ageFromPrimaryMinutes": 36 }
+        ],
+        "maximumV1OlderByMinutesAtSameRank": 30
+      },
+      "functionalGuardrails": {
+        "primaryHighlightPreserved": true,
+        "eligibleCoveragePreserved": true,
+        "noDuplicateArticleIds": true,
+        "categoryIdentityPreserved": true,
+        "readerOrderParity": true,
+        "disclosureParity": true
+      }
+    },
+    {
+      "name": "different_sources_covering_the_same_category",
+      "baseline": {
+        "topNArticleIds": [3000, 3001, 3002, 3003, 3004, 3005, 3006, 3007, 3008, 3009, 3010, 3011],
+        "eligibleArticleCount": 12,
+        "sourceMetrics": {
+          "topNSlots": 12,
+          "knownSourceSlots": 12,
+          "unidentifiedSourceSlots": 0,
+          "distinctSources": 6,
+          "eligibleDistinctSources": 6,
+          "representedEligibleSources": 6,
+          "eligibleSourceRepresentation": 1,
+          "sourceShares": [
+            { "sourceId": "30", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "31", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "32", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "33", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "34", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "35", "articleCount": 2, "share": 0.166667 }
+          ],
+          "largestSourceShare": 0.166667,
+          "concentrationHhi": 0.166667
+        },
+        "categoryMetrics": {
+          "topNSlots": 12,
+          "unidentifiedCategorySlots": 0,
+          "distinctCategories": 1,
+          "eligibleDistinctCategories": 1,
+          "representedEligibleCategories": 1,
+          "eligibleCategoryRepresentation": 1
+        },
+        "adjacentSameSourcePairs": 0,
+        "longestSameSourceRun": 1
+      },
+      "v1": {
+        "topNArticleIds": [3000, 3001, 3002, 3003, 3004, 3005, 3006, 3007, 3008, 3009, 3010, 3011],
+        "eligibleArticleCount": 12,
+        "sourceMetrics": {
+          "topNSlots": 12,
+          "knownSourceSlots": 12,
+          "unidentifiedSourceSlots": 0,
+          "distinctSources": 6,
+          "eligibleDistinctSources": 6,
+          "representedEligibleSources": 6,
+          "eligibleSourceRepresentation": 1,
+          "sourceShares": [
+            { "sourceId": "30", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "31", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "32", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "33", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "34", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "35", "articleCount": 2, "share": 0.166667 }
+          ],
+          "largestSourceShare": 0.166667,
+          "concentrationHhi": 0.166667
+        },
+        "categoryMetrics": {
+          "topNSlots": 12,
+          "unidentifiedCategorySlots": 0,
+          "distinctCategories": 1,
+          "eligibleDistinctCategories": 1,
+          "representedEligibleCategories": 1,
+          "eligibleCategoryRepresentation": 1
+        },
+        "adjacentSameSourcePairs": 0,
+        "longestSameSourceRun": 1
+      },
+      "delta": {
+        "distinctSources": 0,
+        "distinctCategories": 0,
+        "eligibleSourceRepresentation": 0,
+        "eligibleCategoryRepresentation": 0,
+        "largestSourceShare": 0,
+        "sourceConcentrationHhi": 0,
+        "adjacentSameSourcePairs": 0,
+        "longestSameSourceRun": 0
+      },
+      "ageDisplacement": { "promoted": [], "maximumV1OlderByMinutesAtSameRank": 0 },
+      "functionalGuardrails": {
+        "primaryHighlightPreserved": true,
+        "eligibleCoveragePreserved": true,
+        "noDuplicateArticleIds": true,
+        "categoryIdentityPreserved": true,
+        "readerOrderParity": true,
+        "disclosureParity": true
+      }
+    },
+    {
+      "name": "exact_60_minute_freshness_boundary",
+      "baseline": {
+        "topNArticleIds": [4001, 4002, 4003, 4004, 4005, 4006],
+        "eligibleArticleCount": 6,
+        "sourceMetrics": {
+          "topNSlots": 6,
+          "knownSourceSlots": 6,
+          "unidentifiedSourceSlots": 0,
+          "distinctSources": 6,
+          "eligibleDistinctSources": 6,
+          "representedEligibleSources": 6,
+          "eligibleSourceRepresentation": 1,
+          "sourceShares": [
+            { "sourceId": "1", "articleCount": 1, "share": 0.166667 },
+            { "sourceId": "2", "articleCount": 1, "share": 0.166667 },
+            { "sourceId": "3", "articleCount": 1, "share": 0.166667 },
+            { "sourceId": "4", "articleCount": 1, "share": 0.166667 },
+            { "sourceId": "5", "articleCount": 1, "share": 0.166667 },
+            { "sourceId": "6", "articleCount": 1, "share": 0.166667 }
+          ],
+          "largestSourceShare": 0.166667,
+          "concentrationHhi": 0.166667
+        },
+        "categoryMetrics": {
+          "topNSlots": 6,
+          "unidentifiedCategorySlots": 0,
+          "distinctCategories": 6,
+          "eligibleDistinctCategories": 6,
+          "representedEligibleCategories": 6,
+          "eligibleCategoryRepresentation": 1
+        },
+        "adjacentSameSourcePairs": 0,
+        "longestSameSourceRun": 1
+      },
+      "v1": {
+        "topNArticleIds": [4001, 4003, 4002, 4004, 4005, 4006],
+        "eligibleArticleCount": 6,
+        "sourceMetrics": {
+          "topNSlots": 6,
+          "knownSourceSlots": 6,
+          "unidentifiedSourceSlots": 0,
+          "distinctSources": 6,
+          "eligibleDistinctSources": 6,
+          "representedEligibleSources": 6,
+          "eligibleSourceRepresentation": 1,
+          "sourceShares": [
+            { "sourceId": "1", "articleCount": 1, "share": 0.166667 },
+            { "sourceId": "2", "articleCount": 1, "share": 0.166667 },
+            { "sourceId": "3", "articleCount": 1, "share": 0.166667 },
+            { "sourceId": "4", "articleCount": 1, "share": 0.166667 },
+            { "sourceId": "5", "articleCount": 1, "share": 0.166667 },
+            { "sourceId": "6", "articleCount": 1, "share": 0.166667 }
+          ],
+          "largestSourceShare": 0.166667,
+          "concentrationHhi": 0.166667
+        },
+        "categoryMetrics": {
+          "topNSlots": 6,
+          "unidentifiedCategorySlots": 0,
+          "distinctCategories": 6,
+          "eligibleDistinctCategories": 6,
+          "representedEligibleCategories": 6,
+          "eligibleCategoryRepresentation": 1
+        },
+        "adjacentSameSourcePairs": 0,
+        "longestSameSourceRun": 1
+      },
+      "delta": {
+        "distinctSources": 0,
+        "distinctCategories": 0,
+        "eligibleSourceRepresentation": 0,
+        "eligibleCategoryRepresentation": 0,
+        "largestSourceShare": 0,
+        "sourceConcentrationHhi": 0,
+        "adjacentSameSourcePairs": 0,
+        "longestSameSourceRun": 0
+      },
+      "ageDisplacement": {
+        "promoted": [{ "id": 4003, "fromRank": 3, "toRank": 2, "ageFromPrimaryMinutes": 60 }],
+        "maximumV1OlderByMinutesAtSameRank": 50
+      },
+      "functionalGuardrails": {
+        "primaryHighlightPreserved": true,
+        "eligibleCoveragePreserved": true,
+        "noDuplicateArticleIds": true,
+        "categoryIdentityPreserved": true,
+        "readerOrderParity": true,
+        "disclosureParity": true
+      }
+    },
+    {
+      "name": "secondary_highlight_changed_by_current_star",
+      "baseline": {
+        "topNArticleIds": [5001, 5002, 5004, 5003, 5005, 5006, 5007],
+        "eligibleArticleCount": 7,
+        "sourceMetrics": {
+          "topNSlots": 7,
+          "knownSourceSlots": 7,
+          "unidentifiedSourceSlots": 0,
+          "distinctSources": 6,
+          "eligibleDistinctSources": 6,
+          "representedEligibleSources": 6,
+          "eligibleSourceRepresentation": 1,
+          "sourceShares": [
+            { "sourceId": "10", "articleCount": 1, "share": 0.142857 },
+            { "sourceId": "20", "articleCount": 2, "share": 0.285714 },
+            { "sourceId": "30", "articleCount": 1, "share": 0.142857 },
+            { "sourceId": "40", "articleCount": 1, "share": 0.142857 },
+            { "sourceId": "50", "articleCount": 1, "share": 0.142857 },
+            { "sourceId": "60", "articleCount": 1, "share": 0.142857 }
+          ],
+          "largestSourceShare": 0.285714,
+          "concentrationHhi": 0.183673
+        },
+        "categoryMetrics": {
+          "topNSlots": 7,
+          "unidentifiedCategorySlots": 0,
+          "distinctCategories": 6,
+          "eligibleDistinctCategories": 6,
+          "representedEligibleCategories": 6,
+          "eligibleCategoryRepresentation": 1
+        },
+        "adjacentSameSourcePairs": 0,
+        "longestSameSourceRun": 1
+      },
+      "v1": {
+        "topNArticleIds": [5001, 5007, 5004, 5002, 5003, 5005, 5006],
+        "eligibleArticleCount": 7,
+        "sourceMetrics": {
+          "topNSlots": 7,
+          "knownSourceSlots": 7,
+          "unidentifiedSourceSlots": 0,
+          "distinctSources": 6,
+          "eligibleDistinctSources": 6,
+          "representedEligibleSources": 6,
+          "eligibleSourceRepresentation": 1,
+          "sourceShares": [
+            { "sourceId": "10", "articleCount": 1, "share": 0.142857 },
+            { "sourceId": "20", "articleCount": 2, "share": 0.285714 },
+            { "sourceId": "30", "articleCount": 1, "share": 0.142857 },
+            { "sourceId": "40", "articleCount": 1, "share": 0.142857 },
+            { "sourceId": "50", "articleCount": 1, "share": 0.142857 },
+            { "sourceId": "60", "articleCount": 1, "share": 0.142857 }
+          ],
+          "largestSourceShare": 0.285714,
+          "concentrationHhi": 0.183673
+        },
+        "categoryMetrics": {
+          "topNSlots": 7,
+          "unidentifiedCategorySlots": 0,
+          "distinctCategories": 6,
+          "eligibleDistinctCategories": 6,
+          "representedEligibleCategories": 6,
+          "eligibleCategoryRepresentation": 1
+        },
+        "adjacentSameSourcePairs": 1,
+        "longestSameSourceRun": 2
+      },
+      "delta": {
+        "distinctSources": 0,
+        "distinctCategories": 0,
+        "eligibleSourceRepresentation": 0,
+        "eligibleCategoryRepresentation": 0,
+        "largestSourceShare": 0,
+        "sourceConcentrationHhi": 0,
+        "adjacentSameSourcePairs": 1,
+        "longestSameSourceRun": 1
+      },
+      "ageDisplacement": {
+        "promoted": [{ "id": 5007, "fromRank": 7, "toRank": 2, "ageFromPrimaryMinutes": 30 }],
+        "maximumV1OlderByMinutesAtSameRank": 25
+      },
+      "functionalGuardrails": {
+        "primaryHighlightPreserved": true,
+        "eligibleCoveragePreserved": true,
+        "noDuplicateArticleIds": true,
+        "categoryIdentityPreserved": true,
+        "readerOrderParity": true,
+        "disclosureParity": true
+      }
+    },
+    {
+      "name": "empty_star_profile",
+      "baseline": {
+        "topNArticleIds": [1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011],
+        "eligibleArticleCount": 18,
+        "sourceMetrics": {
+          "topNSlots": 12,
+          "knownSourceSlots": 12,
+          "unidentifiedSourceSlots": 0,
+          "distinctSources": 6,
+          "eligibleDistinctSources": 6,
+          "representedEligibleSources": 6,
+          "eligibleSourceRepresentation": 1,
+          "sourceShares": [
+            { "sourceId": "1", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "2", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "3", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "4", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "5", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "6", "articleCount": 2, "share": 0.166667 }
+          ],
+          "largestSourceShare": 0.166667,
+          "concentrationHhi": 0.166667
+        },
+        "categoryMetrics": {
+          "topNSlots": 12,
+          "unidentifiedCategorySlots": 0,
+          "distinctCategories": 3,
+          "eligibleDistinctCategories": 3,
+          "representedEligibleCategories": 3,
+          "eligibleCategoryRepresentation": 1
+        },
+        "adjacentSameSourcePairs": 0,
+        "longestSameSourceRun": 1
+      },
+      "v1": {
+        "topNArticleIds": [1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011],
+        "eligibleArticleCount": 18,
+        "sourceMetrics": {
+          "topNSlots": 12,
+          "knownSourceSlots": 12,
+          "unidentifiedSourceSlots": 0,
+          "distinctSources": 6,
+          "eligibleDistinctSources": 6,
+          "representedEligibleSources": 6,
+          "eligibleSourceRepresentation": 1,
+          "sourceShares": [
+            { "sourceId": "1", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "2", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "3", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "4", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "5", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "6", "articleCount": 2, "share": 0.166667 }
+          ],
+          "largestSourceShare": 0.166667,
+          "concentrationHhi": 0.166667
+        },
+        "categoryMetrics": {
+          "topNSlots": 12,
+          "unidentifiedCategorySlots": 0,
+          "distinctCategories": 3,
+          "eligibleDistinctCategories": 3,
+          "representedEligibleCategories": 3,
+          "eligibleCategoryRepresentation": 1
+        },
+        "adjacentSameSourcePairs": 0,
+        "longestSameSourceRun": 1
+      },
+      "delta": {
+        "distinctSources": 0,
+        "distinctCategories": 0,
+        "eligibleSourceRepresentation": 0,
+        "eligibleCategoryRepresentation": 0,
+        "largestSourceShare": 0,
+        "sourceConcentrationHhi": 0,
+        "adjacentSameSourcePairs": 0,
+        "longestSameSourceRun": 0
+      },
+      "ageDisplacement": { "promoted": [], "maximumV1OlderByMinutesAtSameRank": 0 },
+      "functionalGuardrails": {
+        "primaryHighlightPreserved": true,
+        "eligibleCoveragePreserved": true,
+        "noDuplicateArticleIds": true,
+        "categoryIdentityPreserved": true,
+        "readerOrderParity": true,
+        "disclosureParity": true
+      }
+    },
+    {
+      "name": "invalid_profile_fallback",
+      "baseline": {
+        "topNArticleIds": [1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011],
+        "eligibleArticleCount": 18,
+        "sourceMetrics": {
+          "topNSlots": 12,
+          "knownSourceSlots": 12,
+          "unidentifiedSourceSlots": 0,
+          "distinctSources": 6,
+          "eligibleDistinctSources": 6,
+          "representedEligibleSources": 6,
+          "eligibleSourceRepresentation": 1,
+          "sourceShares": [
+            { "sourceId": "1", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "2", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "3", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "4", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "5", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "6", "articleCount": 2, "share": 0.166667 }
+          ],
+          "largestSourceShare": 0.166667,
+          "concentrationHhi": 0.166667
+        },
+        "categoryMetrics": {
+          "topNSlots": 12,
+          "unidentifiedCategorySlots": 0,
+          "distinctCategories": 3,
+          "eligibleDistinctCategories": 3,
+          "representedEligibleCategories": 3,
+          "eligibleCategoryRepresentation": 1
+        },
+        "adjacentSameSourcePairs": 0,
+        "longestSameSourceRun": 1
+      },
+      "v1": {
+        "topNArticleIds": [1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011],
+        "eligibleArticleCount": 18,
+        "sourceMetrics": {
+          "topNSlots": 12,
+          "knownSourceSlots": 12,
+          "unidentifiedSourceSlots": 0,
+          "distinctSources": 6,
+          "eligibleDistinctSources": 6,
+          "representedEligibleSources": 6,
+          "eligibleSourceRepresentation": 1,
+          "sourceShares": [
+            { "sourceId": "1", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "2", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "3", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "4", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "5", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "6", "articleCount": 2, "share": 0.166667 }
+          ],
+          "largestSourceShare": 0.166667,
+          "concentrationHhi": 0.166667
+        },
+        "categoryMetrics": {
+          "topNSlots": 12,
+          "unidentifiedCategorySlots": 0,
+          "distinctCategories": 3,
+          "eligibleDistinctCategories": 3,
+          "representedEligibleCategories": 3,
+          "eligibleCategoryRepresentation": 1
+        },
+        "adjacentSameSourcePairs": 0,
+        "longestSameSourceRun": 1
+      },
+      "delta": {
+        "distinctSources": 0,
+        "distinctCategories": 0,
+        "eligibleSourceRepresentation": 0,
+        "eligibleCategoryRepresentation": 0,
+        "largestSourceShare": 0,
+        "sourceConcentrationHhi": 0,
+        "adjacentSameSourcePairs": 0,
+        "longestSameSourceRun": 0
+      },
+      "ageDisplacement": { "promoted": [], "maximumV1OlderByMinutesAtSameRank": 0 },
+      "functionalGuardrails": {
+        "primaryHighlightPreserved": true,
+        "eligibleCoveragePreserved": true,
+        "noDuplicateArticleIds": true,
+        "categoryIdentityPreserved": true,
+        "readerOrderParity": true,
+        "disclosureParity": true
+      }
+    },
+    {
+      "name": "late_profile_fallback",
+      "baseline": {
+        "topNArticleIds": [1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011],
+        "eligibleArticleCount": 18,
+        "sourceMetrics": {
+          "topNSlots": 12,
+          "knownSourceSlots": 12,
+          "unidentifiedSourceSlots": 0,
+          "distinctSources": 6,
+          "eligibleDistinctSources": 6,
+          "representedEligibleSources": 6,
+          "eligibleSourceRepresentation": 1,
+          "sourceShares": [
+            { "sourceId": "1", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "2", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "3", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "4", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "5", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "6", "articleCount": 2, "share": 0.166667 }
+          ],
+          "largestSourceShare": 0.166667,
+          "concentrationHhi": 0.166667
+        },
+        "categoryMetrics": {
+          "topNSlots": 12,
+          "unidentifiedCategorySlots": 0,
+          "distinctCategories": 3,
+          "eligibleDistinctCategories": 3,
+          "representedEligibleCategories": 3,
+          "eligibleCategoryRepresentation": 1
+        },
+        "adjacentSameSourcePairs": 0,
+        "longestSameSourceRun": 1
+      },
+      "v1": {
+        "topNArticleIds": [1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011],
+        "eligibleArticleCount": 18,
+        "sourceMetrics": {
+          "topNSlots": 12,
+          "knownSourceSlots": 12,
+          "unidentifiedSourceSlots": 0,
+          "distinctSources": 6,
+          "eligibleDistinctSources": 6,
+          "representedEligibleSources": 6,
+          "eligibleSourceRepresentation": 1,
+          "sourceShares": [
+            { "sourceId": "1", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "2", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "3", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "4", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "5", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "6", "articleCount": 2, "share": 0.166667 }
+          ],
+          "largestSourceShare": 0.166667,
+          "concentrationHhi": 0.166667
+        },
+        "categoryMetrics": {
+          "topNSlots": 12,
+          "unidentifiedCategorySlots": 0,
+          "distinctCategories": 3,
+          "eligibleDistinctCategories": 3,
+          "representedEligibleCategories": 3,
+          "eligibleCategoryRepresentation": 1
+        },
+        "adjacentSameSourcePairs": 0,
+        "longestSameSourceRun": 1
+      },
+      "delta": {
+        "distinctSources": 0,
+        "distinctCategories": 0,
+        "eligibleSourceRepresentation": 0,
+        "eligibleCategoryRepresentation": 0,
+        "largestSourceShare": 0,
+        "sourceConcentrationHhi": 0,
+        "adjacentSameSourcePairs": 0,
+        "longestSameSourceRun": 0
+      },
+      "ageDisplacement": { "promoted": [], "maximumV1OlderByMinutesAtSameRank": 0 },
+      "functionalGuardrails": {
+        "primaryHighlightPreserved": true,
+        "eligibleCoveragePreserved": true,
+        "noDuplicateArticleIds": true,
+        "categoryIdentityPreserved": true,
+        "readerOrderParity": true,
+        "disclosureParity": true
+      }
+    },
+    {
+      "name": "stale_session_profile_fallback",
+      "baseline": {
+        "topNArticleIds": [1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011],
+        "eligibleArticleCount": 18,
+        "sourceMetrics": {
+          "topNSlots": 12,
+          "knownSourceSlots": 12,
+          "unidentifiedSourceSlots": 0,
+          "distinctSources": 6,
+          "eligibleDistinctSources": 6,
+          "representedEligibleSources": 6,
+          "eligibleSourceRepresentation": 1,
+          "sourceShares": [
+            { "sourceId": "1", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "2", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "3", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "4", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "5", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "6", "articleCount": 2, "share": 0.166667 }
+          ],
+          "largestSourceShare": 0.166667,
+          "concentrationHhi": 0.166667
+        },
+        "categoryMetrics": {
+          "topNSlots": 12,
+          "unidentifiedCategorySlots": 0,
+          "distinctCategories": 3,
+          "eligibleDistinctCategories": 3,
+          "representedEligibleCategories": 3,
+          "eligibleCategoryRepresentation": 1
+        },
+        "adjacentSameSourcePairs": 0,
+        "longestSameSourceRun": 1
+      },
+      "v1": {
+        "topNArticleIds": [1000, 1001, 1002, 1003, 1006, 1009, 1004, 1007, 1010, 1005, 1008, 1011],
+        "eligibleArticleCount": 18,
+        "sourceMetrics": {
+          "topNSlots": 12,
+          "knownSourceSlots": 12,
+          "unidentifiedSourceSlots": 0,
+          "distinctSources": 6,
+          "eligibleDistinctSources": 6,
+          "representedEligibleSources": 6,
+          "eligibleSourceRepresentation": 1,
+          "sourceShares": [
+            { "sourceId": "1", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "2", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "3", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "4", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "5", "articleCount": 2, "share": 0.166667 },
+            { "sourceId": "6", "articleCount": 2, "share": 0.166667 }
+          ],
+          "largestSourceShare": 0.166667,
+          "concentrationHhi": 0.166667
+        },
+        "categoryMetrics": {
+          "topNSlots": 12,
+          "unidentifiedCategorySlots": 0,
+          "distinctCategories": 3,
+          "eligibleDistinctCategories": 3,
+          "representedEligibleCategories": 3,
+          "eligibleCategoryRepresentation": 1
+        },
+        "adjacentSameSourcePairs": 0,
+        "longestSameSourceRun": 1
+      },
+      "delta": {
+        "distinctSources": 0,
+        "distinctCategories": 0,
+        "eligibleSourceRepresentation": 0,
+        "eligibleCategoryRepresentation": 0,
+        "largestSourceShare": 0,
+        "sourceConcentrationHhi": 0,
+        "adjacentSameSourcePairs": 0,
+        "longestSameSourceRun": 0
+      },
+      "ageDisplacement": { "promoted": [], "maximumV1OlderByMinutesAtSameRank": 0 },
+      "functionalGuardrails": {
+        "primaryHighlightPreserved": true,
+        "eligibleCoveragePreserved": true,
+        "noDuplicateArticleIds": true,
+        "categoryIdentityPreserved": true,
+        "readerOrderParity": true,
+        "disclosureParity": true
+      }
+    },
+    {
+      "name": "same_category_title_different_ids",
+      "baseline": {
+        "topNArticleIds": [6001, 6003, 6002, 6004, 6006, 6005],
+        "eligibleArticleCount": 6,
+        "sourceMetrics": {
+          "topNSlots": 6,
+          "knownSourceSlots": 6,
+          "unidentifiedSourceSlots": 0,
+          "distinctSources": 6,
+          "eligibleDistinctSources": 6,
+          "representedEligibleSources": 6,
+          "eligibleSourceRepresentation": 1,
+          "sourceShares": [
+            { "sourceId": "61", "articleCount": 1, "share": 0.166667 },
+            { "sourceId": "62", "articleCount": 1, "share": 0.166667 },
+            { "sourceId": "63", "articleCount": 1, "share": 0.166667 },
+            { "sourceId": "64", "articleCount": 1, "share": 0.166667 },
+            { "sourceId": "65", "articleCount": 1, "share": 0.166667 },
+            { "sourceId": "66", "articleCount": 1, "share": 0.166667 }
+          ],
+          "largestSourceShare": 0.166667,
+          "concentrationHhi": 0.166667
+        },
+        "categoryMetrics": {
+          "topNSlots": 6,
+          "unidentifiedCategorySlots": 0,
+          "distinctCategories": 2,
+          "eligibleDistinctCategories": 2,
+          "representedEligibleCategories": 2,
+          "eligibleCategoryRepresentation": 1
+        },
+        "adjacentSameSourcePairs": 0,
+        "longestSameSourceRun": 1
+      },
+      "v1": {
+        "topNArticleIds": [6001, 6003, 6004, 6002, 6005, 6006],
+        "eligibleArticleCount": 6,
+        "sourceMetrics": {
+          "topNSlots": 6,
+          "knownSourceSlots": 6,
+          "unidentifiedSourceSlots": 0,
+          "distinctSources": 6,
+          "eligibleDistinctSources": 6,
+          "representedEligibleSources": 6,
+          "eligibleSourceRepresentation": 1,
+          "sourceShares": [
+            { "sourceId": "61", "articleCount": 1, "share": 0.166667 },
+            { "sourceId": "62", "articleCount": 1, "share": 0.166667 },
+            { "sourceId": "63", "articleCount": 1, "share": 0.166667 },
+            { "sourceId": "64", "articleCount": 1, "share": 0.166667 },
+            { "sourceId": "65", "articleCount": 1, "share": 0.166667 },
+            { "sourceId": "66", "articleCount": 1, "share": 0.166667 }
+          ],
+          "largestSourceShare": 0.166667,
+          "concentrationHhi": 0.166667
+        },
+        "categoryMetrics": {
+          "topNSlots": 6,
+          "unidentifiedCategorySlots": 0,
+          "distinctCategories": 2,
+          "eligibleDistinctCategories": 2,
+          "representedEligibleCategories": 2,
+          "eligibleCategoryRepresentation": 1
+        },
+        "adjacentSameSourcePairs": 0,
+        "longestSameSourceRun": 1
+      },
+      "delta": {
+        "distinctSources": 0,
+        "distinctCategories": 0,
+        "eligibleSourceRepresentation": 0,
+        "eligibleCategoryRepresentation": 0,
+        "largestSourceShare": 0,
+        "sourceConcentrationHhi": 0,
+        "adjacentSameSourcePairs": 0,
+        "longestSameSourceRun": 0
+      },
+      "ageDisplacement": {
+        "promoted": [
+          { "id": 6004, "fromRank": 4, "toRank": 3, "ageFromPrimaryMinutes": 6 },
+          { "id": 6005, "fromRank": 6, "toRank": 5, "ageFromPrimaryMinutes": 8 }
+        ],
+        "maximumV1OlderByMinutesAtSameRank": 4
+      },
+      "functionalGuardrails": {
+        "primaryHighlightPreserved": true,
+        "eligibleCoveragePreserved": true,
+        "noDuplicateArticleIds": true,
+        "categoryIdentityPreserved": true,
+        "readerOrderParity": true,
+        "disclosureParity": true
+      }
+    },
+    {
+      "name": "intermediate_order_change_without_final_composition_change",
+      "baseline": {
+        "topNArticleIds": [7001, 7002, 7003, 7004, 7007, 7010, 7005, 7008, 7011, 7006, 7009, 7012],
+        "eligibleArticleCount": 12,
+        "sourceMetrics": {
+          "topNSlots": 12,
+          "knownSourceSlots": 12,
+          "unidentifiedSourceSlots": 0,
+          "distinctSources": 3,
+          "eligibleDistinctSources": 3,
+          "representedEligibleSources": 3,
+          "eligibleSourceRepresentation": 1,
+          "sourceShares": [
+            { "sourceId": "701", "articleCount": 4, "share": 0.333333 },
+            { "sourceId": "702", "articleCount": 4, "share": 0.333333 },
+            { "sourceId": "703", "articleCount": 4, "share": 0.333333 }
+          ],
+          "largestSourceShare": 0.333333,
+          "concentrationHhi": 0.333333
+        },
+        "categoryMetrics": {
+          "topNSlots": 12,
+          "unidentifiedCategorySlots": 0,
+          "distinctCategories": 3,
+          "eligibleDistinctCategories": 3,
+          "representedEligibleCategories": 3,
+          "eligibleCategoryRepresentation": 1
+        },
+        "adjacentSameSourcePairs": 6,
+        "longestSameSourceRun": 3
+      },
+      "v1": {
+        "topNArticleIds": [7001, 7002, 7003, 7004, 7007, 7010, 7005, 7008, 7011, 7006, 7009, 7012],
+        "eligibleArticleCount": 12,
+        "sourceMetrics": {
+          "topNSlots": 12,
+          "knownSourceSlots": 12,
+          "unidentifiedSourceSlots": 0,
+          "distinctSources": 3,
+          "eligibleDistinctSources": 3,
+          "representedEligibleSources": 3,
+          "eligibleSourceRepresentation": 1,
+          "sourceShares": [
+            { "sourceId": "701", "articleCount": 4, "share": 0.333333 },
+            { "sourceId": "702", "articleCount": 4, "share": 0.333333 },
+            { "sourceId": "703", "articleCount": 4, "share": 0.333333 }
+          ],
+          "largestSourceShare": 0.333333,
+          "concentrationHhi": 0.333333
+        },
+        "categoryMetrics": {
+          "topNSlots": 12,
+          "unidentifiedCategorySlots": 0,
+          "distinctCategories": 3,
+          "eligibleDistinctCategories": 3,
+          "representedEligibleCategories": 3,
+          "eligibleCategoryRepresentation": 1
+        },
+        "adjacentSameSourcePairs": 6,
+        "longestSameSourceRun": 3
+      },
+      "delta": {
+        "distinctSources": 0,
+        "distinctCategories": 0,
+        "eligibleSourceRepresentation": 0,
+        "eligibleCategoryRepresentation": 0,
+        "largestSourceShare": 0,
+        "sourceConcentrationHhi": 0,
+        "adjacentSameSourcePairs": 0,
+        "longestSameSourceRun": 0
+      },
+      "ageDisplacement": { "promoted": [], "maximumV1OlderByMinutesAtSameRank": 0 },
+      "functionalGuardrails": {
+        "primaryHighlightPreserved": true,
+        "eligibleCoveragePreserved": true,
+        "noDuplicateArticleIds": true,
+        "categoryIdentityPreserved": true,
+        "readerOrderParity": true,
+        "disclosureParity": true
+      }
+    }
+  ],
+  "summary": {
+    "primaryHighlightPreserved": true,
+    "articleCoveragePreserved": true,
+    "noDuplicateArticleIds": true,
+    "categoryIdentityPreserved": true,
+    "readerOrderParity": true,
+    "disclosureParity": true,
+    "sourceDistinctCountDirection": {
+      "improved": 2,
+      "unchanged": 10,
+      "movedOppositeDirection": 0,
+      "notComparable": 0
+    },
+    "sourceConcentrationProxyDirection": {
+      "improved": 2,
+      "unchanged": 10,
+      "movedOppositeDirection": 0,
+      "notComparable": 0
+    },
+    "sourceRepresentationDirection": {
+      "improved": 2,
+      "unchanged": 10,
+      "movedOppositeDirection": 0,
+      "notComparable": 0
+    },
+    "categoryRepresentationDirection": {
+      "improved": 0,
+      "unchanged": 12,
+      "movedOppositeDirection": 0,
+      "notComparable": 0
+    },
+    "adjacentSameSourcePairDirection": {
+      "improved": 2,
+      "unchanged": 9,
+      "movedOppositeDirection": 1,
+      "notComparable": 0
+    },
+    "editorialBenefitEstablished": false,
+    "editorialBenefitReason": "Synthetic proxy metrics do not measure perceived relevance or establish population-level benefit."
+  }
+}
