@@ -1,14 +1,59 @@
 # NewsFlux Project State
 
 - **Purpose:** concise operational state for PM handoffs and future sessions. The roadmap remains the source for sequencing and product/architecture detail.
-- **Last reconciled:** 2026-11-06 against audited commit `fbbd2357caaa2d9d4a0a6b4cf3ed1bc2e8f71063` (post-PR #183, post-QA stabilization). The sections below titled with an earlier PR number are historical.
-- **Current snapshot:** GitHub `main` at `fbbd2357caaa2d9d4a0a6b4cf3ed1bc2e8f71063` (2026-11-06). Last owner-validated and receipt-verified production revision is `fbbd2357caaa2d9d4a0a6b4cf3ed1bc2e8f71063` (`USER_REPORTED_AND_RECEIPT_VERIFIED`); main/production parity is unknown by direct live inspection in this execution. The post-PR #177 and earlier snapshots are preserved below as historical.
-- **Previous snapshot (historical):** post-PR #177 on 2026-11-04; post-PR #129 on 2026-10-25; the post-PR #120 and earlier snapshots are preserved below.
+- **Last reconciled:** 2026-11-08 against GitHub `main` `e949fdd5fd1975cd3437d3981232b0dbe18a74e5`, after PR #193.
+- **Current snapshot:** GitHub `main` at `e949fdd5fd1975cd3437d3981232b0dbe18a74e5`. Production was not inspected in this audit; production SHA and parity are unknown. The post-PR #183 and earlier snapshots below remain historical.
+- **Previous snapshots (historical):** post-PR #183 on 2026-11-06; post-PR #177 on 2026-11-04; post-PR #129 on 2026-10-25; older snapshots remain preserved below.
 - **Related planning documents:** [`PWA_ARCHITECTURE.md`](./PWA_ARCHITECTURE.md) and [`DESIGN_REFERENCES.md`](./DESIGN_REFERENCES.md) (planning only; no implementation authorized).
 
-## Current state (audited commit fbbd2357caaa2d9d4a0a6b4cf3ed1bc2e8f71063, post-PR #183, 2026-11-06)
+## Current state (verified GitHub main `e949fdd5fd1975cd3437d3981232b0dbe18a74e5`, post-PR #193, 2026-11-08)
 
-**Reconciled:** 2026-11-06, as part of roadmap reconciliation after QA stabilization, against the audited commit `fbbd2357caaa2d9d4a0a6b4cf3ed1bc2e8f71063` (`main` at 2026-11-06, the merge of PR #183). The commit and the PR history below were verified against the GitHub API and a local checkout on 2026-11-06. This section supersedes every earlier "current" state in this document; earlier sections are historical records.
+This section is the current operational snapshot. The dated post-PR #183 section immediately below and all older snapshots are historical and do not override it.
+
+### Current authority snapshot
+
+| Field                        | Verified value                                                                                                       |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `CURRENT_MAIN_SHA`           | `e949fdd5fd1975cd3437d3981232b0dbe18a74e5`                                                                           |
+| `LAST_VERIFIED_GITHUB_STATE` | 2026-11-08; GitHub API and fetched `origin/main`                                                                     |
+| `LAST_MERGED_PR`             | #193; squash merge SHA `e949fdd5fd1975cd3437d3981232b0dbe18a74e5`                                                    |
+| `OPEN_DRAFT_PRS`             | #188, #190, #134–#140                                                                                                |
+| `CURRENT_PRODUCT_BASELINE`   | GitHub source baseline `e949fdd5fd1975cd3437d3981232b0dbe18a74e5`; this is not a production-runtime assertion        |
+| `CURRENT_QA_BASELINE`        | E2E scenario contract v6: 46 frozen identities; PR #193 exact-head E2E and Quality gates passed                      |
+| `PRODUCTION_SHA_VERIFIED`    | `UNKNOWN_IN_THIS_AUDIT`                                                                                              |
+| `MAIN_PRODUCTION_PARITY`     | `NOT_VERIFIED`                                                                                                       |
+| `NEXT_RECOMMENDED_TRACK`     | `PERSONALIZATION_V2_EVAL_01_RECONCILIATION` — re-evaluate open PR #190 against post-PR #191 main; V2 remains on hold |
+| `NEXT_AUTHORIZED_ACTION`     | PM review of this documentation-only PR; no implementation, merge, or deployment is authorized by this snapshot      |
+
+### PRs #184–#193 reconciled against GitHub
+
+| PR   | Current state | Merge SHA / disposition                                                                              |
+| ---- | ------------- | ---------------------------------------------------------------------------------------------------- |
+| #184 | Merged        | `eca7d0d94cb88933693887f2de16fa1f40e67b31` — prior documentation reconciliation                      |
+| #185 | Merged        | `c6c0483934885e981edd1ca1c0be1d64a487d1e9` — unfolded Duo floating Mark All correction               |
+| #186 | Merged        | `4c691bc549d48daf6fea7e090f1b41e9113841a7` — Home category lanes                                     |
+| #187 | Merged        | `7dbb366c090c022ea02c54c07acb98aed51d9f99` — category-label ordinal presentation                     |
+| #188 | Open, Draft   | Read-only content fallback service; separate track                                                   |
+| #189 | Merged        | `430026000f2fe8c7f4e823e17ab39b38254198bf` — ordinal formatting independent of Miniflux category IDs |
+| #190 | Open, Draft   | Offline Personalization V2 evaluation; research only, not a V2 implementation or adoption            |
+| #191 | Merged        | `cc9402e8df077ae106dc76927cd95f91046a9c3b` — disclosure visibility follows final Home presentation   |
+| #192 | Merged        | `61bc852a7b9a56b737efe3e0311c1dec321a3a5b` — E2E provenance and safe build-directory guard           |
+| #193 | Merged        | `e949fdd5fd1975cd3437d3981232b0dbe18a74e5` — harness-only Light/Dark synchronization                 |
+
+The open PR inventory also contains Story research PRs #134–#140, all Draft and separate from product activation. No open documentation PR overlapped this reconciliation at the time of the audit.
+
+### Current product, QA, and evidence boundaries
+
+- **Product/source baseline:** #185–#189 contain the recorded Mark All, Home category-lane, and category-label updates; #191 corrects the personalization disclosure behavior. All/Unread remain chronological and Miniflux remains the source of truth for feeds, categories, read/unread, and starred state.
+- **PR #190 reconciliation:** its offline synthetic report, based on pre-#191 main, recorded (1) a disclosure mismatch when an intermediate recent-order change did not alter final composed Home output, and (2) a direct-star fixture that changed a secondary highlight, did not improve measured diversity, and increased adjacent same-source pairs from 0 to 1. The first finding is addressed by #191: current Home code compares baseline with the final composed projection (`hasHomeEditorialCompositionChanged`) and only exposes disclosure when the committed projection is applied and the final composition differs. The direct-star observation has not been re-evaluated on post-#191 main in this audit; it remains an offline research finding, not proof of a general product defect or approval for V2. PR #190 remains OPEN/DRAFT pending that reconciliation.
+- **PR #192 QA contract:** E2E source/build provenance, per-run inventory and server receipts, fail-closed checks, and output-directory safety are documented in [`qa/E2E.md`](./qa/E2E.md).
+- **PR #193:** `HARNESS_LIGHT_01=COMPLETED`; exact-head GitHub checks and 46/46 E2E passed (`CODE_GATE=PASS`); harness result `HARNESS_GATE=PASS`; owner-reported physical harness matrix `REAL_DEVICE_GATE=PASS`: Duo closed/Light, closed/Dark-OLED, open/Light, and open/Dark-OLED. This result is limited to the PR #193 harness; it does not establish general Safari, installed-PWA, Service Worker, or production-component validation.
+- **Production:** PRs #191–#193 are not asserted to be deployed. No live runtime read was performed for this reconciliation, so `PRODUCTION_SHA_VERIFIED=UNKNOWN_IN_THIS_AUDIT` and parity remains unverified. The historical PWA snapshot in [`PWA_ARCHITECTURE.md`](./PWA_ARCHITECTURE.md) is preserved without new runtime or device claims.
+- **README:** no change; it contains no verified-state assertion that requires reconciliation.
+
+## Historical snapshot (audited GitHub main `fbbd2357caaa2d9d4a0a6b4cf3ed1bc2e8f71063`, post-PR #183, 2026-11-06)
+
+**Historical record:** reconciled 2026-11-06 against `fbbd2357caaa2d9d4a0a6b4cf3ed1bc2e8f71063` as the post-PR #183 snapshot. The statements below describe that date only; the current operational state is above. Earlier snapshots below this section are also historical.
 
 ### What this reconciliation does and does not claim
 
@@ -326,7 +371,7 @@ The audit itself and the two selected workflow actions are complete. The next ca
 
 `PWA-VAL-01` is recommended because it is already a planned validation stage and requires no application change; it is preferable to promoting a held product/architecture track without decisions. No implementation, merge or deployment is authorized.
 
-### Current PR inventory
+### PR inventory recorded at the 2026-10-24 snapshot
 
 At the live pre-edit check, there were no open PRs. PR #118, #119 and #120 are closed by merge as recorded above. The Draft PR created for this documentation reconciliation will be the only new PR from this task.
 
@@ -1144,7 +1189,7 @@ Not authorized by package completion:
 
 - None currently recorded.
 
-### Current track
+### Track recorded in the 2026-10-22 snapshot
 
 - **Keyboard/touch parity — COMPLETED.** PR #64 completed Escape/focus return and PR #67 completed the bounded `INPUT-PARITY-TOUCH-TARGET-01` interaction-target correction.
 
