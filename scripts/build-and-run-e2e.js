@@ -29,7 +29,16 @@ const buildAndRunE2E = ({
     return { exitCode: 1, stage: "arguments", error: "E2E mode must be full or stability" }
   }
 
-  const buildDirectory = resolveBuildDirectory(cwd, env.E2E_BUILD_DIR)
+  let buildDirectory
+  try {
+    buildDirectory = resolveBuildDirectory(cwd, env.E2E_BUILD_DIR)
+  } catch (error) {
+    return {
+      exitCode: 1,
+      stage: "output-directory",
+      error: sanitizeE2EDiagnostic(error.message),
+    }
+  }
   let initialSource
   try {
     initialSource = readSourceSnapshot(cwd, { buildDir: buildDirectory })

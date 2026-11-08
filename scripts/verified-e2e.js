@@ -87,15 +87,24 @@ const runVerifiedE2E = ({
   reporterPath = EXPECTED_INVENTORY_REPORTER_PATH,
   runtimeMetadataImpl = collectRuntimeMetadata,
 } = {}) => {
+  const runId = randomUUID()
+  let buildDirectory
+  let buildDirectoryProblem
+  try {
+    buildDirectory = resolveBuildDirectory(cwd, baseEnv.E2E_BUILD_DIR)
+  } catch (error) {
+    buildDirectoryProblem = sanitizeE2EDiagnostic(error.message)
+  }
+
   mkdirSync(outputRoot, { recursive: true })
   const outputDirectory = mkdtempSync(path.join(outputRoot, "run-"))
   const inventoryPath = path.join(outputDirectory, "inventory.json")
   const serverProvenancePath = path.join(outputDirectory, SERVER_PROVENANCE_FILENAME)
   const summaryPath = path.join(outputDirectory, "summary.json")
-  const runId = randomUUID()
-  const buildDirectory = resolveBuildDirectory(cwd, baseEnv.E2E_BUILD_DIR)
   const problems = validateInventoryReporterBinding(config, reporterPath)
-  const preflight = verifyBuildProvenance({ cwd, buildDir: buildDirectory })
+  const preflight = buildDirectoryProblem
+    ? { valid: false, problems: [buildDirectoryProblem], sourceSnapshot: null, provenance: null }
+    : verifyBuildProvenance({ cwd, buildDir: buildDirectory })
   problems.push(...preflight.problems.map((problem) => `provenance preflight: ${problem}`))
   const provenanceProblems = [...preflight.problems]
   let runtimeMetadata

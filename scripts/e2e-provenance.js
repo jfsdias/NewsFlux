@@ -14,6 +14,8 @@ import path from "node:path"
 
 export const BUILD_PROVENANCE_FILENAME = "e2e-build-provenance.json"
 export const SERVER_PROVENANCE_FILENAME = "server-provenance.json"
+export const DEFAULT_E2E_BUILD_DIRECTORY = "build"
+export const SAFE_E2E_OUTPUT_DIRECTORY = path.join("test-results", "e2e-builds")
 
 export const sanitizeE2EDiagnostic = (value) =>
   String(value)
@@ -22,9 +24,6 @@ export const sanitizeE2EDiagnostic = (value) =>
       /((?:"?(?:access[_-]?token|refresh[_-]?token|token|password|api[_-]?key|authorization|cookie|set-cookie|session|secret)"?)\s*[:=]\s*["']?)[^"'&;,\s}]+/gi,
       "$1[REDACTED]",
     )
-
-export const resolveBuildDirectory = (cwd, configuredBuildDir) =>
-  path.resolve(cwd, configuredBuildDir?.trim() || "build")
 
 const FULL_SHA_PATTERN = /^[a-f\d]{40}$/i
 const DIGEST_PATTERN = /^sha256:[a-f\d]{64}$/i
@@ -42,6 +41,161 @@ const isWithinPath = (parent, candidate) => {
     relative === "" ||
     (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative))
   )
+}
+
+const assertNoTraversalSegments = (configuredPath) => {
+  if (configuredPath.split(/[\\/]/).includes("..")) {
+    throw new Error("E2E output directory gate: traversal segments are not allowed")
+  }
+}
+
+const lstatIfPresent = (candidate) => {
+  try {
+    return lstatSync(candidate)
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return null
+    }
+    throw error
+  }
+}
+
+const assertNoSymlinkComponents = (repositoryRoot, candidate) => {
+  const relative = path.relative(repositoryRoot, candidate)
+  let current = repositoryRoot
+  const segments = relative.split(path.sep).filter(Boolean)
+
+  for (const [index, segment] of segments.entries()) {
+    current = path.join(current, segment)
+    const stats = lstatIfPresent(current)
+    if (!stats) {
+      return
+    }
+    if (stats.isSymbolicLink()) {
+      throw new Error("E2E output directory gate: symbolic-link paths are not allowed")
+    }
+    if (index < segments.length - 1 && !stats.isDirectory()) {
+      throw new Error("E2E output directory gate: parent path is not a directory")
+    }
+  }
+
+  const finalStats = lstatIfPresent(candidate)
+  if (finalStats && !finalStats.isDirectory()) {
+    throw new Error("E2E output directory gate: target is not a directory")
+  }
+  if (finalStats && realpathSync(candidate) !== candidate) {
+    throw new Error("E2E output directory gate: resolved path differs from its approved path")
+  }
+}
+
+const isKnownPriorE2EBuild = (buildDir) => {
+  const receiptPath = path.join(buildDir, BUILD_PROVENANCE_FILENAME)
+  const receiptStats = lstatIfPresent(receiptPath)
+  if (!receiptStats || !receiptStats.isFile() || receiptStats.isSymbolicLink()) {
+    return false
+  }
+
+  let receipt
+  let integrity
+  try {
+    receipt = JSON.parse(readFileSync(receiptPath, "utf8"))
+    integrity = calculateBuildIntegrity(buildDir)
+  } catch {
+    return false
+  }
+
+  return (
+    receipt.version === 1 &&
+    FULL_SHA_PATTERN.test(receipt.source?.sha ?? "") &&
+    FULL_SHA_PATTERN.test(receipt.source?.treeSha ?? "") &&
+    receipt.source?.dirtyState === "clean" &&
+    receipt.build?.integrityAlgorithm === "sha256" &&
+    DIGEST_PATTERN.test(receipt.build?.integrityDigest ?? "") &&
+    Number.isSafeInteger(receipt.build?.fileCount) &&
+    receipt.build.fileCount > 0 &&
+    receipt.build.integrityDigest === integrity.digest &&
+    receipt.build.fileCount === integrity.fileCount
+  )
+}
+
+const assertBuildDirectorySafeToReplace = (buildDir) => {
+  const stats = lstatIfPresent(buildDir)
+  if (!stats) {
+    return
+  }
+  if (stats.isSymbolicLink() || !stats.isDirectory()) {
+    throw new Error("E2E output directory gate: target must be a real directory")
+  }
+  if (readdirSync(buildDir).length === 0) {
+    return
+  }
+  if (!isKnownPriorE2EBuild(buildDir)) {
+    throw new Error(
+      "E2E output directory gate: non-empty target is not a verified prior E2E build; refusing to clear unrecognized files",
+    )
+  }
+}
+
+/** Resolves only dedicated output locations and rejects unsafe existing contents before a build. */
+export const resolveBuildDirectory = (cwd, configuredBuildDir) => {
+  let repositoryRoot
+  let workingDirectory
+  try {
+    repositoryRoot = realpathSync(gitOutput(cwd, ["rev-parse", "--show-toplevel"]))
+    workingDirectory = realpathSync(cwd)
+  } catch {
+    throw new Error("E2E output directory gate: repository root could not be identified")
+  }
+  if (!isWithinPath(repositoryRoot, workingDirectory)) {
+    throw new Error("E2E output directory gate: working directory is outside the repository")
+  }
+
+  const configuredPath = configuredBuildDir?.trim() || DEFAULT_E2E_BUILD_DIRECTORY
+  assertNoTraversalSegments(configuredPath)
+
+  const lexicalWorkingDirectory = path.resolve(cwd)
+  const lexicalConfiguredPath = path.isAbsolute(configuredPath)
+    ? path.resolve(configuredPath)
+    : null
+  let outputDirectory
+  if (!lexicalConfiguredPath) {
+    outputDirectory = path.resolve(workingDirectory, configuredPath)
+  } else if (isWithinPath(repositoryRoot, lexicalConfiguredPath)) {
+    outputDirectory = lexicalConfiguredPath
+  } else if (isWithinPath(lexicalWorkingDirectory, lexicalConfiguredPath)) {
+    outputDirectory = path.resolve(
+      workingDirectory,
+      path.relative(lexicalWorkingDirectory, lexicalConfiguredPath),
+    )
+  } else {
+    throw new Error("E2E output directory gate: absolute path is outside the repository")
+  }
+
+  const defaultDirectory = path.join(repositoryRoot, DEFAULT_E2E_BUILD_DIRECTORY)
+  const safeAlternativeRoot = path.join(repositoryRoot, SAFE_E2E_OUTPUT_DIRECTORY)
+  const isDefaultOutput = outputDirectory === defaultDirectory
+  const isSafeAlternative =
+    outputDirectory !== safeAlternativeRoot && isWithinPath(safeAlternativeRoot, outputDirectory)
+
+  if (!isDefaultOutput && !isSafeAlternative) {
+    throw new Error(
+      `E2E output directory gate: use ${DEFAULT_E2E_BUILD_DIRECTORY}/ or a dedicated directory below ${SAFE_E2E_OUTPUT_DIRECTORY}/`,
+    )
+  }
+
+  try {
+    assertNoSymlinkComponents(repositoryRoot, outputDirectory)
+    if (isSafeAlternative) {
+      assertNoSymlinkComponents(repositoryRoot, safeAlternativeRoot)
+    }
+    assertBuildDirectorySafeToReplace(outputDirectory)
+  } catch (error) {
+    if (error.message?.startsWith("E2E output directory gate:")) {
+      throw error
+    }
+    throw new Error("E2E output directory gate: target could not be safely verified")
+  }
+  return outputDirectory
 }
 
 const statusPaths = (statusOutput) => {

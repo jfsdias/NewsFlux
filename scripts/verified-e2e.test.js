@@ -1,6 +1,14 @@
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import test from "node:test"
@@ -46,7 +54,7 @@ const inventoryFor = (runId, scenarios = SCENARIOS) => {
 }
 
 const withTemporaryRoot = (action) => {
-  const root = mkdtempSync(path.join(tmpdir(), "newsflux-verified-e2e-"))
+  const root = realpathSync(mkdtempSync(path.join(tmpdir(), "newsflux-verified-e2e-")))
   try {
     execFileSync("git", ["init", "--quiet", root])
     execFileSync("git", ["-C", root, "config", "user.name", "Verified E2E Test"])
@@ -163,7 +171,7 @@ test("a fresh inventory correlated to its unique execution is accepted", () => {
 
 test("the verified runner applies provenance checks to E2E_BUILD_DIR", () => {
   withTemporaryRoot((root) => {
-    const alternateBuildDir = path.join(root, "output", "e2e-candidate")
+    const alternateBuildDir = path.join(root, "test-results", "e2e-builds", "e2e-candidate")
     mkdirSync(alternateBuildDir, { recursive: true })
     writeFileSync(path.join(alternateBuildDir, "index.html"), "<main>alternate build</main>\n")
     writeBuildProvenance({ cwd: root, buildDir: alternateBuildDir })
@@ -185,6 +193,35 @@ test("the verified runner applies provenance checks to E2E_BUILD_DIR", () => {
     assert.equal(result.verified, true, result.problems.join("\n"))
     assert.equal(result.provenance.buildSourceSha, result.provenance.testSourceSha)
     assert.equal(servedDirectory, alternateBuildDir)
+  })
+})
+
+test("an unsafe output directory blocks before Playwright and preserves protected files", () => {
+  withTemporaryRoot((root) => {
+    const sourceDirectory = path.join(root, "src")
+    mkdirSync(sourceDirectory)
+    const sentinelPath = path.join(sourceDirectory, "sentinel.txt")
+    writeFileSync(sentinelPath, "must remain unchanged\n")
+    let playwrightStarted = false
+
+    const result = runTestVerifiedE2E({
+      cwd: root,
+      outputRoot: path.join(root, "test-results", "runs"),
+      expectedScenarios: SCENARIOS,
+      baseEnv: { E2E_BUILD_DIR: sourceDirectory },
+      spawnImpl: () => {
+        playwrightStarted = true
+        return { status: 0, signal: null }
+      },
+    })
+
+    assert.equal(result.verified, false)
+    assert.equal(playwrightStarted, false)
+    assert.match(result.problems.join("\n"), /E2E output directory gate/)
+    assert.equal(readFileSync(sentinelPath, "utf8"), "must remain unchanged\n")
+    const summary = JSON.parse(readFileSync(result.summaryPath, "utf8"))
+    assert.equal(summary.verified, false)
+    assert.equal(summary.provenance.gate, "FAIL")
   })
 })
 

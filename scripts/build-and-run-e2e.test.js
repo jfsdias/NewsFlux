@@ -1,6 +1,14 @@
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import test from "node:test"
@@ -8,15 +16,20 @@ import test from "node:test"
 import buildAndRunE2E from "./build-and-run-e2e.js"
 
 const withCleanRepository = (action) => {
-  const cwd = mkdtempSync(path.join(tmpdir(), "newsflux-e2e-build-runner-"))
+  const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "newsflux-e2e-build-runner-")))
   try {
     execFileSync("git", ["init", "--quiet", cwd])
     execFileSync("git", ["-C", cwd, "config", "user.name", "E2E Build Test"])
     execFileSync("git", ["-C", cwd, "config", "user.email", "e2e-build@example.invalid"])
     writeFileSync(path.join(cwd, ".gitignore"), "build/\ntest-results/\n")
     writeFileSync(path.join(cwd, "source.js"), "export const built = true\n")
+    for (const directory of ["src", "scripts", "public", "docs", ".github"]) {
+      mkdirSync(path.join(cwd, directory), { recursive: true })
+      writeFileSync(path.join(cwd, directory, "sentinel.txt"), `${directory} sentinel\n`)
+    }
     execFileSync("git", ["-C", cwd, "add", "."])
     execFileSync("git", ["-C", cwd, "commit", "--quiet", "-m", "clean source"])
+    writeFileSync(path.join(cwd, ".git", "sentinel.txt"), "git sentinel\n")
     return action(cwd)
   } finally {
     rmSync(cwd, { recursive: true, force: true })
@@ -150,9 +163,89 @@ test("a checkout changed while the build is running cannot receive a current-SHA
   })
 })
 
+test("unsafe build destinations block before processes and preserve all sentinel files", () => {
+  withCleanRepository((cwd) => {
+    const safeOutputRoot = path.join(cwd, "test-results", "e2e-builds")
+    mkdirSync(safeOutputRoot, { recursive: true })
+
+    const externalDirectory = path.join(path.dirname(cwd), `${path.basename(cwd)}-external`)
+    mkdirSync(externalDirectory, { recursive: true })
+    const externalSentinel = path.join(externalDirectory, "sentinel.txt")
+    writeFileSync(externalSentinel, "external sentinel\n")
+
+    const parentSentinel = path.join(path.dirname(cwd), `${path.basename(cwd)}-parent-sentinel.txt`)
+    writeFileSync(parentSentinel, "parent sentinel\n")
+
+    const symlinkToRoot = path.join(safeOutputRoot, "root-link")
+    const symlinkToExternal = path.join(safeOutputRoot, "external-link")
+    symlinkSync(cwd, symlinkToRoot, "dir")
+    symlinkSync(externalDirectory, symlinkToExternal, "dir")
+
+    const unknownOutput = path.join(safeOutputRoot, "unrecognized")
+    mkdirSync(unknownOutput, { recursive: true })
+    const unknownSentinel = path.join(unknownOutput, "keep-me.txt")
+    writeFileSync(unknownSentinel, "unrecognized output sentinel\n")
+
+    const protectedSentinels = [
+      path.join(cwd, "source.js"),
+      path.join(cwd, "src", "sentinel.txt"),
+      path.join(cwd, "scripts", "sentinel.txt"),
+      path.join(cwd, "public", "sentinel.txt"),
+      path.join(cwd, "docs", "sentinel.txt"),
+      path.join(cwd, ".github", "sentinel.txt"),
+      path.join(cwd, ".git", "sentinel.txt"),
+      externalSentinel,
+      parentSentinel,
+      unknownSentinel,
+    ]
+    const before = new Map(protectedSentinels.map((file) => [file, readFileSync(file)]))
+    const invalidDestinations = [
+      ["repository root", cwd],
+      ["repository parent", path.dirname(cwd)],
+      ["source directory", path.join(cwd, "src")],
+      ["scripts directory", path.join(cwd, "scripts")],
+      ["public directory", path.join(cwd, "public")],
+      ["Git directory", path.join(cwd, ".git")],
+      ["documentation directory", path.join(cwd, "docs")],
+      ["configuration directory", path.join(cwd, ".github")],
+      ["absolute external directory", externalDirectory],
+      ["symlink to repository root", symlinkToRoot],
+      ["symlink to external directory", symlinkToExternal],
+      ["traversal to protected source", "test-results/e2e-builds/../../src"],
+      ["output containing unrecognized files", unknownOutput],
+    ]
+
+    try {
+      for (const [label, destination] of invalidDestinations) {
+        let processStarts = 0
+        const result = buildAndRunE2E({
+          cwd,
+          env: { E2E_BUILD_DIR: destination },
+          spawnImpl: () => {
+            processStarts += 1
+            return { status: 1, signal: null }
+          },
+        })
+
+        assert.equal(result.exitCode, 1, label)
+        assert.equal(result.stage, "output-directory", label)
+        assert.equal(processStarts, 0, label)
+        assert.match(result.error, /output directory|build directory/i, label)
+        for (const [file, contents] of before) {
+          assert.deepEqual(readFileSync(file), contents, `${label}: ${file} changed`)
+        }
+      }
+    } finally {
+      rmSync(externalDirectory, { recursive: true, force: true })
+      rmSync(parentSentinel, { force: true })
+    }
+  })
+})
+
 test("an alternate E2E_BUILD_DIR is built and receipted under the same source contract", () => {
   withCleanRepository((cwd) => {
-    const alternate = path.join(cwd, "output", "candidate")
+    const alternate = path.join(cwd, "test-results", "e2e-builds", "candidate")
+    mkdirSync(alternate, { recursive: true })
     const calls = []
     const result = buildAndRunE2E({
       cwd,
@@ -177,5 +270,58 @@ test("an alternate E2E_BUILD_DIR is built and receipted under the same source co
     assert.deepEqual(calls[1].args.slice(2), ["build", "--emptyOutDir", "--outDir", alternate])
     assert.deepEqual(calls[2].args, ["scripts/run-e2e-stability.js"])
     assert.equal(calls[2].options.env.E2E_BUILD_DIR, alternate)
+
+    const repeatCalls = []
+    const repeated = buildAndRunE2E({
+      cwd,
+      env: { E2E_BUILD_DIR: alternate },
+      mode: "full",
+      spawnImpl: (command, args, options) => {
+        repeatCalls.push({ command, args, options })
+        if (args.includes("vite")) {
+          buildFixture(cwd, alternate)
+        }
+        return successfulProcess
+      },
+      nodeCommand: "node-test-double",
+    })
+    assert.equal(repeated.exitCode, 0)
+    assert.equal(repeatCalls.length, 3)
+    assert.deepEqual(repeatCalls[2].args, ["scripts/run-verified-e2e.js"])
+  })
+})
+
+test("modified files in a previously receipted build block replacement before any process", () => {
+  withCleanRepository((cwd) => {
+    const initialBuild = buildAndRunE2E({
+      cwd,
+      env: {},
+      spawnImpl: (command) => {
+        if (command === "pnpm") {
+          buildFixture(cwd)
+        }
+        return successfulProcess
+      },
+      nodeCommand: "node-test-double",
+    })
+    assert.equal(initialBuild.exitCode, 0)
+
+    const sentinel = path.join(cwd, "build", "unexpected-user-data.txt")
+    writeFileSync(sentinel, "do not clear\n")
+    let processStarts = 0
+    const result = buildAndRunE2E({
+      cwd,
+      env: {},
+      spawnImpl: () => {
+        processStarts += 1
+        return successfulProcess
+      },
+    })
+
+    assert.equal(result.exitCode, 1)
+    assert.equal(result.stage, "output-directory")
+    assert.equal(processStarts, 0)
+    assert.equal(readFileSync(sentinel, "utf8"), "do not clear\n")
+    assert.match(result.error, /output directory gate/i)
   })
 })
