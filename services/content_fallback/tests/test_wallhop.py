@@ -18,7 +18,7 @@ class FakeTransport:
         self.calls: list[tuple[str, str]] = []
 
     def resolve(self, host: str, _port: int, _allow_private: bool = False) -> str:
-        if host == "127.0.0.1":
+        if host in {"127.0.0.1", "10.20.30.40"}:
             raise UnsafeURL("URL resolves to a non-public address")
         return "93.184.216.34"
 
@@ -40,7 +40,52 @@ class WallHopProviderTests(unittest.TestCase):
         result = provider.recover(entry(), original)
         self.assertEqual(result.assessment.state, "SUFFICIENT")
         self.assertEqual(len(transport.calls), 1)
-        self.assertIn("https://wallhop.io/raw/https%3A%2F%2Fwww.nytimes.com%2F2026%2F11%2F07%2Fexample-story.html", transport.calls[0][0])
+        self.assertEqual(
+            transport.calls[0][0],
+            "https://wallhop.io/raw/https://www.nytimes.com/2026/11/07/example-story.html",
+        )
+
+    def test_wallhop_url_uses_documented_raw_https_format(self) -> None:
+        self.assertEqual(
+            WallHopProvider._wallhop_url("https://example.com/article"),
+            "https://wallhop.io/raw/https://example.com/article",
+        )
+
+    def test_wallhop_url_keeps_common_query_parameters_in_the_source_url(self) -> None:
+        source = "https://example.com/article?id=42&utm_source=feed&view=full"
+        self.assertEqual(
+            WallHopProvider._wallhop_url(source),
+            "https://wallhop.io/raw/https://example.com/article?id=42&utm_source=feed&view=full",
+        )
+
+    def test_wallhop_url_keeps_existing_escapes_and_fragment_is_removed(self) -> None:
+        source = "https://example.com/a%2Fb?next=%3Fpage%3D2&label=a%26b#section"
+        sanitized = WallHopProvider._source_url(source)
+        self.assertEqual(sanitized, "https://example.com/a%2Fb?next=%3Fpage%3D2&label=a%26b")
+        self.assertEqual(
+            WallHopProvider._wallhop_url(sanitized),
+            "https://wallhop.io/raw/https://example.com/a%2Fb?next=%3Fpage%3D2&label=a%26b",
+        )
+
+    def test_url_credentials_are_rejected_before_wallhop_request(self) -> None:
+        transport = FakeTransport(wallhop_response(full_article_html()))
+        provider = WallHopProvider(http=transport.client(), sleep=lambda _seconds: None)
+        protected = entry(url="https://reader:secret@example.com/article")
+        with self.assertRaises(UnsafeURL):
+            provider.recover(protected, assess_content("Research Update", "<p>Short feed teaser.</p>"))
+        self.assertEqual(transport.calls, [])
+
+    def test_private_and_loopback_source_destinations_are_blocked_before_wallhop(self) -> None:
+        for address in ("127.0.0.1", "10.20.30.40"):
+            with self.subTest(address=address):
+                transport = FakeTransport(wallhop_response(full_article_html()))
+                provider = WallHopProvider(http=transport.client(), sleep=lambda _seconds: None)
+                with self.assertRaises(UnsafeURL):
+                    provider.recover(
+                        entry(url=f"http://{address}/article"),
+                        assess_content("Research Update", "<p>Short feed teaser.</p>"),
+                    )
+                self.assertEqual(transport.calls, [])
 
     def test_wallhop_partial_text_preserves_original(self) -> None:
         partial = "<article><p>" + ("The report includes a few early observations. " * 20) + "</p></article>"

@@ -113,6 +113,61 @@ class PinnedHTTPClientTests(unittest.TestCase):
         self.assertEqual(requests, [("https://wallhop.io/raw/encoded", "93.184.216.34")])
         getaddrinfo.assert_called_once_with("wallhop.io", 443, type=socket.SOCK_STREAM)
 
+    def test_raw_wallhop_url_query_and_percent_escapes_reach_http_request_unchanged(self) -> None:
+        request_targets: list[tuple[str, str]] = []
+
+        class FakeSocket:
+            def settimeout(self, _timeout):
+                pass
+
+            def close(self):
+                pass
+
+        class FakeResponse:
+            status = 200
+
+            def read(self, _limit):
+                return b"ok"
+
+            def getheaders(self):
+                return [("content-type", "text/plain")]
+
+        class FakeConnection:
+            def __init__(self, _host, *, port, timeout):
+                self.port = port
+                self.timeout = timeout
+                self.sock = None
+
+            def request(self, method, target, *, headers):
+                request_targets.append((method, target))
+
+            def getresponse(self):
+                return FakeResponse()
+
+            def close(self):
+                pass
+
+        class FakeSSLContext:
+            def wrap_socket(self, sock, *, server_hostname):
+                self.server_hostname = server_hostname
+                return sock
+
+        source = "https://example.com/a%2Fb?next=%3Fpage%3D2&label=a%26b"
+        url = "https://wallhop.io/raw/" + source
+        with (
+            patch("socket.getaddrinfo", return_value=[address_info("93.184.216.34", 443)]),
+            patch("socket.create_connection", return_value=FakeSocket()),
+            patch("ssl.create_default_context", return_value=FakeSSLContext()),
+            patch("http.client.HTTPSConnection", FakeConnection),
+        ):
+            response = PinnedHTTPClient().get(url, max_redirects=0)
+
+        self.assertEqual(response.body, b"ok")
+        self.assertEqual(
+            request_targets,
+            [("GET", "/raw/https://example.com/a%2Fb?next=%3Fpage%3D2&label=a%26b")],
+        )
+
     def test_default_dns_resolver_repins_each_redirect_with_mocked_transport(self) -> None:
         requests: list[tuple[str, str]] = []
         responses = [

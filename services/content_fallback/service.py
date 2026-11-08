@@ -9,7 +9,7 @@ import time
 from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from urllib.parse import parse_qsl, quote, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlsplit, urlunsplit
 
 from services.content_fallback.content import ContentAssessment, assess_content, passes_recovery
 from services.content_fallback.http_client import (
@@ -82,9 +82,7 @@ class WallHopProvider:
 
     @staticmethod
     def _wallhop_url(source_url: str) -> str:
-        # Keep the source URL inside one encoded path segment so its query cannot become
-        # query parameters on WallHop itself.
-        return "https://wallhop.io/raw/" + quote(source_url, safe="")
+        return "https://wallhop.io/raw/" + source_url
 
     def recover(self, entry: EntrySnapshot, original: ContentAssessment) -> ProviderResult:
         source_url = self._source_url(entry.url)
