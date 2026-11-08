@@ -5,6 +5,7 @@ import { selectInitialHighlightIds } from "../../src/utils/home-editorial-projec
 import {
   appendHomeSessionEntries,
   createHomeEditorialSession,
+  hasHomeEditorialCompositionChanged,
   projectHomeSession,
   transitionHomeSession,
 } from "../../src/utils/home-editorial-session.js" // eslint-disable-line import/no-relative-parent-imports -- session metrics exercise the existing production contract.
@@ -12,13 +13,19 @@ import {
   HOME_PERSONALIZATION_FRESHNESS_WINDOW,
   HOME_STARRED_PROFILE_LIMIT,
 } from "../../src/utils/home-personalization-constants.js" // eslint-disable-line import/no-relative-parent-imports -- record production freshness and profile bounds.
+import {
+  commitHomePersonalizationSnapshot,
+  createHomePersonalizationGeneration,
+  failHomePersonalizationProfile,
+  resolveHomePersonalizationProfile,
+} from "../../src/utils/home-personalization-generation.js" // eslint-disable-line import/no-relative-parent-imports -- reproduce the production post-PR191 commit/disclosure contract.
 // eslint-disable-next-line import/no-relative-parent-imports -- build synthetic profiles with the actual production helper.
 import { createHomePersonalizationProfile } from "../../src/utils/home-personalization-profile.js"
 // eslint-disable-next-line import/no-relative-parent-imports -- compare the actual production V1 candidate with Phase 2C.
 import { projectHomePersonalization } from "../../src/utils/home-personalization-projection.js"
 
 export const EVALUATION_TOP_N = 12
-const EVALUATION_COMPOSITION_SAMPLES = 101
+export const EVALUATION_COMPOSITION_SAMPLES = 101
 const EVALUATION_EPOCH = Date.UTC(2026, 10, 7, 12, 0, 0)
 
 const entry = ({
@@ -241,7 +248,37 @@ const calculateAgeDisplacement = (entries, baselineIds, personalizedIds) => {
   }
 }
 
-const runComposition = (entries, profile, useV1) => {
+const makeGenerationContext = () => ({
+  generationId: 1,
+  requestKey: "synthetic-home-eval",
+  canonicalRequestKey: "synthetic-home-eval-canonical",
+  identityKey: "synthetic-home-eval-identity",
+  sessionRevision: 7,
+})
+
+const commitCandidateProjection = ({
+  profileState,
+  profile,
+  baselineProjection,
+  personalizedProjection,
+  disclosureVisible,
+}) => {
+  const context = makeGenerationContext()
+  let generation = createHomePersonalizationGeneration(context)
+  generation =
+    profileState === "ready"
+      ? resolveHomePersonalizationProfile(generation, { ...context, profile })
+      : failHomePersonalizationProfile(generation, context)
+
+  return commitHomePersonalizationSnapshot(generation, {
+    ...context,
+    baselineProjection,
+    personalizedProjection,
+    disclosureVisible,
+  }).generation
+}
+
+const runComposition = (entries, profile, useV1, profileState = "ready") => {
   const baselineSession = makeSession(entries)
   const baselineRecentIds = baselineSession.recentIds
   const baselineHighlights = baselineSession.highlightIds
@@ -252,7 +289,8 @@ const runComposition = (entries, profile, useV1) => {
       baselineComposition,
       personalizedProjection: null,
       v1Composition: baselineComposition,
-      disclosure: false,
+      projectionApplied: false,
+      disclosureVisible: false,
     }
   }
 
@@ -267,12 +305,27 @@ const runComposition = (entries, profile, useV1) => {
     highlightIds: personalizedProjection.highlightIds,
     recentIds: personalizedProjection.recentIds,
   })
+  const candidateDisclosureVisible = hasHomeEditorialCompositionChanged(
+    baselineComposition.sections,
+    v1Composition.sections,
+  )
+  const committedGeneration = commitCandidateProjection({
+    profileState,
+    profile,
+    baselineProjection: baselineComposition.sections,
+    personalizedProjection,
+    disclosureVisible: candidateDisclosureVisible,
+  })
+  const committedComposition = committedGeneration.projectionApplied
+    ? compose(entries, committedGeneration.projection)
+    : baselineComposition
   return {
     baselineSession,
     baselineComposition,
     personalizedProjection,
-    v1Composition,
-    disclosure: personalizedProjection.personalizationApplied,
+    v1Composition: committedComposition,
+    projectionApplied: committedGeneration.projectionApplied,
+    disclosureVisible: committedGeneration.disclosureVisible,
   }
 }
 
@@ -291,13 +344,22 @@ const composeForScenario = (scenario) => {
     })
   }
 
-  const v1 = runComposition(entries, profile, useV1Projection)
+  const v1 = runComposition(entries, profile, useV1Projection, scenario.profileState ?? "ready")
   const baselineSummary = summarizeComposition(entries, baseline.baselineComposition)
   const v1Summary = summarizeComposition(entries, v1.v1Composition)
   const finalPresentationChanged = !allEqual(
     baseline.baselineComposition.presentationSignature,
     v1.v1Composition.presentationSignature,
   )
+  const candidateFinalPresentationChanged = v1.personalizedProjection
+    ? !allEqual(
+        baseline.baselineComposition.presentationSignature,
+        compose(entries, {
+          highlightIds: v1.personalizedProjection.highlightIds,
+          recentIds: v1.personalizedProjection.recentIds,
+        }).presentationSignature,
+      )
+    : false
   const personalizedOrder = v1.personalizedProjection
     ? [
         ...v1.personalizedProjection.highlightIds.filter((id, index) => index > 0 && id != null),
@@ -329,18 +391,20 @@ const composeForScenario = (scenario) => {
     comparison: {
       primaryUnchanged: baselineSummary.primaryId === v1Summary.primaryId,
       finalPresentationChanged,
+      candidateFinalPresentationChanged,
       intermediateOrderChanged: !allEqual(baselineOrder, personalizedOrder),
-      personalizationApplied: v1.disclosure,
-      disclosureMatchesFinalComposition: v1.disclosure === finalPresentationChanged,
-      disclosureMismatch: v1.disclosure && !finalPresentationChanged,
+      projectionApplied: v1.projectionApplied,
+      disclosureVisible: v1.disclosureVisible,
+      disclosureMatchesFinalComposition: v1.disclosureVisible === finalPresentationChanged,
+      disclosureMismatch: v1.disclosureVisible !== finalPresentationChanged,
       topNDelta,
       measuredTopNBenefit,
-      disclosureCase: v1.disclosure
+      disclosureCase: v1.projectionApplied
         ? finalPresentationChanged
-          ? "APPLIED_WITH_FINAL_PRESENTATION_CHANGE"
-          : "APPLIED_WITHOUT_FINAL_PRESENTATION_CHANGE"
+          ? "APPLIED_WITH_VISIBLE_FINAL_CHANGE"
+          : "PROJECTION_APPLIED_BUT_FINAL_COMPOSITION_UNCHANGED"
         : finalPresentationChanged
-          ? "NO_FLAG_WITH_FINAL_PRESENTATION_CHANGE"
+          ? "NO_PROJECTION_WITH_FINAL_PRESENTATION_CHANGE"
           : "NO_PERSONALIZATION_CHANGE",
       categoryLaneMembershipChanged: !allEqual(
         baselineSummary.categoryLanes.map(({ categoryId, entryIds }) => [categoryId, entryIds]),
@@ -576,23 +640,83 @@ export const EVALUATION_SCENARIOS = [
 
 const scenarioResult = (scenario) => evaluateScenario(scenario)
 
-export const runEvaluationReport = () => ({
-  metadata: {
-    mainSha: "430026000f2fe8c7f4e823e17ab39b38254198bf",
-    baseline: "Phase 2C projection composed through current Home category/session helpers",
-    candidate: "Current Phase 2D V1 personalization projection composed through the same helpers",
-    topN: EVALUATION_TOP_N,
-    topNDefinition:
-      "first 12 article IDs in final visual order (up to 3 Highlights + 9 category-lane slots)",
-    compositionSamples: EVALUATION_COMPOSITION_SAMPLES,
-    freshnessWindowMs: HOME_PERSONALIZATION_FRESHNESS_WINDOW,
-    starredProfileLimit: HOME_STARRED_PROFILE_LIMIT,
-    data: "synthetic fixtures only; no Miniflux access",
-    caveat:
-      "latency measures local projection/composition only; excludes network and browser rendering",
+const summarizeDirectStarReevaluation = (result) => ({
+  scenario: result.name,
+  primaryHighlight: {
+    baselineId: result.baseline.primaryId,
+    candidateId: result.v1.primaryId,
+    unchanged: result.comparison.primaryUnchanged,
   },
-  scenarios: EVALUATION_SCENARIOS.map((scenario) => scenarioResult(scenario)),
+  secondaryHighlightIds: {
+    baseline: result.baseline.highlightIds.slice(1),
+    candidate: result.v1.highlightIds.slice(1),
+  },
+  visibleArticleIds: {
+    baseline: result.baseline.visibleIds,
+    candidate: result.v1.visibleIds,
+  },
+  coverage: {
+    eligible: result.v1.eligibleCount,
+    visible: result.v1.visibleCount,
+    missingIds: result.v1.missingIds,
+    extraIds: result.v1.extraIds,
+    noDuplicateIds: result.comparison.noDuplicateArticleIds,
+  },
+  topN: {
+    distinctSources: {
+      baseline: result.baseline.topN.distinctSources,
+      candidate: result.v1.topN.distinctSources,
+    },
+    distinctCategories: {
+      baseline: result.baseline.topN.distinctCategories,
+      candidate: result.v1.topN.distinctCategories,
+    },
+    adjacentSameSourcePairs: {
+      baseline: result.baseline.topN.consecutiveSameSourcePairs,
+      candidate: result.v1.topN.consecutiveSameSourcePairs,
+    },
+    longestSameSourceRun: {
+      baseline: result.baseline.topN.longestSameSourceRun,
+      candidate: result.v1.topN.longestSameSourceRun,
+    },
+  },
+  promotedArticleAgeDisplacement: result.comparison.ageDisplacement,
+  readerOrderParity: result.comparison.readerOrderParity,
+  disclosureVisible: result.comparison.disclosureVisible,
+  classification: "SYNTHETIC_OBSERVATION_NO_DIVERSITY_GAIN_MORE_REPETITION",
 })
+
+export const runEvaluationReport = () => {
+  const scenarios = EVALUATION_SCENARIOS.map((scenario) => scenarioResult(scenario))
+  const directStar = scenarios.find(
+    ({ name }) => name === "secondary_highlight_changed_by_current_star",
+  )
+
+  return {
+    metadata: {
+      mainSha: "17135332f2948a3739b285cbcff112ea07f0996e",
+      priorPrHead: "74a6f0ffc5681d0520c562e492eed9fb94847e15",
+      historicalPre191MainSha: "430026000f2fe8c7f4e823e17ab39b38254198bf",
+      disclosureContract: "PR191 production helpers compare the committed final Home composition",
+      baseline: "Phase 2C projection composed through current Home category/session helpers",
+      candidate:
+        "Current Phase 2D V1 personalization projection composed through the same helpers and PR191 generation commit contract",
+      topN: EVALUATION_TOP_N,
+      topNDefinition:
+        "first 12 article IDs in final visual order (up to 3 Highlights + 9 category-lane slots)",
+      scenarioCount: EVALUATION_SCENARIOS.length,
+      compositionSamples: EVALUATION_COMPOSITION_SAMPLES,
+      freshnessWindowMs: HOME_PERSONALIZATION_FRESHNESS_WINDOW,
+      starredProfileLimit: HOME_STARRED_PROFILE_LIMIT,
+      data: "deterministic synthetic fixtures only; no Miniflux access",
+      caveat:
+        "latency measures local projection/composition and PR191 disclosure helpers only; excludes network and browser rendering",
+    },
+    scenarios,
+    directStarReevaluation: summarizeDirectStarReevaluation(directStar),
+    sessionStability: evaluateSessionStability(),
+  }
+}
 
 export const evaluateSessionStability = () => {
   const initialEntries = makeEntries([
@@ -663,6 +787,44 @@ export const evaluateSessionStability = () => {
       categoryLanes: projection.categoryLanes,
     }) === frozenSignature
 
+  const fallbackScenarios = [
+    "invalid_profile_fallback",
+    "late_profile_fallback",
+    "stale_session_profile_fallback",
+  ].map((name) =>
+    composeForScenario(EVALUATION_SCENARIOS.find((scenario) => scenario.name === name)),
+  )
+  const categoryIdentityScenario = composeForScenario(
+    EVALUATION_SCENARIOS.find(({ name }) => name === "same_category_title_different_ids"),
+  )
+  const freshnessScenario = composeForScenario(
+    EVALUATION_SCENARIOS.find(({ name }) => name === "exact_60_minute_freshness_boundary"),
+  )
+  const generationContext = makeGenerationContext()
+  const pendingGeneration = createHomePersonalizationGeneration(generationContext)
+  const staleResolvedGeneration = resolveHomePersonalizationProfile(pendingGeneration, {
+    ...generationContext,
+    sessionRevision: generationContext.sessionRevision + 1,
+    profile: { sourceWeights: {} },
+  })
+  const staleCommit = commitHomePersonalizationSnapshot(pendingGeneration, {
+    ...generationContext,
+    canonicalRequestKey: `${generationContext.canonicalRequestKey}-stale`,
+    baselineProjection: initial,
+    personalizedProjection: initialProjection,
+    disclosureVisible: true,
+  })
+  const committedWithoutProfile = commitHomePersonalizationSnapshot(pendingGeneration, {
+    ...generationContext,
+    baselineProjection: initial,
+    personalizedProjection: initialProjection,
+    disclosureVisible: false,
+  })
+  const lateResolvedGeneration = resolveHomePersonalizationProfile(
+    committedWithoutProfile.generation,
+    { ...generationContext, profile: { sourceWeights: {} } },
+  )
+
   return {
     loadMoreAppendsOnlyToLatest:
       afterLoadMore.latestIds.includes(appendedEntry.id) &&
@@ -675,6 +837,15 @@ export const evaluateSessionStability = () => {
     starDoesNotRecompose: frozen(afterStar),
     unstarDoesNotRecompose: frozen(afterUnstar),
     lateProfileDoesNotRecompose: frozen(projectHomeSession(session, initialEntries)),
+    invalidProfileFallsBack:
+      allEqual(fallbackScenarios[0].v1.visibleIds, fallbackScenarios[0].baseline.visibleIds) &&
+      fallbackScenarios[0].comparison.projectionApplied === false,
+    lateProfileFallsBack:
+      allEqual(fallbackScenarios[1].v1.visibleIds, fallbackScenarios[1].baseline.visibleIds) &&
+      fallbackScenarios[1].comparison.projectionApplied === false,
+    staleSessionProfileFallsBack:
+      allEqual(fallbackScenarios[2].v1.visibleIds, fallbackScenarios[2].baseline.visibleIds) &&
+      fallbackScenarios[2].comparison.projectionApplied === false,
     staleRevisionIgnored:
       transitionHomeSession(session, {
         sessionRevision: session.sessionRevision + 1,
@@ -683,5 +854,11 @@ export const evaluateSessionStability = () => {
         entryIds: [initialEntries[0].id],
         previousStatuses: { [initialEntries[0].id]: "unread" },
       }) === session,
+    staleGenerationIgnored: staleResolvedGeneration === pendingGeneration && !staleCommit.committed,
+    lateProfileAfterCommitIgnored: lateResolvedGeneration === committedWithoutProfile.generation,
+    categoryIdentityPreserved: categoryIdentityScenario.comparison.categoryIdentityPass,
+    freshnessBoundaryPreserved:
+      freshnessScenario.v1.highlightIds.includes(4003) &&
+      !freshnessScenario.v1.highlightIds.includes(4004),
   }
 }
