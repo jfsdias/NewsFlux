@@ -22,6 +22,7 @@ import {
   appendHomeSessionEntries,
   createHomeEditorialSession,
   createHomeSessionKey,
+  hasHomeEditorialCompositionChanged,
   projectHomeSession,
   transitionHomeSession,
 } from "@/utils/home-editorial-session"
@@ -186,10 +187,22 @@ const HomeEditorial = ({
               freshnessWindow: HOME_PERSONALIZATION_FRESHNESS_WINDOW,
             })
           : baselineProjection
+      const personalizedSession = createHomeEditorialSession({
+        requestKey,
+        sessionRevision: generation.sessionRevision,
+        entries: content.entries,
+        initialProjection: personalizedProjection,
+      })
+      const personalizedFinalProjection = projectHomeSession(personalizedSession, content.entries)
+      const disclosureVisible = hasHomeEditorialCompositionChanged(
+        baselineProjection,
+        personalizedFinalProjection,
+      )
       const committed = commitHomePersonalizationSnapshot(generationRef.current, {
         ...currentContext(generation),
         baselineProjection,
         personalizedProjection,
+        disclosureVisible,
       })
       if (!committed.committed) {
         return
@@ -202,13 +215,14 @@ const HomeEditorial = ({
           requestKey,
           sessionRevision: generation.sessionRevision,
           entries: content.entries,
-          initialProjection: committed.generation.personalizationApplied
+          initialProjection: committed.generation.projectionApplied
             ? committed.projection
             : undefined,
+          projectionApplied: committed.generation.projectionApplied,
+          disclosureVisible: committed.generation.disclosureVisible,
           scrollRoot: entryListRef.current?.contentWrapperEl ?? entryListRef.current?.el ?? null,
         }),
         snapshotRevision: content.articleListSnapshotRevision,
-        personalizationApplied: committed.generation.personalizationApplied,
       })
     }
 
@@ -429,10 +443,10 @@ const HomeEditorial = ({
             <>
               <HomeHighlights
                 articleActivation={articleActivation}
+                disclosureVisible={Boolean(activeSession.disclosureVisible)}
                 entries={entries}
                 highlightIds={projection.highlightIds}
                 observeRead={observeRead}
-                personalizationApplied={Boolean(activeSession.personalizationApplied)}
               />
               <HomeCategorySections
                 articleActivation={articleActivation}

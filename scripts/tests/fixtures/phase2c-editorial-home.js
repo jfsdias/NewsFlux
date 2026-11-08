@@ -94,6 +94,27 @@ export const personalizationFixtures = {
     personalizationEntry(603, -20, 3, 3),
     { ...personalizationEntry(604, -30, 4, 4), starred: true },
   ],
+  disclosureInvisibleHome: Array.from({ length: 12 }, (_, index) => {
+    const categoryId = (index % 3) + 701
+    return personalizationEntry(7001 + index, -index, categoryId, categoryId)
+  }),
+  disclosureInvisibleProfile: Array.from({ length: 3 }, (_, index) => ({
+    ...personalizationEntry(9001 + index, -120 - index, 701, 701),
+    status: "read",
+    starred: true,
+  })),
+  disclosureVisibleCategoryHome: [
+    personalizationEntry(7001, 0, 1, 1),
+    personalizationEntry(7002, -120, 2, 2),
+    personalizationEntry(7003, -240, 3, 3),
+    ...Array.from({ length: 12 }, (_, index) => {
+      const categoryId = (index % 3) + 701
+      return {
+        ...personalizationEntry(7010 + index, -360 - index * 5, categoryId, categoryId),
+        starred: index === 9,
+      }
+    }),
+  ],
 }
 
 const categoryLaneCategories = [
@@ -195,6 +216,9 @@ export const phase2cEditorialHomeMatrix = {
     "HOME_EMPTY_RECENT",
     "HOME_LOADING",
     "HOME_REFRESH_ERROR_WITH_CONTENT",
+    "HARNESS_THEME_PRESENTATION",
+    "THEME_SWITCH_RUNTIME",
+    "NO_THEME_LEAKAGE",
     "HOME_LIGHT",
     "HOME_DARK",
     "HOME_IDENTITY_FAILURE_RECOVERY",

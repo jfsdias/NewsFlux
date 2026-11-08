@@ -1,9 +1,12 @@
 import { spawnSync } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { createRequire } from "node:module"
 import path from "node:path"
 import process from "node:process"
 import { fileURLToPath } from "node:url"
+
+import { chromium } from "@playwright/test"
 
 // eslint-disable-next-line import/no-relative-parent-imports -- E2E validation shares the frozen scenario contract through package imports.
 import { EXPECTED_SCENARIOS } from "#e2e/scenario-contract.js"
@@ -15,15 +18,43 @@ import {
   EXPECTED_INVENTORY_REPORTER_PATH,
   validateInventoryReporterBinding,
 } from "./e2e-config-contract.js"
+import {
+  resolveBuildDirectory,
+  sanitizeE2EDiagnostic,
+  SERVER_PROVENANCE_FILENAME,
+  verifyBuildProvenance,
+  verifyServerProvenance,
+} from "./e2e-provenance.js"
 import { validateInventory } from "./e2e-stability.js"
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 
-const sanitizeDiagnostic = (value) =>
-  String(value)
-    .replaceAll(/\bBearer\s+\S+/gi, "Bearer [REDACTED]")
-    .replaceAll(/((?:token|password|api[_-]?key|authorization)=)[^&\s]+/gi, "$1[REDACTED]")
-    .replaceAll(/(authorization:\s*)[^\r\n]+/gi, "$1[REDACTED]")
+const collectRuntimeMetadata = ({ cwd, command = "pnpm" } = {}) => {
+  const require = createRequire(import.meta.url)
+  const playwrightPackagePath = require.resolve("@playwright/test/package.json")
+  const playwrightVersion = JSON.parse(readFileSync(playwrightPackagePath, "utf8")).version
+  const pnpmResult = spawnSync(command, ["--version"], {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+    timeout: 10_000,
+  })
+  const chromiumPath = chromium.executablePath()
+  const chromiumResult = spawnSync(chromiumPath, ["--version"], {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+    timeout: 10_000,
+  })
+
+  return {
+    nodeVersion: process.version,
+    pnpmVersion: pnpmResult?.status === 0 ? pnpmResult.stdout.trim() : null,
+    playwrightVersion,
+    chromiumVersionOrRevision: chromiumResult?.status === 0 ? chromiumResult.stdout.trim() : null,
+    platform: process.platform,
+  }
+}
 
 const parseInventory = (inventoryPath) => {
   if (!existsSync(inventoryPath)) {
@@ -54,35 +85,82 @@ const runVerifiedE2E = ({
   baseEnv = process.env,
   config = playwrightConfig,
   reporterPath = EXPECTED_INVENTORY_REPORTER_PATH,
+  runtimeMetadataImpl = collectRuntimeMetadata,
 } = {}) => {
+  const runId = randomUUID()
+  let buildDirectory
+  let buildDirectoryProblem
+  try {
+    buildDirectory = resolveBuildDirectory(cwd, baseEnv.E2E_BUILD_DIR)
+  } catch (error) {
+    buildDirectoryProblem = sanitizeE2EDiagnostic(error.message)
+  }
+
   mkdirSync(outputRoot, { recursive: true })
   const outputDirectory = mkdtempSync(path.join(outputRoot, "run-"))
   const inventoryPath = path.join(outputDirectory, "inventory.json")
-  const runId = randomUUID()
+  const serverProvenancePath = path.join(outputDirectory, SERVER_PROVENANCE_FILENAME)
+  const summaryPath = path.join(outputDirectory, "summary.json")
   const problems = validateInventoryReporterBinding(config, reporterPath)
+  const preflight = buildDirectoryProblem
+    ? { valid: false, problems: [buildDirectoryProblem], sourceSnapshot: null, provenance: null }
+    : verifyBuildProvenance({ cwd, buildDir: buildDirectory })
+  problems.push(...preflight.problems.map((problem) => `provenance preflight: ${problem}`))
+  const provenanceProblems = [...preflight.problems]
+  let runtimeMetadata
+  if (preflight.valid) {
+    try {
+      runtimeMetadata = runtimeMetadataImpl({ cwd, command })
+    } catch (error) {
+      const problem = `runtime metadata could not be collected: ${sanitizeE2EDiagnostic(error.message)}`
+      problems.push(problem)
+      provenanceProblems.push(problem)
+    }
+    for (const field of [
+      "nodeVersion",
+      "pnpmVersion",
+      "playwrightVersion",
+      "chromiumVersionOrRevision",
+      "platform",
+    ]) {
+      if (typeof runtimeMetadata?.[field] !== "string" || runtimeMetadata[field].trim() === "") {
+        const problem = `runtime metadata is missing ${field}`
+        problems.push(problem)
+        provenanceProblems.push(problem)
+      }
+    }
+  }
   let result
   let spawnError
+  let playwrightStarted = false
 
   if (problems.length === 0) {
     try {
+      playwrightStarted = true
       result = spawnImpl(command, args, {
         cwd,
         stdio: "inherit",
         env: {
           ...baseEnv,
+          E2E_BUILD_DIR: buildDirectory,
           E2E_INVENTORY_PATH: inventoryPath,
           E2E_RUN_ID: runId,
           E2E_OUTPUT_DIR: path.join(outputDirectory, "artifacts"),
+          E2E_SERVER_PROVENANCE_PATH: serverProvenancePath,
+          E2E_EXPECTED_BUILD_SOURCE_SHA: preflight.provenance.sourceSha,
+          E2E_EXPECTED_BUILD_INTEGRITY_DIGEST: preflight.provenance.buildIntegrityDigest,
+          E2E_EXPECTED_BUILD_FILE_COUNT: String(preflight.provenance.buildFileCount),
+          NEWSFLUX_E2E_PROVENANCE_REQUIRED: "1",
         },
       })
       if (result?.error) {
-        spawnError = result.error.message
+        spawnError = sanitizeE2EDiagnostic(result.error.message)
       }
       if (!result || typeof result !== "object") {
         problems.push("Playwright process invocation returned no result")
       }
     } catch (error) {
-      spawnError = error.message
+      spawnError = sanitizeE2EDiagnostic(error.message)
     }
   }
 
@@ -98,12 +176,40 @@ const runVerifiedE2E = ({
     problems.push(`Playwright process ended by signal ${signal}`)
   }
 
+  let finalBuildValidation
+  let serverValidation
+  if (playwrightStarted) {
+    finalBuildValidation = verifyBuildProvenance({ cwd, buildDir: buildDirectory })
+    const postflightProblems = finalBuildValidation.problems.map(
+      (problem) => `provenance postflight: ${problem}`,
+    )
+    problems.push(...postflightProblems)
+    provenanceProblems.push(...postflightProblems)
+    if (
+      finalBuildValidation.provenance?.sourceSha !== preflight.provenance?.sourceSha ||
+      finalBuildValidation.provenance?.buildIntegrityDigest !==
+        preflight.provenance?.buildIntegrityDigest ||
+      finalBuildValidation.provenance?.buildFileCount !== preflight.provenance?.buildFileCount
+    ) {
+      const problem = "Build provenance changed while the E2E invocation was running"
+      problems.push(problem)
+      provenanceProblems.push(problem)
+    }
+    serverValidation = verifyServerProvenance({
+      serverReceiptPath: serverProvenancePath,
+      runId,
+      provenance: preflight.provenance,
+    })
+    problems.push(...serverValidation.problems)
+    provenanceProblems.push(...serverValidation.problems)
+  }
+
   let inventory
-  if (problems.length === 0 || existsSync(inventoryPath)) {
+  if (playwrightStarted && (problems.length === 0 || existsSync(inventoryPath))) {
     const parsed = parseInventory(inventoryPath)
     inventory = parsed.inventory
     problems.push(...parsed.problems)
-  } else if (!existsSync(inventoryPath)) {
+  } else if (playwrightStarted && !existsSync(inventoryPath)) {
     problems.push("current invocation did not produce its inventory artifact")
   }
 
@@ -112,12 +218,47 @@ const runVerifiedE2E = ({
     problems.push(...validation.problems)
   }
 
+  const provenance = {
+    gate:
+      preflight.valid &&
+      runtimeMetadata !== undefined &&
+      playwrightStarted &&
+      finalBuildValidation?.valid === true &&
+      serverValidation?.valid === true
+        ? "PASS"
+        : "FAIL",
+    runId,
+    sourceSha: preflight.sourceSnapshot?.sha ?? null,
+    sourceTreeSha: preflight.sourceSnapshot?.treeSha ?? null,
+    sourceDirtyStateBefore: preflight.sourceSnapshot?.dirtyState ?? null,
+    sourceDirtyPathCountBefore: preflight.sourceSnapshot?.dirtyPathCount ?? null,
+    sourceDirtyStateAfter:
+      finalBuildValidation?.sourceSnapshot?.dirtyState ??
+      preflight.sourceSnapshot?.dirtyState ??
+      null,
+    testSourceSha: preflight.sourceSnapshot?.sha ?? null,
+    testSourceDirtyState: preflight.sourceSnapshot?.dirtyState ?? null,
+    buildSourceSha: preflight.provenance?.sourceSha ?? null,
+    buildSourceDirtyState: preflight.provenance?.sourceDirtyState ?? null,
+    buildIntegrityDigest: preflight.provenance?.buildIntegrityDigest ?? null,
+    buildFileCount: preflight.provenance?.buildFileCount ?? null,
+    runtime: runtimeMetadata ?? null,
+    appServer: serverValidation?.receipt ?? null,
+    blockReasons: provenanceProblems.map((problem) => sanitizeE2EDiagnostic(problem)),
+  }
+
   const summary = {
-    version: 1,
+    version: 2,
     runId,
     exitCode,
     signal,
     verified: problems.length === 0,
+    provenance,
+    artifacts: {
+      inventory: "inventory.json",
+      serverProvenance: SERVER_PROVENANCE_FILENAME,
+      playwrightOutput: "artifacts/",
+    },
     counts: inventory?.counts ?? null,
     validationErrors: [
       ...problems,
@@ -129,18 +270,15 @@ const runVerifiedE2E = ({
             )
             .map(({ id, note }) => `${id}: ${note}`)
         : []),
-    ].map((problem) => sanitizeDiagnostic(problem).slice(0, 2000)),
+    ].map((problem) => sanitizeE2EDiagnostic(problem).slice(0, 2000)),
     scenarios: Array.isArray(inventory?.scenarios)
       ? inventory.scenarios.map(({ id, state, durationMs }) => ({ id, state, durationMs }))
       : [],
   }
   try {
-    writeFileSync(
-      path.join(outputDirectory, "summary.json"),
-      `${JSON.stringify(summary, null, 2)}\n`,
-    )
+    writeFileSync(summaryPath, `${JSON.stringify(summary, null, 2)}\n`)
   } catch (error) {
-    console.error(`Could not write sanitized E2E summary: ${sanitizeDiagnostic(error.message)}`)
+    console.error(`Could not write sanitized E2E summary: ${sanitizeE2EDiagnostic(error.message)}`)
   }
 
   return {
@@ -148,12 +286,15 @@ const runVerifiedE2E = ({
     runId,
     outputDirectory,
     inventoryPath,
+    summaryPath,
     exitCode,
     signal,
     spawnError,
     inventory,
+    provenance,
     problems,
   }
 }
 
+export { collectRuntimeMetadata }
 export default runVerifiedE2E

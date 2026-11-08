@@ -36,7 +36,8 @@ export const createHomePersonalizationGeneration = ({
   previousProjection,
   visibleProjection: previousProjection,
   projection: null,
-  personalizationApplied: false,
+  projectionApplied: false,
+  disclosureVisible: false,
 })
 
 export const resolveHomePersonalizationProfile = (generation, { ...result }) => {
@@ -76,12 +77,14 @@ export const commitHomePersonalizationSnapshot = (generation, { ...snapshot }) =
   const projection = freezeProjection(
     useProfile ? snapshot.personalizedProjection : snapshot.baselineProjection,
   )
+  const projectionApplied = Boolean(useProfile && projection.personalizationApplied)
   const nextGeneration = {
     ...generation,
     status: "committed",
     visibleProjection: projection,
     projection,
-    personalizationApplied: Boolean(useProfile && projection.personalizationApplied),
+    projectionApplied,
+    disclosureVisible: Boolean(projectionApplied && snapshot.disclosureVisible),
   }
 
   return { generation: nextGeneration, committed: true, projection }
@@ -97,7 +100,8 @@ export const failHomePersonalizationSnapshot = (generation, context) => {
     status: "canonical-failed",
     profile: null,
     visibleProjection: generation.previousProjection,
-    personalizationApplied: false,
+    projectionApplied: false,
+    disclosureVisible: false,
   }
 }
 

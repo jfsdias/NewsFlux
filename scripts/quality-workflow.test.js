@@ -244,9 +244,9 @@ test("failed E2E runs upload only their invocation-scoped diagnostics", () => {
 test("the e2e scripts exist and Playwright stays pinned", () => {
   const { scripts, devDependencies } = JSON.parse(readFileSync(PACKAGE_PATH, "utf8"))
 
-  assert.equal(scripts["test:e2e"], "pnpm run build && node scripts/run-verified-e2e.js")
+  assert.equal(scripts["test:e2e"], "node scripts/build-and-run-e2e.js")
   assert.equal(scripts["test:e2e:run"], "node scripts/run-verified-e2e.js")
-  assert.equal(scripts["test:e2e:stability"], "pnpm run build && node scripts/run-e2e-stability.js")
+  assert.equal(scripts["test:e2e:stability"], "node scripts/build-and-run-e2e.js --stability")
   assert.match(devDependencies["@playwright/test"], /^\d+\.\d+\.\d+$/, "pin an exact version")
 })
 

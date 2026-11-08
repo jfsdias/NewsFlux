@@ -1,7 +1,7 @@
 // Local fixtures exercise production routes, Home/Content, reader, context, manager and brand.
 import "@arco-design/web-react/es/_util/react-19-adapter"
 import Polyglot from "node-polyglot"
-import React, { useState } from "react"
+import React, { useLayoutEffect, useRef, useState } from "react"
 import { createRoot } from "react-dom/client"
 import { createMemoryRouter, Outlet, RouterProvider } from "react-router"
 
@@ -18,6 +18,7 @@ import {
   readerTypographyFixtures,
   routeEntries,
 } from "./fixtures/phase2c-editorial-home"
+import applyHarnessTheme from "./harness-theme"
 
 import apiClient from "@/apis/ofetch"
 import { ContextProvider } from "@/components/Content/ContentContext"
@@ -51,6 +52,9 @@ import {
   projectHomeSession,
   transitionHomeSession,
 } from "@/utils/home-editorial-session"
+import { HOME_PERSONALIZATION_FRESHNESS_WINDOW } from "@/utils/home-personalization-constants"
+import { createHomePersonalizationProfile } from "@/utils/home-personalization-profile"
+import { projectHomePersonalization } from "@/utils/home-personalization-projection"
 import "@arco-design/web-react/dist/css/arco.css"
 import "simplebar-react/dist/simplebar.min.css"
 import "@/index.css"
@@ -112,7 +116,7 @@ apiClient.get = async (url) => {
       if (starredProfileMode === "deferred" && deferredStarredProfile) {
         return deferredStarredProfile.promise
       }
-      return { entries: starredProfileEntries }
+      return { entries: starredProfileEntries, total: starredProfileEntries.length }
     }
     if (articleFailure) {
       throw new Error("Expected local article query failure")
@@ -303,6 +307,14 @@ const assert = (condition, message) => {
     throw new Error(message)
   }
 }
+const homeCompositionShape = ({ highlightIds, categoryLanes, latestIds }) => ({
+  highlightIds,
+  categoryLanes: categoryLanes.map(({ categoryId, entryIds }) => ({
+    categoryId,
+    entryIds,
+  })),
+  latestIds,
+})
 const settle = () => new Promise((resolve) => setTimeout(resolve, 70))
 const createDeferred = () => {
   let release
@@ -832,6 +844,13 @@ const srgbChannel = (value) => {
 }
 const relativeLuminance = ([red, green, blue]) =>
   0.2126 * srgbChannel(red) + 0.7152 * srgbChannel(green) + 0.0722 * srgbChannel(blue)
+const readerColorContrast = (foreground, background) => {
+  const [lighter, darker] = [
+    relativeLuminance(readerColor(foreground)),
+    relativeLuminance(readerColor(background)),
+  ].toSorted((a, b) => b - a)
+  return (lighter + 0.05) / (darker + 0.05)
+}
 const readerContrast = (node, surface = node) => {
   const foreground = readerColor(getComputedStyle(node).color)
   const background = readerBackground(surface)
@@ -846,6 +865,8 @@ const readerContrast = (node, surface = node) => {
   )
   return (lighter + 0.05) / (darker + 0.05)
 }
+const sameReaderColor = (left, right) =>
+  readerColor(left).slice(0, 3).join(",") === readerColor(right).slice(0, 3).join(",")
 const readerNestedContext = "li, td, th, blockquote, figure"
 const readerStyle = (node) => getComputedStyle(node)
 const readerPx = (node, property) => Number.parseFloat(readerStyle(node)[property])
@@ -1997,6 +2018,11 @@ const Harness = () => {
   const [selectedTheme, setSelectedTheme] = useState(() =>
     new URLSearchParams(globalThis.location.search).get("theme") === "dark" ? "dark" : "light",
   )
+  const selectedThemeRef = useRef(selectedTheme)
+  useLayoutEffect(() => {
+    selectedThemeRef.current = selectedTheme
+    applyHarnessTheme(selectedTheme, document)
+  }, [selectedTheme])
   const [matrixRuns, setMatrixRuns] = useState(readMatrixRuns)
   const mount = async (
     path = "/",
@@ -4240,7 +4266,7 @@ const Harness = () => {
       "HOME_LIGHT",
       async () => {
         await mountHighlights(highlightFixtures.image)
-        document.body.removeAttribute("arco-theme")
+        applyHarnessTheme("light", document)
         await new Promise((resolve) => setTimeout(resolve, 240))
         const card = homeRoot().querySelector(".grid-card-wrapper")
         const control = homeRoot().querySelector(".nf-glass-control")
@@ -4273,7 +4299,7 @@ const Harness = () => {
       "HOME_DARK",
       async () => {
         await mountHighlights(highlightFixtures.image)
-        document.body.setAttribute("arco-theme", "dark")
+        applyHarnessTheme("dark", document)
         await new Promise((resolve) => setTimeout(resolve, 240))
         const card = homeRoot().querySelector(".grid-card-wrapper")
         const control = homeRoot().querySelector(".nf-glass-control")
@@ -4306,6 +4332,243 @@ const Harness = () => {
             chromeBlur: controlStyle.backdropFilter,
           },
         }
+      },
+    ],
+  ]
+  const harnessThemeScenarios = [
+    [
+      "HARNESS_THEME_PRESENTATION",
+      async () => {
+        const expectedTheme = selectedThemeRef.current
+        const bodyStyle = getComputedStyle(document.body)
+        const rootStyle = getComputedStyle(document.documentElement)
+        const canvas = bodyStyle.getPropertyValue("--nf-canvas").trim()
+        const shell = rootStyle.getPropertyValue("--app-shell-background").trim()
+        const controls = document.querySelector(".harness-controls")
+        const controlsStyle = controls && getComputedStyle(controls)
+        const themeControl = controls?.querySelector('[data-testid="harness-theme"]')
+        const themeControlStyle = themeControl && getComputedStyle(themeControl)
+        const actionButton = controls?.querySelector("button")
+        const actionButtonStyle = actionButton && getComputedStyle(actionButton)
+        const checks = []
+        const require = (condition, message) => {
+          if (!condition) {
+            checks.push(message)
+          }
+        }
+
+        require(document.body.getAttribute("arco-theme") ===
+          expectedTheme, `body theme=${document.body.getAttribute("arco-theme")}`)
+        require(document.body.style.colorScheme === expectedTheme &&
+          bodyStyle.colorScheme ===
+            expectedTheme, `color-scheme inline=${document.body.style.colorScheme || "unset"}, computed=${bodyStyle.colorScheme}`)
+        require(shell === canvas, `shell=${shell} differs from canvas=${canvas}`)
+        require(sameReaderColor(
+          bodyStyle.color,
+          bodyStyle.getPropertyValue("--nf-text-primary"),
+        ), `body foreground=${bodyStyle.color}`)
+        require(Boolean(controls && controlsStyle), "harness controls are missing")
+        require(Boolean(controlsStyle), "harness control styles are unavailable")
+        require(Boolean(themeControl && themeControlStyle), "theme selector styles are unavailable")
+        require(Boolean(actionButton && actionButtonStyle), "harness button styles are unavailable")
+        if (controls && controlsStyle) {
+          require(sameReaderColor(
+            controlsStyle.backgroundColor,
+            bodyStyle.getPropertyValue("--nf-surface-content"),
+          ), `controls background=${controlsStyle.backgroundColor}`)
+          require(readerContrast(controls.querySelector("h1"), controls) >=
+            4.5, `harness title contrast=${readerContrast(controls.querySelector("h1"), controls).toFixed(2)}:1`)
+        }
+        if (themeControl && themeControlStyle) {
+          require(sameReaderColor(
+            themeControlStyle.backgroundColor,
+            bodyStyle.getPropertyValue("--nf-surface-raised"),
+          ), `theme selector background=${themeControlStyle.backgroundColor}`)
+          require(readerContrast(themeControl, themeControl) >=
+            4.5, `theme selector contrast=${readerContrast(themeControl, themeControl).toFixed(2)}:1`)
+          require(readerColorContrast(
+            themeControlStyle.borderTopColor,
+            themeControlStyle.backgroundColor,
+          ) >=
+            3, `theme selector border contrast=${readerColorContrast(themeControlStyle.borderTopColor, themeControlStyle.backgroundColor).toFixed(2)}:1`)
+        }
+        if (actionButton && actionButtonStyle) {
+          require(sameReaderColor(
+            actionButtonStyle.backgroundColor,
+            bodyStyle.getPropertyValue("--nf-surface-raised"),
+          ), `harness button background=${actionButtonStyle.backgroundColor}`)
+          require(readerContrast(actionButton, actionButton) >=
+            4.5, `harness button contrast=${readerContrast(actionButton, actionButton).toFixed(2)}:1`)
+          require(readerColorContrast(
+            actionButtonStyle.borderTopColor,
+            actionButtonStyle.backgroundColor,
+          ) >=
+            3, `harness button border contrast=${readerColorContrast(actionButtonStyle.borderTopColor, actionButtonStyle.backgroundColor).toFixed(2)}:1`)
+        }
+
+        await mountHighlights(highlightFixtures.image)
+        const home = homeRoot()
+        const card = homeRoot().querySelector(".grid-card-wrapper")
+        const cardTitle = homeRoot().querySelector(".grid-card-title")
+        require(Boolean(home && card && cardTitle), "Home theme fixture is incomplete")
+        const homeBackground = home && getComputedStyle(home).backgroundColor
+        const homeTitleContrast = cardTitle && card ? readerContrast(cardTitle, card) : 0
+        if (home) {
+          require(sameReaderColor(homeBackground, canvas), `Home background=${homeBackground}`)
+        }
+        if (cardTitle && card) {
+          require(homeTitleContrast >= 4.5, `Home title contrast=${homeTitleContrast.toFixed(2)}:1`)
+        }
+
+        await mountReaderCase(mount, "short")
+        const reader = document.querySelector(".article-container")
+        const readerTitle = reader?.querySelector(".article-title")
+        require(Boolean(reader && readerTitle), "Reader theme fixture is incomplete")
+        const readerBackgroundColor = reader && getComputedStyle(reader).backgroundColor
+        const readerTitleContrast = readerTitle && reader ? readerContrast(readerTitle, reader) : 0
+        if (reader) {
+          require(sameReaderColor(
+            readerBackgroundColor,
+            bodyStyle.getPropertyValue("--nf-surface-content"),
+          ), `Reader background=${readerBackgroundColor}`)
+        }
+        if (readerTitle && reader) {
+          require(readerTitleContrast >=
+            4.5, `Reader title contrast=${readerTitleContrast.toFixed(2)}:1`)
+        }
+
+        globalThis.__phase2cHarnessThemeMetrics = {
+          expectedTheme,
+          systemDark: matchMedia("(prefers-color-scheme: dark)").matches,
+          bodyTheme: document.body.getAttribute("arco-theme"),
+          inlineColorScheme: document.body.style.colorScheme || null,
+          computedColorScheme: getComputedStyle(document.body).colorScheme,
+          shell,
+          canvas,
+          controlsBackground: controlsStyle?.backgroundColor ?? null,
+          controlsText: controlsStyle?.color ?? null,
+          bodyForeground: bodyStyle.color,
+          primaryTextToken: bodyStyle.getPropertyValue("--nf-text-primary").trim(),
+          controlsTitleContrast: controls
+            ? Number(readerContrast(controls.querySelector("h1"), controls).toFixed(2))
+            : null,
+          controlsButtonBackground: controls
+            ? getComputedStyle(controls.querySelector("button")).backgroundColor
+            : null,
+          controlsButtonBorder: controls
+            ? getComputedStyle(controls.querySelector("button")).borderTopColor
+            : null,
+          controlsButtonBorderContrast: controls
+            ? Number(
+                readerColorContrast(
+                  getComputedStyle(controls.querySelector("button")).borderTopColor,
+                  getComputedStyle(controls.querySelector("button")).backgroundColor,
+                ).toFixed(2),
+              )
+            : null,
+          themeSelectContrast: themeControl
+            ? Number(readerContrast(themeControl, themeControl).toFixed(2))
+            : null,
+          themeSelectBorderContrast: themeControlStyle
+            ? Number(
+                readerColorContrast(
+                  themeControlStyle.borderTopColor,
+                  themeControlStyle.backgroundColor,
+                ).toFixed(2),
+              )
+            : null,
+          controlsButtonContrast: controls
+            ? Number(
+                readerContrast(
+                  controls.querySelector("button"),
+                  controls.querySelector("button"),
+                ).toFixed(2),
+              )
+            : null,
+          homeBackground,
+          homeTitleContrast: Number(homeTitleContrast.toFixed(2)),
+          readerBackground: readerBackgroundColor,
+          readerTitleContrast: Number(readerTitleContrast.toFixed(2)),
+          failures: checks,
+        }
+        assert(
+          checks.length === 0,
+          `Harness theme ${expectedTheme} failed: ${JSON.stringify(globalThis.__phase2cHarnessThemeMetrics)}`,
+        )
+      },
+    ],
+  ]
+  const harnessThemeRuntimeScenarios = [
+    [
+      "THEME_SWITCH_RUNTIME",
+      async () => {
+        const themeControl = document.querySelector('[data-testid="harness-theme"]')
+        assert(themeControl && !themeControl.disabled, "Theme control is unavailable during a run")
+        await new Promise((resolve) => setTimeout(resolve, 700))
+
+        const expectedTheme = selectedThemeRef.current
+        const bodyStyle = getComputedStyle(document.body)
+        const canvas = bodyStyle.getPropertyValue("--nf-canvas").trim()
+        const shell = getComputedStyle(document.documentElement)
+          .getPropertyValue("--app-shell-background")
+          .trim()
+        const foreground = bodyStyle.getPropertyValue("--nf-text-primary").trim()
+        const failures = []
+        if (themeControl.value !== expectedTheme) {
+          failures.push("selector state diverged")
+        }
+        if (document.body.getAttribute("arco-theme") !== expectedTheme) {
+          failures.push("body theme diverged")
+        }
+        if (
+          document.body.style.colorScheme !== expectedTheme ||
+          bodyStyle.colorScheme !== expectedTheme
+        ) {
+          failures.push("browser color scheme diverged")
+        }
+        if (canvas !== shell) {
+          failures.push(`shell=${shell} differs from canvas=${canvas}`)
+        }
+        if (!foreground) {
+          failures.push("theme foreground token is missing")
+        }
+
+        globalThis.__phase2cHarnessThemeSwitchMetrics = {
+          expectedTheme,
+          selectorTheme: themeControl.value,
+          bodyTheme: document.body.getAttribute("arco-theme"),
+          colorScheme: bodyStyle.colorScheme,
+          shell,
+          canvas,
+          foreground,
+          failures,
+        }
+        assert(
+          failures.length === 0,
+          `Runtime theme switch failed: ${JSON.stringify(globalThis.__phase2cHarnessThemeSwitchMetrics)}`,
+        )
+      },
+    ],
+  ]
+  const harnessThemeIsolationScenarios = [
+    [
+      "NO_THEME_LEAKAGE",
+      async () => {
+        const expectedTheme = selectedThemeRef.current
+        const themeControl = document.querySelector('[data-testid="harness-theme"]')
+        const bodyStyle = getComputedStyle(document.body)
+        const canvas = bodyStyle.getPropertyValue("--nf-canvas").trim()
+        const shell = getComputedStyle(document.documentElement)
+          .getPropertyValue("--app-shell-background")
+          .trim()
+        assert(themeControl?.value === expectedTheme, "Selected theme leaked between scenarios")
+        assert(
+          document.body.getAttribute("arco-theme") === expectedTheme &&
+            document.body.style.colorScheme === expectedTheme &&
+            bodyStyle.colorScheme === expectedTheme &&
+            canvas === shell,
+          `Theme state leaked: selected=${expectedTheme}, body=${document.body.getAttribute("arco-theme")}, shell=${shell}, canvas=${canvas}`,
+        )
       },
     ],
   ]
@@ -4544,6 +4807,165 @@ const Harness = () => {
             `Unavailable, hidden-only, or no-effect profile did not preserve Phase 2C: ${ids().join(",")}`,
           )
         }
+      },
+    ],
+    [
+      "PERSONALIZATION_INTERMEDIATE_ORDER_WITHOUT_FINAL_COMPOSITION_CHANGE",
+      async () => {
+        const entries = personalizationFixtures.disclosureInvisibleHome
+        const baselineSession = createHomeEditorialSession({
+          requestKey: "disclosure-invisible",
+          sessionRevision: 1,
+          entries,
+        })
+        const baseline = projectHomeSession(baselineSession, entries)
+        const profile = createHomePersonalizationProfile({
+          entries: personalizationFixtures.disclosureInvisibleProfile,
+          hiddenFeedIds: new Set(),
+        })
+        const intermediate = projectHomePersonalization({
+          entries,
+          baselineHighlightIds: baseline.highlightIds,
+          baselineRecentIds: baseline.recentIds,
+          profile,
+          freshnessWindow: HOME_PERSONALIZATION_FRESHNESS_WINDOW,
+        })
+        const personalizedSession = createHomeEditorialSession({
+          requestKey: "disclosure-invisible",
+          sessionRevision: 1,
+          entries,
+          initialProjection: intermediate,
+        })
+        const personalized = projectHomeSession(personalizedSession, entries)
+        assert(
+          intermediate.personalizationApplied,
+          "Fixture did not change the intermediate projection",
+        )
+        assert(
+          JSON.stringify(intermediate.recentIds) !== JSON.stringify(baseline.recentIds),
+          "Fixture did not change the intermediate projection",
+        )
+        assert(
+          JSON.stringify(homeCompositionShape(personalized)) ===
+            JSON.stringify(homeCompositionShape(baseline)),
+          "Fixture changed the final visible Home composition",
+        )
+
+        await mount("/", {
+          deferInitial: true,
+          entries,
+          total: entries.length,
+          personalization: { entries: personalizationFixtures.disclosureInvisibleProfile },
+        })
+        await waitFor(
+          () => starredProfileRequests().length === 1,
+          "Disclosure-invisible profile query did not start",
+        )
+        await settle()
+        deferredArticleQuery.resolve()
+        await waitFor(
+          () =>
+            contentState.get().isArticleListReady &&
+            homeRoot().querySelectorAll(".home-category-section").length === 3,
+          "Disclosure-invisible Home did not render its three category lanes",
+        )
+
+        assert(
+          ids().join(",") === "7001,7002,7003" &&
+            recentIds().join(",") === "7004,7007,7010,7005,7008,7011,7006,7009,7012" &&
+            !homeRoot().querySelector(".home-personalization-info-button"),
+          `Intermediate-only reordering changed the final Home or showed a false disclosure: highlights=${ids().join(",")}; recent=${recentIds().join(",")}; disclosure=${Boolean(homeRoot().querySelector(".home-personalization-info-button"))}`,
+        )
+      },
+    ],
+    [
+      "PERSONALIZATION_CATEGORY_LANE_COMPOSITION_CHANGE_SHOWS_DISCLOSURE",
+      async () => {
+        const entries = personalizationFixtures.disclosureVisibleCategoryHome
+        const baselineSession = createHomeEditorialSession({
+          requestKey: "category-change-fixture",
+          sessionRevision: 1,
+          entries,
+        })
+        const baseline = projectHomeSession(baselineSession, entries)
+        const candidateProjection = projectHomePersonalization({
+          entries,
+          baselineHighlightIds: baseline.highlightIds,
+          baselineRecentIds: baseline.recentIds,
+          profile: createHomePersonalizationProfile({ entries: [], hiddenFeedIds: new Set() }),
+          freshnessWindow: HOME_PERSONALIZATION_FRESHNESS_WINDOW,
+        })
+        const candidate = projectHomeSession(
+          createHomeEditorialSession({
+            requestKey: "category-change-fixture",
+            sessionRevision: 1,
+            entries,
+            initialProjection: candidateProjection,
+          }),
+          entries,
+        )
+        assert(
+          JSON.stringify(candidate.highlightIds) === JSON.stringify(baseline.highlightIds) &&
+            JSON.stringify(candidate.categoryLanes) !== JSON.stringify(baseline.categoryLanes),
+          "Fixture did not isolate a Category Lane-only composition change",
+        )
+        await mount("/", {
+          deferInitial: true,
+          entries,
+          total: entries.length,
+          personalization: { entries: [] },
+        })
+        await waitFor(
+          () => starredProfileRequests().length === 1,
+          "Category-change profile query did not start",
+        )
+        await settle()
+        deferredArticleQuery.resolve()
+        await waitFor(
+          () =>
+            contentState.get().isArticleListReady &&
+            homeRoot().querySelectorAll(".home-category-section").length === 3,
+          "Category-change Home did not render its category lanes",
+        )
+        const actualEntries = contentState.get().entries
+        const actualBaseline = projectHomeSession(
+          createHomeEditorialSession({
+            requestKey: "category-change-diagnostic",
+            sessionRevision: 1,
+            entries: actualEntries,
+          }),
+          actualEntries,
+        )
+        const expectedProjection = projectHomePersonalization({
+          entries: actualEntries,
+          baselineHighlightIds: actualBaseline.highlightIds,
+          baselineRecentIds: actualBaseline.recentIds,
+          profile: createHomePersonalizationProfile({
+            entries: starredProfileEntries,
+            hiddenFeedIds: new Set(),
+          }),
+          freshnessWindow: HOME_PERSONALIZATION_FRESHNESS_WINDOW,
+        })
+
+        assert(
+          ids().join(",") === "7001,7002,7003" &&
+            [...homeRoot().querySelectorAll(".home-category-section")]
+              .map((section) => section.dataset.categoryId)
+              .join(",") === "701,702,703" &&
+            [
+              ...homeRoot().querySelectorAll(
+                ".home-category-section[data-category-id='701'] .article-entry",
+              ),
+            ]
+              .map((node) => Number(node.dataset.entryId))
+              .includes(7019) &&
+            homeRoot().querySelector(".home-personalization-info-button") &&
+            canonicalEntryRequests().length === 1 &&
+            starredProfileRequests().length === 1 &&
+            statusMutationRequests === 0 &&
+            starMutationRequests === 0,
+          `A visible Category Lane composition change did not show the disclosure: highlights=${ids().join(",")}; categories=${[...homeRoot().querySelectorAll(".home-category-section")].map((section) => section.dataset.categoryId).join(",")}; disclosure=${Boolean(homeRoot().querySelector(".home-personalization-info-button"))}; expectedProjection=${JSON.stringify(expectedProjection)}; profileRequests=${starredProfileRequests().length}; entry7005=${JSON.stringify(actualEntries.find(({ id }) => id === 7005))}`,
+        )
       },
     ],
     [
@@ -5167,6 +5589,9 @@ const Harness = () => {
           "HOME_EMPTY_RECENT",
           "HOME_LOADING",
           "HOME_REFRESH_ERROR_WITH_CONTENT",
+          "HARNESS_THEME_PRESENTATION",
+          "THEME_SWITCH_RUNTIME",
+          "NO_THEME_LEAKAGE",
           "HOME_LIGHT",
           "HOME_DARK",
           "HOME_IDENTITY_FAILURE_RECOVERY",
@@ -5237,6 +5662,9 @@ const Harness = () => {
           ...listSentinelScenarios,
           ...stateScenarios,
           ...responsiveScenarios,
+          ...harnessThemeScenarios,
+          ...harnessThemeRuntimeScenarios,
+          ...harnessThemeIsolationScenarios,
           ...personalizationScenarios,
           ...primaryHierarchyScenarios,
           ...readerScenarios,
@@ -5298,6 +5726,9 @@ const Harness = () => {
     { name: "list-sentinel-regression", scenarios: listSentinelScenarios },
     { name: "states-and-recovery", scenarios: stateScenarios },
     { name: "responsive-visual", scenarios: responsiveScenarios },
+    { name: "harness-theme-presentation", scenarios: harnessThemeScenarios },
+    { name: "harness-theme-runtime", scenarios: harnessThemeRuntimeScenarios },
+    { name: "harness-theme-isolation", scenarios: harnessThemeIsolationScenarios },
     { name: "personalization", scenarios: personalizationScenarios },
     { name: "home-visual-01-primary-hierarchy", scenarios: primaryHierarchyScenarios },
     { name: "reader-visual-01-reading-ergonomics", scenarios: readerScenarios },
@@ -5329,11 +5760,7 @@ const Harness = () => {
         }
         try {
           for (const [name, scenario] of selectedScenarios) {
-            if (selectedTheme === "dark") {
-              document.body.setAttribute("arco-theme", "dark")
-            } else {
-              document.body.removeAttribute("arco-theme")
-            }
+            applyHarnessTheme(selectedThemeRef.current, document)
             try {
               await scenario()
               next.push({
@@ -5341,7 +5768,7 @@ const Harness = () => {
                 name,
                 status: "PASS",
                 gateClass: "AUTOMATED",
-                metrics: captureHomeHarnessMetrics(selectedTheme),
+                metrics: captureHomeHarnessMetrics(selectedThemeRef.current),
                 ...(name === "HOME_EDITORIAL_02_CATEGORY_LANE_COVERAGE_AND_READER_ORDER"
                   ? { productMetrics: globalThis.__homeEditorial02ProductMetrics }
                   : {}),
@@ -5372,7 +5799,7 @@ const Harness = () => {
                 path: router?.state.location.pathname,
                 activeId: contentState.get().activeContent?.id,
                 readerText: document.querySelector(".article-body")?.textContent,
-                metrics: captureHomeHarnessMetrics(selectedTheme),
+                metrics: captureHomeHarnessMetrics(selectedThemeRef.current),
                 ...(name === "HOME_EDITORIAL_02_CATEGORY_LANE_COVERAGE_AND_READER_ORDER"
                   ? { productMetrics: globalThis.__homeEditorial02ProductMetrics }
                   : {}),
@@ -5423,10 +5850,14 @@ const Harness = () => {
         <label htmlFor="phase2c-harness-theme">Run theme</label>
         <select
           data-testid="harness-theme"
-          disabled={running}
           id="phase2c-harness-theme"
           value={selectedTheme}
-          onChange={(event) => setSelectedTheme(event.target.value)}
+          onChange={(event) => {
+            const theme = event.target.value
+            selectedThemeRef.current = theme
+            applyHarnessTheme(theme, document)
+            setSelectedTheme(theme)
+          }}
         >
           <option value="light">Light</option>
           <option value="dark">Dark / OLED</option>
@@ -5452,6 +5883,15 @@ const Harness = () => {
         </button>
         <button disabled={running} onClick={() => void run(stateScenarios)}>
           Run Home loading and recovery scenario
+        </button>
+        <button disabled={running} onClick={() => void run(harnessThemeScenarios)}>
+          Run harness theme presentation scenario
+        </button>
+        <button disabled={running} onClick={() => void run(harnessThemeRuntimeScenarios)}>
+          Run runtime theme switch scenario
+        </button>
+        <button disabled={running} onClick={() => void run(harnessThemeIsolationScenarios)}>
+          Run theme isolation scenario
         </button>
         <button disabled={running} onClick={() => void run(responsiveScenarios)}>
           Run Home responsive visual gates
