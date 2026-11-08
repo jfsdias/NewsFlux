@@ -21,17 +21,31 @@ const main = () => {
   mkdirSync(outputDirectory, { recursive: true })
   const { runs, evaluation } = runStabilityChecks()
   const summary = {
+    version: 2,
     requiredRuns: REQUIRED_RUNS,
     runs: runs.map(
-      ({ runId, inventoryPath, exitCode, signal, spawnError, verified, problems, inventory }) => ({
+      ({
         runId,
         inventoryPath,
+        summaryPath,
+        exitCode,
+        signal,
+        spawnError,
+        verified,
+        problems,
+        inventory,
+        provenance,
+      }) => ({
+        runId,
+        inventoryPath,
+        summaryPath,
         exitCode,
         signal,
         spawnError: spawnError ?? null,
         verified,
         counts: inventory?.counts ?? null,
         problems,
+        provenance: provenance ?? null,
       }),
     ),
     stable: evaluation.stable,

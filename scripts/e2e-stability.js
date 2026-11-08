@@ -185,6 +185,8 @@ export const evaluateRuns = (runs, expectedScenarios = EXPECTED_SCENARIOS) => {
 
   const runIds = new Set()
   const inventoryPaths = new Set()
+  const summaryPaths = new Set()
+  let firstProvenance
   for (const [index, run] of runs.entries()) {
     if (!run || !isRecord(run)) {
       problems.push(`run ${index + 1}: execution receipt must be an object`)
@@ -226,6 +228,52 @@ export const evaluateRuns = (runs, expectedScenarios = EXPECTED_SCENARIOS) => {
     }
     if (!run.inventory || run.inventory.runId !== run.runId) {
       problems.push(`run ${index + 1}: inventory does not match its execution run identifier`)
+    }
+
+    const { provenance } = run
+    if (!provenance || provenance.gate !== "PASS") {
+      problems.push(`run ${index + 1}: verified source/build provenance is required`)
+    } else {
+      if (provenance.runId !== run.runId || provenance.appServer?.runId !== run.runId) {
+        problems.push(
+          `run ${index + 1}: provenance receipts do not match the execution run identifier`,
+        )
+      }
+      if (
+        provenance.appServer?.sourceSha !== provenance.sourceSha ||
+        provenance.appServer?.buildIntegrityDigest !== provenance.buildIntegrityDigest
+      ) {
+        problems.push(`run ${index + 1}: app server receipt does not match its build provenance`)
+      }
+      if (firstProvenance) {
+        for (const field of [
+          "sourceSha",
+          "sourceTreeSha",
+          "testSourceSha",
+          "buildSourceSha",
+          "buildIntegrityDigest",
+          "buildFileCount",
+        ]) {
+          if (provenance[field] !== firstProvenance[field]) {
+            problems.push(`run ${index + 1}: ${field} differs across stability executions`)
+          }
+        }
+        if (JSON.stringify(provenance.runtime) !== JSON.stringify(firstProvenance.runtime)) {
+          problems.push(`run ${index + 1}: runtime versions differ across stability executions`)
+        }
+      } else {
+        firstProvenance = provenance
+      }
+    }
+
+    if (typeof run.summaryPath !== "string" || run.summaryPath.trim() === "") {
+      problems.push(`run ${index + 1}: summary artifact path is missing`)
+    } else {
+      const summaryPath = path.resolve(run.summaryPath)
+      if (summaryPaths.has(summaryPath)) {
+        problems.push(`run ${index + 1}: duplicate summary artifact path ${run.summaryPath}`)
+      }
+      summaryPaths.add(summaryPath)
     }
   }
 
