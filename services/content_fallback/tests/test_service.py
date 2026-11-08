@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import threading
 import tempfile
 import time
@@ -8,7 +9,7 @@ import unittest
 from pathlib import Path
 
 from services.content_fallback.content import assess_content
-from services.content_fallback.http_client import UnsafeURL
+from services.content_fallback.http_client import HTTPResponse, PinnedHTTPClient, UnsafeURL
 from services.content_fallback.miniflux import EntrySnapshot
 from services.content_fallback.policy import DomainPolicy, PolicyRegistry
 from services.content_fallback.service import (
@@ -16,8 +17,9 @@ from services.content_fallback.service import (
     MinifluxScraperProvider,
     ProviderResult,
     RecoveryError,
+    WallHopProvider,
 )
-from services.content_fallback.store import MemoryRecoveryStore, SQLiteRecoveryStore
+from services.content_fallback.store import MemoryRecoveryStore, SQLiteRecoveryStore, StoredRecovery
 
 
 def full_article_html() -> str:
@@ -124,6 +126,171 @@ def native_registry() -> PolicyRegistry:
 
 
 class ServiceTests(unittest.TestCase):
+    def test_legacy_wallhop_cache_is_cleaned_in_memory_before_return(self) -> None:
+        item = entry()
+        footer = (
+            "Technical attribution: WaffleHacker and everywall maintain ladder, released under "
+            "GPL-3.0, for the rendering service."
+        )
+        contaminated = "<p>wallhop</p>" + full_article_html() + f"<p>{footer}</p>"
+        old_assessment = assess_content(item.title, contaminated)
+        self.assertTrue(old_assessment.sufficient)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "synthetic-content-cache.sqlite3"
+            initial = SQLiteRecoveryStore(path)
+            initial.put(
+                item.id,
+                item.content_fingerprint,
+                StoredRecovery(
+                    source_fingerprint=item.content_fingerprint,
+                    content_html=old_assessment.safe_html,
+                    validation=old_assessment.public_dict(),
+                    provider="wallhop.io",
+                    fetched_at="2026-11-07T00:00:00+00:00",
+                ),
+            )
+            initial.close()
+
+            store = SQLiteRecoveryStore(path)
+            provider = FakeProvider()
+            result = ContentFallbackService(
+                miniflux=FakeMiniflux({item.id: item}),
+                policies=enabled_registry(),
+                provider=provider,
+                store=store,
+            ).recover(item.id)
+
+            self.assertEqual(result["status"], "recovered")
+            self.assertTrue(result["cache_hit"])
+            self.assertNotIn("wallhop", result["content_html"].casefold())
+            self.assertNotIn("wafflehacker", result["content_html"].casefold())
+            self.assertEqual(provider.calls, 0)
+            legacy_row = store.get(item.id, item.content_fingerprint)
+            self.assertIsNotNone(legacy_row)
+            self.assertIn("wafflehacker", legacy_row.content_html.casefold())
+            store.close()
+
+    def test_insufficient_legacy_cache_falls_back_without_returning_provider_chrome(self) -> None:
+        item = entry()
+        sentence = "Researchers compared coastal sensor readings across three independent observation sites. "
+        body = "<article>" + "".join(
+            f"<p>Section {index}. {sentence * 4}</p>" for index in range(4)
+        ) + "</article>"
+        footer = (
+            "Technical attribution: WaffleHacker and everywall maintain ladder, released under "
+            "GPL-3.0, for the rendering service. Credits describe the captured intermediary output."
+        )
+        old_content = body + f"<p>{footer}</p>"
+        old_assessment = assess_content(item.title, old_content)
+        self.assertTrue(old_assessment.sufficient)
+        store = MemoryRecoveryStore()
+        store.put(
+            item.id,
+            item.content_fingerprint,
+            StoredRecovery(
+                source_fingerprint=item.content_fingerprint,
+                content_html=old_assessment.safe_html,
+                validation=old_assessment.public_dict(),
+                provider="wallhop.io",
+                fetched_at="2026-11-07T00:00:00+00:00",
+            ),
+        )
+
+        result = ContentFallbackService(
+            miniflux=FakeMiniflux({item.id: item}),
+            policies=enabled_registry(),
+            provider=PartialProvider(),
+            store=store,
+        ).recover(item.id)
+
+        self.assertEqual((result["status"], result["reason"]), ("incomplete", "short_or_partial_prose"))
+        self.assertEqual(result["content_origin"], "miniflux")
+        self.assertNotIn("wafflehacker", result["content_html"].casefold())
+        self.assertIsNone(store.get(item.id, item.content_fingerprint))
+
+    def test_ambiguous_legacy_cache_is_rejected_and_reason_is_logged(self) -> None:
+        item = entry()
+        ambiguous = full_article_html() + (
+            "<p>WaffleHacker and everywall mention ladder tools in this report.</p>"
+        )
+        assessment = assess_content(item.title, ambiguous)
+        store = MemoryRecoveryStore()
+        store.put(
+            item.id,
+            item.content_fingerprint,
+            StoredRecovery(
+                source_fingerprint=item.content_fingerprint,
+                content_html=assessment.safe_html,
+                validation=assessment.public_dict(),
+                provider="wallhop.io",
+                fetched_at="2026-11-07T00:00:00+00:00",
+            ),
+        )
+
+        service = ContentFallbackService(
+            miniflux=FakeMiniflux({item.id: item}),
+            policies=enabled_registry(),
+            provider=PartialProvider(),
+            store=store,
+        )
+        with self.assertLogs("newsflux.content_fallback", level=logging.WARNING) as logs:
+            result = service.recover(item.id)
+
+        self.assertEqual((result["status"], result["content_origin"]), ("incomplete", "miniflux"))
+        self.assertNotIn("wafflehacker", result["content_html"].casefold())
+        self.assertIn(
+            "ambiguous_provider_chrome",
+            [getattr(record, "reason", None) for record in logs.records],
+        )
+        rendered_logs = "\n".join(logs.output)
+        self.assertIn("ambiguous_provider_chrome", rendered_logs)
+        self.assertNotIn("WaffleHacker", rendered_logs)
+
+    def test_provider_failure_logs_hide_source_url_token_and_source_html(self) -> None:
+        item = entry(url="https://www.nytimes.com/story/URL_SENTINEL?ref=QUERY_SENTINEL")
+        source_html_sentinel = "SOURCE_HTML_SECRET_SENTINEL TOKEN_SENTINEL"
+        request_urls: list[str] = []
+
+        def request(url, pinned_ip, port, headers, timeout, max_bytes):
+            del pinned_ip, port, headers, timeout, max_bytes
+            request_urls.append(url)
+            return HTTPResponse(
+                200,
+                {"content-type": "text/html"},
+                f"<p>{source_html_sentinel}</p>".encode(),
+                url,
+            )
+
+        http = PinnedHTTPClient(
+            resolver=lambda _host, _port, _private: "93.184.216.34",
+            requester=request,
+        )
+        provider = WallHopProvider(http=http, sleep=lambda _seconds: None)
+        service = ContentFallbackService(
+            miniflux=FakeMiniflux({item.id: item}),
+            policies=enabled_registry(),
+            provider=provider,
+        )
+
+        with self.assertLogs("newsflux.content_fallback", level=logging.INFO) as logs:
+            result = service.recover(item.id)
+
+        rendered_logs = "\n".join(logs.output)
+        self.assertEqual(result["status"], "incomplete")
+        for secret in ("URL_SENTINEL", "QUERY_SENTINEL", "SOURCE_HTML_SECRET_SENTINEL", "TOKEN_SENTINEL"):
+            self.assertNotIn(secret, rendered_logs)
+
+        protected_item = entry(entry_id=43, url="https://www.nytimes.com/story?access_token=URL_TOKEN_SENTINEL")
+        protected_service = ContentFallbackService(
+            miniflux=FakeMiniflux({protected_item.id: protected_item}),
+            policies=enabled_registry(),
+            provider=provider,
+        )
+        with self.assertLogs("newsflux.content_fallback", level=logging.INFO) as protected_logs:
+            protected_service.recover(protected_item.id)
+        self.assertNotIn("URL_TOKEN_SENTINEL", "\n".join(protected_logs.output))
+        self.assertEqual(len(request_urls), 2, "sensitive source URLs must never reach the transport")
+
     def test_public_feed_uses_miniflux_native_scraper_on_demand(self) -> None:
         item = entry(url="https://public-feed.example.org/story")
         miniflux = FakeMiniflux({item.id: item})

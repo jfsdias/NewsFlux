@@ -20,6 +20,17 @@ def full_article_html() -> str:
 
 
 class ContentAssessmentTests(unittest.TestCase):
+    def test_legitimate_repeated_paragraphs_are_preserved(self) -> None:
+        repeated = (
+            "Researchers compared coastal sensor readings across three independent sites "
+            "and reported consistent measurements during the observation period."
+        )
+        raw = f"<article><p>{repeated}</p><p>{repeated}</p></article>"
+
+        result = assess_content("Research Update", raw)
+
+        self.assertEqual(result.safe_html.count(f"<p>{repeated}</p>"), 2)
+
     def test_void_tags_inside_nested_skip_regions_do_not_hide_article(self) -> None:
         raw = (
             "<header><img src='/logo.png'><nav>Home<br><input></header>"

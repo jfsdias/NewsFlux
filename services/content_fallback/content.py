@@ -53,6 +53,15 @@ _SKIP_CLASS_RE = re.compile(
     re.IGNORECASE,
 )
 _BLOCK_TAGS = {"p", "li", "blockquote", "pre", "h1", "h2", "h3", "h4", "h5", "h6", "div", "section"}
+_WALLHOP_HEADER_RE = re.compile(r"wallhop(?:\.io)?", re.IGNORECASE)
+_WALLHOP_FOOTER_MARKERS = (
+    re.compile(r"\bwafflehacker\b", re.IGNORECASE),
+    re.compile(r"\beverywall\b", re.IGNORECASE),
+    re.compile(r"\bladder\b", re.IGNORECASE),
+    re.compile(r"\bgpl[-\s]?3\.0\b", re.IGNORECASE),
+)
+_WALLHOP_FOOTER_WINDOW = 6
+_WALLHOP_FOOTER_MAX_WORDS = 60
 
 
 def _clean_text(value: str) -> str:
@@ -104,7 +113,7 @@ class _HTMLTextExtractor(HTMLParser):
     def _commit(self) -> None:
         text = _clean_text(" ".join(self._current))
         self._current.clear()
-        if text and (not self.blocks or text != self.blocks[-1]):
+        if text:
             self.blocks.append(text)
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
@@ -207,6 +216,49 @@ def _text_and_blocks(value: str) -> tuple[str, tuple[str, ...]]:
     return _clean_text(" ".join(parsed.blocks)), parsed.blocks
 
 
+def _safe_html_from_blocks(blocks: list[str] | tuple[str, ...]) -> str:
+    return "".join(f"<p>{html.escape(block, quote=False)}</p>" for block in blocks if block)
+
+
+def clean_wallhop_content(content_html: str) -> tuple[str, str]:
+    """Remove only high-confidence WallHop chrome from sanitized text blocks.
+
+    Ambiguous provider-like blocks are left intact and reported to the caller so it can
+    reject the candidate instead of guessing which text is editorial.
+    """
+    blocks = list(_parse(content_html, read_jsonld=False).blocks)
+    if not blocks:
+        return "", "no_provider_chrome"
+
+    remove: set[int] = set()
+    header_positions = [
+        index for index, block in enumerate(blocks)
+        if _WALLHOP_HEADER_RE.fullmatch(block.strip())
+    ]
+    for index in header_positions:
+        if index > 2 or len(blocks) < 2:
+            return _safe_html_from_blocks(blocks), "ambiguous_provider_chrome"
+        remove.add(index)
+
+    footer_positions: list[int] = []
+    tail_start = max(0, len(blocks) - _WALLHOP_FOOTER_WINDOW)
+    for index, block in enumerate(blocks):
+        marker_count = sum(bool(marker.search(block)) for marker in _WALLHOP_FOOTER_MARKERS)
+        if marker_count == len(_WALLHOP_FOOTER_MARKERS):
+            if index < tail_start or len(_words(block)) > _WALLHOP_FOOTER_MAX_WORDS:
+                return _safe_html_from_blocks(blocks), "ambiguous_provider_chrome"
+            footer_positions.append(index)
+        elif index >= tail_start and marker_count >= 3:
+            return _safe_html_from_blocks(blocks), "ambiguous_provider_chrome"
+
+    if len(footer_positions) > 1:
+        return _safe_html_from_blocks(blocks), "ambiguous_provider_chrome"
+    remove.update(footer_positions)
+    cleaned = [block for index, block in enumerate(blocks) if index not in remove]
+    reason = "provider_chrome_removed" if remove else "no_provider_chrome"
+    return _safe_html_from_blocks(cleaned), reason
+
+
 @dataclass(frozen=True)
 class ContentAssessment:
     state: str
@@ -300,7 +352,7 @@ def assess_content(title: str, content_html: str) -> ContentAssessment:
     else:
         state, reason = "TEASER", "short_or_partial_prose"
 
-    safe_html = "".join(f"<p>{html.escape(block, quote=False)}</p>" for block in body_blocks if block)
+    safe_html = _safe_html_from_blocks(body_blocks)
     fingerprint = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
     return ContentAssessment(
         state=state,

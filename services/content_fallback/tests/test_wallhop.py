@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 
+from services.content_fallback import content as content_module
 from services.content_fallback.content import assess_content
 from services.content_fallback.http_client import FetchError, HTTPResponse, PinnedHTTPClient, UnsafeURL
 from services.content_fallback.service import RecoveryError, WallHopProvider
@@ -10,6 +11,13 @@ from services.content_fallback.tests.test_service import entry, full_article_htm
 
 def wallhop_response(body: str, status: int = 200, content_type: str = "text/html; charset=utf-8") -> HTTPResponse:
     return HTTPResponse(status, {"content-type": content_type}, body.encode(), "https://wallhop.io/raw/encoded")
+
+
+PROVIDER_FOOTER = (
+    "Technical attribution: WaffleHacker and everywall maintain ladder, released under "
+    "GPL-3.0, for the rendering service. Credits identify the intermediary version used "
+    "to provide this captured article to the public reader."
+)
 
 
 class FakeTransport:
@@ -33,6 +41,108 @@ class FakeTransport:
 
 
 class WallHopProviderTests(unittest.TestCase):
+    def test_isolated_provider_header_is_removed_after_fetch(self) -> None:
+        page = "<p>wallhop</p>" + full_article_html()
+        transport = FakeTransport(wallhop_response(page))
+        provider = WallHopProvider(http=transport.client(), sleep=lambda _seconds: None)
+
+        result = provider.recover(entry(), assess_content("Research Update", "<p>Short feed teaser.</p>"))
+
+        self.assertTrue(result.assessment.sufficient)
+        self.assertNotIn("wallhop", result.assessment.safe_html.casefold())
+        self.assertIn("Researchers reported", result.assessment.safe_html)
+        self.assertEqual(result.assessment.safe_html, assess_content("Research Update", full_article_html()).safe_html)
+
+    def test_specific_provider_footer_is_removed_without_dropping_newsletter(self) -> None:
+        newsletter = (
+            "<section><h2>More from the newsletter</h2>"
+            "<p>Subscribers receive additional reporting, context, interviews, and analysis every week.</p></section>"
+        )
+        page = full_article_html() + f"<p>{PROVIDER_FOOTER}</p>" + newsletter
+        transport = FakeTransport(wallhop_response(page))
+        provider = WallHopProvider(http=transport.client(), sleep=lambda _seconds: None)
+
+        result = provider.recover(entry(), assess_content("Research Update", "<p>Short feed teaser.</p>"))
+
+        self.assertTrue(result.assessment.sufficient)
+        self.assertNotIn("wafflehacker", result.assessment.safe_html.casefold())
+        self.assertNotIn("everywall", result.assessment.safe_html.casefold())
+        self.assertNotIn("gpl-3.0", result.assessment.safe_html.casefold())
+        self.assertIn("More from the newsletter", result.assessment.safe_html)
+        self.assertIn("Subscribers receive additional reporting", result.assessment.safe_html)
+        expected = assess_content(
+            "Research Update",
+            full_article_html() + newsletter,
+        ).safe_html
+        self.assertEqual(result.assessment.safe_html, expected)
+
+    def test_legitimate_wallhop_and_open_source_mentions_are_preserved(self) -> None:
+        prose = (
+            "<p>The reporting discusses WallHop and open-source software, including a "
+            "separate project licensed under GPL-3.0, as part of its account of web publishing.</p>"
+        )
+        page = full_article_html().replace("</article>", prose + "</article>")
+        transport = FakeTransport(wallhop_response(page))
+        provider = WallHopProvider(http=transport.client(), sleep=lambda _seconds: None)
+
+        result = provider.recover(entry(), assess_content("Research Update", "<p>Short feed teaser.</p>"))
+
+        self.assertTrue(result.assessment.sufficient)
+        self.assertIn("WallHop and open-source software", result.assessment.safe_html)
+        self.assertIn("GPL-3.0", result.assessment.safe_html)
+
+    def test_provider_chrome_cleanup_keeps_html_sanitization(self) -> None:
+        page = (
+            "<script>RAW_SCRIPT_SENTINEL</script><img src='https://tracker.invalid/pixel' "
+            "onerror='RAW_EVENT_SENTINEL'><p>wallhop</p>"
+            + full_article_html()
+        )
+        transport = FakeTransport(wallhop_response(page))
+        provider = WallHopProvider(http=transport.client(), sleep=lambda _seconds: None)
+
+        result = provider.recover(entry(), assess_content("Research Update", "<p>Short feed teaser.</p>"))
+
+        self.assertNotIn("<script", result.assessment.safe_html.casefold())
+        self.assertNotIn("<img", result.assessment.safe_html.casefold())
+        self.assertNotIn("onerror", result.assessment.safe_html.casefold())
+        self.assertNotIn("RAW_SCRIPT_SENTINEL", result.assessment.safe_html)
+        self.assertNotIn("RAW_EVENT_SENTINEL", result.assessment.safe_html)
+
+    def test_ambiguous_footer_signature_is_rejected_without_partial_removal(self) -> None:
+        ambiguous = "<p>WaffleHacker and everywall mention ladder tools in this report.</p>"
+        transport = FakeTransport(wallhop_response(full_article_html() + ambiguous))
+        provider = WallHopProvider(http=transport.client(), sleep=lambda _seconds: None)
+
+        with self.assertRaisesRegex(RecoveryError, "ambiguous_provider_chrome"):
+            provider.recover(entry(), assess_content("Research Update", "<p>Short feed teaser.</p>"))
+
+        self.assertEqual(len(transport.calls), 2)
+
+    def test_cleanup_is_idempotent(self) -> None:
+        page = "<p>wallhop</p>" + full_article_html() + f"<p>{PROVIDER_FOOTER}</p>"
+
+        cleaned, first_reason = content_module.clean_wallhop_content(page)
+        repeated, second_reason = content_module.clean_wallhop_content(cleaned)
+
+        self.assertEqual(first_reason, "provider_chrome_removed")
+        self.assertEqual(second_reason, "no_provider_chrome")
+        self.assertEqual(repeated, cleaned)
+
+    def test_recovery_is_rejected_when_cleaned_article_fails_validation(self) -> None:
+        sentence = "Researchers compared coastal sensor readings across three independent observation sites. "
+        body = "<article>" + "".join(
+            f"<p>Section {index}. {sentence * 4}</p>" for index in range(4)
+        ) + "</article>"
+        page = body + f"<p>{PROVIDER_FOOTER}</p>"
+        self.assertTrue(assess_content("Research Update", page).sufficient)
+        transport = FakeTransport(wallhop_response(page))
+        provider = WallHopProvider(http=transport.client(), sleep=lambda _seconds: None)
+
+        with self.assertRaisesRegex(RecoveryError, "short_or_partial_prose"):
+            provider.recover(entry(), assess_content("Research Update", "<p>Short feed teaser.</p>"))
+
+        self.assertEqual(len(transport.calls), 2)
+
     def test_wallhop_full_text_passes_validation(self) -> None:
         transport = FakeTransport(wallhop_response(full_article_html()))
         provider = WallHopProvider(http=transport.client(), sleep=lambda _seconds: None)

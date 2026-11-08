@@ -11,7 +11,12 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from urllib.parse import parse_qsl, urlsplit, urlunsplit
 
-from services.content_fallback.content import ContentAssessment, assess_content, passes_recovery
+from services.content_fallback.content import (
+    ContentAssessment,
+    assess_content,
+    clean_wallhop_content,
+    passes_recovery,
+)
 from services.content_fallback.http_client import (
     DEFAULT_TIMEOUT_SECONDS,
     FetchError,
@@ -38,6 +43,20 @@ _SENSITIVE_QUERY_RE = re.compile(
 
 class RecoveryError(RuntimeError):
     pass
+
+
+def _assess_wallhop_content(title: str, content_html: str) -> ContentAssessment:
+    raw_assessment = assess_content(title, content_html)
+    if raw_assessment.blocked_page:
+        raise RecoveryError("block_page_marker")
+    if raw_assessment.paywall_signal:
+        raise RecoveryError("paywall_marker")
+
+    cleaned_html, cleanup_reason = clean_wallhop_content(raw_assessment.safe_html)
+    if cleanup_reason == "ambiguous_provider_chrome":
+        raise RecoveryError("ambiguous_provider_chrome")
+    # Re-assess the exact sanitized content that may be returned or persisted.
+    return assess_content(title, cleaned_html)
 
 
 @dataclass(frozen=True)
@@ -126,7 +145,7 @@ class WallHopProvider:
                     html_body = response.body.decode(charset, errors="replace")
                 except LookupError:
                     html_body = response.body.decode("utf-8", errors="replace")
-                assessment = assess_content(entry.title, html_body)
+                assessment = _assess_wallhop_content(entry.title, html_body)
                 if not passes_recovery(original, assessment):
                     raise RecoveryError(assessment.reason)
                 return ProviderResult(
@@ -289,9 +308,25 @@ class ContentFallbackService:
             self._delete_stored(entry.id)
             stored = None
         stored_assessment = None
+        stored_rejection_reason = None
         if stored is not None:
-            stored_assessment = assess_content(entry.title, stored.content_html)
-            if not passes_recovery(original, stored_assessment):
+            try:
+                if stored.provider == "wallhop.io":
+                    stored_assessment = _assess_wallhop_content(entry.title, stored.content_html)
+                else:
+                    stored_assessment = assess_content(entry.title, stored.content_html)
+            except RecoveryError as exc:
+                stored_assessment = None
+                stored_rejection_reason = str(exc)
+            if stored_assessment is None or not passes_recovery(original, stored_assessment):
+                rejection_reason = stored_rejection_reason or (
+                    stored_assessment.reason if stored_assessment is not None else "content_revalidation_failed"
+                )
+                LOGGER.warning(
+                    "Persistent content recovery rejected after revalidation: %s",
+                    rejection_reason,
+                    extra={"entry_id": entry.id, "provider": stored.provider, "reason": rejection_reason},
+                )
                 self._delete_stored(entry.id)
                 stored = None
                 stored_assessment = None
@@ -380,6 +415,7 @@ class ContentFallbackService:
             incomplete_reasons = {
                 "block_page_marker", "paywall_marker", "short_or_partial_prose",
                 "title_only", "insufficient_prose_structure", "no_text",
+                "ambiguous_provider_chrome",
             }
             security_reasons = {
                 "miniflux_url_rewrite_rules_present",
