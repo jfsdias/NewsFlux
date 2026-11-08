@@ -126,11 +126,36 @@ def native_registry() -> PolicyRegistry:
 
 
 class ServiceTests(unittest.TestCase):
+    def test_miniflux_scraper_rejects_repeated_teaser_inflation(self) -> None:
+        item = entry()
+        repeated_teaser = (
+            "Researchers reported a brief coastal current change and said additional "
+            "measurements will be reviewed during the next observation period."
+        )
+        miniflux = FakeMiniflux({item.id: item})
+        miniflux.scraped_content = "<article>" + "".join(
+            f"<p>{repeated_teaser}</p>" for _ in range(12)
+        ) + "</article>"
+        provider = MinifluxScraperProvider(
+            miniflux, resolver=lambda _host, _port, _private: "93.184.216.34"
+        )
+
+        with self.assertRaises(RecoveryError):
+            provider.recover(
+                item, assess_content(item.title, "<p>Short feed teaser.</p>")
+            )
+
+        self.assertEqual(
+            [call[0] for call in miniflux.native_calls],
+            ["GET_FEED", "GET_FETCH_CONTENT", "GET_FEED"],
+        )
+
     def test_legacy_wallhop_cache_is_cleaned_in_memory_before_return(self) -> None:
         item = entry()
         footer = (
             "Technical attribution: WaffleHacker and everywall maintain ladder, released under "
-            "GPL-3.0, for the rendering service."
+            "GPL-3.0, for the rendering service. Credits identify the intermediary version "
+            "used to provide this captured article to the public reader."
         )
         contaminated = "<p>wallhop</p>" + full_article_html() + f"<p>{footer}</p>"
         old_assessment = assess_content(item.title, contaminated)

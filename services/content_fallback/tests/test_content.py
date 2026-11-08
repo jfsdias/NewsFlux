@@ -31,6 +31,25 @@ class ContentAssessmentTests(unittest.TestCase):
 
         self.assertEqual(result.safe_html.count(f"<p>{repeated}</p>"), 2)
 
+    def test_repeated_teaser_preserves_blocks_without_inflating_quality(self) -> None:
+        teaser = (
+            "Researchers reported a brief coastal current change and said additional "
+            "measurements will be reviewed during the next observation period."
+        )
+        repetitions = 12
+        raw = "<article>" + "".join(
+            f"<p>{teaser}</p>" for _ in range(repetitions)
+        ) + "</article>"
+
+        result = assess_content("Research Update", raw)
+
+        self.assertGreaterEqual(len(teaser.split()) * repetitions, 180)
+        self.assertGreaterEqual(result.word_count, 180)
+        self.assertGreaterEqual(result.paragraph_count, 2)
+        self.assertLess(result.quality_word_count, 180)
+        self.assertFalse(result.sufficient)
+        self.assertEqual(result.safe_html.count(f"<p>{teaser}</p>"), repetitions)
+
     def test_void_tags_inside_nested_skip_regions_do_not_hide_article(self) -> None:
         raw = (
             "<header><img src='/logo.png'><nav>Home<br><input></header>"

@@ -41,6 +41,27 @@ class FakeTransport:
 
 
 class WallHopProviderTests(unittest.TestCase):
+    def test_article_title_named_wallhop_is_not_removed_as_provider_chrome(self) -> None:
+        body = full_article_html().removeprefix("<article>").removesuffix("</article>")
+        article = f"<article><h1>WallHop</h1>{body}</article>"
+
+        cleaned, reason = content_module.clean_wallhop_content(article)
+
+        self.assertEqual(reason, "no_provider_chrome")
+        self.assertIn("<p>WallHop</p>", cleaned)
+
+    def test_editorial_footer_with_all_provider_markers_is_not_removed(self) -> None:
+        final_paragraph = (
+            "The article's final section compares WaffleHacker, everywall, ladder, and "
+            "GPL-3.0 as examples in the history of web publishing."
+        )
+        article = full_article_html() + f"<p>{final_paragraph}</p>"
+
+        cleaned, reason = content_module.clean_wallhop_content(article)
+
+        self.assertEqual(reason, "ambiguous_provider_chrome")
+        self.assertIn(final_paragraph, cleaned)
+
     def test_isolated_provider_header_is_removed_after_fetch(self) -> None:
         page = "<p>wallhop</p>" + full_article_html()
         transport = FakeTransport(wallhop_response(page))
@@ -203,6 +224,24 @@ class WallHopProviderTests(unittest.TestCase):
         provider = WallHopProvider(http=transport.client(), sleep=lambda _seconds: None)
         with self.assertRaises(RecoveryError):
             provider.recover(entry(), assess_content("Research Update", "<p>Short feed teaser.</p>"))
+        self.assertEqual(len(transport.calls), 2)
+
+    def test_wallhop_repeated_teaser_is_not_accepted_as_full_text(self) -> None:
+        repeated_teaser = (
+            "Researchers reported a brief coastal current change and said additional "
+            "measurements will be reviewed during the next observation period."
+        )
+        repeated_page = "<article>" + "".join(
+            f"<p>{repeated_teaser}</p>" for _ in range(12)
+        ) + "</article>"
+        transport = FakeTransport(wallhop_response(repeated_page))
+        provider = WallHopProvider(http=transport.client(), sleep=lambda _seconds: None)
+
+        with self.assertRaises(RecoveryError):
+            provider.recover(
+                entry(), assess_content("Research Update", "<p>Short feed teaser.</p>")
+            )
+
         self.assertEqual(len(transport.calls), 2)
 
     def test_wallhop_block_page_http_200_is_rejected(self) -> None:

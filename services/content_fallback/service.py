@@ -52,7 +52,9 @@ def _assess_wallhop_content(title: str, content_html: str) -> ContentAssessment:
     if raw_assessment.paywall_signal:
         raise RecoveryError("paywall_marker")
 
-    cleaned_html, cleanup_reason = clean_wallhop_content(raw_assessment.safe_html)
+    cleaned_html, cleanup_reason = clean_wallhop_content(
+        raw_assessment.safe_html, source_html=content_html
+    )
     if cleanup_reason == "ambiguous_provider_chrome":
         raise RecoveryError("ambiguous_provider_chrome")
     # Re-assess the exact sanitized content that may be returned or persisted.
