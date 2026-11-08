@@ -1,8 +1,8 @@
 # NewsFlux Roadmap
 
-- **Status:** canonical roadmap reconciled on 2026-11-06 against audited commit `fbbd2357caaa2d9d4a0a6b4cf3ed1bc2e8f71063` (post-PR #183); the active engineering track is DESIGN_COMPLETION_QUEUE (visual evolution completion); current state is in Section 24.
+- **Status:** operational snapshot reconciled on 2026-11-08 against GitHub `main` `e949fdd5fd1975cd3437d3981232b0dbe18a74e5`, after PR #193. Section 24 is retained as a historical snapshot.
 - **Created:** 2026-10-15.
-- **Last reconciled:** 2026-11-06.
+- **Last reconciled:** 2026-11-08.
 - **Reconciled against (historical, post-PR #129):** GitHub `main` at `de138bc961d665005fe3322082034963bf263b16`. The production baseline remains `dc4154d7729204c65c8a1abaa50f9bfc9f92be64` (image `newsflux-local:dc4154d77292`); main/production SHA parity is **NO**, while there is no application runtime delta since production and PR #129 requires no deployment. Open PR: #130 (documentation reconciliation, draft). Active track: STORY-01B-D (human labeling gate).
 - **Previously reconciled against (historical, post-PR #128):** GitHub `main` at `dc4154d7729204c65c8a1abaa50f9bfc9f92be64`; production at `dc4154d7729204c65c8a1abaa50f9bfc9f92be64`. The earlier post-PR #120, post-PR #108 and post-PR #96 snapshots and prior states are preserved below; see Sections 19–22.
 - **Purpose:** preserve completed work, accepted findings, sequencing, architecture/product gates, upstream baseline, and the next recommended action without turning the roadmap into implementation authorization.
@@ -10,9 +10,35 @@
 
 This document is the canonical **roadmap**, not an implementation authorization. Detailed design decisions remain in the dedicated design documents and implementation plans remain in `docs/superpowers/plans/` where present.
 
-For present execution status, current PRs and audit outcomes, Section 24 is authoritative. Earlier status tables and snapshots, including Sections 18–23, are retained as historical records; they do not override Section 24.
+For present execution status, current PRs and audit outcomes, the current canonical snapshot below is authoritative. Section 24 and earlier status tables remain historical records; they do not override it.
 
 No roadmap item may bypass project governance: one identifiable purpose per PR; no merge without explicit user authorization; no blind upstream sync; upstream sync, redesign and functional changes stay isolated; incidental findings are reported, classified and routed to backlog; no new persistent NewsFlux state without an explicit architecture decision; and no incidental scope expansion.
+
+## Current canonical state (verified 2026-11-08; post-PR #193)
+
+This live snapshot supersedes Section 24 for current-state questions. Section 24 remains intact as the 2026-11-06 historical record.
+
+| Field                      | Verified state                                                                                                                     |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `CURRENT_MAIN_SHA`         | `e949fdd5fd1975cd3437d3981232b0dbe18a74e5`                                                                                         |
+| `LAST_MERGED_PR`           | #193, squash merge `e949fdd5fd1975cd3437d3981232b0dbe18a74e5`                                                                      |
+| `OPEN_DRAFT_PRS`           | #188, #190, and Story research #134–#140                                                                                           |
+| `CURRENT_PRODUCT_BASELINE` | GitHub source baseline `e949fdd5fd1975cd3437d3981232b0dbe18a74e5`; production runtime not verified                                 |
+| `CURRENT_QA_BASELINE`      | E2E contract v6, 46 frozen scenario identities; PR #193 exact-head Quality and E2E checks passed, with 46/46 scenarios passing     |
+| `PRODUCTION_SHA_VERIFIED`  | `UNKNOWN_IN_THIS_AUDIT`                                                                                                            |
+| `MAIN_PRODUCTION_PARITY`   | `NOT_VERIFIED`                                                                                                                     |
+| `NEXT_RECOMMENDED_TRACK`   | `PERSONALIZATION_V2_EVAL_01_RECONCILIATION` — reconcile open PR #190 against post-PR #191 main; Personalization V2 remains on HOLD |
+| `NEXT_AUTHORIZED_ACTION`   | PM review of this docs-only reconciliation; no follow-on implementation, merge, or deploy is authorized here                       |
+
+### PRs #184–#193
+
+PRs #184, #185, #186, #187, #189, #191, #192, and #193 are merged. PR #188 (read-only content fallback) and PR #190 (offline Personalization V2 evaluation) remain open Drafts. PRs #134–#140 remain Story research Drafts. PR #190 is not a V2 implementation and does not authorize ranking changes.
+
+PR #191 corrected the false-positive disclosure case reported by PR #190: current code compares the baseline Home projection with the final composed projection and only exposes disclosure when a committed personalization projection changes the visible composition. The separate synthetic direct-star result in PR #190 (secondary-highlight change, unchanged diversity, adjacent same-source pairs 0→1) was not re-evaluated on post-#191 main in this audit. Keep it as an open evaluation question; do not treat it as a confirmed general defect or as grounds to adopt V2. The next candidate is an offline reconciliation of PR #190 against current main.
+
+PR #193 changed the test harness only. Its exact-head automated checks passed; the owner reported PASS for the harness in all four physical conditions: Duo closed/Light, closed/Dark-OLED, open/Light, and open/Dark-OLED. That result is scoped to the harness and is not proof of general Safari, installed-PWA, Service Worker, or production-component behavior.
+
+PR #192's source/build provenance and safe-output contract is documented in [`docs/qa/E2E.md`](./qa/E2E.md). Production was not inspected live for this reconciliation. Do not infer deployment of PRs #191–#193. The PWA architecture snapshot may remain historical, and the README needs no change for this state-only update.
 
 ---
 
@@ -59,7 +85,7 @@ Current reference decisions:
 
 - **ADOPT:** multi-select; mark-selected-as-read; keyboard navigation expansion; provider-backed range mark-as-read; visible feed-health signaling; stronger list/read-state redundancy; editorial typography/details that do not alter behavior.
 - **ADAPT:** Favorites as Miniflux `starred`; density control using existing local settings; Miniflux block/keep rules; external-save/read-later handoff through Miniflux integrations; category rhythm on Home; Material-style confirmations/snackbars only where they preserve NewsFlux scope semantics.
-- **PLANNED:** HOME-VISUAL-02 composition and structural contextual-chrome consolidation remain gated on product decisions. NAV-VISUAL-01 PR0, PR1, PR4 and scoped PR5 work are complete; PR6 is an evidence gap and PR7 is product-held. See Section 24 for the current inventory.
+- **PLANNED:** HOME-VISUAL-02 composition and structural contextual-chrome consolidation remain gated on product decisions. NAV-VISUAL-01 PR0, PR1, PR4 and scoped PR5 work are complete; PR6 is an evidence gap and PR7 is product-held. The implementation inventory in Section 24 is a historical 2026-11-06 snapshot; the live operational state is recorded at the top of this roadmap.
 - **HOLD:** NewsFlux-owned Saved umbrella, internal Read Later queue, internal Bookmarks, Boards, Tags, Smart folders, per-feed layout sync, swipe-save to an undefined target, story clustering, ML.
 - **DO NOT COPY:** Apple News ad-like blocks/oversized imagery; Feedly/Inoreader toolbar density; NewsBlur visual density; glass over content; permanent three-pane UI; algorithmic For You outside Home.
 - **NetNewsWire UX research track — ACCEPTED AS DESIGN INPUT** (`NETNEWSWIRE_UX_REFERENCE`): source identity, navigation density, contextual toolbar, reader source header and a research-only multi-pane study, each separating `REFERENCE_PATTERN` from `NEWSFLUX_PRODUCT_DECISION`. See `DESIGN_REFERENCES.md`. This is not a visual-clone request and does not reopen the single-pane, opaque-content, glass-as-chrome or `884×1104` decisions.
@@ -485,13 +511,13 @@ The following opportunities do not require new persistent NewsFlux state:
 - **MINIFLUX_DELETE_STATUS_01 — PR #84 MERGED** (merge `9b6f98cee745c2fed8dbe73cee2b1f2e4ad29ac7`): the DELETE retry hazard was hardened in `src/apis/feeds.js`; the historical 404 causation remains high-confidence but unproven, so no root-cause closure is claimed.
 - **Miniflux fetch security migration — PASS:** global private-network fetch allowance is disabled; RSS-Bridge private access is restricted through the dedicated proxy to the intended `rss-bridge:80` target.
 
-### 3.13 Historical PWA Foundation rollout snapshot (2026-10-22; superseded by Section 19)
+### 3.13 Historical PWA Foundation rollout snapshot (2026-10-22)
 
-The table and rollout order below record the state before PRs #93–#95. Preserve it as history; Section 19 records the current PWA status.
+The table and rollout order below record the state before PRs #93–#95. Preserve it as history; the current PWA status is recorded in the canonical snapshot at the top of this roadmap.
 
 PWA work has moved from planning into implementation. The code and production state intentionally differ after PR #91's failed old-to-new runtime canary; this is an operational rollback, not an indication that PR #91 was reverted from GitHub.
 
-| Track                                            | Current state                               | Dependency / gate                                                                                                                                                                   |
+| Track                                            | State at the 2026-10-22 snapshot            | Dependency / gate                                                                                                                                                                   |
 | ------------------------------------------------ | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | PWA-00 runtime baseline                          | **EXECUTED (PARTIAL)**                      | Public-origin/device evidence remains limited as described in `PWA_00_BASELINE.md`                                                                                                  |
 | PWA-03A1 update activation safety / PR #90       | **MERGED; PRESENT IN PRODUCTION BASELINE**  | New service workers wait for explicit user choice; no silent mid-reading reload                                                                                                     |
@@ -503,7 +529,7 @@ PWA work has moved from planning into implementation. The code and production st
 | PWA authenticated/offline data caching           | **NOT AUTHORIZED**                          | No authenticated or user data caching; no new persistent state                                                                                                                      |
 | PWA-04 optional capabilities                     | **PLANNED / DEFECT-DRIVEN**                 | Separate capability PRs after runtime stability                                                                                                                                     |
 
-**PR #91 canary failure and current recovery contract:** the old build `5ea2136` references `RouterProtect-C7UKTYiv.js`, while build `de8b4645` emits `RouterProtect-Clm3raF1.js`. During the transition, a cross-build chunk request can reach SPA fallback HTML instead of the expected JavaScript, causing a dynamic-import failure before the normal update UI is available. Production was rolled back to `5ea21363676dd93dde97fd5ff8548e89864495ec`; GitHub `main` remains at PR #91 merge `de8b4645df1b8ce17b4b02c2d54adb694af25109`. This makes PWA-03A2C the immediate deployment blocker. A2A's cache-integrity behavior remains in main and is not reverted.
+**PR #91 canary failure and recovery contract recorded on 2026-10-22:** the old build `5ea2136` references `RouterProtect-C7UKTYiv.js`, while build `de8b4645` emits `RouterProtect-Clm3raF1.js`. During the transition, a cross-build chunk request can reach SPA fallback HTML instead of the expected JavaScript, causing a dynamic-import failure before the normal update UI is available. Production was reported rolled back to `5ea21363676dd93dde97fd5ff8548e89864495ec`; GitHub `main` was at PR #91 merge `de8b4645df1b8ce17b4b02c2d54adb694af25109`. PWA-03A2C was the immediate deployment blocker at that snapshot. A2A's cache-integrity behavior remained in main and was not reverted.
 
 Required ordering:
 
@@ -515,7 +541,7 @@ Required ordering:
 
 Do not place another standalone deployment of A2A ahead of A2C. Do not rely solely on a control rendered inside `AppNotifications`: recovery must remain reachable if a lazy chunk failure prevents the React application from mounting. The source of the current SPA asset fallback is not yet proven; inspect the serving path before changing NPM or any proxy configuration.
 
-### 3.14 Intelligence, statistics, Home briefing, automation and discovery gates (2026-10-22 planning snapshot; current queue in Section 19)
+### 3.14 Intelligence, statistics, Home briefing, automation and discovery gates (2026-10-22 planning snapshot; current queue at the top of this roadmap)
 
 These accepted tracks preserve a deterministic and privacy-bounded direction. The status below is planning/research state, not a product implementation grant.
 
@@ -639,9 +665,9 @@ Offline reading, feed notifications, third-party AI summaries and other new pers
 
 ---
 
-## 7. Historical recommended execution order (PR #91 rollback snapshot; superseded by Section 19)
+## 7. Historical recommended execution order (PR #91 rollback snapshot)
 
-This historical execution order reflected the PR #91 production rollback. It is preserved as a sequencing record, **not** authorization to implement, merge or deploy. Section 19 records the current state and queue.
+This historical execution order reflected the PR #91 production rollback. It is preserved as a sequencing record, **not** authorization to implement, merge or deploy. The current state and queue are recorded in the canonical snapshot at the top of this roadmap.
 
 ### Critical production-safety lane
 
@@ -1604,9 +1630,9 @@ PRODUCTION_MUTATIONS=NO
 
 ---
 
-## 22. Current canonical state: post-UPSTREAM_AUDIT_02 and PR #120 (2026-10-24)
+## 22. Historical snapshot: post-UPSTREAM_AUDIT_02 and PR #120 (2026-10-24)
 
-This section supersedes the historical post-PR #114 state in Section 21. Live GitHub checks on 2026-10-24 found `main` at `4c91f25f0ac92c9806f31ea7b766d28d22eb0d28` and no open PRs before this documentation reconciliation. Production remains at the owner-reported PR #114 runtime baseline; production was not re-inspected or modified by this documentation task.
+This section records the 2026-10-24 snapshot and supersedes the post-PR #114 record only within that historical sequence. The current canonical state is at the top of this roadmap. Live GitHub checks on 2026-10-24 found `main` at `4c91f25f0ac92c9806f31ea7b766d28d22eb0d28` and no open PRs before that documentation reconciliation. Production was described from the owner-reported PR #114 runtime baseline; it was not re-inspected or modified by that documentation task.
 
 ```text
 GITHUB_MAIN=4c91f25f0ac92c9806f31ea7b766d28d22eb0d28
@@ -1666,7 +1692,7 @@ The PM accepted the formal review of 13 commits from `3b2b08fb6036ef94f92a757ac6
 
 Production remains `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9` (`newsflux-local:bf1f911f0e2d`, image ID `sha256:368310dd4e8080571eb8ab72500cce4b6ac27524f4c04e891bc7d45295b8ba2f`, compose SHA `8cac8c8c2a9ceecdbd5f9cad4a3b026b3e65bb6024fc88123e41843b4549a8f4`). These exact production identifiers are from the owner-reported handoff, not a fresh server inspection. The main/production SHA parity is NO, but there is no application runtime delta since production because the intervening main commits were documentation and workflow-only. No catch-up deploy is required for #118–#120; production intentionally remains unchanged.
 
-### Current product baseline and holds
+### Product baseline and holds recorded on 2026-10-24
 
 - **PWA:** PWA-01A / PR #114 is complete, merged and deployed; D1/D2/D3 are approved and the real-device D3 gate passed. PWA-03A update safety/recovery is complete in the deployed baseline. PWA-VAL-01 remains a planned evidence-only device/runtime validation; PWA-02 stays defect-driven. This roadmap does not authorize implementation or promotion.
 - **Authentication:** AUTH_APIKEY_01 is complete, merged and deployed; manual token authentication remains supported and the consent/create/verify/store/drop-password/revoke lifecycle is preserved.
@@ -1680,9 +1706,9 @@ Production remains `bf1f911f0e2d405dbf84a04414a04cc0bc6530c9` (`newsflux-local:b
 
 `DOCKER_PUBLISHING_IDENTITY_01` is `BACKLOG_HOLD` (`HOLD_ARCHITECTURE_AUDIT_REQUIRED`). Publishing workflows still require the `electh/ReactFlux` repository identity and use `electh/reactflux` as the image destination, so publishing remains blocked for `jfsdias/NewsFlux`. A separate decision must establish whether NewsFlux wants GitHub/Docker Hub publishing given its self-hosted exact-SHA local-image production model. Do not enable publishing, change guards or destination, add credentials, or alter topology in this roadmap reconciliation.
 
-### Current next-track decision matrix
+### Next-track decision matrix recorded on 2026-10-24
 
-The completed UPSTREAM_AUDIT_02 is removed from the ready/recommended queue. PWA-VAL-01 has precedence as an already-planned evidence-only validation stage: it can assess the deployed baseline without application changes, while PWA-03A is complete and PWA-02 is defect-driven. This recommendation is subject to PM prioritization, device availability and the existing runbook; it authorizes no implementation.
+At the 2026-10-24 snapshot, UPSTREAM_AUDIT_02 was removed from that snapshot's ready/recommended queue. PWA-VAL-01 was listed as an evidence-only validation candidate, subject to PM prioritization, device availability and its runbook; this historical recommendation does not describe the current queue or authorize implementation.
 
 | Candidate                            | Status                            | Gate / decision                                                                                                                                                | Recommended order              |
 | ------------------------------------ | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
@@ -1696,7 +1722,7 @@ The completed UPSTREAM_AUDIT_02 is removed from the ready/recommended queue. PWA
 
 The next step is a prioritization decision for PWA-VAL-01, not automatic execution. Every item remains subject to the project rules: one purpose per PR, no blind upstream sync, no new persistent state without architecture approval, and no merge without explicit user authorization.
 
-## 23. Historical canonical state: post-PR #129 / STORY-01B-R (2026-10-25; superseded by Section 24)
+## 23. Historical canonical state: post-PR #129 / STORY-01B-R (2026-10-25; followed by the 2026-11-06 snapshot in Section 24)
 
 This section supersedes the historical post-NAV-02F-A state. GitHub main was live-verified at `de138bc961d665005fe3322082034963bf263b16` following the merge of STORY-01B-R (PR #129). Deployed production application revision remains `dc4154d7729204c65c8a1abaa50f9bfc9f92be64` (image `newsflux-local:dc4154d77292`). Main/production SHA parity is NO, but MAIN_PRODUCTION_PARITY_REQUIRED is NO: PR #129 was exclusively research documentation and offline harness tooling, introducing zero product runtime changes and zero production import changes. This divergence is intentional (`INTENTIONAL_DIVERGENCE=YES`, `DEPLOYMENT_DRIFT_REQUIRING_REMEDIATION=NO`); no deployment or canary is required (`DEPLOY_REQUIRED=NO`, `CANARY_REQUIRED=NO`).
 
@@ -1828,7 +1854,7 @@ MERGE_AUTHORIZED=NO
 DEPLOY_AUTHORIZED=NO
 ```
 
-### Current next-track decision matrix
+### Next-track decision matrix recorded on 2026-11-06
 
 With STORY-01B-R and PR #130 merged to main, and STORY-01B-D gold dataset curation successfully completed and frozen in `story01b-gold-v1`, the active track is STORY-01B-D4 (documentation reconciliation of the story identity contract and gold metadata). Downstream modeling (STORY-01B-M), clustering (STORY-01B-C), production story integration (STORY-02), and all product runtime modifications remain unauthorized pending PM authorization.
 
@@ -1853,11 +1879,13 @@ The active track is STORY-01B-D4 (documentation reconciliation only). Downstream
 
 ---
 
-## 24. Current canonical state: audited commit fbbd2357caaa2d9d4a0a6b4cf3ed1bc2e8f71063, post-PR #183 (2026-11-06)
+## 24. Historical snapshot: audited commit fbbd2357caaa2d9d4a0a6b4cf3ed1bc2e8f71063, post-PR #183 (2026-11-06)
 
-Reconciled for PR #184 R2 against the exact audited main SHA fbbd2357caaa2d9d4a0a6b4cf3ed1bc2e8f71063. This section is authoritative for current state; earlier dated sections remain historical and have not been rewritten. This documentation change does not authorize implementation, merge or deployment.
+This section preserves the state as recorded on 2026-11-06. The current canonical state is at the top of this roadmap.
 
-### Current repository, production and quality snapshot
+Reconciled for PR #184 R2 against the exact audited main SHA fbbd2357caaa2d9d4a0a6b4cf3ed1bc2e8f71063. This section records the historical state as of 2026-11-06; the current canonical state is at the top of this roadmap. Earlier dated sections remain historical and have not been rewritten. This documentation change does not authorize implementation, merge or deployment.
+
+### Repository, production and quality snapshot at 2026-11-06
 
 | Field                              | Current value and evidence                                                                                                                                                                                                                                                                                       |
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -2051,7 +2079,7 @@ DESIGN-CLOSE-00 is the first visual activity and is a read-only audit. No token 
 | Docker publishing identity                                                | BACKLOG           | Separate architecture decision before changing registry, identity, credentials or release topology.                                                  |
 | PWA installability/device follow-up                                       | EVIDENCE_GAP      | Preserve the current runtime; collect physical-device evidence without treating it as a release/deploy gate for this docs task.                      |
 
-### Current ordering and governance
+### Ordering and governance recorded on 2026-11-06
 
 The owner-approved order is: (1) finish visual evolution through evidence-led work, beginning with the read-only DESIGN-CLOSE-00 audit; (2) conclude selective upstream review/integration without bulk sync, then consider optional package maintenance only if justified; (3) resume deferred roadmap items after their product or architecture gates. There is no automatic implementation queue beyond DESIGN-CLOSE-00.
 
