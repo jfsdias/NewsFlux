@@ -56,15 +56,41 @@ const completeSmallInventory = (runId) =>
 const executionRun = (
   index,
   { runId = `run-${index}`, inventoryPath = `/tmp/${runId}.json`, exitCode = 0 } = {},
-) => ({
-  verified: true,
-  runId,
-  inventoryPath,
-  exitCode,
-  signal: null,
-  spawnError: undefined,
-  inventory: completeSmallInventory(runId),
-})
+) => {
+  const sourceSha = "a".repeat(40)
+  const buildIntegrityDigest = `sha256:${"b".repeat(64)}`
+  const buildFileCount = 2
+  const runtime = {
+    nodeVersion: "v22.22.0",
+    pnpmVersion: "11.21.0",
+    playwrightVersion: "1.63.0",
+    chromiumVersionOrRevision: "Chromium 153.0.8010.12",
+  }
+  const appServer = { runId, sourceSha, buildIntegrityDigest, buildFileCount }
+
+  return {
+    verified: true,
+    runId,
+    inventoryPath,
+    summaryPath: `/tmp/${runId}-summary.json`,
+    exitCode,
+    signal: null,
+    spawnError: undefined,
+    inventory: completeSmallInventory(runId),
+    provenance: {
+      gate: "PASS",
+      runId,
+      sourceSha,
+      sourceTreeSha: "c".repeat(40),
+      testSourceSha: sourceSha,
+      buildSourceSha: sourceSha,
+      buildIntegrityDigest,
+      buildFileCount,
+      runtime,
+      appServer,
+    },
+  }
+}
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 
 const withoutReporterOutput = (action) => {
@@ -258,6 +284,28 @@ test("three-run stability rejects reused execution identifiers or artifacts", ()
   assert.match(duplicateRunId.problems.join("\n"), /duplicate execution run identifier/)
   assert.equal(duplicateArtifact.stable, false)
   assert.match(duplicateArtifact.problems.join("\n"), /duplicate inventory artifact path/)
+})
+
+test("three-run stability rejects build or server receipts from another source/run", () => {
+  const mismatchedBuild = executionRun(2)
+  mismatchedBuild.provenance.buildIntegrityDigest = `sha256:${"d".repeat(64)}`
+  const mismatchedServerRun = executionRun(3)
+  mismatchedServerRun.provenance.appServer.runId = "previous-run"
+
+  const result = evaluateRuns(
+    [executionRun(1), mismatchedBuild, mismatchedServerRun],
+    SMALL_CONTRACT,
+  )
+
+  assert.equal(result.stable, false)
+  assert.match(
+    result.problems.join("\n"),
+    /buildIntegrityDigest differs across stability executions/,
+  )
+  assert.match(
+    result.problems.join("\n"),
+    /provenance receipts do not match the execution run identifier/,
+  )
 })
 
 test("the actual Playwright reporter fails the run when zero scenarios execute", () => {

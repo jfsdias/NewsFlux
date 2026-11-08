@@ -68,7 +68,7 @@ test("stability checker rejects three stale inventories after zero-exit runs wri
       true,
     )
     assert.equal(evaluation.stable, false)
-    assert.match(evaluation.problems.join("\n"), /current invocation did not produce/i)
+    assert.match(evaluation.problems.join("\n"), /provenance preflight/i)
     assert.equal(
       readFileSync(path.join(legacyDirectory, "run-1.json"), "utf8"),
       JSON.stringify(previousInventory("old-run-1")),
