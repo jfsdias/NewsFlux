@@ -1,0 +1,40 @@
+{
+  "fixtureKind": "SYNTHETIC_ONLY",
+  "frozenForDeterministicTests": true,
+  "sessionChoices": [
+    { "slotIndex": 0, "profileSeedKeys": ["synthetic-favorite-mobility"] },
+    { "slotIndex": 1, "profileSeedKeys": ["synthetic-favorite-learning"] },
+    { "slotIndex": 2, "profileSeedKeys": [] },
+    {
+      "slotIndex": 3,
+      "profileSeedKeys": ["synthetic-favorite-local", "synthetic-favorite-community"]
+    }
+  ],
+  "responsePlan": [
+    {
+      "slotIndex": 0,
+      "completionStatus": "COMPLETE",
+      "scenarioPreferences": { "synthetic_transit": "X", "synthetic_library": "CANNOT_JUDGE" },
+      "overallPreference": "Y"
+    },
+    {
+      "slotIndex": 1,
+      "completionStatus": "COMPLETE",
+      "scenarioPreferences": { "synthetic_transit": null, "synthetic_library": "TIE" },
+      "overallPreference": null
+    },
+    {
+      "slotIndex": 2,
+      "completionStatus": "COMPLETE",
+      "scenarioPreferences": { "synthetic_transit": "NEITHER", "synthetic_library": "X" },
+      "overallPreference": "CANNOT_JUDGE"
+    },
+    {
+      "slotIndex": 3,
+      "completionStatus": "COMPLETE",
+      "scenarioPreferences": { "synthetic_transit": "Y", "synthetic_library": "Y" },
+      "overallPreference": "TIE",
+      "tamper": "PAIR_RECEIPT_HASH"
+    }
+  ]
+}

@@ -1,0 +1,117 @@
+{
+  "fixtureKind": "SYNTHETIC_ONLY",
+  "responses": [
+    {
+      "schemaVersion": "1.0",
+      "studyCode": "PERSONALIZATION_HUMAN_RELEVANCE_PILOT_01",
+      "sessionCode": "SYNTHETIC-b49d76e89e2b365166627cf1",
+      "consentAccepted": true,
+      "completionStatus": "COMPLETE",
+      "sessionManifestHash": "34da25c08994c8163828fdf42173a7ff4f94a7065ca4d393d02784312e2b939a",
+      "studyOnlyPreferenceSeedKeys": ["synthetic-favorite-mobility"],
+      "scenarioRatings": {
+        "synthetic_transit": {
+          "pairReceiptHash": "11c40361568a157a8908e5873e985b5144b1f832c4a74d12b1895dd6a56b28d7",
+          "presentationOrder": "X_THEN_Y",
+          "scenarioPreference": "X",
+          "X": { "editorialUsefulness": 1, "confidence": 3 },
+          "Y": { "editorialUsefulness": 2, "confidence": 3 }
+        },
+        "synthetic_library": {
+          "pairReceiptHash": "c5e66489a4d382f7d6dcf20094270acea0c17c57895594ab9f286c667da8cec9",
+          "presentationOrder": "X_THEN_Y",
+          "scenarioPreference": "CANNOT_JUDGE",
+          "X": { "editorialUsefulness": 2, "confidence": 3 },
+          "Y": { "editorialUsefulness": 3, "confidence": 3 }
+        }
+      },
+      "overallPreference": "Y",
+      "allocationKey": "8e011a262dde1b2e80a2476e189e0387",
+      "optionalRationale": null
+    },
+    {
+      "schemaVersion": "1.0",
+      "studyCode": "PERSONALIZATION_HUMAN_RELEVANCE_PILOT_01",
+      "sessionCode": "SYNTHETIC-30a1a639b896c878182c4133",
+      "consentAccepted": true,
+      "completionStatus": "COMPLETE",
+      "sessionManifestHash": "09e1517f384ebe1f83375cf2e724dab35cee429d115ffa519f76160ae51b5270",
+      "studyOnlyPreferenceSeedKeys": ["synthetic-favorite-learning"],
+      "scenarioRatings": {
+        "synthetic_transit": {
+          "pairReceiptHash": "134e90f8e450ea59015ea77ad6cfc7ea8e026426adb4a27c3c64c02f7dac4334",
+          "presentationOrder": "X_THEN_Y",
+          "scenarioPreference": null,
+          "X": { "editorialUsefulness": 2, "confidence": 3 },
+          "Y": { "editorialUsefulness": 3, "confidence": 3 }
+        },
+        "synthetic_library": {
+          "pairReceiptHash": "59120af7585455d2defbff09752c86f229840eaa61a272197a8d8492c267823a",
+          "presentationOrder": "X_THEN_Y",
+          "scenarioPreference": "TIE",
+          "X": { "editorialUsefulness": 3, "confidence": 3 },
+          "Y": { "editorialUsefulness": 4, "confidence": 3 }
+        }
+      },
+      "overallPreference": null,
+      "allocationKey": "78b88809123bc8ae2012859ad5a91d89",
+      "optionalRationale": null
+    },
+    {
+      "schemaVersion": "1.0",
+      "studyCode": "PERSONALIZATION_HUMAN_RELEVANCE_PILOT_01",
+      "sessionCode": "SYNTHETIC-c2f69235a84e5a94eee36e94",
+      "consentAccepted": true,
+      "completionStatus": "COMPLETE",
+      "sessionManifestHash": "d37698cd8465c0f325c33437d3c891ee0acdd7745231db74c59f6b10851434c6",
+      "studyOnlyPreferenceSeedKeys": [],
+      "scenarioRatings": {
+        "synthetic_transit": {
+          "pairReceiptHash": "09dc962d372d863126e022c330eafbda7bf2c0e359085ce27a9796a7069149e1",
+          "presentationOrder": "X_THEN_Y",
+          "scenarioPreference": "NEITHER",
+          "X": { "editorialUsefulness": 3, "confidence": 3 },
+          "Y": { "editorialUsefulness": 4, "confidence": 3 }
+        },
+        "synthetic_library": {
+          "pairReceiptHash": "c5e66489a4d382f7d6dcf20094270acea0c17c57895594ab9f286c667da8cec9",
+          "presentationOrder": "X_THEN_Y",
+          "scenarioPreference": "X",
+          "X": { "editorialUsefulness": 4, "confidence": 3 },
+          "Y": { "editorialUsefulness": 5, "confidence": 3 }
+        }
+      },
+      "overallPreference": "CANNOT_JUDGE",
+      "allocationKey": "8b45b42388cf0f11be700d75906b9fbb",
+      "optionalRationale": null
+    },
+    {
+      "schemaVersion": "1.0",
+      "studyCode": "PERSONALIZATION_HUMAN_RELEVANCE_PILOT_01",
+      "sessionCode": "SYNTHETIC-5d7a28f1a0161ee792c6a173",
+      "consentAccepted": true,
+      "completionStatus": "COMPLETE",
+      "sessionManifestHash": "f4883c7796287c4f6398cdeb42cb87cfbece16abc0e5f4372427d1eb3af9a5cb",
+      "studyOnlyPreferenceSeedKeys": ["synthetic-favorite-local", "synthetic-favorite-community"],
+      "scenarioRatings": {
+        "synthetic_transit": {
+          "pairReceiptHash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "presentationOrder": "X_THEN_Y",
+          "scenarioPreference": "Y",
+          "X": { "editorialUsefulness": 4, "confidence": 3 },
+          "Y": { "editorialUsefulness": 5, "confidence": 3 }
+        },
+        "synthetic_library": {
+          "pairReceiptHash": "ab0cc190f46b4f59f5016772f9c17c6fa9c210bed18f42a49ed8c904d7a26841",
+          "presentationOrder": "X_THEN_Y",
+          "scenarioPreference": "Y",
+          "X": { "editorialUsefulness": 5, "confidence": 3 },
+          "Y": { "editorialUsefulness": 1, "confidence": 3 }
+        }
+      },
+      "overallPreference": "TIE",
+      "allocationKey": "7a2b94b9adf0ea4ea81bffc6661b8ca5",
+      "optionalRationale": null
+    }
+  ]
+}

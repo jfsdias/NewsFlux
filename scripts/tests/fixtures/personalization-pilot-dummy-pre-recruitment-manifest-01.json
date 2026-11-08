@@ -1,0 +1,343 @@
+{
+  "schemaVersion": "PILOT_PRE_RECRUITMENT_MANIFEST_V1",
+  "fixtureKind": "SYNTHETIC_ONLY",
+  "studyCode": "PERSONALIZATION_HUMAN_RELEVANCE_PILOT_01",
+  "frozenAt": "2026-11-08T12:00:00.000Z",
+  "referenceBaseSha": "35446e1ab5d8e0e82bbef285835244ac4ab80181",
+  "locale": "en-US",
+  "theme": "dark",
+  "viewport": { "width": 884, "height": 1104 },
+  "rendererRevision": "synthetic-slot-renderer-v1",
+  "algorithmRevisions": {
+    "phase2c": "home-editorial-session-and-category-projection@35446e1ab5d8e0e82bbef285835244ac4ab80181",
+    "personalizationV1": "home-personalization-profile-and-projection@35446e1ab5d8e0e82bbef285835244ac4ab80181"
+  },
+  "rules": {
+    "eligibleStatus": "unread",
+    "sameEligibleArticleIdsAcrossArms": true,
+    "sameRendererAndSectionStructure": true,
+    "maxProfileSeedItems": 75,
+    "storyIntelligence": "DISABLED",
+    "externalRankingService": "NONE"
+  },
+  "scenarios": [
+    {
+      "scenarioCode": "synthetic_transit",
+      "eligibleArticleIds": [1101, 1102, 1103, 1104, 1105, 1106, 1107, 1108]
+    },
+    {
+      "scenarioCode": "synthetic_library",
+      "eligibleArticleIds": [2101, 2102, 2103, 2104, 2105, 2106, 2107, 2108]
+    }
+  ],
+  "articles": [
+    {
+      "id": 1101,
+      "status": "unread",
+      "starred": false,
+      "title": "Synthetic transit bulletin 1101",
+      "published_at": "2026-11-01T12:00:00.000Z",
+      "content": "Synthetic-only article content for rehearsal fixture 1101.",
+      "feed": {
+        "id": 11,
+        "title": "Synthetic Transit Source 11",
+        "category": { "id": 1, "title": "Synthetic Local" }
+      }
+    },
+    {
+      "id": 1102,
+      "status": "unread",
+      "starred": false,
+      "title": "Synthetic transit bulletin 1102",
+      "published_at": "2026-11-01T11:55:00.000Z",
+      "content": "Synthetic-only article content for rehearsal fixture 1102.",
+      "feed": {
+        "id": 12,
+        "title": "Synthetic Transit Source 12",
+        "category": { "id": 1, "title": "Synthetic Local" }
+      }
+    },
+    {
+      "id": 1103,
+      "status": "unread",
+      "starred": false,
+      "title": "Synthetic transit bulletin 1103",
+      "published_at": "2026-11-01T11:48:00.000Z",
+      "content": "Synthetic-only article content for rehearsal fixture 1103.",
+      "feed": {
+        "id": 13,
+        "title": "Synthetic Transit Source 13",
+        "category": { "id": 2, "title": "Synthetic Civic" }
+      }
+    },
+    {
+      "id": 1104,
+      "status": "unread",
+      "starred": false,
+      "title": "Synthetic transit bulletin 1104",
+      "published_at": "2026-11-01T11:40:00.000Z",
+      "content": "Synthetic-only article content for rehearsal fixture 1104.",
+      "feed": {
+        "id": 14,
+        "title": "Synthetic Transit Source 14",
+        "category": { "id": 2, "title": "Synthetic Civic" }
+      }
+    },
+    {
+      "id": 1105,
+      "status": "unread",
+      "starred": false,
+      "title": "Synthetic transit bulletin 1105",
+      "published_at": "2026-11-01T11:32:00.000Z",
+      "content": "Synthetic-only article content for rehearsal fixture 1105.",
+      "feed": {
+        "id": 15,
+        "title": "Synthetic Transit Source 15",
+        "category": { "id": 3, "title": "Synthetic Mobility" }
+      }
+    },
+    {
+      "id": 1106,
+      "status": "unread",
+      "starred": false,
+      "title": "Synthetic transit bulletin 1106",
+      "published_at": "2026-11-01T11:24:00.000Z",
+      "content": "Synthetic-only article content for rehearsal fixture 1106.",
+      "feed": {
+        "id": 16,
+        "title": "Synthetic Transit Source 16",
+        "category": { "id": 3, "title": "Synthetic Mobility" }
+      }
+    },
+    {
+      "id": 1107,
+      "status": "unread",
+      "starred": false,
+      "title": "Synthetic transit bulletin 1107",
+      "published_at": "2026-11-01T11:16:00.000Z",
+      "content": "Synthetic-only article content for rehearsal fixture 1107.",
+      "feed": {
+        "id": 17,
+        "title": "Synthetic Transit Source 17",
+        "category": { "id": 1, "title": "Synthetic Local" }
+      }
+    },
+    {
+      "id": 1108,
+      "status": "unread",
+      "starred": false,
+      "title": "Synthetic transit bulletin 1108",
+      "published_at": "2026-11-01T11:08:00.000Z",
+      "content": "Synthetic-only article content for rehearsal fixture 1108.",
+      "feed": {
+        "id": 18,
+        "title": "Synthetic Transit Source 18",
+        "category": { "id": 2, "title": "Synthetic Civic" }
+      }
+    },
+    {
+      "id": 2101,
+      "status": "unread",
+      "starred": false,
+      "title": "Synthetic library bulletin 2101",
+      "published_at": "2026-11-02T12:00:00.000Z",
+      "content": "Synthetic-only article content for rehearsal fixture 2101.",
+      "feed": {
+        "id": 21,
+        "title": "Synthetic Library Source 21",
+        "category": { "id": 4, "title": "Synthetic Learning" }
+      }
+    },
+    {
+      "id": 2102,
+      "status": "unread",
+      "starred": false,
+      "title": "Synthetic library bulletin 2102",
+      "published_at": "2026-11-02T11:55:00.000Z",
+      "content": "Synthetic-only article content for rehearsal fixture 2102.",
+      "feed": {
+        "id": 22,
+        "title": "Synthetic Library Source 22",
+        "category": { "id": 4, "title": "Synthetic Learning" }
+      }
+    },
+    {
+      "id": 2103,
+      "status": "unread",
+      "starred": false,
+      "title": "Synthetic library bulletin 2103",
+      "published_at": "2026-11-02T11:48:00.000Z",
+      "content": "Synthetic-only article content for rehearsal fixture 2103.",
+      "feed": {
+        "id": 23,
+        "title": "Synthetic Library Source 23",
+        "category": { "id": 5, "title": "Synthetic Public Services" }
+      }
+    },
+    {
+      "id": 2104,
+      "status": "unread",
+      "starred": false,
+      "title": "Synthetic library bulletin 2104",
+      "published_at": "2026-11-02T11:40:00.000Z",
+      "content": "Synthetic-only article content for rehearsal fixture 2104.",
+      "feed": {
+        "id": 24,
+        "title": "Synthetic Library Source 24",
+        "category": { "id": 5, "title": "Synthetic Public Services" }
+      }
+    },
+    {
+      "id": 2105,
+      "status": "unread",
+      "starred": false,
+      "title": "Synthetic library bulletin 2105",
+      "published_at": "2026-11-02T11:32:00.000Z",
+      "content": "Synthetic-only article content for rehearsal fixture 2105.",
+      "feed": {
+        "id": 25,
+        "title": "Synthetic Library Source 25",
+        "category": { "id": 6, "title": "Synthetic Community" }
+      }
+    },
+    {
+      "id": 2106,
+      "status": "unread",
+      "starred": false,
+      "title": "Synthetic library bulletin 2106",
+      "published_at": "2026-11-02T11:24:00.000Z",
+      "content": "Synthetic-only article content for rehearsal fixture 2106.",
+      "feed": {
+        "id": 26,
+        "title": "Synthetic Library Source 26",
+        "category": { "id": 6, "title": "Synthetic Community" }
+      }
+    },
+    {
+      "id": 2107,
+      "status": "unread",
+      "starred": false,
+      "title": "Synthetic library bulletin 2107",
+      "published_at": "2026-11-02T11:16:00.000Z",
+      "content": "Synthetic-only article content for rehearsal fixture 2107.",
+      "feed": {
+        "id": 27,
+        "title": "Synthetic Library Source 27",
+        "category": { "id": 4, "title": "Synthetic Learning" }
+      }
+    },
+    {
+      "id": 2108,
+      "status": "unread",
+      "starred": false,
+      "title": "Synthetic library bulletin 2108",
+      "published_at": "2026-11-02T11:08:00.000Z",
+      "content": "Synthetic-only article content for rehearsal fixture 2108.",
+      "feed": {
+        "id": 28,
+        "title": "Synthetic Library Source 28",
+        "category": { "id": 5, "title": "Synthetic Public Services" }
+      }
+    }
+  ],
+  "profileSeeds": [
+    {
+      "key": "synthetic-favorite-mobility",
+      "entry": {
+        "id": 9101,
+        "status": "read",
+        "starred": true,
+        "title": "Synthetic saved sample 9101",
+        "published_at": "2026-10-30T12:00:00.000Z",
+        "feed": {
+          "id": 15,
+          "title": "Synthetic Transit Source 15",
+          "category": { "id": 3, "title": "Synthetic Mobility" }
+        }
+      }
+    },
+    {
+      "key": "synthetic-favorite-local",
+      "entry": {
+        "id": 9102,
+        "status": "read",
+        "starred": true,
+        "title": "Synthetic saved sample 9102",
+        "published_at": "2026-10-30T12:00:00.000Z",
+        "feed": {
+          "id": 12,
+          "title": "Synthetic Transit Source 12",
+          "category": { "id": 1, "title": "Synthetic Local" }
+        }
+      }
+    },
+    {
+      "key": "synthetic-favorite-community",
+      "entry": {
+        "id": 9201,
+        "status": "read",
+        "starred": true,
+        "title": "Synthetic saved sample 9201",
+        "published_at": "2026-10-30T12:00:00.000Z",
+        "feed": {
+          "id": 25,
+          "title": "Synthetic Library Source 25",
+          "category": { "id": 6, "title": "Synthetic Community" }
+        }
+      }
+    },
+    {
+      "key": "synthetic-favorite-learning",
+      "entry": {
+        "id": 9202,
+        "status": "read",
+        "starred": true,
+        "title": "Synthetic saved sample 9202",
+        "published_at": "2026-10-30T12:00:00.000Z",
+        "feed": {
+          "id": 22,
+          "title": "Synthetic Library Source 22",
+          "category": { "id": 4, "title": "Synthetic Learning" }
+        }
+      }
+    }
+  ],
+  "articleContentHashes": {
+    "1101": "edd4b049e4a630c29aeb8479ef0975dd9abf6afc24bb25ed5cecb6c2eb3e1425",
+    "1102": "82c6f752e496640a1ebf917ee98e69aba186ef33860cd34ea5400c26614f1738",
+    "1103": "52fabc2ccf0749d83197fdfb5659bf6f18153d7d95a1ea96820b8010f5f383dd",
+    "1104": "d11b169abcf6bdd13bf696b039fce77a81f4420e478b2e0f37182856468d7f3f",
+    "1105": "b0b6fe9e33cb07a0863ac2ddc7b016c61d9e8a10f67302f7823ea6f9b06384d9",
+    "1106": "0483e39fd33bb7d2b91ad74435fe96bd219b6e620715d0bd8f4f6d48ed1c79c4",
+    "1107": "0be01af58d4fec2b345f92f81e31fcfefb9cdfdd35c0d241e9397167b755ab0a",
+    "1108": "2a66aabfe7fa12a32b2b9f820e1ffb4d1a84d1ce5e9063211cd72f352c9fa0d5",
+    "2101": "1535dca4793d653f185a4c864b964ee1361abb6f43740faa50053c07b116b278",
+    "2102": "85612019e3c112743962926ea235609f103de3a9d8ac98ca54ed8e38309aed92",
+    "2103": "d4a290dd9d5d81573a3e3c28f525c1f9774823fd4d3e579b52d7126fbe105770",
+    "2104": "49af2c3e71785e10c347ee86d9ee0dd646f135bc93e615a3b1eacf3450d08a5e",
+    "2105": "9ac182b60321747bb90bbb6dd8bccd25b902ea6eb661163432e84a31b0c44fdd",
+    "2106": "e1622682291ef0ee092a3bd8ba573793f8308c7ef375b0f7f4a68272e85840a0",
+    "2107": "de12f28e65f850e89ec50699b06316c0cbc3677db7b7994bbecac58e33580085",
+    "2108": "fe63a2b762dce9d68b1d4178a89ff24f5cedc3b79d55c814f78a1b094daae7ff"
+  },
+  "articleMetadataHashes": {
+    "1101": "f6dfaaa604e99e0b325a2783a920544241175ba892366d1e71b8a3aeaf146827",
+    "1102": "458c9d0ea98734944186770425ed38acbce56aa9ee871e59572df8eb5d4bbbbd",
+    "1103": "0ae95eacac0e8927744d53790e1effa599235bb08106613ccea1c4fa79f7bb3e",
+    "1104": "088aa3d34dcafd45202f8f48f92a07db426d86c88e9c4ad3f3a18ea7ff291d0a",
+    "1105": "a9e2bf3fcd6f242ece590c2d522f771ea1478684eb98b468329d07f0e6332b2f",
+    "1106": "fb22d0a5adcf7c1e5c124dc59d52511ca370f23d71f52c55d5aa92b9032b4021",
+    "1107": "484041307e5f18d008ac7deca361a6c8a1c37804423e7f22bafbec38c639c4ed",
+    "1108": "523f92b0181759777493f7d9487e28612afc1edfa43a4e78b02a7e3fb51d51a1",
+    "2101": "a5af86f093ecdc9a128e7229a193852d8518b33fc250e87f426cd3b788f77eb8",
+    "2102": "61efa3b5808e63cef026d56d11a336019aab9c654eb461daf4b6a19a3ba75530",
+    "2103": "e27873d013c0def5e15cbe13f0497032f74719a075d98faf24ca5ef560032e41",
+    "2104": "8f0304d93f2073b803c01f2701fe9f37f702ff361671296558b08f45c1f73de4",
+    "2105": "9769deb09d8cd9303001cc399f739fff0885a362e6242316584b92c823a69bdb",
+    "2106": "d7b1ed998ee907916dfd85f084f4be60d2bb4331321d9ad371d502af64490942",
+    "2107": "0114d9af2265316571e66708e882bfe3d02008dc0255fa54f65c275700c5422e",
+    "2108": "0a65d7556b7c914ccac16fa7306a8fff04e4d510f90f3d9e1d2e376fa21f4390"
+  },
+  "articleSetHash": "ddf4148df065d9b66d4b086c844524983643622f41925bbb0ba78531c3802a8c",
+  "manifestHash": "a5b3d646ed53bb944a66195ce71c237f434d1e7e1d04be0170e4a97bc83f1a81"
+}
