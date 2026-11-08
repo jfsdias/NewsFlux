@@ -1,5 +1,7 @@
 body {
   margin: 0;
+  background-color: var(--app-shell-background);
+  color: var(--nf-text-primary);
 }
 
 html,
@@ -11,16 +13,28 @@ body,
 }
 
 .harness-controls {
+  background-color: var(--nf-surface-content);
+  border-bottom: 1px solid var(--nf-separator-subtle);
+  color: var(--nf-text-primary);
   padding: 16px;
 }
 
-.harness-controls > button {
+.harness-controls > button,
+.harness-controls > select {
+  background-color: var(--nf-surface-raised);
+  border: 1px solid var(--nf-accent);
+  border-radius: var(--nf-radius-control);
+  color: var(--nf-text-primary);
+  min-height: 36px;
   margin: 4px;
+  padding: 4px 10px;
 }
 
 .harness-matrix-report,
 .harness-manual-report {
-  border: 1px solid #c5cbd2;
+  background-color: var(--nf-surface-content);
+  border: 1px solid var(--nf-separator-subtle);
+  color: var(--nf-text-primary);
   margin-block: 12px;
   max-width: 100%;
   padding: 8px 12px;
@@ -34,7 +48,7 @@ body,
 }
 
 .harness-manual-report strong {
-  color: #8a4b08;
+  color: var(--nf-favorite);
 }
 
 .harness-stage {
