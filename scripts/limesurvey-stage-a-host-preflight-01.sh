@@ -21,6 +21,12 @@ OS_VERSION=unknown
 CPU_CORES=unknown
 MEMORY_GIB=unknown
 FREE_GIB=unknown
+UTM_APP_PATH=
+UTM_PRESENT=NO
+UTM_VERSION=unknown
+UTM_BUILD_VERSION=unknown
+UTM_METADATA_GATE=BLOCKED
+UTM_VERSION_GATE=BLOCKED
 
 if [ "$OS_NAME" = Darwin ] && command -v sw_vers >/dev/null 2>&1; then
   OS_VERSION=$(sw_vers -productVersion 2>/dev/null || printf unknown)
@@ -50,17 +56,43 @@ else
   emit HOST_PLATFORM_GATE BLOCKED
 fi
 
+if [ "$OS_NAME" = Darwin ] && printf '%s\n' "$OS_VERSION" | grep -Eq '^27\.[0-9]+(\.[0-9]+)?$'; then
+  HOST_MACOS_VERSION_GATE=PASS
+else
+  HOST_MACOS_VERSION_GATE=BLOCKED
+fi
+emit HOST_MACOS_VERSION_GATE "$HOST_MACOS_VERSION_GATE"
+
 if [ "$CPU_CORES" -ge 4 ] 2>/dev/null && [ "$MEMORY_GIB" -ge 12 ] 2>/dev/null && awk -v free="$FREE_GIB" 'BEGIN {exit !(free >= 40)}'; then
   emit HOST_RESOURCE_GATE PASS
 else
   emit HOST_RESOURCE_GATE BLOCKED
 fi
 
-if [ -d /Applications/UTM.app ] || [ -d "$HOME/Applications/UTM.app" ]; then
-  emit UTM_PRESENT YES
-else
-  emit UTM_PRESENT NO
+UTM_APPLICATIONS_DIR=${UTM_APPLICATIONS_DIR:-/Applications}
+if [ -d "$UTM_APPLICATIONS_DIR/UTM.app" ]; then
+  UTM_APP_PATH="$UTM_APPLICATIONS_DIR/UTM.app"
+elif [ -d "$HOME/Applications/UTM.app" ]; then
+  UTM_APP_PATH="$HOME/Applications/UTM.app"
 fi
+
+if [ -n "$UTM_APP_PATH" ]; then
+  UTM_PRESENT=YES
+  UTM_INFO_PLIST="$UTM_APP_PATH/Contents/Info.plist"
+  if [ -f "$UTM_INFO_PLIST" ] && [ -r "$UTM_INFO_PLIST" ] && command -v plutil >/dev/null 2>&1 && plutil -lint "$UTM_INFO_PLIST" >/dev/null 2>&1; then
+    UTM_VERSION=$(plutil -extract CFBundleShortVersionString raw -o - "$UTM_INFO_PLIST" 2>/dev/null || printf unknown)
+    UTM_BUILD_VERSION=$(plutil -extract CFBundleVersion raw -o - "$UTM_INFO_PLIST" 2>/dev/null || printf unknown)
+    if [ -n "$UTM_VERSION" ] && [ "$UTM_VERSION" != unknown ] && [ -n "$UTM_BUILD_VERSION" ] && [ "$UTM_BUILD_VERSION" != unknown ]; then
+      UTM_METADATA_GATE=PASS
+      if [ "$UTM_VERSION" = 5.0.8 ]; then UTM_VERSION_GATE=PASS; fi
+    fi
+  fi
+fi
+
+emit UTM_PRESENT "$UTM_PRESENT"
+emit UTM_VERSION "$UTM_VERSION"
+emit UTM_METADATA_GATE "$UTM_METADATA_GATE"
+emit UTM_VERSION_GATE "$UTM_VERSION_GATE"
 if is_present limactl || is_present lima; then emit LIMA_PRESENT YES; else emit LIMA_PRESENT NO; fi
 if is_present multipass; then emit MULTIPASS_PRESENT YES; else emit MULTIPASS_PRESENT NO; fi
 if is_present qemu-system-aarch64 || is_present qemu-system-x86_64; then emit QEMU_PRESENT YES; else emit QEMU_PRESENT NO; fi
@@ -106,7 +138,7 @@ emit HOST_SERVICE_REACHABILITY_GATE BLOCKED_NO_VM
 emit NO_PUBLIC_INGRESS_GATE BLOCKED_NO_VM
 emit PRODUCTION_ROUTE_GATE BLOCKED_NO_VM
 
-if [ "$OS_NAME" = Darwin ] && [ "$HOST_ARCH" = arm64 ] && [ -d /Applications/UTM.app -o -d "$HOME/Applications/UTM.app" ] && [ "$IPV4_FORWARD" = 0 ] && [ "$IPV6_FORWARD" = 0 ] && [ "$CPU_CORES" -ge 4 ] 2>/dev/null && [ "$MEMORY_GIB" -ge 12 ] 2>/dev/null && awk -v free="$FREE_GIB" 'BEGIN {exit !(free >= 40)}'; then
+if [ "$OS_NAME" = Darwin ] && [ "$HOST_ARCH" = arm64 ] && [ "$HOST_MACOS_VERSION_GATE" = PASS ] && [ "$UTM_PRESENT" = YES ] && [ "$UTM_METADATA_GATE" = PASS ] && [ "$UTM_VERSION_GATE" = PASS ] && [ "$IPV4_FORWARD" = 0 ] && [ "$IPV6_FORWARD" = 0 ] && [ "$CPU_CORES" -ge 4 ] 2>/dev/null && [ "$MEMORY_GIB" -ge 12 ] 2>/dev/null && awk -v free="$FREE_GIB" 'BEGIN {exit !(free >= 40)}'; then
   emit HOST_PREFLIGHT PASS
 else
   emit HOST_PREFLIGHT BLOCKED

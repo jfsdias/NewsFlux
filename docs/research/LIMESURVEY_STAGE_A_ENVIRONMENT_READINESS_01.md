@@ -26,20 +26,20 @@ This branch changes only this readiness document, the read-only host preflight s
 
 Observed on 2026-11-09:
 
-| Property                                                 | Observation                                                                                             |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| Host                                                     | MacBook Pro, Apple M1 Pro, arm64                                                                        |
-| macOS                                                    | 27.2                                                                                                    |
-| CPU                                                      | Prior detailed audit: 8 total cores (6 performance, 2 efficiency); current script cannot read the count |
-| Memory                                                   | 16 GiB, read from `system_profiler`                                                                     |
-| Home-volume free space                                   | 79.7 GiB in the latest preflight run                                                                    |
-| VM software                                              | UTM, Lima, Multipass, QEMU, VirtualBox, VMware Fusion, and Parallels not found by the preflight         |
-| Safari                                                   | Present; use a separate clean browser profile for the future local preview                              |
-| Host routes                                              | IPv4 and IPv6 default routes are present on the host. This says nothing about a future guest route.     |
-| Host IPv4/IPv6 forwarding sysctls                        | Read blocked in the current environment; actual values remain unknown                                   |
-| VM runtime / guest route / browser-to-guest reachability | Not tested; no VM was created                                                                           |
+| Property                                                 | Observation                                                                                                                                               |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Host                                                     | MacBook Pro, Apple M1 Pro, arm64                                                                                                                          |
+| macOS                                                    | 27.2                                                                                                                                                      |
+| CPU                                                      | Prior detailed audit: 8 total cores (6 performance, 2 efficiency); current script cannot read the count                                                   |
+| Memory                                                   | 16 GiB, read from `system_profiler`                                                                                                                       |
+| Home-volume free space                                   | 82.4 GiB in the latest preflight run                                                                                                                      |
+| VM software                                              | UTM.app present; `Info.plist` metadata validated as UTM 5.0.8. Lima, Multipass, QEMU, VirtualBox, VMware Fusion, and Parallels not found by the preflight |
+| Safari                                                   | Present; use a separate clean browser profile for the future local preview                                                                                |
+| Host routes                                              | IPv4 and IPv6 default routes are present on the host. This says nothing about a future guest route.                                                       |
+| Host IPv4/IPv6 forwarding sysctls                        | Read blocked in the current environment; actual values remain unknown                                                                                     |
+| VM runtime / guest route / browser-to-guest reachability | Not tested; no VM was created                                                                                                                             |
 
-The previous detailed audit measured 8 CPU cores, 16 GiB of memory, and 82.8 GiB free. In the latest run the read-only script could not read the CPU count through `sysctl`, so it reports `HOST_CPU_CORES=unknown` and `HOST_RESOURCE_GATE=BLOCKED`; memory is 16 GiB and current free space is 79.7 GiB. Installation preflight is **BLOCKED** because UTM is absent, forwarding state is unreadable, and the current resource gate cannot verify CPU count. No route addresses, MAC addresses, VPN details, secrets, or service endpoints are recorded. No OMV host was inspected because no authorization or access path was established.
+The previous detailed audit measured 8 CPU cores, 16 GiB of memory, and 82.8 GiB free. The latest read-only run reports `HOST_CPU_CORES=unknown` and `HOST_RESOURCE_GATE=BLOCKED`; memory is 16 GiB and current free space is 82.4 GiB. macOS 27.2 and UTM 5.0.8 passed their version gates, but `HOST_PREFLIGHT` remains **BLOCKED** because CPU count and IPv4/IPv6 forwarding state could not be verified. No route addresses, MAC addresses, VPN details, secrets, or service endpoints are recorded. No OMV host was inspected because no authorization or access path was established.
 
 Run the proposed host-only check with:
 
@@ -47,11 +47,13 @@ Run the proposed host-only check with:
 sh scripts/limesurvey-stage-a-host-preflight-01.sh
 ```
 
-It reports summarized, non-identifying properties only. It does not install, download, create, start, or configure anything. `HOST_PREFLIGHT=BLOCKED` is expected until UTM is installed through a separate authorization and the relevant host forwarding state can be inspected.
+It reports summarized, non-identifying properties only. It does not install, download, create, start, or configure anything. Host admission requires all existing resource and forwarding checks plus the explicit macOS and UTM version gates. `HOST_PREFLIGHT=BLOCKED` remains expected while CPU count or host forwarding cannot be verified. A future macOS major version requires review; a host pass would still not prove guest or runtime isolation.
+
+Host admission is fail-closed: the script reads macOS using `sw_vers` and requires Darwin arm64 on macOS 27.x. It separately reports whether `UTM.app` is present, whether its readable `Contents/Info.plist` is valid and contains both version fields, and whether `CFBundleShortVersionString` is exactly 5.0.8. Presence alone is not version approval; unreadable or incomplete metadata blocks admission. A future macOS major version requires review of this contract. Even `HOST_PREFLIGHT=PASS` would cover only host admission: guest routing, VM peer isolation, host-service reachability, and runtime isolation remain untested until a separately authorized VM exists.
 
 ## Virtualization options
 
-Versions below were checked against vendor release pages on 2026-11-09. No tool was installed.
+Versions below were checked against vendor release pages on 2026-11-09. The later read-only host preflight found UTM 5.0.8 already present; no installation was performed as part of either audit.
 
 | Option                               | Compatibility and current network behavior                                                                                                                                                                                                                                                                                              | Assessment for this rehearsal                                                                                                                                                                                                                                                         |
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -64,7 +66,7 @@ Versions below were checked against vendor release pages on 2026-11-09. No tool 
 ### Resource and operating model
 
 - Guest: **2 vCPU, 4 GiB RAM, 24 GiB virtual disk**; Debian server-only, no desktop environment.
-- Host admission threshold: arm64, at least 4 CPU cores, 12 GiB RAM, and **40 GiB free disk** before creation. The previous detailed audit measured 8 cores and 16 GiB; the latest preflight could not verify the CPU count, so require a fresh `HOST_RESOURCE_GATE=PASS` before creation. Latest free space is 79.7 GiB.
+- Host admission threshold: arm64, at least 4 CPU cores, 12 GiB RAM, and **40 GiB free disk** before creation. The previous detailed audit measured 8 cores and 16 GiB; the latest preflight could not verify the CPU count, so require a fresh `HOST_RESOURCE_GATE=PASS` before creation. Latest free space is 82.4 GiB.
 - Disk headroom reserves room for a pinned ~3.72 GiB Debian DVD-1 image, LimeSurvey archive, VM growth, database backup, and a pre-import VM snapshot. VM disk may be sparse; reserve as if it grows to its configured cap.
 - Apache, PHP, PostgreSQL, and LimeSurvey run entirely inside the disposable VM. PostgreSQL listens on loopback only. Apache listens on the guest host-only IPv4 address and one unprivileged HTTP port; the guest firewall permits only the host-only Mac peer. Before creating the VM, require that no other VM is attached to that UTM Host Only segment. Review host listeners reachable over the host-only interface; guest egress is dropped by default, and no host firewall change is allowed without separate authorization. No NewsFlux/Miniflux, Compose, reverse proxy, SMTP, DNS, external analytics, or public service is involved.
 - The local Safari profile is isolated from production cookies and credentials. The host browser loads only the guest's host-only address and locally packaged assets.
@@ -100,8 +102,11 @@ Obtain an explicit owner authorization naming the UTM target, Debian and LimeSur
 
 ```text
 HOST_ARCH=arm64
+HOST_MACOS_VERSION_GATE=PASS
 HOST_RESOURCE_GATE=PASS
 UTM_PRESENT=YES
+UTM_METADATA_GATE=PASS
+UTM_VERSION_GATE=PASS
 HOST_IPV4_FORWARDING=0
 HOST_IPV6_FORWARDING=0
 HOST_PREFLIGHT=PASS
@@ -260,26 +265,26 @@ The checked-in blueprint at `scripts/tests/fixtures/limesurvey-ce-dummy-instrume
 
 ## Gate ledger
 
-| Gate                                       | Status           | Evidence / remaining condition                                                                           |
-| ------------------------------------------ | ---------------- | -------------------------------------------------------------------------------------------------------- |
-| GitHub prestate and PR #200 merge          | `PASS`           | Live `main` is PR #200 merge SHA; no overlapping LimeSurvey PR                                           |
-| Host inventory                             | `PASS`           | Read-only Mac audit; UTM absent, host forwarding state unreadable                                        |
-| Resource sizing                            | `BLOCKED`        | Memory and disk meet thresholds; latest script could not read CPU count, so the combined gate is blocked |
-| Host Only peer-VM isolation                | `BLOCKED_NO_VM`  | No UTM instance exists; same-app peer VM exclusion must be checked at runtime                            |
-| Host-service reachability                  | `BLOCKED_NO_VM`  | No UTM host-only interface exists; listener/firewall review is a future runtime gate                     |
-| UTM option and architecture review         | `PLAN_PASS`      | UTM AVF Host Only, Debian arm64; no application/runtime installed                                        |
-| Lima/Multipass comparison                  | `PASS`           | Official network docs reviewed; both default models rejected for this isolation target                   |
-| IPv4/IPv6 isolation                        | `PLAN_PASS`      | No NIC besides Host Only; no guest default routes; guest default-deny firewall; runtime still untested   |
-| No production/private route                | `PLAN_PASS`      | Guest egress denied and no default route; no service probes; runtime still untested                      |
-| No public ingress                          | `PLAN_PASS`      | No bridged/NAT NIC/forward; host-only-bound listener plus guest firewall; runtime still untested         |
-| Current LimeSurvey version/source/checksum | `PASS`           | Official page/checksum endpoint observed; version snapshot recheck required before install               |
-| LimeSurvey archive bytes                   | `NOT_EXECUTED`   | No archive download or local hashing                                                                     |
-| Debian media signature/hash                | `NOT_EXECUTED`   | Exact media and signed-checksum verification commands prepared; no ISO downloaded                        |
-| Offline package availability               | `BLOCKED`        | Must demonstrate required package closure on DVD-1; no online fallback permitted                         |
-| Install/health checks                      | `PLAN_PASS`      | Commands prepared; runtime not created                                                                   |
-| LSS export/re-import/Preview               | `PLAN_PASS`      | Blueprint and steps preserved; no `.lss` or survey runtime created                                       |
-| Backup/rollback/teardown                   | `PLAN_PASS`      | Pre-import snapshot plus `pg_dump`; delete requires separate authorization                               |
-| Stage B/CSV/human data                     | `NOT_AUTHORIZED` | No activation, submissions, real CSV, or collection                                                      |
+| Gate                                       | Status           | Evidence / remaining condition                                                                                |
+| ------------------------------------------ | ---------------- | ------------------------------------------------------------------------------------------------------------- |
+| GitHub prestate and PR #200 merge          | `PASS`           | Live `main` is PR #200 merge SHA; no overlapping LimeSurvey PR                                                |
+| Host inventory                             | `PASS`           | Read-only Mac audit; macOS 27.2 and UTM 5.0.8 metadata/version gates pass; host forwarding remains unreadable |
+| Resource sizing                            | `BLOCKED`        | Memory and disk meet thresholds; latest script could not read CPU count, so the combined gate is blocked      |
+| Host Only peer-VM isolation                | `BLOCKED_NO_VM`  | No UTM instance exists; same-app peer VM exclusion must be checked at runtime                                 |
+| Host-service reachability                  | `BLOCKED_NO_VM`  | No UTM host-only interface exists; listener/firewall review is a future runtime gate                          |
+| UTM option and architecture review         | `PLAN_PASS`      | UTM 5.0.8 app metadata is verified; AVF Host Only and Debian arm64 remain the plan; no VM/runtime exists      |
+| Lima/Multipass comparison                  | `PASS`           | Official network docs reviewed; both default models rejected for this isolation target                        |
+| IPv4/IPv6 isolation                        | `PLAN_PASS`      | No NIC besides Host Only; no guest default routes; guest default-deny firewall; runtime still untested        |
+| No production/private route                | `PLAN_PASS`      | Guest egress denied and no default route; no service probes; runtime still untested                           |
+| No public ingress                          | `PLAN_PASS`      | No bridged/NAT NIC/forward; host-only-bound listener plus guest firewall; runtime still untested              |
+| Current LimeSurvey version/source/checksum | `PASS`           | Official page/checksum endpoint observed; version snapshot recheck required before install                    |
+| LimeSurvey archive bytes                   | `NOT_EXECUTED`   | No archive download or local hashing                                                                          |
+| Debian media signature/hash                | `NOT_EXECUTED`   | Exact media and signed-checksum verification commands prepared; no ISO downloaded                             |
+| Offline package availability               | `BLOCKED`        | Must demonstrate required package closure on DVD-1; no online fallback permitted                              |
+| Install/health checks                      | `PLAN_PASS`      | Commands prepared; runtime not created                                                                        |
+| LSS export/re-import/Preview               | `PLAN_PASS`      | Blueprint and steps preserved; no `.lss` or survey runtime created                                            |
+| Backup/rollback/teardown                   | `PLAN_PASS`      | Pre-import snapshot plus `pg_dump`; delete requires separate authorization                                    |
+| Stage B/CSV/human data                     | `NOT_AUTHORIZED` | No activation, submissions, real CSV, or collection                                                           |
 
 ### Owner decisions required before any operation
 
@@ -310,7 +315,11 @@ The checked-in blueprint at `scripts/tests/fixtures/limesurvey-ce-dummy-instrume
 
 ```text
 HOST_AUDIT=PASS_READ_ONLY
-HOST_PREFLIGHT=BLOCKED_UTM_ABSENT_AND_FORWARDING_UNREADABLE
+HOST_MACOS_VERSION_GATE=PASS
+UTM_PRESENT=YES
+UTM_METADATA_GATE=PASS
+UTM_VERSION_GATE=PASS
+HOST_PREFLIGHT=BLOCKED_CPU_AND_FORWARDING_UNREADABLE
 RECOMMENDED_TARGET=UTM_5.0.8_AVF_HOST_ONLY_DEBIAN_13.7.0_ARM64
 FALLBACK_TARGET=DEDICATED_DISCONNECTED_LINUX_ARM64_HOST_NOT_VERIFIED_AVAILABLE
 LIMESURVEY_VERSION=7.9.1
