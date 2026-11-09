@@ -25,9 +25,16 @@ URL_FINGERPRINT = hashlib.sha256(SOURCE_URL.encode()).hexdigest()
 
 
 class FakeAuth:
-    def __init__(self, *, user_id: int = 7, accessible: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        user_id: int = 7,
+        accessible: bool = True,
+        url_fingerprint: str | None = URL_FINGERPRINT,
+    ) -> None:
         self.user_id = user_id
         self.accessible = accessible
+        self.url_fingerprint = url_fingerprint
         self.calls = []
 
     def authorize_entry(self, **kwargs):
@@ -37,7 +44,7 @@ class FakeAuth:
         return type(
             "AuthorizedEntryFixture",
             (),
-            {"entry_id": ENTRY_ID, "user_id": self.user_id, "url_fingerprint": URL_FINGERPRINT},
+            {"entry_id": ENTRY_ID, "user_id": self.user_id, "url_fingerprint": self.url_fingerprint},
         )()
 
 
@@ -218,6 +225,20 @@ class ReaderContentBridgeTests(unittest.TestCase):
                     request_origin=ORIGIN,
                     request_is_secure=True,
                 )
+
+    def test_missing_or_invalid_authorized_url_fingerprint_blocks_private_recovery(self):
+        for fingerprint in (None, "not-a-sha256", "0" * 63):
+            recovery = FakeRecovery()
+            bridge = make_bridge(auth=FakeAuth(url_fingerprint=fingerprint), recovery=recovery)
+            with self.subTest(fingerprint=fingerprint), self.assertRaises(ReaderBridgeError):
+                bridge.recover(
+                    entry_id=ENTRY_ID,
+                    api_key=API_KEY,
+                    claimed_miniflux_base_url=BASE_URL,
+                    request_origin=ORIGIN,
+                    request_is_secure=True,
+                )
+            self.assertEqual(recovery.calls, [])
 
     def test_unsuccessful_or_unsafe_results_are_not_returned(self):
         for change in (

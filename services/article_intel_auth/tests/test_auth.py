@@ -5,7 +5,7 @@ import json
 import unittest
 from collections.abc import Callable
 
-from services.article_intel_auth.auth import AuthError, AuthSettings, MinifluxAuthService
+from services.article_intel_auth.auth import AuthError, AuthSettings, AuthorizedEntry, MinifluxAuthService
 from services.content_fallback.http_client import FetchError, HTTPResponse, PinnedHTTPClient
 
 
@@ -66,6 +66,18 @@ def service(http: FakeHTTP, *, admin_ids: frozenset[int] = frozenset({7}), state
 
 
 class MinifluxAuthTests(unittest.TestCase):
+    def test_authorized_entry_keeps_legacy_constructor_compatible(self) -> None:
+        authorized = AuthorizedEntry(
+            entry_id=42,
+            feed_id=3,
+            user_id=7,
+            title="Synthetic article",
+            content_html="Synthetic article body.",
+            content_sha256=hashlib.sha256(b"Synthetic article body.").hexdigest(),
+        )
+
+        self.assertIsNone(authorized.url_fingerprint)
+
     def test_real_pinned_http_client_path_uses_fixed_origin_and_synthetic_transport(self) -> None:
         requests: list[dict[str, object]] = []
 

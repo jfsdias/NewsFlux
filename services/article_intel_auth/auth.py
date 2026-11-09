@@ -35,7 +35,7 @@ class AuthorizedEntry:
     title: str
     content_html: str
     content_sha256: str
-    url_fingerprint: str
+    url_fingerprint: str | None = None
 
 
 class MinifluxAuthService:

@@ -326,6 +326,9 @@ class ReaderContentBridge:
             raise
         if authorized_entry.user_id != self.allowed_user_id:
             raise ReaderBridgeError("entry_not_accessible", 404)
+        url_fingerprint = authorized_entry.url_fingerprint
+        if not isinstance(url_fingerprint, str) or not _SHA256_RE.fullmatch(url_fingerprint):
+            raise ReaderBridgeError("entry_fingerprint_unavailable", 502)
 
         try:
             service_identity = self.miniflux.get_current_user_identity()
@@ -341,5 +344,5 @@ class ReaderContentBridge:
         return _validate_recovery_result(
             result,
             entry_id=authorized_entry.entry_id,
-            url_fingerprint=authorized_entry.url_fingerprint,
+            url_fingerprint=url_fingerprint,
         )
