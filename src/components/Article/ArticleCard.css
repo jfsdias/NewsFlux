@@ -50,6 +50,10 @@
   gap: 8px;
 }
 
+.card-meta:has(.card-quick-actions) {
+  align-items: center;
+}
+
 .card-preview {
   color: var(--nf-text-secondary, var(--color-text-2));
   font-size: 0.9rem;

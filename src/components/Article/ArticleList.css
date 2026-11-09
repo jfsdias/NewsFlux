@@ -32,7 +32,7 @@
   min-width: 0;
 }
 
-.article-card-grid-cell > .article-entry,
+.article-card-grid-cell > .article-entry-card-shell,
 .article-card-grid-cell > .article-entry-shell {
   flex: 1;
   height: 100%;

@@ -9,6 +9,7 @@ const useLongPressContextMenu = ({ disabled = false } = {}) => {
   const contextMenuIdRef = useRef(Symbol("context-menu"))
   const contextMenuTargetRef = useRef(null)
   const longPressTimerRef = useRef(null)
+  const restoreFocusTargetRef = useRef(null)
   const suppressNextClickRef = useRef(false)
   const [popupVisible, setPopupVisible] = useState(false)
 
@@ -28,6 +29,14 @@ const useLongPressContextMenu = ({ disabled = false } = {}) => {
         document.dispatchEvent(
           new CustomEvent(CONTEXT_MENU_OPEN_EVENT, { detail: contextMenuIdRef.current }),
         )
+      } else {
+        const restoreFocusTarget = restoreFocusTargetRef.current
+        restoreFocusTargetRef.current = null
+        if (restoreFocusTarget?.isConnected) {
+          globalThis.requestAnimationFrame?.(() =>
+            restoreFocusTarget.focus({ preventScroll: true }),
+          )
+        }
       }
 
       setPopupVisible(nextVisible)
@@ -35,9 +44,50 @@ const useLongPressContextMenu = ({ disabled = false } = {}) => {
     [disabled],
   )
 
+  const openContextMenu = useCallback(
+    (target, restoreFocusTarget = null) => {
+      if (disabled || !target) {
+        return
+      }
+      contextMenuTargetRef.current = target
+      restoreFocusTargetRef.current = restoreFocusTarget
+      const bounds = target.getBoundingClientRect()
+      target.dispatchEvent(
+        new MouseEvent("contextmenu", {
+          bubbles: true,
+          button: 2,
+          cancelable: true,
+          clientX: bounds.left + bounds.width / 2,
+          clientY: bounds.top + bounds.height / 2,
+          view: globalThis,
+        }),
+      )
+    },
+    [disabled],
+  )
+
+  useEffect(() => {
+    if (!popupVisible || !restoreFocusTargetRef.current) {
+      return
+    }
+
+    const handleEscape = (event) => {
+      if (event.key !== "Escape") {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      handlePopupVisibleChange(false)
+    }
+
+    document.addEventListener("keydown", handleEscape, true)
+    return () => document.removeEventListener("keydown", handleEscape, true)
+  }, [handlePopupVisibleChange, popupVisible])
+
   useEffect(() => {
     const handleOtherContextMenuOpen = (event) => {
       if (event.detail !== contextMenuIdRef.current) {
+        restoreFocusTargetRef.current = null
         setPopupVisible(false)
       }
     }
@@ -55,6 +105,7 @@ const useLongPressContextMenu = ({ disabled = false } = {}) => {
     }
 
     cancelLongPress()
+    restoreFocusTargetRef.current = null
     const timeoutId = globalThis.setTimeout(() => setPopupVisible(false), 0)
     return () => globalThis.clearTimeout(timeoutId)
   }, [cancelLongPress, disabled])
@@ -157,6 +208,7 @@ const useLongPressContextMenu = ({ disabled = false } = {}) => {
       onPointerMove: handlePointerMove,
       onPointerUp: handlePointerEnd,
     },
+    openContextMenu,
   }
 }
 
