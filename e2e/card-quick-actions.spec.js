@@ -269,4 +269,59 @@ test.describe("CARD-QUICK-ACTIONS-01", () => {
       }
     }
   })
+
+  test("CARD-QUICK-ACTIONS-01-7: grid card content fills each stretched row", async ({
+    openApp,
+  }) => {
+    for (const path of ["/", "/all"]) {
+      const { page } = await openApp({
+        path,
+        width: 884,
+        height: 1104,
+        settings: { articleListLayout: "card" },
+      })
+      const gridCards = page.locator(
+        path === "/"
+          ? ".home-editorial .article-entry-card-shell.grid-card-wrapper"
+          : ".article-entry-card-shell.grid-card-wrapper",
+      )
+      await expect(gridCards.first()).toBeVisible()
+
+      const cardHeights = await gridCards.evaluateAll((elements) =>
+        elements.map((shell) => {
+          const content = shell.querySelector(".article-entry-card-content > .grid-card-content")
+          return {
+            content: content?.getBoundingClientRect().height ?? 0,
+            shell: shell.clientHeight,
+          }
+        }),
+      )
+      const footerGaps = await page.locator(".article-card-grid-row").evaluateAll((rows) =>
+        rows.flatMap((row) => {
+          const footers = [...row.children]
+            .map(
+              (cell) =>
+                cell
+                  .querySelector(".article-entry-card-shell.grid-card-wrapper .grid-card-footer")
+                  ?.getBoundingClientRect().bottom,
+            )
+            .filter((bottom) => Number.isFinite(bottom))
+          if (footers.length < 2) {
+            return []
+          }
+          return [Math.max(...footers) - Math.min(...footers)]
+        }),
+      )
+      expect(cardHeights.length).toBeGreaterThan(0)
+      expect(
+        cardHeights.filter(({ content, shell }) => content < shell - 2),
+        `${path}: ${JSON.stringify(cardHeights)}`,
+      ).toEqual([])
+      expect(footerGaps.length).toBeGreaterThan(0)
+      expect(
+        footerGaps.filter((gap) => gap > 1),
+        `${path}: ${JSON.stringify(footerGaps)}`,
+      ).toEqual([])
+    }
+  })
 })

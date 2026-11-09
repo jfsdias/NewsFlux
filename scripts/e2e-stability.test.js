@@ -174,9 +174,9 @@ test("fewer than three runs cannot establish stability", () => {
   assert.match(result.problems.join("\n"), /at least 3 runs/)
 })
 
-test("the frozen expected scenario contract contains the reviewed 52 unique identities", () => {
-  assert.equal(EXPECTED_SCENARIOS.length, 52)
-  assert.equal(new Set(EXPECTED_SCENARIOS.map(({ id }) => id)).size, 52)
+test("the frozen expected scenario contract contains the reviewed 53 unique identities", () => {
+  assert.equal(EXPECTED_SCENARIOS.length, 53)
+  assert.equal(new Set(EXPECTED_SCENARIOS.map(({ id }) => id)).size, 53)
   assert.ok(EXPECTED_SCENARIOS.every(({ id, state }) => id && state))
 })
 
@@ -186,8 +186,8 @@ test("CARD-QUICK-ACTIONS-01 increments the scenario contract with all approved s
     states[state] = (states[state] ?? 0) + 1
   }
 
-  assert.equal(E2E_SCENARIO_CONTRACT_VERSION, 8)
-  assert.deepEqual(states, { PASSED: 52 })
+  assert.equal(E2E_SCENARIO_CONTRACT_VERSION, 9)
+  assert.deepEqual(states, { PASSED: 53 })
   for (const id of ["F02-2", "F04-1", "F04-3", "QA-001-884", "QA-001-939"]) {
     assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === id)?.state, "PASSED")
   }
@@ -201,6 +201,7 @@ test("CARD-QUICK-ACTIONS-01 increments the scenario contract with all approved s
     "CARD-QUICK-ACTIONS-01-4",
     "CARD-QUICK-ACTIONS-01-5",
     "CARD-QUICK-ACTIONS-01-6",
+    "CARD-QUICK-ACTIONS-01-7",
   ]) {
     assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === id)?.state, "PASSED")
   }
@@ -411,7 +412,7 @@ test("the actual Playwright reporter accepts the complete reviewed scenario cont
     const recorded = JSON.parse(readFileSync(outputFile, "utf8"))
 
     assert.equal(result, undefined)
-    assert.equal(recorded.scenarios.length, 52)
+    assert.equal(recorded.scenarios.length, 53)
     assert.deepEqual(recorded.contractProblems, [])
   } finally {
     rmSync(directory, { recursive: true, force: true })

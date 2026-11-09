@@ -38,6 +38,12 @@
   pointer-events: none;
 }
 
+.article-entry-card-shell.grid-card-wrapper > .article-entry-card-content {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .article-entry-card-content .card-quick-actions {
   pointer-events: auto;
 }
