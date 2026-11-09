@@ -51,7 +51,7 @@ Miniflux -> [Content Fallback after its gates] -> verified ArticleSnapshot
               -> Reader and summary request use identical snapshot identity
 ```
 
-Do **not** attach the dedicated LiteLLM proxy to the existing `ai_internal` or `npm-proxyyml_default` merely for convenience. No direct browser access to the LiteLLM proxy, DB, Admin UI or management API. Only the NewsFlux AI backend may be reachable behind a reviewed HTTPS route. Authentication via the existing Miniflux browser token alone is **not** established as safe backend identity.
+Do **not** attach the dedicated LiteLLM proxy to the existing `ai_internal` or `npm-proxyyml_default` merely for convenience. No direct browser access to the LiteLLM proxy, DB, Admin UI or management API. Only the NewsFlux AI backend may be reachable behind a reviewed HTTPS route. **Preferred Miniflux-first identity:** the existing NewsFlux API key becomes backend identity only **after** the backend verifies it through `GET /v1/me` on a deployment-allowlisted canonical Miniflux origin. A raw token, client-supplied user/admin claim, or arbitrary API origin is not itself backend authority. No new login or OIDC client is required for P0 if these checks pass.
 
 ### Proposed deployment inventory (names are placeholders, not discovered paths)
 
@@ -98,21 +98,21 @@ Official deployment reference: https://docs.litellm.ai/docs/proxy/deploy and htt
 
 ## 5. Authentication and management boundary — blocking design choice
 
-**Before implementing a credential settings form**, choose a NewsFlux AI backend identity mechanism. Current NewsFlux auth state in the browser is not an authorization system for the new backend.
+**Preferred P0: preserve the current NewsFlux login using Miniflux URL and API key.** The AI backend receives that key only over reviewed same-origin HTTPS, calls `GET /v1/me` with `X-Auth-Token` against an exact **operator-configured, allowlisted Miniflux origin**, and establishes `(trusted_origin, returned_user_id)` as the verified principal. Never follow redirects or let a browser-provided Miniflux URL become an arbitrary backend fetch/proxy target. Reject all AI operations for unapproved origins while retaining ordinary Reader behavior. Verify on **each protected request** without storing the Miniflux key server-side. Fetch one article with the same authenticated user's key and check returned entry ownership. Provider administration requires both `is_admin=true` from the verified Miniflux response and an explicit deployment-admin allowlist of Miniflux user IDs for that origin. Provider keys remain securely server-side in A2, never in browser persistence.
 
-Acceptable candidate for audit: existing Authelia OIDC with an Authorization Code + PKCE flow and backend session, or a rigorously authenticated reverse-proxy identity boundary with unforgeable headers and direct access blocked. This is a candidate only; present availability and OIDC client/grants are **unverified**. If neither meets the requirements, API management remains disabled.
+**Authelia/OIDC = HOLD (contingency only).** A2_AUTH-02 found one OIDC client not identified as NewsFlux and HTTP 400 from a direct-IP discovery probe; this does not establish that OIDC is broken or needed. Revisit OIDC only after a demonstrated Miniflux-first security or tenancy failure.
 
 Minimum controls:
 
-- Backend verifies principal, session, administrator role, CSRF (for cookie sessions), same-origin/proxy trust boundary, expiry, logout, rate limits and per-entry authorization.
+- Backend verifies the Miniflux token with `GET /v1/me` on the approved exact origin **on each request**; admin role additionally requires `is_admin` plus origin-scoped admin user-ID allowlist; enforce same-origin/CORS and proxy boundaries, revoked-token denial, rate limits and per-entry authorization. Cookie session/CSRF requirements only apply if cookies are introduced later.
 - Admin route allowlist; LiteLLM management API and master key accessible only by the NewsFlux backend administrative component. The *inference client* uses a separate restricted key, allowlisted model IDs and limited routes. Do not derive admin keys from inference keys.
 - Reject any client-supplied `user_id`, private API base URL, SQL/DB connection string, arbitrary article URL, provider key ID outside the NewsFlux-owned registry, or arbitrary LiteLLM management path.
-- No per-user BYOK in P0 without verified tenant-to-entry mapping. A deployment-admin-managed credential scope is the only candidate for initial configuration.
+- No per-user BYOK in P0 without verified tenant-to-entry mapping. The **provider** credential scope is deployment-admin-managed; individual Miniflux users continue to have their own article-read rights.
 - Database `proxy_admin` and Admin UI permissions are separated from NewsFlux UI authentication; the LiteLLM Admin UI is not directly published.
 - Credential create/replace/revoke operations are audit-trailed without secret values and fail closed if dependent models or transaction outcomes cannot be reconciled.
 - Avoid a long-lived cached admin key in any browser session, trace or static resource.
 
-Blocking deliverable: **AUTH_DECISION_RECORD** with effective identity design, API permission matrix, negative tests, security review and logout behavior. No AUTH approval => no admin UI, no provider onboarding, no article transfer.
+Blocking deliverable: **AUTH_DECISION_RECORD** proving exact-origin Miniflux validation, admin user-ID allowlist, token revocation, per-entry ownership, cross-origin/CORS protections and negative tests. No AUTH approval => no admin UI, provider onboarding or article transfer. **OIDC is not a prerequisite** unless a specific Miniflux-first gate fails.
 
 ## 6. Secrets, backup, recovery and key lifecycle
 
@@ -146,8 +146,8 @@ Mistral is a model/provider choice, not a permanent API design assumption. Googl
 | A2_ISOLATION | dedicated DB/role and private networks; shared LiteLLM counts/SHAs invariant | Cross-database privilege, unexpected shared-container restart |
 | A2_DB_MIGRATION | explicit isolated migration + schema contract and clean startup | Schema drift or shared DB touched |
 | A2_BACKUP_RESTORE | restore database + cryptographic key access into disposable isolation, synthetic credentials decrypt | Counts-only backup or missing salt blocks promotion |
-| A2_AUTH_ADMIN | unauthenticated and reader principals denied, admin mutation CSRF gated, admin UI not publicly routable | Any browser access to LiteLLM master key or management path |
-| A2_AUTH_ENTRY | only authorized entry IDs and snapshots can be summarized | Guessed entry ID or stale-session leak |
+| A2_AUTH_ADMIN | verified Miniflux `GET /v1/me` on pinned origin, `is_admin` and operator-owned admin allowlist; invalid/revoked keys and non-admin principals denied; no direct LiteLLM management route | Forged origin/user/admin claim or exposed master key |
+| A2_AUTH_ENTRY | article fetched using requester's server-verified Miniflux key; returned ownership and active snapshot verified | Guessed entry ID, cross-user leak or stale/revoked token |
 | A2_SECRETS | no secrets in frontend bundle, browser persistent storage, logs, errors, traces or exports | Secret value or proxy admin token exposed |
 | A2_EGRESS | approved provider origins and internal Ollama route only; reject private/loopback arbitrary URLs | Gateway can fetch arbitrary browser-supplied endpoint |
 | A2_BUDGET | unknown price and failed accounting reject paid inference; rate limit in single-replica mode verified | Paid inference with missing guardrail |
@@ -166,7 +166,7 @@ Do not infer gateway readiness solely from a `/health` response. Check DB reads,
 | --- | --- | --- |
 | 0 | **ARTICLE-INTEL-ARCH-01 / PR #201** | ADR and proposed frontend/backend contract, docs-only, still draft |
 | 1 | **ARTICLE-INTEL-GATEWAY-01 / this plan** | docs-only A2 runtime design, topology and gates; does not provision |
-| 2 | **ARTICLE-INTEL-AUTH-01** | explicit backend identity/auth + negative tests, separate from provider registration |
+| 2 | **ARTICLE-INTEL-AUTH-01** | Miniflux-key-first exact-origin backend authentication, admin/entry authorization and negative tests, separate from provider registration |
 | 3 | **ARTICLE-INTEL-GATEWAY-02** | isolated A2 Compose/DB/secret references in dedicated infrastructure PR after PRESTATE and owner approval |
 | 4 | **ARTICLE-INTEL-ADMIN-01** | registered provider/key/model management backend; no Reader changes |
 | 5 | **ARTICLE-INTEL-SETTINGS-01** | provider model and credential management UI, no direct provider keys in browser storage |
@@ -178,7 +178,7 @@ Do not infer gateway readiness solely from a `/health` response. Check DB reads,
 
 ## 10. Execution authorization and handoff
 
-This document is a **design package**, not executable Compose or an approval to create resources. Next authorized act after PM review: a **read-only resource/identity preflight** on OMV and authentication boundary; collect sanitized evidence. Only after the owner explicitly authorizes implementation should agents create a disposable A2 stack.
+This document is a **design package**, not executable Compose or an approval to create resources. Next authorized act after PM review: a **targeted Miniflux identity/auth gate** and remaining read-only A2 capacity/security checks, without exposing API keys or invoking provider inference. OIDC investigation remains paused absent a specific Miniflux-first failure. Only after the owner explicitly authorizes implementation should agents create a disposable A2 stack.
 
 ```text
 NEWSFLUX_A2_GATEWAY_PLAN_HANDOFF
