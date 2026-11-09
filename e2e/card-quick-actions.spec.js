@@ -305,14 +305,26 @@ test.describe("CARD-QUICK-ACTIONS-01", () => {
     expect(scrollStart.distance).toBeGreaterThanOrEqual(40)
     const before = await scrollArea.evaluate((element) => element.scrollTop)
     const cdp = await page.context().newCDPSession(page)
-    await cdp.send("Input.synthesizeScrollGesture", {
-      x: scrollStart.x,
-      y: scrollStart.y,
-      xDistance: 0,
-      yDistance: -scrollStart.distance,
-      speed: 900,
-      gestureSourceType: "touch",
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ id: 1, x: scrollStart.x, y: scrollStart.y, force: 1 }],
     })
+    const moveCount = Math.ceil(scrollStart.distance / 24)
+    for (let step = 1; step <= moveCount; step += 1) {
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchMove",
+        touchPoints: [
+          {
+            id: 1,
+            x: scrollStart.x,
+            y: scrollStart.y - (scrollStart.distance * step) / moveCount,
+            force: 1,
+          },
+        ],
+      })
+      await page.waitForTimeout(20)
+    }
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] })
 
     await expect
       .poll(() => scrollArea.evaluate((element) => element.scrollTop))
