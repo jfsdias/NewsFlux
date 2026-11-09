@@ -2,6 +2,8 @@ import { reconcileSyntheticExport } from "./personalization-pilot-dummy-rehearsa
 
 const CONTRACT_VERSION = "LIMESURVEY_CE_RESPONSE_CSV_MOCK_V1"
 const RECOGNIZED_DELIMITERS = new Set([",", ";", "\t"])
+const ALLOWED_SYSTEM_COLUMNS = new Set(["submitdate", "id", "lastpage", "startlanguage", "seed"])
+const ALLOWED_IGNORED_SYSTEM_COLUMNS = new Set(["id", "lastpage", "startlanguage", "seed"])
 const ARM_NAMES = ["X", "Y"]
 const RATING_NAMES = [
   "relevanceToDeclaredContext",
@@ -222,11 +224,19 @@ const validateFieldMap = (fieldMap) => {
     fieldMap.systemColumns.submittedAt,
     ...fieldMap.systemColumns.allowedIgnored,
   ]
-  if (
-    systemColumns.some((column) => typeof column !== "string" || !column) ||
-    new Set(systemColumns).size !== systemColumns.length
-  ) {
+  if (systemColumns.some((column) => typeof column !== "string" || !column)) {
     fail("CSV_FIELD_MAP_INVALID")
+  }
+  if (
+    !ALLOWED_SYSTEM_COLUMNS.has(fieldMap.systemColumns.submittedAt) ||
+    fieldMap.systemColumns.allowedIgnored.some(
+      (column) => !ALLOWED_IGNORED_SYSTEM_COLUMNS.has(column),
+    )
+  ) {
+    fail("CSV_SYSTEM_COLUMN_UNAPPROVED")
+  }
+  if (new Set(systemColumns).size !== systemColumns.length) {
+    fail("CSV_SYSTEM_COLUMN_DUPLICATE")
   }
   if (systemColumns.some((column) => questionColumns.includes(column))) {
     fail("CSV_FIELD_MAP_INVALID")

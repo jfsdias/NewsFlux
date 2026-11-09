@@ -145,6 +145,57 @@ test("adapter maps only explicitly configured MOCK_CSV_CONTRACT formats", () => 
   )
 })
 
+test("V1 system column allowlist rejects unapproved and duplicate fields", () => {
+  const csvText = buildMockLimeSurveyCsv({ responses: responseFixture.slice(0, 1), fieldMap })
+  assert.equal(importLimeSurveyMockCsv({ csvText, ...context }).report.validResponseCount, 1)
+
+  for (const column of ["token", "email", "unexpected_system_field"]) {
+    const changedFieldMap = {
+      ...fieldMap,
+      systemColumns: {
+        ...fieldMap.systemColumns,
+        allowedIgnored: [...fieldMap.systemColumns.allowedIgnored, column],
+      },
+    }
+    assert.throws(
+      () => importLimeSurveyMockCsv({ csvText, ...context, fieldMap: changedFieldMap }),
+      (error) => error.code === "CSV_SYSTEM_COLUMN_UNAPPROVED",
+    )
+  }
+
+  assert.throws(
+    () =>
+      importLimeSurveyMockCsv({
+        csvText,
+        ...context,
+        fieldMap: {
+          ...fieldMap,
+          systemColumns: { ...fieldMap.systemColumns, submittedAt: "email" },
+        },
+      }),
+    (error) => error.code === "CSV_SYSTEM_COLUMN_UNAPPROVED",
+  )
+
+  const duplicateFieldMap = {
+    ...fieldMap,
+    systemColumns: {
+      ...fieldMap.systemColumns,
+      allowedIgnored: [...fieldMap.systemColumns.allowedIgnored, "id"],
+    },
+  }
+  assert.throws(
+    () => importLimeSurveyMockCsv({ csvText, ...context, fieldMap: duplicateFieldMap }),
+    (error) => error.code === "CSV_SYSTEM_COLUMN_DUPLICATE",
+  )
+
+  assert.deepEqual(fieldMap.systemColumns.allowedIgnored, [
+    "id",
+    "lastpage",
+    "startlanguage",
+    "seed",
+  ])
+})
+
 test("scenario identity, receipt hash, visible order, and session join are fail-closed", () => {
   const csvText = buildMockLimeSurveyCsv({ responses: responseFixture.slice(0, 1), fieldMap })
   const records = parseLimeSurveyCsv({ input: csvText, delimiter: "," })
