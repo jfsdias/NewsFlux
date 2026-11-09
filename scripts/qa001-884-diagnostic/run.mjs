@@ -272,7 +272,7 @@ const finalStatus = runText(
   ["status", "--porcelain", "--untracked-files=no"],
   sourceDirectory,
 )
-if (finalStatus !== " M e2e/qa-001-reader-header.spec.js") {
+if (finalStatus !== "M e2e/qa-001-reader-header.spec.js") {
   throw new Error(`Instrumented source diff exceeded the test-only overlay: ${finalStatus}`)
 }
 
