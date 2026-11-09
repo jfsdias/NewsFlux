@@ -54,7 +54,15 @@ case "${1:-}" in
     case "$template" in
       '{{.Config.Image}}') printf '%s\n' 'newsflux-local:1fdfd08dd201' ;;
       '{{.Image}}') printf '%s\n' 'sha256:4ec48a15cd547aaa63bbbe40d910d93d3efc1d0c78f3fcbeb77ee1ae950fc641' ;;
-      *) printf 'container=/%s image=synthetic state=running published_ports=none\n' "$container" ;;
+      *)
+        case "$template" in
+          *'nano_cpus='*)
+            if [ "${MOCK_FAIL_CONTAINER_TEMPLATE:-}" = "$container" ]; then
+              printf '%s\n' 'template parsing error: template: inspect:1:55: executing "inspect" at <.HostConfig.NanoCpus>: map has no entry for key "NanoCpus"; SYNTHETIC_PRIVATE_ERROR_SENTINEL' >&2
+              exit 1
+            fi ;;
+        esac
+        printf 'container=/%s image=synthetic state=running published_ports=none\n' "$container" ;;
     esac ;;
   network)
     if [ "${2:-}" != 'inspect' ]; then exit 2; fi
@@ -122,6 +130,7 @@ esac
         self,
         include_nft: bool,
         fail_firewall_save: str | None = None,
+        fail_container_template: str | None = None,
     ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
         temp_context = tempfile.TemporaryDirectory()
         self.addCleanup(temp_context.cleanup)
@@ -133,6 +142,8 @@ esac
         test_env = {"PATH": str(fake_bin), "MOCK_COMMAND_LOG": str(log_path)}
         if fail_firewall_save is not None:
             test_env["MOCK_FAIL_FIREWALL_SAVE"] = fail_firewall_save
+        if fail_container_template is not None:
+            test_env["MOCK_FAIL_CONTAINER_TEMPLATE"] = fail_container_template
         result = subprocess.run(
             ["bash", str(SCRIPT)],
             check=False,
@@ -364,6 +375,25 @@ esac
         self.assertNotIn("ip6tables:nat:*filter", output)
         self.assertIn("[READ_ONLY_COMMAND_AUDIT]", output)
         self.assertIn("[MUTATION_GUARD]", output)
+        self._assert_call_log_is_read_only(calls)
+
+    def test_container_template_error_is_classified_without_raw_diagnostic(self) -> None:
+        result, calls = self._run_success_path(
+            include_nft=True,
+            fail_container_template="newsflux",
+        )
+        output = result.stdout + result.stderr
+
+        self.assertEqual(result.returncode, 3, output)
+        self.assertIn(
+            "container=newsflux inspect=UNAVAILABLE inspect_error_class=TEMPLATE_MISSING_FIELD_NANO_CPUS",
+            output,
+        )
+        self.assertIn("SECTION_UNAVAILABLE=container:newsflux", output)
+        self.assertIn("COLLECTOR_COMPLETENESS=PARTIAL", output)
+        self.assertNotIn("SYNTHETIC_PRIVATE_ERROR_SENTINEL", output)
+        self.assertNotIn("map has no entry for key", output)
+        self.assertNotIn("nano_cpus=0", output)
         self._assert_call_log_is_read_only(calls)
 
     def test_script_contains_no_known_mutating_docker_or_firewall_commands(self) -> None:

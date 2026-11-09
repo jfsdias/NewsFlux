@@ -115,16 +115,37 @@ else
 fi
 
 container_format='container={{.Name}} image={{.Config.Image}} image_id={{.Image}} state={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}not-configured{{end}} restart={{.HostConfig.RestartPolicy.Name}} mem_limit_bytes={{.HostConfig.Memory}} nano_cpus={{.HostConfig.NanoCpus}} pids_limit={{.HostConfig.PidsLimit}} readonly_root={{.HostConfig.ReadonlyRootfs}} exposed_ports={{json .Config.ExposedPorts}} published_ports={{json .NetworkSettings.Ports}} compose_project={{index .Config.Labels "com.docker.compose.project"}} compose_service={{index .Config.Labels "com.docker.compose.service"}} compose_workdir={{index .Config.Labels "com.docker.compose.project.working_dir"}} compose_files={{index .Config.Labels "com.docker.compose.project.config_files"}} networks={{range $name,$net := .NetworkSettings.Networks}}{{$name}}:ip={{$net.IPAddress}}/{{$net.IPPrefixLen}},gateway={{$net.Gateway}},aliases={{json $net.Aliases}};{{end}} mounts={{range .Mounts}}{{.Type}}:{{.Source}}->{{.Destination}}:rw={{.RW}};{{end}}'
+classify_inspect_error() {
+  local error_text="${1,,}"
+  case "$error_text" in
+    *'map has no entry for key "nanocpus"'*|*'<.hostconfig.nanocpus>'*)
+      out 'TEMPLATE_MISSING_FIELD_NANO_CPUS' ;;
+    *'map has no entry for key '*|*'nil pointer evaluating'*)
+      out 'TEMPLATE_MISSING_FIELD' ;;
+    *'template parsing error'*)
+      out 'TEMPLATE_PARSE_ERROR' ;;
+    *'template:'*|*"can't evaluate field"*)
+      out 'TEMPLATE_EXECUTION_ERROR' ;;
+    *'cannot connect to the docker daemon'*|*'error during connect'*)
+      out 'DOCKER_CONNECTION_ERROR' ;;
+    *'error response from daemon:'*)
+      out 'DOCKER_API_ERROR' ;;
+    *)
+      out 'OTHER_DOCKER_INSPECT_ERROR' ;;
+  esac
+}
 inspect_container() {
   local container="$1"
+  local inspect_output
   if ! docker inspect "$container" >/dev/null 2>&1; then
     out "container=$container state=NOT_FOUND_OR_UNAVAILABLE"
     return 1
   fi
-  if docker inspect --format "$container_format" "$container" 2>/dev/null; then
+  if inspect_output=$(docker inspect --format "$container_format" "$container" 2>&1); then
+    out "$inspect_output"
     return 0
   fi
-  out "container=$container inspect=UNAVAILABLE"
+  out "container=$container inspect=UNAVAILABLE inspect_error_class=$(classify_inspect_error "$inspect_output")"
   return 1
 }
 
