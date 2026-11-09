@@ -10,7 +10,7 @@
 
 All routes below are **proposed**, not implemented. Namespace: `/api/ai/v1`. Requests and responses are JSON over authenticated HTTPS, with bounded body sizes and a strict versioned contract. API server identity is NOT inherited implicitly from the existing browser-to-Miniflux session.
 
-The backend derives `principal_id`, `tenant_scope`, authorization and allowed entry IDs from a verified session. Browser-provided IDs, HTTP headers or Miniflux credentials by themselves cannot grant NewsFlux AI permissions. Roles for P0:
+The backend derives `principal_id`, `tenant_scope`, authorization and allowed entry IDs from a **server-verified Miniflux credential** (or a separately approved equivalent identity mechanism). The browser's existing Miniflux API key is supplied via a protected same-origin request header and validated by backend `GET /v1/me` using `X-Auth-Token` **only** against the operator-approved canonical Miniflux origin; no arbitrary browser-supplied API origin, redirect, or private-host proxying. The verified principal is `(canonical_origin, returned_user_id)`; never trust a user ID, `is_admin` flag or origin claimed by the client. Credential-management admin requires `is_admin=true` **plus an explicit deployment user-ID allowlist** scoped to that origin. The Miniflux key remains an existing browser login credential, not a LiteLLM or provider key; it is not persisted by the NewsFlux AI backend. Roles for P0:
 
 | Role | Allowed |
 | --- | --- |
@@ -20,7 +20,7 @@ The backend derives `principal_id`, `tenant_scope`, authorization and allowed en
 
 P0 may implement only the deployment-admin account. A multi-user production release requires an explicit account-to-Miniflux-entry authorization model and tenancy tests first. Do not create a guest bypass.
 
-Use secure, HttpOnly, SameSite cookies for cookie-based sessions plus origin/CSRF validation on mutations; or implement a reviewed OIDC/BFF design. Which authentication mechanism is selected remains **GATED**. The backend denies requests if the scheme is not established.
+**Preferred P0, no second login:** reuse the existing NewsFlux Miniflux API key, passed only over same-origin HTTPS, and perform server-side `GET /v1/me` verification on **every protected request** (including admin mutations) before using it to fetch one user's entry. Do not add a persistent NewsFlux session or store the Miniflux token server-side in P0. Reject cross-origin requests and CORS; never log the credential. For noncanonical Miniflux origins, existing reading remains available, but NewsFlux AI endpoints deny access. If future cookie sessions are introduced, require HttpOnly/Secure/SameSite, CSRF and explicit revocation. **Authelia/OIDC is an optional fallback only if these checks fail**, not a default requirement. Endpoints deny requests until this design is tested.
 
 ## Provider registry and status
 
@@ -129,7 +129,7 @@ Allowed request body:
 }
 ~~~
 
-Do not accept client-supplied article URLs, article HTML, paragraph content, arbitrary provider base URLs, credentials, authority claims, or model prompts. The backend checks the session and the requested entry's authorization, resolves the effective article snapshot using Miniflux and the gated Content Fallback overlay, then dispatches the bounded editorial operation. The only client-level model selection allowed is an identifier already authorized by the administrator policy (not an arbitrary endpoint). Data may leave the host only under an enabled privacy policy.
+Do not accept client-supplied article URLs, article HTML, paragraph content, arbitrary provider base URLs, credentials, authority claims, or model prompts. The backend authenticates the Miniflux API key with `GET /v1/me` on the allowlisted origin, fetches the requested entry using the **same user's key**, checks the returned `user_id` and content identity, resolves the effective article snapshot using Miniflux and the gated Content Fallback overlay, then dispatches the bounded editorial operation. The only client-level model selection allowed is an identifier already authorized by the administrator policy (not an arbitrary endpoint). Data may leave the host only under an enabled privacy policy.
 
 The resolver returns, internally, `entry_id`, `content_fingerprint`, `source_fingerprint`, `content_origin`, `completeness`, `paragraphs[{id,text}]` and a session/entry revision. These values are **not** accepted as authoritative from the browser. When Content Fallback is unsuccessful, expose `partial` or `insufficient` instead of silently claiming full content. Reference IDs are stable only within a particular snapshot.
 
@@ -194,9 +194,9 @@ Suggested codes: `UNAUTHENTICATED` (401), `NOT_AUTHORIZED` (403), `ENTRY_NOT_ACC
 
 | Gate | Required evidence |
 | --- | --- |
-| IDENTITY_ADMIN | Unauthorized users cannot list/add/replace/revoke credentials or change budgets |
-| IDENTITY_ENTRY | User cannot summarize/read another principal's entry, including guessed IDs |
-| CSRF_ORIGIN | Cross-origin cookie-authenticated writes denied; untrusted identity headers denied |
+| IDENTITY_ADMIN | Only exact-origin, server-verified `is_admin=true` principals on a server-owned user-ID allowlist can list/add/replace/revoke credentials or change budgets; forged `is_admin`, user ID, origin, and revoked key denied |
+| IDENTITY_ENTRY | User cannot summarize/read another principal's entry, including guessed IDs; fetch uses requester's verified Miniflux key and checks returned entry ownership |
+| CSRF_ORIGIN | No cross-origin credential requests or untrusted forwarded identity accepted; when cookie auth is introduced, CSRF/session controls are mandatory |
 | SECRETS | API key never appears in API readback, browser persistence/export, logs, traces or exception bodies |
 | PROVIDER_REGISTRY | Mistral-first, additional providers can be registered without Reader changes |
 | INFERENCE_TRANSPORT | Synthetic fixture, correct model and provider attribution, bounded tokens and cost |
