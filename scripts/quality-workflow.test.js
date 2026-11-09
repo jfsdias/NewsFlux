@@ -107,7 +107,9 @@ test("the Python suite runs independently on the supported interpreter", () => {
   assert.equal(String(pythonSetups[0].with["python-version"]), "3.12")
   assert.equal(nodeSetups.length, 0)
   assert.deepEqual(runCommands(job), [
+    "python3 -m pip install --disable-pip-version-check --requirement services/article_intel_summary/requirements.txt",
     "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s services/article_intel_auth/tests -p 'test_*.py' -v",
+    "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s services/article_intel_summary/tests -p 'test_*.py' -v",
     "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s services/content_fallback/tests -p 'test_*.py' -v",
   ])
 })
