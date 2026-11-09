@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://newsflux.example/schemas/article-summary-error-v1.json",
+  "title": "NewsFlux article summary error v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "request_id", "error"],
+  "properties": {
+    "schema_version": { "const": "1" },
+    "request_id": { "type": ["string", "null"], "format": "uuid" },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "retryable"],
+      "properties": {
+        "code": {
+          "enum": [
+            "UNAUTHENTICATED",
+            "NOT_AUTHORIZED",
+            "ENTRY_NOT_ACCESSIBLE",
+            "STALE_SNAPSHOT",
+            "INVALID_REQUEST",
+            "INVALID_JSON",
+            "HTTPS_REQUIRED",
+            "HOST_NOT_AUTHORIZED",
+            "REQUEST_TOO_LARGE",
+            "SUMMARY_BUSY",
+            "MINIFLUX_UNAVAILABLE",
+            "MODEL_OUTPUT_INVALID"
+          ]
+        },
+        "retryable": { "type": "boolean" }
+      }
+    }
+  }
+}
