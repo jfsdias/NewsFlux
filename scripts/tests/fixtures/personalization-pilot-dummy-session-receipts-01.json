@@ -1,0 +1,1745 @@
+{
+  "fixtureKind": "SYNTHETIC_ONLY",
+  "sessionManifests": [
+    {
+      "schemaVersion": "PILOT_SESSION_RECEIPT_V1",
+      "fixtureKind": "SYNTHETIC_ONLY",
+      "referenceBaseSha": "35446e1ab5d8e0e82bbef285835244ac4ab80181",
+      "sessionCode": "SYNTHETIC-b49d76e89e2b365166627cf1",
+      "allocationKey": "8e011a262dde1b2e80a2476e189e0387",
+      "slotIndex": 0,
+      "preRecruitmentManifestHash": "a5b3d646ed53bb944a66195ce71c237f434d1e7e1d04be0170e4a97bc83f1a81",
+      "profileSeedReferences": {
+        "keys": ["synthetic-favorite-mobility"],
+        "hash": "891dfe6439a38d40bedbb3894a1672a6d3df3b28b37209464b99fabddb1e6de2"
+      },
+      "rendererRevision": "synthetic-slot-renderer-v1",
+      "armMapping": { "X": "PHASE_2C_DETERMINISTIC", "Y": "PERSONALIZATION_V1" },
+      "presentationOrder": "PHASE_2C_FIRST",
+      "labelPresentationOrder": "X_THEN_Y",
+      "scenarioOrder": ["synthetic_transit", "synthetic_library"],
+      "scenarioPairs": [
+        {
+          "scenarioCode": "synthetic_transit",
+          "scenarioOrderIndex": 0,
+          "eligibleArticleIds": [1101, 1102, 1103, 1104, 1105, 1106, 1107, 1108],
+          "articleSetHash": "1486e1075a351f80e23dbb0733640042be94a16cf9a0f4634152331c73359c3c",
+          "rendererRevision": "synthetic-slot-renderer-v1",
+          "armMapping": { "X": "PHASE_2C_DETERMINISTIC", "Y": "PERSONALIZATION_V1" },
+          "presentationOrder": "X_THEN_Y",
+          "randomizedAlgorithmOrder": "PHASE_2C_FIRST",
+          "arms": {
+            "X": {
+              "algorithmRevision": "home-editorial-session-and-category-projection@35446e1ab5d8e0e82bbef285835244ac4ab80181",
+              "highlightIds": [1101, 1103, 1105],
+              "categoryLanes": [
+                { "categoryId": 1, "categoryTitle": "Synthetic Local", "entryIds": [1102, 1107] },
+                { "categoryId": 2, "categoryTitle": "Synthetic Civic", "entryIds": [1104, 1108] }
+              ],
+              "latestIds": [1106],
+              "articleIds": [1101, 1103, 1105, 1102, 1107, 1104, 1108, 1106],
+              "readerOrderIds": [1101, 1103, 1105, 1102, 1107, 1104, 1108, 1106],
+              "articleMetadata": [
+                {
+                  "id": 1101,
+                  "title": "Synthetic transit bulletin 1101",
+                  "publishedAt": "2026-11-01T12:00:00.000Z",
+                  "feed": {
+                    "id": 11,
+                    "title": "Synthetic Transit Source 11",
+                    "category": { "id": 1, "title": "Synthetic Local" }
+                  }
+                },
+                {
+                  "id": 1103,
+                  "title": "Synthetic transit bulletin 1103",
+                  "publishedAt": "2026-11-01T11:48:00.000Z",
+                  "feed": {
+                    "id": 13,
+                    "title": "Synthetic Transit Source 13",
+                    "category": { "id": 2, "title": "Synthetic Civic" }
+                  }
+                },
+                {
+                  "id": 1105,
+                  "title": "Synthetic transit bulletin 1105",
+                  "publishedAt": "2026-11-01T11:32:00.000Z",
+                  "feed": {
+                    "id": 15,
+                    "title": "Synthetic Transit Source 15",
+                    "category": { "id": 3, "title": "Synthetic Mobility" }
+                  }
+                },
+                {
+                  "id": 1102,
+                  "title": "Synthetic transit bulletin 1102",
+                  "publishedAt": "2026-11-01T11:55:00.000Z",
+                  "feed": {
+                    "id": 12,
+                    "title": "Synthetic Transit Source 12",
+                    "category": { "id": 1, "title": "Synthetic Local" }
+                  }
+                },
+                {
+                  "id": 1107,
+                  "title": "Synthetic transit bulletin 1107",
+                  "publishedAt": "2026-11-01T11:16:00.000Z",
+                  "feed": {
+                    "id": 17,
+                    "title": "Synthetic Transit Source 17",
+                    "category": { "id": 1, "title": "Synthetic Local" }
+                  }
+                },
+                {
+                  "id": 1104,
+                  "title": "Synthetic transit bulletin 1104",
+                  "publishedAt": "2026-11-01T11:40:00.000Z",
+                  "feed": {
+                    "id": 14,
+                    "title": "Synthetic Transit Source 14",
+                    "category": { "id": 2, "title": "Synthetic Civic" }
+                  }
+                },
+                {
+                  "id": 1108,
+                  "title": "Synthetic transit bulletin 1108",
+                  "publishedAt": "2026-11-01T11:08:00.000Z",
+                  "feed": {
+                    "id": 18,
+                    "title": "Synthetic Transit Source 18",
+                    "category": { "id": 2, "title": "Synthetic Civic" }
+                  }
+                },
+                {
+                  "id": 1106,
+                  "title": "Synthetic transit bulletin 1106",
+                  "publishedAt": "2026-11-01T11:24:00.000Z",
+                  "feed": {
+                    "id": 16,
+                    "title": "Synthetic Transit Source 16",
+                    "category": { "id": 3, "title": "Synthetic Mobility" }
+                  }
+                }
+              ]
+            },
+            "Y": {
+              "algorithmRevision": "home-personalization-profile-and-projection@35446e1ab5d8e0e82bbef285835244ac4ab80181",
+              "highlightIds": [1101, 1105, 1103],
+              "categoryLanes": [
+                { "categoryId": 1, "categoryTitle": "Synthetic Local", "entryIds": [1102, 1107] },
+                { "categoryId": 2, "categoryTitle": "Synthetic Civic", "entryIds": [1104, 1108] }
+              ],
+              "latestIds": [1106],
+              "articleIds": [1101, 1105, 1103, 1102, 1107, 1104, 1108, 1106],
+              "readerOrderIds": [1101, 1105, 1103, 1102, 1107, 1104, 1108, 1106],
+              "articleMetadata": [
+                {
+                  "id": 1101,
+                  "title": "Synthetic transit bulletin 1101",
+                  "publishedAt": "2026-11-01T12:00:00.000Z",
+                  "feed": {
+                    "id": 11,
+                    "title": "Synthetic Transit Source 11",
+                    "category": { "id": 1, "title": "Synthetic Local" }
+                  }
+                },
+                {
+                  "id": 1105,
+                  "title": "Synthetic transit bulletin 1105",
+                  "publishedAt": "2026-11-01T11:32:00.000Z",
+                  "feed": {
+                    "id": 15,
+                    "title": "Synthetic Transit Source 15",
+                    "category": { "id": 3, "title": "Synthetic Mobility" }
+                  }
+                },
+                {
+                  "id": 1103,
+                  "title": "Synthetic transit bulletin 1103",
+                  "publishedAt": "2026-11-01T11:48:00.000Z",
+                  "feed": {
+                    "id": 13,
+                    "title": "Synthetic Transit Source 13",
+                    "category": { "id": 2, "title": "Synthetic Civic" }
+                  }
+                },
+                {
+                  "id": 1102,
+                  "title": "Synthetic transit bulletin 1102",
+                  "publishedAt": "2026-11-01T11:55:00.000Z",
+                  "feed": {
+                    "id": 12,
+                    "title": "Synthetic Transit Source 12",
+                    "category": { "id": 1, "title": "Synthetic Local" }
+                  }
+                },
+                {
+                  "id": 1107,
+                  "title": "Synthetic transit bulletin 1107",
+                  "publishedAt": "2026-11-01T11:16:00.000Z",
+                  "feed": {
+                    "id": 17,
+                    "title": "Synthetic Transit Source 17",
+                    "category": { "id": 1, "title": "Synthetic Local" }
+                  }
+                },
+                {
+                  "id": 1104,
+                  "title": "Synthetic transit bulletin 1104",
+                  "publishedAt": "2026-11-01T11:40:00.000Z",
+                  "feed": {
+                    "id": 14,
+                    "title": "Synthetic Transit Source 14",
+                    "category": { "id": 2, "title": "Synthetic Civic" }
+                  }
+                },
+                {
+                  "id": 1108,
+                  "title": "Synthetic transit bulletin 1108",
+                  "publishedAt": "2026-11-01T11:08:00.000Z",
+                  "feed": {
+                    "id": 18,
+                    "title": "Synthetic Transit Source 18",
+                    "category": { "id": 2, "title": "Synthetic Civic" }
+                  }
+                },
+                {
+                  "id": 1106,
+                  "title": "Synthetic transit bulletin 1106",
+                  "publishedAt": "2026-11-01T11:24:00.000Z",
+                  "feed": {
+                    "id": 16,
+                    "title": "Synthetic Transit Source 16",
+                    "category": { "id": 3, "title": "Synthetic Mobility" }
+                  }
+                }
+              ]
+            }
+          },
+          "pairReceiptHash": "11c40361568a157a8908e5873e985b5144b1f832c4a74d12b1895dd6a56b28d7"
+        },
+        {
+          "scenarioCode": "synthetic_library",
+          "scenarioOrderIndex": 1,
+          "eligibleArticleIds": [2101, 2102, 2103, 2104, 2105, 2106, 2107, 2108],
+          "articleSetHash": "d0cb439725f5cab329ff7e7b56bbbc8384766191cbe7dc2c4100f9ddabf1c080",
+          "rendererRevision": "synthetic-slot-renderer-v1",
+          "armMapping": { "X": "PHASE_2C_DETERMINISTIC", "Y": "PERSONALIZATION_V1" },
+          "presentationOrder": "X_THEN_Y",
+          "randomizedAlgorithmOrder": "PHASE_2C_FIRST",
+          "arms": {
+            "X": {
+              "algorithmRevision": "home-editorial-session-and-category-projection@35446e1ab5d8e0e82bbef285835244ac4ab80181",
+              "highlightIds": [2101, 2103, 2105],
+              "categoryLanes": [
+                {
+                  "categoryId": 4,
+                  "categoryTitle": "Synthetic Learning",
+                  "entryIds": [2102, 2107]
+                },
+                {
+                  "categoryId": 5,
+                  "categoryTitle": "Synthetic Public Services",
+                  "entryIds": [2104, 2108]
+                }
+              ],
+              "latestIds": [2106],
+              "articleIds": [2101, 2103, 2105, 2102, 2107, 2104, 2108, 2106],
+              "readerOrderIds": [2101, 2103, 2105, 2102, 2107, 2104, 2108, 2106],
+              "articleMetadata": [
+                {
+                  "id": 2101,
+                  "title": "Synthetic library bulletin 2101",
+                  "publishedAt": "2026-11-02T12:00:00.000Z",
+                  "feed": {
+                    "id": 21,
+                    "title": "Synthetic Library Source 21",
+                    "category": { "id": 4, "title": "Synthetic Learning" }
+                  }
+                },
+                {
+                  "id": 2103,
+                  "title": "Synthetic library bulletin 2103",
+                  "publishedAt": "2026-11-02T11:48:00.000Z",
+                  "feed": {
+                    "id": 23,
+                    "title": "Synthetic Library Source 23",
+                    "category": { "id": 5, "title": "Synthetic Public Services" }
+                  }
+                },
+                {
+                  "id": 2105,
+                  "title": "Synthetic library bulletin 2105",
+                  "publishedAt": "2026-11-02T11:32:00.000Z",
+                  "feed": {
+                    "id": 25,
+                    "title": "Synthetic Library Source 25",
+                    "category": { "id": 6, "title": "Synthetic Community" }
+                  }
+                },
+                {
+                  "id": 2102,
+                  "title": "Synthetic library bulletin 2102",
+                  "publishedAt": "2026-11-02T11:55:00.000Z",
+                  "feed": {
+                    "id": 22,
+                    "title": "Synthetic Library Source 22",
+                    "category": { "id": 4, "title": "Synthetic Learning" }
+                  }
+                },
+                {
+                  "id": 2107,
+                  "title": "Synthetic library bulletin 2107",
+                  "publishedAt": "2026-11-02T11:16:00.000Z",
+                  "feed": {
+                    "id": 27,
+                    "title": "Synthetic Library Source 27",
+                    "category": { "id": 4, "title": "Synthetic Learning" }
+                  }
+                },
+                {
+                  "id": 2104,
+                  "title": "Synthetic library bulletin 2104",
+                  "publishedAt": "2026-11-02T11:40:00.000Z",
+                  "feed": {
+                    "id": 24,
+                    "title": "Synthetic Library Source 24",
+                    "category": { "id": 5, "title": "Synthetic Public Services" }
+                  }
+                },
+                {
+                  "id": 2108,
+                  "title": "Synthetic library bulletin 2108",
+                  "publishedAt": "2026-11-02T11:08:00.000Z",
+                  "feed": {
+                    "id": 28,
+                    "title": "Synthetic Library Source 28",
+                    "category": { "id": 5, "title": "Synthetic Public Services" }
+                  }
+                },
+                {
+                  "id": 2106,
+                  "title": "Synthetic library bulletin 2106",
+                  "publishedAt": "2026-11-02T11:24:00.000Z",
+                  "feed": {
+                    "id": 26,
+                    "title": "Synthetic Library Source 26",
+                    "category": { "id": 6, "title": "Synthetic Community" }
+                  }
+                }
+              ]
+            },
+            "Y": {
+              "algorithmRevision": "home-personalization-profile-and-projection@35446e1ab5d8e0e82bbef285835244ac4ab80181",
+              "highlightIds": [2101, 2103, 2105],
+              "categoryLanes": [
+                {
+                  "categoryId": 4,
+                  "categoryTitle": "Synthetic Learning",
+                  "entryIds": [2102, 2107]
+                },
+                {
+                  "categoryId": 5,
+                  "categoryTitle": "Synthetic Public Services",
+                  "entryIds": [2104, 2108]
+                }
+              ],
+              "latestIds": [2106],
+              "articleIds": [2101, 2103, 2105, 2102, 2107, 2104, 2108, 2106],
+              "readerOrderIds": [2101, 2103, 2105, 2102, 2107, 2104, 2108, 2106],
+              "articleMetadata": [
+                {
+                  "id": 2101,
+                  "title": "Synthetic library bulletin 2101",
+                  "publishedAt": "2026-11-02T12:00:00.000Z",
+                  "feed": {
+                    "id": 21,
+                    "title": "Synthetic Library Source 21",
+                    "category": { "id": 4, "title": "Synthetic Learning" }
+                  }
+                },
+                {
+                  "id": 2103,
+                  "title": "Synthetic library bulletin 2103",
+                  "publishedAt": "2026-11-02T11:48:00.000Z",
+                  "feed": {
+                    "id": 23,
+                    "title": "Synthetic Library Source 23",
+                    "category": { "id": 5, "title": "Synthetic Public Services" }
+                  }
+                },
+                {
+                  "id": 2105,
+                  "title": "Synthetic library bulletin 2105",
+                  "publishedAt": "2026-11-02T11:32:00.000Z",
+                  "feed": {
+                    "id": 25,
+                    "title": "Synthetic Library Source 25",
+                    "category": { "id": 6, "title": "Synthetic Community" }
+                  }
+                },
+                {
+                  "id": 2102,
+                  "title": "Synthetic library bulletin 2102",
+                  "publishedAt": "2026-11-02T11:55:00.000Z",
+                  "feed": {
+                    "id": 22,
+                    "title": "Synthetic Library Source 22",
+                    "category": { "id": 4, "title": "Synthetic Learning" }
+                  }
+                },
+                {
+                  "id": 2107,
+                  "title": "Synthetic library bulletin 2107",
+                  "publishedAt": "2026-11-02T11:16:00.000Z",
+                  "feed": {
+                    "id": 27,
+                    "title": "Synthetic Library Source 27",
+                    "category": { "id": 4, "title": "Synthetic Learning" }
+                  }
+                },
+                {
+                  "id": 2104,
+                  "title": "Synthetic library bulletin 2104",
+                  "publishedAt": "2026-11-02T11:40:00.000Z",
+                  "feed": {
+                    "id": 24,
+                    "title": "Synthetic Library Source 24",
+                    "category": { "id": 5, "title": "Synthetic Public Services" }
+                  }
+                },
+                {
+                  "id": 2108,
+                  "title": "Synthetic library bulletin 2108",
+                  "publishedAt": "2026-11-02T11:08:00.000Z",
+                  "feed": {
+                    "id": 28,
+                    "title": "Synthetic Library Source 28",
+                    "category": { "id": 5, "title": "Synthetic Public Services" }
+                  }
+                },
+                {
+                  "id": 2106,
+                  "title": "Synthetic library bulletin 2106",
+                  "publishedAt": "2026-11-02T11:24:00.000Z",
+                  "feed": {
+                    "id": 26,
+                    "title": "Synthetic Library Source 26",
+                    "category": { "id": 6, "title": "Synthetic Community" }
+                  }
+                }
+              ]
+            }
+          },
+          "pairReceiptHash": "c5e66489a4d382f7d6dcf20094270acea0c17c57895594ab9f286c667da8cec9"
+        }
+      ],
+      "sessionManifestHash": "34da25c08994c8163828fdf42173a7ff4f94a7065ca4d393d02784312e2b939a"
+    },
+    {
+      "schemaVersion": "PILOT_SESSION_RECEIPT_V1",
+      "fixtureKind": "SYNTHETIC_ONLY",
+      "referenceBaseSha": "35446e1ab5d8e0e82bbef285835244ac4ab80181",
+      "sessionCode": "SYNTHETIC-30a1a639b896c878182c4133",
+      "allocationKey": "78b88809123bc8ae2012859ad5a91d89",
+      "slotIndex": 1,
+      "preRecruitmentManifestHash": "a5b3d646ed53bb944a66195ce71c237f434d1e7e1d04be0170e4a97bc83f1a81",
+      "profileSeedReferences": {
+        "keys": ["synthetic-favorite-learning"],
+        "hash": "5d13ec4ce64a98912c076a44c839d89febb23294531e8627b7a37d93c46971da"
+      },
+      "rendererRevision": "synthetic-slot-renderer-v1",
+      "armMapping": { "X": "PERSONALIZATION_V1", "Y": "PHASE_2C_DETERMINISTIC" },
+      "presentationOrder": "PHASE_2C_FIRST",
+      "labelPresentationOrder": "Y_THEN_X",
+      "scenarioOrder": ["synthetic_transit", "synthetic_library"],
+      "scenarioPairs": [
+        {
+          "scenarioCode": "synthetic_transit",
+          "scenarioOrderIndex": 0,
+          "eligibleArticleIds": [1101, 1102, 1103, 1104, 1105, 1106, 1107, 1108],
+          "articleSetHash": "1486e1075a351f80e23dbb0733640042be94a16cf9a0f4634152331c73359c3c",
+          "rendererRevision": "synthetic-slot-renderer-v1",
+          "armMapping": { "X": "PERSONALIZATION_V1", "Y": "PHASE_2C_DETERMINISTIC" },
+          "presentationOrder": "Y_THEN_X",
+          "randomizedAlgorithmOrder": "PHASE_2C_FIRST",
+          "arms": {
+            "X": {
+              "algorithmRevision": "home-personalization-profile-and-projection@35446e1ab5d8e0e82bbef285835244ac4ab80181",
+              "highlightIds": [1101, 1103, 1105],
+              "categoryLanes": [
+                { "categoryId": 1, "categoryTitle": "Synthetic Local", "entryIds": [1102, 1107] },
+                { "categoryId": 2, "categoryTitle": "Synthetic Civic", "entryIds": [1104, 1108] }
+              ],
+              "latestIds": [1106],
+              "articleIds": [1101, 1103, 1105, 1102, 1107, 1104, 1108, 1106],
+              "readerOrderIds": [1101, 1103, 1105, 1102, 1107, 1104, 1108, 1106],
+              "articleMetadata": [
+                {
+                  "id": 1101,
+                  "title": "Synthetic transit bulletin 1101",
+                  "publishedAt": "2026-11-01T12:00:00.000Z",
+                  "feed": {
+                    "id": 11,
+                    "title": "Synthetic Transit Source 11",
+                    "category": { "id": 1, "title": "Synthetic Local" }
+                  }
+                },
+                {
+                  "id": 1103,
+                  "title": "Synthetic transit bulletin 1103",
+                  "publishedAt": "2026-11-01T11:48:00.000Z",
+                  "feed": {
+                    "id": 13,
+                    "title": "Synthetic Transit Source 13",
+                    "category": { "id": 2, "title": "Synthetic Civic" }
+                  }
+                },
+                {
+                  "id": 1105,
+                  "title": "Synthetic transit bulletin 1105",
+                  "publishedAt": "2026-11-01T11:32:00.000Z",
+                  "feed": {
+                    "id": 15,
+                    "title": "Synthetic Transit Source 15",
+                    "category": { "id": 3, "title": "Synthetic Mobility" }
+                  }
+                },
+                {
+                  "id": 1102,
+                  "title": "Synthetic transit bulletin 1102",
+                  "publishedAt": "2026-11-01T11:55:00.000Z",
+                  "feed": {
+                    "id": 12,
+                    "title": "Synthetic Transit Source 12",
+                    "category": { "id": 1, "title": "Synthetic Local" }
+                  }
+                },
+                {
+                  "id": 1107,
+                  "title": "Synthetic transit bulletin 1107",
+                  "publishedAt": "2026-11-01T11:16:00.000Z",
+                  "feed": {
+                    "id": 17,
+                    "title": "Synthetic Transit Source 17",
+                    "category": { "id": 1, "title": "Synthetic Local" }
+                  }
+                },
+                {
+                  "id": 1104,
+                  "title": "Synthetic transit bulletin 1104",
+                  "publishedAt": "2026-11-01T11:40:00.000Z",
+                  "feed": {
+                    "id": 14,
+                    "title": "Synthetic Transit Source 14",
+                    "category": { "id": 2, "title": "Synthetic Civic" }
+                  }
+                },
+                {
+                  "id": 1108,
+                  "title": "Synthetic transit bulletin 1108",
+                  "publishedAt": "2026-11-01T11:08:00.000Z",
+                  "feed": {
+                    "id": 18,
+                    "title": "Synthetic Transit Source 18",
+                    "category": { "id": 2, "title": "Synthetic Civic" }
+                  }
+                },
+                {
+                  "id": 1106,
+                  "title": "Synthetic transit bulletin 1106",
+                  "publishedAt": "2026-11-01T11:24:00.000Z",
+                  "feed": {
+                    "id": 16,
+                    "title": "Synthetic Transit Source 16",
+                    "category": { "id": 3, "title": "Synthetic Mobility" }
+                  }
+                }
+              ]
+            },
+            "Y": {
+              "algorithmRevision": "home-editorial-session-and-category-projection@35446e1ab5d8e0e82bbef285835244ac4ab80181",
+              "highlightIds": [1101, 1103, 1105],
+              "categoryLanes": [
+                { "categoryId": 1, "categoryTitle": "Synthetic Local", "entryIds": [1102, 1107] },
+                { "categoryId": 2, "categoryTitle": "Synthetic Civic", "entryIds": [1104, 1108] }
+              ],
+              "latestIds": [1106],
+              "articleIds": [1101, 1103, 1105, 1102, 1107, 1104, 1108, 1106],
+              "readerOrderIds": [1101, 1103, 1105, 1102, 1107, 1104, 1108, 1106],
+              "articleMetadata": [
+                {
+                  "id": 1101,
+                  "title": "Synthetic transit bulletin 1101",
+                  "publishedAt": "2026-11-01T12:00:00.000Z",
+                  "feed": {
+                    "id": 11,
+                    "title": "Synthetic Transit Source 11",
+                    "category": { "id": 1, "title": "Synthetic Local" }
+                  }
+                },
+                {
+                  "id": 1103,
+                  "title": "Synthetic transit bulletin 1103",
+                  "publishedAt": "2026-11-01T11:48:00.000Z",
+                  "feed": {
+                    "id": 13,
+                    "title": "Synthetic Transit Source 13",
+                    "category": { "id": 2, "title": "Synthetic Civic" }
+                  }
+                },
+                {
+                  "id": 1105,
+                  "title": "Synthetic transit bulletin 1105",
+                  "publishedAt": "2026-11-01T11:32:00.000Z",
+                  "feed": {
+                    "id": 15,
+                    "title": "Synthetic Transit Source 15",
+                    "category": { "id": 3, "title": "Synthetic Mobility" }
+                  }
+                },
+                {
+                  "id": 1102,
+                  "title": "Synthetic transit bulletin 1102",
+                  "publishedAt": "2026-11-01T11:55:00.000Z",
+                  "feed": {
+                    "id": 12,
+                    "title": "Synthetic Transit Source 12",
+                    "category": { "id": 1, "title": "Synthetic Local" }
+                  }
+                },
+                {
+                  "id": 1107,
+                  "title": "Synthetic transit bulletin 1107",
+                  "publishedAt": "2026-11-01T11:16:00.000Z",
+                  "feed": {
+                    "id": 17,
+                    "title": "Synthetic Transit Source 17",
+                    "category": { "id": 1, "title": "Synthetic Local" }
+                  }
+                },
+                {
+                  "id": 1104,
+                  "title": "Synthetic transit bulletin 1104",
+                  "publishedAt": "2026-11-01T11:40:00.000Z",
+                  "feed": {
+                    "id": 14,
+                    "title": "Synthetic Transit Source 14",
+                    "category": { "id": 2, "title": "Synthetic Civic" }
+                  }
+                },
+                {
+                  "id": 1108,
+                  "title": "Synthetic transit bulletin 1108",
+                  "publishedAt": "2026-11-01T11:08:00.000Z",
+                  "feed": {
+                    "id": 18,
+                    "title": "Synthetic Transit Source 18",
+                    "category": { "id": 2, "title": "Synthetic Civic" }
+                  }
+                },
+                {
+                  "id": 1106,
+                  "title": "Synthetic transit bulletin 1106",
+                  "publishedAt": "2026-11-01T11:24:00.000Z",
+                  "feed": {
+                    "id": 16,
+                    "title": "Synthetic Transit Source 16",
+                    "category": { "id": 3, "title": "Synthetic Mobility" }
+                  }
+                }
+              ]
+            }
+          },
+          "pairReceiptHash": "3d32fa7fedf69c8f770a9132c3319388e5afa98f868e8a50655cf92604ae5388"
+        },
+        {
+          "scenarioCode": "synthetic_library",
+          "scenarioOrderIndex": 1,
+          "eligibleArticleIds": [2101, 2102, 2103, 2104, 2105, 2106, 2107, 2108],
+          "articleSetHash": "d0cb439725f5cab329ff7e7b56bbbc8384766191cbe7dc2c4100f9ddabf1c080",
+          "rendererRevision": "synthetic-slot-renderer-v1",
+          "armMapping": { "X": "PERSONALIZATION_V1", "Y": "PHASE_2C_DETERMINISTIC" },
+          "presentationOrder": "Y_THEN_X",
+          "randomizedAlgorithmOrder": "PHASE_2C_FIRST",
+          "arms": {
+            "X": {
+              "algorithmRevision": "home-personalization-profile-and-projection@35446e1ab5d8e0e82bbef285835244ac4ab80181",
+              "highlightIds": [2101, 2103, 2105],
+              "categoryLanes": [
+                {
+                  "categoryId": 4,
+                  "categoryTitle": "Synthetic Learning",
+                  "entryIds": [2102, 2107]
+                },
+                {
+                  "categoryId": 5,
+                  "categoryTitle": "Synthetic Public Services",
+                  "entryIds": [2104, 2108]
+                }
+              ],
+              "latestIds": [2106],
+              "articleIds": [2101, 2103, 2105, 2102, 2107, 2104, 2108, 2106],
+              "readerOrderIds": [2101, 2103, 2105, 2102, 2107, 2104, 2108, 2106],
+              "articleMetadata": [
+                {
+                  "id": 2101,
+                  "title": "Synthetic library bulletin 2101",
+                  "publishedAt": "2026-11-02T12:00:00.000Z",
+                  "feed": {
+                    "id": 21,
+                    "title": "Synthetic Library Source 21",
+                    "category": { "id": 4, "title": "Synthetic Learning" }
+                  }
+                },
+                {
+                  "id": 2103,
+                  "title": "Synthetic library bulletin 2103",
+                  "publishedAt": "2026-11-02T11:48:00.000Z",
+                  "feed": {
+                    "id": 23,
+                    "title": "Synthetic Library Source 23",
+                    "category": { "id": 5, "title": "Synthetic Public Services" }
+                  }
+                },
+                {
+                  "id": 2105,
+                  "title": "Synthetic library bulletin 2105",
+                  "publishedAt": "2026-11-02T11:32:00.000Z",
+                  "feed": {
+                    "id": 25,
+                    "title": "Synthetic Library Source 25",
+                    "category": { "id": 6, "title": "Synthetic Community" }
+                  }
+                },
+                {
+                  "id": 2102,
+                  "title": "Synthetic library bulletin 2102",
+                  "publishedAt": "2026-11-02T11:55:00.000Z",
+                  "feed": {
+                    "id": 22,
+                    "title": "Synthetic Library Source 22",
+                    "category": { "id": 4, "title": "Synthetic Learning" }
+                  }
+                },
+                {
+                  "id": 2107,
+                  "title": "Synthetic library bulletin 2107",
+                  "publishedAt": "2026-11-02T11:16:00.000Z",
+                  "feed": {
+                    "id": 27,
+                    "title": "Synthetic Library Source 27",
+                    "category": { "id": 4, "title": "Synthetic Learning" }
+                  }
+                },
+                {
+                  "id": 2104,
+                  "title": "Synthetic library bulletin 2104",
+                  "publishedAt": "2026-11-02T11:40:00.000Z",
+                  "feed": {
+                    "id": 24,
+                    "title": "Synthetic Library Source 24",
+                    "category": { "id": 5, "title": "Synthetic Public Services" }
+                  }
+                },
+                {
+                  "id": 2108,
+                  "title": "Synthetic library bulletin 2108",
+                  "publishedAt": "2026-11-02T11:08:00.000Z",
+                  "feed": {
+                    "id": 28,
+                    "title": "Synthetic Library Source 28",
+                    "category": { "id": 5, "title": "Synthetic Public Services" }
+                  }
+                },
+                {
+                  "id": 2106,
+                  "title": "Synthetic library bulletin 2106",
+                  "publishedAt": "2026-11-02T11:24:00.000Z",
+                  "feed": {
+                    "id": 26,
+                    "title": "Synthetic Library Source 26",
+                    "category": { "id": 6, "title": "Synthetic Community" }
+                  }
+                }
+              ]
+            },
+            "Y": {
+              "algorithmRevision": "home-editorial-session-and-category-projection@35446e1ab5d8e0e82bbef285835244ac4ab80181",
+              "highlightIds": [2101, 2103, 2105],
+              "categoryLanes": [
+                {
+                  "categoryId": 4,
+                  "categoryTitle": "Synthetic Learning",
+                  "entryIds": [2102, 2107]
+                },
+                {
+                  "categoryId": 5,
+                  "categoryTitle": "Synthetic Public Services",
+                  "entryIds": [2104, 2108]
+                }
+              ],
+              "latestIds": [2106],
+              "articleIds": [2101, 2103, 2105, 2102, 2107, 2104, 2108, 2106],
+              "readerOrderIds": [2101, 2103, 2105, 2102, 2107, 2104, 2108, 2106],
+              "articleMetadata": [
+                {
+                  "id": 2101,
+                  "title": "Synthetic library bulletin 2101",
+                  "publishedAt": "2026-11-02T12:00:00.000Z",
+                  "feed": {
+                    "id": 21,
+                    "title": "Synthetic Library Source 21",
+                    "category": { "id": 4, "title": "Synthetic Learning" }
+                  }
+                },
+                {
+                  "id": 2103,
+                  "title": "Synthetic library bulletin 2103",
+                  "publishedAt": "2026-11-02T11:48:00.000Z",
+                  "feed": {
+                    "id": 23,
+                    "title": "Synthetic Library Source 23",
+                    "category": { "id": 5, "title": "Synthetic Public Services" }
+                  }
+                },
+                {
+                  "id": 2105,
+                  "title": "Synthetic library bulletin 2105",
+                  "publishedAt": "2026-11-02T11:32:00.000Z",
+                  "feed": {
+                    "id": 25,
+                    "title": "Synthetic Library Source 25",
+                    "category": { "id": 6, "title": "Synthetic Community" }
+                  }
+                },
+                {
+                  "id": 2102,
+                  "title": "Synthetic library bulletin 2102",
+                  "publishedAt": "2026-11-02T11:55:00.000Z",
+                  "feed": {
+                    "id": 22,
+                    "title": "Synthetic Library Source 22",
+                    "category": { "id": 4, "title": "Synthetic Learning" }
+                  }
+                },
+                {
+                  "id": 2107,
+                  "title": "Synthetic library bulletin 2107",
+                  "publishedAt": "2026-11-02T11:16:00.000Z",
+                  "feed": {
+                    "id": 27,
+                    "title": "Synthetic Library Source 27",
+                    "category": { "id": 4, "title": "Synthetic Learning" }
+                  }
+                },
+                {
+                  "id": 2104,
+                  "title": "Synthetic library bulletin 2104",
+                  "publishedAt": "2026-11-02T11:40:00.000Z",
+                  "feed": {
+                    "id": 24,
+                    "title": "Synthetic Library Source 24",
+                    "category": { "id": 5, "title": "Synthetic Public Services" }
+                  }
+                },
+                {
+                  "id": 2108,
+                  "title": "Synthetic library bulletin 2108",
+                  "publishedAt": "2026-11-02T11:08:00.000Z",
+                  "feed": {
+                    "id": 28,
+                    "title": "Synthetic Library Source 28",
+                    "category": { "id": 5, "title": "Synthetic Public Services" }
+                  }
+                },
+                {
+                  "id": 2106,
+                  "title": "Synthetic library bulletin 2106",
+                  "publishedAt": "2026-11-02T11:24:00.000Z",
+                  "feed": {
+                    "id": 26,
+                    "title": "Synthetic Library Source 26",
+                    "category": { "id": 6, "title": "Synthetic Community" }
+                  }
+                }
+              ]
+            }
+          },
+          "pairReceiptHash": "02719e3828afdcad032ad0ff74b1f738efdc88f42b033cf3ff0adcebda3d631b"
+        }
+      ],
+      "sessionManifestHash": "ee7dd6a5d435ecdde66255772c6b558e365cf3686b106c9f8e9e42c3f73031e6"
+    },
+    {
+      "schemaVersion": "PILOT_SESSION_RECEIPT_V1",
+      "fixtureKind": "SYNTHETIC_ONLY",
+      "referenceBaseSha": "35446e1ab5d8e0e82bbef285835244ac4ab80181",
+      "sessionCode": "SYNTHETIC-c2f69235a84e5a94eee36e94",
+      "allocationKey": "8b45b42388cf0f11be700d75906b9fbb",
+      "slotIndex": 2,
+      "preRecruitmentManifestHash": "a5b3d646ed53bb944a66195ce71c237f434d1e7e1d04be0170e4a97bc83f1a81",
+      "profileSeedReferences": {
+        "keys": [],
+        "hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "rendererRevision": "synthetic-slot-renderer-v1",
+      "armMapping": { "X": "PERSONALIZATION_V1", "Y": "PHASE_2C_DETERMINISTIC" },
+      "presentationOrder": "V1_FIRST",
+      "labelPresentationOrder": "X_THEN_Y",
+      "scenarioOrder": ["synthetic_transit", "synthetic_library"],
+      "scenarioPairs": [
+        {
+          "scenarioCode": "synthetic_transit",
+          "scenarioOrderIndex": 0,
+          "eligibleArticleIds": [1101, 1102, 1103, 1104, 1105, 1106, 1107, 1108],
+          "articleSetHash": "1486e1075a351f80e23dbb0733640042be94a16cf9a0f4634152331c73359c3c",
+          "rendererRevision": "synthetic-slot-renderer-v1",
+          "armMapping": { "X": "PERSONALIZATION_V1", "Y": "PHASE_2C_DETERMINISTIC" },
+          "presentationOrder": "X_THEN_Y",
+          "randomizedAlgorithmOrder": "V1_FIRST",
+          "arms": {
+            "X": {
+              "algorithmRevision": "home-personalization-profile-and-projection@35446e1ab5d8e0e82bbef285835244ac4ab80181",
+              "highlightIds": [1101, 1103, 1105],
+              "categoryLanes": [
+                { "categoryId": 1, "categoryTitle": "Synthetic Local", "entryIds": [1102, 1107] },
+                { "categoryId": 2, "categoryTitle": "Synthetic Civic", "entryIds": [1104, 1108] }
+              ],
+              "latestIds": [1106],
+              "articleIds": [1101, 1103, 1105, 1102, 1107, 1104, 1108, 1106],
+              "readerOrderIds": [1101, 1103, 1105, 1102, 1107, 1104, 1108, 1106],
+              "articleMetadata": [
+                {
+                  "id": 1101,
+                  "title": "Synthetic transit bulletin 1101",
+                  "publishedAt": "2026-11-01T12:00:00.000Z",
+                  "feed": {
+                    "id": 11,
+                    "title": "Synthetic Transit Source 11",
+                    "category": { "id": 1, "title": "Synthetic Local" }
+                  }
+                },
+                {
+                  "id": 1103,
+                  "title": "Synthetic transit bulletin 1103",
+                  "publishedAt": "2026-11-01T11:48:00.000Z",
+                  "feed": {
+                    "id": 13,
+                    "title": "Synthetic Transit Source 13",
+                    "category": { "id": 2, "title": "Synthetic Civic" }
+                  }
+                },
+                {
+                  "id": 1105,
+                  "title": "Synthetic transit bulletin 1105",
+                  "publishedAt": "2026-11-01T11:32:00.000Z",
+                  "feed": {
+                    "id": 15,
+                    "title": "Synthetic Transit Source 15",
+                    "category": { "id": 3, "title": "Synthetic Mobility" }
+                  }
+                },
+                {
+                  "id": 1102,
+                  "title": "Synthetic transit bulletin 1102",
+                  "publishedAt": "2026-11-01T11:55:00.000Z",
+                  "feed": {
+                    "id": 12,
+                    "title": "Synthetic Transit Source 12",
+                    "category": { "id": 1, "title": "Synthetic Local" }
+                  }
+                },
+                {
+                  "id": 1107,
+                  "title": "Synthetic transit bulletin 1107",
+                  "publishedAt": "2026-11-01T11:16:00.000Z",
+                  "feed": {
+                    "id": 17,
+                    "title": "Synthetic Transit Source 17",
+                    "category": { "id": 1, "title": "Synthetic Local" }
+                  }
+                },
+                {
+                  "id": 1104,
+                  "title": "Synthetic transit bulletin 1104",
+                  "publishedAt": "2026-11-01T11:40:00.000Z",
+                  "feed": {
+                    "id": 14,
+                    "title": "Synthetic Transit Source 14",
+                    "category": { "id": 2, "title": "Synthetic Civic" }
+                  }
+                },
+                {
+                  "id": 1108,
+                  "title": "Synthetic transit bulletin 1108",
+                  "publishedAt": "2026-11-01T11:08:00.000Z",
+                  "feed": {
+                    "id": 18,
+                    "title": "Synthetic Transit Source 18",
+                    "category": { "id": 2, "title": "Synthetic Civic" }
+                  }
+                },
+                {
+                  "id": 1106,
+                  "title": "Synthetic transit bulletin 1106",
+                  "publishedAt": "2026-11-01T11:24:00.000Z",
+                  "feed": {
+                    "id": 16,
+                    "title": "Synthetic Transit Source 16",
+                    "category": { "id": 3, "title": "Synthetic Mobility" }
+                  }
+                }
+              ]
+            },
+            "Y": {
+              "algorithmRevision": "home-editorial-session-and-category-projection@35446e1ab5d8e0e82bbef285835244ac4ab80181",
+              "highlightIds": [1101, 1103, 1105],
+              "categoryLanes": [
+                { "categoryId": 1, "categoryTitle": "Synthetic Local", "entryIds": [1102, 1107] },
+                { "categoryId": 2, "categoryTitle": "Synthetic Civic", "entryIds": [1104, 1108] }
+              ],
+              "latestIds": [1106],
+              "articleIds": [1101, 1103, 1105, 1102, 1107, 1104, 1108, 1106],
+              "readerOrderIds": [1101, 1103, 1105, 1102, 1107, 1104, 1108, 1106],
+              "articleMetadata": [
+                {
+                  "id": 1101,
+                  "title": "Synthetic transit bulletin 1101",
+                  "publishedAt": "2026-11-01T12:00:00.000Z",
+                  "feed": {
+                    "id": 11,
+                    "title": "Synthetic Transit Source 11",
+                    "category": { "id": 1, "title": "Synthetic Local" }
+                  }
+                },
+                {
+                  "id": 1103,
+                  "title": "Synthetic transit bulletin 1103",
+                  "publishedAt": "2026-11-01T11:48:00.000Z",
+                  "feed": {
+                    "id": 13,
+                    "title": "Synthetic Transit Source 13",
+                    "category": { "id": 2, "title": "Synthetic Civic" }
+                  }
+                },
+                {
+                  "id": 1105,
+                  "title": "Synthetic transit bulletin 1105",
+                  "publishedAt": "2026-11-01T11:32:00.000Z",
+                  "feed": {
+                    "id": 15,
+                    "title": "Synthetic Transit Source 15",
+                    "category": { "id": 3, "title": "Synthetic Mobility" }
+                  }
+                },
+                {
+                  "id": 1102,
+                  "title": "Synthetic transit bulletin 1102",
+                  "publishedAt": "2026-11-01T11:55:00.000Z",
+                  "feed": {
+                    "id": 12,
+                    "title": "Synthetic Transit Source 12",
+                    "category": { "id": 1, "title": "Synthetic Local" }
+                  }
+                },
+                {
+                  "id": 1107,
+                  "title": "Synthetic transit bulletin 1107",
+                  "publishedAt": "2026-11-01T11:16:00.000Z",
+                  "feed": {
+                    "id": 17,
+                    "title": "Synthetic Transit Source 17",
+                    "category": { "id": 1, "title": "Synthetic Local" }
+                  }
+                },
+                {
+                  "id": 1104,
+                  "title": "Synthetic transit bulletin 1104",
+                  "publishedAt": "2026-11-01T11:40:00.000Z",
+                  "feed": {
+                    "id": 14,
+                    "title": "Synthetic Transit Source 14",
+                    "category": { "id": 2, "title": "Synthetic Civic" }
+                  }
+                },
+                {
+                  "id": 1108,
+                  "title": "Synthetic transit bulletin 1108",
+                  "publishedAt": "2026-11-01T11:08:00.000Z",
+                  "feed": {
+                    "id": 18,
+                    "title": "Synthetic Transit Source 18",
+                    "category": { "id": 2, "title": "Synthetic Civic" }
+                  }
+                },
+                {
+                  "id": 1106,
+                  "title": "Synthetic transit bulletin 1106",
+                  "publishedAt": "2026-11-01T11:24:00.000Z",
+                  "feed": {
+                    "id": 16,
+                    "title": "Synthetic Transit Source 16",
+                    "category": { "id": 3, "title": "Synthetic Mobility" }
+                  }
+                }
+              ]
+            }
+          },
+          "pairReceiptHash": "134e90f8e450ea59015ea77ad6cfc7ea8e026426adb4a27c3c64c02f7dac4334"
+        },
+        {
+          "scenarioCode": "synthetic_library",
+          "scenarioOrderIndex": 1,
+          "eligibleArticleIds": [2101, 2102, 2103, 2104, 2105, 2106, 2107, 2108],
+          "articleSetHash": "d0cb439725f5cab329ff7e7b56bbbc8384766191cbe7dc2c4100f9ddabf1c080",
+          "rendererRevision": "synthetic-slot-renderer-v1",
+          "armMapping": { "X": "PERSONALIZATION_V1", "Y": "PHASE_2C_DETERMINISTIC" },
+          "presentationOrder": "X_THEN_Y",
+          "randomizedAlgorithmOrder": "V1_FIRST",
+          "arms": {
+            "X": {
+              "algorithmRevision": "home-personalization-profile-and-projection@35446e1ab5d8e0e82bbef285835244ac4ab80181",
+              "highlightIds": [2101, 2103, 2105],
+              "categoryLanes": [
+                {
+                  "categoryId": 4,
+                  "categoryTitle": "Synthetic Learning",
+                  "entryIds": [2102, 2107]
+                },
+                {
+                  "categoryId": 5,
+                  "categoryTitle": "Synthetic Public Services",
+                  "entryIds": [2104, 2108]
+                }
+              ],
+              "latestIds": [2106],
+              "articleIds": [2101, 2103, 2105, 2102, 2107, 2104, 2108, 2106],
+              "readerOrderIds": [2101, 2103, 2105, 2102, 2107, 2104, 2108, 2106],
+              "articleMetadata": [
+                {
+                  "id": 2101,
+                  "title": "Synthetic library bulletin 2101",
+                  "publishedAt": "2026-11-02T12:00:00.000Z",
+                  "feed": {
+                    "id": 21,
+                    "title": "Synthetic Library Source 21",
+                    "category": { "id": 4, "title": "Synthetic Learning" }
+                  }
+                },
+                {
+                  "id": 2103,
+                  "title": "Synthetic library bulletin 2103",
+                  "publishedAt": "2026-11-02T11:48:00.000Z",
+                  "feed": {
+                    "id": 23,
+                    "title": "Synthetic Library Source 23",
+                    "category": { "id": 5, "title": "Synthetic Public Services" }
+                  }
+                },
+                {
+                  "id": 2105,
+                  "title": "Synthetic library bulletin 2105",
+                  "publishedAt": "2026-11-02T11:32:00.000Z",
+                  "feed": {
+                    "id": 25,
+                    "title": "Synthetic Library Source 25",
+                    "category": { "id": 6, "title": "Synthetic Community" }
+                  }
+                },
+                {
+                  "id": 2102,
+                  "title": "Synthetic library bulletin 2102",
+                  "publishedAt": "2026-11-02T11:55:00.000Z",
+                  "feed": {
+                    "id": 22,
+                    "title": "Synthetic Library Source 22",
+                    "category": { "id": 4, "title": "Synthetic Learning" }
+                  }
+                },
+                {
+                  "id": 2107,
+                  "title": "Synthetic library bulletin 2107",
+                  "publishedAt": "2026-11-02T11:16:00.000Z",
+                  "feed": {
+                    "id": 27,
+                    "title": "Synthetic Library Source 27",
+                    "category": { "id": 4, "title": "Synthetic Learning" }
+                  }
+                },
+                {
+                  "id": 2104,
+                  "title": "Synthetic library bulletin 2104",
+                  "publishedAt": "2026-11-02T11:40:00.000Z",
+                  "feed": {
+                    "id": 24,
+                    "title": "Synthetic Library Source 24",
+                    "category": { "id": 5, "title": "Synthetic Public Services" }
+                  }
+                },
+                {
+                  "id": 2108,
+                  "title": "Synthetic library bulletin 2108",
+                  "publishedAt": "2026-11-02T11:08:00.000Z",
+                  "feed": {
+                    "id": 28,
+                    "title": "Synthetic Library Source 28",
+                    "category": { "id": 5, "title": "Synthetic Public Services" }
+                  }
+                },
+                {
+                  "id": 2106,
+                  "title": "Synthetic library bulletin 2106",
+                  "publishedAt": "2026-11-02T11:24:00.000Z",
+                  "feed": {
+                    "id": 26,
+                    "title": "Synthetic Library Source 26",
+                    "category": { "id": 6, "title": "Synthetic Community" }
+                  }
+                }
+              ]
+            },
+            "Y": {
+              "algorithmRevision": "home-editorial-session-and-category-projection@35446e1ab5d8e0e82bbef285835244ac4ab80181",
+              "highlightIds": [2101, 2103, 2105],
+              "categoryLanes": [
+                {
+                  "categoryId": 4,
+                  "categoryTitle": "Synthetic Learning",
+                  "entryIds": [2102, 2107]
+                },
+                {
+                  "categoryId": 5,
+                  "categoryTitle": "Synthetic Public Services",
+                  "entryIds": [2104, 2108]
+                }
+              ],
+              "latestIds": [2106],
+              "articleIds": [2101, 2103, 2105, 2102, 2107, 2104, 2108, 2106],
+              "readerOrderIds": [2101, 2103, 2105, 2102, 2107, 2104, 2108, 2106],
+              "articleMetadata": [
+                {
+                  "id": 2101,
+                  "title": "Synthetic library bulletin 2101",
+                  "publishedAt": "2026-11-02T12:00:00.000Z",
+                  "feed": {
+                    "id": 21,
+                    "title": "Synthetic Library Source 21",
+                    "category": { "id": 4, "title": "Synthetic Learning" }
+                  }
+                },
+                {
+                  "id": 2103,
+                  "title": "Synthetic library bulletin 2103",
+                  "publishedAt": "2026-11-02T11:48:00.000Z",
+                  "feed": {
+                    "id": 23,
+                    "title": "Synthetic Library Source 23",
+                    "category": { "id": 5, "title": "Synthetic Public Services" }
+                  }
+                },
+                {
+                  "id": 2105,
+                  "title": "Synthetic library bulletin 2105",
+                  "publishedAt": "2026-11-02T11:32:00.000Z",
+                  "feed": {
+                    "id": 25,
+                    "title": "Synthetic Library Source 25",
+                    "category": { "id": 6, "title": "Synthetic Community" }
+                  }
+                },
+                {
+                  "id": 2102,
+                  "title": "Synthetic library bulletin 2102",
+                  "publishedAt": "2026-11-02T11:55:00.000Z",
+                  "feed": {
+                    "id": 22,
+                    "title": "Synthetic Library Source 22",
+                    "category": { "id": 4, "title": "Synthetic Learning" }
+                  }
+                },
+                {
+                  "id": 2107,
+                  "title": "Synthetic library bulletin 2107",
+                  "publishedAt": "2026-11-02T11:16:00.000Z",
+                  "feed": {
+                    "id": 27,
+                    "title": "Synthetic Library Source 27",
+                    "category": { "id": 4, "title": "Synthetic Learning" }
+                  }
+                },
+                {
+                  "id": 2104,
+                  "title": "Synthetic library bulletin 2104",
+                  "publishedAt": "2026-11-02T11:40:00.000Z",
+                  "feed": {
+                    "id": 24,
+                    "title": "Synthetic Library Source 24",
+                    "category": { "id": 5, "title": "Synthetic Public Services" }
+                  }
+                },
+                {
+                  "id": 2108,
+                  "title": "Synthetic library bulletin 2108",
+                  "publishedAt": "2026-11-02T11:08:00.000Z",
+                  "feed": {
+                    "id": 28,
+                    "title": "Synthetic Library Source 28",
+                    "category": { "id": 5, "title": "Synthetic Public Services" }
+                  }
+                },
+                {
+                  "id": 2106,
+                  "title": "Synthetic library bulletin 2106",
+                  "publishedAt": "2026-11-02T11:24:00.000Z",
+                  "feed": {
+                    "id": 26,
+                    "title": "Synthetic Library Source 26",
+                    "category": { "id": 6, "title": "Synthetic Community" }
+                  }
+                }
+              ]
+            }
+          },
+          "pairReceiptHash": "59120af7585455d2defbff09752c86f229840eaa61a272197a8d8492c267823a"
+        }
+      ],
+      "sessionManifestHash": "dfdc195709ea1b6a991a28a5c559adca072c33b1255f6d559fa40c34a343e580"
+    },
+    {
+      "schemaVersion": "PILOT_SESSION_RECEIPT_V1",
+      "fixtureKind": "SYNTHETIC_ONLY",
+      "referenceBaseSha": "35446e1ab5d8e0e82bbef285835244ac4ab80181",
+      "sessionCode": "SYNTHETIC-5d7a28f1a0161ee792c6a173",
+      "allocationKey": "7a2b94b9adf0ea4ea81bffc6661b8ca5",
+      "slotIndex": 3,
+      "preRecruitmentManifestHash": "a5b3d646ed53bb944a66195ce71c237f434d1e7e1d04be0170e4a97bc83f1a81",
+      "profileSeedReferences": {
+        "keys": ["synthetic-favorite-local", "synthetic-favorite-community"],
+        "hash": "7428c4d3d373959e1a560f26e2ba605b5ad76626062f2a4d463802255261b5d5"
+      },
+      "rendererRevision": "synthetic-slot-renderer-v1",
+      "armMapping": { "X": "PHASE_2C_DETERMINISTIC", "Y": "PERSONALIZATION_V1" },
+      "presentationOrder": "V1_FIRST",
+      "labelPresentationOrder": "Y_THEN_X",
+      "scenarioOrder": ["synthetic_transit", "synthetic_library"],
+      "scenarioPairs": [
+        {
+          "scenarioCode": "synthetic_transit",
+          "scenarioOrderIndex": 0,
+          "eligibleArticleIds": [1101, 1102, 1103, 1104, 1105, 1106, 1107, 1108],
+          "articleSetHash": "1486e1075a351f80e23dbb0733640042be94a16cf9a0f4634152331c73359c3c",
+          "rendererRevision": "synthetic-slot-renderer-v1",
+          "armMapping": { "X": "PHASE_2C_DETERMINISTIC", "Y": "PERSONALIZATION_V1" },
+          "presentationOrder": "Y_THEN_X",
+          "randomizedAlgorithmOrder": "V1_FIRST",
+          "arms": {
+            "X": {
+              "algorithmRevision": "home-editorial-session-and-category-projection@35446e1ab5d8e0e82bbef285835244ac4ab80181",
+              "highlightIds": [1101, 1103, 1105],
+              "categoryLanes": [
+                { "categoryId": 1, "categoryTitle": "Synthetic Local", "entryIds": [1102, 1107] },
+                { "categoryId": 2, "categoryTitle": "Synthetic Civic", "entryIds": [1104, 1108] }
+              ],
+              "latestIds": [1106],
+              "articleIds": [1101, 1103, 1105, 1102, 1107, 1104, 1108, 1106],
+              "readerOrderIds": [1101, 1103, 1105, 1102, 1107, 1104, 1108, 1106],
+              "articleMetadata": [
+                {
+                  "id": 1101,
+                  "title": "Synthetic transit bulletin 1101",
+                  "publishedAt": "2026-11-01T12:00:00.000Z",
+                  "feed": {
+                    "id": 11,
+                    "title": "Synthetic Transit Source 11",
+                    "category": { "id": 1, "title": "Synthetic Local" }
+                  }
+                },
+                {
+                  "id": 1103,
+                  "title": "Synthetic transit bulletin 1103",
+                  "publishedAt": "2026-11-01T11:48:00.000Z",
+                  "feed": {
+                    "id": 13,
+                    "title": "Synthetic Transit Source 13",
+                    "category": { "id": 2, "title": "Synthetic Civic" }
+                  }
+                },
+                {
+                  "id": 1105,
+                  "title": "Synthetic transit bulletin 1105",
+                  "publishedAt": "2026-11-01T11:32:00.000Z",
+                  "feed": {
+                    "id": 15,
+                    "title": "Synthetic Transit Source 15",
+                    "category": { "id": 3, "title": "Synthetic Mobility" }
+                  }
+                },
+                {
+                  "id": 1102,
+                  "title": "Synthetic transit bulletin 1102",
+                  "publishedAt": "2026-11-01T11:55:00.000Z",
+                  "feed": {
+                    "id": 12,
+                    "title": "Synthetic Transit Source 12",
+                    "category": { "id": 1, "title": "Synthetic Local" }
+                  }
+                },
+                {
+                  "id": 1107,
+                  "title": "Synthetic transit bulletin 1107",
+                  "publishedAt": "2026-11-01T11:16:00.000Z",
+                  "feed": {
+                    "id": 17,
+                    "title": "Synthetic Transit Source 17",
+                    "category": { "id": 1, "title": "Synthetic Local" }
+                  }
+                },
+                {
+                  "id": 1104,
+                  "title": "Synthetic transit bulletin 1104",
+                  "publishedAt": "2026-11-01T11:40:00.000Z",
+                  "feed": {
+                    "id": 14,
+                    "title": "Synthetic Transit Source 14",
+                    "category": { "id": 2, "title": "Synthetic Civic" }
+                  }
+                },
+                {
+                  "id": 1108,
+                  "title": "Synthetic transit bulletin 1108",
+                  "publishedAt": "2026-11-01T11:08:00.000Z",
+                  "feed": {
+                    "id": 18,
+                    "title": "Synthetic Transit Source 18",
+                    "category": { "id": 2, "title": "Synthetic Civic" }
+                  }
+                },
+                {
+                  "id": 1106,
+                  "title": "Synthetic transit bulletin 1106",
+                  "publishedAt": "2026-11-01T11:24:00.000Z",
+                  "feed": {
+                    "id": 16,
+                    "title": "Synthetic Transit Source 16",
+                    "category": { "id": 3, "title": "Synthetic Mobility" }
+                  }
+                }
+              ]
+            },
+            "Y": {
+              "algorithmRevision": "home-personalization-profile-and-projection@35446e1ab5d8e0e82bbef285835244ac4ab80181",
+              "highlightIds": [1101, 1103, 1105],
+              "categoryLanes": [
+                { "categoryId": 1, "categoryTitle": "Synthetic Local", "entryIds": [1102, 1107] },
+                { "categoryId": 2, "categoryTitle": "Synthetic Civic", "entryIds": [1104, 1108] }
+              ],
+              "latestIds": [1106],
+              "articleIds": [1101, 1103, 1105, 1102, 1107, 1104, 1108, 1106],
+              "readerOrderIds": [1101, 1103, 1105, 1102, 1107, 1104, 1108, 1106],
+              "articleMetadata": [
+                {
+                  "id": 1101,
+                  "title": "Synthetic transit bulletin 1101",
+                  "publishedAt": "2026-11-01T12:00:00.000Z",
+                  "feed": {
+                    "id": 11,
+                    "title": "Synthetic Transit Source 11",
+                    "category": { "id": 1, "title": "Synthetic Local" }
+                  }
+                },
+                {
+                  "id": 1103,
+                  "title": "Synthetic transit bulletin 1103",
+                  "publishedAt": "2026-11-01T11:48:00.000Z",
+                  "feed": {
+                    "id": 13,
+                    "title": "Synthetic Transit Source 13",
+                    "category": { "id": 2, "title": "Synthetic Civic" }
+                  }
+                },
+                {
+                  "id": 1105,
+                  "title": "Synthetic transit bulletin 1105",
+                  "publishedAt": "2026-11-01T11:32:00.000Z",
+                  "feed": {
+                    "id": 15,
+                    "title": "Synthetic Transit Source 15",
+                    "category": { "id": 3, "title": "Synthetic Mobility" }
+                  }
+                },
+                {
+                  "id": 1102,
+                  "title": "Synthetic transit bulletin 1102",
+                  "publishedAt": "2026-11-01T11:55:00.000Z",
+                  "feed": {
+                    "id": 12,
+                    "title": "Synthetic Transit Source 12",
+                    "category": { "id": 1, "title": "Synthetic Local" }
+                  }
+                },
+                {
+                  "id": 1107,
+                  "title": "Synthetic transit bulletin 1107",
+                  "publishedAt": "2026-11-01T11:16:00.000Z",
+                  "feed": {
+                    "id": 17,
+                    "title": "Synthetic Transit Source 17",
+                    "category": { "id": 1, "title": "Synthetic Local" }
+                  }
+                },
+                {
+                  "id": 1104,
+                  "title": "Synthetic transit bulletin 1104",
+                  "publishedAt": "2026-11-01T11:40:00.000Z",
+                  "feed": {
+                    "id": 14,
+                    "title": "Synthetic Transit Source 14",
+                    "category": { "id": 2, "title": "Synthetic Civic" }
+                  }
+                },
+                {
+                  "id": 1108,
+                  "title": "Synthetic transit bulletin 1108",
+                  "publishedAt": "2026-11-01T11:08:00.000Z",
+                  "feed": {
+                    "id": 18,
+                    "title": "Synthetic Transit Source 18",
+                    "category": { "id": 2, "title": "Synthetic Civic" }
+                  }
+                },
+                {
+                  "id": 1106,
+                  "title": "Synthetic transit bulletin 1106",
+                  "publishedAt": "2026-11-01T11:24:00.000Z",
+                  "feed": {
+                    "id": 16,
+                    "title": "Synthetic Transit Source 16",
+                    "category": { "id": 3, "title": "Synthetic Mobility" }
+                  }
+                }
+              ]
+            }
+          },
+          "pairReceiptHash": "5e9d85955e27db75389f7f04ec2db87765102d635dfba582a32135a407e7f66b"
+        },
+        {
+          "scenarioCode": "synthetic_library",
+          "scenarioOrderIndex": 1,
+          "eligibleArticleIds": [2101, 2102, 2103, 2104, 2105, 2106, 2107, 2108],
+          "articleSetHash": "d0cb439725f5cab329ff7e7b56bbbc8384766191cbe7dc2c4100f9ddabf1c080",
+          "rendererRevision": "synthetic-slot-renderer-v1",
+          "armMapping": { "X": "PHASE_2C_DETERMINISTIC", "Y": "PERSONALIZATION_V1" },
+          "presentationOrder": "Y_THEN_X",
+          "randomizedAlgorithmOrder": "V1_FIRST",
+          "arms": {
+            "X": {
+              "algorithmRevision": "home-editorial-session-and-category-projection@35446e1ab5d8e0e82bbef285835244ac4ab80181",
+              "highlightIds": [2101, 2103, 2105],
+              "categoryLanes": [
+                {
+                  "categoryId": 4,
+                  "categoryTitle": "Synthetic Learning",
+                  "entryIds": [2102, 2107]
+                },
+                {
+                  "categoryId": 5,
+                  "categoryTitle": "Synthetic Public Services",
+                  "entryIds": [2104, 2108]
+                }
+              ],
+              "latestIds": [2106],
+              "articleIds": [2101, 2103, 2105, 2102, 2107, 2104, 2108, 2106],
+              "readerOrderIds": [2101, 2103, 2105, 2102, 2107, 2104, 2108, 2106],
+              "articleMetadata": [
+                {
+                  "id": 2101,
+                  "title": "Synthetic library bulletin 2101",
+                  "publishedAt": "2026-11-02T12:00:00.000Z",
+                  "feed": {
+                    "id": 21,
+                    "title": "Synthetic Library Source 21",
+                    "category": { "id": 4, "title": "Synthetic Learning" }
+                  }
+                },
+                {
+                  "id": 2103,
+                  "title": "Synthetic library bulletin 2103",
+                  "publishedAt": "2026-11-02T11:48:00.000Z",
+                  "feed": {
+                    "id": 23,
+                    "title": "Synthetic Library Source 23",
+                    "category": { "id": 5, "title": "Synthetic Public Services" }
+                  }
+                },
+                {
+                  "id": 2105,
+                  "title": "Synthetic library bulletin 2105",
+                  "publishedAt": "2026-11-02T11:32:00.000Z",
+                  "feed": {
+                    "id": 25,
+                    "title": "Synthetic Library Source 25",
+                    "category": { "id": 6, "title": "Synthetic Community" }
+                  }
+                },
+                {
+                  "id": 2102,
+                  "title": "Synthetic library bulletin 2102",
+                  "publishedAt": "2026-11-02T11:55:00.000Z",
+                  "feed": {
+                    "id": 22,
+                    "title": "Synthetic Library Source 22",
+                    "category": { "id": 4, "title": "Synthetic Learning" }
+                  }
+                },
+                {
+                  "id": 2107,
+                  "title": "Synthetic library bulletin 2107",
+                  "publishedAt": "2026-11-02T11:16:00.000Z",
+                  "feed": {
+                    "id": 27,
+                    "title": "Synthetic Library Source 27",
+                    "category": { "id": 4, "title": "Synthetic Learning" }
+                  }
+                },
+                {
+                  "id": 2104,
+                  "title": "Synthetic library bulletin 2104",
+                  "publishedAt": "2026-11-02T11:40:00.000Z",
+                  "feed": {
+                    "id": 24,
+                    "title": "Synthetic Library Source 24",
+                    "category": { "id": 5, "title": "Synthetic Public Services" }
+                  }
+                },
+                {
+                  "id": 2108,
+                  "title": "Synthetic library bulletin 2108",
+                  "publishedAt": "2026-11-02T11:08:00.000Z",
+                  "feed": {
+                    "id": 28,
+                    "title": "Synthetic Library Source 28",
+                    "category": { "id": 5, "title": "Synthetic Public Services" }
+                  }
+                },
+                {
+                  "id": 2106,
+                  "title": "Synthetic library bulletin 2106",
+                  "publishedAt": "2026-11-02T11:24:00.000Z",
+                  "feed": {
+                    "id": 26,
+                    "title": "Synthetic Library Source 26",
+                    "category": { "id": 6, "title": "Synthetic Community" }
+                  }
+                }
+              ]
+            },
+            "Y": {
+              "algorithmRevision": "home-personalization-profile-and-projection@35446e1ab5d8e0e82bbef285835244ac4ab80181",
+              "highlightIds": [2101, 2105, 2103],
+              "categoryLanes": [
+                {
+                  "categoryId": 4,
+                  "categoryTitle": "Synthetic Learning",
+                  "entryIds": [2102, 2107]
+                },
+                {
+                  "categoryId": 5,
+                  "categoryTitle": "Synthetic Public Services",
+                  "entryIds": [2104, 2108]
+                }
+              ],
+              "latestIds": [2106],
+              "articleIds": [2101, 2105, 2103, 2102, 2107, 2104, 2108, 2106],
+              "readerOrderIds": [2101, 2105, 2103, 2102, 2107, 2104, 2108, 2106],
+              "articleMetadata": [
+                {
+                  "id": 2101,
+                  "title": "Synthetic library bulletin 2101",
+                  "publishedAt": "2026-11-02T12:00:00.000Z",
+                  "feed": {
+                    "id": 21,
+                    "title": "Synthetic Library Source 21",
+                    "category": { "id": 4, "title": "Synthetic Learning" }
+                  }
+                },
+                {
+                  "id": 2105,
+                  "title": "Synthetic library bulletin 2105",
+                  "publishedAt": "2026-11-02T11:32:00.000Z",
+                  "feed": {
+                    "id": 25,
+                    "title": "Synthetic Library Source 25",
+                    "category": { "id": 6, "title": "Synthetic Community" }
+                  }
+                },
+                {
+                  "id": 2103,
+                  "title": "Synthetic library bulletin 2103",
+                  "publishedAt": "2026-11-02T11:48:00.000Z",
+                  "feed": {
+                    "id": 23,
+                    "title": "Synthetic Library Source 23",
+                    "category": { "id": 5, "title": "Synthetic Public Services" }
+                  }
+                },
+                {
+                  "id": 2102,
+                  "title": "Synthetic library bulletin 2102",
+                  "publishedAt": "2026-11-02T11:55:00.000Z",
+                  "feed": {
+                    "id": 22,
+                    "title": "Synthetic Library Source 22",
+                    "category": { "id": 4, "title": "Synthetic Learning" }
+                  }
+                },
+                {
+                  "id": 2107,
+                  "title": "Synthetic library bulletin 2107",
+                  "publishedAt": "2026-11-02T11:16:00.000Z",
+                  "feed": {
+                    "id": 27,
+                    "title": "Synthetic Library Source 27",
+                    "category": { "id": 4, "title": "Synthetic Learning" }
+                  }
+                },
+                {
+                  "id": 2104,
+                  "title": "Synthetic library bulletin 2104",
+                  "publishedAt": "2026-11-02T11:40:00.000Z",
+                  "feed": {
+                    "id": 24,
+                    "title": "Synthetic Library Source 24",
+                    "category": { "id": 5, "title": "Synthetic Public Services" }
+                  }
+                },
+                {
+                  "id": 2108,
+                  "title": "Synthetic library bulletin 2108",
+                  "publishedAt": "2026-11-02T11:08:00.000Z",
+                  "feed": {
+                    "id": 28,
+                    "title": "Synthetic Library Source 28",
+                    "category": { "id": 5, "title": "Synthetic Public Services" }
+                  }
+                },
+                {
+                  "id": 2106,
+                  "title": "Synthetic library bulletin 2106",
+                  "publishedAt": "2026-11-02T11:24:00.000Z",
+                  "feed": {
+                    "id": 26,
+                    "title": "Synthetic Library Source 26",
+                    "category": { "id": 6, "title": "Synthetic Community" }
+                  }
+                }
+              ]
+            }
+          },
+          "pairReceiptHash": "d108e80555646a36a77d4ac9e5c465bd4b5d45c813958e0ac0ade3b0c89d75a5"
+        }
+      ],
+      "sessionManifestHash": "8a41afb1980b00437887a9e1fd3613a4fb649237568cc8f3859b18627ea9444d"
+    }
+  ]
+}

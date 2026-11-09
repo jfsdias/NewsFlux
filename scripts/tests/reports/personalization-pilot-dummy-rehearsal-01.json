@@ -1,0 +1,32 @@
+{
+  "reportVersion": "PERSONALIZATION_PILOT_DUMMY_REHEARSAL_01_V2",
+  "fixtureKind": "SYNTHETIC_ONLY",
+  "generatedFromFrozenFixtures": true,
+  "referenceBaseSha": "35446e1ab5d8e0e82bbef285835244ac4ab80181",
+  "preRecruitmentManifestHash": "a5b3d646ed53bb944a66195ce71c237f434d1e7e1d04be0170e4a97bc83f1a81",
+  "sessionCount": 4,
+  "pairCount": 8,
+  "validResponseCount": 3,
+  "rejectedResponseCount": 1,
+  "rejectionReasons": { "PAIR_RECEIPT_HASH_MISMATCH": 1 },
+  "algorithmOrderBalance": { "PHASE_2C_FIRST": 2, "V1_FIRST": 2 },
+  "labelOrderBalance": { "X_THEN_Y": 2, "Y_THEN_X": 2 },
+  "jointOrderCoverage": {
+    "PHASE_2C_FIRST|X_THEN_Y": 1,
+    "PHASE_2C_FIRST|Y_THEN_X": 1,
+    "V1_FIRST|X_THEN_Y": 1,
+    "V1_FIRST|Y_THEN_X": 1
+  },
+  "scenarioPreferenceStates": { "CANNOT_JUDGE": 1, "NEITHER": 1, "OMITTED": 1, "TIE": 1, "X": 2 },
+  "overallPreferenceStates": { "CANNOT_JUDGE": 1, "OMITTED": 1, "Y": 1 },
+  "sessionHashesVerified": 4,
+  "pairHashesVerified": 8,
+  "articleCoverageVerified": true,
+  "sourceAndCategoryIdentityPreserved": true,
+  "blindingPreserved": true,
+  "humanRelevanceMeasured": false,
+  "limeSurveyIntegrationGate": "NOT_TESTED",
+  "externalDataTransfer": false,
+  "minifluxAccess": false,
+  "productChanges": false
+}
