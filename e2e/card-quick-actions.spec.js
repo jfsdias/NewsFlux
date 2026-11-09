@@ -373,6 +373,17 @@ test.describe("CARD-QUICK-ACTIONS-01", () => {
     expect(columnBounds.height).toBeGreaterThanOrEqual(44)
     await columnButton.click()
     await expect(actionMenu(columnRun.page)).toBeVisible()
+
+    const primaryRun = await openApp({ path: "/all", settings: { articleListLayout: "card" } })
+    const primaryLink = primaryRun.page
+      .locator(".article-entry-card-shell > a.article-entry")
+      .first()
+    const primaryHref = await primaryLink.getAttribute("href")
+    expect(primaryHref).toBeTruthy()
+    expect(await primaryLink.evaluate((element) => element.tagName)).toBe("A")
+    await primaryLink.focus()
+    await primaryRun.page.keyboard.press("Enter")
+    await expect(primaryRun.page).toHaveURL(new URL(primaryHref, primaryRun.page.url()).href)
   })
 
   test("CARD-QUICK-ACTIONS-01-2: existing read and favorite actions remain available", async ({
