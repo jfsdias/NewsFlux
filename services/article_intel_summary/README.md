@@ -43,6 +43,35 @@ As of 2026-11-09, Mistral's public list-price page lists `mistral-small-2603` at
 
 The gateway is not available or verified in this development workspace. Thus the real A2 mapping, account retention/training/logging controls, provider-side budget enforcement, and effective price are **BLOCKED / NOT TESTED**. No Mistral or LiteLLM request was made during this implementation. The configured-gateway tests use `httpx.MockTransport` and synthetic article text only. A first, single synthetic canary needs a separate approval containing the actual gateway/deployment digest, provider/model mapping, price source, prompt version, token caps, maximum estimated cost, approved budget, gateway cap evidence, privacy/logging review, and rollback. Its status remains `NOT_AUTHORIZED`; this code is not evidence of live inference.
 
+Use this approval record only after the A2 evidence is available. Leave it `SAFE_TO_EXECUTE=NO` until the separate approval is explicit:
+
+```text
+MISTRAL_REAL_CANARY_AUTHORIZATION
+
+GATEWAY=
+IMAGE_DIGEST=
+DEPLOYMENT_ID=
+EFFECTIVE_MODEL=
+PROVIDER=
+MODEL_PRICE_SOURCE=
+PROMPT_VERSION=
+
+MAX_INPUT_TOKENS=
+MAX_OUTPUT_TOKENS=
+MAX_ESTIMATED_COST=
+APPROVED_BUDGET=
+PROVIDER_BUDGET_ENFORCEMENT=
+
+DATA_CLASS=SYNTHETIC_ONLY
+EXTERNAL_TRANSFER_APPROVED=
+ACCOUNT_PRIVACY_REVIEW=
+LOGGING_REVIEW=
+
+REQUEST_COUNT=1
+ROLLBACK=
+SAFE_TO_EXECUTE=NO
+```
+
 No summaries are cached or persisted. The service keeps its two-request per-process cap; the Mistral adapter and its persistent ledger additionally allow only one provider call at a time. Response bytes and output are bounded to 128 KiB and 64 KiB respectively, and the API validates the final object against `contracts/summary-response.schema.json` and the exact snapshot paragraph IDs. The result remains `partial` with `content_scope=unknown` for Miniflux-only content. This validates structure and provenance but does not mathematically prove factual support. The ASGI application does not enable credentialed cookies.
 
 ## Dependencies and local tests
