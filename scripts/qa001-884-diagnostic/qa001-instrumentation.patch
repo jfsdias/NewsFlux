@@ -1,8 +1,197 @@
 diff --git a/e2e/qa-001-reader-header.spec.js b/e2e/qa-001-reader-header.spec.js
-index 78c5f12..5830c4e 100644
+index 78c5f12..356be62 100644
 --- a/e2e/qa-001-reader-header.spec.js
 +++ b/e2e/qa-001-reader-header.spec.js
-@@ -101,0 +102 @@ test.describe("QA-001 Close article hit-testing with a coarse pointer", () => {
+@@ -4,0 +5,175 @@ import { assertQa001CenterHit } from "./support/qa001-hit-test.js"
++const qa001DiagnosticEnabled = process.env.QA001_DIAGNOSTIC_INSTRUMENTATION === "1"
++
++const attachQa001Diagnostic = async (page, testInfo, label) => {
++  if (!qa001DiagnosticEnabled) {
++    return
++  }
++
++  const snapshot = await page.evaluate((snapshotLabel) => {
++    // eslint-disable-next-line unicorn/consistent-function-scoping -- this helper runs in the page DOM context.
++    const describe = (element) => {
++      if (!(element instanceof Element)) {
++        return
++      }
++      const rect = element.getBoundingClientRect()
++      const style = getComputedStyle(element)
++      return {
++        tagName: element.tagName,
++        id: element.id,
++        className: typeof element.className === "string" ? element.className : "",
++        ariaLabel: element.getAttribute("aria-label"),
++        ariaExpanded: element.getAttribute("aria-expanded"),
++        rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
++        display: style.display,
++        visibility: style.visibility,
++        pointerEvents: style.pointerEvents,
++        zIndex: style.zIndex,
++      }
++    }
++    const closeButtons = [...document.querySelectorAll('button[aria-label="Close article"]')]
++    const sidebarTriggers = [...document.querySelectorAll(".reader-sidebar-trigger")]
++    const close = closeButtons[0]
++    const closeRect = close?.getBoundingClientRect()
++    const point = closeRect && {
++      x: closeRect.left + closeRect.width / 2,
++      y: closeRect.top + closeRect.height / 2,
++    }
++    const elementsAtPoint = point
++      ? document
++          .elementsFromPoint(point.x, point.y)
++          .slice(0, 8)
++          .map((element) => describe(element))
++      : []
++    return {
++      label: snapshotLabel,
++      timestamp: performance.now(),
++      url: location.href,
++      viewport: { width: innerWidth, height: innerHeight },
++      visualViewport: visualViewport
++        ? {
++            width: visualViewport.width,
++            height: visualViewport.height,
++            scale: visualViewport.scale,
++          }
++        : undefined,
++      appWindowClass: document.querySelector(".app")?.dataset.windowClass ?? "none",
++      closeButtons: closeButtons.map((element) => describe(element)),
++      sidebarTriggers: sidebarTriggers.map((element) => describe(element)),
++      point,
++      elementsAtPoint,
++      drawer: describe(document.querySelector("#mobile-sidebar-drawer")),
++      drawerMask: describe(document.querySelector("#mobile-sidebar-drawer .arco-drawer-mask")),
++    }
++  }, label)
++  const events = await page.evaluate(() => globalThis.__qa001DiagnosticEvents ?? [])
++  await testInfo.attach(`qa001-${label}.json`, {
++    body: Buffer.from(`${JSON.stringify({ snapshot, events }, undefined, 2)}\n`),
++    contentType: "application/json",
++  })
++}
++
++const installQa001EventCapture = async (page) => {
++  if (!qa001DiagnosticEnabled) {
++    return
++  }
++
++  await page.evaluate(() => {
++    const events = []
++    globalThis.__qa001DiagnosticEvents = events
++    // eslint-disable-next-line unicorn/consistent-function-scoping -- this helper runs in the page DOM context.
++    const describe = (element) => {
++      if (!(element instanceof Element)) {
++        return
++      }
++      const rect = element.getBoundingClientRect()
++      return {
++        tagName: element.tagName,
++        id: element.id,
++        className: typeof element.className === "string" ? element.className : "",
++        ariaLabel: element.getAttribute("aria-label"),
++        ariaExpanded: element.getAttribute("aria-expanded"),
++        rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
++      }
++    }
++    const record = (event) => {
++      if (events.length >= 1000) {
++        return
++      }
++      const touch = event.changedTouches?.[0] ?? event.touches?.[0]
++      const x = Number.isFinite(event.clientX) ? event.clientX : touch?.clientX
++      const y = Number.isFinite(event.clientY) ? event.clientY : touch?.clientY
++      const eventDetail = Number.isFinite(x) && Number.isFinite(y) ? { point: { x, y } } : {}
++      events.push({
++        kind: "input",
++        type: event.type,
++        timestamp: performance.now(),
++        url: location.href,
++        pointerType: event.pointerType ?? "unknown",
++        ...eventDetail,
++        target: describe(event.target),
++        composedPath: event
++          .composedPath()
++          .slice(0, 8)
++          .map((element) => describe(element)),
++      })
++    }
++
++    for (const type of [
++      "touchstart",
++      "touchend",
++      "touchcancel",
++      "pointerdown",
++      "pointerup",
++      "pointercancel",
++      "click",
++    ]) {
++      document.addEventListener(type, record, { capture: true, passive: true })
++    }
++    const recordSidebarState = (kind, detail = {}) => {
++      events.push({
++        kind,
++        timestamp: performance.now(),
++        url: location.href,
++        viewport: { width: innerWidth, height: innerHeight },
++        sidebar: describe(document.querySelector(".reader-sidebar-trigger")),
++        drawer: describe(document.querySelector("#mobile-sidebar-drawer")),
++        ...detail,
++      })
++    }
++    window.addEventListener(
++      "resize",
++      () => {
++        recordSidebarState("resize")
++        requestAnimationFrame(() =>
++          requestAnimationFrame(() => recordSidebarState("resize-two-frames")),
++        )
++      },
++      { passive: true },
++    )
++    const observer = new MutationObserver((records) => {
++      for (const mutation of records) {
++        if (mutation.target instanceof Element) {
++          const { target } = mutation
++          if (
++            target.matches(
++              ".reader-sidebar-trigger, #mobile-sidebar-drawer, .arco-drawer-wrapper, .arco-drawer-mask",
++            ) ||
++            target.closest("#mobile-sidebar-drawer")
++          ) {
++            recordSidebarState("sidebar-mutation", {
++              attribute: mutation.attributeName ?? "child-list",
++              target: describe(target),
++            })
++          }
++        }
++      }
++    })
++    observer.observe(document.documentElement, {
++      attributes: true,
++      attributeFilter: ["aria-expanded", "class", "style"],
++      subtree: true,
++      childList: true,
++    })
++  })
++}
++
+@@ -59 +234 @@ test.describe("QA-001 Close article hit-testing with a coarse pointer", () => {
+-    }) => {
++    }, testInfo) => {
+@@ -60,0 +236 @@ test.describe("QA-001 Close article hit-testing with a coarse pointer", () => {
++      await installQa001EventCapture(page)
+@@ -101,0 +278 @@ test.describe("QA-001 Close article hit-testing with a coarse pointer", () => {
 +          await installQa001EventCapture(page)
-@@ -135,0 +137 @@ test.describe("QA-001 Close article hit-testing with a coarse pointer", () => {
+@@ -120,0 +298 @@ test.describe("QA-001 Close article hit-testing with a coarse pointer", () => {
++          await attachQa001Diagnostic(page, testInfo, `after-resize-${boundaryWidth}`)
+@@ -135,0 +314 @@ test.describe("QA-001 Close article hit-testing with a coarse pointer", () => {
 +            await installQa001EventCapture(page)
+@@ -140,0 +320 @@ test.describe("QA-001 Close article hit-testing with a coarse pointer", () => {
++        await attachQa001Diagnostic(page, testInfo, "after-restore-884")
+@@ -149,0 +330 @@ test.describe("QA-001 Close article hit-testing with a coarse pointer", () => {
++      await attachQa001Diagnostic(page, testInfo, "immediately-before-final-touch")
+@@ -150,0 +332 @@ test.describe("QA-001 Close article hit-testing with a coarse pointer", () => {
++      await attachQa001Diagnostic(page, testInfo, "immediately-after-final-touch")

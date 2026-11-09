@@ -122,6 +122,8 @@ if (sourceSha !== expectedSourceSha || initialStatus !== "") {
 }
 
 const pnpmLockSha256 = sha256(readFileSync(path.join(sourceDirectory, "pnpm-lock.yaml")))
+const qa001SourceTestPath = path.join(sourceDirectory, "e2e/qa-001-reader-header.spec.js")
+const qa001SourceTestSha256 = sha256(readFileSync(qa001SourceTestPath))
 const nodeVersion = runText("node", ["--version"], sourceDirectory)
 const pnpmVersion = runText("pnpm", ["--version"], sourceDirectory)
 const playwrightVersion = runText("pnpm", ["exec", "playwright", "--version"], sourceDirectory)
@@ -148,6 +150,7 @@ const provenance = {
   actualSourceSha: sourceSha,
   sourceTreeSha,
   pnpmLockSha256,
+  qa001SourceTestSha256,
   nodeVersion,
   pnpmVersion,
   playwrightVersion,
@@ -221,7 +224,22 @@ const runSuite = (variant, instrumented) => {
 
 const baseline = runSuite("baseline", false)
 const patchBytes = readFileSync(overlayPath)
-const applyResult = spawnSync("git", ["apply", overlayPath], {
+const patchText = patchBytes.toString("utf8")
+for (const requiredSnippet of [
+  "const qa001DiagnosticEnabled =",
+  "const installQa001EventCapture =",
+  "const attachQa001Diagnostic =",
+  "touchstart",
+  "pointerdown",
+  "composedPath()",
+  "elementsFromPoint(",
+  "immediately-before-final-touch",
+]) {
+  if (!patchText.includes(requiredSnippet)) {
+    throw new Error("Harness-only instrumentation overlay is incomplete")
+  }
+}
+const applyResult = spawnSync("git", ["apply", "--unidiff-zero", overlayPath], {
   cwd: sourceDirectory,
   encoding: "utf8",
 })
@@ -233,12 +251,20 @@ const changedPaths = runText("git", ["diff", "--name-only"], sourceDirectory)
 if (changedPaths !== "e2e/qa-001-reader-header.spec.js") {
   throw new Error(`Unexpected diagnostic overlay scope: ${changedPaths || "none"}`)
 }
+const instrumentedTest = readFileSync(qa001SourceTestPath, "utf8")
+for (const requiredSnippet of [
+  "const installQa001EventCapture =",
+  "const attachQa001Diagnostic =",
+  "immediately-before-final-touch",
+]) {
+  if (!instrumentedTest.includes(requiredSnippet)) {
+    throw new Error("Harness-only instrumentation was not present in the test overlay")
+  }
+}
 
 provenance.instrumentationApplied = true
 provenance.overlayPatchSha256 = sha256(patchBytes)
-provenance.instrumentedTestFileSha256 = sha256(
-  readFileSync(path.join(sourceDirectory, "e2e/qa-001-reader-header.spec.js")),
-)
+provenance.instrumentedTestFileSha256 = sha256(instrumentedTest)
 
 const instrumented = runSuite("instrumented", true)
 const finalStatus = runText(
