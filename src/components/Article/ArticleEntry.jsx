@@ -216,6 +216,9 @@ const ArticleEntry = ({
       <IconMoreVertical aria-hidden="true" />
     </button>
   ) : null
+  const cardActionTriggerProps = isEditorialCard
+    ? { ...dropdownProps.triggerProps, className: "card-quick-actions-popup" }
+    : dropdownProps.triggerProps
 
   return (
     <Dropdown
@@ -223,6 +226,7 @@ const ArticleEntry = ({
       disabled={!enableContextMenu}
       position="bl"
       trigger="contextMenu"
+      triggerProps={cardActionTriggerProps}
       droplist={
         <Menu className="mobile-action-menu" id={contextMenuId}>
           <Menu.Item key={menuOpenAction.key} onClick={menuOpenAction.onClick}>

@@ -48,6 +48,13 @@
   pointer-events: auto;
 }
 
+.card-quick-actions-popup.slideDynamicOrigin-appear > .mobile-action-menu,
+.card-quick-actions-popup.slideDynamicOrigin-appear-active > .mobile-action-menu,
+.card-quick-actions-popup.slideDynamicOrigin-enter > .mobile-action-menu,
+.card-quick-actions-popup.slideDynamicOrigin-enter-active > .mobile-action-menu {
+  pointer-events: auto;
+}
+
 .article-entry-card-shell:has(> .article-entry:focus-visible) {
   outline: 2px solid var(--nf-focus-ring, rgb(var(--primary-6)));
   outline-offset: -2px;

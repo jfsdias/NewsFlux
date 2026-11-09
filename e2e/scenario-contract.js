@@ -1,4 +1,4 @@
-export const E2E_SCENARIO_CONTRACT_VERSION = 9
+export const E2E_SCENARIO_CONTRACT_VERSION = 11
 
 // This reviewed inventory binds CI to the scenario IDs and currently approved outcome classes.
 // Additions, removals, or classification changes are intentional contract changes for review.
@@ -56,4 +56,12 @@ export const EXPECTED_SCENARIOS = [
   { id: "CARD-QUICK-ACTIONS-01-5", state: "PASSED" },
   { id: "CARD-QUICK-ACTIONS-01-6", state: "PASSED" },
   { id: "CARD-QUICK-ACTIONS-01-7", state: "PASSED" },
+  { id: "CARD-QUICK-ACTIONS-01-8", state: "PASSED" },
+  { id: "CARD-QUICK-ACTIONS-01-9", state: "PASSED" },
+  { id: "CARD-QUICK-ACTIONS-01-10", state: "PASSED" },
+  { id: "CARD-QUICK-ACTIONS-01-11", state: "PASSED" },
+  { id: "CARD-QUICK-ACTIONS-01-12", state: "PASSED" },
+  { id: "CARD-QUICK-ACTIONS-01-13", state: "PASSED" },
+  { id: "CARD-QUICK-ACTIONS-01-14", state: "PASSED" },
+  { id: "CARD-QUICK-ACTIONS-01-15", state: "PASSED" },
 ]

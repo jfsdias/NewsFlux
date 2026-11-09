@@ -4,7 +4,315 @@ import { expect, test } from "./support/fixtures.js"
 const cardActions = (page) => page.getByRole("button", { name: "Card actions" }).first()
 const actionMenu = (page) => page.locator(".mobile-action-menu").filter({ visible: true })
 
+const touchPrimaryCard = async (openApp, viewport) => {
+  const { page } = await openApp({
+    path: "/all",
+    ...viewport,
+    touch: true,
+    settings: { articleListLayout: "card", themeMode: "dark" },
+  })
+  const title = page.locator(".article-entry-card-shell .article-entry-title").first()
+  await expect(title).toBeVisible()
+  const bounds = await title.boundingBox()
+  expect(bounds).not.toBeNull()
+  const point = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
+  const entryId = await title.evaluate(
+    (element) =>
+      element.closest(".article-entry-card-shell")?.querySelector(":scope > a.article-entry")
+        ?.dataset.entryId,
+  )
+  const hit = await page.evaluate(({ x, y }) => {
+    const target = document.elementFromPoint(x, y)
+    return target?.closest("a.article-entry")?.dataset.entryId ?? null
+  }, point)
+  expect(hit).toBe(entryId)
+  await page.touchscreen.tap(point.x, point.y)
+  await expect(page).toHaveURL(new RegExp(`/all/entry/${entryId}$`))
+}
+
+const tapMenuItemWithTouch = async (page, item) => {
+  const bounds = await item.boundingBox()
+  expect(bounds).not.toBeNull()
+  const point = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
+  const hit = await page.evaluate(({ x, y }) => {
+    const target = document.elementFromPoint(x, y)
+    return {
+      menu: Boolean(target?.closest(".mobile-action-menu")),
+      item: target?.closest(".mobile-action-menu [role=menuitem]")?.textContent ?? "",
+    }
+  }, point)
+  expect(hit.menu).toBe(true)
+  await page.touchscreen.tap(point.x, point.y)
+}
+
 test.describe("CARD-QUICK-ACTIONS-01", () => {
+  test("CARD-QUICK-ACTIONS-01-8: primary touch still opens the article on the open Duo", async ({
+    openApp,
+  }) => {
+    await touchPrimaryCard(openApp, { width: 884, height: 1104 })
+  })
+
+  test("CARD-QUICK-ACTIONS-01-11: primary touch still opens the article on the closed Duo", async ({
+    openApp,
+  }) => {
+    await touchPrimaryCard(openApp, { width: 466, height: 614 })
+  })
+
+  test("CARD-QUICK-ACTIONS-01-12: menu dismissal leaves primary touch navigation intact", async ({
+    openApp,
+  }) => {
+    const { page } = await openApp({
+      path: "/all",
+      width: 466,
+      height: 614,
+      touch: true,
+      settings: { articleListLayout: "card", showStatus: "all", themeMode: "dark" },
+    })
+    await cardActions(page).tap()
+    await expect(actionMenu(page)).toBeVisible()
+    const outsidePoint = await page.evaluate(() => {
+      const menuRect = document.querySelector(".mobile-action-menu")?.getBoundingClientRect()
+      for (let y = 4; y < innerHeight - 4; y += 8) {
+        for (let x = 4; x < innerWidth - 4; x += 8) {
+          if (
+            menuRect &&
+            x >= menuRect.left &&
+            x <= menuRect.right &&
+            y >= menuRect.top &&
+            y <= menuRect.bottom
+          ) {
+            continue
+          }
+          const target = document.elementFromPoint(x, y)
+          if (!target?.closest("a,button,input,textarea,select,[role=button],[role=menuitem]")) {
+            return { x, y }
+          }
+        }
+      }
+      return null
+    })
+    expect(outsidePoint).not.toBeNull()
+    await page.touchscreen.tap(outsidePoint.x, outsidePoint.y)
+    await expect(actionMenu(page)).toBeHidden()
+    await expect(page).toHaveURL(/\/all$/)
+
+    const title = page.locator(".article-entry-card-shell .article-entry-title").first()
+    const bounds = await title.boundingBox()
+    expect(bounds).not.toBeNull()
+    const entryId = await title.evaluate(
+      (element) =>
+        element.closest(".article-entry-card-shell")?.querySelector(":scope > a.article-entry")
+          ?.dataset.entryId,
+    )
+    await page.touchscreen.tap(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
+    await expect(page).toHaveURL(new RegExp(`/all/entry/${entryId}$`))
+  })
+
+  test("CARD-QUICK-ACTIONS-01-9: touch mark-as-read mutates only the synthetic entry", async ({
+    openApp,
+    mock,
+  }) => {
+    const { page } = await openApp({
+      path: "/all",
+      width: 466,
+      height: 614,
+      touch: true,
+      settings: { articleListLayout: "card", showStatus: "all" },
+    })
+    const card = cards(page).first()
+    const entryId = Number(await card.getAttribute("data-entry-id"))
+
+    await cardActions(page).tap()
+    await expect(actionMenu(page)).toBeVisible()
+    await expect(page).toHaveURL(/\/all$/)
+    const outsidePoint = await page.evaluate(() => {
+      const menuRect = document.querySelector(".mobile-action-menu")?.getBoundingClientRect()
+      for (let y = 4; y < innerHeight - 4; y += 8) {
+        for (let x = 4; x < innerWidth - 4; x += 8) {
+          if (
+            menuRect &&
+            x >= menuRect.left &&
+            x <= menuRect.right &&
+            y >= menuRect.top &&
+            y <= menuRect.bottom
+          ) {
+            continue
+          }
+          const target = document.elementFromPoint(x, y)
+          if (!target?.closest("a,button,input,textarea,select,[role=button],[role=menuitem]")) {
+            return { x, y }
+          }
+        }
+      }
+      return null
+    })
+    expect(outsidePoint).not.toBeNull()
+    await page.touchscreen.tap(outsidePoint.x, outsidePoint.y)
+    await expect(actionMenu(page)).toBeHidden()
+    await expect(page).toHaveURL(/\/all$/)
+    await cardActions(page).tap()
+    await expect(actionMenu(page)).toBeVisible()
+    const markAsRead = page.getByRole("menuitem", { name: /Mark as read/i })
+    const markAsReadBounds = await markAsRead.boundingBox()
+    expect(markAsReadBounds).not.toBeNull()
+    const menuHit = await page.evaluate(
+      ({ x, y }) => {
+        const target = document.elementFromPoint(x, y)
+        return {
+          insideMenu: Boolean(target?.closest(".mobile-action-menu")),
+          menuItem: target?.closest(".mobile-action-menu [role=menuitem]")?.textContent ?? "",
+        }
+      },
+      {
+        x: markAsReadBounds.x + markAsReadBounds.width / 2,
+        y: markAsReadBounds.y + markAsReadBounds.height / 2,
+      },
+    )
+    expect(menuHit.insideMenu).toBe(true)
+    expect(menuHit.menuItem).toMatch(/Mark as read/i)
+    await page.touchscreen.tap(
+      markAsReadBounds.x + markAsReadBounds.width / 2,
+      markAsReadBounds.y + markAsReadBounds.height / 2,
+    )
+    await expect.poll(() => mock.readIds()).toContain(entryId)
+    await expect(page).toHaveURL(/\/all$/)
+  })
+
+  test("CARD-QUICK-ACTIONS-01-10: touch mark-as-unread mutates only the synthetic entry", async ({
+    openApp,
+    mock,
+  }) => {
+    const { page } = await openApp({
+      path: "/all",
+      width: 466,
+      height: 614,
+      touch: true,
+      settings: { articleListLayout: "card", showStatus: "all" },
+    })
+    const card = cards(page).first()
+    const entryId = Number(await card.getAttribute("data-entry-id"))
+    const statusAll = page
+      .getByRole("radiogroup", { name: "Filter articles by status" })
+      .getByRole("radio", { name: "All" })
+    await expect(statusAll).toBeChecked()
+    await cardActions(page).tap()
+    await expect(actionMenu(page)).toBeVisible()
+    await page.getByRole("menuitem", { name: /Mark as read/i }).tap()
+    await expect.poll(() => mock.readIds()).toContain(entryId)
+    await expect(page).toHaveURL(/\/all$/)
+    await cardActions(page).tap()
+    await page.getByRole("menuitem", { name: /Mark as unread/i }).tap()
+    await expect.poll(() => mock.readIds()).not.toContain(entryId)
+    await expect(page).toHaveURL(/\/all$/)
+  })
+
+  test("CARD-QUICK-ACTIONS-01-13: Chrome touch long press opens the context menu without navigation", async ({
+    openApp,
+  }) => {
+    const { page } = await openApp({
+      path: "/all",
+      width: 466,
+      height: 614,
+      touch: true,
+      settings: { articleListLayout: "card", showStatus: "all" },
+    })
+    const card = cards(page).first()
+    const bounds = await card.boundingBox()
+    expect(bounds).not.toBeNull()
+    const cdp = await page.context().newCDPSession(page)
+    const point = {
+      x: bounds.x + bounds.width / 2,
+      y: bounds.y + Math.min(80, bounds.height / 2),
+    }
+
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ id: 1, x: point.x, y: point.y, force: 1 }],
+    })
+    await page.waitForTimeout(550)
+    await expect(actionMenu(page)).toBeVisible()
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] })
+    await expect(page).toHaveURL(/\/all$/)
+    await expect(actionMenu(page)).toBeVisible()
+  })
+
+  test("CARD-QUICK-ACTIONS-01-14: touch star and unstar stay on the card list", async ({
+    openApp,
+    mock,
+  }) => {
+    const { page } = await openApp({
+      path: "/all",
+      width: 466,
+      height: 614,
+      touch: true,
+      settings: { articleListLayout: "card", showStatus: "all" },
+    })
+    const entryId = Number(await cards(page).first().getAttribute("data-entry-id"))
+    await cardActions(page).tap()
+    await expect(actionMenu(page)).toBeVisible()
+    await tapMenuItemWithTouch(page, page.getByRole("menuitem", { name: /^Star$/i }))
+    await expect
+      .poll(async () => {
+        const state = await mock.state()
+        return state.starred
+      })
+      .toContain(entryId)
+    await expect(page).toHaveURL(/\/all$/)
+
+    await cardActions(page).tap()
+    await expect(actionMenu(page)).toBeVisible()
+    await tapMenuItemWithTouch(page, page.getByRole("menuitem", { name: /^Unstar$/i }))
+    await expect
+      .poll(async () => {
+        const state = await mock.state()
+        return state.starred
+      })
+      .not.toContain(entryId)
+    await expect(page).toHaveURL(/\/all$/)
+  })
+
+  test("CARD-QUICK-ACTIONS-01-15: Chrome vertical touch scroll does not activate a card or menu", async ({
+    openApp,
+    mock,
+  }) => {
+    const { page } = await openApp({
+      path: "/all",
+      width: 466,
+      height: 614,
+      touch: true,
+      settings: { articleListLayout: "card", showStatus: "all" },
+    })
+    await mock.inject(10)
+    await page.reload()
+    const card = cards(page).first()
+    const scrollArea = page.locator(".entry-list")
+    await expect(card).toBeVisible()
+    await expect
+      .poll(() => scrollArea.evaluate((element) => element.scrollHeight > element.clientHeight))
+      .toBe(true)
+
+    const scrollStart = await card.evaluate((element) => {
+      const bounds = element.getBoundingClientRect()
+      return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
+    })
+    const before = await scrollArea.evaluate((element) => element.scrollTop)
+    const cdp = await page.context().newCDPSession(page)
+    await cdp.send("Input.synthesizeScrollGesture", {
+      x: scrollStart.x,
+      y: scrollStart.y,
+      xDistance: 0,
+      yDistance: -320,
+      speed: 900,
+      gestureSourceType: "touch",
+    })
+
+    await expect
+      .poll(() => scrollArea.evaluate((element) => element.scrollTop))
+      .toBeGreaterThan(before)
+    await expect(page).toHaveURL(/\/all$/)
+    await expect(actionMenu(page)).toBeHidden()
+  })
+
   test("CARD-QUICK-ACTIONS-01-1: keyboard menu semantics and focus restoration", async ({
     openApp,
   }) => {
