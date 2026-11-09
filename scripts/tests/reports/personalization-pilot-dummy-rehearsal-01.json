@@ -1,5 +1,5 @@
 {
-  "reportVersion": "PERSONALIZATION_PILOT_DUMMY_REHEARSAL_01_V1",
+  "reportVersion": "PERSONALIZATION_PILOT_DUMMY_REHEARSAL_01_V2",
   "fixtureKind": "SYNTHETIC_ONLY",
   "generatedFromFrozenFixtures": true,
   "referenceBaseSha": "35446e1ab5d8e0e82bbef285835244ac4ab80181",
@@ -9,8 +9,14 @@
   "validResponseCount": 3,
   "rejectedResponseCount": 1,
   "rejectionReasons": { "PAIR_RECEIPT_HASH_MISMATCH": 1 },
-  "assignmentBalance": { "PHASE_2C_FIRST": 2, "V1_FIRST": 2 },
-  "mappingBalance": { "PERSONALIZATION_V1_AS_X": 2, "PHASE_2C_DETERMINISTIC_AS_X": 2 },
+  "algorithmOrderBalance": { "PHASE_2C_FIRST": 2, "V1_FIRST": 2 },
+  "labelOrderBalance": { "X_THEN_Y": 2, "Y_THEN_X": 2 },
+  "jointOrderCoverage": {
+    "PHASE_2C_FIRST|X_THEN_Y": 1,
+    "PHASE_2C_FIRST|Y_THEN_X": 1,
+    "V1_FIRST|X_THEN_Y": 1,
+    "V1_FIRST|Y_THEN_X": 1
+  },
   "scenarioPreferenceStates": { "CANNOT_JUDGE": 1, "NEITHER": 1, "OMITTED": 1, "TIE": 1, "X": 2 },
   "overallPreferenceStates": { "CANNOT_JUDGE": 1, "OMITTED": 1, "Y": 1 },
   "sessionHashesVerified": 4,

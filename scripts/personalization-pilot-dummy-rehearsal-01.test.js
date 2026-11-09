@@ -118,6 +118,44 @@ test("frozen rehearsal artifacts reproduce the manifest, receipts, export and re
   assert.deepEqual(report, rehearsal.report)
 })
 
+test("frozen fixture covers algorithm-first and X/Y label-first as independent orders", () => {
+  const coverage = allocationFixture.assignments.map(({ presentationOrder, armMapping }) => {
+    const algorithmFirst =
+      presentationOrder === "PHASE_2C_FIRST" ? "PHASE_2C_DETERMINISTIC" : "PERSONALIZATION_V1"
+    const labelFirst = armMapping.X === algorithmFirst ? "X" : "Y"
+    return `${algorithmFirst}|${labelFirst}`
+  })
+
+  assert.deepEqual(coverage.toSorted(), [
+    "PERSONALIZATION_V1|X",
+    "PERSONALIZATION_V1|Y",
+    "PHASE_2C_DETERMINISTIC|X",
+    "PHASE_2C_DETERMINISTIC|Y",
+  ])
+
+  for (const [slotIndex, sessionManifest] of context.sessionManifests.entries()) {
+    const expectedLabelOrder = coverage[slotIndex].endsWith("|X") ? "X_THEN_Y" : "Y_THEN_X"
+    assert.equal(sessionManifest.labelPresentationOrder, expectedLabelOrder)
+    assert.ok(
+      sessionManifest.scenarioPairs.every(
+        ({ presentationOrder }) => presentationOrder === expectedLabelOrder,
+      ),
+    )
+
+    if (expectedLabelOrder === "Y_THEN_X") {
+      const response = responseFor(slotIndex)
+      assert.doesNotThrow(() =>
+        validateSyntheticResponse({
+          response,
+          sessionManifest,
+          preRecruitmentManifest: context.preRecruitmentManifest,
+          allocation: allocationFixture.assignments[slotIndex],
+        }),
+      )
+    }
+  }
+})
+
 test("blind allocation uses cryptographic defaults and counterbalances each four-slot block", () => {
   const generated = createBlindAllocationSchedule({ sessionCount: 4 })
   const orders = generated.map(({ presentationOrder }) => presentationOrder)
@@ -153,6 +191,34 @@ test("fixed random fixtures reproduce a valid allocation without reading profile
     2,
   )
   assert.equal(first.filter(({ presentationOrder }) => presentationOrder === "V1_FIRST").length, 2)
+})
+
+test("allocation generator supports all four joint algorithm and label orders", () => {
+  let byteCounter = 1
+  const randomDraws = [2, 2, 0, 0, 1, 1, 0]
+  const generated = createBlindAllocationSchedule({
+    sessionCount: 4,
+    randomBytesImpl: (size) => Buffer.alloc(size, byteCounter++),
+    randomIntImpl: (upperBound) => {
+      const value = randomDraws.shift()
+      assert.ok(value < upperBound)
+      return value
+    },
+  })
+  const combinations = generated.map(({ presentationOrder, armMapping }) => {
+    const algorithmFirst =
+      presentationOrder === "PHASE_2C_FIRST" ? "PHASE_2C_DETERMINISTIC" : "PERSONALIZATION_V1"
+    const labelFirst = armMapping.X === algorithmFirst ? "X" : "Y"
+    return `${algorithmFirst}|${labelFirst}`
+  })
+
+  assert.deepEqual(combinations.toSorted(), [
+    "PERSONALIZATION_V1|X",
+    "PERSONALIZATION_V1|Y",
+    "PHASE_2C_DETERMINISTIC|X",
+    "PHASE_2C_DETERMINISTIC|Y",
+  ])
+  assert.equal(randomDraws.length, 0)
 })
 
 test("session receipts use production Home projections and freeze both arm compositions", () => {
@@ -453,7 +519,14 @@ test("reconciliation preserves unique allocations and reports deterministic vali
   assert.deepEqual(report.rejectionReasons, { PAIR_RECEIPT_HASH_MISMATCH: 1 })
   assert.equal(report.submittedPairCount, 8)
   assert.equal(report.acceptedPairCount, 6)
-  assert.deepEqual(report.assignmentBalance, { PHASE_2C_FIRST: 2, V1_FIRST: 2 })
+  assert.deepEqual(report.algorithmOrderBalance, { PHASE_2C_FIRST: 2, V1_FIRST: 2 })
+  assert.deepEqual(report.labelOrderBalance, { X_THEN_Y: 2, Y_THEN_X: 2 })
+  assert.deepEqual(report.jointOrderCoverage, {
+    "PHASE_2C_FIRST|X_THEN_Y": 1,
+    "PHASE_2C_FIRST|Y_THEN_X": 1,
+    "V1_FIRST|X_THEN_Y": 1,
+    "V1_FIRST|Y_THEN_X": 1,
+  })
   assert.equal(report.assignmentMappingLeakedToResponseExport, false)
   assert.equal(report.sessionHashesVerified, 4)
   assert.equal(report.pairHashesVerified, 8)

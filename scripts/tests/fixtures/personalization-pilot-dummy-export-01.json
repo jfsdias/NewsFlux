@@ -35,19 +35,19 @@
       "sessionCode": "SYNTHETIC-30a1a639b896c878182c4133",
       "consentAccepted": true,
       "completionStatus": "COMPLETE",
-      "sessionManifestHash": "09e1517f384ebe1f83375cf2e724dab35cee429d115ffa519f76160ae51b5270",
+      "sessionManifestHash": "ee7dd6a5d435ecdde66255772c6b558e365cf3686b106c9f8e9e42c3f73031e6",
       "studyOnlyPreferenceSeedKeys": ["synthetic-favorite-learning"],
       "scenarioRatings": {
         "synthetic_transit": {
-          "pairReceiptHash": "134e90f8e450ea59015ea77ad6cfc7ea8e026426adb4a27c3c64c02f7dac4334",
-          "presentationOrder": "X_THEN_Y",
+          "pairReceiptHash": "3d32fa7fedf69c8f770a9132c3319388e5afa98f868e8a50655cf92604ae5388",
+          "presentationOrder": "Y_THEN_X",
           "scenarioPreference": null,
           "X": { "editorialUsefulness": 2, "confidence": 3 },
           "Y": { "editorialUsefulness": 3, "confidence": 3 }
         },
         "synthetic_library": {
-          "pairReceiptHash": "59120af7585455d2defbff09752c86f229840eaa61a272197a8d8492c267823a",
-          "presentationOrder": "X_THEN_Y",
+          "pairReceiptHash": "02719e3828afdcad032ad0ff74b1f738efdc88f42b033cf3ff0adcebda3d631b",
+          "presentationOrder": "Y_THEN_X",
           "scenarioPreference": "TIE",
           "X": { "editorialUsefulness": 3, "confidence": 3 },
           "Y": { "editorialUsefulness": 4, "confidence": 3 }
@@ -63,18 +63,18 @@
       "sessionCode": "SYNTHETIC-c2f69235a84e5a94eee36e94",
       "consentAccepted": true,
       "completionStatus": "COMPLETE",
-      "sessionManifestHash": "d37698cd8465c0f325c33437d3c891ee0acdd7745231db74c59f6b10851434c6",
+      "sessionManifestHash": "dfdc195709ea1b6a991a28a5c559adca072c33b1255f6d559fa40c34a343e580",
       "studyOnlyPreferenceSeedKeys": [],
       "scenarioRatings": {
         "synthetic_transit": {
-          "pairReceiptHash": "09dc962d372d863126e022c330eafbda7bf2c0e359085ce27a9796a7069149e1",
+          "pairReceiptHash": "134e90f8e450ea59015ea77ad6cfc7ea8e026426adb4a27c3c64c02f7dac4334",
           "presentationOrder": "X_THEN_Y",
           "scenarioPreference": "NEITHER",
           "X": { "editorialUsefulness": 3, "confidence": 3 },
           "Y": { "editorialUsefulness": 4, "confidence": 3 }
         },
         "synthetic_library": {
-          "pairReceiptHash": "c5e66489a4d382f7d6dcf20094270acea0c17c57895594ab9f286c667da8cec9",
+          "pairReceiptHash": "59120af7585455d2defbff09752c86f229840eaa61a272197a8d8492c267823a",
           "presentationOrder": "X_THEN_Y",
           "scenarioPreference": "X",
           "X": { "editorialUsefulness": 4, "confidence": 3 },
@@ -91,19 +91,19 @@
       "sessionCode": "SYNTHETIC-5d7a28f1a0161ee792c6a173",
       "consentAccepted": true,
       "completionStatus": "COMPLETE",
-      "sessionManifestHash": "f4883c7796287c4f6398cdeb42cb87cfbece16abc0e5f4372427d1eb3af9a5cb",
+      "sessionManifestHash": "8a41afb1980b00437887a9e1fd3613a4fb649237568cc8f3859b18627ea9444d",
       "studyOnlyPreferenceSeedKeys": ["synthetic-favorite-local", "synthetic-favorite-community"],
       "scenarioRatings": {
         "synthetic_transit": {
           "pairReceiptHash": "0000000000000000000000000000000000000000000000000000000000000000",
-          "presentationOrder": "X_THEN_Y",
+          "presentationOrder": "Y_THEN_X",
           "scenarioPreference": "Y",
           "X": { "editorialUsefulness": 4, "confidence": 3 },
           "Y": { "editorialUsefulness": 5, "confidence": 3 }
         },
         "synthetic_library": {
-          "pairReceiptHash": "ab0cc190f46b4f59f5016772f9c17c6fa9c210bed18f42a49ed8c904d7a26841",
-          "presentationOrder": "X_THEN_Y",
+          "pairReceiptHash": "d108e80555646a36a77d4ac9e5c465bd4b5d45c813958e0ac0ade3b0c89d75a5",
+          "presentationOrder": "Y_THEN_X",
           "scenarioPreference": "Y",
           "X": { "editorialUsefulness": 5, "confidence": 3 },
           "Y": { "editorialUsefulness": 1, "confidence": 3 }

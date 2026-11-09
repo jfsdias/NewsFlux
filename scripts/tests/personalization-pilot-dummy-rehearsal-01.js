@@ -1175,10 +1175,17 @@ export const reconcileSyntheticExport = ({
       rejectionReasons[errorCode] = (rejectionReasons[errorCode] ?? 0) + 1
     }
   }
-  const assignmentBalance = countValues(
+  const algorithmOrderBalance = countValues(
     allocations.map(({ presentationOrder }) => presentationOrder),
   )
-  const mappingBalance = countValues(allocations.map(({ armMapping }) => `${armMapping.X}_AS_X`))
+  const labelOrderBalance = countValues(
+    allocations.map((allocation) => getLabelPresentationOrder(allocation)),
+  )
+  const jointOrderCoverage = countValues(
+    allocations.map(
+      (allocation) => `${allocation.presentationOrder}|${getLabelPresentationOrder(allocation)}`,
+    ),
+  )
   return {
     fixtureKind: "SYNTHETIC_ONLY",
     referenceBaseSha: preRecruitmentManifest.referenceBaseSha,
@@ -1192,8 +1199,9 @@ export const reconcileSyntheticExport = ({
     ),
     submittedPairCount,
     acceptedPairCount,
-    assignmentBalance,
-    mappingBalance,
+    algorithmOrderBalance,
+    labelOrderBalance,
+    jointOrderCoverage,
     scenarioPreferenceStates: countValues(
       scenarioPreferences.map((value) => (value === null ? "OMITTED" : value)),
     ),
@@ -1220,7 +1228,12 @@ export const buildDummyRehearsal = ({ stimuli, allocationFixture, sessionPlan })
   if (allocationFixture?.fixtureKind !== "SYNTHETIC_ONLY" || allocationFixture.frozen !== true) {
     fail("ALLOCATION_FIXTURE_NOT_FROZEN_SYNTHETIC")
   }
-  if (allocationFixture.generatedBy !== "node:crypto.randomBytes+randomInt") {
+  if (
+    allocationFixture.generatedBy !==
+      "node:crypto.randomBytes+randomInt (session and allocation keys)" ||
+    allocationFixture.assignmentSelection !== "DETERMINISTIC_2X2_COVERAGE" ||
+    allocationFixture.representativeOfOperationalRandomization !== false
+  ) {
     fail("ALLOCATION_FIXTURE_RANDOMNESS_UNVERIFIED")
   }
   const preRecruitmentManifest = createPreRecruitmentManifest(stimuli)
@@ -1264,7 +1277,7 @@ export const buildDummyRehearsal = ({ stimuli, allocationFixture, sessionPlan })
     preRecruitmentManifest,
   })
   const report = {
-    reportVersion: "PERSONALIZATION_PILOT_DUMMY_REHEARSAL_01_V1",
+    reportVersion: "PERSONALIZATION_PILOT_DUMMY_REHEARSAL_01_V2",
     fixtureKind: "SYNTHETIC_ONLY",
     generatedFromFrozenFixtures: true,
     referenceBaseSha: preRecruitmentManifest.referenceBaseSha,
@@ -1277,8 +1290,9 @@ export const buildDummyRehearsal = ({ stimuli, allocationFixture, sessionPlan })
     validResponseCount: reconciliation.validResponseCount,
     rejectedResponseCount: reconciliation.rejectedResponseCount,
     rejectionReasons: reconciliation.rejectionReasons,
-    assignmentBalance: reconciliation.assignmentBalance,
-    mappingBalance: reconciliation.mappingBalance,
+    algorithmOrderBalance: reconciliation.algorithmOrderBalance,
+    labelOrderBalance: reconciliation.labelOrderBalance,
+    jointOrderCoverage: reconciliation.jointOrderCoverage,
     scenarioPreferenceStates: reconciliation.scenarioPreferenceStates,
     overallPreferenceStates: reconciliation.overallPreferenceStates,
     sessionHashesVerified: reconciliation.sessionHashesVerified,

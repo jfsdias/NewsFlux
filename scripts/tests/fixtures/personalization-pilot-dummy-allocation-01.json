@@ -1,6 +1,8 @@
 {
   "fixtureKind": "SYNTHETIC_ONLY",
-  "generatedBy": "node:crypto.randomBytes+randomInt",
+  "generatedBy": "node:crypto.randomBytes+randomInt (session and allocation keys)",
+  "assignmentSelection": "DETERMINISTIC_2X2_COVERAGE",
+  "representativeOfOperationalRandomization": false,
   "frozen": true,
   "assignments": [
     {
@@ -17,7 +19,7 @@
       "slotIndex": 1,
       "sessionCode": "SYNTHETIC-30a1a639b896c878182c4133",
       "allocationKey": "78b88809123bc8ae2012859ad5a91d89",
-      "presentationOrder": "V1_FIRST",
+      "presentationOrder": "PHASE_2C_FIRST",
       "armMapping": {
         "X": "PERSONALIZATION_V1",
         "Y": "PHASE_2C_DETERMINISTIC"
@@ -27,10 +29,10 @@
       "slotIndex": 2,
       "sessionCode": "SYNTHETIC-c2f69235a84e5a94eee36e94",
       "allocationKey": "8b45b42388cf0f11be700d75906b9fbb",
-      "presentationOrder": "PHASE_2C_FIRST",
+      "presentationOrder": "V1_FIRST",
       "armMapping": {
-        "X": "PHASE_2C_DETERMINISTIC",
-        "Y": "PERSONALIZATION_V1"
+        "X": "PERSONALIZATION_V1",
+        "Y": "PHASE_2C_DETERMINISTIC"
       }
     },
     {
@@ -39,8 +41,8 @@
       "allocationKey": "7a2b94b9adf0ea4ea81bffc6661b8ca5",
       "presentationOrder": "V1_FIRST",
       "armMapping": {
-        "X": "PERSONALIZATION_V1",
-        "Y": "PHASE_2C_DETERMINISTIC"
+        "X": "PHASE_2C_DETERMINISTIC",
+        "Y": "PERSONALIZATION_V1"
       }
     }
   ]
