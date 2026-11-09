@@ -8,16 +8,22 @@ import { fileURLToPath, pathToFileURL } from "node:url"
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 let fetchImplementation = null
 const nativeFetch = globalThis.fetch
+globalThis.__testAuthState = {
+  server: "https://example.invalid",
+  token: "fixture",
+  username: "",
+  password: "",
+}
+globalThis.__testDataSessionRevision = 0
 globalThis.fetch = (...args) =>
   fetchImplementation ? fetchImplementation(...args) : nativeFetch(...args)
 const moduleMocks = {
   "@/routes":
     'const router = { state: { location: { pathname: "/", search: "", hash: "" } }, navigate: async () => {} }; export default router',
-  "@/store/authState":
-    'export const authState = { get: () => ({ server: "https://example.invalid", token: "fixture", username: "", password: "" }) }',
+  "@/store/authState": "export const authState = { get: () => globalThis.__testAuthState }",
   "@/store/contentState": "export const contentState = { get: () => ({ filterDate: null }) }",
   "@/store/dataState":
-    "export const getDataSessionRevision = () => 0; export const isEntryScopeFullyVisible = () => false",
+    "export const getDataSessionRevision = () => globalThis.__testDataSessionRevision; export const isEntryScopeFullyVisible = () => false",
   "@/store/settingsState":
     'export const getSettings = (key) => key === "updateContentOnFetch" ? globalThis.__updateContentOnFetch : false',
   "@/utils/constants":
@@ -132,6 +138,38 @@ test("entry API accepts nullable and empty article fields while validating list 
     })
   } finally {
     fetchImplementation = null
+  }
+})
+
+test("late Miniflux response from a previous session is discarded after logout or account switch", async () => {
+  let resolveFetch
+  fetchImplementation = () =>
+    new Promise((resolve) => {
+      resolveFetch = resolve
+    })
+  const pending = apiClient.get("/v1/me")
+
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  globalThis.__testAuthState = {
+    server: "https://other.example",
+    token: "other-session-fixture",
+    username: "other-user",
+    password: "",
+  }
+  globalThis.__testDataSessionRevision += 1
+  resolveFetch(Response.json({ id: 7, username: "former-user", is_admin: true }))
+
+  try {
+    await assert.rejects(pending)
+  } finally {
+    fetchImplementation = null
+    globalThis.__testAuthState = {
+      server: "https://example.invalid",
+      token: "fixture",
+      username: "",
+      password: "",
+    }
+    globalThis.__testDataSessionRevision = 0
   }
 })
 
