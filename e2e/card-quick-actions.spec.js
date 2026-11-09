@@ -293,15 +293,23 @@ test.describe("CARD-QUICK-ACTIONS-01", () => {
 
     const scrollStart = await card.evaluate((element) => {
       const bounds = element.getBoundingClientRect()
-      return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
+      const scrollBounds = element.closest(".entry-list").getBoundingClientRect()
+      const minY = Math.max(bounds.top + 24, scrollBounds.top + 24, 24)
+      const y = Math.min(bounds.bottom - 24, scrollBounds.bottom - 24, innerHeight - 24)
+      return {
+        distance: Math.min(120, y - minY),
+        x: bounds.x + bounds.width / 2,
+        y,
+      }
     })
+    expect(scrollStart.distance).toBeGreaterThanOrEqual(40)
     const before = await scrollArea.evaluate((element) => element.scrollTop)
     const cdp = await page.context().newCDPSession(page)
     await cdp.send("Input.synthesizeScrollGesture", {
       x: scrollStart.x,
       y: scrollStart.y,
       xDistance: 0,
-      yDistance: -320,
+      yDistance: -scrollStart.distance,
       speed: 900,
       gestureSourceType: "touch",
     })
