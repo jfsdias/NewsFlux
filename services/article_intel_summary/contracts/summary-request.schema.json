@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://newsflux.example/schemas/article-summary-request-v1.json",
+  "title": "NewsFlux article summary request v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "request_id", "profile_id"],
+  "properties": {
+    "schema_version": { "const": "1" },
+    "request_id": { "type": "string", "format": "uuid" },
+    "profile_id": { "const": "editorial-default" }
+  }
+}

@@ -65,6 +65,14 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s services/content_fallb
 
 No live Miniflux, WallHop, publisher, Compose, or production request is made by this test command. The four real-article WallHop attempts for this PR were separately blocked by the managed workspace network policy; none counted as a full-text pass. See the audit report.
 
+Run the isolated runtime rehearsal:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/content_fallback_runtime_01.py
+```
+
+The rehearsal starts the actual HTTP handler and Miniflux client against synthetic services bound only to `127.0.0.1`, uses synthetic credentials and a temporary SQLite database, and replaces the WallHop provider at its service boundary. It exercises health, service authentication, read-only Miniflux access, policy gating, sanitized recovery, fallback, stale-entry rejection, cache persistence across a service restart, log redaction, and shutdown. Its JSON receipt contains gate names and counts only; it contains no article body, source URL, or token. The rehearsal does not build or run the Docker image. The Dockerfile healthcheck is a local `/healthz` probe and requires image/runtime validation before deployment.
+
 ## Deployment, backup, and rollback
 
 This PR does not change the production Compose file, publish the service port, configure a reverse proxy, or enable the policy. A later isolated deployment should place the sidecar on a private container network, mount a named volume at `/data`, store the two API tokens in the secret manager, bind only an authenticated internal route, and start with `enabled:false`. Run first against a disposable Miniflux environment, then test one approved public article per source before changing an explicit policy to `ON_DEMAND`.
