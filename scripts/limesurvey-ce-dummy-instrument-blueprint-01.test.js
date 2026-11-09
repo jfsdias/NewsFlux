@@ -77,6 +77,25 @@ test("blueprint is explicitly synthetic and not represented as an importable Lim
   assert.equal(blueprint.safety.personalizationV2, "HOLD")
 })
 
+test("runtime plan separates inactive structure preview, authorized response capture, and shutdown", () => {
+  const stages = blueprint.runtimeStages
+  assert.equal(stages.stageA.sourceSurveyState, "INACTIVE")
+  assert.equal(stages.stageA.reimportedSurveyState, "INACTIVE")
+  assert.equal(stages.stageA.previewResponsesPersist, false)
+  assert.equal(stages.stageB.activateSurvey, "REIMPORTED_SURVEY_ONLY")
+  assert.match(stages.stageB.authorization, /separate explicit operational authorization/i)
+  assert.deepEqual(stages.stageB.exportsBeforeClose, ["COMPLETED", "INCOMPLETE", "ALL"])
+  assert.equal(stages.stageC.verifyExportsBeforeClose, true)
+  assert.equal(stages.stageC.ordinaryCloseAction, "STOP_OR_PAUSE")
+  assert.match(stages.stageC.instanceDataTeardown, /separate explicit authorization/i)
+
+  assert.equal(blueprint.surveyConfiguration.anonymizedResponses, true)
+  assert.equal(blueprint.surveyConfiguration.saveIpAddress, false)
+  assert.equal(blueprint.surveyConfiguration.saveReferrerUrl, false)
+  assert.equal(blueprint.surveyConfiguration.saveTimings, false)
+  assert.match(blueprint.surveyConfiguration.dateStamp, /before activation/i)
+})
+
 test("blueprint references the exact versioned field-map question codes once", () => {
   const actual = blueprintFieldCodes()
   const expected = expectedFieldCodes()
