@@ -258,6 +258,11 @@
     "server_error": "The server could not load this article. Please try again.",
     "network_error": "Could not connect to the server. Check your connection and try again.",
     "request_error": "Could not load this article. Please try again.",
+    "recover_full_text": "Recover full text",
+    "recovering_full_text": "Recovering full text…",
+    "recovered_from_wallhop": "Full text recovered from WallHop",
+    "recovered_from_miniflux_scraper": "Full text recovered with Miniflux scraper",
+    "recovery_failed": "Full text could not be recovered. The original content is still shown.",
     "back_to_list": "Back to list"
   },
   "deduplicate": {

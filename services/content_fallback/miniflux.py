@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 from services.content_fallback.http_client import FetchError, PinnedHTTPClient
 
 MAX_ENTRY_RESPONSE_BYTES = 2 * 1024 * 1024
+MAX_IDENTITY_RESPONSE_BYTES = 64 * 1024
 
 
 class MinifluxError(RuntimeError):
@@ -62,6 +63,13 @@ class EntrySnapshot:
         return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
+@dataclass(frozen=True)
+class MinifluxIdentity:
+    id: int
+    username: str
+    is_admin: bool
+
+
 class MinifluxClient:
     """Narrow Miniflux 2.3.5 API client. This class exposes GET only."""
 
@@ -110,6 +118,43 @@ class MinifluxClient:
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise MinifluxError("Miniflux API returned invalid JSON") from exc
         return _entry_snapshot(raw, expected_id=entry_id)
+
+    def get_current_user_identity(self) -> MinifluxIdentity:
+        """Identify the configured service credential without exposing its token."""
+
+        url = f"{self.base_url}/v1/me"
+        try:
+            response = self.http.get(
+                url,
+                headers={"X-Auth-Token": self.api_token, "Accept": "application/json"},
+                timeout=self.timeout_seconds,
+                max_bytes=MAX_IDENTITY_RESPONSE_BYTES,
+                max_redirects=0,
+                same_origin=self.base_url,
+                allow_private_origin=True,
+            )
+        except FetchError as exc:
+            raise MinifluxError("Miniflux identity request failed") from exc
+        if response.status != 200:
+            raise MinifluxError("Miniflux identity request was not successful")
+        try:
+            raw = json.loads(response.body.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise MinifluxError("Miniflux returned invalid identity JSON") from exc
+        if not isinstance(raw, dict):
+            raise MinifluxError("Miniflux returned an invalid identity")
+        identity_id = _positive_int(raw.get("id"), "identity id")
+        username = raw.get("username")
+        is_admin = raw.get("is_admin")
+        if (
+            not isinstance(username, str)
+            or not username.strip()
+            or len(username) > 256
+            or any(ord(char) < 0x20 or ord(char) == 0x7F for char in username)
+            or not isinstance(is_admin, bool)
+        ):
+            raise MinifluxError("Miniflux returned an invalid identity")
+        return MinifluxIdentity(identity_id, username, is_admin)
 
     def get_feed_urlrewrite_rules(self, feed_id: int) -> str:
         if isinstance(feed_id, bool) or not isinstance(feed_id, int) or feed_id <= 0:

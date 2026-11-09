@@ -97,6 +97,45 @@ class ResolveHostTests(unittest.TestCase):
 
 
 class PinnedHTTPClientTests(unittest.TestCase):
+    def test_private_post_pins_the_configured_origin_and_never_follows_redirects(self) -> None:
+        requests = []
+
+        def resolver(host, port, allow_private):
+            self.assertEqual((host, port, allow_private), ("content-fallback", 8790, True))
+            return "10.0.0.8"
+
+        def post_requester(url, pinned_ip, port, headers, timeout, max_bytes, body):
+            requests.append((url, pinned_ip, port, headers, timeout, max_bytes, body))
+            return HTTPResponse(200, {"content-type": "application/json"}, b"{}", url)
+
+        client = PinnedHTTPClient(resolver=resolver, post_requester=post_requester)
+        response = client.post(
+            "http://content-fallback:8790/v1/entries/42/recover",
+            b"",
+            headers={"Authorization": "Bearer internal-only"},
+            same_origin="http://content-fallback:8790",
+            allow_private_origin=True,
+        )
+        self.assertEqual(response.body, b"{}")
+        self.assertEqual(requests[0][1], "10.0.0.8")
+        self.assertEqual(requests[0][-1], b"")
+        self.assertEqual(requests[0][3]["Authorization"], "Bearer internal-only")
+
+    def test_private_post_rejects_another_origin_before_network_access(self) -> None:
+        calls = []
+        client = PinnedHTTPClient(
+            resolver=lambda *_args: "10.0.0.8",
+            post_requester=lambda *args: calls.append(args),
+        )
+        with self.assertRaises(UnsafeURL):
+            client.post(
+                "http://attacker.example/v1/entries/42/recover",
+                b"",
+                same_origin="http://content-fallback:8790",
+                allow_private_origin=True,
+            )
+        self.assertEqual(calls, [])
+
     def test_http_client_uses_default_dns_resolver_with_mocked_transport(self) -> None:
         requests: list[tuple[str, str]] = []
         answer = address_info("93.184.216.34", 443)

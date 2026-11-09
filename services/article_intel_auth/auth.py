@@ -35,6 +35,7 @@ class AuthorizedEntry:
     title: str
     content_html: str
     content_sha256: str
+    url_fingerprint: str
 
 
 class MinifluxAuthService:
@@ -174,6 +175,7 @@ class MinifluxAuthService:
             raise AuthError("invalid_miniflux_response", 502)
         try:
             content_digest = hashlib.sha256(content.encode("utf-8", errors="strict")).hexdigest()
+            url_fingerprint = hashlib.sha256(source_url.encode("utf-8", errors="strict")).hexdigest()
         except UnicodeError:
             raise AuthError("invalid_miniflux_response", 502) from None
         return AuthorizedEntry(
@@ -183,6 +185,7 @@ class MinifluxAuthService:
             title=title,
             content_html=content,
             content_sha256=content_digest,
+            url_fingerprint=url_fingerprint,
         )
 
     def _assert_authorized_miniflux_base(self, claimed_base: str | None) -> None:

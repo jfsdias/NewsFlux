@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import unittest
 from collections.abc import Callable
@@ -330,10 +331,15 @@ class MinifluxAuthTests(unittest.TestCase):
         self.assertEqual((authorized.entry_id, authorized.user_id, authorized.feed_id), (42, 7, 3))
         self.assertEqual(authorized.content_html, "Synthetic article body.")
         self.assertEqual(len(authorized.content_sha256), 64)
+        self.assertEqual(
+            authorized.url_fingerprint,
+            hashlib.sha256(b"https://publisher.example/story").hexdigest(),
+        )
         self.assertEqual([call["url"] for call in http.calls], [f"{TRUSTED_MINIFLUX}/v1/me", f"{TRUSTED_MINIFLUX}/v1/entries/42"])
         self.assertTrue(all(call["headers"]["X-Auth-Token"] == USER_KEY for call in http.calls))
         self.assertTrue(all(call["max_redirects"] == 0 for call in http.calls))
         self.assertNotIn("api_key", authorized.__dict__)
+        self.assertNotIn("url", authorized.__dict__)
 
         for payload in (
             entry(entry_id=43),
