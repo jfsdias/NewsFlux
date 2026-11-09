@@ -1,0 +1,8 @@
+diff --git a/e2e/qa-001-reader-header.spec.js b/e2e/qa-001-reader-header.spec.js
+index 78c5f12..5830c4e 100644
+--- a/e2e/qa-001-reader-header.spec.js
++++ b/e2e/qa-001-reader-header.spec.js
+@@ -101,0 +102 @@ test.describe("QA-001 Close article hit-testing with a coarse pointer", () => {
++          await installQa001EventCapture(page)
+@@ -135,0 +137 @@ test.describe("QA-001 Close article hit-testing with a coarse pointer", () => {
++            await installQa001EventCapture(page)
