@@ -90,7 +90,7 @@ for family_tool in iptables ip6tables; do
     out "$family_tool=UNAVAILABLE"
     continue
   fi
-  "$family_tool" --version 2>&1 | sed "s/^/$family_tool_version=/"
+  "$family_tool" --version 2>&1 | sed "s/^/${family_tool}_version=/"
   save_tool="${family_tool}-save"
   if has "$save_tool"; then
     for table in filter nat; do
@@ -150,6 +150,7 @@ else
 fi
 
 section 'OPERATOR_SUPPLIED_ROUTE_AND_BACKUP_DECISIONS'
+out 'output_review=before sharing, redact sensitive internal addresses, interface names, and mount paths; retain firewall rule structure and ordering'
 out 'miniflux_https_base_url=NOT_COLLECTED (supply the exact configured HTTPS origin separately; do not include API keys)'
 out 'api_https_route=NOT_COLLECTED (state whether an existing approved route exists; this script does not inspect NPM credentials/config)'
 if [[ -n "${A2_BACKUP_TARGET:-}" ]]; then

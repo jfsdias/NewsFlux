@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -13,6 +14,163 @@ SCRIPT = ROOT / "scripts" / "ops" / "article-intel-a2-readonly-gap-collector.sh"
 
 
 class A2ReadOnlyGapCollectorTests(unittest.TestCase):
+    def _install_success_path_tools(self, fake_bin: Path, log_path: Path, include_nft: bool) -> None:
+        for utility in ("bash", "awk", "tail", "sed", "python3"):
+            executable = shutil.which(utility, path="/usr/bin:/bin")
+            self.assertIsNotNone(executable, f"required test utility unavailable: {utility}")
+            (fake_bin / utility).symlink_to(executable)
+
+        docker_body = r'''#!/bin/sh
+printf 'docker %s\n' "$*" >> "$MOCK_COMMAND_LOG"
+case "${1:-}" in
+  context)
+    case "${2:-}" in
+      show) printf '%s\n' 'default' ;;
+      inspect) printf '%s\n' 'unix:///var/run/docker.sock' ;;
+      *) exit 2 ;;
+    esac ;;
+  info)
+    if [ "${3:-}" = '{{.DockerRootDir}}' ]; then
+      printf '%s\n' '/dockerdata/docker'
+    else
+      printf '%s\n' 'DockerRootDir=/dockerdata/docker OperatingSystem=Debian GNU/Linux 13 Architecture=x86_64 CPUs=12 MemoryBytes=32212254720'
+    fi ;;
+  version) printf '%s\n' '29.9.3' ;;
+  inspect)
+    if [ "${2:-}" = '--format' ]; then
+      template=${3:-}
+      container=${4:-unknown}
+    elif [ "${3:-}" = '--format' ]; then
+      container=${2:-unknown}
+      template=${4:-}
+    else
+      exit 0
+    fi
+    case "$template" in
+      '{{.Config.Image}}') printf '%s\n' 'newsflux-local:1fdfd08dd201' ;;
+      '{{.Image}}') printf '%s\n' 'sha256:4ec48a15cd547aaa63bbbe40d910d93d3efc1d0c78f3fcbeb77ee1ae950fc641' ;;
+      *) printf 'container=/%s image=synthetic state=running published_ports=none\n' "$container" ;;
+    esac ;;
+  network)
+    if [ "${2:-}" != 'inspect' ]; then exit 2; fi
+    if [ "${3:-}" = '--format' ]; then
+      printf 'network=%s driver=bridge internal=false ipam=synthetic-endpoints\n' "${5:-unknown}"
+    fi ;;
+  *) exit 2 ;;
+esac
+'''
+        self._write_fake_command(fake_bin, "docker", docker_body)
+
+        for utility, version in (("iptables", "iptables v1.8.10 (nf_tables)"), ("ip6tables", "ip6tables v1.8.10 (nf_tables)")):
+            body = (
+                "#!/bin/sh\n"
+                f'printf "%s\\n" "{utility} $*" >> "$MOCK_COMMAND_LOG"\n'
+                f"printf '%s\\n' '{version}'\n"
+            )
+            self._write_fake_command(fake_bin, utility, body)
+
+        firewall_save_body = r'''#!/bin/sh
+printf '%s %s\n' "${0##*/}" "$*" >> "$MOCK_COMMAND_LOG"
+printf '%s\n' '*filter' ':INPUT ACCEPT [0:0]' '-A INPUT -m comment --comment "SYNTHETIC_IPTABLES_COMMENT_SENTINEL" -j ACCEPT' '-A INPUT -j LOG --log-prefix "SYNTHETIC_IPTABLES_LOG_SENTINEL"' 'COMMIT'
+'''
+        self._write_fake_command(fake_bin, "iptables-save", firewall_save_body)
+        self._write_fake_command(fake_bin, "ip6tables-save", firewall_save_body)
+
+        self._write_fake_command(
+            fake_bin,
+            "vmstat",
+            "#!/bin/sh\nprintf '%s\\n' 'procs memory swap io system cpu' 'sample 1' 'sample 2' 'sample 3' 'sample 4'\n",
+        )
+        self._write_fake_command(fake_bin, "swapon", "#!/bin/sh\nexit 0\n")
+        self._write_fake_command(
+            fake_bin,
+            "findmnt",
+            "#!/bin/sh\nprintf '%s\\n' '/dockerdata /dev/synthetic ext4 rw,relatime'\n",
+        )
+        self._write_fake_command(
+            fake_bin,
+            "df",
+            "#!/bin/sh\nprintf '%s\\n' 'Filesystem Type 1K-blocks Used Available Use% Mounted on' 'synthetic ext4 1000 100 900 10% /dockerdata'\n",
+        )
+
+        if include_nft:
+            nft_body = r'''#!/bin/sh
+printf 'nft %s\n' "$*" >> "$MOCK_COMMAND_LOG"
+case "$*" in
+  --version) printf '%s\n' 'nftables v1.1.1' ;;
+  '-j list ruleset') printf '%s\n' '{"nftables":[{"table":{"family":"inet","name":"filter","comment":"SYNTHETIC_NFT_COMMENT_SENTINEL"}},{"chain":{"family":"inet","table":"filter","name":"forward","hook":"forward","comment":"SYNTHETIC_NFT_CHAIN_SENTINEL"}},{"rule":{"family":"inet","table":"filter","chain":"forward","expr":[{"log":{"prefix":"SYNTHETIC_NFT_LOG_SENTINEL"}},{"accept":null}],"comment":"SYNTHETIC_NFT_RULE_SENTINEL"}}]}' ;;
+  *) exit 2 ;;
+esac
+'''
+            self._write_fake_command(fake_bin, "nft", nft_body)
+
+    @staticmethod
+    def _write_fake_command(directory: Path, name: str, source: str) -> None:
+        executable = directory / name
+        executable.write_text(source, encoding="utf-8")
+        executable.chmod(0o755)
+
+    def _run_success_path(self, include_nft: bool) -> tuple[subprocess.CompletedProcess[str], list[str]]:
+        temp_context = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_context.cleanup)
+        temp = Path(temp_context.name)
+        fake_bin = temp / "bin"
+        fake_bin.mkdir()
+        log_path = temp / "command-calls.txt"
+        self._install_success_path_tools(fake_bin, log_path, include_nft)
+        result = subprocess.run(
+            ["bash", str(SCRIPT)],
+            check=False,
+            capture_output=True,
+            text=True,
+            env={"PATH": str(fake_bin), "MOCK_COMMAND_LOG": str(log_path)},
+        )
+        calls = log_path.read_text(encoding="utf-8").splitlines()
+        return result, calls
+
+    def test_success_path_with_nft_reaches_read_only_mutation_guard(self) -> None:
+        result, calls = self._run_success_path(include_nft=True)
+        output = result.stdout + result.stderr
+
+        self.assertEqual(result.returncode, 0, output)
+        self.assertIn("TARGET_GUARD=PASS_OPERATOR_SUPPLIED_OMV_IDENTITY", output)
+        self.assertIn("iptables_version=iptables v1.8.10 (nf_tables)", output)
+        self.assertIn("ip6tables_version=ip6tables v1.8.10 (nf_tables)", output)
+        self.assertIn("nft_version=nftables v1.1.1", output)
+        self.assertIn("nft_object=", output)
+        self.assertIn("output_review=before sharing, redact sensitive internal addresses", output)
+        self.assertIn("[MUTATION_GUARD]", output)
+        self.assertIn("docker_mutations=0", output)
+        self.assertIn("firewall_mutations=0", output)
+        self.assertNotIn("SYNTHETIC_", output)
+        self.assertIn("iptables-save -t filter", calls)
+        self.assertIn("ip6tables-save -t nat", calls)
+        self.assertIn("nft -j list ruleset", calls)
+        self._assert_call_log_is_read_only(calls)
+
+    def test_success_path_without_nft_reports_explicit_absence(self) -> None:
+        result, calls = self._run_success_path(include_nft=False)
+        output = result.stdout + result.stderr
+
+        self.assertEqual(result.returncode, 0, output)
+        self.assertIn("TARGET_GUARD=PASS_OPERATOR_SUPPLIED_OMV_IDENTITY", output)
+        self.assertIn("[MUTATION_GUARD]", output)
+        self.assertIn("nft=UNAVAILABLE", output)
+        self.assertIn("docker_mutations=0", output)
+        self.assertIn("firewall_mutations=0", output)
+        self.assertNotIn("SYNTHETIC_", output)
+        self.assertNotIn("nft --version", "\n".join(calls))
+        self.assertNotIn("unbound variable", output)
+        self._assert_call_log_is_read_only(calls)
+
+    def _assert_call_log_is_read_only(self, calls: list[str]) -> None:
+        mutation = re.compile(
+            r"^(?:docker (?:compose )?(?:up|down|rm|run|create|exec|start|stop|restart|kill|pull|push|build|network (?:connect|disconnect|create|rm)|volume (?:create|rm))\b|(?:ip6?tables)\s+.*\s-[AIDFZNPXRC]\b|nft\s+(?:add|insert|delete|flush|replace)\b)",
+            re.IGNORECASE,
+        )
+        self.assertTrue(calls)
+        self.assertFalse([call for call in calls if mutation.search(call)])
+
     def test_wrong_docker_target_stops_before_network_or_firewall_inventory(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
