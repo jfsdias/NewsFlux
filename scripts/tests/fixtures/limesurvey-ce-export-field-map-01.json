@@ -1,0 +1,115 @@
+{
+  "fixtureKind": "MOCK_CSV_CONTRACT",
+  "contractVersion": "LIMESURVEY_CE_RESPONSE_CSV_MOCK_V1",
+  "realLimeSurveyExport": "NOT_TESTED",
+  "exportMode": {
+    "format": "CSV",
+    "delimiter": ",",
+    "questionHeading": "Question code",
+    "expressionScriptVariableNames": true,
+    "answerValues": "CODES",
+    "headerRow": 1,
+    "headerPolicy": "EXACT_VERSIONED_QUESTION_CODE_MAP"
+  },
+  "systemColumns": {
+    "submittedAt": "submitdate",
+    "allowedIgnored": ["id", "lastpage", "startlanguage", "seed"]
+  },
+  "sessionColumns": {
+    "sessionCode": "NFSess",
+    "allocationKey": "NFAlloc",
+    "sessionManifestHash": "NFMani",
+    "consent": "NFConsent",
+    "overallPreference": "NFOverall",
+    "optionalRationale": "NFRationale",
+    "studyOnlyPreferenceSeedKeys": [
+      { "key": "synthetic-favorite-mobility", "column": "NFSeed_Mobility" },
+      { "key": "synthetic-favorite-learning", "column": "NFSeed_Learning" },
+      { "key": "synthetic-favorite-local", "column": "NFSeed_Local" },
+      { "key": "synthetic-favorite-community", "column": "NFSeed_Community" }
+    ]
+  },
+  "codes": {
+    "consentAccepted": "Y",
+    "presented": "Y",
+    "preference": ["X", "Y", "TIE", "NEITHER", "CANNOTJUDGE"],
+    "cannotJudge": "CANNOTJUDGE"
+  },
+  "ratingFields": {
+    "relevanceToDeclaredContext": "Rel",
+    "editorialUsefulness": "Edit",
+    "highlightInterest": "Hi",
+    "affinityVarietyBalance": "Aff",
+    "unnecessaryRepetition": "Rep",
+    "freshnessAdequacy": "Fresh",
+    "organizationClarity": "Org",
+    "predictabilityFindability": "Find",
+    "confidence": "Conf"
+  },
+  "scenarios": [
+    {
+      "scenarioCode": "synthetic_transit",
+      "columns": {
+        "scenarioCode": "TrCode",
+        "presented": "TrShown",
+        "pairReceiptHash": "TrHash",
+        "presentationOrder": "TrOrder",
+        "scenarioPreference": "TrPref",
+        "X": {
+          "relevanceToDeclaredContext": "TrXRel",
+          "editorialUsefulness": "TrXEdit",
+          "highlightInterest": "TrXHi",
+          "affinityVarietyBalance": "TrXAff",
+          "unnecessaryRepetition": "TrXRep",
+          "freshnessAdequacy": "TrXFresh",
+          "organizationClarity": "TrXOrg",
+          "predictabilityFindability": "TrXFind",
+          "confidence": "TrXConf"
+        },
+        "Y": {
+          "relevanceToDeclaredContext": "TrYRel",
+          "editorialUsefulness": "TrYEdit",
+          "highlightInterest": "TrYHi",
+          "affinityVarietyBalance": "TrYAff",
+          "unnecessaryRepetition": "TrYRep",
+          "freshnessAdequacy": "TrYFresh",
+          "organizationClarity": "TrYOrg",
+          "predictabilityFindability": "TrYFind",
+          "confidence": "TrYConf"
+        }
+      }
+    },
+    {
+      "scenarioCode": "synthetic_library",
+      "columns": {
+        "scenarioCode": "LiCode",
+        "presented": "LiShown",
+        "pairReceiptHash": "LiHash",
+        "presentationOrder": "LiOrder",
+        "scenarioPreference": "LiPref",
+        "X": {
+          "relevanceToDeclaredContext": "LiXRel",
+          "editorialUsefulness": "LiXEdit",
+          "highlightInterest": "LiXHi",
+          "affinityVarietyBalance": "LiXAff",
+          "unnecessaryRepetition": "LiXRep",
+          "freshnessAdequacy": "LiXFresh",
+          "organizationClarity": "LiXOrg",
+          "predictabilityFindability": "LiXFind",
+          "confidence": "LiXConf"
+        },
+        "Y": {
+          "relevanceToDeclaredContext": "LiYRel",
+          "editorialUsefulness": "LiYEdit",
+          "highlightInterest": "LiYHi",
+          "affinityVarietyBalance": "LiYAff",
+          "unnecessaryRepetition": "LiYRep",
+          "freshnessAdequacy": "LiYFresh",
+          "organizationClarity": "LiYOrg",
+          "predictabilityFindability": "LiYFind",
+          "confidence": "LiYConf"
+        }
+      }
+    }
+  ]
+}
