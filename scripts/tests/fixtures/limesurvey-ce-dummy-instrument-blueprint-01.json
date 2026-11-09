@@ -1,0 +1,157 @@
+{
+  "artifactKind": "SYNTHETIC_SURVEY_BLUEPRINT_NOT_LSS",
+  "blueprintVersion": "LIMESURVEY_CE_DUMMY_INSTRUMENT_BLUEPRINT_01",
+  "targetSoftware": {
+    "product": "LimeSurvey Community Edition",
+    "versionSnapshot": "7.9.1",
+    "versionSnapshotDate": "2026-11-08",
+    "runtimeImportVerified": false
+  },
+  "sourceFieldMap": {
+    "path": "scripts/tests/fixtures/limesurvey-ce-export-field-map-01.json",
+    "contractVersion": "LIMESURVEY_CE_RESPONSE_CSV_MOCK_V1"
+  },
+  "purpose": "Prepare a no-human, all-synthetic survey structure for an isolated runtime rehearsal. It is not a deployable or importable LimeSurvey file.",
+  "syntheticFixtureContract": {
+    "fixtureKind": "SYNTHETIC_ONLY",
+    "sessionCount": 4,
+    "scenariosPerSession": 2,
+    "armsPerScenario": 2,
+    "profileChoicesAffectOnlyV1Composition": true,
+    "assignmentIndependentOfProfileChoices": true,
+    "references": [
+      "scripts/tests/fixtures/personalization-pilot-dummy-stimuli-01.json",
+      "scripts/tests/fixtures/personalization-pilot-dummy-allocation-01.json",
+      "scripts/tests/fixtures/personalization-pilot-dummy-session-plan-01.json",
+      "scripts/tests/fixtures/personalization-pilot-dummy-pre-recruitment-manifest-01.json",
+      "scripts/tests/fixtures/personalization-pilot-dummy-session-receipts-01.json",
+      "scripts/tests/fixtures/personalization-pilot-dummy-export-01.json"
+    ]
+  },
+  "surveyConfiguration": {
+    "responseMode": "anonymous",
+    "anonymizedResponses": true,
+    "participantTable": false,
+    "emailQuestions": false,
+    "tokenQuestions": false,
+    "ipAddressCollection": false,
+    "saveIpAddress": false,
+    "referrerCollection": false,
+    "saveReferrerUrl": false,
+    "outboundEmail": false,
+    "armMappingVisibleToRespondent": false,
+    "stimulusRendering": "separate local static pack; never fetch NewsFlux or Miniflux",
+    "dateStamp": "Stage B only: enable before activation to verify the pinned submitdate completion marker; anonymized mode may normalize its value",
+    "saveTimings": false,
+    "googleAnalytics": false,
+    "note": "These are required setup values for the future dummy instance, not verified LimeSurvey runtime settings. Stage A keeps both surveys inactive; Stage B needs separate operational authorization."
+  },
+  "runtimeStages": {
+    "stageA": {
+      "name": "STRUCTURE_IMPORT_VERIFICATION",
+      "authorization": "isolated installation/use authorization required; activation not authorized",
+      "sourceSurveyState": "INACTIVE",
+      "reimportedSurveyState": "INACTIVE",
+      "actions": [
+        "create synthetic source survey",
+        "export LimeSurvey-generated LSS structure",
+        "reimport into a clean second survey slot",
+        "compare codes groups question types and relevant configuration",
+        "preview rendering only"
+      ],
+      "previewResponsesPersist": false
+    },
+    "stageB": {
+      "name": "AUTHORIZED_SYNTHETIC_RUNTIME",
+      "authorization": "separate explicit operational authorization required",
+      "activateSurvey": "REIMPORTED_SURVEY_ONLY",
+      "humanParticipants": false,
+      "cases": 4,
+      "exportsBeforeClose": ["COMPLETED", "INCOMPLETE", "ALL"]
+    },
+    "stageC": {
+      "name": "CONTROLLED_SHUTDOWN",
+      "verifyExportsBeforeClose": true,
+      "ordinaryCloseAction": "STOP_OR_PAUSE",
+      "deactivate": "only for authorized structure changes after verified exports and isolated backup",
+      "instanceDataTeardown": "separate explicit authorization required"
+    }
+  },
+  "questionGroups": {
+    "sessionControl": {
+      "fields": {
+        "sessionCode": "sessionColumns.sessionCode",
+        "allocationKey": "sessionColumns.allocationKey",
+        "sessionManifestHash": "sessionColumns.sessionManifestHash",
+        "consent": "sessionColumns.consent"
+      },
+      "visibility": "hidden synthetic fixture fields; validate values against frozen receipts",
+      "consentAnswers": ["Y", "N"]
+    },
+    "profileSeedChoices": {
+      "fields": "sessionColumns.studyOnlyPreferenceSeedKeys[].column",
+      "visibility": "synthetic fixture only; optional choices; no account or Miniflux state"
+    },
+    "pairedScenarios": [
+      {
+        "scenarioCode": "synthetic_transit",
+        "fields": {
+          "identity": "scenarios[synthetic_transit].columns.scenarioCode",
+          "presented": "scenarios[synthetic_transit].columns.presented",
+          "pairReceiptHash": "scenarios[synthetic_transit].columns.pairReceiptHash",
+          "presentationOrder": "scenarios[synthetic_transit].columns.presentationOrder",
+          "preference": "scenarios[synthetic_transit].columns.scenarioPreference",
+          "X": "scenarios[synthetic_transit].columns.X.*",
+          "Y": "scenarios[synthetic_transit].columns.Y.*"
+        }
+      },
+      {
+        "scenarioCode": "synthetic_library",
+        "fields": {
+          "identity": "scenarios[synthetic_library].columns.scenarioCode",
+          "presented": "scenarios[synthetic_library].columns.presented",
+          "pairReceiptHash": "scenarios[synthetic_library].columns.pairReceiptHash",
+          "presentationOrder": "scenarios[synthetic_library].columns.presentationOrder",
+          "preference": "scenarios[synthetic_library].columns.scenarioPreference",
+          "X": "scenarios[synthetic_library].columns.X.*",
+          "Y": "scenarios[synthetic_library].columns.Y.*"
+        }
+      }
+    ],
+    "sessionCloseout": {
+      "fields": {
+        "overallPreference": "sessionColumns.overallPreference",
+        "optionalRationale": "sessionColumns.optionalRationale"
+      },
+      "preferenceAnswers": ["X", "Y", "TIE", "NEITHER", "CANNOTJUDGE"],
+      "blankMeans": "omitted/unanswered",
+      "cannotJudgeMeans": "explicit response distinct from blank"
+    }
+  },
+  "answerContract": {
+    "scenarioPreferenceCodes": ["X", "Y", "TIE", "NEITHER", "CANNOTJUDGE"],
+    "ratingCodes": ["1", "2", "3", "4", "5", "CANNOTJUDGE"],
+    "presentationOrderCodes": ["X_THEN_Y", "Y_THEN_X"],
+    "blankIsNotCannotJudge": true,
+    "allocationAndPairHashesAreValidatedAgainstReceipts": true
+  },
+  "systemColumns": {
+    "completionMarkerFieldMapPath": "systemColumns.submittedAt",
+    "ignoredColumnsAreRestrictedByExistingV1Allowlist": true,
+    "realRuntimeSemanticsVerified": false
+  },
+  "importStatus": {
+    "lssFileIncluded": false,
+    "reason": "The official LSS format is a LimeSurvey-generated XML survey structure. Without an authorized matching CE runtime, this blueprint cannot be exported from or validated by LimeSurvey; labeling hand-authored XML as importable would overstate evidence.",
+    "nextStepAfterInstallationAuthorization": "Stage A only: build the survey from this blueprint in the isolated CE instance, export its .lss structure from that exact version, re-import it into a clean second survey slot while both surveys remain inactive, run Preview without claiming response persistence, and record the import/structure comparison. Stage B still requires separate explicit operational authorization."
+  },
+  "safety": {
+    "humanCollection": false,
+    "humanResponsesIncluded": false,
+    "realNewsFluxOrMinifluxData": false,
+    "productionNetworkRequests": false,
+    "minifluxWrites": false,
+    "personalizationV2": "HOLD",
+    "armMappingInParticipantResponse": false
+  }
+}
