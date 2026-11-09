@@ -4,9 +4,9 @@ import { expect, test } from "./support/fixtures.js"
 const cardActions = (page) => page.getByRole("button", { name: "Card actions" }).first()
 const actionMenu = (page) => page.locator(".mobile-action-menu").filter({ visible: true })
 
-const touchPrimaryCard = async (openApp, viewport) => {
+const touchPrimaryCard = async (openApp, viewport, path = "/all") => {
   const { page } = await openApp({
-    path: "/all",
+    path,
     ...viewport,
     touch: true,
     settings: { articleListLayout: "card", themeMode: "dark" },
@@ -16,18 +16,17 @@ const touchPrimaryCard = async (openApp, viewport) => {
   const bounds = await title.boundingBox()
   expect(bounds).not.toBeNull()
   const point = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
-  const entryId = await title.evaluate(
+  const linkHref = await title.evaluate(
     (element) =>
-      element.closest(".article-entry-card-shell")?.querySelector(":scope > a.article-entry")
-        ?.dataset.entryId,
+      element.closest(".article-entry-card-shell")?.querySelector(":scope > a.article-entry")?.href,
   )
   const hit = await page.evaluate(({ x, y }) => {
     const target = document.elementFromPoint(x, y)
-    return target?.closest("a.article-entry")?.dataset.entryId ?? null
+    return target?.closest("a.article-entry")?.href ?? null
   }, point)
-  expect(hit).toBe(entryId)
+  expect(hit).toBe(linkHref)
   await page.touchscreen.tap(point.x, point.y)
-  await expect(page).toHaveURL(new RegExp(`/all/entry/${entryId}$`))
+  await expect(page).toHaveURL(linkHref)
 }
 
 const tapMenuItemWithTouch = async (page, item) => {
@@ -50,6 +49,7 @@ test.describe("CARD-QUICK-ACTIONS-01", () => {
     openApp,
   }) => {
     await touchPrimaryCard(openApp, { width: 884, height: 1104 })
+    await touchPrimaryCard(openApp, { width: 884, height: 1104 }, "/")
   })
 
   test("CARD-QUICK-ACTIONS-01-11: primary touch still opens the article on the closed Duo", async ({
