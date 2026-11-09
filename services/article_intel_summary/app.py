@@ -14,7 +14,7 @@ from jsonschema.exceptions import ValidationError
 from services.article_intel_auth.auth import AuthError, AuthSettings, MinifluxAuthService
 from services.article_intel_auth.config import AuthConfigurationError, canonicalize_web_origin
 from services.article_intel_summary.contracts import validate_error, validate_request
-from services.article_intel_summary.inference import DisabledInferenceAdapter
+from services.article_intel_summary.litellm_adapter import create_configured_inference_adapter
 from services.article_intel_summary.service import ModelOutputInvalid, SummaryService
 
 MAX_REQUEST_BODY_BYTES = 8 * 1024
@@ -43,7 +43,7 @@ def create_app(
         auth_service = MinifluxAuthService(trusted_settings)
     elif settings is not None and settings != auth_service.settings:
         raise AuthConfigurationError("Provided app settings differ from the authentication service settings")
-    summary_service = summary_service or SummaryService(DisabledInferenceAdapter())
+    summary_service = summary_service or SummaryService(create_configured_inference_adapter())
     origins = frozenset(auth_service.settings.allowed_web_origins)
     in_flight = threading.BoundedSemaphore(MAX_IN_FLIGHT_SUMMARIES)
     app = FastAPI(title="NewsFlux Article Intelligence API", version="1", docs_url=None, redoc_url=None, openapi_url=None)
