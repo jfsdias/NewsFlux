@@ -14,5 +14,6 @@ VOLUME ["/data"]
 
 USER 10001:10001
 EXPOSE 8790
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD ["python", "-c", "import json, urllib.request; response = urllib.request.urlopen('http://127.0.0.1:8790/healthz', timeout=2); assert response.status == 200 and json.load(response).get('status') == 'ok'"]
 
 CMD ["python", "-m", "services.content_fallback.server"]
