@@ -1,7 +1,7 @@
 import { cards, horizontalOverflow } from "./support/app.js"
 import { expect, test } from "./support/fixtures.js"
 
-const moreActions = (page) => page.getByRole("button", { name: "More actions" }).first()
+const cardActions = (page) => page.getByRole("button", { name: "Card actions" }).first()
 const actionMenu = (page) => page.locator(".mobile-action-menu").filter({ visible: true })
 
 test.describe("CARD-QUICK-ACTIONS-01", () => {
@@ -10,7 +10,7 @@ test.describe("CARD-QUICK-ACTIONS-01", () => {
   }) => {
     const { page } = await openApp({ path: "/all", settings: { articleListLayout: "card" } })
     const card = cards(page).first()
-    const button = moreActions(page)
+    const button = cardActions(page)
 
     await expect(card).toBeVisible()
     await expect(button).toBeVisible()
@@ -38,7 +38,7 @@ test.describe("CARD-QUICK-ACTIONS-01", () => {
     await expect(button).toHaveAttribute("aria-expanded", "false")
 
     const columnRun = await openApp({ path: "/all", settings: { articleListLayout: "column" } })
-    const columnButton = moreActions(columnRun.page)
+    const columnButton = cardActions(columnRun.page)
     await expect(columnButton).toBeVisible()
     const columnBounds = await columnButton.boundingBox()
     expect(columnBounds.width).toBeGreaterThanOrEqual(44)
@@ -52,7 +52,7 @@ test.describe("CARD-QUICK-ACTIONS-01", () => {
     mock,
   }) => {
     const { page } = await openApp({ path: "/all", settings: { articleListLayout: "card" } })
-    const button = moreActions(page)
+    const button = cardActions(page)
     await button.click()
     await page.getByRole("menuitem", { name: /Mark as read/i }).click()
     await expect.poll(() => mock.readIds()).toContain(1)
@@ -139,7 +139,7 @@ test.describe("CARD-QUICK-ACTIONS-01", () => {
     await expect(touchRun.page.getByRole("menuitem", { name: /Mark as read/i })).toBeVisible()
 
     await touchRun.page.keyboard.press("Escape")
-    const actionButton = moreActions(touchRun.page)
+    const actionButton = cardActions(touchRun.page)
     await actionButton.tap()
     await expect(actionMenu(touchRun.page)).toBeVisible()
     await expect(touchRun.page).toHaveURL(/\/all$/)
@@ -148,14 +148,14 @@ test.describe("CARD-QUICK-ACTIONS-01", () => {
   test("CARD-QUICK-ACTIONS-01-5: List and multi-select remain unchanged", async ({ openApp }) => {
     const listRun = await openApp({ path: "/all", settings: { articleListLayout: "list" } })
     await expect(cards(listRun.page).first()).toBeVisible()
-    await expect(moreActions(listRun.page)).toHaveCount(0)
+    await expect(cardActions(listRun.page)).toHaveCount(0)
 
     const selectionRun = await openApp({ path: "/all", settings: { articleListLayout: "card" } })
     const selectionTrigger = selectionRun.page.getByRole("button", { name: "Select", exact: true })
     await expect(selectionTrigger).toBeEnabled()
     await selectionTrigger.click()
     await expect(selectionRun.page.locator("input[data-bulk-entry-checkbox]").first()).toBeVisible()
-    await expect(moreActions(selectionRun.page)).toHaveCount(0)
+    await expect(cardActions(selectionRun.page)).toHaveCount(0)
   })
 
   test("CARD-QUICK-ACTIONS-01-6: responsive Light and Dark/OLED visual matrix", async ({
@@ -180,7 +180,7 @@ test.describe("CARD-QUICK-ACTIONS-01", () => {
           settings: { articleListLayout: "card", themeMode: theme.expected },
         })
         const shell = page.locator(".article-entry-card-shell.grid-card-wrapper").first()
-        const button = shell.getByRole("button", { name: "More actions" })
+        const button = shell.getByRole("button", { name: "Card actions" })
 
         await expect(shell).toBeVisible()
         await expect(button).toBeVisible()

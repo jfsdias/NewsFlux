@@ -135,7 +135,7 @@ const ArticleEntry = ({
   const accessibleLabel = isUnread
     ? polyglot.t("article_card.unread_article_aria_label", { title: displayTitle })
     : displayTitle
-  const moreActionsLabel = polyglot.t("article_card.more_actions_tooltip")
+  const cardActionsLabel = polyglot.t("article_card.card_quick_actions_tooltip")
   const selectionCheckboxLabel = polyglot.t(
     bulkSelected ? "article_selection.deselect_article" : "article_selection.select_article",
     { title: displayTitle },
@@ -206,7 +206,7 @@ const ArticleEntry = ({
       aria-controls={contextMenuId}
       aria-expanded={isContextMenuOpen}
       aria-haspopup="menu"
-      aria-label={moreActionsLabel}
+      aria-label={cardActionsLabel}
       className="card-quick-actions"
       disabled={!enableContextMenu}
       type="button"
