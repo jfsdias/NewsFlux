@@ -176,6 +176,7 @@
     "unstar_tooltip": "スターを解除",
     "fetch_original_tooltip": "元の本文を取得",
     "more_actions_tooltip": "その他の操作",
+    "card_quick_actions_tooltip": "カードの操作",
     "save_to_third_party_services_tooltip": "サードパーティサービスに保存",
     "share_tooltip": "共有",
     "view_comments_tooltip": "コメントを表示"

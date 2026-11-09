@@ -1,4 +1,4 @@
-.article-entry.grid-card-wrapper {
+.article-entry-card-shell.grid-card-wrapper {
   display: flex;
   box-sizing: border-box;
   width: 100%;
@@ -66,6 +66,17 @@
   font-size: 0.8125rem;
   font-variant-numeric: tabular-nums;
   line-height: 1.35;
+}
+
+.grid-card-meta-trailing {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-width: 0;
+}
+
+.grid-card-meta:has(.card-quick-actions) {
+  min-height: 44px;
 }
 
 .grid-card-source {

@@ -174,26 +174,45 @@ test("fewer than three runs cannot establish stability", () => {
   assert.match(result.problems.join("\n"), /at least 3 runs/)
 })
 
-test("the frozen expected scenario contract contains the reviewed 46 unique identities", () => {
-  assert.equal(EXPECTED_SCENARIOS.length, 46)
-  assert.equal(new Set(EXPECTED_SCENARIOS.map(({ id }) => id)).size, 46)
+test("the frozen expected scenario contract contains the reviewed 61 unique identities", () => {
+  assert.equal(EXPECTED_SCENARIOS.length, 61)
+  assert.equal(new Set(EXPECTED_SCENARIOS.map(({ id }) => id)).size, 61)
   assert.ok(EXPECTED_SCENARIOS.every(({ id, state }) => id && state))
 })
 
-test("QA-004 closure increments the scenario contract with all approved scenarios passing", () => {
+test("CARD-QUICK-ACTIONS-01 increments the scenario contract with all approved scenarios passing", () => {
   const states = {}
   for (const { state } of EXPECTED_SCENARIOS) {
     states[state] = (states[state] ?? 0) + 1
   }
 
-  assert.equal(E2E_SCENARIO_CONTRACT_VERSION, 6)
-  assert.deepEqual(states, { PASSED: 46 })
+  assert.equal(E2E_SCENARIO_CONTRACT_VERSION, 11)
+  assert.deepEqual(states, { PASSED: 61 })
   for (const id of ["F02-2", "F04-1", "F04-3", "QA-001-884", "QA-001-939"]) {
     assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === id)?.state, "PASSED")
   }
   assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === "F06-3")?.state, "PASSED")
   assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === "F12-10b")?.state, "PASSED")
   assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === "F15-4")?.state, "PASSED")
+  for (const id of [
+    "CARD-QUICK-ACTIONS-01-1",
+    "CARD-QUICK-ACTIONS-01-2",
+    "CARD-QUICK-ACTIONS-01-3",
+    "CARD-QUICK-ACTIONS-01-4",
+    "CARD-QUICK-ACTIONS-01-5",
+    "CARD-QUICK-ACTIONS-01-6",
+    "CARD-QUICK-ACTIONS-01-7",
+    "CARD-QUICK-ACTIONS-01-8",
+    "CARD-QUICK-ACTIONS-01-9",
+    "CARD-QUICK-ACTIONS-01-10",
+    "CARD-QUICK-ACTIONS-01-11",
+    "CARD-QUICK-ACTIONS-01-12",
+    "CARD-QUICK-ACTIONS-01-13",
+    "CARD-QUICK-ACTIONS-01-14",
+    "CARD-QUICK-ACTIONS-01-15",
+  ]) {
+    assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === id)?.state, "PASSED")
+  }
 })
 
 test("empty, skipped, missing, duplicate, unexpected and misclassified scenarios fail closed", () => {
@@ -401,7 +420,7 @@ test("the actual Playwright reporter accepts the complete reviewed scenario cont
     const recorded = JSON.parse(readFileSync(outputFile, "utf8"))
 
     assert.equal(result, undefined)
-    assert.equal(recorded.scenarios.length, 46)
+    assert.equal(recorded.scenarios.length, 61)
     assert.deepEqual(recorded.contractProblems, [])
   } finally {
     rmSync(directory, { recursive: true, force: true })

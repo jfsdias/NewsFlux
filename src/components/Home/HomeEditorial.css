@@ -143,7 +143,7 @@
   padding-bottom: 10px;
 }
 
-.home-article-section .article-card-grid-cell > .article-entry {
+.home-article-section .article-card-grid-cell > .article-entry-card-shell {
   flex: 1;
   height: 100%;
 }
@@ -175,7 +175,7 @@
     padding-bottom: 10px;
   }
 
-  .home-category-section .article-entry.grid-card-wrapper {
+  .home-category-section .article-entry-card-shell.grid-card-wrapper {
     min-height: 72px;
   }
 
