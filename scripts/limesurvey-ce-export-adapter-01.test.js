@@ -196,6 +196,41 @@ test("V1 system column allowlist rejects unapproved and duplicate fields", () =>
   ])
 })
 
+test("V1 pins submitdate and rejects ignored columns as completion markers", () => {
+  const partialResponse = structuredClone(responseFixture[0])
+  partialResponse.completionStatus = "PARTIAL"
+  const correctCsv = buildMockLimeSurveyCsv({ responses: [partialResponse], fieldMap })
+  const records = parseLimeSurveyCsv({ input: correctCsv, delimiter: "," })
+  const submitDateIndex = records[0].indexOf(fieldMap.systemColumns.submittedAt)
+  assert.notEqual(submitDateIndex, -1)
+
+  const remappedCsv = records
+    .map((row) => row.filter((_, index) => index !== submitDateIndex))
+    .map((row) => row.join(","))
+    .join("\r\n")
+
+  for (const submittedAt of fieldMap.systemColumns.allowedIgnored) {
+    const remappedFieldMap = {
+      ...fieldMap,
+      systemColumns: {
+        submittedAt,
+        allowedIgnored: fieldMap.systemColumns.allowedIgnored.filter(
+          (column) => column !== submittedAt,
+        ),
+      },
+    }
+    assert.throws(
+      () =>
+        importLimeSurveyMockCsv({
+          csvText: remappedCsv,
+          ...context,
+          fieldMap: remappedFieldMap,
+        }),
+      (error) => error.code === "CSV_SYSTEM_COLUMN_UNAPPROVED",
+    )
+  }
+})
+
 test("scenario identity, receipt hash, visible order, and session join are fail-closed", () => {
   const csvText = buildMockLimeSurveyCsv({ responses: responseFixture.slice(0, 1), fieldMap })
   const records = parseLimeSurveyCsv({ input: csvText, delimiter: "," })
