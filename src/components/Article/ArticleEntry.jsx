@@ -5,6 +5,7 @@ import {
   IconBook,
   IconLaunch,
   IconMinusCircle,
+  IconMoreVertical,
   IconRecord,
   IconSave,
   IconStar,
@@ -83,6 +84,7 @@ const ArticleEntry = ({
   const sourceFeed = catalogFeedsById.get(String(entry.feed?.id)) ?? entry.feed ?? {}
   const sourceName = getSourceDisplayName(sourceFeed) ?? ""
   const sourceDescriptionId = `${useId()}-source`
+  const contextMenuId = `article-entry-menu-${useId()}`
 
   const {
     handleSaveToThirdPartyServices,
@@ -90,7 +92,7 @@ const ArticleEntry = ({
     handleToggleStatus,
     handleOpenLinkExternally,
   } = useEntryActions()
-  const { dropdownProps, longPressProps } = useLongPressContextMenu({
+  const { dropdownProps, longPressProps, openContextMenu } = useLongPressContextMenu({
     disabled: !enableContextMenu,
   })
   const markRelativeRead = useMarkRelativeRead()
@@ -133,6 +135,7 @@ const ArticleEntry = ({
   const accessibleLabel = isUnread
     ? polyglot.t("article_card.unread_article_aria_label", { title: displayTitle })
     : displayTitle
+  const cardActionsLabel = polyglot.t("article_card.card_quick_actions_tooltip")
   const selectionCheckboxLabel = polyglot.t(
     bulkSelected ? "article_selection.deselect_article" : "article_selection.select_article",
     { title: displayTitle },
@@ -150,6 +153,27 @@ const ArticleEntry = ({
         label: polyglot.t("article_card.open_link_externally_tooltip"),
         onClick: () => handleOpenLinkExternally(entry),
       }
+  const isEditorialCard = !selectionMode && (layout === "card" || layout === "column")
+  const entryStateClassNames = {
+    "bulk-selection-selected": bulkSelected,
+    "context-menu-enabled": enableContextMenu,
+    read: !isUnread,
+    selected: isSelected,
+    unread: isUnread,
+  }
+  const handleOpenCardActions = (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    openContextMenu(event.currentTarget, event.currentTarget)
+    if (event.detail === 0) {
+      globalThis.requestAnimationFrame?.(() => {
+        document
+          .querySelector(`#${CSS.escape(contextMenuId)}`)
+          ?.querySelector('[role="menuitem"]:not([aria-disabled="true"])')
+          ?.focus({ preventScroll: true })
+      })
+    }
+  }
   const articleLink = (
     <a
       {...primaryLinkProps}
@@ -158,24 +182,43 @@ const ArticleEntry = ({
       aria-describedby={describedBy}
       aria-label={accessibleLabel}
       data-entry-id={entry.id}
-      className={classNames("article-entry", ENTRY_CLASS_NAMES[layout], presentationClassName, {
-        "bulk-selection-selected": bulkSelected,
-        "context-menu-enabled": enableContextMenu,
-        read: !isUnread,
-        selected: isSelected,
-        unread: isUnread,
-      })}
+      className={classNames(
+        "article-entry",
+        ENTRY_CLASS_NAMES[layout],
+        presentationClassName,
+        entryStateClassNames,
+      )}
     >
-      <Presenter
-        displayTitle={displayTitle}
-        entry={entry}
-        feed={sourceFeed}
-        previewContent={previewContent}
-        sourceDescriptionId={sourceDescriptionId}
-        sourceName={sourceName}
-      />
+      {!isEditorialCard && (
+        <Presenter
+          displayTitle={displayTitle}
+          entry={entry}
+          feed={sourceFeed}
+          previewContent={previewContent}
+          sourceDescriptionId={sourceDescriptionId}
+          sourceName={sourceName}
+        />
+      )}
     </a>
   )
+  const cardQuickActions = isEditorialCard ? (
+    <button
+      aria-controls={contextMenuId}
+      aria-expanded={isContextMenuOpen}
+      aria-haspopup="menu"
+      aria-label={cardActionsLabel}
+      className="card-quick-actions"
+      disabled={!enableContextMenu}
+      type="button"
+      onClick={handleOpenCardActions}
+      onContextMenu={longPressProps.onContextMenu}
+    >
+      <IconMoreVertical aria-hidden="true" />
+    </button>
+  ) : null
+  const cardActionTriggerProps = isEditorialCard
+    ? { ...dropdownProps.triggerProps, className: "card-quick-actions-popup" }
+    : dropdownProps.triggerProps
 
   return (
     <Dropdown
@@ -183,8 +226,9 @@ const ArticleEntry = ({
       disabled={!enableContextMenu}
       position="bl"
       trigger="contextMenu"
+      triggerProps={cardActionTriggerProps}
       droplist={
-        <Menu className="mobile-action-menu">
+        <Menu className="mobile-action-menu" id={contextMenuId}>
           <Menu.Item key={menuOpenAction.key} onClick={menuOpenAction.onClick}>
             <div className="settings-menu-item">
               <span>{menuOpenAction.label}</span>
@@ -282,6 +326,28 @@ const ArticleEntry = ({
             <span className="a11y-visually-hidden">{selectionCheckboxLabel}</span>
           </label>
           {articleLink}
+        </div>
+      ) : isEditorialCard ? (
+        <div
+          className={classNames(
+            "article-entry-card-shell",
+            ENTRY_CLASS_NAMES[layout],
+            presentationClassName,
+            entryStateClassNames,
+          )}
+        >
+          {articleLink}
+          <div className="article-entry-card-content">
+            <Presenter
+              displayTitle={displayTitle}
+              entry={entry}
+              feed={sourceFeed}
+              previewContent={previewContent}
+              quickActions={cardQuickActions}
+              sourceDescriptionId={sourceDescriptionId}
+              sourceName={sourceName}
+            />
+          </div>
         </div>
       ) : (
         articleLink
