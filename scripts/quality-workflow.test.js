@@ -220,6 +220,21 @@ test("the e2e workflow installs the pinned browser and runs three verified stabi
   )
 })
 
+test("the Article Intelligence Reader job generates build metadata before starting Vite", () => {
+  const { workflow } = readE2eWorkflow()
+  const steps = stepsOf(workflow.jobs.article_intelligence_reader)
+  const prebuildIndex = steps.findIndex((step) => step.run?.trim() === "pnpm run prebuild")
+  const browserIndex = steps.findIndex((step) =>
+    step.run
+      ?.trim()
+      .startsWith("pnpm exec playwright test --config=playwright.article-intelligence.config.js"),
+  )
+
+  assert.notEqual(prebuildIndex, -1, "the standalone Vite harness must generate version-info.json")
+  assert.notEqual(browserIndex, -1, "the dedicated Reader browser suite must run")
+  assert.ok(prebuildIndex < browserIndex, "build metadata must exist before Vite starts")
+})
+
 test("the blocking UX-REACH job builds and executes its isolated 11-test Playwright suite", () => {
   const { workflow } = readE2eWorkflow()
   const job = workflow.jobs.ux_reach

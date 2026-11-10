@@ -112,6 +112,9 @@ jobs:
       - name: Install the pinned Chromium
         run: pnpm exec playwright install --with-deps chromium
 
+      - name: Generate local build metadata
+        run: pnpm run prebuild
+
       - name: Run Article Intelligence Reader scenarios
         run: pnpm exec playwright test --config=playwright.article-intelligence.config.js
 
