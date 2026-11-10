@@ -558,8 +558,7 @@ def run() -> None:
         short_run = f"{WORKFLOW_RUN}-{WORKFLOW_ATTEMPT}"
         frontend_image = f"newsflux-p1-r2-frontend:{short_run}"
         sidecar_image = f"newsflux-p1-r2-sidecar:{short_run}"
-        fixture_image = f"newsflux-p1-r2-fixture:{short_run}"
-        IMAGES.extend((frontend_image, sidecar_image, fixture_image))
+        IMAGES.extend((frontend_image, sidecar_image))
 
         command(
             [
@@ -1206,8 +1205,14 @@ def main() -> int:
         RESULT["FINAL"] = "FAIL"
         RESULT.setdefault("FAILURE_STEP", CURRENT_STEP)
         RESULT["FAILURE_CLASS"] = type(exc).__name__
-        print(f"HARNESS_FAILURE_STEP={CURRENT_STEP}", flush=True)
+        failure_detail = str(exc)
+        for secret in (USER_KEY, ROTATED_KEY, OTHER_USER_KEY, ADMIN_KEY, PRIVATE_SERVICE_KEY):
+            failure_detail = failure_detail.replace(secret, "[redacted]")
+        RESULT["FAILURE_DETAIL"] = failure_detail[:400]
+        print(f"HARNESS_FAILURE_STEP={RESULT['FAILURE_STEP']}", flush=True)
         print(f"HARNESS_FAILURE_CLASS={type(exc).__name__}", flush=True)
+        if failure_detail:
+            print(f"HARNESS_FAILURE_DETAIL={failure_detail[:400]}", flush=True)
     finally:
         if TEMP_ROOT is not None and RESULT["CLEANUP_GATE"] == "NOT_RUN":
             try:
