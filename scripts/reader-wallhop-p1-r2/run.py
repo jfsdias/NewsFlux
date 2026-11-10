@@ -394,6 +394,9 @@ def wait_for_https(ca_cert: Path, timeout: float = 60.0) -> tuple[int, str]:
         except RuntimeError as exc:
             last_error = str(exc)
         time.sleep(1)
+    failure_step = CURRENT_STEP
+    diagnose_https_startup()
+    CURRENT_STEP = failure_step
     for container_name in ("newsflux-p1-r2-proxy", "newsflux-p1-r2-frontend"):
         result = command(
             ["docker", "logs", "--tail", "40", container_name],
@@ -407,6 +410,49 @@ def wait_for_https(ca_cert: Path, timeout: float = 60.0) -> tuple[int, str]:
             print(f"HTTPS_DIAGNOSTIC_END={container_name}", flush=True)
     last_error = redact_secrets(last_error)[:300]
     raise RuntimeError(f"HTTPS ingress did not serve the frontend before timeout; last probe: {last_error}")
+
+
+def diagnose_https_startup() -> None:
+    """Capture only proxy state and a secret-free internal HTTPS reachability probe."""
+    try:
+        proxy_info = inspect_container("newsflux-p1-r2-proxy")
+        state = proxy_info.get("State") or {}
+        settings = proxy_info.get("NetworkSettings") or {}
+        networks = settings.get("Networks") or {}
+        safe_inspect = {
+            "status": state.get("Status"),
+            "running": state.get("Running"),
+            "exit_code": state.get("ExitCode"),
+            "error": redact_secrets(str(state.get("Error") or ""))[:200],
+            "port_bindings": proxy_info.get("HostConfig", {}).get("PortBindings") or {},
+            "ports": settings.get("Ports") or {},
+            "networks": {
+                name: {"ip": details.get("IPAddress"), "aliases": details.get("Aliases")}
+                for name, details in networks.items()
+            },
+        }
+        print(f"HTTPS_PROXY_INSPECT={json.dumps(safe_inspect, sort_keys=True)}", flush=True)
+    except Exception as exc:
+        print(f"HTTPS_PROXY_INSPECT_ERROR={type(exc).__name__}: {str(exc)[:200]}", flush=True)
+
+    probe = (
+        "import ssl,urllib.request;"
+        "context=ssl._create_unverified_context();"
+        "request=urllib.request.Request('https://newsflux-proxy:8443/',headers={'Host':'newsflux.test:8443'});"
+        "response=urllib.request.urlopen(request,context=context,timeout=5);"
+        "print('status='+str(response.status))"
+    )
+    result = command(
+        ["docker", "exec", "newsflux-p1-r2-miniflux", "python", "-c", probe],
+        step="Probe HTTPS proxy from isolated synthetic network",
+        check=False,
+    )
+    detail = redact_secrets((result.stdout + result.stderr).strip())[-300:]
+    print(
+        f"HTTPS_INTERNAL_PROXY_PROBE_EXIT={result.returncode}"
+        + (f" DETAIL={detail}" if detail else ""),
+        flush=True,
+    )
 
 
 def curl_request(
