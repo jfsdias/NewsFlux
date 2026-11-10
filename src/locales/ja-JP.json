@@ -192,7 +192,11 @@
     "partial_result": "選択した記事 %{total} 件のうち %{marked} 件のみ既読を確認しました",
     "read_error": "選択した記事を既読にできませんでした",
     "counts_refresh_error": "記事を既読にしましたが、未読件数が最新でない可能性があります",
-    "undo_error": "選択した記事の既読を元に戻せませんでした"
+    "undo_error": "選択した記事の既読を元に戻せませんでした",
+    "read_success_scoped": "%{scope}の選択した記事 %{smart_count} 件を既読にしました",
+    "partial_result_scoped": "%{scope}の選択した記事 %{total} 件中 %{marked} 件のみ既読を確認しました",
+    "read_error_scoped": "%{scope}の選択した記事を既読にできませんでした",
+    "counts_refresh_error_scoped": "%{scope}の選択した記事 %{smart_count} 件を既読にしましたが、未読件数が最新でない可能性があります"
   },
   "article_list": {
     "sort_direction_desc": "新しい順",
@@ -232,7 +236,29 @@
     "load_error_forbidden": "これらの記事を表示する権限がありません。",
     "load_error_rate_limited": "サーバーが一時的にリクエストを制限しています。しばらくしてから再試行してください。",
     "load_error_server": "サーバーがこれらの記事を読み込めませんでした。再試行してください。",
-    "load_error_network": "サーバーに接続できませんでした。接続を確認して再試行してください。"
+    "load_error_network": "サーバーに接続できませんでした。接続を確認して再試行してください。",
+    "bulk_read_scope_named": "%{type}「%{name}」",
+    "bulk_read_scope_feed": "このフィード",
+    "bulk_read_scope_category": "このカテゴリー",
+    "bulk_read_scope_all": "すべての記事",
+    "bulk_read_scope_unread": "未読の記事",
+    "bulk_read_scope_starred": "スター付きの記事",
+    "bulk_read_scope_today": "今日の記事",
+    "bulk_read_scope_home": "ホームの記事",
+    "bulk_read_scope_current": "現在の一覧",
+    "bulk_read_scope_filtered": "%{scope}（現在のフィルター適用中）",
+    "bulk_read_success_count_unknown": "%{scope}で%{operation}が完了しました（確認できた件数はありません）",
+    "bulk_read_partial_count_unknown": "%{operation}が%{scope}で停止する前に、記事 %{smart_count} 件を既読と確認しました",
+    "bulk_read_direction_above": "上の",
+    "bulk_read_direction_below": "下の",
+    "mark_all_as_read_success_scoped": "%{scope}の記事 %{smart_count} 件を既読にしました",
+    "mark_all_as_read_error_scoped": "%{scope}の記事を既読にできませんでした",
+    "mark_older_as_read_success_scoped": "%{scope}の古い記事 %{smart_count} 件を既読にしました",
+    "mark_older_as_read_error_scoped": "%{scope}の古い記事を既読にできませんでした",
+    "mark_older_as_read_partial_scoped": "%{scope}の古い記事 %{total} 件中 %{marked} 件のみ既読を確認しました",
+    "mark_relative_as_read_success_scoped": "%{scope}で%{direction}記事 %{smart_count} 件を既読にしました",
+    "mark_relative_as_read_error_scoped": "%{scope}で%{direction}記事を既読にできませんでした",
+    "mark_relative_as_read_partial_scoped": "%{scope}で%{direction}記事 %{total} 件中 %{marked} 件のみ既読を確認しました"
   },
   "article_toc": {
     "tooltip": "目次",

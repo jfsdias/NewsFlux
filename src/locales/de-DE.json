@@ -192,7 +192,11 @@
     "partial_result": "Nur %{marked} von %{total} ausgewählten Artikeln wurden als gelesen bestätigt",
     "read_error": "Ausgewählte Artikel konnten nicht als gelesen markiert werden",
     "counts_refresh_error": "Artikel wurden markiert, aber die Anzahl ungelesener Artikel ist möglicherweise veraltet",
-    "undo_error": "Die ausgewählte Lesemarkierung konnte nicht rückgängig gemacht werden"
+    "undo_error": "Die ausgewählte Lesemarkierung konnte nicht rückgängig gemacht werden",
+    "read_success_scoped": "%{smart_count} ausgewählter Artikel in %{scope} als gelesen markiert |||| %{smart_count} ausgewählte Artikel in %{scope} als gelesen markiert",
+    "partial_result_scoped": "Nur %{marked} von %{total} ausgewählten Artikeln in %{scope} wurden als gelesen bestätigt",
+    "read_error_scoped": "Ausgewählte Artikel in %{scope} konnten nicht als gelesen markiert werden",
+    "counts_refresh_error_scoped": "%{smart_count} ausgewählter Artikel in %{scope} als gelesen markiert, aber ungelesene Zähler sind möglicherweise veraltet |||| %{smart_count} ausgewählte Artikel in %{scope} als gelesen markiert, aber ungelesene Zähler sind möglicherweise veraltet"
   },
   "article_list": {
     "sort_direction_desc": "Neueste zuerst",
@@ -232,7 +236,29 @@
     "load_error_forbidden": "Sie haben keine Berechtigung, diese Artikel anzusehen.",
     "load_error_rate_limited": "Der Server begrenzt Anfragen vorübergehend. Bitte versuchen Sie es in Kürze erneut.",
     "load_error_server": "Der Server konnte diese Artikel nicht laden. Bitte versuchen Sie es erneut.",
-    "load_error_network": "Verbindung zum Server fehlgeschlagen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
+    "load_error_network": "Verbindung zum Server fehlgeschlagen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+    "bulk_read_scope_named": "%{name} (%{type})",
+    "bulk_read_scope_feed": "Dieser Feed",
+    "bulk_read_scope_category": "Diese Kategorie",
+    "bulk_read_scope_all": "Alle Artikel",
+    "bulk_read_scope_unread": "Ungelesene Artikel",
+    "bulk_read_scope_starred": "Markierte Artikel",
+    "bulk_read_scope_today": "Heutige Artikel",
+    "bulk_read_scope_home": "Startseitenartikel",
+    "bulk_read_scope_current": "Aktuelle Liste",
+    "bulk_read_scope_filtered": "%{scope} mit aktuellen Filtern",
+    "bulk_read_success_count_unknown": "%{operation} in %{scope} abgeschlossen; bestätigte Anzahl nicht verfügbar",
+    "bulk_read_partial_count_unknown": "%{smart_count} Artikel als gelesen bestätigt, bevor %{operation} in %{scope} abgebrochen wurde",
+    "bulk_read_direction_above": "oberhalb",
+    "bulk_read_direction_below": "unterhalb",
+    "mark_all_as_read_success_scoped": "%{smart_count} Artikel in %{scope} als gelesen markiert |||| %{smart_count} Artikel in %{scope} als gelesen markiert",
+    "mark_all_as_read_error_scoped": "Artikel in %{scope} konnten nicht als gelesen markiert werden",
+    "mark_older_as_read_success_scoped": "%{smart_count} älterer Artikel in %{scope} als gelesen markiert |||| %{smart_count} ältere Artikel in %{scope} als gelesen markiert",
+    "mark_older_as_read_error_scoped": "Ältere Artikel in %{scope} konnten nicht als gelesen markiert werden",
+    "mark_older_as_read_partial_scoped": "Nur %{marked} von %{total} älteren Artikeln in %{scope} wurden als gelesen bestätigt",
+    "mark_relative_as_read_success_scoped": "%{smart_count} Artikel %{direction} in %{scope} als gelesen markiert",
+    "mark_relative_as_read_error_scoped": "Artikel %{direction} in %{scope} konnten nicht als gelesen markiert werden",
+    "mark_relative_as_read_partial_scoped": "Nur %{marked} von %{total} Artikeln %{direction} in %{scope} wurden als gelesen bestätigt"
   },
   "article_toc": {
     "tooltip": "Inhaltsverzeichnis",

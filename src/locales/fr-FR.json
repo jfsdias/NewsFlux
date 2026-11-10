@@ -192,7 +192,11 @@
     "partial_result": "Seuls %{marked} articles sur %{total} ont été confirmés comme lus",
     "read_error": "Impossible de marquer les articles sélectionnés comme lus",
     "counts_refresh_error": "Les articles ont été marqués, mais le nombre d’articles non lus peut être obsolète",
-    "undo_error": "Impossible d’annuler la lecture des articles sélectionnés"
+    "undo_error": "Impossible d’annuler la lecture des articles sélectionnés",
+    "read_success_scoped": "%{smart_count} article sélectionné marqué comme lu dans %{scope} |||| %{smart_count} articles sélectionnés marqués comme lus dans %{scope}",
+    "partial_result_scoped": "Seuls %{marked} articles sélectionnés sur %{total} ont été confirmés comme lus dans %{scope}",
+    "read_error_scoped": "Impossible de marquer les articles sélectionnés comme lus dans %{scope}",
+    "counts_refresh_error_scoped": "%{smart_count} article sélectionné marqué comme lu dans %{scope}, mais les compteurs de non lus peuvent être obsolètes |||| %{smart_count} articles sélectionnés marqués comme lus dans %{scope}, mais les compteurs de non lus peuvent être obsolètes"
   },
   "article_list": {
     "sort_direction_desc": "Les plus récents en premier",
@@ -232,7 +236,29 @@
     "load_error_forbidden": "Vous n’avez pas l’autorisation de consulter ces articles.",
     "load_error_rate_limited": "Le serveur limite temporairement les requêtes. Veuillez réessayer bientôt.",
     "load_error_server": "Le serveur n’a pas pu charger ces articles. Veuillez réessayer.",
-    "load_error_network": "Connexion au serveur impossible. Vérifiez votre connexion et réessayez."
+    "load_error_network": "Connexion au serveur impossible. Vérifiez votre connexion et réessayez.",
+    "bulk_read_scope_named": "%{name} (%{type})",
+    "bulk_read_scope_feed": "Cette source",
+    "bulk_read_scope_category": "Cette catégorie",
+    "bulk_read_scope_all": "Tous les articles",
+    "bulk_read_scope_unread": "Articles non lus",
+    "bulk_read_scope_starred": "Articles favoris",
+    "bulk_read_scope_today": "Articles du jour",
+    "bulk_read_scope_home": "Articles de l’accueil",
+    "bulk_read_scope_current": "Liste actuelle",
+    "bulk_read_scope_filtered": "%{scope} avec les filtres actuels",
+    "bulk_read_success_count_unknown": "%{operation} terminée dans %{scope} ; nombre confirmé indisponible",
+    "bulk_read_partial_count_unknown": "%{smart_count} article confirmé comme lu avant l’arrêt de %{operation} dans %{scope} |||| %{smart_count} articles confirmés comme lus avant l’arrêt de %{operation} dans %{scope}",
+    "bulk_read_direction_above": "au-dessus",
+    "bulk_read_direction_below": "en dessous",
+    "mark_all_as_read_success_scoped": "%{smart_count} article marqué comme lu dans %{scope} |||| %{smart_count} articles marqués comme lus dans %{scope}",
+    "mark_all_as_read_error_scoped": "Impossible de marquer les articles comme lus dans %{scope}",
+    "mark_older_as_read_success_scoped": "%{smart_count} ancien article marqué comme lu dans %{scope} |||| %{smart_count} anciens articles marqués comme lus dans %{scope}",
+    "mark_older_as_read_error_scoped": "Impossible de marquer les anciens articles comme lus dans %{scope}",
+    "mark_older_as_read_partial_scoped": "Seuls %{marked} anciens articles sur %{total} ont été confirmés comme lus dans %{scope}",
+    "mark_relative_as_read_success_scoped": "%{smart_count} article %{direction} marqué comme lu dans %{scope} |||| %{smart_count} articles %{direction} marqués comme lus dans %{scope}",
+    "mark_relative_as_read_error_scoped": "Impossible de marquer comme lus les articles %{direction} dans %{scope}",
+    "mark_relative_as_read_partial_scoped": "Seuls %{marked} articles sur %{total} %{direction} ont été confirmés comme lus dans %{scope}"
   },
   "article_toc": {
     "tooltip": "Table des matières",

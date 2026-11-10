@@ -46,6 +46,7 @@ import {
 } from "@/utils/age-based-mark-read"
 import { hasArticleListFilters } from "@/utils/article-list-filters"
 import createArticleListRequestKey from "@/utils/article-list-request-key"
+import { createBulkReadFeedback, getBulkReadScopeLabel } from "@/utils/bulk-read-feedback"
 import { get24HoursAgoTimestamp } from "@/utils/date"
 import { runEntryMutation } from "@/utils/entry-mutation-state"
 import {
@@ -741,6 +742,14 @@ const FooterPanel = ({
     }
 
     const content = { ...contentState.get(), infoFrom: source, infoId: sourceId }
+    const scopeLabel = getBulkReadScopeLabel({
+      from: source,
+      id: sourceId,
+      isFiltered: hasArticleListFilters(content),
+      categories,
+      feeds,
+      polyglot,
+    })
     const settings = settingsState.get()
     const sessionRevision = getDataSessionRevision()
     const markedEntryIds = new Set()
@@ -814,6 +823,12 @@ const FooterPanel = ({
         Notification.remove(getMarkAllReadUndoNotificationId(previousUndoToken))
       }
       const undoEntryIds = [...markedEntryIds]
+      const feedback = createBulkReadFeedback({
+        operation: "markAll",
+        status: "success",
+        acknowledgedIds: undoEntryIds,
+        scope: scopeLabel,
+      })
       if (undoEntryIds.length > 0) {
         let token
         token = markAllReadUndoActions.replace(
@@ -825,7 +840,7 @@ const FooterPanel = ({
         )
         Notification.success({
           id: getMarkAllReadUndoNotificationId(token),
-          title: polyglot.t("article_list.mark_all_as_read_success"),
+          title: polyglot.t(feedback.titleKey, feedback.titleParams),
           duration: MARK_ALL_READ_UNDO_DURATION_MS,
           btn: (
             <Button size="small" onClick={() => void handleUndoMarkAllRead(token)}>
@@ -836,7 +851,7 @@ const FooterPanel = ({
         })
       } else {
         Notification.success({
-          title: polyglot.t("article_list.mark_all_as_read_success"),
+          title: polyglot.t(feedback.titleKey, feedback.titleParams),
         })
       }
       if (markAllReadJumpToNext && isCurrentList()) {
@@ -853,9 +868,46 @@ const FooterPanel = ({
       }
       await refreshCounts({ force: true })
       if (isCurrentSession()) {
-        Notification.error({
-          title: polyglot.t("article_list.mark_all_as_read_error"),
+        const acknowledgedIds = [...markedEntryIds]
+        const feedback = createBulkReadFeedback({
+          operation: "markAll",
+          status: "failure",
+          acknowledgedIds,
+          scope: scopeLabel,
+          operationLabel: polyglot.t("article_list.mark_all_as_read_tooltip"),
         })
+        if (feedback.notificationType === "warning") {
+          const previousUndoToken = markAllReadUndoActions.getCurrentToken()
+          markAllReadUndoActions.clear()
+          if (previousUndoToken !== null) {
+            Notification.remove(getMarkAllReadUndoNotificationId(previousUndoToken))
+          }
+          let token
+          token = markAllReadUndoActions.replace(
+            { entryIds: feedback.undoEntryIds, sessionRevision },
+            {
+              durationMs: MARK_ALL_READ_UNDO_DURATION_MS,
+              onExpire: () => Notification.remove(getMarkAllReadUndoNotificationId(token)),
+            },
+          )
+          Notification.warning({
+            id: getMarkAllReadUndoNotificationId(token),
+            title: polyglot.t(feedback.titleKey, feedback.titleParams),
+            duration: MARK_ALL_READ_UNDO_DURATION_MS,
+            content: error.message,
+            btn: (
+              <Button size="small" onClick={() => void handleUndoMarkAllRead(token)}>
+                {polyglot.t("actions.undo")}
+              </Button>
+            ),
+            onClose: () => markAllReadUndoActions.clear(token),
+          })
+        } else {
+          Notification.error({
+            title: polyglot.t(feedback.titleKey, feedback.titleParams),
+            content: error.message,
+          })
+        }
       }
     } finally {
       if (!jumpedToNext) {
@@ -948,6 +1000,14 @@ const FooterPanel = ({
       }
 
       if (result.status === "success" || result.status === "partial") {
+        const scopeLabel = getBulkReadScopeLabel({
+          from: confirmedSource,
+          id: confirmedSourceId,
+          isFiltered: hasArticleListFilters(content),
+          categories,
+          feeds,
+          polyglot,
+        })
         const previousUndoToken = markAllReadUndoActions.getCurrentToken()
         markAllReadUndoActions.clear()
         if (previousUndoToken !== null) {
@@ -974,25 +1034,49 @@ const FooterPanel = ({
         }
 
         if (result.status === "partial") {
+          const feedback = createBulkReadFeedback({
+            operation: "older",
+            status: result.status,
+            acknowledgedIds: result.acknowledgedIds,
+            requestedCount: result.requestedCount,
+            scope: scopeLabel,
+          })
           Notification.warning({
             ...notification,
-            title: polyglot.t("article_list.mark_older_as_read_partial", {
-              marked: result.acknowledgedIds.length,
-              total: result.requestedCount,
-            }),
+            title: polyglot.t(feedback.titleKey, feedback.titleParams),
           })
         } else {
+          const feedback = createBulkReadFeedback({
+            operation: "older",
+            status: result.status,
+            acknowledgedIds: result.acknowledgedIds,
+            requestedCount: result.requestedCount,
+            scope: scopeLabel,
+          })
           Notification.success({
             ...notification,
-            title: polyglot.t("article_list.mark_older_as_read_success", {
-              smart_count: result.acknowledgedIds.length,
-            }),
+            title: polyglot.t(feedback.titleKey, feedback.titleParams),
           })
         }
       } else {
         console.error("Failed to mark older articles as read:", result.error)
+        const scopeLabel = getBulkReadScopeLabel({
+          from: confirmedSource,
+          id: confirmedSourceId,
+          isFiltered: hasArticleListFilters(content),
+          categories,
+          feeds,
+          polyglot,
+        })
+        const feedback = createBulkReadFeedback({
+          operation: "older",
+          status: "failure",
+          acknowledgedIds: result.acknowledgedIds,
+          requestedCount: result.requestedCount,
+          scope: scopeLabel,
+        })
         Notification.error({
-          title: polyglot.t("article_list.mark_older_as_read_error"),
+          title: polyglot.t(feedback.titleKey, feedback.titleParams),
           content: result.error?.message,
         })
       }

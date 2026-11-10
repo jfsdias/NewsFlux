@@ -11,9 +11,15 @@ import {
   setActiveContent,
   setEntries,
 } from "@/store/contentState"
-import { getDataSessionRevision } from "@/store/dataState"
+import {
+  getDataSessionRevision,
+  visibleCategoriesState,
+  visibleFeedsState,
+} from "@/store/dataState"
 import { settingsState } from "@/store/settingsState"
+import { hasArticleListFilters } from "@/utils/article-list-filters"
 import createArticleListRequestKey from "@/utils/article-list-request-key"
+import { createBulkReadFeedback, getBulkReadScopeLabel } from "@/utils/bulk-read-feedback"
 import { runEntryMutation } from "@/utils/entry-mutation-state"
 import {
   getMarkAllReadUndoNotificationId,
@@ -43,6 +49,8 @@ const getListIdentity = () =>
 // an explicit entry-ID set and Undo reuses the shared one-shot Mark All Undo store/coordinator.
 const useMarkRelativeRead = () => {
   const { polyglot } = useStore(polyglotState)
+  const categories = useStore(visibleCategoriesState)
+  const feeds = useStore(visibleFeedsState)
   const refreshCounts = useRefreshCounts()
 
   const handleUndo = useCallback(
@@ -66,7 +74,7 @@ const useMarkRelativeRead = () => {
   )
 
   const offerUndo = useCallback(
-    ({ acknowledgedIds, partialTitle, sessionRevision }) => {
+    ({ acknowledgedIds, content, feedback, sessionRevision }) => {
       const previousUndoToken = markAllReadUndoActions.getCurrentToken()
       markAllReadUndoActions.clear()
       if (previousUndoToken !== null) {
@@ -91,14 +99,16 @@ const useMarkRelativeRead = () => {
         ),
         onClose: () => markAllReadUndoActions.clear(token),
       }
-      if (partialTitle) {
-        Notification.warning({ ...notification, title: partialTitle })
+      if (feedback.notificationType === "warning") {
+        Notification.warning({
+          ...notification,
+          title: polyglot.t(feedback.titleKey, feedback.titleParams),
+          ...(content && { content }),
+        })
       } else {
         Notification.success({
           ...notification,
-          title: polyglot.t("article_list.mark_relative_as_read_success", {
-            smart_count: acknowledgedIds.length,
-          }),
+          title: polyglot.t(feedback.titleKey, feedback.titleParams),
         })
       }
     },
@@ -107,10 +117,20 @@ const useMarkRelativeRead = () => {
 
   return useCallback(
     async (anchorId, direction) => {
-      const targetIds = getRelativeUnreadTargetIds(contentState.get().entries, anchorId, direction)
+      const content = contentState.get()
+      const targetIds = getRelativeUnreadTargetIds(content.entries, anchorId, direction)
       if (targetIds.length === 0) {
         return
       }
+      const scope = getBulkReadScopeLabel({
+        from: content.infoFrom,
+        id: content.infoId,
+        isFiltered: hasArticleListFilters(content),
+        categories,
+        feeds,
+        polyglot,
+      })
+      const directionLabel = polyglot.t(`article_list.bulk_read_direction_${direction}`)
 
       const sessionRevision = getDataSessionRevision()
       const listIdentity = getListIdentity()
@@ -148,7 +168,18 @@ const useMarkRelativeRead = () => {
         }
 
         if (result.status === "success") {
-          offerUndo({ acknowledgedIds: result.acknowledgedIds, sessionRevision })
+          offerUndo({
+            acknowledgedIds: result.acknowledgedIds,
+            feedback: createBulkReadFeedback({
+              operation: "relative",
+              status: result.status,
+              acknowledgedIds: result.acknowledgedIds,
+              requestedCount: result.requestedCount,
+              scope,
+              direction: directionLabel,
+            }),
+            sessionRevision,
+          })
           return
         }
 
@@ -166,15 +197,23 @@ const useMarkRelativeRead = () => {
         if (result.status === "partial") {
           offerUndo({
             acknowledgedIds: result.acknowledgedIds,
-            partialTitle: polyglot.t("article_list.mark_relative_as_read_partial", {
-              marked: result.acknowledgedIds.length,
-              total: result.requestedCount,
+            content: result.error?.message,
+            feedback: createBulkReadFeedback({
+              operation: "relative",
+              status: result.status,
+              acknowledgedIds: result.acknowledgedIds,
+              requestedCount: result.requestedCount,
+              scope,
+              direction: directionLabel,
             }),
             sessionRevision,
           })
         } else {
           Notification.error({
-            title: polyglot.t("article_list.mark_relative_as_read_error"),
+            title: polyglot.t("article_list.mark_relative_as_read_error_scoped", {
+              scope,
+              direction: directionLabel,
+            }),
             content: result.error?.message,
           })
         }
@@ -182,7 +221,7 @@ const useMarkRelativeRead = () => {
         markAllReadOperationCoordinator.release(operationLease)
       }
     },
-    [offerUndo, polyglot, refreshCounts],
+    [categories, feeds, offerUndo, polyglot, refreshCounts],
   )
 }
 
