@@ -276,6 +276,19 @@
     "preview_image": "%{name} をプレビュー",
     "media_error": "このメディアはここでは再生できません。下記の添付リンクをご利用ください。"
   },
+  "article_intelligence": {
+    "title": "記事の要約",
+    "action": "AIで要約",
+    "loading": "要約を作成しています…",
+    "retry": "再試行",
+    "error": "要約を作成できませんでした。元の記事は変更されていません。",
+    "summary": "要約",
+    "key_points": "要点",
+    "partial_content": "記事の一部だけを要約している可能性があります。",
+    "limitations": "制限事項",
+    "insufficient": "信頼できる要約を作成するには記事のテキストが不足しています。",
+    "unavailable": "現在、要約を利用できません。"
+  },
   "content": {
     "mark_as_read_error": "既読への変更に失敗しました。後で再試行してください",
     "entry_unavailable": "この記事は利用できなくなりました。",

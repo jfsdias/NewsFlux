@@ -276,6 +276,19 @@
     "preview_image": "Preview %{name}",
     "media_error": "This media cannot be played here. Use the attachment link below."
   },
+  "article_intelligence": {
+    "title": "Article summary",
+    "action": "Summarize with AI",
+    "loading": "Generating summary…",
+    "retry": "Try again",
+    "error": "The summary could not be created. The original article is unchanged.",
+    "summary": "Summary",
+    "key_points": "Key points",
+    "partial_content": "This summary may cover only part of the article.",
+    "limitations": "Limitations",
+    "insufficient": "There is not enough article text to create a reliable summary.",
+    "unavailable": "A summary is not available right now."
+  },
   "content": {
     "mark_as_read_error": "Failed to mark as read, please try again later",
     "entry_unavailable": "This article is no longer available.",

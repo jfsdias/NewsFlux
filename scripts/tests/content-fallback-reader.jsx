@@ -2,7 +2,7 @@
 import "@arco-design/web-react/es/_util/react-19-adapter"
 import "@arco-design/web-react/dist/css/arco.css"
 import Polyglot from "node-polyglot"
-import React from "react"
+import React, { useEffect } from "react"
 import { createRoot } from "react-dom/client"
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router"
 
@@ -27,8 +27,10 @@ import "@/App.css"
 import "@/components/Article/ArticleDetail.css"
 import "@/components/Article/ReaderStyles.css"
 import "@/components/Article/littlefoot.css"
+import "@/components/Content/Content.css"
 
 const mode = new URLSearchParams(location.search).get("mode") ?? "success"
+const articleSummaryMode = new URLSearchParams(location.search).get("article_summary")
 const polyglot = new Polyglot({ phrases, locale: "en-US" })
 polyglotState.set({ polyglot })
 
@@ -80,8 +82,10 @@ contentState.set({
 })
 
 let pendingResolve = null
+let pendingSummaryResolve = null
 const requestLedger = []
 const otherRequestLedger = []
+const articleSummaryLedger = []
 const responseFor = async (entry = firstEntry, changes = {}) => ({
   status: "recovered",
   entry_id: entry.id,
@@ -95,6 +99,52 @@ const responseFor = async (entry = firstEntry, changes = {}) => ({
 
 globalThis.fetch = async (url, options = {}) => {
   const requestUrl = String(url)
+  if (requestUrl.includes("/api/ai/v1/entries/")) {
+    articleSummaryLedger.push({
+      path: requestUrl,
+      method: String(options.method ?? "GET").toUpperCase(),
+      headerNames: Object.keys(options.headers ?? {}).toSorted(),
+      bodyKeys: Object.keys(JSON.parse(options.body ?? "{}")).toSorted(),
+    })
+    report()
+    const requestId = JSON.parse(options.body).request_id
+    const payload = {
+      schema_version: "1",
+      request_id: requestId,
+      entry_id: Number(requestUrl.match(/entries\/(\d+)/)?.[1]),
+      status: "partial",
+      content_scope: "unknown",
+      summary: "Synthetic AI summary for the current article.",
+      summary_paragraph_ids: ["p1"],
+      key_points: [{ text: "Synthetic grounded key point.", paragraph_ids: ["p1"] }],
+      action_points: [],
+      limitations: ["Only the available Miniflux text was summarized."],
+      provenance: {
+        content_origin: "miniflux",
+        content_fingerprint: "a".repeat(64),
+        provider_id: "litellm",
+        deployment_id: "s5-free",
+        effective_model_id: "synthetic-s5-free",
+        prompt_version: "summary-v1",
+      },
+    }
+    if (articleSummaryMode === "retry" && articleSummaryLedger.length === 1) {
+      return Response.json(
+        {
+          schema_version: "1",
+          request_id: requestId,
+          error: { code: "SUMMARY_BUSY", retryable: true },
+        },
+        { status: 429 },
+      )
+    }
+    if (["stale", "loading"].includes(articleSummaryMode)) {
+      return new Promise((resolve) => {
+        pendingSummaryResolve = () => resolve(Response.json(payload, { status: 200 }))
+      })
+    }
+    return Response.json(payload, { status: 200 })
+  }
   if (!requestUrl.includes("/reader/v1/entries/")) {
     otherRequestLedger.push({
       url: requestUrl,
@@ -143,6 +193,7 @@ const report = () => {
     mode,
     results,
     requestCount: requestLedger.length,
+    articleSummaryRequestCount: articleSummaryLedger.length,
     minifluxWrites,
     viewport: { width: window.innerWidth, height: window.innerHeight },
     scrollWidth: document.documentElement.scrollWidth,
@@ -155,6 +206,7 @@ const report = () => {
       ...request,
       headerNames: Object.keys(headers ?? {}).toSorted(),
     })),
+    articleSummaryRequests: articleSummaryLedger.map((request) => ({ ...request })),
     minifluxWrites,
   }
 }
@@ -179,6 +231,22 @@ const driveChecks = async () => {
   results.READ_STAR_STATE_PRESERVED =
     contentState.get().activeContent?.status === "unread" &&
     contentState.get().activeContent?.starred === true
+  if (articleSummaryMode) {
+    const summaryAction = document.querySelector(".article-intelligence-summary__action")
+    results.ORIGINAL_CONTENT_VISIBLE = originalVisible
+    results.SUMMARY_ACTION_PRESENT = Boolean(summaryAction)
+    results.SUMMARY_ACTION_ACCESSIBLE =
+      summaryAction?.tagName === "BUTTON" &&
+      summaryAction.textContent.trim() === "Summarize with AI"
+    results.NO_SUMMARY_BEFORE_ACTIVATION = articleSummaryLedger.length === 0
+    results.NO_HORIZONTAL_OVERFLOW = document.documentElement.scrollWidth <= window.innerWidth
+    results.READ_STAR_STATE_PRESERVED =
+      contentState.get().activeContent?.status === "unread" &&
+      contentState.get().activeContent?.starred === true
+    globalThis.__articleIntelligenceHarness?.ready?.()
+    report()
+    return
+  }
   if (mode === "disabled") {
     results.ORIGINAL_CONTENT_VISIBLE = originalVisible
     results.RECOVERY_ACTION_ABSENT = action === null
@@ -304,6 +372,24 @@ const driveChecks = async () => {
 
 const NavigateControls = () => {
   const navigate = useNavigate()
+  useEffect(() => {
+    globalThis.__articleIntelligenceHarness = {
+      ready: () => {},
+      navigateToOther: () => {
+        setActiveContent(secondEntry)
+        navigate("/all/entry/502")
+      },
+      resolvePendingSummary: () => pendingSummaryResolve?.(),
+      changeSession: () => {
+        dataState.set({ ...dataState.get(), sessionRevision: 5 })
+        authState.set({ ...authState.get(), token: "synthetic-rotated-user-api-key" })
+      },
+      summaryRequests: () => articleSummaryLedger.map((request) => ({ ...request })),
+    }
+    return () => {
+      delete globalThis.__articleIntelligenceHarness
+    }
+  }, [navigate])
   return (
     <button
       hidden
@@ -336,8 +422,10 @@ const HarnessPage = () => (
       <ReaderCommandsContext.Provider value={readerCommands}>
         <ContextProvider>
           <NavigateControls />
-          <ArticleDetail />
-          <aside aria-label="Content Fallback Reader report">
+          <div className="article-container article-container-full-size content-wrapper">
+            <ArticleDetail />
+          </div>
+          <aside hidden aria-label="Content Fallback Reader report">
             <h2>Content Fallback Reader gate</h2>
             <output data-testid="reader-recovery-report">RUNNING</output>
           </aside>

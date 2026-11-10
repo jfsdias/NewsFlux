@@ -28,6 +28,7 @@ import AdaptiveScrollArea from "@/components/ui/AdaptiveScrollArea"
 import FadeTransition from "@/components/ui/FadeTransition"
 import FeedSourceMark from "@/components/ui/FeedSourceMark"
 import PlyrPlayer from "@/components/ui/LazyPlyrPlayer"
+import useArticleSummary from "@/hooks/useArticleSummary"
 import { updateEntriesStatusOptimistically } from "@/hooks/useEntryActions"
 import { polyglotState } from "@/hooks/useLanguage"
 import usePhotoSlider from "@/hooks/usePhotoSlider"
@@ -397,6 +398,11 @@ const ArticleDetail = forwardRef((_, ref) => {
     onRecoveryStart: rememberRecoveryFocusIntent,
     routeEntryId,
     routePath: location.pathname,
+  })
+  const articleSummary = useArticleSummary({
+    activeContent,
+    routeEntryId,
+    sessionRevision,
   })
   const catalogFeedsById = useStore(catalogFeedsByIdState)
   const resolvedFeed = catalogFeedsById.get(String(activeContent.feed.id)) ?? activeContent.feed
@@ -871,6 +877,86 @@ const ArticleDetail = forwardRef((_, ref) => {
                 </span>
               )}
             </div>
+          )}
+          {articleSummary.canSummarize && !isArticleBodyPending && (
+            <section
+              aria-busy={articleSummary.status === "loading" || undefined}
+              aria-label={polyglot.t("article_intelligence.title")}
+              className="article-intelligence-summary"
+              data-testid="article-intelligence-summary"
+              style={{ maxWidth: responsiveMaxWidth }}
+            >
+              <button
+                className="article-intelligence-summary__action"
+                disabled={articleSummary.status === "loading"}
+                type="button"
+                onClick={() => void articleSummary.summarize()}
+              >
+                {polyglot.t(
+                  articleSummary.status === "loading"
+                    ? "article_intelligence.loading"
+                    : articleSummary.status === "error"
+                      ? "article_intelligence.retry"
+                      : "article_intelligence.action",
+                )}
+              </button>
+              {articleSummary.status === "loading" && (
+                <p
+                  aria-live="polite"
+                  className="article-intelligence-summary__status"
+                  role="status"
+                >
+                  {polyglot.t("article_intelligence.loading")}
+                </p>
+              )}
+              {articleSummary.status === "error" && (
+                <p aria-live="polite" className="article-intelligence-summary__error" role="status">
+                  {polyglot.t("article_intelligence.error")}
+                </p>
+              )}
+              {(articleSummary.status === "insufficient" ||
+                articleSummary.status === "unavailable") && (
+                <p
+                  aria-live="polite"
+                  className="article-intelligence-summary__status"
+                  role="status"
+                >
+                  {polyglot.t(
+                    articleSummary.status === "insufficient"
+                      ? "article_intelligence.insufficient"
+                      : "article_intelligence.unavailable",
+                  )}
+                </p>
+              )}
+              {articleSummary.summary && (
+                <div className="article-intelligence-summary__result">
+                  <h2>{polyglot.t("article_intelligence.summary")}</h2>
+                  <p>{articleSummary.summary.summary}</p>
+                  <h3>{polyglot.t("article_intelligence.key_points")}</h3>
+                  <ul>
+                    {articleSummary.summary.key_points.map((point, index) => (
+                      <li key={`${point.paragraph_ids.join("-")}-${index}`}>{point.text}</li>
+                    ))}
+                  </ul>
+                  {(articleSummary.summary.status === "partial" ||
+                    articleSummary.summary.content_scope !== "full") && (
+                    <p className="article-intelligence-summary__status" role="status">
+                      {polyglot.t("article_intelligence.partial_content")}
+                    </p>
+                  )}
+                  {articleSummary.summary.limitations.length > 0 && (
+                    <>
+                      <h3>{polyglot.t("article_intelligence.limitations")}</h3>
+                      <ul>
+                        {articleSummary.summary.limitations.map((limitation, index) => (
+                          <li key={`${index}-${limitation.slice(0, 24)}`}>{limitation}</li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </div>
+              )}
+            </section>
           )}
           <div
             key={activeContent.id}

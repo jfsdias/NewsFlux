@@ -276,6 +276,19 @@
     "preview_image": "Vista previa de %{name}",
     "media_error": "Este contenido multimedia no se puede reproducir aquí. Usa el enlace del archivo adjunto que aparece abajo."
   },
+  "article_intelligence": {
+    "title": "Resumen del artículo",
+    "action": "Resumir con IA",
+    "loading": "Generando resumen…",
+    "retry": "Intentar de nuevo",
+    "error": "No se pudo crear el resumen. El artículo original no ha cambiado.",
+    "summary": "Resumen",
+    "key_points": "Puntos clave",
+    "partial_content": "El resumen puede cubrir solo una parte del artículo.",
+    "limitations": "Limitaciones",
+    "insufficient": "No hay suficiente texto del artículo para crear un resumen fiable.",
+    "unavailable": "El resumen no está disponible en este momento."
+  },
   "content": {
     "mark_as_read_error": "No se pudo marcar como leído, por favor intente de nuevo más tarde",
     "entry_unavailable": "Este artículo ya no está disponible.",
