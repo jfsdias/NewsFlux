@@ -145,7 +145,8 @@ def choose_subnet() -> str:
     occupied: list[ipaddress.IPv4Network] = []
     for network_id in raw_ids.stdout.split():
         info = docker_json(["network", "inspect", network_id], step="Inspect Docker network")
-        for item in info[0].get("IPAM", {}).get("Config", []):
+        ipam = info[0].get("IPAM") or {}
+        for item in ipam.get("Config") or []:
             subnet = item.get("Subnet")
             if subnet:
                 try:
