@@ -30,17 +30,17 @@ printf 'docker %s\n' "$*" >> "$MOCK_COMMAND_LOG"
 case "${1:-}" in
   context)
     case "${2:-}" in
-      show) printf '%s\n' 'default' ;;
-      inspect) printf '%s\n' 'unix:///var/run/docker.sock' ;;
+      show) printf '%s\n' "${MOCK_DOCKER_CONTEXT-default}" ;;
+      inspect) printf '%s\n' "${MOCK_DOCKER_ENDPOINT-unix:///var/run/docker.sock}" ;;
       *) exit 2 ;;
     esac ;;
   info)
     if [ "${3:-}" = '{{.DockerRootDir}}' ]; then
-      printf '%s\n' '/dockerdata/docker'
+      printf '%s\n' "${MOCK_DOCKER_ROOT-/dockerdata/docker}"
     else
       printf '%s\n' 'DockerRootDir=/dockerdata/docker OperatingSystem=Debian GNU/Linux 13 Architecture=x86_64 CPUs=12 MemoryBytes=32212254720'
     fi ;;
-  version) printf '%s\n' '29.9.3' ;;
+  version) printf '%s\n' "${MOCK_DOCKER_VERSION-29.9.3}" ;;
   inspect)
     if [ "${2:-}" = '--format' ]; then
       template=${3:-}
@@ -52,8 +52,8 @@ case "${1:-}" in
       exit 0
     fi
     case "$template" in
-      '{{.Config.Image}}') printf '%s\n' 'newsflux-local:1fdfd08dd201' ;;
-      '{{.Image}}') printf '%s\n' 'sha256:4ec48a15cd547aaa63bbbe40d910d93d3efc1d0c78f3fcbeb77ee1ae950fc641' ;;
+      '{{.Config.Image}}') printf '%s\n' "${MOCK_NEWSFLUX_IMAGE-newsflux-local:70f0d0c3c90b}" ;;
+      '{{.Image}}') printf '%s\n' "${MOCK_NEWSFLUX_IMAGE_ID-sha256:9f2cd31257d1857b7bb6341f6e9c8a9b619c970cb2ffd12a80aac4561dd7dd95}" ;;
       *)
         case "$template" in
           *'nano_cpus='*)
@@ -131,6 +131,7 @@ esac
         include_nft: bool,
         fail_firewall_save: str | None = None,
         fail_container_template: str | None = None,
+    target_overrides: dict[str, str] | None = None,
     ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
         temp_context = tempfile.TemporaryDirectory()
         self.addCleanup(temp_context.cleanup)
@@ -140,6 +141,7 @@ esac
         log_path = temp / "command-calls.txt"
         self._install_success_path_tools(fake_bin, log_path, include_nft)
         test_env = {"PATH": str(fake_bin), "MOCK_COMMAND_LOG": str(log_path)}
+        test_env.update(target_overrides or {})
         if fail_firewall_save is not None:
             test_env["MOCK_FAIL_FIREWALL_SAVE"] = fail_firewall_save
         if fail_container_template is not None:
@@ -205,6 +207,111 @@ esac
         self.assertNotIn("unbound variable", output)
         self._assert_call_log_is_read_only(calls)
 
+    def test_expected_runtime_identity_matches_verified_r26_pins(self) -> None:
+        source = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("readonly EXPECTED_DOCKER_ROOT='/dockerdata/docker'", source)
+        self.assertIn("readonly EXPECTED_DOCKER_VERSION='29.9.3'", source)
+        self.assertIn("readonly EXPECTED_NEWSFLUX_IMAGE='newsflux-local:70f0d0c3c90b'", source)
+        self.assertIn(
+            "readonly EXPECTED_NEWSFLUX_IMAGE_ID='sha256:9f2cd31257d1857b7bb6341f6e9c8a9b619c970cb2ffd12a80aac4561dd7dd95'",
+            source,
+        )
+
+    def test_wrong_image_tag_blocks_and_suppresses_runtime_identity(self) -> None:
+        result, calls = self._run_success_path(
+            include_nft=True,
+            target_overrides={
+                "MOCK_NEWSFLUX_IMAGE": "newsflux-local:SYNTHETIC_PRIVATE_TAG",
+            },
+        )
+        output = result.stdout + result.stderr
+
+        self.assertEqual(result.returncode, 2, output)
+        self.assertIn("TARGET_GUARD=BLOCKED_TARGET_MISMATCH", output)
+        self.assertNotIn("SYNTHETIC_PRIVATE_TAG", output)
+        self.assertNotIn("[HOST_AND_CAPACITY]", output)
+        self.assertFalse(any("network inspect" in call for call in calls))
+        self.assertFalse(any("iptables" in call or "nft" in call for call in calls))
+
+    def test_wrong_image_id_blocks_and_suppresses_runtime_identity(self) -> None:
+        result, calls = self._run_success_path(
+            include_nft=True,
+            target_overrides={"MOCK_NEWSFLUX_IMAGE_ID": "sha256:SYNTHETIC_PRIVATE_IMAGE_ID"},
+        )
+        output = result.stdout + result.stderr
+
+        self.assertEqual(result.returncode, 2, output)
+        self.assertIn("TARGET_GUARD=BLOCKED_TARGET_MISMATCH", output)
+        self.assertNotIn("SYNTHETIC_PRIVATE_IMAGE_ID", output)
+        self.assertNotIn("[HOST_AND_CAPACITY]", output)
+        self.assertFalse(any("network inspect" in call for call in calls))
+
+    def test_wrong_docker_context_blocks_and_suppresses_context_value(self) -> None:
+        result, calls = self._run_success_path(
+            include_nft=True,
+            target_overrides={"MOCK_DOCKER_CONTEXT": "SYNTHETIC_PRIVATE_CONTEXT"},
+        )
+        output = result.stdout + result.stderr
+
+        self.assertEqual(result.returncode, 2, output)
+        self.assertIn("TARGET_GUARD=BLOCKED_TARGET_MISMATCH", output)
+        self.assertNotIn("SYNTHETIC_PRIVATE_CONTEXT", output)
+        self.assertFalse(any("network inspect" in call for call in calls))
+
+    def test_nonlocal_docker_endpoint_blocks_and_suppresses_endpoint(self) -> None:
+        result, calls = self._run_success_path(
+            include_nft=True,
+            target_overrides={"MOCK_DOCKER_ENDPOINT": "tcp://SYNTHETIC_PRIVATE_ENDPOINT:2376"},
+        )
+        output = result.stdout + result.stderr
+
+        self.assertEqual(result.returncode, 2, output)
+        self.assertIn("TARGET_GUARD=BLOCKED_TARGET_MISMATCH", output)
+        self.assertNotIn("SYNTHETIC_PRIVATE_ENDPOINT", output)
+        self.assertFalse(any("network inspect" in call for call in calls))
+
+    def test_missing_required_identity_output_fails_closed(self) -> None:
+        result, calls = self._run_success_path(
+            include_nft=True,
+            target_overrides={"MOCK_NEWSFLUX_IMAGE_ID": ""},
+        )
+        output = result.stdout + result.stderr
+
+        self.assertEqual(result.returncode, 2, output)
+        self.assertIn("TARGET_GUARD=BLOCKED_TARGET_MISMATCH", output)
+        self.assertIn("COLLECTOR_COMPLETENESS=NOT_STARTED_TARGET_GUARD_BLOCKED", output)
+        self.assertNotIn("[HOST_AND_CAPACITY]", output)
+        self.assertFalse(any("network inspect" in call for call in calls))
+
+    def test_docker_context_environment_override_blocks_without_echo(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            fake_bin = temp / "bin"
+            fake_bin.mkdir()
+            log_path = temp / "docker-calls.txt"
+            fake_docker = fake_bin / "docker"
+            fake_docker.write_text(
+                "#!/bin/sh\nprintf '%s\\n' \\\"$*\\\" >> \\\"$MOCK_DOCKER_LOG\\\"\\n",
+                encoding="utf-8",
+            )
+            fake_docker.chmod(0o755)
+            result = subprocess.run(
+                ["bash", str(SCRIPT)],
+                check=False,
+                capture_output=True,
+                text=True,
+                env={
+                    "PATH": f"{fake_bin}:/usr/bin:/bin",
+                    "MOCK_DOCKER_LOG": str(log_path),
+                    "DOCKER_CONTEXT": "synthetic-private-context-sentinel",
+                },
+            )
+
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertIn("TARGET_GUARD=BLOCKED_DOCKER_ENV_OVERRIDE_SET (values suppressed)", result.stdout)
+            self.assertNotIn("synthetic-private-context-sentinel", result.stdout + result.stderr)
+            self.assertFalse(log_path.exists())
+
     def _assert_call_log_is_read_only(self, calls: list[str]) -> None:
         mutation = re.compile(
             r"^(?:docker (?:compose )?(?:up|down|rm|run|create|exec|start|stop|restart|kill|pull|push|build|network (?:connect|disconnect|create|rm)|volume (?:create|rm))\b|(?:ip6?tables)\s+.*\s-[AIDFZNPXRC]\b|nft\s+(?:add|insert|delete|flush|replace)\b)",
@@ -230,8 +337,8 @@ esac
                 "  'version --format {{.Server.Version}}') echo 29.9.3 ;;\n"
                 "  'inspect newsflux --format')\n"
                 "    case \"$4\" in\n"
-                "      '{{.Config.Image}}') echo newsflux-local:1fdfd08dd201 ;;\n"
-                "      '{{.Image}}') echo sha256:4ec48a15cd547aaa63bbbe40d910d93d3efc1d0c78f3fcbeb77ee1ae950fc641 ;;\n"
+                "      '{{.Config.Image}}') echo newsflux-local:70f0d0c3c90b ;;\n"
+                "      '{{.Image}}') echo sha256:9f2cd31257d1857b7bb6341f6e9c8a9b619c970cb2ffd12a80aac4561dd7dd95 ;;\n"
                 "    esac ;;\n"
                 "esac\n",
                 encoding="utf-8",
@@ -282,8 +389,8 @@ esac
                 "  'version --format {{.Server.Version}}') echo 29.9.3 ;;\n"
                 "  'inspect newsflux --format')\n"
                 "    case \"$4\" in\n"
-                "      '{{.Config.Image}}') echo newsflux-local:1fdfd08dd201 ;;\n"
-                "      '{{.Image}}') echo sha256:4ec48a15cd547aaa63bbbe40d910d93d3efc1d0c78f3fcbeb77ee1ae950fc641 ;;\n"
+                "      '{{.Config.Image}}') echo newsflux-local:70f0d0c3c90b ;;\n"
+                "      '{{.Image}}') echo sha256:9f2cd31257d1857b7bb6341f6e9c8a9b619c970cb2ffd12a80aac4561dd7dd95 ;;\n"
                 "    esac ;;\n"
                 "esac\n",
                 encoding="utf-8",
@@ -299,7 +406,8 @@ esac
 
             self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
             self.assertIn("TARGET_GUARD=BLOCKED_TARGET_MISMATCH", result.stdout)
-            self.assertIn("observed_endpoint=tcp://192.0.2.10:2376", result.stdout)
+            self.assertNotIn("observed_endpoint=", result.stdout)
+            self.assertNotIn("192.0.2.10", result.stdout)
             calls = log_path.read_text(encoding="utf-8").splitlines()
             self.assertEqual(len(calls), 6)
             self.assertFalse(any("network inspect" in call for call in calls))

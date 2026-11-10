@@ -7,8 +7,8 @@ set -uo pipefail
 
 readonly EXPECTED_DOCKER_ROOT='/dockerdata/docker'
 readonly EXPECTED_DOCKER_VERSION='29.9.3'
-readonly EXPECTED_NEWSFLUX_IMAGE='newsflux-local:1fdfd08dd201'
-readonly EXPECTED_NEWSFLUX_IMAGE_ID='sha256:4ec48a15cd547aaa63bbbe40d910d93d3efc1d0c78f3fcbeb77ee1ae950fc641'
+readonly EXPECTED_NEWSFLUX_IMAGE='newsflux-local:70f0d0c3c90b'
+readonly EXPECTED_NEWSFLUX_IMAGE_ID='sha256:9f2cd31257d1857b7bb6341f6e9c8a9b619c970cb2ffd12a80aac4561dd7dd95'
 
 out() { printf '%s\n' "$*"; }
 section() { printf '\n[%s]\n' "$*"; }
@@ -44,12 +44,7 @@ if [[ "$docker_context" != 'default' || "$docker_endpoint" != unix://* || "$dock
       "$newsflux_image_id" != "$EXPECTED_NEWSFLUX_IMAGE_ID" ]]; then
   out 'TARGET_GUARD=BLOCKED_TARGET_MISMATCH'
   out 'COLLECTOR_COMPLETENESS=NOT_STARTED_TARGET_GUARD_BLOCKED'
-  out "observed_context=${docker_context:-unavailable}"
-  out "observed_endpoint=${docker_endpoint:-unavailable}"
-  out "observed_docker_root=${docker_root:-unavailable}"
-  out "observed_docker_version=${docker_version:-unavailable}"
-  out "observed_newsflux_image=${newsflux_image:-unavailable}"
-  out "observed_newsflux_image_id=${newsflux_image_id:-unavailable}"
+  out 'Target identity values are suppressed.'
   out 'No further inventory was collected.'
   exit 2
 fi
