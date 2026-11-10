@@ -3,6 +3,8 @@
   "entry": [
     "scripts/tests/**/*.{js,jsx}",
     "scripts/*.js",
+    "scripts/ux-reach-r5-diagnostic/**/*.mjs",
+    "scripts/ux-reach-r5-diagnostic/**/*.spec.js",
     "e2e/**/*.spec.js",
     "e2e/reporters/*.js",
     "e2e/support/start-*.js",
