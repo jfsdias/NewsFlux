@@ -1134,8 +1134,36 @@ def run() -> None:
             "POST",
             APP_ORIGIN + READER_PATH + "/701/recover",
             headers=reader_headers(USER_KEY),
-            expected_statuses={200},
+            expected_statuses=None,
         )
+        if valid_status != 200:
+            try:
+                safe_error = json.loads(valid_body).get("error")
+            except (json.JSONDecodeError, AttributeError):
+                safe_error = "unavailable"
+            fixture_after_failure = fixture_state("newsflux-p1-r2-miniflux")
+            safe_events = [
+                {
+                    "method": event.get("method"),
+                    "path": event.get("path"),
+                    "status": event.get("status"),
+                    "update_content": event.get("update_content", []),
+                }
+                for event in fixture_after_failure.get("events", [])
+            ]
+            print(
+                "VALID_RECOVERY_FAILURE_DIAGNOSTIC="
+                + json.dumps(
+                    {
+                        "status": valid_status,
+                        "error": safe_error if isinstance(safe_error, str) else "unavailable",
+                        "miniflux_events": safe_events,
+                    },
+                    sort_keys=True,
+                ),
+                flush=True,
+            )
+            raise RuntimeError(f"Valid synthetic recovery failed with HTTP {valid_status}: {safe_error}")
         valid = json.loads(valid_body)
         if (
             valid_status != 200
