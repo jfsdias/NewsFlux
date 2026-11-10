@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import requestArticleSummary from "@/apis/article-intelligence"
 import { authState } from "@/store/authState"
 import { getDataSessionRevision } from "@/store/dataState"
+import { isArticleIntelligenceEnabled } from "@/utils/article-intelligence-feature"
 import { isCurrentArticleSummaryRequest } from "@/utils/article-intelligence-summary"
 import { getAuthSessionKey, hasProvisionedApiKey } from "@/utils/auth"
 
@@ -35,6 +36,7 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
 
   const entryId = Number(activeContent?.id)
   const canSummarize =
+    isArticleIntelligenceEnabled() &&
     Number.isSafeInteger(entryId) &&
     entryId > 0 &&
     Number(routeEntryId) === entryId &&

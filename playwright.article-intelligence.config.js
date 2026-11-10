@@ -17,10 +17,18 @@ export default defineConfig({
     headless: true,
     trace: "retain-on-failure",
   },
-  webServer: {
-    command: "pnpm exec vite --host 127.0.0.1 --port 4175 --strictPort",
-    url: "http://127.0.0.1:4175",
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  webServer: [
+    {
+      command: "node e2e/support/start-mock-server.js",
+      url: "http://127.0.0.1:8081/v1/version",
+      reuseExistingServer: false,
+      timeout: 30_000,
+    },
+    {
+      command: "pnpm exec vite --host 127.0.0.1 --port 4175 --strictPort",
+      url: "http://127.0.0.1:4175",
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+  ],
 })
