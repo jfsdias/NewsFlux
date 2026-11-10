@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import re
 import unittest
+from pathlib import Path
 
 from provenance import SourceProvenanceError, validate_source_provenance
 
@@ -10,6 +12,16 @@ CANDIDATE = "a" * 40
 
 
 class SourceProvenanceTests(unittest.TestCase):
+    def test_reverse_proxy_reference_is_pinned_to_an_immutable_digest(self) -> None:
+        source = Path(__file__).with_name("run.py").read_text(encoding="utf-8")
+        match = re.search(r'^PROXY_IMAGE = "([^"]+)"$', source, re.MULTILINE)
+
+        self.assertIsNotNone(match)
+        self.assertRegex(
+            match.group(1),
+            r"^nginx:1\.27-alpine@sha256:[0-9a-f]{64}$",
+        )
+
     def test_pull_request_uses_exact_base_and_merge_candidate(self) -> None:
         result = validate_source_provenance(
             event_name="pull_request",

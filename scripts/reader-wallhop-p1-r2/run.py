@@ -24,7 +24,8 @@ MINIFLUX_BASE_URL = f"{APP_ORIGIN}/miniflux"
 USER_ID = 7
 READER_PATH = "/api/content-fallback/reader/v1/entries"
 PYTHON_BASE = "python:3.12-slim@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704"
-PROXY_IMAGE = "nginx:1.27-alpine"
+# Docker Hub's official nginx:1.27-alpine OCI index digest, resolved 2026-11-10.
+PROXY_IMAGE = "nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10"
 WORKFLOW_RUN = os.environ.get("GITHUB_RUN_ID", "local")
 WORKFLOW_ATTEMPT = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
 
@@ -40,6 +41,8 @@ RESULT: dict[str, Any] = {
     "CANDIDATE_SHA": "NOT_VERIFIED",
     "SOURCE_SHA": "NOT_VERIFIED",
     "DOCKER_VERSION": "NOT_VERIFIED",
+    "PROXY_IMAGE_REFERENCE": PROXY_IMAGE,
+    "PROXY_IMAGE_ID": "NOT_PULLED",
     "FRONTEND_IMAGE_ID": "NOT_BUILT",
     "SIDECAR_IMAGE_ID": "NOT_BUILT",
     "DOCKER_IMAGE_GATE": "NOT_RUN",
@@ -786,6 +789,7 @@ def run() -> None:
         nginx_image_id = image_id(PROXY_IMAGE)
         if not fixture_image_id or not nginx_image_id:
             raise RuntimeError("Fixture or reverse-proxy image ID was unavailable")
+        RESULT["PROXY_IMAGE_ID"] = nginx_image_id
 
         network_suffix = secrets.token_hex(3)
         candidate_network = f"reader-p1-r2-{WORKFLOW_RUN}-{network_suffix}"
@@ -1428,6 +1432,8 @@ def main() -> int:
             "CANDIDATE_SHA",
             "SOURCE_SHA",
             "DOCKER_VERSION",
+            "PROXY_IMAGE_REFERENCE",
+            "PROXY_IMAGE_ID",
             "FRONTEND_IMAGE_ID",
             "SIDECAR_IMAGE_ID",
             "DOCKER_IMAGE_GATE",
