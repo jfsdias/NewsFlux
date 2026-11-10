@@ -109,38 +109,144 @@ else
   section_unavailable 'DOCKERDATA_DISK'
 fi
 
-container_format='container={{.Name}} image={{.Config.Image}} image_id={{.Image}} state={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}not-configured{{end}} restart={{.HostConfig.RestartPolicy.Name}} mem_limit_bytes={{.HostConfig.Memory}} nano_cpus={{.HostConfig.NanoCpus}} pids_limit={{.HostConfig.PidsLimit}} readonly_root={{.HostConfig.ReadonlyRootfs}} exposed_ports={{json .Config.ExposedPorts}} published_ports={{json .NetworkSettings.Ports}} compose_project={{index .Config.Labels "com.docker.compose.project"}} compose_service={{index .Config.Labels "com.docker.compose.service"}} compose_workdir={{index .Config.Labels "com.docker.compose.project.working_dir"}} compose_files={{index .Config.Labels "com.docker.compose.project.config_files"}} networks={{range $name,$net := .NetworkSettings.Networks}}{{$name}}:ip={{$net.IPAddress}}/{{$net.IPPrefixLen}},gateway={{$net.Gateway}},aliases={{json $net.Aliases}};{{end}} mounts={{range .Mounts}}{{.Type}}:{{.Source}}->{{.Destination}}:rw={{.RW}};{{end}}'
+readonly -a optional_container_fields=(
+  'health'
+  'restart'
+  'mem_limit_bytes'
+  'nano_cpus'
+  'pids_limit'
+  'readonly_root'
+  'exposed_ports'
+  'published_ports'
+  'compose_labels'
+  'networks'
+  'mounts'
+)
+readonly -a optional_container_fragments=(
+  'health={{if .State.Health}}{{.State.Health.Status}}{{else}}not-configured{{end}}'
+  'restart={{.HostConfig.RestartPolicy.Name}}'
+  'mem_limit_bytes={{.HostConfig.Memory}}'
+  'nano_cpus={{.HostConfig.NanoCpus}}'
+  'pids_limit={{.HostConfig.PidsLimit}}'
+  'readonly_root={{.HostConfig.ReadonlyRootfs}}'
+  'exposed_ports={{json .Config.ExposedPorts}}'
+  'published_ports={{json .NetworkSettings.Ports}}'
+  'compose_project={{index .Config.Labels "com.docker.compose.project"}} compose_service={{index .Config.Labels "com.docker.compose.service"}} compose_workdir={{index .Config.Labels "com.docker.compose.project.working_dir"}} compose_files={{index .Config.Labels "com.docker.compose.project.config_files"}}'
+  'networks={{range $name,$net := .NetworkSettings.Networks}}{{$name}}:ip={{$net.IPAddress}}/{{$net.IPPrefixLen}},gateway={{$net.Gateway}},aliases={{json $net.Aliases}};{{end}}'
+  'mounts={{range .Mounts}}{{.Type}}:{{.Source}}->{{.Destination}}:rw={{.RW}};{{end}}'
+)
+build_container_format() {
+  local omitted_indexes="$1"
+  local index
+  container_format='container={{.Name}} image={{.Config.Image}} image_id={{.Image}} state={{.State.Status}}'
+  for index in "${!optional_container_fragments[@]}"; do
+    if [[ "$omitted_indexes" == *" $index "* ]]; then
+      continue
+    fi
+    container_format+=" ${optional_container_fragments[$index]}"
+  done
+}
 classify_inspect_error() {
-  local error_text="${1,,}"
+  local error_text
+  error_text=$(printf '%s' "$1" | sed 'y/ABCDEFGHIJKLMNOPQRSTUVWXYZ/abcdefghijklmnopqrstuvwxyz/')
   case "$error_text" in
-    *'map has no entry for key "nanocpus"'*|*'<.hostconfig.nanocpus>'*)
-      out 'TEMPLATE_MISSING_FIELD_NANO_CPUS' ;;
-    *'map has no entry for key '*|*'nil pointer evaluating'*)
-      out 'TEMPLATE_MISSING_FIELD' ;;
-    *'template parsing error'*)
-      out 'TEMPLATE_PARSE_ERROR' ;;
-    *'template:'*|*"can't evaluate field"*)
-      out 'TEMPLATE_EXECUTION_ERROR' ;;
-    *'cannot connect to the docker daemon'*|*'error during connect'*)
+    *'no such object:'*|*'no such container:'*|*'container not found'*)
+      out 'CONTAINER_NOT_FOUND' ;;
+    *'permission denied'*|*'access is denied'*)
+      out 'DOCKER_PERMISSION_ERROR' ;;
+    *'cannot connect to the docker daemon'*|*'error during connect'*|*'is the docker daemon running'*)
       out 'DOCKER_CONNECTION_ERROR' ;;
     *'error response from daemon:'*)
       out 'DOCKER_API_ERROR' ;;
+    *'map has no entry for key '*|*'nil pointer evaluating'*)
+      out 'TEMPLATE_MISSING_FIELD' ;;
+    *"can't evaluate field"*|*"can't index"*|*'wrong type for value'*|*'is not a method'*)
+      out 'TEMPLATE_INCOMPATIBLE' ;;
+    *'template parsing error'*)
+      out 'TEMPLATE_PARSE_ERROR' ;;
+    *'template:'*)
+      out 'TEMPLATE_EXECUTION_ERROR' ;;
     *)
       out 'OTHER_DOCKER_INSPECT_ERROR' ;;
   esac
 }
-inspect_container() {
-  local container="$1"
-  local inspect_output
-  if ! docker inspect "$container" >/dev/null 2>&1; then
-    out "container=$container state=NOT_FOUND_OR_UNAVAILABLE"
-    return 1
-  fi
-  if inspect_output=$(docker inspect --format "$container_format" "$container" 2>&1); then
-    out "$inspect_output"
+missing_inspect_path() {
+  local error_text="$1"
+  if [[ "$error_text" =~ at\ \<\.([[:alnum:]_.]+)\> ]]; then
+    out "${BASH_REMATCH[1]}"
     return 0
   fi
-  out "container=$container inspect=UNAVAILABLE inspect_error_class=$(classify_inspect_error "$inspect_output")"
+  return 1
+}
+optional_field_index_for_path() {
+  case "$1" in
+    State.Health) out 0 ;;
+    HostConfig.RestartPolicy.Name) out 1 ;;
+    HostConfig.Memory) out 2 ;;
+    HostConfig.NanoCpus) out 3 ;;
+    HostConfig.PidsLimit) out 4 ;;
+    HostConfig.ReadonlyRootfs) out 5 ;;
+    Config.ExposedPorts) out 6 ;;
+    NetworkSettings.Ports) out 7 ;;
+    Config.Labels) out 8 ;;
+    NetworkSettings.Networks) out 9 ;;
+    Mounts) out 10 ;;
+    *) return 1 ;;
+  esac
+}
+missing_inspect_key() {
+  local error_text="$1"
+  if [[ "$error_text" =~ map\ has\ no\ entry\ for\ key\ \"([[:alnum:]_]+)\" ]]; then
+    out "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  return 1
+}
+inspect_error_class_result='NONE'
+inspect_container() {
+  local container="$1"
+  local inspect_output error_class missing_path missing_key optional_index omitted_indexes=' ' missing_summary=' '
+  local probe_error
+  if ! probe_error=$(docker inspect "$container" 2>&1 >/dev/null); then
+    error_class=$(classify_inspect_error "$probe_error")
+    inspect_error_class_result="$error_class"
+    out "container=$container inspect=UNAVAILABLE inspect_error_class=$error_class"
+    return 1
+  fi
+  inspect_error_class_result='NONE'
+  local attempt
+  for ((attempt = 0; attempt <= ${#optional_container_fields[@]}; attempt++)); do
+    build_container_format "$omitted_indexes"
+    if inspect_output=$(docker inspect --format "$container_format" "$container" 2>&1); then
+      inspect_output=$(printf '%s\n' "$inspect_output" | sed -E 's/(health|restart|mem_limit_bytes|nano_cpus|pids_limit|readonly_root|exposed_ports|published_ports)=<(nil|no value)>/\1=not-reported/g')
+      out "${inspect_output}${missing_summary}"
+      return 0
+    fi
+
+    error_class=$(classify_inspect_error "$inspect_output")
+    if [[ "$error_class" == 'TEMPLATE_MISSING_FIELD' ]]; then
+      if missing_path=$(missing_inspect_path "$inspect_output") && missing_key=$(missing_inspect_key "$inspect_output") && \
+         optional_index=$(optional_field_index_for_path "$missing_path") && \
+         [[ "$missing_path" == *".$missing_key" || "$missing_path" == "$missing_key" ]]; then
+        if [[ "$omitted_indexes" == *" $optional_index "* ]]; then
+          error_class='TEMPLATE_INCOMPATIBLE'
+        else
+          omitted_indexes+="$optional_index "
+          missing_summary+=" ${optional_container_fields[$optional_index]}=not-reported"
+          continue
+        fi
+      else
+        error_class='TEMPLATE_INCOMPATIBLE'
+      fi
+    fi
+
+    inspect_error_class_result="$error_class"
+    out "container=$container inspect=UNAVAILABLE inspect_error_class=$error_class"
+    return 1
+  done
+
+  inspect_error_class_result="$error_class"
+  out "container=$container inspect=UNAVAILABLE inspect_error_class=$error_class"
   return 1
 }
 
@@ -154,15 +260,16 @@ for container in newsflux miniflux litellm litellm-db newsflux-pr188-content-fal
 done
 proxy_container_found=0
 for container in npm nginx-proxy-manager; do
-  if docker inspect "$container" >/dev/null 2>&1; then
+  if inspect_container "$container"; then
     proxy_container_found=1
-    if inspect_container "$container"; then
-      section_status "container:$container"
-    else
-      section_unavailable "container:$container"
-    fi
+    section_status "container:$container"
   else
-    out "container=$container state=NOT_FOUND_OR_UNAVAILABLE (alternate proxy name)"
+    if [[ "$inspect_error_class_result" != 'CONTAINER_NOT_FOUND' ]]; then
+      proxy_container_found=1
+      section_unavailable "container:$container"
+    else
+      :
+    fi
   fi
 done
 if [[ "$proxy_container_found" -eq 0 ]]; then

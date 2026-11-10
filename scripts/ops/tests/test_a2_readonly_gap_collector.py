@@ -49,20 +49,62 @@ case "${1:-}" in
       container=${2:-unknown}
       template=${4:-}
     else
+      container=${2:-unknown}
+      case "${MOCK_EXISTENCE_ERROR:-}" in
+        "$container:not_found") printf 'Error: No such object: %s\n' "$container" >&2; exit 1 ;;
+        "$container:api") printf '%s\n' 'Error response from daemon: SYNTHETIC_DOCKER_API_SENTINEL' >&2; exit 1 ;;
+        "$container:connection") printf '%s\n' 'Cannot connect to the Docker daemon: SYNTHETIC_DOCKER_CONNECTION_SENTINEL' >&2; exit 1 ;;
+        "$container:permission") printf '%s\n' 'permission denied while connecting to Docker: SYNTHETIC_DOCKER_PERMISSION_SENTINEL' >&2; exit 1 ;;
+      esac
       exit 0
     fi
     case "$template" in
       '{{.Config.Image}}') printf '%s\n' "${MOCK_NEWSFLUX_IMAGE-newsflux-local:70f0d0c3c90b}" ;;
       '{{.Image}}') printf '%s\n' "${MOCK_NEWSFLUX_IMAGE_ID-sha256:9f2cd31257d1857b7bb6341f6e9c8a9b619c970cb2ffd12a80aac4561dd7dd95}" ;;
       *)
-        case "$template" in
-          *'nano_cpus='*)
-            if [ "${MOCK_FAIL_CONTAINER_TEMPLATE:-}" = "$container" ]; then
-              printf '%s\n' 'template parsing error: template: inspect:1:55: executing "inspect" at <.HostConfig.NanoCpus>: map has no entry for key "NanoCpus"; SYNTHETIC_PRIVATE_ERROR_SENTINEL' >&2
-              exit 1
-            fi ;;
-        esac
-        printf 'container=/%s image=synthetic state=running published_ports=none\n' "$container" ;;
+        if [ "${MOCK_FAIL_CONTAINER_TEMPLATE:-}" = "$container" ]; then
+          printf '%s\n' 'template parsing error: template: inspect:1: unexpected token; SYNTHETIC_PRIVATE_ERROR_SENTINEL' >&2
+          exit 1
+        fi
+        missing_field=${MOCK_MISSING_INSPECT_FIELD:-}
+        if [ -n "$missing_field" ] && [ "${missing_field%%:*}" = "$container" ]; then
+          field_path=${missing_field#*:}
+          case "$template" in
+            *".$field_path"*)
+              field_name=${field_path##*.}
+              printf 'template: inspect: executing at <.%s>: map has no entry for key "%s"; SYNTHETIC_PRIVATE_ERROR_SENTINEL\n' "$field_path" "$field_name" >&2
+              exit 1 ;;
+          esac
+        fi
+        incompatible_field=${MOCK_INCOMPATIBLE_INSPECT_FIELD:-}
+        if [ -n "$incompatible_field" ] && [ "${incompatible_field%%:*}" = "$container" ]; then
+          field_path=${incompatible_field#*:}
+          case "$template" in
+            *".$field_path"*)
+              printf 'template parsing error: template: inspect:1: executing at <.%s>: can\047t evaluate field in incompatible synthetic type; SYNTHETIC_INCOMPATIBILITY_SENTINEL\n' "$field_path" >&2
+              exit 1 ;;
+          esac
+        fi
+        null_field=${MOCK_NULL_INSPECT_FIELD:-}
+        if [ -n "$null_field" ] && [ "${null_field%%:*}" = "$container" ]; then
+          field_path=${null_field#*:}
+          case "$template" in
+            *".$field_path"*) printf 'container=/%s image=synthetic state=running health=<nil>\n' "$container"; exit 0 ;;
+          esac
+        fi
+        inspect_line="container=/$container image=synthetic image_id=sha256:synthetic state=running"
+        case "$template" in *'health='*) inspect_line="$inspect_line health=healthy" ;; esac
+        case "$template" in *'restart='*) inspect_line="$inspect_line restart=no" ;; esac
+        case "$template" in *'mem_limit_bytes='*) inspect_line="$inspect_line mem_limit_bytes=0" ;; esac
+        case "$template" in *'nano_cpus='*) inspect_line="$inspect_line nano_cpus=0" ;; esac
+        case "$template" in *'pids_limit='*) inspect_line="$inspect_line pids_limit=0" ;; esac
+        case "$template" in *'readonly_root='*) inspect_line="$inspect_line readonly_root=false" ;; esac
+        case "$template" in *'exposed_ports='*) inspect_line="$inspect_line exposed_ports={}" ;; esac
+        case "$template" in *'published_ports='*) inspect_line="$inspect_line published_ports={}" ;; esac
+        case "$template" in *'compose_project='*) inspect_line="$inspect_line compose_project=synthetic compose_service=synthetic compose_workdir=/synthetic compose_files=/synthetic/compose.yml" ;; esac
+        case "$template" in *'networks='*) inspect_line="$inspect_line networks=synthetic:ip=192.0.2.10/24,gateway=192.0.2.1,aliases=[];" ;; esac
+        case "$template" in *'mounts='*) inspect_line="$inspect_line mounts=bind:/synthetic->/synthetic:rw=false;" ;; esac
+        printf '%s\n' "$inspect_line" ;;
     esac ;;
   network)
     if [ "${2:-}" != 'inspect' ]; then exit 2; fi
@@ -131,7 +173,11 @@ esac
         include_nft: bool,
         fail_firewall_save: str | None = None,
         fail_container_template: str | None = None,
-    target_overrides: dict[str, str] | None = None,
+        target_overrides: dict[str, str] | None = None,
+        missing_inspect_field: str | None = None,
+        existence_error: str | None = None,
+        incompatible_inspect_field: str | None = None,
+        null_inspect_field: str | None = None,
     ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
         temp_context = tempfile.TemporaryDirectory()
         self.addCleanup(temp_context.cleanup)
@@ -146,6 +192,14 @@ esac
             test_env["MOCK_FAIL_FIREWALL_SAVE"] = fail_firewall_save
         if fail_container_template is not None:
             test_env["MOCK_FAIL_CONTAINER_TEMPLATE"] = fail_container_template
+        if missing_inspect_field is not None:
+            test_env["MOCK_MISSING_INSPECT_FIELD"] = missing_inspect_field
+        if existence_error is not None:
+            test_env["MOCK_EXISTENCE_ERROR"] = existence_error
+        if incompatible_inspect_field is not None:
+            test_env["MOCK_INCOMPATIBLE_INSPECT_FIELD"] = incompatible_inspect_field
+        if null_inspect_field is not None:
+            test_env["MOCK_NULL_INSPECT_FIELD"] = null_inspect_field
         result = subprocess.run(
             ["bash", str(SCRIPT)],
             check=False,
@@ -162,6 +216,23 @@ esac
 
         self.assertEqual(result.returncode, 3, output)
         self.assertIn("TARGET_GUARD=PASS_OPERATOR_SUPPLIED_OMV_IDENTITY", output)
+        for metadata in (
+            "health=healthy",
+            "restart=no",
+            "mem_limit_bytes=0",
+            "nano_cpus=0",
+            "pids_limit=0",
+            "readonly_root=false",
+            "exposed_ports={}",
+            "published_ports={}",
+            "compose_project=synthetic",
+            "compose_service=synthetic",
+            "compose_workdir=/synthetic",
+            "compose_files=/synthetic/compose.yml",
+            "networks=synthetic:ip=192.0.2.10/24",
+            "mounts=bind:/synthetic->/synthetic:rw=false",
+        ):
+            self.assertIn(metadata, output)
         self.assertIn("iptables_version=iptables v1.8.10 (nf_tables)", output)
         self.assertIn("ip6tables_version=ip6tables v1.8.10 (nf_tables)", output)
         self.assertIn("nft_version=nftables v1.1.1", output)
@@ -493,16 +564,114 @@ esac
         output = result.stdout + result.stderr
 
         self.assertEqual(result.returncode, 3, output)
-        self.assertIn(
-            "container=newsflux inspect=UNAVAILABLE inspect_error_class=TEMPLATE_MISSING_FIELD_NANO_CPUS",
-            output,
-        )
+        self.assertIn("container=newsflux inspect=UNAVAILABLE inspect_error_class=TEMPLATE_PARSE_ERROR", output)
         self.assertIn("SECTION_UNAVAILABLE=container:newsflux", output)
         self.assertIn("COLLECTOR_COMPLETENESS=PARTIAL", output)
         self.assertNotIn("SYNTHETIC_PRIVATE_ERROR_SENTINEL", output)
         self.assertNotIn("map has no entry for key", output)
-        self.assertNotIn("nano_cpus=0", output)
+        self.assertNotIn("unexpected token", output)
         self._assert_call_log_is_read_only(calls)
+
+    def test_optional_inspect_fields_can_be_absent_without_invalidating_container_inventory(self) -> None:
+        optional_fields = (
+            "State.Health",
+            "HostConfig.RestartPolicy.Name",
+            "HostConfig.Memory",
+            "HostConfig.NanoCpus",
+            "HostConfig.PidsLimit",
+            "HostConfig.ReadonlyRootfs",
+            "Config.ExposedPorts",
+            "Config.Labels",
+            "NetworkSettings.Ports",
+            "NetworkSettings.Networks",
+            "Mounts",
+        )
+        for field_path in optional_fields:
+            with self.subTest(field_path=field_path):
+                result, calls = self._run_success_path(
+                    include_nft=True,
+                    missing_inspect_field=f"newsflux:{field_path}",
+                )
+                output = result.stdout + result.stderr
+
+                self.assertEqual(result.returncode, 3, output)
+                self.assertIn("container=/newsflux image=synthetic image_id=sha256:synthetic state=running", output)
+                self.assertIn("not-reported", output)
+                self.assertNotIn("SECTION_UNAVAILABLE=container:newsflux", output)
+                self.assertNotIn("SYNTHETIC_PRIVATE_ERROR_SENTINEL", output)
+                self.assertFalse(any(".Config.Env" in call for call in calls))
+                self._assert_call_log_is_read_only(calls)
+
+    def test_missing_container_is_distinguished_from_template_and_api_errors(self) -> None:
+        result, calls = self._run_success_path(
+            include_nft=True,
+            existence_error="newsflux:not_found",
+        )
+        output = result.stdout + result.stderr
+
+        self.assertEqual(result.returncode, 3, output)
+        self.assertIn(
+            "container=newsflux inspect=UNAVAILABLE inspect_error_class=CONTAINER_NOT_FOUND",
+            output,
+        )
+        self.assertIn("SECTION_UNAVAILABLE=container:newsflux", output)
+        self.assertNotIn("No such object", output)
+        self.assertNotIn("not_found", output)
+        self._assert_call_log_is_read_only(calls)
+
+    def test_docker_api_and_connection_errors_have_distinct_safe_classes(self) -> None:
+        for failure, error_class, sentinel in (
+            ("api", "DOCKER_API_ERROR", "SYNTHETIC_DOCKER_API_SENTINEL"),
+            ("connection", "DOCKER_CONNECTION_ERROR", "SYNTHETIC_DOCKER_CONNECTION_SENTINEL"),
+            ("permission", "DOCKER_PERMISSION_ERROR", "SYNTHETIC_DOCKER_PERMISSION_SENTINEL"),
+        ):
+            with self.subTest(failure=failure):
+                result, calls = self._run_success_path(
+                    include_nft=True,
+                    existence_error=f"newsflux:{failure}",
+                )
+                output = result.stdout + result.stderr
+
+                self.assertEqual(result.returncode, 3, output)
+                self.assertIn(f"container=newsflux inspect=UNAVAILABLE inspect_error_class={error_class}", output)
+                self.assertNotIn(sentinel, output)
+                self.assertIn("SECTION_UNAVAILABLE=container:newsflux", output)
+                self._assert_call_log_is_read_only(calls)
+
+    def test_null_optional_values_are_normalized_without_losing_container_identity(self) -> None:
+        result, calls = self._run_success_path(
+            include_nft=True,
+            null_inspect_field="newsflux:State.Health",
+        )
+        output = result.stdout + result.stderr
+
+        self.assertEqual(result.returncode, 3, output)
+        self.assertIn("container=/newsflux image=synthetic state=running health=not-reported", output)
+        self.assertNotIn("<nil>", output)
+        self.assertNotIn("SECTION_UNAVAILABLE=container:newsflux", output)
+        self._assert_call_log_is_read_only(calls)
+
+    def test_incompatible_template_shape_is_not_misclassified_as_absent_optional_data(self) -> None:
+        incompatible_cases = (
+            {"incompatible_inspect_field": "newsflux:NetworkSettings.Networks"},
+            {"missing_inspect_field": "newsflux:IPAddress"},
+            {"missing_inspect_field": "newsflux:State.Health.Status"},
+        )
+        for case in incompatible_cases:
+            with self.subTest(case=case):
+                result, calls = self._run_success_path(include_nft=True, **case)
+                output = result.stdout + result.stderr
+
+                self.assertEqual(result.returncode, 3, output)
+                self.assertIn(
+                    "container=newsflux inspect=UNAVAILABLE inspect_error_class=TEMPLATE_INCOMPATIBLE",
+                    output,
+                )
+                self.assertIn("SECTION_UNAVAILABLE=container:newsflux", output)
+                self.assertNotIn("SYNTHETIC_INCOMPATIBILITY_SENTINEL", output)
+                self.assertNotIn("SYNTHETIC_PRIVATE_ERROR_SENTINEL", output)
+                self.assertNotIn("can't evaluate field", output)
+                self._assert_call_log_is_read_only(calls)
 
     def test_script_contains_no_known_mutating_docker_or_firewall_commands(self) -> None:
         source = SCRIPT.read_text(encoding="utf-8")
