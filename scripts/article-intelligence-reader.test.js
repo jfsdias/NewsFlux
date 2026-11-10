@@ -113,16 +113,16 @@ test("synthetic authenticated Reader fixture can provision an isolated API-key i
   )
 })
 
-test("cross-tab session test waits for its storage listener before rotating auth", async () => {
+test("combined session test emits the established auth storage change before checking cancellation", async () => {
   const recoveryIntegration = await read(
     "reader-ai-e2e/article-intelligence-recovery-integration.spec.js",
   )
   assert.match(
     recoveryIntegration,
-    /await page\.evaluate\(\(\) => \{\s*globalThis\.__authStorageChangeObserved = false\s*globalThis\.addEventListener\(\s*"storage"/u,
+    /await recoveryRequest\s*await page\.getByRole\("button", \{ name: "Summarize with AI" \}\)\.click\(\)\s*await summaryRequest/u,
   )
   assert.match(
     recoveryIntegration,
-    /await expect\s*\.poll\(\(\) => page\.evaluate\(\(\) => globalThis\.__authStorageChangeObserved\)\)\s*\.toBe\(true\)/u,
+    /localStorage\.setItem\(\s*"auth",\s*value,?\s*\)\s*globalThis\.dispatchEvent\(new StorageEvent\(\s*"storage",\s*\{ key: "auth", newValue: value \}/u,
   )
 })

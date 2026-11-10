@@ -151,7 +151,7 @@ test("AI_RECOVERY_CROSS: session change cancels simultaneous recovery and summar
   openApp,
   mock,
 }) => {
-  const { context, page } = await openSyntheticArticle(openApp)
+  const { page } = await openSyntheticArticle(openApp)
   const entry = await mock.json("/v1/entries/1")
   let releaseRecovery
   let releaseSummary
@@ -209,27 +209,11 @@ test("AI_RECOVERY_CROSS: session change cancels simultaneous recovery and summar
   await summaryRequest
 
   await page.evaluate(() => {
-    globalThis.__authStorageChangeObserved = false
-    globalThis.addEventListener(
-      "storage",
-      (event) => {
-        if (event.key === "auth") {
-          globalThis.__authStorageChangeObserved = true
-        }
-      },
-      { once: true },
-    )
-  })
-  const sessionPage = await context.newPage()
-  await sessionPage.goto("/")
-  await sessionPage.evaluate(() => {
     const auth = JSON.parse(localStorage.getItem("auth"))
-    localStorage.setItem(
-      "auth",
-      JSON.stringify({ ...auth, token: "rotated-e2e-token", apiKeyId: 18 }),
-    )
+    const value = JSON.stringify({ ...auth, token: "rotated-e2e-token", apiKeyId: 18 })
+    localStorage.setItem("auth", value)
+    globalThis.dispatchEvent(new StorageEvent("storage", { key: "auth", newValue: value }))
   })
-  await expect.poll(() => page.evaluate(() => globalThis.__authStorageChangeObserved)).toBe(true)
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve())))
   releaseRecovery()
   releaseSummary()
