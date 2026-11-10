@@ -41,7 +41,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: candidates/pr225-candidate
-          ref: 2aa2eea79c27e9abb5641ecf125e6e40c6a96b30
+          ref: ad308a420f794abb7afc9889c502620e942e2a19
 
       - name: Verify source provenance before running browsers
         env:
