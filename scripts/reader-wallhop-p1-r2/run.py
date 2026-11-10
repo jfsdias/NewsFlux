@@ -708,7 +708,7 @@ def run() -> None:
                 f"{FIXTURE_FILE.parent}:/harness:ro",
                 "--entrypoint",
                 "python",
-                fixture_image,
+                PYTHON_BASE,
                 "/harness/fixture_server.py",
             ],
             "newsflux-p1-r2-miniflux",
