@@ -277,7 +277,8 @@ events {
 }
 
 http {
-    access_log /dev/stdout '$request_method $uri $status $ssl_protocol $remote_addr';
+    log_format sanitized '$request_method $uri $status $ssl_protocol $remote_addr';
+    access_log /dev/stdout sanitized;
     client_body_temp_path /tmp/client_temp;
     proxy_temp_path /tmp/proxy_temp;
     client_max_body_size 1m;
@@ -804,6 +805,31 @@ def run() -> None:
             ],
             "newsflux-p1-r2-sidecar",
             step="Start isolated non-root sidecar with fixture-only ON_DEMAND policy",
+        )
+        command(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "--network",
+                NETWORK_NAME,
+                "--user",
+                "101:101",
+                "--read-only",
+                "--tmpfs",
+                "/tmp:rw,noexec,nosuid,size=16m",
+                "-v",
+                f"{proxy_config}:/etc/nginx/nginx.conf:ro",
+                "-v",
+                f"{proxy_tls_dir}:/run/test-tls:ro",
+                "--entrypoint",
+                "nginx",
+                PROXY_IMAGE,
+                "-t",
+                "-c",
+                "/etc/nginx/nginx.conf",
+            ],
+            step="Validate isolated reverse-proxy configuration",
         )
         docker_run(
             [
