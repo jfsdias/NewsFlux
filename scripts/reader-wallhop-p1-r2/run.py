@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-EXPECTED_SOURCE_SHA = "70f0d0c3c90b19c2853be63039fc7022b301266b"
+EXPECTED_SOURCE_SHA = "0aee25c37d29bb076ea81261da25de96671f07e1"
 APP_HOST = "newsflux.test"
 APP_PORT = 8443
 APP_ORIGIN = f"https://{APP_HOST}:{APP_PORT}"

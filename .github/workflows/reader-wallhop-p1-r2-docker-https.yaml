@@ -30,14 +30,14 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: jfsdias/NewsFlux
-          ref: 70f0d0c3c90b19c2853be63039fc7022b301266b
+          ref: 0aee25c37d29bb076ea81261da25de96671f07e1
           path: source
           persist-credentials: false
 
       - name: Verify live main remains the approved exact SHA
         run: |
           actual="$(git ls-remote https://github.com/jfsdias/NewsFlux.git refs/heads/main | cut -f1)"
-          test "$actual" = "70f0d0c3c90b19c2853be63039fc7022b301266b"
+          test "$actual" = "0aee25c37d29bb076ea81261da25de96671f07e1"
           test "$(git -C source rev-parse HEAD)" = "$actual"
           test -z "$(git -C source status --porcelain)"
 
