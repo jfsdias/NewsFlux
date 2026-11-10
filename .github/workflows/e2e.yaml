@@ -88,3 +88,38 @@ jobs:
           path: test-results/ux-reach-01/
           if-no-files-found: warn
           retention-days: 3
+
+  article_intelligence_reader:
+    name: Article Intelligence Reader Chromium scenarios
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install the pinned Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run Article Intelligence Reader scenarios
+        run: pnpm exec playwright test --config=playwright.article-intelligence.config.js
+
+      - name: Upload Article Intelligence Reader diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: article-intelligence-reader-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/article-intelligence-reader/
+          if-no-files-found: ignore
+          retention-days: 3

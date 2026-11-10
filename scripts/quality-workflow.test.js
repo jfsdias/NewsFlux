@@ -328,7 +328,11 @@ for (const [file, read] of WORKFLOW_FILES) {
     for (const [where, node] of jobsAndSteps(workflow)) {
       const allowedDiagnosticUpload =
         file === ".github/workflows/e2e.yaml" &&
-        ["Upload synthetic E2E diagnostics", "Upload UX-REACH diagnostics"].includes(node.name)
+        [
+          "Upload synthetic E2E diagnostics",
+          "Upload UX-REACH diagnostics",
+          "Upload Article Intelligence Reader diagnostics",
+        ].includes(node.name)
       if (allowedDiagnosticUpload) {
         assert.equal(node.if, "${{ failure() }}", `${where} must upload only after a failure`)
       } else {
