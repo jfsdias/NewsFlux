@@ -151,4 +151,3 @@ export const createBulkReadFeedback = ({
   }
 }
 
-export default createBulkReadFeedback
