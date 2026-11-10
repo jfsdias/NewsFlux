@@ -123,14 +123,15 @@ try {
   await small.context.close()
 
   const large = await createReader({ entryId: 502, width: 884, height: 1104, touch: false })
-  await expect(large.page.getByText("Original teaser 502", { exact: false })).toBeVisible()
+  const largeReaderContent = large.page.getByRole("region", { name: "scrollable content" })
+  await expect(largeReaderContent.getByText("Original teaser 502", { exact: false })).toBeVisible()
   await large.page.getByRole("button", { name: /recover full text/i }).click()
   await expect(
     large.page.getByText("Full text could not be recovered. The original content is still shown.", {
       exact: true,
     }),
   ).toBeVisible()
-  await expect(large.page.getByText("Original teaser 502", { exact: false })).toBeVisible()
+  await expect(largeReaderContent.getByText("Original teaser 502", { exact: false })).toBeVisible()
   await expect(
     large.page.getByText("Synthetic recovered paragraph for isolated Reader validation"),
   ).toHaveCount(0)
