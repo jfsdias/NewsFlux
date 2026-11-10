@@ -3,7 +3,7 @@ import process from "node:process"
 import { defineConfig } from "@playwright/test"
 
 const apiPort = Number(process.env.E2E_API_PORT ?? 8081)
-const appPort = Number(process.env.E2E_APP_PORT ?? 4173)
+const appPort = Number(process.env.E2E_APP_PORT ?? 4175)
 
 export default defineConfig({
   testDir: "./reader-ai-e2e",
@@ -28,10 +28,10 @@ export default defineConfig({
       timeout: 30_000,
     },
     {
-      command: "node e2e/support/start-app-server.js",
-      url: `http://127.0.0.1:${appPort}/`,
-      reuseExistingServer: false,
-      timeout: 60_000,
+      command: `pnpm exec vite --host 127.0.0.1 --port ${appPort} --strictPort`,
+      url: `http://127.0.0.1:${appPort}/scripts/tests/content-fallback-reader.html?mode=disabled`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
     },
   ],
 })

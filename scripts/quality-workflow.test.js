@@ -251,8 +251,8 @@ test("the Article Intelligence Reader job builds both flag states before serving
   assert.ok(defaultBuildIndex < defaultTestIndex)
   assert.ok(defaultTestIndex < enabledBuildIndex)
   assert.ok(enabledBuildIndex < enabledTestIndex)
-  assert.match(playwrightConfig, /start-app-server\.js/u)
-  assert.doesNotMatch(playwrightConfig, /pnpm exec vite --host/u)
+  assert.match(playwrightConfig, /pnpm exec vite --host 127\.0\.0\.1 --port/u)
+  assert.doesNotMatch(playwrightConfig, /start-app-server\.js/u)
 })
 
 test("the blocking UX-REACH job builds and executes its isolated 11-test Playwright suite", () => {
