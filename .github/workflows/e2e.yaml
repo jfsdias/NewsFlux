@@ -118,6 +118,13 @@ jobs:
       - name: Run Article Intelligence Reader scenarios
         run: pnpm exec playwright test --config=playwright.article-intelligence.config.js
 
+      - name: Run actual Reader component with explicit AI enablement
+        env:
+          VITE_ARTICLE_INTELLIGENCE_ENABLED: "1"
+        run: >-
+          pnpm exec playwright test --config=playwright.article-intelligence.config.js
+          --grep "ARTICLE_INTELLIGENCE_COMPONENT"
+
       - name: Upload Article Intelligence Reader diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
