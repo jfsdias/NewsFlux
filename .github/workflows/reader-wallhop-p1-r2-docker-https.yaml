@@ -7,6 +7,17 @@ on:
     paths:
       - ".github/workflows/reader-wallhop-p1-r2-docker-https.yaml"
       - "scripts/reader-wallhop-p1-r2/**"
+      - "src/components/Article/**"
+      - "src/hooks/useReaderContentRecovery*"
+      - "src/apis/content-fallback-reader*"
+      - "src/utils/content-fallback-reader*"
+      - "src/locales/**"
+      - "services/content_fallback/**"
+      - "e2e/reader-content-recovery.spec.js"
+      - "e2e/support/**"
+      - "Dockerfile"
+      - "package.json"
+      - "pnpm-lock.yaml"
 
 permissions:
   contents: read
@@ -30,15 +41,20 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: jfsdias/NewsFlux
-          ref: 0aee25c37d29bb076ea81261da25de96671f07e1
+          ref: ${{ github.sha }}
           path: source
+          fetch-depth: 0
           persist-credentials: false
 
-      - name: Verify live main remains the approved exact SHA
+      - name: Verify exact base and tested candidate
+        env:
+          NEWSFLUX_EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+          NEWSFLUX_CANDIDATE_SHA: ${{ github.sha }}
         run: |
           actual="$(git ls-remote https://github.com/jfsdias/NewsFlux.git refs/heads/main | cut -f1)"
-          test "$actual" = "0aee25c37d29bb076ea81261da25de96671f07e1"
-          test "$(git -C source rev-parse HEAD)" = "$actual"
+          test "$actual" = "$NEWSFLUX_EXPECTED_BASE_SHA"
+          test "$(git -C source rev-parse HEAD)" = "$NEWSFLUX_CANDIDATE_SHA"
+          git -C source merge-base --is-ancestor "$NEWSFLUX_EXPECTED_BASE_SHA" "$NEWSFLUX_CANDIDATE_SHA"
           test -z "$(git -C source status --porcelain)"
 
       - name: Setup pnpm
@@ -50,6 +66,9 @@ jobs:
           node-version: "22"
           cache: "pnpm"
           cache-dependency-path: source/pnpm-lock.yaml
+
+      - name: Validate exact-SHA provenance rules
+        run: python3 -m unittest discover -s scripts/reader-wallhop-p1-r2 -p 'test_provenance.py'
 
       - name: Install locked browser dependencies
         working-directory: source
@@ -66,6 +85,9 @@ jobs:
         env:
           NEWSFLUX_SOURCE_ROOT: ${{ github.workspace }}/source
           NEWSFLUX_OUTPUT_ROOT: ${{ github.workspace }}/test-results/reader-wallhop-p1-r2
+          NEWSFLUX_EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+          NEWSFLUX_CANDIDATE_SHA: ${{ github.sha }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
           PYTHONDONTWRITEBYTECODE: "1"
         run: python3 scripts/reader-wallhop-p1-r2/run.py
 
