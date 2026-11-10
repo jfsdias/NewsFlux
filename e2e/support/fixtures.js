@@ -11,10 +11,10 @@ const control = async (path) => {
   return response.json()
 }
 
-const seedAuth = (server) => {
+const seedAuth = ({ server, apiKeyId = null }) => {
   localStorage.setItem(
     "auth",
-    JSON.stringify({ server, token: "e2e-token", apiKeyId: null, username: "", password: "" }),
+    JSON.stringify({ server, token: "e2e-token", apiKeyId, username: "", password: "" }),
   )
 }
 
@@ -64,6 +64,7 @@ export const test = base.extend({
       height = 1104,
       touch = false,
       authenticated = true,
+      provisionedApiKey = false,
       serviceWorkers = "block",
       deviceScaleFactor = 2,
       storageState,
@@ -81,7 +82,10 @@ export const test = base.extend({
       })
       contexts.push(context)
       if (authenticated) {
-        await context.addInitScript(seedAuth, mock.url)
+        await context.addInitScript(seedAuth, {
+          server: mock.url,
+          apiKeyId: provisionedApiKey ? 17 : null,
+        })
       }
       if (settings) {
         await context.addInitScript((value) => {

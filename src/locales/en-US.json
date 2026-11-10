@@ -289,6 +289,10 @@
     "recovering_full_text": "Recovering full text…",
     "recovered_from_wallhop": "Full text recovered from WallHop",
     "recovered_from_miniflux_scraper": "Full text recovered with Miniflux scraper",
+    "show_original_text": "Show original text",
+    "show_recovered_text": "Show recovered text",
+    "original_restored_from_wallhop": "Showing original Miniflux text. WallHop version remains available.",
+    "original_restored_from_miniflux_scraper": "Showing original Miniflux text. Scraper version remains available.",
     "recovery_failed": "Full text could not be recovered. The original content is still shown.",
     "back_to_list": "Back to list"
   },
