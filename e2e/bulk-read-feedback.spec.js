@@ -14,6 +14,74 @@ const acknowledgedReadIds = async (mock, fromMutationIndex = 0) => {
     .flatMap(({ entryIds: ids }) => ids)
 }
 
+const failSecondReadBatch = async (page) => {
+  const requests = []
+  await page.route("**/v1/entries", async (route) => {
+    if (route.request().method() !== "PUT") {
+      await route.continue()
+      return
+    }
+
+    requests.push(route.request().postDataJSON().entry_ids)
+    if (requests.length === 2) {
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ error_message: "synthetic second batch failure" }),
+      })
+      return
+    }
+    await route.continue()
+  })
+  return requests
+}
+
+const feedCounterRequestCount = async (mock) => {
+  const requests = await mock.requests()
+  return requests.filter((request) => request.startsWith("GET /v1/feeds/counters")).length
+}
+
+const sortedNumericIds = (ids) => ids.toSorted((left, right) => left - right)
+
+const expectAcknowledgedOnlyUndo = async ({ page, mock, batchRequests, expectedScope }) => {
+  await expect.poll(() => batchRequests.length).toBe(2)
+  const acknowledgedIds = batchRequests[0]
+  const failedBatchIds = batchRequests[1]
+
+  expect(acknowledgedIds).toHaveLength(1000)
+  expect(new Set(acknowledgedIds).size).toBe(acknowledgedIds.length)
+  expect(failedBatchIds.length).toBeGreaterThan(0)
+  expect(acknowledgedIds.some((id) => failedBatchIds.includes(id))).toBe(false)
+
+  await expect(
+    page.getByText(
+      `${acknowledgedIds.length} articles confirmed as read before Mark all as read stopped in ${expectedScope}`,
+    ),
+  ).toBeVisible()
+  await expect(undoButton(page)).toBeVisible()
+  await expect(page).toHaveURL(/\/(?:feed\/1|category\/1)$/)
+  expect(sortedNumericIds(await mock.readIds())).toEqual(sortedNumericIds(acknowledgedIds))
+
+  const mutationsBeforeUndo = await mock.mutations()
+  expect(mutationsBeforeUndo).toHaveLength(1)
+  expect(mutationsBeforeUndo[0].status).toBe("read")
+  expect(sortedNumericIds(mutationsBeforeUndo[0].entryIds)).toEqual(
+    sortedNumericIds(acknowledgedIds),
+  )
+
+  const countersBeforeUndo = await feedCounterRequestCount(mock)
+  await undoButton(page).click()
+  await expect.poll(() => mock.readIds()).toEqual([])
+  await expect.poll(() => mock.mutations()).toHaveLength(2)
+  const mutationsAfterUndo = await mock.mutations()
+  expect(mutationsAfterUndo[1].status).toBe("unread")
+  expect(sortedNumericIds(mutationsAfterUndo[1].entryIds)).toEqual(
+    sortedNumericIds(acknowledgedIds),
+  )
+  await expect.poll(async () => feedCounterRequestCount(mock)).toBeGreaterThan(countersBeforeUndo)
+  await expect(page).toHaveURL(/\/(?:feed\/1|category\/1)$/)
+}
+
 const confirmFooterMarkAll = async (page) => {
   await footerMarkAllButton(page)
     .first()
@@ -105,6 +173,65 @@ test("BULK-01C-2: Sidebar category Mark All reports its confirmed count and supp
   ).toBeVisible()
   await undoButton(page).click()
   await expect.poll(() => mock.readIds()).not.toContain(acknowledgedIds[0])
+})
+
+test("BULK-01C-7: Footer Mark All partial failure undoes only the acknowledged batch", async ({
+  openApp,
+  mock,
+}) => {
+  const { page } = await openApp({
+    path: "/feed/1",
+    settings: { articleListLayout: "card", showStatus: "unread", markAllReadJumpToNext: true },
+  })
+  await mock.inject(1001)
+  await page.reload()
+  await expect(cards(page).first()).toBeVisible()
+  const countersBeforeAction = await feedCounterRequestCount(mock)
+  const batchRequests = await failSecondReadBatch(page)
+
+  await confirmFooterMarkAll(page)
+  await expectAcknowledgedOnlyUndo({
+    page,
+    mock,
+    batchRequests,
+    expectedScope: "Alfa Tech (Feed)",
+  })
+  await expect
+    .poll(async () => feedCounterRequestCount(mock))
+    .toBeGreaterThan(countersBeforeAction + 1)
+})
+
+test("BULK-01C-8: Sidebar category partial failure undoes only the acknowledged batch", async ({
+  openApp,
+  mock,
+}) => {
+  const { page } = await openApp({
+    path: "/category/1",
+    settings: { articleListLayout: "card", showStatus: "all" },
+  })
+  await mock.inject(1001)
+  await page.reload()
+  await expect(cards(page).first()).toBeVisible()
+  const countersBeforeAction = await feedCounterRequestCount(mock)
+  const batchRequests = await failSecondReadBatch(page)
+
+  await page.getByRole("button", { name: "Feeds", exact: true }).click()
+  const category = page.locator("#category-link-1")
+  await expect(category).toBeVisible()
+  await category.click({ button: "right" })
+  await page.getByRole("menuitem", { name: "Mark all as read" }).click()
+  await expect(page.getByText("Mark all as read?")).toBeVisible()
+  await page.locator(".arco-modal-wrapper .arco-btn-primary").click()
+
+  await expectAcknowledgedOnlyUndo({
+    page,
+    mock,
+    batchRequests,
+    expectedScope: "Tecnologia (Category)",
+  })
+  await expect
+    .poll(async () => feedCounterRequestCount(mock))
+    .toBeGreaterThan(countersBeforeAction + 1)
 })
 
 test("BULK-01C-3: selected read reports the selected count and category scope", async ({
