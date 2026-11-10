@@ -1,4 +1,11 @@
+import process from "node:process"
+
 import { expect, test } from "@playwright/test"
+
+test.skip(
+  process.env.VITE_ARTICLE_INTELLIGENCE_ENABLED !== "1",
+  "requires explicit build-time AI UI enablement",
+)
 
 const openReader = async (page, mode, viewport) => {
   await page.setViewportSize(viewport)

@@ -220,19 +220,39 @@ test("the e2e workflow installs the pinned browser and runs three verified stabi
   )
 })
 
-test("the Article Intelligence Reader job generates build metadata before starting Vite", () => {
+test("the Article Intelligence Reader job builds both flag states before serving the production bundle", () => {
   const { workflow } = readE2eWorkflow()
   const steps = stepsOf(workflow.jobs.article_intelligence_reader)
-  const prebuildIndex = steps.findIndex((step) => step.run?.trim() === "pnpm run prebuild")
-  const browserIndex = steps.findIndex((step) =>
-    step.run
-      ?.trim()
-      .startsWith("pnpm exec playwright test --config=playwright.article-intelligence.config.js"),
+  const defaultBuildIndex = steps.findIndex(
+    (step) =>
+      step.name === "Build Reader with AI disabled by default" && step.run?.trim() === "pnpm build",
+  )
+  const enabledBuildIndex = steps.findIndex(
+    (step) =>
+      step.name === "Build Reader with explicit AI enablement" && step.run?.trim() === "pnpm build",
+  )
+  const defaultTestIndex = steps.findIndex(
+    (step) => step.name === "Run Article Intelligence Reader scenarios",
+  )
+  const enabledTestIndex = steps.findIndex(
+    (step) => step.name === "Run AI-enabled Reader scenarios",
+  )
+  const playwrightConfig = readFileSync(
+    new URL("../playwright.article-intelligence.config.js", import.meta.url),
+    "utf8",
   )
 
-  assert.notEqual(prebuildIndex, -1, "the standalone Vite harness must generate version-info.json")
-  assert.notEqual(browserIndex, -1, "the dedicated Reader browser suite must run")
-  assert.ok(prebuildIndex < browserIndex, "build metadata must exist before Vite starts")
+  assert.notEqual(defaultBuildIndex, -1, "the default-off Reader bundle must be built")
+  assert.notEqual(enabledBuildIndex, -1, "the explicitly enabled Reader bundle must be built")
+  assert.notEqual(defaultTestIndex, -1, "the default-off Reader scenarios must run")
+  assert.notEqual(enabledTestIndex, -1, "the AI-enabled Reader scenarios must run")
+  assert.equal(steps[enabledBuildIndex].env?.VITE_ARTICLE_INTELLIGENCE_ENABLED, "1")
+  assert.equal(steps[enabledTestIndex].env?.VITE_ARTICLE_INTELLIGENCE_ENABLED, "1")
+  assert.ok(defaultBuildIndex < defaultTestIndex)
+  assert.ok(defaultTestIndex < enabledBuildIndex)
+  assert.ok(enabledBuildIndex < enabledTestIndex)
+  assert.match(playwrightConfig, /start-app-server\.js/u)
+  assert.doesNotMatch(playwrightConfig, /pnpm exec vite --host/u)
 })
 
 test("the blocking UX-REACH job builds and executes its isolated 11-test Playwright suite", () => {
