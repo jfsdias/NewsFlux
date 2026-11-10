@@ -44,7 +44,7 @@ async function createReader({ entryId, width, height, touch }) {
     ({ server, token }) => {
       globalThis.localStorage.setItem(
         "auth",
-        JSON.stringify({ server, token, apiKeyId: undefined, username: "", password: "" }),
+        JSON.stringify({ server, token, apiKeyId: 101, username: "", password: "" }),
       )
       globalThis.localStorage.setItem(
         "settings",
@@ -155,7 +155,7 @@ try {
   const nextAuth = JSON.stringify({
     server: minifluxBase,
     token: rotatedKey,
-    apiKeyId: undefined,
+    apiKeyId: 102,
     username: "",
     password: "",
   })
