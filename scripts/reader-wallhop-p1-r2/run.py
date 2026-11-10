@@ -1239,10 +1239,15 @@ def run() -> None:
         RESULT["TLS_INGRESS_GATE"] = "PASS"
         RESULT["SAME_ORIGIN_GATE"] = "PASS"
 
+        runner_home = Path(os.environ.get("HOME", str(Path.home()))).expanduser()
+        playwright_browsers_path = os.environ.get("PLAYWRIGHT_BROWSERS_PATH") or str(
+            runner_home / ".cache" / "ms-playwright"
+        )
         node_env = os.environ.copy()
         node_env.update(
             {
                 "HOME": str(browser_home),
+                "PLAYWRIGHT_BROWSERS_PATH": playwright_browsers_path,
                 "NEWSFLUX_SOURCE_ROOT": str(SOURCE_ROOT),
                 "NEWSFLUX_OUTPUT_ROOT": str(OUTPUT_ROOT),
                 "NEWSFLUX_APP_ORIGIN": APP_ORIGIN,
