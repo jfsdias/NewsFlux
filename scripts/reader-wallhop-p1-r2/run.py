@@ -11,7 +11,11 @@ import time
 from pathlib import Path
 from typing import Any
 
-EXPECTED_SOURCE_SHA = "0aee25c37d29bb076ea81261da25de96671f07e1"
+from provenance import SourceProvenanceError, validate_source_provenance
+
+EVENT_NAME = os.environ.get("GITHUB_EVENT_NAME", "")
+EXPECTED_BASE_SHA = os.environ.get("NEWSFLUX_EXPECTED_BASE_SHA", "")
+CANDIDATE_SHA = os.environ.get("NEWSFLUX_CANDIDATE_SHA", os.environ.get("GITHUB_SHA", ""))
 APP_HOST = "newsflux.test"
 APP_PORT = 8443
 APP_ORIGIN = f"https://{APP_HOST}:{APP_PORT}"
@@ -32,6 +36,8 @@ BROWSER_FILE = ROOT / "scripts" / "reader-wallhop-p1-r2" / "browser.mjs"
 
 RESULT: dict[str, Any] = {
     "MAIN_SHA": "NOT_VERIFIED",
+    "EXPECTED_BASE_SHA": "NOT_VERIFIED",
+    "CANDIDATE_SHA": "NOT_VERIFIED",
     "SOURCE_SHA": "NOT_VERIFIED",
     "DOCKER_VERSION": "NOT_VERIFIED",
     "FRONTEND_IMAGE_ID": "NOT_BUILT",
@@ -112,21 +118,47 @@ def inspect_container(name: str) -> dict[str, Any]:
     return docker_json(["inspect", name], step=f"Inspect {name}")[0]
 
 
-def check_exact_source() -> str:
+def check_exact_source(live_main_sha: str) -> str:
     global CURRENT_STEP
     CURRENT_STEP = "EXACT_SOURCE_SHA"
     actual = command(
         ["git", "-C", str(SOURCE_ROOT), "rev-parse", "--verify", "HEAD"],
         step=CURRENT_STEP,
     ).stdout.strip()
-    if actual != EXPECTED_SOURCE_SHA:
-        raise RuntimeError(f"Expected exact source SHA {EXPECTED_SOURCE_SHA}, found {actual}")
     status = command(
         ["git", "-C", str(SOURCE_ROOT), "status", "--porcelain"],
         step="SOURCE_TREE_CLEAN",
     ).stdout.strip()
     if status:
         raise RuntimeError("Source checkout was not clean before creating the test-only build environment")
+
+    base_is_ancestor = command(
+        [
+            "git",
+            "-C",
+            str(SOURCE_ROOT),
+            "merge-base",
+            "--is-ancestor",
+            EXPECTED_BASE_SHA,
+            CANDIDATE_SHA,
+        ],
+        step="CANDIDATE_BASE_PROVENANCE",
+        check=False,
+    ).returncode == 0
+    try:
+        provenance = validate_source_provenance(
+            event_name=EVENT_NAME,
+            expected_base_sha=EXPECTED_BASE_SHA,
+            candidate_sha=CANDIDATE_SHA,
+            live_main_sha=live_main_sha,
+            checkout_sha=actual,
+            candidate_is_based_on_base=base_is_ancestor,
+        )
+    except SourceProvenanceError as exc:
+        raise RuntimeError(str(exc)) from exc
+
+    RESULT["EXPECTED_BASE_SHA"] = provenance["base_sha"]
+    RESULT["CANDIDATE_SHA"] = provenance["candidate_sha"]
     RESULT["SOURCE_SHA"] = actual
     return actual
 
@@ -140,8 +172,8 @@ def verify_live_main() -> str:
     )
     actual = result.stdout.split()[0] if result.stdout.split() else ""
     RESULT["MAIN_SHA"] = actual or "UNAVAILABLE"
-    if actual != EXPECTED_SOURCE_SHA:
-        raise RuntimeError(f"Live main moved from expected SHA: {actual or 'unavailable'}")
+    if not actual:
+        raise RuntimeError("Live main SHA was unavailable")
     return actual
 
 
@@ -620,7 +652,7 @@ def run() -> None:
     global TEMP_ROOT, NETWORK_NAME, CURRENT_STEP, APP_CONNECT_IP
     CURRENT_STEP = "PREFLIGHT"
     main_sha = verify_live_main()
-    source_sha = check_exact_source()
+    source_sha = check_exact_source(main_sha)
     docker_version = command(["docker", "version", "--format", "{{.Server.Version}}"], step="Docker server version")
     RESULT["DOCKER_VERSION"] = docker_version.stdout.strip()
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
@@ -1392,6 +1424,8 @@ def main() -> int:
         output_file.write_text(json.dumps(RESULT, indent=2) + "\n", encoding="utf-8")
         fields = (
             "MAIN_SHA",
+            "EXPECTED_BASE_SHA",
+            "CANDIDATE_SHA",
             "SOURCE_SHA",
             "DOCKER_VERSION",
             "FRONTEND_IMAGE_ID",
