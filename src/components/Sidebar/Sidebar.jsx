@@ -79,6 +79,7 @@ import {
 } from "@/store/dataState"
 import { settingsState, updateSettings } from "@/store/settingsState"
 import { expandedCategoriesState, setExpandedCategories } from "@/store/sidebarState"
+import { createBulkReadFeedback, getBulkReadScopeLabel } from "@/utils/bulk-read-feedback"
 import formatCategoryDisplayName from "@/utils/category-display-name"
 import { confirmDialogProps } from "@/utils/confirm-dialog"
 import { PRODUCT_NAME } from "@/utils/constants"
@@ -1074,6 +1075,13 @@ const Sidebar = ({ headerAction, isDrawer = false, onNavigate }) => {
 
   const performSidebarMarkAllAsRead = async (scope, source) => {
     const sourceId = source.id
+    const scopeLabel = getBulkReadScopeLabel({
+      from: scope,
+      id: sourceId,
+      categories: visibleCategories,
+      feeds: visibleFeeds,
+      polyglot,
+    })
     const sessionRevision = getDataSessionRevision()
     const operationLease = markAllReadOperationCoordinator.acquire(sessionRevision)
     if (operationLease === null) {
@@ -1120,6 +1128,12 @@ const Sidebar = ({ headerAction, isDrawer = false, onNavigate }) => {
       }
 
       const entryIds = [...markedEntryIds]
+      const feedback = createBulkReadFeedback({
+        operation: "markAll",
+        status: "success",
+        acknowledgedIds: entryIds,
+        scope: scopeLabel,
+      })
       if (entryIds.length > 0) {
         let token
         token = markAllReadUndoActions.replace(
@@ -1131,7 +1145,7 @@ const Sidebar = ({ headerAction, isDrawer = false, onNavigate }) => {
         )
         Notification.success({
           id: getMarkAllReadUndoNotificationId(token),
-          title: polyglot.t("article_list.mark_all_as_read_success"),
+          title: polyglot.t(feedback.titleKey, feedback.titleParams),
           duration: MARK_ALL_READ_UNDO_DURATION_MS,
           btn: (
             <Button size="small" onClick={() => void handleUndoMarkAllRead(token)}>
@@ -1142,7 +1156,7 @@ const Sidebar = ({ headerAction, isDrawer = false, onNavigate }) => {
         })
       } else {
         Notification.success({
-          title: polyglot.t("article_list.mark_all_as_read_success"),
+          title: polyglot.t(feedback.titleKey, feedback.titleParams),
         })
       }
     } catch (error) {
@@ -1153,9 +1167,45 @@ const Sidebar = ({ headerAction, isDrawer = false, onNavigate }) => {
       invalidateArticleList()
       await refreshCounts({ force: true })
       if (isCurrentSession()) {
-        Notification.error({
-          title: polyglot.t("article_list.mark_all_as_read_error"),
+        const feedback = createBulkReadFeedback({
+          operation: "markAll",
+          status: "failure",
+          acknowledgedIds: [...markedEntryIds],
+          scope: scopeLabel,
+          operationLabel: polyglot.t("sidebar.context_menu.mark_all_as_read"),
         })
+        if (feedback.notificationType === "warning") {
+          const previousUndoToken = markAllReadUndoActions.getCurrentToken()
+          markAllReadUndoActions.clear()
+          if (previousUndoToken !== null) {
+            Notification.remove(getMarkAllReadUndoNotificationId(previousUndoToken))
+          }
+          let token
+          token = markAllReadUndoActions.replace(
+            { entryIds: feedback.undoEntryIds, sessionRevision },
+            {
+              durationMs: MARK_ALL_READ_UNDO_DURATION_MS,
+              onExpire: () => Notification.remove(getMarkAllReadUndoNotificationId(token)),
+            },
+          )
+          Notification.warning({
+            id: getMarkAllReadUndoNotificationId(token),
+            title: polyglot.t(feedback.titleKey, feedback.titleParams),
+            duration: MARK_ALL_READ_UNDO_DURATION_MS,
+            content: error.message,
+            btn: (
+              <Button size="small" onClick={() => void handleUndoMarkAllRead(token)}>
+                {polyglot.t("actions.undo")}
+              </Button>
+            ),
+            onClose: () => markAllReadUndoActions.clear(token),
+          })
+        } else {
+          Notification.error({
+            title: polyglot.t(feedback.titleKey, feedback.titleParams),
+            content: error.message,
+          })
+        }
       }
     } finally {
       markAllReadOperationCoordinator.release(operationLease)

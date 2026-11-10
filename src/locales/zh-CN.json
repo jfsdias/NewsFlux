@@ -176,6 +176,7 @@
     "unstar_tooltip": "取消收藏",
     "fetch_original_tooltip": "获取原文",
     "more_actions_tooltip": "更多操作",
+    "card_quick_actions_tooltip": "卡片操作",
     "save_to_third_party_services_tooltip": "保存到第三方服务",
     "share_tooltip": "分享",
     "view_comments_tooltip": "查看评论"
@@ -191,7 +192,11 @@
     "partial_result": "所选 %{total} 篇文章中仅确认 %{marked} 篇已读",
     "read_error": "无法将所选文章标记为已读",
     "counts_refresh_error": "文章已标记，但未读计数可能不是最新的",
-    "undo_error": "无法撤销所选文章的已读状态"
+    "undo_error": "无法撤销所选文章的已读状态",
+    "read_success_scoped": "已在%{scope}将所选 %{smart_count} 篇文章标记为已读",
+    "partial_result_scoped": "在%{scope}中，所选 %{total} 篇文章仅确认 %{marked} 篇已读",
+    "read_error_scoped": "无法在%{scope}将所选文章标记为已读",
+    "counts_refresh_error_scoped": "已在%{scope}将所选 %{smart_count} 篇文章标记为已读，但未读计数可能不是最新的"
   },
   "article_list": {
     "sort_direction_desc": "最新优先",
@@ -231,7 +236,29 @@
     "load_error_forbidden": "您没有权限查看这些文章。",
     "load_error_rate_limited": "服务器正在暂时限制请求，请稍后重试。",
     "load_error_server": "服务器无法加载这些文章，请重试。",
-    "load_error_network": "无法连接到服务器。请检查连接后重试。"
+    "load_error_network": "无法连接到服务器。请检查连接后重试。",
+    "bulk_read_scope_named": "%{type}「%{name}」",
+    "bulk_read_scope_feed": "此来源",
+    "bulk_read_scope_category": "此分类",
+    "bulk_read_scope_all": "全部文章",
+    "bulk_read_scope_unread": "未读文章",
+    "bulk_read_scope_starred": "已收藏文章",
+    "bulk_read_scope_today": "今日文章",
+    "bulk_read_scope_home": "首页文章",
+    "bulk_read_scope_current": "当前列表",
+    "bulk_read_scope_filtered": "%{scope}（使用当前筛选条件）",
+    "bulk_read_success_count_unknown": "已在%{scope}完成%{operation}；无法确认数量",
+    "bulk_read_partial_count_unknown": "%{operation}在%{scope}中断前，已确认 %{smart_count} 篇文章为已读",
+    "bulk_read_direction_above": "上方",
+    "bulk_read_direction_below": "下方",
+    "mark_all_as_read_success_scoped": "已在%{scope}将 %{smart_count} 篇文章标记为已读",
+    "mark_all_as_read_error_scoped": "无法在%{scope}将文章标记为已读",
+    "mark_older_as_read_success_scoped": "已在%{scope}将 %{smart_count} 篇较早文章标记为已读",
+    "mark_older_as_read_error_scoped": "无法在%{scope}将较早文章标记为已读",
+    "mark_older_as_read_partial_scoped": "在%{scope}中，较早的 %{total} 篇文章仅确认 %{marked} 篇已读",
+    "mark_relative_as_read_success_scoped": "已在%{scope}将%{direction}的 %{smart_count} 篇文章标记为已读",
+    "mark_relative_as_read_error_scoped": "无法在%{scope}将%{direction}的文章标记为已读",
+    "mark_relative_as_read_partial_scoped": "在%{scope}中，%{direction}的 %{total} 篇文章仅确认 %{marked} 篇已读"
   },
   "article_toc": {
     "tooltip": "目录大纲",
@@ -258,6 +285,11 @@
     "server_error": "服务器无法加载此文章，请重试。",
     "network_error": "无法连接到服务器。请检查连接后重试。",
     "request_error": "无法加载此文章，请重试。",
+    "recover_full_text": "恢复全文",
+    "recovering_full_text": "正在恢复全文…",
+    "recovered_from_wallhop": "已从 WallHop 恢复全文",
+    "recovered_from_miniflux_scraper": "已通过 Miniflux 抓取器恢复全文",
+    "recovery_failed": "无法恢复全文，仍显示原始内容。",
     "back_to_list": "返回列表"
   },
   "deduplicate": {

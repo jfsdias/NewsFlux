@@ -512,7 +512,7 @@ test("UX-REACH-01: a failed bulk request leaves the list unchanged and the actio
   })
 
   await action.click()
-  await expect(page.getByText("Failed to mark all as read")).toBeVisible()
+  await expect(page.getByText("Could not mark articles as read in All articles")).toBeVisible()
   await expect(action).toBeEnabled()
   expect(await mock.readIds()).toHaveLength(0)
   await expect(page.getByRole("button", { name: "Undo" })).toBeHidden()

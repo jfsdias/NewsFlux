@@ -133,7 +133,14 @@ const getCoverCandidates = (entry) =>
       ? [{ height: entry.coverHeight, src: entry.coverSource, width: entry.coverWidth }]
       : []
 
-const ArticleGridCard = ({ displayTitle, entry, feed, sourceDescriptionId, sourceName }) => {
+const ArticleGridCard = ({
+  displayTitle,
+  entry,
+  feed,
+  quickActions,
+  sourceDescriptionId,
+  sourceName,
+}) => {
   const { showCardSummary, showDetailedRelativeTime, showEstimatedReadingTime, showFeedIcon } =
     useStore(articleGridCardSettingsState)
   const [coverState, setCoverState] = useState(() => ({
@@ -267,9 +274,12 @@ const ArticleGridCard = ({ displayTitle, entry, feed, sourceDescriptionId, sourc
               {sourceName}
             </span>
           </div>
-          <time className="grid-card-time" dateTime={entry.published_at}>
-            {generateRelativeTime(entry.published_at, showDetailedRelativeTime)}
-          </time>
+          <div className="grid-card-meta-trailing">
+            <time className="grid-card-time" dateTime={entry.published_at}>
+              {generateRelativeTime(entry.published_at, showDetailedRelativeTime)}
+            </time>
+            {quickActions}
+          </div>
         </div>
 
         <h3 className="article-entry-title grid-card-title">{displayTitle}</h3>

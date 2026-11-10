@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import unittest
 from collections.abc import Callable
 
-from services.article_intel_auth.auth import AuthError, AuthSettings, MinifluxAuthService
+from services.article_intel_auth.auth import AuthError, AuthSettings, AuthorizedEntry, MinifluxAuthService
 from services.content_fallback.http_client import FetchError, HTTPResponse, PinnedHTTPClient
 
 
@@ -65,6 +66,18 @@ def service(http: FakeHTTP, *, admin_ids: frozenset[int] = frozenset({7}), state
 
 
 class MinifluxAuthTests(unittest.TestCase):
+    def test_authorized_entry_keeps_legacy_constructor_compatible(self) -> None:
+        authorized = AuthorizedEntry(
+            entry_id=42,
+            feed_id=3,
+            user_id=7,
+            title="Synthetic article",
+            content_html="Synthetic article body.",
+            content_sha256=hashlib.sha256(b"Synthetic article body.").hexdigest(),
+        )
+
+        self.assertIsNone(authorized.url_fingerprint)
+
     def test_real_pinned_http_client_path_uses_fixed_origin_and_synthetic_transport(self) -> None:
         requests: list[dict[str, object]] = []
 
@@ -330,10 +343,15 @@ class MinifluxAuthTests(unittest.TestCase):
         self.assertEqual((authorized.entry_id, authorized.user_id, authorized.feed_id), (42, 7, 3))
         self.assertEqual(authorized.content_html, "Synthetic article body.")
         self.assertEqual(len(authorized.content_sha256), 64)
+        self.assertEqual(
+            authorized.url_fingerprint,
+            hashlib.sha256(b"https://publisher.example/story").hexdigest(),
+        )
         self.assertEqual([call["url"] for call in http.calls], [f"{TRUSTED_MINIFLUX}/v1/me", f"{TRUSTED_MINIFLUX}/v1/entries/42"])
         self.assertTrue(all(call["headers"]["X-Auth-Token"] == USER_KEY for call in http.calls))
         self.assertTrue(all(call["max_redirects"] == 0 for call in http.calls))
         self.assertNotIn("api_key", authorized.__dict__)
+        self.assertNotIn("url", authorized.__dict__)
 
         for payload in (
             entry(entry_id=43),

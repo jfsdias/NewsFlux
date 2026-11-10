@@ -125,7 +125,7 @@ test.describe("F15 Deep links and reopening", () => {
     mock,
   }) => {
     await mock.fault("entry", "emptyobject")
-    const { page } = await openApp({ path: "/all" })
+    const { page } = await openApp({ path: "/all", settings: { markReadBy: "view" } })
     await expect(cards(page).first()).toBeVisible()
     const consoleErrors = []
     page.on("console", (message) => {
@@ -147,6 +147,8 @@ test.describe("F15 Deep links and reopening", () => {
     await page.getByRole("button", { name: "Retry" }).click()
     await expect(page.getByText("Notícia 5").first()).toBeVisible()
 
+    const expectedRetryMutation = { entryIds: [5], outcome: "applied", status: "read" }
+    await expect.poll(() => mock.mutations()).toEqual([expectedRetryMutation])
     const mutationsAfterRetry = await mock.mutations()
     for (const [id, malformedField] of [
       [10, "missingstatus"],

@@ -176,6 +176,7 @@
     "unstar_tooltip": "Unstar",
     "fetch_original_tooltip": "Fetch original content",
     "more_actions_tooltip": "More actions",
+    "card_quick_actions_tooltip": "Card actions",
     "save_to_third_party_services_tooltip": "Save to third-party services",
     "share_tooltip": "Share",
     "view_comments_tooltip": "View comments"
@@ -191,7 +192,11 @@
     "partial_result": "Only %{marked} of %{total} selected articles were confirmed as read",
     "read_error": "Could not mark selected articles as read",
     "counts_refresh_error": "Articles were marked, but unread counts may be out of date",
-    "undo_error": "Failed to undo the selected read operation"
+    "undo_error": "Failed to undo the selected read operation",
+    "read_success_scoped": "%{smart_count} selected article marked as read in %{scope} |||| %{smart_count} selected articles marked as read in %{scope}",
+    "partial_result_scoped": "Only %{marked} of %{total} selected articles were confirmed as read in %{scope}",
+    "read_error_scoped": "Could not mark selected articles as read in %{scope}",
+    "counts_refresh_error_scoped": "%{smart_count} selected article marked as read in %{scope}, but unread counts may be out of date |||| %{smart_count} selected articles marked as read in %{scope}, but unread counts may be out of date"
   },
   "article_list": {
     "sort_direction_desc": "Newest first",
@@ -231,7 +236,29 @@
     "load_error_forbidden": "You do not have permission to view these articles.",
     "load_error_rate_limited": "The server is temporarily limiting requests. Please try again shortly.",
     "load_error_server": "The server could not load these articles. Please try again.",
-    "load_error_network": "Could not connect to the server. Check your connection and try again."
+    "load_error_network": "Could not connect to the server. Check your connection and try again.",
+    "bulk_read_scope_named": "%{name} (%{type})",
+    "bulk_read_scope_feed": "This feed",
+    "bulk_read_scope_category": "This category",
+    "bulk_read_scope_all": "All articles",
+    "bulk_read_scope_unread": "Unread articles",
+    "bulk_read_scope_starred": "Starred articles",
+    "bulk_read_scope_today": "Today's articles",
+    "bulk_read_scope_home": "Home articles",
+    "bulk_read_scope_current": "Current list",
+    "bulk_read_scope_filtered": "%{scope} with current filters",
+    "bulk_read_success_count_unknown": "%{operation} completed in %{scope}; confirmed count unavailable",
+    "bulk_read_partial_count_unknown": "%{smart_count} article confirmed as read before %{operation} stopped in %{scope} |||| %{smart_count} articles confirmed as read before %{operation} stopped in %{scope}",
+    "bulk_read_direction_above": "above",
+    "bulk_read_direction_below": "below",
+    "mark_all_as_read_success_scoped": "%{smart_count} article marked as read in %{scope} |||| %{smart_count} articles marked as read in %{scope}",
+    "mark_all_as_read_error_scoped": "Could not mark articles as read in %{scope}",
+    "mark_older_as_read_success_scoped": "%{smart_count} older article marked as read in %{scope} |||| %{smart_count} older articles marked as read in %{scope}",
+    "mark_older_as_read_error_scoped": "Could not mark older articles as read in %{scope}",
+    "mark_older_as_read_partial_scoped": "Only %{marked} of %{total} older articles were confirmed as read in %{scope}",
+    "mark_relative_as_read_success_scoped": "Marked %{smart_count} article %{direction} as read in %{scope} |||| Marked %{smart_count} articles %{direction} as read in %{scope}",
+    "mark_relative_as_read_error_scoped": "Could not mark articles %{direction} as read in %{scope}",
+    "mark_relative_as_read_partial_scoped": "Only %{marked} of %{total} articles %{direction} were confirmed as read in %{scope}"
   },
   "article_toc": {
     "tooltip": "Table of Contents",
@@ -258,6 +285,11 @@
     "server_error": "The server could not load this article. Please try again.",
     "network_error": "Could not connect to the server. Check your connection and try again.",
     "request_error": "Could not load this article. Please try again.",
+    "recover_full_text": "Recover full text",
+    "recovering_full_text": "Recovering full text…",
+    "recovered_from_wallhop": "Full text recovered from WallHop",
+    "recovered_from_miniflux_scraper": "Full text recovered with Miniflux scraper",
+    "recovery_failed": "Full text could not be recovered. The original content is still shown.",
     "back_to_list": "Back to list"
   },
   "deduplicate": {

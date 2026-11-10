@@ -176,6 +176,7 @@
     "unstar_tooltip": "Desmarcar como favorito",
     "fetch_original_tooltip": "Obtener contenido original",
     "more_actions_tooltip": "Más acciones",
+    "card_quick_actions_tooltip": "Acciones de la tarjeta",
     "save_to_third_party_services_tooltip": "Guardar en servicios de terceros",
     "share_tooltip": "Compartir",
     "view_comments_tooltip": "Ver comentarios"
@@ -191,7 +192,11 @@
     "partial_result": "Solo se confirmó como leídos %{marked} de %{total} artículos seleccionados",
     "read_error": "No se pudieron marcar los artículos seleccionados como leídos",
     "counts_refresh_error": "Se marcaron los artículos, pero el contador de no leídos podría estar desactualizado",
-    "undo_error": "No se pudo deshacer la lectura de los artículos seleccionados"
+    "undo_error": "No se pudo deshacer la lectura de los artículos seleccionados",
+    "read_success_scoped": "%{smart_count} artículo seleccionado marcado como leído en %{scope} |||| %{smart_count} artículos seleccionados marcados como leídos en %{scope}",
+    "partial_result_scoped": "Solo se confirmaron como leídos %{marked} de %{total} artículos seleccionados en %{scope}",
+    "read_error_scoped": "No se pudieron marcar como leídos los artículos seleccionados en %{scope}",
+    "counts_refresh_error_scoped": "Se marcó como leído %{smart_count} artículo seleccionado en %{scope}, pero los contadores de no leídos podrían estar desactualizados |||| Se marcaron como leídos %{smart_count} artículos seleccionados en %{scope}, pero los contadores de no leídos podrían estar desactualizados"
   },
   "article_list": {
     "sort_direction_desc": "Las más recientes primero",
@@ -231,7 +236,29 @@
     "load_error_forbidden": "No tiene permiso para ver estos artículos.",
     "load_error_rate_limited": "El servidor está limitando las solicitudes temporalmente. Inténtelo de nuevo en breve.",
     "load_error_server": "El servidor no pudo cargar estos artículos. Inténtelo de nuevo.",
-    "load_error_network": "No se pudo conectar con el servidor. Compruebe la conexión e inténtelo de nuevo."
+    "load_error_network": "No se pudo conectar con el servidor. Compruebe la conexión e inténtelo de nuevo.",
+    "bulk_read_scope_named": "%{name} (%{type})",
+    "bulk_read_scope_feed": "Esta fuente",
+    "bulk_read_scope_category": "Esta categoría",
+    "bulk_read_scope_all": "Todos los artículos",
+    "bulk_read_scope_unread": "Artículos no leídos",
+    "bulk_read_scope_starred": "Artículos destacados",
+    "bulk_read_scope_today": "Artículos de hoy",
+    "bulk_read_scope_home": "Artículos de inicio",
+    "bulk_read_scope_current": "Lista actual",
+    "bulk_read_scope_filtered": "%{scope} con los filtros actuales",
+    "bulk_read_success_count_unknown": "%{operation} completada en %{scope}; no se pudo confirmar el número",
+    "bulk_read_partial_count_unknown": "Se confirmó como leído %{smart_count} artículo antes de que se detuviera %{operation} en %{scope} |||| Se confirmaron como leídos %{smart_count} artículos antes de que se detuviera %{operation} en %{scope}",
+    "bulk_read_direction_above": "por encima",
+    "bulk_read_direction_below": "por debajo",
+    "mark_all_as_read_success_scoped": "Se marcó como leído %{smart_count} artículo en %{scope} |||| Se marcaron como leídos %{smart_count} artículos en %{scope}",
+    "mark_all_as_read_error_scoped": "No se pudieron marcar los artículos como leídos en %{scope}",
+    "mark_older_as_read_success_scoped": "Se marcó como leído %{smart_count} artículo antiguo en %{scope} |||| Se marcaron como leídos %{smart_count} artículos antiguos en %{scope}",
+    "mark_older_as_read_error_scoped": "No se pudieron marcar como leídos los artículos antiguos en %{scope}",
+    "mark_older_as_read_partial_scoped": "Solo se confirmaron como leídos %{marked} de %{total} artículos antiguos en %{scope}",
+    "mark_relative_as_read_success_scoped": "Se marcaron como leídos %{smart_count} artículos %{direction} en %{scope}",
+    "mark_relative_as_read_error_scoped": "No se pudieron marcar como leídos los artículos %{direction} en %{scope}",
+    "mark_relative_as_read_partial_scoped": "Solo se confirmaron como leídos %{marked} de %{total} artículos %{direction} en %{scope}"
   },
   "article_toc": {
     "tooltip": "Tabla de contenidos",
@@ -258,6 +285,11 @@
     "server_error": "El servidor no pudo cargar este artículo. Inténtelo de nuevo.",
     "network_error": "No se pudo conectar con el servidor. Compruebe la conexión e inténtelo de nuevo.",
     "request_error": "No se pudo cargar este artículo. Inténtelo de nuevo.",
+    "recover_full_text": "Recuperar texto completo",
+    "recovering_full_text": "Recuperando texto completo…",
+    "recovered_from_wallhop": "Texto completo recuperado con WallHop",
+    "recovered_from_miniflux_scraper": "Texto completo recuperado con el scraper de Miniflux",
+    "recovery_failed": "No se pudo recuperar el texto completo. Se sigue mostrando el contenido original.",
     "back_to_list": "Volver a la lista"
   },
   "deduplicate": {

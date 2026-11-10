@@ -11,9 +11,15 @@ import {
   setActiveContent,
   setEntries,
 } from "@/store/contentState"
-import { getDataSessionRevision } from "@/store/dataState"
+import {
+  getDataSessionRevision,
+  visibleCategoriesState,
+  visibleFeedsState,
+} from "@/store/dataState"
 import { settingsState } from "@/store/settingsState"
+import { hasArticleListFilters } from "@/utils/article-list-filters"
 import { getEligibleArticleSelectionIds } from "@/utils/article-selection"
+import { createBulkReadFeedback, getBulkReadScopeLabel } from "@/utils/bulk-read-feedback"
 import { runEntryMutation } from "@/utils/entry-mutation-state"
 import {
   getMarkAllReadUndoNotificationId,
@@ -27,6 +33,8 @@ import runSelectedReadBatches from "@/utils/selected-read-operation"
 const useMarkSelectedRead = (selection) => {
   const { polyglot } = useStore(polyglotState)
   const { refreshCounts } = useAppData()
+  const categories = useStore(visibleCategoriesState)
+  const feeds = useStore(visibleFeedsState)
   const [isBusy, setIsBusy] = useState(false)
   const busyRef = useRef(false)
 
@@ -66,7 +74,7 @@ const useMarkSelectedRead = (selection) => {
   )
 
   const offerUndo = useCallback(
-    (acknowledgedIds, sessionRevision, countsError, result) => {
+    (acknowledgedIds, sessionRevision, countsError, result, scope) => {
       const previousUndoToken = markAllReadUndoActions.getCurrentToken()
       markAllReadUndoActions.clear()
       if (previousUndoToken !== null) {
@@ -92,26 +100,33 @@ const useMarkSelectedRead = (selection) => {
         onClose: () => markAllReadUndoActions.clear(token),
       }
 
-      if (countsError) {
-        Notification.error({
-          ...notification,
-          title: polyglot.t("article_selection.counts_refresh_error"),
-          content: countsError.message,
-        })
-      } else if (result.status === "partial") {
+      const feedback = createBulkReadFeedback({
+        operation: "selected",
+        status: result.status,
+        acknowledgedIds,
+        requestedCount: result.requestedCount,
+        scope,
+      })
+
+      if (result.status === "partial") {
         Notification.warning({
           ...notification,
-          title: polyglot.t("article_selection.partial_result", {
-            marked: acknowledgedIds.length,
-            total: result.requestedCount,
+          title: polyglot.t(feedback.titleKey, feedback.titleParams),
+          content: countsError?.message ?? result.error?.message,
+        })
+      } else if (countsError) {
+        Notification.error({
+          ...notification,
+          title: polyglot.t("article_selection.counts_refresh_error_scoped", {
+            smart_count: acknowledgedIds.length,
+            scope,
           }),
+          content: countsError.message,
         })
       } else {
         Notification.success({
           ...notification,
-          title: polyglot.t("article_selection.read_success", {
-            smart_count: acknowledgedIds.length,
-          }),
+          title: polyglot.t(feedback.titleKey, feedback.titleParams),
         })
       }
     },
@@ -124,6 +139,14 @@ const useMarkSelectedRead = (selection) => {
     }
 
     const content = contentState.get()
+    const scope = getBulkReadScopeLabel({
+      from: content.infoFrom,
+      id: content.infoId,
+      isFiltered: hasArticleListFilters(content),
+      categories,
+      feeds,
+      polyglot,
+    })
     const sessionRevision = getDataSessionRevision()
     const scopeKey = selection.getCurrentScopeKey()
     if (!selection.isSelectionMode || content.activeContent || selection.scopeKey !== scopeKey) {
@@ -191,7 +214,7 @@ const useMarkSelectedRead = (selection) => {
           invalidateArticleList()
 
           if (result.acknowledgedIds.length > 0) {
-            offerUndo(result.acknowledgedIds, sessionRevision, countsError, result)
+            offerUndo(result.acknowledgedIds, sessionRevision, countsError, result, scope)
             if (result.status === "success" && isCurrentScope()) {
               selection.exitSelectionMode({
                 restoreFocus: !contentState.get().activeContent,
@@ -202,7 +225,7 @@ const useMarkSelectedRead = (selection) => {
 
           if (result.status === "failure") {
             Notification.error({
-              title: polyglot.t("article_selection.read_error"),
+              title: polyglot.t("article_selection.read_error_scoped", { scope }),
               content: countsError?.message ?? result.error?.message,
             })
           }
@@ -213,7 +236,7 @@ const useMarkSelectedRead = (selection) => {
       selection.setSelectionLocked(false)
       setIsBusy(false)
     }
-  }, [offerUndo, polyglot, refreshCounts, selection])
+  }, [categories, feeds, offerUndo, polyglot, refreshCounts, selection])
 
   return { isBusy, markSelectedRead }
 }
