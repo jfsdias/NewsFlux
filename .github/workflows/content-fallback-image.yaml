@@ -1,0 +1,46 @@
+name: Content Fallback image
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "services/content_fallback/Dockerfile"
+      - "services/article_intel_auth/**"
+      - "scripts/content-fallback-image-gate.sh"
+      - ".github/workflows/content-fallback-image.yaml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: content-fallback-image-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  image:
+    name: Build and verify exact base/candidate images
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Preserve image gate runner
+        run: cp scripts/content-fallback-image-gate.sh "$RUNNER_TEMP/content-fallback-image-gate.sh"
+
+      - name: Build exact base image and reproduce missing package import
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git checkout --detach "$BASE_SHA"
+          bash "$RUNNER_TEMP/content-fallback-image-gate.sh" baseline "$BASE_SHA"
+
+      - name: Build exact candidate image and verify startup contract
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git checkout --detach "$HEAD_SHA"
+          bash "$RUNNER_TEMP/content-fallback-image-gate.sh" candidate "$HEAD_SHA"
