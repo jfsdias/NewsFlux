@@ -111,6 +111,7 @@ test("the Python suite runs independently on the supported interpreter", () => {
     "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s services/article_intel_auth/tests -p 'test_*.py' -v",
     "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s services/article_intel_summary/tests -p 'test_*.py' -v",
     "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s services/content_fallback/tests -p 'test_*.py' -v",
+    "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/ops/tests -p 'test_*.py' -v",
   ])
 })
 
