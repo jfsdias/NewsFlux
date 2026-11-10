@@ -237,6 +237,14 @@ test("the Article Intelligence Reader job builds both flag states before serving
   const enabledTestIndex = steps.findIndex(
     (step) => step.name === "Run AI-enabled Reader scenarios",
   )
+  const integrationBuildIndex = steps.findIndex(
+    (step) =>
+      step.name === "Build Reader with recovery for cross-feature scenarios" &&
+      step.run?.trim() === "pnpm build",
+  )
+  const integrationTestIndex = steps.findIndex(
+    (step) => step.name === "Run recovery and summary cross-feature scenarios",
+  )
   const playwrightConfig = readFileSync(
     new URL("../playwright.article-intelligence.config.js", import.meta.url),
     "utf8",
@@ -246,21 +254,34 @@ test("the Article Intelligence Reader job builds both flag states before serving
   assert.notEqual(enabledBuildIndex, -1, "the explicitly enabled Reader bundle must be built")
   assert.notEqual(defaultTestIndex, -1, "the default-off Reader scenarios must run")
   assert.notEqual(enabledTestIndex, -1, "the AI-enabled Reader scenarios must run")
+  assert.notEqual(
+    integrationBuildIndex,
+    -1,
+    "the explicitly integrated Reader bundle must be built",
+  )
+  assert.notEqual(integrationTestIndex, -1, "the combined recovery and summary scenarios must run")
   assert.equal(steps[enabledBuildIndex].env?.VITE_ARTICLE_INTELLIGENCE_ENABLED, "1")
   assert.equal(steps[enabledTestIndex].env?.VITE_ARTICLE_INTELLIGENCE_ENABLED, "1")
   assert.equal(steps[defaultBuildIndex].env?.VITE_CONTENT_FALLBACK_READER_BASE_PATH, undefined)
   assert.equal(steps[defaultTestIndex].env?.VITE_CONTENT_FALLBACK_READER_BASE_PATH, undefined)
+  assert.equal(steps[enabledBuildIndex].env?.VITE_CONTENT_FALLBACK_READER_BASE_PATH, undefined)
+  assert.equal(steps[enabledTestIndex].env?.VITE_CONTENT_FALLBACK_READER_BASE_PATH, undefined)
+  assert.equal(steps[integrationBuildIndex].env?.VITE_ARTICLE_INTELLIGENCE_ENABLED, "1")
   assert.equal(
-    steps[enabledBuildIndex].env?.VITE_CONTENT_FALLBACK_READER_BASE_PATH,
+    steps[integrationBuildIndex].env?.VITE_CONTENT_FALLBACK_READER_BASE_PATH,
     "/api/content-fallback",
   )
+  assert.equal(steps[integrationTestIndex].env?.VITE_ARTICLE_INTELLIGENCE_ENABLED, "1")
   assert.equal(
-    steps[enabledTestIndex].env?.VITE_CONTENT_FALLBACK_READER_BASE_PATH,
+    steps[integrationTestIndex].env?.VITE_CONTENT_FALLBACK_READER_BASE_PATH,
     "/api/content-fallback",
   )
+  assert.match(steps[integrationTestIndex].run, /--grep AI_RECOVERY_CROSS/u)
   assert.ok(defaultBuildIndex < defaultTestIndex)
   assert.ok(defaultTestIndex < enabledBuildIndex)
   assert.ok(enabledBuildIndex < enabledTestIndex)
+  assert.ok(enabledTestIndex < integrationBuildIndex)
+  assert.ok(integrationBuildIndex < integrationTestIndex)
   assert.match(playwrightConfig, /pnpm exec vite --host 127\.0\.0\.1 --port/u)
   assert.doesNotMatch(playwrightConfig, /start-app-server\.js/u)
 })

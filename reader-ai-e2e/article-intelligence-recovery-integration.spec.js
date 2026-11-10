@@ -7,8 +7,9 @@ import { cards } from "../e2e/support/app.js"
 import { expect, test } from "../e2e/support/fixtures.js"
 
 test.skip(
-  process.env.VITE_ARTICLE_INTELLIGENCE_ENABLED !== "1",
-  "requires explicit build-time AI UI enablement",
+  process.env.VITE_ARTICLE_INTELLIGENCE_ENABLED !== "1" ||
+    !process.env.VITE_CONTENT_FALLBACK_READER_BASE_PATH,
+  "requires explicitly enabled AI and Reader recovery UI",
 )
 
 const RECOVERY_HTML = Array.from(
@@ -208,14 +209,33 @@ test("AI_RECOVERY_CROSS: session change cancels simultaneous recovery and summar
   await summaryRequest
 
   const sessionPage = await context.newPage()
+  const storageChangeObserved = page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        globalThis.addEventListener(
+          "storage",
+          (event) => {
+            if (event.key === "auth") {
+              resolve()
+            }
+          },
+          { once: true },
+        )
+      }),
+  )
   await sessionPage.goto("/")
   await sessionPage.evaluate(() => {
     const auth = JSON.parse(localStorage.getItem("auth"))
-    localStorage.setItem("auth", JSON.stringify({ ...auth, apiKeyId: 18 }))
+    localStorage.setItem(
+      "auth",
+      JSON.stringify({ ...auth, token: "rotated-e2e-token", apiKeyId: 18 }),
+    )
   })
-  await expect.poll(() => abortedRequests.size).toBe(2)
+  await storageChangeObserved
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve())))
   releaseRecovery()
   releaseSummary()
+  await expect.poll(() => abortedRequests.size).toBe(2)
   await expect(page.locator(".article-body")).toContainText("const x = 1")
   await expect(page.locator(".article-body")).not.toContainText("Synthetic recovered paragraph")
   await expect(page.getByText("Synthetic integrated Reader summary.")).toHaveCount(0)

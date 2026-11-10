@@ -121,14 +121,24 @@ jobs:
       - name: Build Reader with explicit AI enablement
         env:
           VITE_ARTICLE_INTELLIGENCE_ENABLED: "1"
-          VITE_CONTENT_FALLBACK_READER_BASE_PATH: "/api/content-fallback"
         run: pnpm build
 
       - name: Run AI-enabled Reader scenarios
         env:
           VITE_ARTICLE_INTELLIGENCE_ENABLED: "1"
-          VITE_CONTENT_FALLBACK_READER_BASE_PATH: "/api/content-fallback"
         run: pnpm exec playwright test --config=playwright.article-intelligence.config.js
+
+      - name: Build Reader with recovery for cross-feature scenarios
+        env:
+          VITE_ARTICLE_INTELLIGENCE_ENABLED: "1"
+          VITE_CONTENT_FALLBACK_READER_BASE_PATH: "/api/content-fallback"
+        run: pnpm build
+
+      - name: Run recovery and summary cross-feature scenarios
+        env:
+          VITE_ARTICLE_INTELLIGENCE_ENABLED: "1"
+          VITE_CONTENT_FALLBACK_READER_BASE_PATH: "/api/content-fallback"
+        run: pnpm exec playwright test --config=playwright.article-intelligence.config.js --grep AI_RECOVERY_CROSS
 
       - name: Upload Article Intelligence Reader diagnostics
         if: ${{ failure() }}
