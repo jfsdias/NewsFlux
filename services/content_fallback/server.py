@@ -1,21 +1,31 @@
 from __future__ import annotations
 
 import hmac
+import ipaddress
 import json
 import logging
 import os
 import re
+import ssl
 from dataclasses import dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from services.article_intel_auth.auth import AuthError, MinifluxAuthService
 from services.content_fallback.miniflux import MinifluxClient
 from services.content_fallback.policy import PolicyRegistry
+from services.content_fallback.reader_bridge import (
+    ContentFallbackPrivateClient,
+    ReaderBridgeError,
+    ReaderBridgeRuntimeConfig,
+    ReaderContentBridge,
+)
 from services.content_fallback.service import ContentFallbackService, RecoveryError
 from services.content_fallback.store import SQLiteRecoveryStore
 
 LOGGER = logging.getLogger("newsflux.content_fallback.http")
 _ENTRY_PATH_RE = re.compile(r"^/v1/entries/([1-9][0-9]{0,18})/recover$")
+_READER_ENTRY_PATH_RE = re.compile(r"^/reader/v1/entries/([1-9][0-9]{0,18})/recover$")
 
 
 @dataclass(frozen=True)
@@ -26,7 +36,9 @@ class Settings:
     miniflux_api_token: str
     service_api_token: str
     database_path: str
+    private_service_url: str
     policies: PolicyRegistry
+    reader_bridge: ReaderBridgeRuntimeConfig | None
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -55,15 +67,30 @@ class Settings:
             miniflux_api_token=miniflux_token,
             service_api_token=service_token,
             database_path=os.environ.get("CONTENT_FALLBACK_DB_PATH", "/data/content-fallback.sqlite3"),
+            private_service_url=os.environ.get(
+                "CONTENT_FALLBACK_PRIVATE_URL", f"http://127.0.0.1:{port}"
+            ).strip(),
             policies=PolicyRegistry.from_dict(policy_document),
+            reader_bridge=ReaderBridgeRuntimeConfig.from_env(),
         )
 
 
-def make_handler(service: ContentFallbackService, service_token: str):
+def make_handler(
+    service: ContentFallbackService,
+    service_token: str,
+    *,
+    reader_bridge: ReaderContentBridge | None = None,
+    reader_trusted_proxy_ips: frozenset[str] = frozenset(),
+):
     class ContentFallbackHandler(BaseHTTPRequestHandler):
         server_version = "NewsFluxContentFallback/0.1"
 
-        def _write_json(self, status: HTTPStatus, payload: dict[str, object]) -> None:
+        def _write_json(
+            self,
+            status: HTTPStatus,
+            payload: dict[str, object],
+            extra_headers: dict[str, str] | None = None,
+        ) -> None:
             self._last_status = status.value
             body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
             self.send_response(status.value)
@@ -72,6 +99,8 @@ def make_handler(service: ContentFallbackService, service_token: str):
             self.send_header("x-content-type-options", "nosniff")
             self.send_header("content-length", str(len(body)))
             self.send_header("connection", "close")
+            for name, value in (extra_headers or {}).items():
+                self.send_header(name, value)
             self.end_headers()
             self.wfile.write(body)
             self.close_connection = True
@@ -91,7 +120,27 @@ def make_handler(service: ContentFallbackService, service_token: str):
                 },
             )
 
+        def do_OPTIONS(self) -> None:  # noqa: N802
+            if reader_bridge is None or not _READER_ENTRY_PATH_RE.fullmatch(self.path):
+                self._write_json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
+                return
+            try:
+                headers = reader_bridge.auth.origin_policy.preflight_headers(
+                    self.headers.get("Origin"),
+                    self.headers.get("Access-Control-Request-Method", ""),
+                    self.headers.get("Access-Control-Request-Headers", ""),
+                )
+            except Exception:
+                self._write_json(HTTPStatus.FORBIDDEN, {"error": "request_origin_not_allowed"})
+                return
+            self._write_json(HTTPStatus.OK, {}, headers)
+
         def do_POST(self) -> None:  # noqa: N802
+            reader_path_match = _READER_ENTRY_PATH_RE.fullmatch(self.path)
+            if reader_path_match is not None:
+                self._handle_reader_recovery(int(reader_path_match.group(1)))
+                return
+
             supplied = self.headers.get("Authorization", "")
             expected = f"Bearer {service_token}"
             if not service_token or not hmac.compare_digest(supplied, expected):
@@ -119,6 +168,54 @@ def make_handler(service: ContentFallbackService, service_token: str):
                 return
             self._write_json(HTTPStatus.OK, result)
 
+        def _handle_reader_recovery(self, entry_id: int) -> None:
+            if reader_bridge is None:
+                self._write_json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
+                return
+            cors_headers: dict[str, str] = {}
+            try:
+                cors_headers = reader_bridge.auth.origin_policy.cors_headers(self.headers.get("Origin"))
+                if self.headers.get("content-length", "0") != "0" or self.headers.get("transfer-encoding"):
+                    self._write_json(HTTPStatus.BAD_REQUEST, {"error": "request_body_not_allowed"}, cors_headers)
+                    return
+                result = reader_bridge.recover(
+                    entry_id=entry_id,
+                    api_key=self.headers.get("X-Miniflux-API-Key"),
+                    claimed_miniflux_base_url=self.headers.get("X-NewsFlux-Miniflux-Server"),
+                    request_origin=self.headers.get("Origin"),
+                    request_is_secure=self._request_is_secure(),
+                )
+            except ReaderBridgeError as exc:
+                self._write_json(
+                    HTTPStatus(exc.status_code),
+                    {"error": exc.code},
+                    cors_headers,
+                )
+                return
+            except AuthError as exc:
+                self._write_json(
+                    HTTPStatus(exc.status_code),
+                    {"error": exc.code},
+                    cors_headers,
+                )
+                return
+            except Exception:
+                self._write_json(HTTPStatus.BAD_GATEWAY, {"error": "recovery_unavailable"}, cors_headers)
+                return
+            self._write_json(HTTPStatus.OK, result, cors_headers)
+
+        def _request_is_secure(self) -> bool:
+            if isinstance(self.connection, ssl.SSLSocket):
+                return True
+            try:
+                peer_ip = ipaddress.ip_address(str(self.client_address[0])).compressed
+            except ValueError:
+                return False
+            return (
+                peer_ip in reader_trusted_proxy_ips
+                and self.headers.get("X-Forwarded-Proto", "").strip().casefold() == "https"
+            )
+
         def log_message(self, _format: str, *_args: object) -> None:
             # BaseHTTPRequestHandler's default access log includes the request target;
             # keep the service log limited to route and status, never URL parameters.
@@ -136,10 +233,34 @@ def build_service(settings: Settings) -> ContentFallbackService:
     return ContentFallbackService(miniflux=miniflux, policies=settings.policies, store=store)
 
 
+def build_reader_bridge(settings: Settings, service: ContentFallbackService) -> ReaderContentBridge | None:
+    config = settings.reader_bridge
+    if config is None:
+        return None
+    auth = MinifluxAuthService(config.auth_settings, http=service.miniflux.http)
+    recovery = ContentFallbackPrivateClient(settings.private_service_url, settings.service_api_token)
+    return ReaderContentBridge(
+        auth=auth,
+        miniflux=service.miniflux,
+        recovery=recovery,
+        allowed_user_id=config.allowed_user_id,
+    )
+
+
 def main() -> None:
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO").upper(), format="%(message)s")
     settings = Settings.from_env()
-    server = ThreadingHTTPServer((settings.host, settings.port), make_handler(build_service(settings), settings.service_api_token))
+    service = build_service(settings)
+    reader_bridge = build_reader_bridge(settings, service)
+    server = ThreadingHTTPServer(
+        (settings.host, settings.port),
+        make_handler(
+            service,
+            settings.service_api_token,
+            reader_bridge=reader_bridge,
+            reader_trusted_proxy_ips=(settings.reader_bridge.trusted_proxy_ips if settings.reader_bridge else frozenset()),
+        ),
+    )
     server.daemon_threads = True
     LOGGER.info("NewsFlux content fallback listening", extra={"host": settings.host, "port": settings.port})
     server.serve_forever()

@@ -6,6 +6,8 @@ import threading
 import unittest
 from http.server import ThreadingHTTPServer
 
+from services.article_intel_auth.auth import AuthError
+from services.article_intel_auth.origin import OriginPolicy
 from services.content_fallback.server import make_handler
 
 
@@ -18,10 +20,36 @@ class FakeService:
         return {"entry_id": entry_id, "status": "disabled", "content_html": "<p>Original</p>"}
 
 
+class FakeReaderBridge:
+    def __init__(self) -> None:
+        self.auth = type(
+            "AuthFixture",
+            (),
+            {"origin_policy": OriginPolicy(["https://newsflux.example"])},
+        )()
+        self.calls: list[dict[str, object]] = []
+
+    def recover(self, **kwargs):
+        if kwargs["request_is_secure"] is not True:
+            raise AuthError("https_required", 400)
+        self.auth.origin_policy.validate_origin(kwargs["request_origin"])
+        self.calls.append(kwargs)
+        return {"status": "recovered", "entry_id": kwargs["entry_id"]}
+
+
 class ServerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.service = FakeService()
-        self.server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(self.service, "s" * 40))
+        self.reader_bridge = FakeReaderBridge()
+        self.server = ThreadingHTTPServer(
+            ("127.0.0.1", 0),
+            make_handler(
+                self.service,
+                "s" * 40,
+                reader_bridge=self.reader_bridge,
+                reader_trusted_proxy_ips=frozenset({"127.0.0.1"}),
+            ),
+        )
         self.server.daemon_threads = True
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -41,6 +69,28 @@ class ServerTests(unittest.TestCase):
         payload = response.read()
         connection.close()
         return status, json.loads(payload)
+
+    def reader_request(self, *, forwarded_proto: str = "https", origin: str = "https://newsflux.example"):
+        connection = http.client.HTTPConnection("127.0.0.1", self.port, timeout=2)
+        connection.request(
+            "POST",
+            "/reader/v1/entries/42/recover",
+            body=b"",
+            headers={
+                "Content-Length": "0",
+                "X-Miniflux-API-Key": "synthetic-key",
+                "X-NewsFlux-Miniflux-Server": "https://miniflux.example",
+                "Origin": origin,
+                "X-Forwarded-Proto": forwarded_proto,
+                "Authorization": "Bearer internal-service-token-must-not-be-used",
+            },
+        )
+        response = connection.getresponse()
+        status = response.status
+        payload = response.read()
+        headers = dict(response.getheaders())
+        connection.close()
+        return status, json.loads(payload), headers
 
     def test_service_authentication_is_required(self) -> None:
         status, payload = self.request("/v1/entries/42/recover")
@@ -74,6 +124,47 @@ class ServerTests(unittest.TestCase):
         )
         self.assertEqual(status, 404)
         self.assertEqual(payload["error"], "not_found")
+
+    def test_reader_route_requires_verified_https_proxy_and_exact_origin(self) -> None:
+        status, payload, headers = self.reader_request(forwarded_proto="http")
+        self.assertEqual(status, 400)
+        self.assertEqual(payload["error"], "https_required")
+        self.assertEqual(self.reader_bridge.calls, [])
+
+        status, payload, _headers = self.reader_request(origin="https://attacker.example")
+        self.assertEqual(status, 403)
+        self.assertEqual(payload["error"], "request_origin_not_allowed")
+        self.assertEqual(self.reader_bridge.calls, [])
+
+    def test_reader_route_forwards_only_miniflux_request_headers_and_adds_no_store_cors(self) -> None:
+        status, payload, headers = self.reader_request()
+        self.assertEqual(status, 200)
+        self.assertEqual(payload, {"status": "recovered", "entry_id": 42})
+        self.assertEqual(len(self.reader_bridge.calls), 1)
+        call = self.reader_bridge.calls[0]
+        self.assertEqual(call["api_key"], "synthetic-key")
+        self.assertEqual(call["claimed_miniflux_base_url"], "https://miniflux.example")
+        self.assertTrue(call["request_is_secure"])
+        self.assertNotIn("internal-service-token-must-not-be-used", json.dumps(call))
+        self.assertEqual(headers.get("Access-Control-Allow-Origin"), "https://newsflux.example")
+        self.assertEqual(headers.get("Cache-Control"), "no-store")
+
+    def test_reader_preflight_allows_only_the_configured_origin_and_headers(self) -> None:
+        connection = http.client.HTTPConnection("127.0.0.1", self.port, timeout=2)
+        connection.request(
+            "OPTIONS",
+            "/reader/v1/entries/42/recover",
+            headers={
+                "Origin": "https://newsflux.example",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "x-miniflux-api-key,x-newsflux-miniflux-server",
+            },
+        )
+        response = connection.getresponse()
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.getheader("Access-Control-Allow-Origin"), "https://newsflux.example")
+        response.read()
+        connection.close()
 
 
 if __name__ == "__main__":
