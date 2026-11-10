@@ -10,7 +10,8 @@ const origin = process.env.NEWSFLUX_APP_ORIGIN
 const minifluxBase = process.env.NEWSFLUX_MINIFLUX_BASE_URL
 const userKey = process.env.NEWSFLUX_TEST_USER_KEY
 const rotatedKey = process.env.NEWSFLUX_TEST_ROTATED_KEY
-assert.ok(sourceRoot && outputRoot && origin && minifluxBase && userKey && rotatedKey)
+const ingressIp = process.env.NEWSFLUX_INGRESS_IP
+assert.ok(sourceRoot && outputRoot && origin && minifluxBase && userKey && rotatedKey && ingressIp)
 
 const requireFromSource = createRequire(path.join(sourceRoot, "package.json"))
 const { chromium, expect } = requireFromSource("@playwright/test")
@@ -18,7 +19,7 @@ await mkdir(outputRoot, { recursive: true })
 
 const browser = await chromium.launch({
   headless: true,
-  args: ["--host-resolver-rules=MAP newsflux.test 127.0.0.1"],
+  args: [`--host-resolver-rules=MAP newsflux.test ${ingressIp}`],
 })
 const browserVersion = browser.version()
 const recoveryRequests = []

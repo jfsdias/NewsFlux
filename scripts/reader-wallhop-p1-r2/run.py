@@ -15,6 +15,7 @@ EXPECTED_SOURCE_SHA = "70f0d0c3c90b19c2853be63039fc7022b301266b"
 APP_HOST = "newsflux.test"
 APP_PORT = 8443
 APP_ORIGIN = f"https://{APP_HOST}:{APP_PORT}"
+APP_CONNECT_IP = "127.0.0.1"
 MINIFLUX_BASE_URL = f"{APP_ORIGIN}/miniflux"
 USER_ID = 7
 READER_PATH = "/api/content-fallback/reader/v1/entries"
@@ -396,7 +397,7 @@ def wait_for_https(ca_cert: Path, timeout: float = 60.0) -> tuple[int, str]:
             last_error = str(exc)
         time.sleep(1)
     failure_step = CURRENT_STEP
-    diagnose_https_startup()
+    diagnose_https_startup(ca_cert)
     CURRENT_STEP = failure_step
     for container_name in ("newsflux-p1-r2-proxy", "newsflux-p1-r2-frontend"):
         result = command(
@@ -413,7 +414,7 @@ def wait_for_https(ca_cert: Path, timeout: float = 60.0) -> tuple[int, str]:
     raise RuntimeError(f"HTTPS ingress did not serve the frontend before timeout; last probe: {last_error}")
 
 
-def diagnose_https_startup() -> None:
+def diagnose_https_startup(ca_cert: Path) -> None:
     """Capture only proxy state and a secret-free internal HTTPS reachability probe."""
     try:
         proxy_info = inspect_container("newsflux-p1-r2-proxy")
@@ -454,6 +455,35 @@ def diagnose_https_startup() -> None:
         + (f" DETAIL={detail}" if detail else ""),
         flush=True,
     )
+    host_probe = command(
+        [
+            "curl",
+            "--noproxy",
+            "*",
+            "--silent",
+            "--show-error",
+            "--max-time",
+            "5",
+            "--cacert",
+            str(ca_cert),
+            "--resolve",
+            f"{APP_HOST}:{APP_PORT}:{APP_CONNECT_IP}",
+            "-o",
+            "/dev/null",
+            "-w",
+            "%{http_code}",
+            APP_ORIGIN + "/",
+        ],
+        step="Probe HTTPS proxy from isolated runner host",
+        check=False,
+    )
+    host_detail = redact_secrets((host_probe.stderr or host_probe.stdout).strip())[-300:]
+    print(
+        f"HTTPS_HOST_PROXY_PROBE_EXIT={host_probe.returncode}"
+        + (f" STATUS={host_probe.stdout.strip()}" if host_probe.stdout.strip() else "")
+        + (f" DETAIL={host_detail}" if host_detail else ""),
+        flush=True,
+    )
 
 
 def curl_request(
@@ -476,7 +506,7 @@ def curl_request(
         "--cacert",
         str(ca_cert),
         "--resolve",
-        f"{APP_HOST}:{APP_PORT}:127.0.0.1",
+        f"{APP_HOST}:{APP_PORT}:{APP_CONNECT_IP}",
         "-X",
         method,
     ]
@@ -587,7 +617,7 @@ def docker_run(args: list[str], name: str, *, step: str) -> None:
 
 
 def run() -> None:
-    global TEMP_ROOT, NETWORK_NAME, CURRENT_STEP
+    global TEMP_ROOT, NETWORK_NAME, CURRENT_STEP, APP_CONNECT_IP
     CURRENT_STEP = "PREFLIGHT"
     main_sha = verify_live_main()
     source_sha = check_exact_source()
@@ -915,8 +945,6 @@ def run() -> None:
                 "/tmp:rw,noexec,nosuid,size=16m",
                 "--tmpfs",
                 "/var/cache/nginx:rw,noexec,nosuid,size=16m,uid=101,gid=101,mode=0750",
-                "-p",
-                f"127.0.0.1:{APP_PORT}:8443",
                 "-v",
                 f"{proxy_config}:/etc/nginx/nginx.conf:ro",
                 "-v",
@@ -930,7 +958,7 @@ def run() -> None:
                 "/etc/nginx/nginx.conf",
             ],
             "newsflux-p1-r2-proxy",
-            step="Start loopback-only HTTPS reverse proxy",
+            step="Start HTTPS reverse proxy on the isolated Docker network",
         )
 
         network_info = docker_json(["network", "inspect", NETWORK_NAME], step="Inspect test network")[0]
@@ -948,6 +976,7 @@ def run() -> None:
                 f"Proxy IP mismatch: expected {proxy_ip}, observed {actual_proxy_ip or 'missing'}; "
                 f"attached networks: {attached_networks}"
             )
+        APP_CONNECT_IP = actual_proxy_ip
         sidecar_networks = sidecar_info["NetworkSettings"].get("Networks") or {}
         actual_sidecar_ip = sidecar_networks.get(NETWORK_NAME, {}).get("IPAddress", "")
         if actual_sidecar_ip != sidecar_ip:
@@ -1016,10 +1045,8 @@ def run() -> None:
             raise RuntimeError("Sidecar port was published outside the isolated network")
         if not expected_container_not_published("newsflux-p1-r2-frontend", "2000/tcp"):
             raise RuntimeError("Frontend port was published outside the isolated network")
-        proxy_bindings = proxy_info["HostConfig"].get("PortBindings") or {}
-        published_proxy = proxy_bindings.get("8443/tcp") or []
-        if len(published_proxy) != 1 or published_proxy[0].get("HostIp") != "127.0.0.1":
-            raise RuntimeError("Reverse proxy was not restricted to host loopback")
+        if not expected_container_not_published("newsflux-p1-r2-proxy", "8443/tcp"):
+            raise RuntimeError("Reverse proxy port was published outside the isolated Docker network")
 
         deadline = time.monotonic() + 60
         while time.monotonic() < deadline:
@@ -1036,7 +1063,7 @@ def run() -> None:
 
         https_status, _index = wait_for_https(ca_cert)
         if https_status != 200:
-            raise RuntimeError("The loopback HTTPS ingress did not serve the frontend")
+            raise RuntimeError("The private Docker-network HTTPS ingress did not serve the frontend")
         plaintext = command(
             [
                 "curl",
@@ -1046,11 +1073,13 @@ def run() -> None:
                 "--show-error",
                 "--max-time",
                 "5",
+                "--resolve",
+                f"{APP_HOST}:{APP_PORT}:{APP_CONNECT_IP}",
                 "-o",
                 "/dev/null",
                 "-w",
                 "%{http_code}",
-                f"http://127.0.0.1:{APP_PORT}/",
+                f"http://{APP_HOST}:{APP_PORT}/",
             ],
             step="Verify the isolated ingress does not serve plaintext HTTP",
             check=False,
@@ -1189,6 +1218,7 @@ def run() -> None:
                 "NEWSFLUX_SOURCE_ROOT": str(SOURCE_ROOT),
                 "NEWSFLUX_OUTPUT_ROOT": str(OUTPUT_ROOT),
                 "NEWSFLUX_APP_ORIGIN": APP_ORIGIN,
+                "NEWSFLUX_INGRESS_IP": APP_CONNECT_IP,
                 "NEWSFLUX_MINIFLUX_BASE_URL": MINIFLUX_BASE_URL,
                 "NEWSFLUX_TEST_USER_KEY": USER_KEY,
                 "NEWSFLUX_TEST_ROTATED_KEY": ROTATED_KEY,
