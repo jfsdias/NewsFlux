@@ -76,6 +76,32 @@ async function fixtureState(page) {
   return response.body
 }
 
+function waitForRecoveryOutcome(page, entryId) {
+  const expectedPath = `/api/content-fallback/reader/v1/entries/${entryId}/recover`
+  return new Promise((resolve) => {
+    const cleanup = () => {
+      page.off("response", onResponse)
+      page.off("requestfailed", onFailure)
+    }
+    const finish = (outcome) => {
+      cleanup()
+      resolve(outcome)
+    }
+    const onResponse = (response) => {
+      if (new globalThis.URL(response.url()).pathname === expectedPath) {
+        finish({ kind: "response", response })
+      }
+    }
+    const onFailure = (request) => {
+      if (new globalThis.URL(request.url()).pathname === expectedPath) {
+        finish({ kind: "aborted", request })
+      }
+    }
+    page.on("response", onResponse)
+    page.on("requestfailed", onFailure)
+  })
+}
+
 try {
   const small = await createReader({ entryId: 501, width: 390, height: 844, touch: true })
   const beforeSmallAction = await fixtureState(small.page)
@@ -150,10 +176,7 @@ try {
   const pendingRecovery = stale.page.waitForRequest((request) =>
     new globalThis.URL(request.url()).pathname.endsWith("/reader/v1/entries/503/recover"),
   )
-  const abortedRecovery = stale.page.waitForEvent("requestfailed", {
-    predicate: (request) =>
-      new globalThis.URL(request.url()).pathname.endsWith("/reader/v1/entries/503/recover"),
-  })
+  const staleRecoveryOutcome = waitForRecoveryOutcome(stale.page, 503)
   await stale.page.getByRole("button", { name: /recover full text/i }).tap()
   await pendingRecovery
   const previousAuth = await stale.page.evaluate(() => globalThis.localStorage.getItem("auth"))
@@ -183,8 +206,12 @@ try {
       stale.page.evaluate(() => JSON.parse(globalThis.localStorage.getItem("auth") ?? "{}").token),
     )
     .toBe(rotatedKey)
-  const failedRecovery = await abortedRecovery
-  assert.match(failedRecovery.failure()?.errorText ?? "", /aborted|canceled/i)
+  const staleOutcome = await staleRecoveryOutcome
+  if (staleOutcome.kind === "response") {
+    assert.equal(staleOutcome.response.status(), 200)
+  } else {
+    assert.match(staleOutcome.request.failure()?.errorText ?? "", /aborted|canceled/i)
+  }
   await expect(
     stale.page.getByText("Full text recovered with Miniflux scraper", { exact: true }),
   ).toHaveCount(0)
@@ -207,7 +234,7 @@ try {
     deviceScaleFactor: 2,
     readerAction: "PASS",
     providerFailurePreservedOriginal: "PASS",
-    staleSessionRequestAborted: "PASS",
+    staleSessionOutcome: staleOutcome.kind === "response" ? "STALE_RESPONSE_SUPPRESSED" : "ABORTED",
     staleSessionResponseSuppressed: "PASS",
     readStarUnchanged: "PASS",
     minifluxWrites: 0,

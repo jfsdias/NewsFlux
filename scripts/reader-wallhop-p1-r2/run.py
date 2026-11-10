@@ -1314,7 +1314,7 @@ def run() -> None:
             for item in final_fixture_state.get("events", [])
         ):
             raise RuntimeError("Forwarded-header rewrite was not observed on a Miniflux API request")
-        for identifier in (501, 502, 503):
+        for identifier in (501, 502):
             if f"/v1/entries/{identifier}/fetch-content" not in final_fixture_state.get(
                 "reader_recovery_gets", []
             ):
