@@ -28,14 +28,18 @@ SHORT_CONTENT = {
     902: "<p>Original teaser 902: a short synthetic article preview.</p>",
     991: "<p>Original teaser 991: a short synthetic article preview.</p>",
 }
-RECOVERED_CONTENT = (
-    "<p>"
-    + " ".join(
-        "Synthetic recovered paragraph for isolated Reader validation. "
-        "The provider response is a fixture and no external provider is contacted."
-        for _ in range(32)
-    )
-    + "</p><script>window.__unsafe_fixture_script = true</script>"
+RECOVERED_PARAGRAPHS = (
+    "Synthetic recovered paragraph for isolated Reader validation. Researchers compared water temperature, wind direction, and shoreline movement at several coastal stations during repeated autumn visits. The record kept each observation available for later comparison.",
+    "Synthetic recovered paragraph for isolated Reader validation. Field notes recorded rainfall totals and tide levels, giving scientists comparable observations across northern survey locations. These entries gave researchers a consistent reference for analysis.",
+    "Synthetic recovered paragraph for isolated Reader validation. The teams reviewed morning measurements alongside evening readings to identify gradual changes across the region. That review helped describe the regional pattern accurately.",
+    "Synthetic recovered paragraph for isolated Reader validation. Local observers documented shoreline conditions and shared dated reports with the coordinating research group. The dated notes allowed teams to verify their field reports.",
+    "Synthetic recovered paragraph for isolated Reader validation. Analysts checked the collected records for gaps before comparing results from every monitoring station. This process made missing observations visible before analysis was completed.",
+    "Synthetic recovered paragraph for isolated Reader validation. Researchers described how seasonal winds affected the samples and noted which patterns appeared consistently. The summary distinguished recurring effects from temporary local changes.",
+    "Synthetic recovered paragraph for isolated Reader validation. The study team compared its findings with earlier observations while keeping each source record intact. Earlier measurements supplied context for the new observations.",
+    "Synthetic recovered paragraph for isolated Reader validation. Follow-up visits will help the group assess whether these measured conditions continue through the winter. The next survey will extend the same measurement process.",
+)
+RECOVERED_CONTENT = "".join(f"<p>{paragraph}</p>" for paragraph in RECOVERED_PARAGRAPHS) + (
+    "<script>window.__unsafe_fixture_script = true</script>"
 )
 FEED = {
     "id": FEED_ID,
