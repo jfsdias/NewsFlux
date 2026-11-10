@@ -65,7 +65,6 @@ test("AI Reader browser tests remain outside the frozen 46-scenario product inve
 test("AI Reader browser suite separates the default-off and explicitly enabled runs", async () => {
   const workflow = await read(".github/workflows/e2e.yaml")
   const config = await read("playwright.article-intelligence.config.js")
-  const appServer = await read("e2e/support/start-app-server.js")
   const availability = await read("reader-ai-e2e/article-intelligence-availability.spec.js")
   const enabledScenarios = await read("reader-ai-e2e/article-intelligence.spec.js")
 
@@ -74,6 +73,10 @@ test("AI Reader browser suite separates the default-off and explicitly enabled r
   assert.match(
     workflow,
     /Build Reader with explicit AI enablement[\s\S]*?VITE_ARTICLE_INTELLIGENCE_ENABLED: "1"[\s\S]*?pnpm build/u,
+  )
+  assert.match(
+    workflow,
+    /Build Reader with AI disabled by default[\s\S]*?pnpm build[\s\S]*?Run Article Intelligence Reader scenarios/u,
   )
   assert.match(
     workflow,
@@ -86,20 +89,11 @@ test("AI Reader browser suite separates the default-off and explicitly enabled r
   assert.doesNotMatch(workflow, /--grep "ARTICLE_INTELLIGENCE_COMPONENT"/u)
   assert.match(availability, /process\.env\.VITE_ARTICLE_INTELLIGENCE_ENABLED === "1"/u)
   assert.match(enabledScenarios, /process\.env\.VITE_ARTICLE_INTELLIGENCE_ENABLED !== "1"/u)
-  assert.match(config, /start-app-server\.js/u)
-  assert.doesNotMatch(config, /pnpm exec vite --host/u)
-
-  const configPort = config.match(
-    /const appPort = Number\(process\.env\.E2E_APP_PORT \?\? (\d+)\)/u,
-  )?.[1]
-  const serverPort = appServer.match(
-    /const port = Number\(process\.env\.E2E_APP_PORT \?\? (\d+)\)/u,
-  )?.[1]
-  assert.equal(
-    configPort,
-    serverPort,
-    "Playwright must wait on the static app server's default port",
+  assert.match(
+    config,
+    /command: `pnpm exec vite --host 127\.0\.0\.1 --port \$\{appPort\} --strictPort`/u,
   )
+  assert.match(config, /url: `http:\/\/127\.0\.0\.1:\$\{appPort\}\//u)
 })
 
 test("synthetic authenticated Reader fixture can provision an isolated API-key identity", async () => {
