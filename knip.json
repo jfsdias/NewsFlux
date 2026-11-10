@@ -3,6 +3,7 @@
   "entry": [
     "scripts/tests/**/*.{js,jsx}",
     "scripts/*.js",
+    "scripts/ux-reach-01-root-cause/**/*.js",
     "e2e/**/*.spec.js",
     "e2e/reporters/*.js",
     "e2e/support/start-*.js",

@@ -1,0 +1,93 @@
+name: UX-REACH-01 exact-source hit-test diagnostic
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/ux-reach-01-root-cause-diagnostic.yaml
+      - scripts/ux-reach-01-root-cause/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ux-reach-01-root-cause-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-source-ab:
+    name: Exact main, PR #219 head, and synthetic merge
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      MAIN_SHA: 70f0d0c3c90b19c2853be63039fc7022b301266b
+      PR219_HEAD: 0cba501ef74fc91f724940f19ea3c64c510146d6
+      PR219_MERGE: 452bdb84177557ca2132cb07bb4fa5965c3c45c5
+    steps:
+      - name: Checkout diagnostic harness
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: diagnostic
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Checkout exact main source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: candidates/main
+          ref: 70f0d0c3c90b19c2853be63039fc7022b301266b
+
+      - name: Checkout PR #219 head source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: candidates/pr219-head
+          ref: 0cba501ef74fc91f724940f19ea3c64c510146d6
+
+      - name: Checkout PR #219 synthetic merge source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: candidates/pr219-merge
+          ref: 452bdb84177557ca2132cb07bb4fa5965c3c45c5
+
+      - name: Verify candidate identities and main has not moved
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(git -C candidates/main rev-parse HEAD)" = "$MAIN_SHA"
+          test "$(git -C candidates/pr219-head rev-parse HEAD)" = "$PR219_HEAD"
+          test "$(git -C candidates/pr219-merge rev-parse HEAD)" = "$PR219_MERGE"
+          test "$(gh api repos/jfsdias/NewsFlux --jq .default_branch)" = main
+          test "$(gh api repos/jfsdias/NewsFlux/commits/main --jq .sha)" = "$MAIN_SHA"
+          test "$(gh api repos/jfsdias/NewsFlux/pulls/219 --jq .head.sha)" = "$PR219_HEAD"
+          test "$(git ls-remote https://github.com/jfsdias/NewsFlux.git refs/pull/219/merge | cut -f1)" = "$PR219_MERGE"
+          printf 'MAIN_SHA=%s\nPR219_HEAD=%s\nPR219_MERGE=%s\n' "$MAIN_SHA" "$PR219_HEAD" "$PR219_MERGE"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 11.21.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.4
+
+      - name: Install pinned Chromium and system dependencies
+        working-directory: candidates/main
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+
+      - name: Run exact-source comparisons and capture hit targets
+        working-directory: diagnostic
+        env:
+          UX_REACH_ROOT_CAUSE_OUTPUT: ${{ github.workspace }}/test-results/ux-reach-root-cause
+        run: node scripts/ux-reach-01-root-cause/run.mjs
+
+      - name: Upload exact-source traces, screenshots, and measurements
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ux-reach-01-root-cause-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/ux-reach-root-cause/
+          if-no-files-found: warn
+          retention-days: 7
