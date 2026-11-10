@@ -1,5 +1,6 @@
 import process from "node:process"
 
+import { cards } from "../e2e/support/app.js"
 /* eslint import/extensions: off -- Shared E2E fixture is a native Node ESM module. */
 /* eslint import/no-relative-parent-imports: off -- Keep AI scenarios outside the frozen product inventory while reusing its synthetic fixtures. */
 import { expect, test } from "../e2e/support/fixtures.js"
@@ -14,10 +15,12 @@ test("ARTICLE_INTELLIGENCE_COMPONENT: explicit keyboard action summarizes withou
   mock,
 }) => {
   const { page } = await openApp({
-    path: "/all/entry/1",
+    path: "/all",
     provisionedApiKey: true,
     settings: { markReadBy: "manually" },
   })
+  await cards(page).first().click()
+  await expect(page).toHaveURL(/\/all\/entry\/1$/)
   await expect(page.getByRole("heading", { name: "Subtítulo" })).toBeVisible()
   let summaryRequestCount = 0
   await page.route("**/api/ai/v1/entries/1/summary", async (route) => {
