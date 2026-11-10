@@ -845,9 +845,20 @@ def run() -> None:
         proxy_info = inspect_container("newsflux-p1-r2-proxy")
         sidecar_info = inspect_container("newsflux-p1-r2-sidecar")
         frontend_info = inspect_container("newsflux-p1-r2-frontend")
-        actual_proxy_ip = proxy_info["NetworkSettings"]["Networks"][NETWORK_NAME]["IPAddress"]
+        proxy_networks = proxy_info["NetworkSettings"].get("Networks") or {}
+        actual_proxy_ip = proxy_networks.get(NETWORK_NAME, {}).get("IPAddress", "")
         if actual_proxy_ip != proxy_ip:
-            raise RuntimeError("Proxy container IP differed from the sidecar trusted IP")
+            attached_networks = ",".join(sorted(proxy_networks)) or "none"
+            raise RuntimeError(
+                f"Proxy IP mismatch: expected {proxy_ip}, observed {actual_proxy_ip or 'missing'}; "
+                f"attached networks: {attached_networks}"
+            )
+        sidecar_networks = sidecar_info["NetworkSettings"].get("Networks") or {}
+        actual_sidecar_ip = sidecar_networks.get(NETWORK_NAME, {}).get("IPAddress", "")
+        if actual_sidecar_ip != sidecar_ip:
+            raise RuntimeError(
+                f"Sidecar IP mismatch: expected {sidecar_ip}, observed {actual_sidecar_ip or 'missing'}"
+            )
         if sidecar_info["Config"].get("User") != "10001:10001":
             raise RuntimeError("Sidecar process was not configured as non-root")
         if frontend_info["Config"].get("User") != "1000:1000":
