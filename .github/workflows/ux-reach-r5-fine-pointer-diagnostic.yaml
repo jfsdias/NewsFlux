@@ -1,0 +1,94 @@
+name: UX-REACH-R5 fine-pointer pen-drag diagnostic
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/ux-reach-r5-fine-pointer-diagnostic.yaml
+      - scripts/ux-reach-r5-diagnostic/**
+      - knip.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ux-reach-r5-fine-pointer-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compare-exact-sources:
+    name: Exact main and PR #225 candidate diagnostics
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    env:
+      EXPECTED_MAIN_SHA: 654b9d30ee0f43b05edab07f5ed8c9ac188625c0
+      EXPECTED_PR225_HEAD_SHA: 74e388476943e2e81538308793529c884fcd6170
+      EXPECTED_PR225_MERGE_SHA: ad308a420f794abb7afc9889c502620e942e2a19
+    steps:
+      - name: Checkout diagnostic harness
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: diagnostic
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Checkout exact main source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: candidates/main
+          ref: 654b9d30ee0f43b05edab07f5ed8c9ac188625c0
+
+      - name: Checkout exact PR #225 merge candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: candidates/pr225-candidate
+          ref: ad308a420f794abb7afc9889c502620e942e2a19
+
+      - name: Verify source provenance before running browsers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          checkout_main=$(git -C candidates/main rev-parse HEAD)
+          checkout_candidate=$(git -C candidates/pr225-candidate rev-parse HEAD)
+          live_main=$(gh api repos/jfsdias/NewsFlux/commits/main --jq .sha)
+          live_pr225_head=$(gh api repos/jfsdias/NewsFlux/pulls/225 --jq .head.sha)
+          live_pr225_merge=$(git ls-remote https://github.com/jfsdias/NewsFlux.git refs/pull/225/merge | cut -f1)
+          printf 'CHECKOUT_MAIN=%s\nCHECKOUT_PR225_MERGE=%s\nLIVE_MAIN=%s\nLIVE_PR225_HEAD=%s\nLIVE_PR225_MERGE=%s\n' \
+            "$checkout_main" "$checkout_candidate" "$live_main" "$live_pr225_head" "$live_pr225_merge"
+          test "$checkout_main" = "$EXPECTED_MAIN_SHA"
+          test "$checkout_candidate" = "$EXPECTED_PR225_MERGE_SHA"
+          test "$live_main" = "$EXPECTED_MAIN_SHA"
+          test "$live_pr225_head" = "$EXPECTED_PR225_HEAD_SHA"
+          test "$live_pr225_merge" = "$EXPECTED_PR225_MERGE_SHA"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 11.21.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.4
+
+      - name: Install exact main dependencies and pinned Chromium
+        working-directory: candidates/main
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+          pnpm exec playwright --version
+
+      - name: Collect bounded A/B observations
+        working-directory: diagnostic
+        env:
+          UX_REACH_R5_DIAGNOSTIC_OUTPUT: ${{ github.workspace }}/test-results/ux-reach-r5
+        run: node scripts/ux-reach-r5-diagnostic/run.mjs
+
+      - name: Upload A/B logs, per-run telemetry, screenshots, and traces
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ux-reach-r5-fine-pointer-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/ux-reach-r5/
+          if-no-files-found: warn
+          retention-days: 14
