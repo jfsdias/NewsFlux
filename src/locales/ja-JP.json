@@ -259,6 +259,11 @@
     "server_error": "サーバーがこの記事を読み込めませんでした。再試行してください。",
     "network_error": "サーバーに接続できませんでした。接続を確認して再試行してください。",
     "request_error": "この記事を読み込めませんでした。再試行してください。",
+    "recover_full_text": "全文を取得",
+    "recovering_full_text": "全文を取得しています…",
+    "recovered_from_wallhop": "WallHop から全文を取得しました",
+    "recovered_from_miniflux_scraper": "Miniflux スクレーパーで全文を取得しました",
+    "recovery_failed": "全文を取得できませんでした。元のコンテンツを引き続き表示します。",
     "back_to_list": "一覧に戻る"
   },
   "deduplicate": {

@@ -259,6 +259,11 @@
     "server_error": "Der Server konnte diesen Artikel nicht laden. Bitte versuchen Sie es erneut.",
     "network_error": "Verbindung zum Server fehlgeschlagen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
     "request_error": "Dieser Artikel konnte nicht geladen werden. Bitte versuchen Sie es erneut.",
+    "recover_full_text": "Vollständigen Text abrufen",
+    "recovering_full_text": "Vollständiger Text wird abgerufen…",
+    "recovered_from_wallhop": "Vollständiger Text von WallHop abgerufen",
+    "recovered_from_miniflux_scraper": "Vollständiger Text mit dem Miniflux-Scraper abgerufen",
+    "recovery_failed": "Der vollständige Text konnte nicht abgerufen werden. Der ursprüngliche Inhalt wird weiterhin angezeigt.",
     "back_to_list": "Zur Liste zurück"
   },
   "deduplicate": {

@@ -259,6 +259,11 @@
     "server_error": "Le serveur n’a pas pu charger cet article. Veuillez réessayer.",
     "network_error": "Connexion au serveur impossible. Vérifiez votre connexion et réessayez.",
     "request_error": "Impossible de charger cet article. Veuillez réessayer.",
+    "recover_full_text": "Récupérer le texte complet",
+    "recovering_full_text": "Récupération du texte complet…",
+    "recovered_from_wallhop": "Texte complet récupéré via WallHop",
+    "recovered_from_miniflux_scraper": "Texte complet récupéré avec le scraper Miniflux",
+    "recovery_failed": "Impossible de récupérer le texte complet. Le contenu d’origine reste affiché.",
     "back_to_list": "Retour à la liste"
   },
   "deduplicate": {

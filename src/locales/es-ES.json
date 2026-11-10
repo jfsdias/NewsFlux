@@ -259,6 +259,11 @@
     "server_error": "El servidor no pudo cargar este artículo. Inténtelo de nuevo.",
     "network_error": "No se pudo conectar con el servidor. Compruebe la conexión e inténtelo de nuevo.",
     "request_error": "No se pudo cargar este artículo. Inténtelo de nuevo.",
+    "recover_full_text": "Recuperar texto completo",
+    "recovering_full_text": "Recuperando texto completo…",
+    "recovered_from_wallhop": "Texto completo recuperado con WallHop",
+    "recovered_from_miniflux_scraper": "Texto completo recuperado con el scraper de Miniflux",
+    "recovery_failed": "No se pudo recuperar el texto completo. Se sigue mostrando el contenido original.",
     "back_to_list": "Volver a la lista"
   },
   "deduplicate": {

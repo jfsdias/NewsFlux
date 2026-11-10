@@ -31,6 +31,7 @@ class HTTPResponse:
 
 Resolver = Callable[[str, int, bool], str]
 Requester = Callable[[str, str, int, dict[str, str], float, int], HTTPResponse]
+PostRequester = Callable[[str, str, int, dict[str, str], float, int, bytes], HTTPResponse]
 
 
 def _origin(url: str) -> tuple[str, str, int]:
@@ -142,6 +143,64 @@ def _request_pinned(
             sock.close()
 
 
+def _request_pinned_post(
+    url: str,
+    pinned_ip: str,
+    port: int,
+    headers: dict[str, str],
+    timeout: float,
+    max_bytes: int,
+    body: bytes,
+) -> HTTPResponse:
+    parts = urlsplit(url)
+    host = parts.hostname or ""
+    target = parts.path or "/"
+    if parts.query:
+        target += "?" + parts.query
+    if target.startswith("//") or "\r" in target or "\n" in target:
+        raise UnsafeURL("invalid request path")
+
+    request_headers = {
+        "Host": host
+        if (parts.scheme.casefold() == "http" and port == 80)
+        or (parts.scheme.casefold() == "https" and port == 443)
+        else f"{host}:{port}",
+        "Connection": "close",
+        "Accept-Encoding": "identity",
+        "User-Agent": "NewsFlux-ContentFallback/0.1",
+        "Content-Length": str(len(body)),
+        **headers,
+    }
+    sock: socket.socket | None = None
+    connection: http.client.HTTPConnection | None = None
+    try:
+        sock = socket.create_connection((pinned_ip, port), timeout=timeout)
+        sock.settimeout(timeout)
+        if parts.scheme.casefold() == "https":
+            context = ssl.create_default_context()
+            sock = context.wrap_socket(sock, server_hostname=host)
+        connection_type = http.client.HTTPSConnection if parts.scheme.casefold() == "https" else http.client.HTTPConnection
+        connection = connection_type(host, port=port, timeout=timeout)
+        connection.sock = sock
+        sock = None
+        connection.request("POST", target, body=body, headers=request_headers)
+        response = connection.getresponse()
+        response_body = response.read(max_bytes + 1)
+        if len(response_body) > max_bytes:
+            raise FetchError("response exceeds the configured size limit")
+        response_headers = {key.casefold(): value for key, value in response.getheaders()}
+        if response_headers.get("content-encoding", "identity").casefold() not in {"", "identity"}:
+            raise FetchError("compressed responses are not accepted")
+        return HTTPResponse(response.status, response_headers, response_body, url)
+    except (OSError, http.client.HTTPException, ssl.SSLError, TimeoutError) as exc:
+        raise FetchError("upstream request failed") from exc
+    finally:
+        if connection is not None:
+            connection.close()
+        if sock is not None:
+            sock.close()
+
+
 class PinnedHTTPClient:
     """GET-only client with DNS pinning and validation at every redirect hop."""
 
@@ -150,9 +209,11 @@ class PinnedHTTPClient:
         *,
         resolver: Resolver = resolve_host,
         requester: Requester = _request_pinned,
+        post_requester: PostRequester = _request_pinned_post,
     ) -> None:
         self._resolver = resolver
         self._requester = requester
+        self._post_requester = post_requester
 
     def get(
         self,
@@ -202,3 +263,37 @@ class PinnedHTTPClient:
                 current_headers = {}
             current_url = next_url
         raise FetchError("too many redirects")
+
+    def post(
+        self,
+        url: str,
+        body: bytes,
+        *,
+        headers: dict[str, str] | None = None,
+        timeout: float = DEFAULT_TIMEOUT_SECONDS,
+        max_bytes: int = MAX_RESPONSE_BYTES,
+        same_origin: str,
+        allow_private_origin: bool = False,
+    ) -> HTTPResponse:
+        if not isinstance(body, bytes):
+            raise UnsafeURL("request body must be bytes")
+        initial_url = _validate_url(url)
+        allowed_origin = _origin(same_origin)
+        if _origin(initial_url) != allowed_origin:
+            raise UnsafeURL("request is outside the configured service origin")
+        _, host, port = _origin(initial_url)
+        pinned_ip = self._resolver(host, port, allow_private_origin)
+        response = self._post_requester(
+            initial_url,
+            pinned_ip,
+            port,
+            dict(headers or {}),
+            timeout,
+            max_bytes,
+            body,
+        )
+        if len(response.body) > max_bytes:
+            raise FetchError("response exceeds the configured size limit")
+        if response.headers.get("content-encoding", "identity").casefold() not in {"", "identity"}:
+            raise FetchError("compressed responses are not accepted")
+        return response

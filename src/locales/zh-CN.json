@@ -259,6 +259,11 @@
     "server_error": "服务器无法加载此文章，请重试。",
     "network_error": "无法连接到服务器。请检查连接后重试。",
     "request_error": "无法加载此文章，请重试。",
+    "recover_full_text": "恢复全文",
+    "recovering_full_text": "正在恢复全文…",
+    "recovered_from_wallhop": "已从 WallHop 恢复全文",
+    "recovered_from_miniflux_scraper": "已通过 Miniflux 抓取器恢复全文",
+    "recovery_failed": "无法恢复全文，仍显示原始内容。",
     "back_to_list": "返回列表"
   },
   "deduplicate": {

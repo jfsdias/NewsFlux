@@ -31,6 +31,7 @@ import PlyrPlayer from "@/components/ui/LazyPlyrPlayer"
 import { updateEntriesStatusOptimistically } from "@/hooks/useEntryActions"
 import { polyglotState } from "@/hooks/useLanguage"
 import usePhotoSlider from "@/hooks/usePhotoSlider"
+import useReaderContentRecovery from "@/hooks/useReaderContentRecovery"
 import useScreenWidth, { prefersReducedMotionState } from "@/hooks/useScreenWidth"
 import { activeContentState, contentState } from "@/store/contentState"
 import { catalogFeedsByIdState, dataState } from "@/store/dataState"
@@ -370,6 +371,11 @@ const ArticleDetail = forwardRef((_, ref) => {
 
   const activeContent = useStore(activeContentState)
   const { sessionRevision } = useStore(dataState, { keys: ["sessionRevision"] })
+  const readerRecovery = useReaderContentRecovery({
+    activeContent,
+    routeEntryId,
+    routePath: location.pathname,
+  })
   const catalogFeedsById = useStore(catalogFeedsByIdState)
   const resolvedFeed = catalogFeedsById.get(String(activeContent.feed.id)) ?? activeContent.feed
   const readerSourceIdentity = getReaderSourceIdentity(resolvedFeed)
@@ -383,7 +389,7 @@ const ArticleDetail = forwardRef((_, ref) => {
     activeContent.title,
     polyglot.t("article_card.untitled_article"),
   )
-  const activeContentHtml = activeContent.content ?? ""
+  const activeContentHtml = readerRecovery.contentHtml ?? activeContent.content ?? ""
   const deferredContentHtml = useDeferredValue(activeContentHtml, "")
   const isArticleBodyPending = deferredContentHtml !== activeContentHtml
   const renderableContentHtml = isArticleBodyPending ? "" : deferredContentHtml
@@ -755,6 +761,41 @@ const ArticleDetail = forwardRef((_, ref) => {
               <Divider />
             </div>
           </div>
+          {readerRecovery.canRecover && (
+            <div
+              aria-live="polite"
+              className="reader-content-recovery"
+              style={{ maxWidth: responsiveMaxWidth }}
+            >
+              {readerRecovery.status === "recovered" ? (
+                <span className="reader-content-recovery__source" role="status">
+                  {polyglot.t(
+                    readerRecovery.contentOrigin === "wallhop"
+                      ? "content.recovered_from_wallhop"
+                      : "content.recovered_from_miniflux_scraper",
+                  )}
+                </span>
+              ) : (
+                <button
+                  className="reader-content-recovery__action"
+                  disabled={readerRecovery.status === "loading"}
+                  type="button"
+                  onClick={() => void readerRecovery.recover()}
+                >
+                  {polyglot.t(
+                    readerRecovery.status === "loading"
+                      ? "content.recovering_full_text"
+                      : "content.recover_full_text",
+                  )}
+                </button>
+              )}
+              {readerRecovery.status === "failed" && (
+                <span className="reader-content-recovery__error" role="status">
+                  {polyglot.t("content.recovery_failed")}
+                </span>
+              )}
+            </div>
+          )}
           <div
             key={activeContent.id}
             aria-busy={isArticleBodyPending || undefined}

@@ -38,7 +38,36 @@ def entry_data(**changes) -> dict[str, object]:
     return value
 
 
+def identity_data(**changes) -> dict[str, object]:
+    value: dict[str, object] = {"id": 7, "username": "reader", "is_admin": False}
+    value.update(changes)
+    return value
+
+
 class MinifluxClientTests(unittest.TestCase):
+    def test_service_credential_identity_is_verified_with_get_me(self) -> None:
+        http = FakeHTTP(identity_data())
+        client = MinifluxClient("http://miniflux:8080", "api-token", http=http)
+        identity = client.get_current_user_identity()
+        self.assertEqual((identity.id, identity.username, identity.is_admin), (7, "reader", False))
+        self.assertEqual(http.calls[0]["method"], "GET")
+        self.assertEqual(http.calls[0]["url"], "http://miniflux:8080/v1/me")
+        self.assertEqual(http.calls[0]["headers"]["X-Auth-Token"], "api-token")
+        self.assertEqual(http.calls[0]["max_redirects"], 0)
+
+    def test_service_identity_preserves_admin_flag_and_rejects_malformed_user(self) -> None:
+        admin = MinifluxClient(
+            "http://miniflux:8080", "api-token", http=FakeHTTP(identity_data(is_admin=True))
+        ).get_current_user_identity()
+        self.assertTrue(admin.is_admin)
+        for payload in (
+            identity_data(id=True),
+            identity_data(username=""),
+            identity_data(is_admin="false"),
+        ):
+            with self.subTest(payload=payload), self.assertRaises(MinifluxError):
+                MinifluxClient("http://miniflux:8080", "api-token", http=FakeHTTP(payload)).get_current_user_identity()
+
     def test_content_fingerprint_ignores_read_and_star_state(self) -> None:
         unread = snapshot()
         read_and_starred = snapshot(status="read", starred=False)
