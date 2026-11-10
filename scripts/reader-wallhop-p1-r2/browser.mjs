@@ -150,9 +150,10 @@ try {
   const pendingRecovery = stale.page.waitForRequest((request) =>
     new globalThis.URL(request.url()).pathname.endsWith("/reader/v1/entries/503/recover"),
   )
-  const completedRecovery = stale.page.waitForResponse((response) =>
-    new globalThis.URL(response.url()).pathname.endsWith("/reader/v1/entries/503/recover"),
-  )
+  const abortedRecovery = stale.page.waitForEvent("requestfailed", {
+    predicate: (request) =>
+      new globalThis.URL(request.url()).pathname.endsWith("/reader/v1/entries/503/recover"),
+  })
   await stale.page.getByRole("button", { name: /recover full text/i }).tap()
   await pendingRecovery
   const previousAuth = await stale.page.evaluate(() => globalThis.localStorage.getItem("auth"))
@@ -182,8 +183,8 @@ try {
       stale.page.evaluate(() => JSON.parse(globalThis.localStorage.getItem("auth") ?? "{}").token),
     )
     .toBe(rotatedKey)
-  const staleResponse = await completedRecovery
-  assert.equal(staleResponse.status(), 200)
+  const failedRecovery = await abortedRecovery
+  assert.match(failedRecovery.failure()?.errorText ?? "", /aborted|canceled/i)
   await expect(
     stale.page.getByText("Full text recovered with Miniflux scraper", { exact: true }),
   ).toHaveCount(0)
@@ -206,6 +207,7 @@ try {
     deviceScaleFactor: 2,
     readerAction: "PASS",
     providerFailurePreservedOriginal: "PASS",
+    staleSessionRequestAborted: "PASS",
     staleSessionResponseSuppressed: "PASS",
     readStarUnchanged: "PASS",
     minifluxWrites: 0,
