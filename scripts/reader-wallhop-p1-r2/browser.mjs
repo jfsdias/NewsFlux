@@ -68,9 +68,12 @@ async function createReader({ entryId, width, height, touch }) {
 }
 
 async function fixtureState(page) {
-  const response = await page.request.get(origin + "/miniflux/__harness__/state")
-  assert.equal(response.status(), 200)
-  return response.json()
+  const response = await page.evaluate(async () => {
+    const result = await globalThis.fetch("/miniflux/__harness__/state")
+    return { status: result.status, body: await result.json() }
+  })
+  assert.equal(response.status, 200)
+  return response.body
 }
 
 try {
