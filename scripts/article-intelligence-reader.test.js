@@ -65,6 +65,7 @@ test("AI Reader browser tests remain outside the frozen 46-scenario product inve
 test("AI Reader browser suite separates the default-off and explicitly enabled runs", async () => {
   const workflow = await read(".github/workflows/e2e.yaml")
   const config = await read("playwright.article-intelligence.config.js")
+  const appServer = await read("e2e/support/start-app-server.js")
   const availability = await read("reader-ai-e2e/article-intelligence-availability.spec.js")
   const enabledScenarios = await read("reader-ai-e2e/article-intelligence.spec.js")
 
@@ -87,10 +88,26 @@ test("AI Reader browser suite separates the default-off and explicitly enabled r
   assert.match(enabledScenarios, /process\.env\.VITE_ARTICLE_INTELLIGENCE_ENABLED !== "1"/u)
   assert.match(config, /start-app-server\.js/u)
   assert.doesNotMatch(config, /pnpm exec vite --host/u)
+
+  const configPort = config.match(
+    /const appPort = Number\(process\.env\.E2E_APP_PORT \?\? (\d+)\)/u,
+  )?.[1]
+  const serverPort = appServer.match(
+    /const port = Number\(process\.env\.E2E_APP_PORT \?\? (\d+)\)/u,
+  )?.[1]
+  assert.equal(
+    configPort,
+    serverPort,
+    "Playwright must wait on the static app server's default port",
+  )
 })
 
 test("synthetic authenticated Reader fixture can provision an isolated API-key identity", async () => {
   const fixtures = await read("e2e/support/fixtures.js")
   assert.match(fixtures, /provisionedApiKey = false/u)
-  assert.match(fixtures, /provisionedApiKey \? 9 : null/u)
+  assert.match(fixtures, /const seedAuth = \(\{ server, apiKeyId = null \}\)/u)
+  assert.match(
+    fixtures,
+    /context\.addInitScript\(seedAuth, \{\s*server: mock\.url,\s*apiKeyId: provisionedApiKey \? 9 : null,?\s*\}\)/u,
+  )
 })

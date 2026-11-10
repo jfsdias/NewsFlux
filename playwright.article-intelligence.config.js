@@ -3,7 +3,7 @@ import process from "node:process"
 import { defineConfig } from "@playwright/test"
 
 const apiPort = Number(process.env.E2E_API_PORT ?? 8081)
-const appPort = Number(process.env.E2E_APP_PORT ?? 4175)
+const appPort = Number(process.env.E2E_APP_PORT ?? 4173)
 
 export default defineConfig({
   testDir: "./reader-ai-e2e",

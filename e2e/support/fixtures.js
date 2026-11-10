@@ -11,7 +11,7 @@ const control = async (path) => {
   return response.json()
 }
 
-const seedAuth = (server, apiKeyId = null) => {
+const seedAuth = ({ server, apiKeyId = null }) => {
   localStorage.setItem(
     "auth",
     JSON.stringify({ server, token: "e2e-token", apiKeyId, username: "", password: "" }),
@@ -82,7 +82,10 @@ export const test = base.extend({
       })
       contexts.push(context)
       if (authenticated) {
-        await context.addInitScript(seedAuth, mock.url, provisionedApiKey ? 9 : null)
+        await context.addInitScript(seedAuth, {
+          server: mock.url,
+          apiKeyId: provisionedApiKey ? 9 : null,
+        })
       }
       if (settings) {
         await context.addInitScript((value) => {
