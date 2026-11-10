@@ -1148,30 +1148,26 @@ def run() -> None:
             raise RuntimeError("Synthetic article content or query material appeared in service logs")
         RESULT["FINAL"] = "PASS"
     finally:
+        failure_step_before_cleanup = CURRENT_STEP
+        had_runtime_failure = RESULT["FINAL"] != "PASS"
         if build_env_created and source_env.exists():
             source_env.unlink(missing_ok=True)
         cleanup_ok = True
         for container_name in reversed(CONTAINERS):
-            result = command(
+            cleanup_ok = cleanup_resource(
                 ["docker", "rm", "-f", container_name],
-                step=f"Remove container {container_name}",
-                check=False,
-            )
-            cleanup_ok = cleanup_ok and result.returncode == 0
+                f"Remove container {container_name}",
+            ) and cleanup_ok
         if NETWORK_NAME:
-            result = command(
+            cleanup_ok = cleanup_resource(
                 ["docker", "network", "rm", NETWORK_NAME],
-                step="Remove isolated Docker network",
-                check=False,
-            )
-            cleanup_ok = cleanup_ok and result.returncode == 0
+                "Remove isolated Docker network",
+            ) and cleanup_ok
         for image in reversed(IMAGES):
-            result = command(
+            cleanup_ok = cleanup_resource(
                 ["docker", "image", "rm", image],
-                step="Remove local test image",
-                check=False,
-            )
-            cleanup_ok = cleanup_ok and result.returncode == 0
+                f"Remove local test image {image.split('@')[0]}",
+            ) and cleanup_ok
         if TEMP_ROOT is not None:
             try:
                 shutil.rmtree(TEMP_ROOT)
@@ -1180,6 +1176,26 @@ def run() -> None:
         RESULT["CLEANUP_GATE"] = "PASS" if cleanup_ok else "FAIL"
         if not cleanup_ok:
             RESULT["FINAL"] = "FAIL"
+        if had_runtime_failure:
+            RESULT["FAILURE_STEP"] = failure_step_before_cleanup
+
+
+def cleanup_resource(args: list[str], step: str) -> bool:
+    """Keep cleanup failures visible without hiding the original runtime failure."""
+    try:
+        result = command(args, step=step, check=False)
+    except Exception as exc:
+        print(f"CLEANUP_FAILURE_STEP={step}", flush=True)
+        print(f"CLEANUP_FAILURE_CLASS={type(exc).__name__}", flush=True)
+        return False
+    if result.returncode == 0:
+        return True
+    diagnostic = (result.stderr or result.stdout).splitlines()[-4:]
+    if diagnostic:
+        print(f"CLEANUP_DIAGNOSTIC_BEGIN={step}", flush=True)
+        print("\n".join(diagnostic), flush=True)
+        print(f"CLEANUP_DIAGNOSTIC_END={step}", flush=True)
+    return False
 
 
 def main() -> int:
@@ -1188,7 +1204,7 @@ def main() -> int:
         run()
     except Exception as exc:
         RESULT["FINAL"] = "FAIL"
-        RESULT["FAILURE_STEP"] = CURRENT_STEP
+        RESULT.setdefault("FAILURE_STEP", CURRENT_STEP)
         RESULT["FAILURE_CLASS"] = type(exc).__name__
         print(f"HARNESS_FAILURE_STEP={CURRENT_STEP}", flush=True)
         print(f"HARNESS_FAILURE_CLASS={type(exc).__name__}", flush=True)
