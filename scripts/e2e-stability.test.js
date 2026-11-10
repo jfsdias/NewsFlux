@@ -174,20 +174,20 @@ test("fewer than three runs cannot establish stability", () => {
   assert.match(result.problems.join("\n"), /at least 3 runs/)
 })
 
-test("the frozen expected scenario contract contains the reviewed 61 unique identities", () => {
-  assert.equal(EXPECTED_SCENARIOS.length, 61)
-  assert.equal(new Set(EXPECTED_SCENARIOS.map(({ id }) => id)).size, 61)
+test("the frozen expected scenario contract contains the reviewed 69 unique identities", () => {
+  assert.equal(EXPECTED_SCENARIOS.length, 69)
+  assert.equal(new Set(EXPECTED_SCENARIOS.map(({ id }) => id)).size, 69)
   assert.ok(EXPECTED_SCENARIOS.every(({ id, state }) => id && state))
 })
 
-test("CARD-QUICK-ACTIONS-01 increments the scenario contract with all approved scenarios passing", () => {
+test("BULK-01C increments the scenario contract with all approved scenarios passing", () => {
   const states = {}
   for (const { state } of EXPECTED_SCENARIOS) {
     states[state] = (states[state] ?? 0) + 1
   }
 
-  assert.equal(E2E_SCENARIO_CONTRACT_VERSION, 11)
-  assert.deepEqual(states, { PASSED: 61 })
+  assert.equal(E2E_SCENARIO_CONTRACT_VERSION, 13)
+  assert.deepEqual(states, { PASSED: 69 })
   for (const id of ["F02-2", "F04-1", "F04-3", "QA-001-884", "QA-001-939"]) {
     assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === id)?.state, "PASSED")
   }
@@ -210,6 +210,18 @@ test("CARD-QUICK-ACTIONS-01 increments the scenario contract with all approved s
     "CARD-QUICK-ACTIONS-01-13",
     "CARD-QUICK-ACTIONS-01-14",
     "CARD-QUICK-ACTIONS-01-15",
+  ]) {
+    assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === id)?.state, "PASSED")
+  }
+  for (const id of [
+    "BULK-01C-1",
+    "BULK-01C-2",
+    "BULK-01C-3",
+    "BULK-01C-4",
+    "BULK-01C-5",
+    "BULK-01C-6",
+    "BULK-01C-7",
+    "BULK-01C-8",
   ]) {
     assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === id)?.state, "PASSED")
   }
@@ -420,7 +432,7 @@ test("the actual Playwright reporter accepts the complete reviewed scenario cont
     const recorded = JSON.parse(readFileSync(outputFile, "utf8"))
 
     assert.equal(result, undefined)
-    assert.equal(recorded.scenarios.length, 61)
+    assert.equal(recorded.scenarios.length, 69)
     assert.deepEqual(recorded.contractProblems, [])
   } finally {
     rmSync(directory, { recursive: true, force: true })
