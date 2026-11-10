@@ -307,11 +307,11 @@ def main() -> int:
             state.blocked_egress.append("host_not_allowed")
             raise UnsafeURL("canary outbound host not allowed")
 
-        http = PinnedHTTPClient(resolver=guarded_resolver, requester=guarded_requester)
+        pinned_http = PinnedHTTPClient(resolver=guarded_resolver, requester=guarded_requester)
         miniflux = MinifluxClient(
             f"http://127.0.0.1:{mock_port}",
             miniflux_token,
-            http=http,
+            http=pinned_http,
             timeout_seconds=4,
         )
         policies = PolicyRegistry.from_dict(
@@ -330,7 +330,7 @@ def main() -> int:
         service = ContentFallbackService(
             miniflux=miniflux,
             policies=policies,
-            provider=WallHopProvider(http=http),
+            provider=WallHopProvider(http=pinned_http),
             store=store,
         )
         service_port = 8790
