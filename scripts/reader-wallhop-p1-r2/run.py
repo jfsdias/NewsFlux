@@ -64,6 +64,12 @@ ADMIN_KEY = secrets.token_urlsafe(32)
 PRIVATE_SERVICE_KEY = secrets.token_urlsafe(48)
 
 
+def redact_secrets(value: str) -> str:
+    for secret in (USER_KEY, ROTATED_KEY, OTHER_USER_KEY, ADMIN_KEY, PRIVATE_SERVICE_KEY):
+        value = value.replace(secret, "[redacted]")
+    return value
+
+
 def command(
     args: list[str],
     *,
@@ -84,9 +90,7 @@ def command(
     )
     if check and result.returncode != 0:
         tail = (result.stderr or result.stdout).splitlines()[-16:]
-        safe_tail = "\n".join(tail)
-        for secret in (USER_KEY, ROTATED_KEY, OTHER_USER_KEY, ADMIN_KEY, PRIVATE_SERVICE_KEY):
-            safe_tail = safe_tail.replace(secret, "[redacted]")
+        safe_tail = redact_secrets("\n".join(tail))
         if safe_tail:
             print(f"STEP_DIAGNOSTIC_BEGIN={step}", flush=True)
             print(safe_tail, flush=True)
@@ -375,6 +379,7 @@ def expected_container_not_published(name: str, container_port: str) -> bool:
 
 def wait_for_https(ca_cert: Path, timeout: float = 60.0) -> tuple[int, str]:
     deadline = time.monotonic() + timeout
+    last_error = ""
     while time.monotonic() < deadline:
         try:
             status, body, _headers = curl_request(
@@ -386,10 +391,22 @@ def wait_for_https(ca_cert: Path, timeout: float = 60.0) -> tuple[int, str]:
             )
             if status == 200 and "<html" in body.casefold():
                 return status, body
-        except RuntimeError:
-            pass
+        except RuntimeError as exc:
+            last_error = str(exc)
         time.sleep(1)
-    raise RuntimeError("HTTPS ingress did not serve the frontend before timeout")
+    for container_name in ("newsflux-p1-r2-proxy", "newsflux-p1-r2-frontend"):
+        result = command(
+            ["docker", "logs", "--tail", "40", container_name],
+            step=f"Read {container_name} HTTPS startup diagnostics",
+            check=False,
+        )
+        log_tail = redact_secrets("\n".join((result.stdout + result.stderr).splitlines()[-30:]))
+        if log_tail:
+            print(f"HTTPS_DIAGNOSTIC_BEGIN={container_name}", flush=True)
+            print(log_tail, flush=True)
+            print(f"HTTPS_DIAGNOSTIC_END={container_name}", flush=True)
+    last_error = redact_secrets(last_error)[:300]
+    raise RuntimeError(f"HTTPS ingress did not serve the frontend before timeout; last probe: {last_error}")
 
 
 def curl_request(
@@ -431,7 +448,8 @@ def curl_request(
     )
     result = command(command_args, step=f"HTTPS request {method} {url}", check=False)
     if result.returncode != 0:
-        raise RuntimeError(f"HTTPS request failed with curl exit {result.returncode}")
+        detail = redact_secrets((result.stderr or result.stdout).strip())[-300:]
+        raise RuntimeError(f"HTTPS request failed with curl exit {result.returncode}: {detail}")
     marker = "\n__NEWSFLUX_STATUS__"
     if marker not in result.stdout:
         raise RuntimeError("HTTPS response did not include a status")
@@ -1247,9 +1265,7 @@ def main() -> int:
         RESULT["FINAL"] = "FAIL"
         RESULT.setdefault("FAILURE_STEP", CURRENT_STEP)
         RESULT["FAILURE_CLASS"] = type(exc).__name__
-        failure_detail = str(exc)
-        for secret in (USER_KEY, ROTATED_KEY, OTHER_USER_KEY, ADMIN_KEY, PRIVATE_SERVICE_KEY):
-            failure_detail = failure_detail.replace(secret, "[redacted]")
+        failure_detail = redact_secrets(str(exc))
         RESULT["FAILURE_DETAIL"] = failure_detail[:400]
         print(f"HARNESS_FAILURE_STEP={RESULT['FAILURE_STEP']}", flush=True)
         print(f"HARNESS_FAILURE_CLASS={type(exc).__name__}", flush=True)
