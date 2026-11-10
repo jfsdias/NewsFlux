@@ -112,3 +112,17 @@ test("synthetic authenticated Reader fixture can provision an isolated API-key i
     /context\.addInitScript\(seedAuth, \{\s*server: mock\.url,\s*apiKeyId: provisionedApiKey \? 9 : null,?\s*\}\)/u,
   )
 })
+
+test("cross-tab session test waits for its storage listener before rotating auth", async () => {
+  const recoveryIntegration = await read(
+    "reader-ai-e2e/article-intelligence-recovery-integration.spec.js",
+  )
+  assert.match(
+    recoveryIntegration,
+    /await page\.evaluate\(\(\) => \{\s*globalThis\.__authStorageChangeObserved = false\s*globalThis\.addEventListener\(\s*"storage"/u,
+  )
+  assert.match(
+    recoveryIntegration,
+    /await expect\s*\.poll\(\(\) => page\.evaluate\(\(\) => globalThis\.__authStorageChangeObserved\)\)\s*\.toBe\(true\)/u,
+  )
+})

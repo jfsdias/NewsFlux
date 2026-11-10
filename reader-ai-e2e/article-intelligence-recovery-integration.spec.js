@@ -208,21 +208,19 @@ test("AI_RECOVERY_CROSS: session change cancels simultaneous recovery and summar
   await page.getByRole("button", { name: "Summarize with AI" }).click()
   await summaryRequest
 
+  await page.evaluate(() => {
+    globalThis.__authStorageChangeObserved = false
+    globalThis.addEventListener(
+      "storage",
+      (event) => {
+        if (event.key === "auth") {
+          globalThis.__authStorageChangeObserved = true
+        }
+      },
+      { once: true },
+    )
+  })
   const sessionPage = await context.newPage()
-  const storageChangeObserved = page.evaluate(
-    () =>
-      new Promise((resolve) => {
-        globalThis.addEventListener(
-          "storage",
-          (event) => {
-            if (event.key === "auth") {
-              resolve()
-            }
-          },
-          { once: true },
-        )
-      }),
-  )
   await sessionPage.goto("/")
   await sessionPage.evaluate(() => {
     const auth = JSON.parse(localStorage.getItem("auth"))
@@ -231,7 +229,7 @@ test("AI_RECOVERY_CROSS: session change cancels simultaneous recovery and summar
       JSON.stringify({ ...auth, token: "rotated-e2e-token", apiKeyId: 18 }),
     )
   })
-  await storageChangeObserved
+  await expect.poll(() => page.evaluate(() => globalThis.__authStorageChangeObserved)).toBe(true)
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve())))
   releaseRecovery()
   releaseSummary()
