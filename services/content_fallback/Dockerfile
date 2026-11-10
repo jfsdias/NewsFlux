@@ -7,6 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 COPY services/__init__.py /app/services/__init__.py
+COPY services/article_intel_auth /app/services/article_intel_auth
 COPY services/content_fallback /app/services/content_fallback
 
 RUN mkdir -p /data && chown 10001:10001 /data && chmod 700 /data
