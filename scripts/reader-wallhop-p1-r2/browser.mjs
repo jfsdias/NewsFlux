@@ -221,6 +221,11 @@ try {
   process.stdout.write("SESSION_PROTECTION=PASS\n")
   process.stdout.write("MINIFLUX_WRITES=0\n")
   process.stdout.write("REAL_WALLHOP_REQUESTS=0\n")
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error)
+  const summary = message.split(/\r?\n/).slice(0, 8).join(" | ").slice(0, 1000)
+  process.stderr.write(`READER_BROWSER_FAILURE=${summary}\n`)
+  throw error
 } finally {
   await browser.close()
 }
