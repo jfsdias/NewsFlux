@@ -67,6 +67,7 @@ const ArticleCard = ({
   entry,
   feed,
   previewContent,
+  quickActions,
   sourceDescriptionId,
   sourceName,
 }) => {
@@ -136,6 +137,7 @@ const ArticleCard = ({
             <time className="card-time" dateTime={entry.published_at}>
               {generateRelativeTime(entry.published_at, showDetailedRelativeTime)}
             </time>
+            {quickActions}
           </div>
         </div>
 

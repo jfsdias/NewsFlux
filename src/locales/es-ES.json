@@ -176,6 +176,7 @@
     "unstar_tooltip": "Desmarcar como favorito",
     "fetch_original_tooltip": "Obtener contenido original",
     "more_actions_tooltip": "Más acciones",
+    "card_quick_actions_tooltip": "Acciones de la tarjeta",
     "save_to_third_party_services_tooltip": "Guardar en servicios de terceros",
     "share_tooltip": "Compartir",
     "view_comments_tooltip": "Ver comentarios"

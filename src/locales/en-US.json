@@ -176,6 +176,7 @@
     "unstar_tooltip": "Unstar",
     "fetch_original_tooltip": "Fetch original content",
     "more_actions_tooltip": "More actions",
+    "card_quick_actions_tooltip": "Card actions",
     "save_to_third_party_services_tooltip": "Save to third-party services",
     "share_tooltip": "Share",
     "view_comments_tooltip": "View comments"
