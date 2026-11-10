@@ -378,6 +378,7 @@ def expected_container_not_published(name: str, container_port: str) -> bool:
 
 
 def wait_for_https(ca_cert: Path, timeout: float = 60.0) -> tuple[int, str]:
+    global CURRENT_STEP
     deadline = time.monotonic() + timeout
     last_error = ""
     while time.monotonic() < deadline:
