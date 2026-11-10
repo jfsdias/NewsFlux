@@ -40,7 +40,12 @@ test("UX-REACH-01: coarse-pointer control stays reachable without blocking artic
       await mock.fault("entries", "slow")
     }
 
-    const { page } = await openApp({ path: "/all", width, height, touch: true })
+    const { page } = await openApp({
+      path: delayedEntriesViewport ? null : "/all",
+      width,
+      height,
+      touch: true,
+    })
     const delayedEntriesResponse = delayedEntriesViewport
       ? page.waitForResponse((response) => {
           const url = new URL(response.url())
@@ -51,6 +56,10 @@ test("UX-REACH-01: coarse-pointer control stays reachable without blocking artic
           )
         })
       : null
+    if (delayedEntriesViewport) {
+      await page.goto("/all")
+    }
+
     const action = getAction(page)
     await expect(action).toBeVisible()
     await expect(page.locator('button[aria-label="Mark all as read"]')).toHaveCount(1)
