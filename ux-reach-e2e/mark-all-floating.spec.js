@@ -34,7 +34,32 @@ test("UX-REACH-01: coarse-pointer control stays reachable without blocking artic
   mock,
 }) => {
   for (const { width, height } of COARSE_VIEWPORTS) {
-    const { page } = await openApp({ path: "/all", width, height, touch: true })
+    // The original failure happened at 993px while the entries request was still pending.
+    const delayedEntriesViewport = width === 993
+    if (delayedEntriesViewport) {
+      await mock.fault("entries", "slow")
+    }
+
+    const { page } = await openApp({
+      path: delayedEntriesViewport ? null : "/all",
+      width,
+      height,
+      touch: true,
+    })
+    const delayedEntriesResponse = delayedEntriesViewport
+      ? page.waitForResponse((response) => {
+          const url = new URL(response.url())
+          return (
+            response.request().method() === "GET" &&
+            url.pathname === "/v1/entries" &&
+            url.searchParams.get("limit") === "100"
+          )
+        })
+      : null
+    if (delayedEntriesViewport) {
+      await page.goto("/all")
+    }
+
     const action = getAction(page)
     await expect(action).toBeVisible()
     await expect(page.locator('button[aria-label="Mark all as read"]')).toHaveCount(1)
@@ -57,6 +82,13 @@ test("UX-REACH-01: coarse-pointer control stays reachable without blocking artic
     )
 
     await expect(getDragHandle(page)).toBeVisible()
+
+    if (delayedEntriesViewport) {
+      await expect(page.locator(".article-entry")).toHaveCount(0)
+      await mock.fault("entries", "ok")
+      await delayedEntriesResponse
+    }
+    await expect(page.locator(".article-entry").first()).toBeVisible()
 
     const floating = page.locator(".mark-all-read-floating")
     await expect(floating).toHaveCSS("position", "relative")
