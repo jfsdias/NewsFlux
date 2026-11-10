@@ -248,6 +248,16 @@ test("the Article Intelligence Reader job builds both flag states before serving
   assert.notEqual(enabledTestIndex, -1, "the AI-enabled Reader scenarios must run")
   assert.equal(steps[enabledBuildIndex].env?.VITE_ARTICLE_INTELLIGENCE_ENABLED, "1")
   assert.equal(steps[enabledTestIndex].env?.VITE_ARTICLE_INTELLIGENCE_ENABLED, "1")
+  assert.equal(steps[defaultBuildIndex].env?.VITE_CONTENT_FALLBACK_READER_BASE_PATH, undefined)
+  assert.equal(steps[defaultTestIndex].env?.VITE_CONTENT_FALLBACK_READER_BASE_PATH, undefined)
+  assert.equal(
+    steps[enabledBuildIndex].env?.VITE_CONTENT_FALLBACK_READER_BASE_PATH,
+    "/api/content-fallback",
+  )
+  assert.equal(
+    steps[enabledTestIndex].env?.VITE_CONTENT_FALLBACK_READER_BASE_PATH,
+    "/api/content-fallback",
+  )
   assert.ok(defaultBuildIndex < defaultTestIndex)
   assert.ok(defaultTestIndex < enabledBuildIndex)
   assert.ok(enabledBuildIndex < enabledTestIndex)
