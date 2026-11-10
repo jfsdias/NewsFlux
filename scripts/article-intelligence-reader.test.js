@@ -61,3 +61,36 @@ test("AI Reader browser tests remain outside the frozen 46-scenario product inve
   assert.match(spec, /late summary is discarded after navigating/u)
   assert.match(spec, /recoverable/u)
 })
+
+test("AI Reader browser suite separates the default-off and explicitly enabled runs", async () => {
+  const workflow = await read(".github/workflows/e2e.yaml")
+  const config = await read("playwright.article-intelligence.config.js")
+  const availability = await read("reader-ai-e2e/article-intelligence-availability.spec.js")
+  const enabledScenarios = await read("reader-ai-e2e/article-intelligence.spec.js")
+
+  assert.match(workflow, /Run Article Intelligence Reader scenarios/u)
+  assert.match(workflow, /Build Reader with AI disabled by default[\s\S]*?pnpm build/u)
+  assert.match(
+    workflow,
+    /Build Reader with explicit AI enablement[\s\S]*?VITE_ARTICLE_INTELLIGENCE_ENABLED: "1"[\s\S]*?pnpm build/u,
+  )
+  assert.match(
+    workflow,
+    /Run AI-enabled Reader scenarios[\s\S]*?VITE_ARTICLE_INTELLIGENCE_ENABLED: "1"/u,
+  )
+  assert.match(
+    workflow,
+    /VITE_ARTICLE_INTELLIGENCE_ENABLED: "1"[\s\S]*?pnpm exec playwright test --config=playwright\.article-intelligence\.config\.js/u,
+  )
+  assert.doesNotMatch(workflow, /--grep "ARTICLE_INTELLIGENCE_COMPONENT"/u)
+  assert.match(availability, /process\.env\.VITE_ARTICLE_INTELLIGENCE_ENABLED === "1"/u)
+  assert.match(enabledScenarios, /process\.env\.VITE_ARTICLE_INTELLIGENCE_ENABLED !== "1"/u)
+  assert.match(config, /start-app-server\.js/u)
+  assert.doesNotMatch(config, /pnpm exec vite --host/u)
+})
+
+test("synthetic authenticated Reader fixture can provision an isolated API-key identity", async () => {
+  const fixtures = await read("e2e/support/fixtures.js")
+  assert.match(fixtures, /provisionedApiKey = false/u)
+  assert.match(fixtures, /provisionedApiKey \? 9 : null/u)
+})

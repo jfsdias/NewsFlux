@@ -11,10 +11,10 @@ const control = async (path) => {
   return response.json()
 }
 
-const seedAuth = (server) => {
+const seedAuth = (server, apiKeyId = null) => {
   localStorage.setItem(
     "auth",
-    JSON.stringify({ server, token: "e2e-token", apiKeyId: null, username: "", password: "" }),
+    JSON.stringify({ server, token: "e2e-token", apiKeyId, username: "", password: "" }),
   )
 }
 
@@ -68,6 +68,7 @@ export const test = base.extend({
       deviceScaleFactor = 2,
       storageState,
       settings,
+      provisionedApiKey = false,
     } = {}) => {
       const context = await browser.newContext({
         baseURL,
@@ -81,7 +82,7 @@ export const test = base.extend({
       })
       contexts.push(context)
       if (authenticated) {
-        await context.addInitScript(seedAuth, mock.url)
+        await context.addInitScript(seedAuth, mock.url, provisionedApiKey ? 9 : null)
       }
       if (settings) {
         await context.addInitScript((value) => {

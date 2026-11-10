@@ -18,6 +18,7 @@ test("ARTICLE_INTELLIGENCE_COMPONENT: explicit keyboard action summarizes withou
     provisionedApiKey: true,
     settings: { markReadBy: "manually" },
   })
+  await expect(page.getByRole("heading", { name: "Subtítulo" })).toBeVisible()
   let summaryRequestCount = 0
   await page.route("**/api/ai/v1/entries/1/summary", async (route) => {
     summaryRequestCount += 1

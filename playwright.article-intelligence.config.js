@@ -2,6 +2,9 @@ import process from "node:process"
 
 import { defineConfig } from "@playwright/test"
 
+const apiPort = Number(process.env.E2E_API_PORT ?? 8081)
+const appPort = Number(process.env.E2E_APP_PORT ?? 4175)
+
 export default defineConfig({
   testDir: "./reader-ai-e2e",
   testMatch: "**/*.spec.js",
@@ -12,7 +15,7 @@ export default defineConfig({
   reporter: "line",
   outputDir: "test-results/article-intelligence-reader/",
   use: {
-    baseURL: "http://127.0.0.1:4175",
+    baseURL: `http://127.0.0.1:${appPort}`,
     browserName: "chromium",
     headless: true,
     trace: "retain-on-failure",
@@ -20,15 +23,15 @@ export default defineConfig({
   webServer: [
     {
       command: "node e2e/support/start-mock-server.js",
-      url: "http://127.0.0.1:8081/v1/version",
+      url: `http://127.0.0.1:${apiPort}/v1/version`,
       reuseExistingServer: false,
       timeout: 30_000,
     },
     {
-      command: "pnpm exec vite --host 127.0.0.1 --port 4175 --strictPort",
-      url: "http://127.0.0.1:4175",
-      reuseExistingServer: !process.env.CI,
-      timeout: 120_000,
+      command: "node e2e/support/start-app-server.js",
+      url: `http://127.0.0.1:${appPort}/`,
+      reuseExistingServer: false,
+      timeout: 60_000,
     },
   ],
 })

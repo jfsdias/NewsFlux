@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import requestArticleSummary from "@/apis/article-intelligence"
 import { authState } from "@/store/authState"
 import { getDataSessionRevision } from "@/store/dataState"
-import { isArticleIntelligenceEnabled } from "@/utils/article-intelligence-feature"
+import isArticleIntelligenceEnabled from "@/utils/article-intelligence-feature"
 import { isCurrentArticleSummaryRequest } from "@/utils/article-intelligence-summary"
 import { getAuthSessionKey, hasProvisionedApiKey } from "@/utils/auth"
 
