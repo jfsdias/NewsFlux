@@ -1,4 +1,5 @@
-import { expect, test } from "../e2e/support/fixtures.js"
+/* eslint-disable import/no-relative-parent-imports -- this file is copied to a temporary root folder to run. */
+import { expect, test } from "#e2e/support/fixtures.js"
 
 const dragHandleSelector = '[data-testid="mark-all-read-drag-handle"]'
 

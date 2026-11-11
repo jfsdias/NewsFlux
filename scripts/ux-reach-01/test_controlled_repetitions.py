@@ -3,7 +3,12 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from run_controlled_repetitions import isolated_command, suite_command, validate_repeat_count
+from run_controlled_repetitions import (
+    DIAGNOSTIC_CONFIG_CONTENT,
+    isolated_command,
+    suite_command,
+    validate_repeat_count,
+)
 
 
 class ControlledRepetitionTests(unittest.TestCase):
@@ -22,6 +27,8 @@ class ControlledRepetitionTests(unittest.TestCase):
         self.assertIn("--retries=0", command)
         self.assertIn("--workers=1", command)
         self.assertEqual(command.count("Input.dispatchMouseEvent"), 0)
+        self.assertIn("retries: 0", DIAGNOSTIC_CONFIG_CONTENT)
+        self.assertIn('testDir: "./r8-d4d-ux-reach-diagnostic"', DIAGNOSTIC_CONFIG_CONTENT)
 
     def test_full_suite_command_runs_the_entire_suite_without_retries(self) -> None:
         command = suite_command(Path("/tmp/full-suite-artifacts"))

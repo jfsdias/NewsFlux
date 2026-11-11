@@ -11,10 +11,43 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 DIAGNOSTIC_TEST = ROOT / "scripts" / "ux-reach-01" / "pen-drag-diagnostic.spec.js"
-DIAGNOSTIC_CONFIG = ROOT / "scripts" / "ux-reach-01" / "diagnostic-playwright.config.js"
 UX_SUITE_TEST = ROOT / "ux-reach-e2e" / "mark-all-floating.spec.js"
 DIAGNOSTIC_TITLE = "R8-D4D PEN DIAGNOSTIC"
 SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
+DIAGNOSTIC_CONFIG_CONTENT = """import { defineConfig } from \"@playwright/test\"
+
+export default defineConfig({
+  testDir: \"./r8-d4d-ux-reach-diagnostic\",
+  testMatch: \"**/*.spec.js\",
+  workers: 1,
+  fullyParallel: false,
+  retries: 0,
+  timeout: 60_000,
+  expect: { timeout: 10_000 },
+  reporter: [[\"list\"]],
+  outputDir: \"test-results/r8-d4d-pen-diagnostic\",
+  use: {
+    baseURL: \"http://localhost:4173\",
+    screenshot: \"only-on-failure\",
+    trace: \"retain-on-failure\",
+  },
+  projects: [{ name: \"chromium\", use: { browserName: \"chromium\" } }],
+  webServer: [
+    {
+      command: \"node e2e/support/start-mock-server.js\",
+      url: \"http://127.0.0.1:8081/v1/version\",
+      reuseExistingServer: false,
+      timeout: 30_000,
+    },
+    {
+      command: \"node e2e/support/start-app-server.js\",
+      url: \"http://localhost:4173/\",
+      reuseExistingServer: false,
+      timeout: 60_000,
+    },
+  ],
+})
+"""
 
 
 def sha256_file(path: Path) -> str:
@@ -176,7 +209,7 @@ def prepare_source(
         else:
             diagnostic_dir.mkdir()
             shutil.copy2(DIAGNOSTIC_TEST, copied_test)
-            shutil.copy2(DIAGNOSTIC_CONFIG, copied_config)
+            copied_config.write_text(DIAGNOSTIC_CONFIG_CONTENT, encoding="utf-8")
             shutil.copy2(UX_SUITE_TEST, ux_test)
             isolated_dir = source / "test-results" / "ux-reach-d4d" / label / "isolated-pen-drag"
             isolated_rc = print_run(
