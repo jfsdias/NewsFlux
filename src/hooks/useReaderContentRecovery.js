@@ -28,7 +28,13 @@ const readContextIsCurrent = ({ contextRef, request, authKey }) => {
   )
 }
 
-const useReaderContentRecovery = ({ activeContent, routeEntryId, routePath }) => {
+const useReaderContentRecovery = ({
+  activeContent,
+  routeEntryId,
+  routePath,
+  onBeforeContentChange,
+  onRecoveryStart,
+}) => {
   const auth = useStore(authState)
   const { sessionRevision } = useStore(dataState, { keys: ["sessionRevision"] })
   const contextKey = JSON.stringify([
@@ -42,16 +48,25 @@ const useReaderContentRecovery = ({ activeContent, routeEntryId, routePath }) =>
   const contextRef = useRef(contextKey)
   const requestIdRef = useRef(0)
   const inFlightRef = useRef(false)
+  const abortControllerRef = useRef(null)
   const [storedState, setStoredState] = useState(EMPTY_STATE)
 
   useLayoutEffect(() => {
-    if (contextRef.current === contextKey) {
-      return
+    if (contextRef.current !== contextKey) {
+      contextRef.current = contextKey
+      requestIdRef.current += 1
+      abortControllerRef.current?.abort()
+      abortControllerRef.current = null
+      inFlightRef.current = false
+      setStoredState(EMPTY_STATE)
     }
-    contextRef.current = contextKey
-    requestIdRef.current += 1
-    inFlightRef.current = false
-    setStoredState(EMPTY_STATE)
+
+    return () => {
+      requestIdRef.current += 1
+      abortControllerRef.current?.abort()
+      abortControllerRef.current = null
+      inFlightRef.current = false
+    }
   }, [contextKey])
 
   const numericEntryId = Number(activeContent?.id)
@@ -65,13 +80,17 @@ const useReaderContentRecovery = ({ activeContent, routeEntryId, routePath }) =>
     activeContent.url.length > 0,
   )
   const visibleState = storedState.contextKey === contextKey ? storedState : EMPTY_STATE
+  const hasRecovery = ["recovered", "original_restored"].includes(visibleState.status)
 
   const recover = async () => {
-    if (!canRecover || inFlightRef.current || visibleState.status === "recovered") {
+    if (!canRecover || inFlightRef.current || hasRecovery) {
       return
     }
     inFlightRef.current = true
     const requestId = ++requestIdRef.current
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+    onRecoveryStart?.()
     const request = {
       requestId,
       entryId: numericEntryId,
@@ -85,8 +104,10 @@ const useReaderContentRecovery = ({ activeContent, routeEntryId, routePath }) =>
       const result = await requestReaderContentRecovery({
         entryId: numericEntryId,
         url: activeContent.url,
+        signal: controller.signal,
       })
       if (readContextIsCurrent({ contextRef, request, authKey: request.authKey })) {
+        onBeforeContentChange?.()
         setStoredState({
           contextKey,
           status: "recovered",
@@ -95,21 +116,47 @@ const useReaderContentRecovery = ({ activeContent, routeEntryId, routePath }) =>
         })
       }
     } catch {
-      if (readContextIsCurrent({ contextRef, request, authKey: request.authKey })) {
+      if (
+        !controller.signal.aborted &&
+        readContextIsCurrent({ contextRef, request, authKey: request.authKey })
+      ) {
         setStoredState({ contextKey, status: "failed" })
       }
     } finally {
       if (requestIdRef.current === requestId) {
         inFlightRef.current = false
       }
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null
+      }
     }
+  }
+
+  const showOriginalContent = () => {
+    if (visibleState.status !== "recovered") {
+      return
+    }
+    onBeforeContentChange?.()
+    setStoredState({ ...visibleState, status: "original_restored" })
+  }
+
+  const showRecoveredContent = () => {
+    if (visibleState.status !== "original_restored") {
+      return
+    }
+    onBeforeContentChange?.()
+    setStoredState({ ...visibleState, status: "recovered" })
   }
 
   return {
     canRecover,
     contentHtml: visibleState.status === "recovered" ? visibleState.contentHtml : null,
-    contentOrigin: visibleState.status === "recovered" ? visibleState.contentOrigin : null,
+    contentOrigin: hasRecovery ? visibleState.contentOrigin : null,
     recover,
+    hasRecovery,
+    isOriginalShown: visibleState.status === "original_restored",
+    showOriginalContent,
+    showRecoveredContent,
     status: visibleState.status,
   }
 }
