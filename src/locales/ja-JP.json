@@ -289,6 +289,10 @@
     "recovering_full_text": "全文を取得しています…",
     "recovered_from_wallhop": "WallHop から全文を取得しました",
     "recovered_from_miniflux_scraper": "Miniflux スクレーパーで全文を取得しました",
+    "show_original_text": "元のテキストを表示",
+    "show_recovered_text": "取得したテキストを表示",
+    "original_restored_from_wallhop": "Miniflux の元のテキストを表示しています。WallHop 版も引き続き利用できます。",
+    "original_restored_from_miniflux_scraper": "Miniflux の元のテキストを表示しています。スクレーパー版も引き続き利用できます。",
     "recovery_failed": "全文を取得できませんでした。元のコンテンツを引き続き表示します。",
     "back_to_list": "一覧に戻る"
   },

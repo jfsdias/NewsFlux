@@ -57,7 +57,12 @@ const buildAndRunE2E = ({
     }
   }
 
-  const buildEnv = { ...env, SOURCE_COMMIT: initialSource.sha }
+  const buildEnv = {
+    ...env,
+    SOURCE_COMMIT: initialSource.sha,
+    VITE_CONTENT_FALLBACK_READER_BASE_PATH:
+      env.VITE_CONTENT_FALLBACK_READER_BASE_PATH ?? "/api/content-fallback",
+  }
   const buildResult = env.E2E_BUILD_DIR
     ? (() => {
         const prebuild = spawnImpl(packageManagerCommand, ["run", "prebuild"], {
