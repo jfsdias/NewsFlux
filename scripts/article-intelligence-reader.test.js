@@ -67,6 +67,9 @@ test("AI Reader browser suite separates the default-off and explicitly enabled r
   const config = await read("playwright.article-intelligence.config.js")
   const availability = await read("reader-ai-e2e/article-intelligence-availability.spec.js")
   const enabledScenarios = await read("reader-ai-e2e/article-intelligence.spec.js")
+  const recoveryIntegration = await read(
+    "reader-ai-e2e/article-intelligence-recovery-integration.spec.js",
+  )
 
   assert.match(workflow, /Run Article Intelligence Reader scenarios/u)
   assert.match(workflow, /Build Reader with AI disabled by default[\s\S]*?pnpm build/u)
@@ -90,6 +93,10 @@ test("AI Reader browser suite separates the default-off and explicitly enabled r
   assert.match(availability, /process\.env\.VITE_ARTICLE_INTELLIGENCE_ENABLED === "1"/u)
   assert.match(enabledScenarios, /process\.env\.VITE_ARTICLE_INTELLIGENCE_ENABLED !== "1"/u)
   assert.match(
+    recoveryIntegration,
+    /process\.env\.VITE_ARTICLE_INTELLIGENCE_ENABLED !== "1"\s*\|\|\s*!process\.env\.VITE_CONTENT_FALLBACK_READER_BASE_PATH/u,
+  )
+  assert.match(
     config,
     /command: `pnpm exec vite --host 127\.0\.0\.1 --port \$\{appPort\} --strictPort`/u,
   )
@@ -103,5 +110,19 @@ test("synthetic authenticated Reader fixture can provision an isolated API-key i
   assert.match(
     fixtures,
     /context\.addInitScript\(seedAuth, \{\s*server: mock\.url,\s*apiKeyId: provisionedApiKey \? 9 : null,?\s*\}\)/u,
+  )
+})
+
+test("combined session test emits the established auth storage change before checking cancellation", async () => {
+  const recoveryIntegration = await read(
+    "reader-ai-e2e/article-intelligence-recovery-integration.spec.js",
+  )
+  assert.match(
+    recoveryIntegration,
+    /await recoveryRequest\s*await page\.getByRole\("button", \{ name: "Summarize with AI" \}\)\.click\(\)\s*await summaryRequest/u,
+  )
+  assert.match(
+    recoveryIntegration,
+    /localStorage\.setItem\(\s*"auth",\s*value,?\s*\)\s*globalThis\.dispatchEvent\(new StorageEvent\(\s*"storage",\s*\{ key: "auth", newValue: value \}/u,
   )
 })
