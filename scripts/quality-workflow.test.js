@@ -210,9 +210,21 @@ test("the e2e workflow is read-only, runs in forks and pins its actions", () => 
 test("the e2e workflow installs the pinned browser and runs three verified stability passes", () => {
   const { workflow } = readE2eWorkflow()
   const commands = new Set(runCommands(workflow.jobs.e2e))
+  const { devDependencies } = JSON.parse(readFileSync(PACKAGE_PATH, "utf8"))
+  const browserVerification = stepsOf(workflow.jobs.e2e).find(
+    (step) => step.name === "Verify pinned Playwright browser image",
+  )
 
   assert.ok(commands.has("pnpm install --frozen-lockfile"))
-  assert.ok(commands.has("pnpm exec playwright install --with-deps chromium"))
+  assert.equal(devDependencies["@playwright/test"], "1.63.0")
+  assert.equal(
+    workflow.jobs.e2e.container.image,
+    "mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27",
+  )
+  assert.ok(browserVerification, "the pinned image browser must be verified before tests run")
+  assert.match(browserVerification.run, /ldd/u)
+  assert.match(browserVerification.run, /CHROMIUM_DEPENDENCIES=FAIL/u)
+  assert.ok(!commands.has("pnpm exec playwright install --with-deps chromium"))
   assert.ok(commands.has("pnpm test:e2e:stability"))
   assert.ok(
     !commands.has("pnpm test:e2e"),
@@ -293,7 +305,8 @@ test("the blocking UX-REACH job builds and executes its isolated 11-test Playwri
   const commands = runCommands(job)
 
   assert.ok(commands.includes("pnpm install --frozen-lockfile"))
-  assert.ok(commands.includes("pnpm exec playwright install --with-deps chromium"))
+  assert.ok(!commands.includes("pnpm exec playwright install --with-deps chromium"))
+  assert.ok(stepsOf(job).some((step) => step.name === "Verify pinned Playwright browser image"))
   assert.ok(commands.includes("pnpm build"))
   assert.ok(
     commands.includes("pnpm exec playwright test --config=playwright.ux-reach-01.config.js"),
@@ -418,11 +431,25 @@ for (const [file, read] of WORKFLOW_FILES) {
 
   test(`${file}: only pull request and push triggers, without path or tag filters`, () => {
     const { workflow } = read()
+    const allowedTriggers =
+      file === ".github/workflows/e2e.yaml"
+        ? new Set([...ALLOWED_TRIGGERS, "workflow_dispatch"])
+        : ALLOWED_TRIGGERS
 
     for (const trigger of Object.keys(workflow.on)) {
-      assert.ok(ALLOWED_TRIGGERS.has(trigger), `unexpected trigger ${trigger}`)
+      assert.ok(allowedTriggers.has(trigger), `unexpected trigger ${trigger}`)
       for (const filter of FORBIDDEN_TRIGGER_FILTERS) {
         assert.ok(!(filter in (workflow.on[trigger] ?? {})), `${trigger} must not use ${filter}`)
+      }
+    }
+    if (file === ".github/workflows/e2e.yaml") {
+      assert.equal(workflow.on.workflow_dispatch.inputs.source_sha.required, true)
+      for (const job of Object.values(workflow.jobs)) {
+        const checkout = stepsOf(job).find((step) => step.name === "Checkout code")
+        assert.equal(checkout.with.ref, "${{ inputs.source_sha || github.sha }}")
+        assert.ok(
+          stepsOf(job).some((step) => step.name === "Trust this ephemeral checkout for hook setup"),
+        )
       }
     }
   })
