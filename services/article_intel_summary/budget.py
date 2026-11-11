@@ -132,7 +132,7 @@ class BudgetLedger:
         if (
             not isinstance(estimated_cost_usd, Decimal)
             or not estimated_cost_usd.is_finite()
-            or estimated_cost_usd <= 0
+            or estimated_cost_usd < 0
             or not isinstance(monthly_budget_usd, Decimal)
             or not monthly_budget_usd.is_finite()
             or monthly_budget_usd <= 0

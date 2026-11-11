@@ -4,7 +4,6 @@ import json
 import tempfile
 import unittest
 from dataclasses import replace
-from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
@@ -12,7 +11,7 @@ import httpx
 
 from services.article_intel_summary.inference import InferenceUnavailable, SummaryModelInput
 from services.article_intel_summary.litellm_adapter import (
-    MISTRAL_SMALL_MODEL_ID,
+    MODEL_CHOICE_MISTRAL_SMALL,
     LiteLLMInferenceAdapter,
     LiteLLMSettings,
     create_configured_inference_adapter,
@@ -39,30 +38,21 @@ GOOD_OUTPUT = {
     ],
     "action_points": [],
 }
+MISTRAL_ALIAS = "newsflux-mistral-small"
+S5_ALIAS = "newsflux-s5-free"
 
 
 def make_settings(database_path: str, **overrides: object) -> LiteLLMSettings:
     values: dict[str, object] = {
-        "gateway_base_url": "https://litellm-a2.example",
+        "gateway_base_url": "https://litellm.example",
         "virtual_key": "synthetic-virtual-key",
-        "model_id": MISTRAL_SMALL_MODEL_ID,
+        "model_choice": MODEL_CHOICE_MISTRAL_SMALL,
+        "model_id": MISTRAL_ALIAS,
+        "s5_free_model_alias": S5_ALIAS,
+        "mistral_small_model_alias": MISTRAL_ALIAS,
         "enabled": True,
         "external_transfer_authorized": True,
         "paid_inference_authorized": True,
-        "a2_runtime_approved": True,
-        "dedicated_gateway_confirmed": True,
-        "deployment_mapping_verified": True,
-        "json_mode_verified": True,
-        "account_privacy_reviewed": True,
-        "account_retention_reviewed": True,
-        "account_training_policy_reviewed": True,
-        "backend_logging_reviewed": True,
-        "litellm_logging_reviewed": True,
-        "provider_budget_enforcement_verified": True,
-        "provider_rate_limits_verified": True,
-        "price_reviewed": True,
-        "price_source_url": "https://docs.mistral.ai/inference/pricing",
-        "price_verified_at": date(2026, 11, 9),
         "input_price_usd_per_million": Decimal("0.15"),
         "output_price_usd_per_million": Decimal("0.60"),
         "monthly_budget_usd": Decimal("1.00"),
@@ -78,32 +68,19 @@ def make_settings(database_path: str, **overrides: object) -> LiteLLMSettings:
 
 
 def approved_environment(database_path: str) -> dict[str, str]:
-    approval_names = (
-        "NEWSFLUX_AI_INFERENCE_ENABLED",
-        "NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER",
-        "NEWSFLUX_AI_ALLOW_PAID_INFERENCE",
-        "NEWSFLUX_AI_A2_RUNTIME_APPROVED",
-        "NEWSFLUX_AI_DEDICATED_A2_CONFIRMED",
-        "NEWSFLUX_AI_MISTRAL_MAPPING_VERIFIED",
-        "NEWSFLUX_AI_MISTRAL_JSON_MODE_VERIFIED",
-        "NEWSFLUX_AI_ACCOUNT_PRIVACY_REVIEWED",
-        "NEWSFLUX_AI_ACCOUNT_RETENTION_REVIEWED",
-        "NEWSFLUX_AI_ACCOUNT_TRAINING_REVIEWED",
-        "NEWSFLUX_AI_BACKEND_LOGGING_REVIEWED",
-        "NEWSFLUX_AI_LITELLM_LOGGING_REVIEWED",
-        "NEWSFLUX_AI_LITELLM_BUDGET_ENFORCEMENT_VERIFIED",
-        "NEWSFLUX_AI_LITELLM_RATE_LIMITS_VERIFIED",
-        "NEWSFLUX_AI_MISTRAL_PRICE_REVIEWED",
-    )
-    values = {name: "true" for name in approval_names}
-    values.update(
-        {
-            "NEWSFLUX_AI_LITELLM_BASE_URL": "https://litellm-a2.example",
-            "NEWSFLUX_AI_LITELLM_MODEL_ID": MISTRAL_SMALL_MODEL_ID,
-            "NEWSFLUX_AI_MISTRAL_PRICE_SOURCE_URL": "https://docs.mistral.ai/inference/pricing",
-            "NEWSFLUX_AI_MISTRAL_PRICE_VERIFIED_AT": "2026-11-09",
-            "NEWSFLUX_AI_MISTRAL_INPUT_USD_PER_MILLION": "0.15",
-            "NEWSFLUX_AI_MISTRAL_OUTPUT_USD_PER_MILLION": "0.60",
+    values = {
+            "NEWSFLUX_AI_INFERENCE_ENABLED": "true",
+            "NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER": "true",
+            "NEWSFLUX_AI_ALLOW_PAID_INFERENCE": "true",
+            "NEWSFLUX_AI_LITELLM_BASE_URL": "https://litellm.example",
+            "NEWSFLUX_AI_LITELLM_MODEL_CHOICE": MODEL_CHOICE_MISTRAL_SMALL,
+            "NEWSFLUX_AI_LITELLM_S5_FREE_ALIAS": S5_ALIAS,
+            "NEWSFLUX_AI_LITELLM_MISTRAL_SMALL_ALIAS": MISTRAL_ALIAS,
+            "NEWSFLUX_AI_LITELLM_S5_FREE_INPUT_USD_PER_MILLION": "0",
+            "NEWSFLUX_AI_LITELLM_S5_FREE_OUTPUT_USD_PER_MILLION": "0",
+            "NEWSFLUX_AI_LITELLM_MISTRAL_SMALL_INPUT_USD_PER_MILLION": "0.15",
+            "NEWSFLUX_AI_LITELLM_MISTRAL_SMALL_OUTPUT_USD_PER_MILLION": "0.60",
+            "NEWSFLUX_AI_LITELLM_VIRTUAL_KEY_FILE": "/not-read-until-test-sets-path",
             "NEWSFLUX_AI_MONTHLY_BUDGET_USD": "1.00",
             "NEWSFLUX_AI_MAX_INPUT_TOKENS": "4096",
             "NEWSFLUX_AI_MAX_OUTPUT_TOKENS": "512",
@@ -111,8 +88,7 @@ def approved_environment(database_path: str) -> dict[str, str]:
             "NEWSFLUX_AI_MAX_TOKENS_PER_MINUTE": "20000",
             "NEWSFLUX_AI_INFERENCE_TIMEOUT_SECONDS": "15",
             "NEWSFLUX_AI_USAGE_DATABASE_PATH": database_path,
-        }
-    )
+    }
     return values
 
 
@@ -125,7 +101,7 @@ def input_fixture(snapshot=None) -> SummaryModelInput:
 def completion_response(
     *,
     output: object = GOOD_OUTPUT,
-    model: str = MISTRAL_SMALL_MODEL_ID,
+    model: str = MISTRAL_ALIAS,
     finish_reason: str = "stop",
     prompt_tokens: int = 100,
     completion_tokens: int = 60,
@@ -168,19 +144,19 @@ class LiteLLMAdapterTests(unittest.TestCase):
         adapter = self.make_adapter()
         result = adapter.summarize(input_fixture(), timeout_seconds=12)
 
-        self.assertEqual(result.provider_id, "mistral")
-        self.assertEqual(result.deployment_id, MISTRAL_SMALL_MODEL_ID)
-        self.assertEqual(result.effective_model_id, MISTRAL_SMALL_MODEL_ID)
+        self.assertEqual(result.provider_id, "litellm")
+        self.assertEqual(result.deployment_id, MODEL_CHOICE_MISTRAL_SMALL)
+        self.assertEqual(result.effective_model_id, MISTRAL_ALIAS)
         self.assertEqual(result.output, GOOD_OUTPUT)
         self.assertEqual(len(self.requests), 1)
         request = self.requests[0]
         self.assertEqual(request.method, "POST")
-        self.assertEqual(str(request.url), "https://litellm-a2.example/v1/chat/completions")
+        self.assertEqual(str(request.url), "https://litellm.example/v1/chat/completions")
         self.assertEqual(request.headers["authorization"], "Bearer synthetic-virtual-key")
         body = json.loads(request.content)
-        self.assertEqual(body["model"], MISTRAL_SMALL_MODEL_ID)
+        self.assertEqual(body["model"], MISTRAL_ALIAS)
         self.assertEqual(body["max_tokens"], 512)
-        self.assertEqual(body["response_format"], {"type": "json_object"})
+        self.assertNotIn("response_format", body)
         self.assertIs(body["stream"], False)
         self.assertNotIn("tools", body)
         self.assertNotIn("tool_choice", body)
@@ -195,23 +171,44 @@ class LiteLLMAdapterTests(unittest.TestCase):
         self.assertNotIn("synthetic-virtual-key", repr(adapter.settings))
         self.assertGreater(adapter.ledger.current_month_spend(), Decimal("0"))
 
+    def test_selected_s5_alias_is_sent_once_without_paid_model_fallback(self) -> None:
+        adapter = self.make_adapter(
+            handler=lambda _request: completion_response(model=S5_ALIAS),
+            model_choice="s5-free",
+            model_id=S5_ALIAS,
+            paid_inference_authorized=False,
+            input_price_usd_per_million=Decimal("0"),
+            output_price_usd_per_million=Decimal("0"),
+        )
+
+        result = adapter.summarize(input_fixture(), timeout_seconds=12)
+
+        self.assertEqual(result.effective_model_id, S5_ALIAS)
+        self.assertEqual(json.loads(self.requests[0].content)["model"], S5_ALIAS)
+        self.assertEqual(len(self.requests), 1)
+        self.assertEqual(adapter.ledger.current_month_spend(), Decimal("0"))
+
+        self.requests.clear()
+        unavailable = self.make_adapter(
+            handler=lambda _request: httpx.Response(429),
+            model_choice="s5-free",
+            model_id=S5_ALIAS,
+            paid_inference_authorized=False,
+            input_price_usd_per_million=Decimal("0"),
+            output_price_usd_per_million=Decimal("0"),
+        )
+        with self.assertRaises(InferenceUnavailable):
+            unavailable.summarize(input_fixture(), timeout_seconds=12)
+        self.assertEqual(len(self.requests), 1)
+
     def test_disabled_or_unapproved_privacy_and_budget_policies_block_before_network(self) -> None:
         for override in (
             {"enabled": False},
             {"external_transfer_authorized": False},
             {"paid_inference_authorized": False},
-            {"a2_runtime_approved": False},
-            {"dedicated_gateway_confirmed": False},
-            {"deployment_mapping_verified": False},
-            {"json_mode_verified": False},
-            {"account_privacy_reviewed": False},
-            {"account_retention_reviewed": False},
-            {"account_training_policy_reviewed": False},
-            {"backend_logging_reviewed": False},
-            {"litellm_logging_reviewed": False},
-            {"provider_budget_enforcement_verified": False},
-            {"provider_rate_limits_verified": False},
-            {"price_reviewed": False},
+            {"model_choice": "unsupported"},
+            {"model_id": "another-provider/arbitrary-model"},
+            {"input_price_usd_per_million": None},
             {"monthly_budget_usd": None},
         ):
             with self.subTest(override=override):
@@ -227,9 +224,9 @@ class LiteLLMAdapterTests(unittest.TestCase):
         self.assertEqual(self.requests, [])
 
         for base_url in (
-            "http://litellm-a2.example",
-            "https://litellm-a2.example/v1",
-            "https://user:password@litellm-a2.example",
+            "http://litellm.example",
+            "https://litellm.example/v1",
+            "https://user:password@litellm.example",
         ):
             with self.subTest(base_url=base_url):
                 adapter = self.make_adapter(
