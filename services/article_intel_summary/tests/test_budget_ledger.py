@@ -51,6 +51,14 @@ class BudgetLedgerTests(unittest.TestCase):
             self.reserve(estimated_cost_usd=Decimal("0.11"))
         self.assertEqual(self.ledger.current_month_spend(now=self.now), Decimal("0.90"))
 
+    def test_zero_estimated_cost_is_valid_and_still_consumes_request_and_token_limits(self) -> None:
+        reservation_id = self.reserve(estimated_cost_usd=Decimal("0"), requests_per_minute=1)
+
+        self.assertTrue(reservation_id)
+        self.assertEqual(self.ledger.current_month_spend(now=self.now), Decimal("0"))
+        with self.assertRaisesRegex(BudgetBlocked, "request rate"):
+            self.reserve(estimated_cost_usd=Decimal("0"), requests_per_minute=1)
+
     def test_request_rate_and_token_rate_are_independently_enforced(self) -> None:
         self.reserve(requests_per_minute=1)
         with self.assertRaisesRegex(BudgetBlocked, "request rate"):
