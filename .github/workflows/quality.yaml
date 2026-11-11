@@ -99,6 +99,9 @@ jobs:
       - name: Run content fallback and pinned DNS tests
         run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s services/content_fallback/tests -p 'test_*.py' -v
 
+      - name: Run isolated Reader Recovery harness tests
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/reader-wallhop-p1-r2 -p 'test_*.py' -v
+
   build:
     name: Production build (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest

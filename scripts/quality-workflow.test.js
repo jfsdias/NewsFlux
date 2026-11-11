@@ -15,6 +15,10 @@ import validatePackageScripts from "./package-script-contract.js"
 
 const WORKFLOW_PATH = new URL("../.github/workflows/quality.yaml", import.meta.url)
 const E2E_WORKFLOW_PATH = new URL("../.github/workflows/e2e.yaml", import.meta.url)
+const READER_RECOVERY_DOCKER_WORKFLOW_PATH = new URL(
+  "../.github/workflows/reader-wallhop-p1-r2-docker-https.yaml",
+  import.meta.url,
+)
 const PACKAGE_PATH = new URL("../package.json", import.meta.url)
 const PINNED_ACTION = /^[\w.-]+\/[\w.-]+@[\da-f]{40}$/
 const SUPPORTED_NODE_VERSIONS = ["22", "24"]
@@ -111,6 +115,7 @@ test("the Python suite runs independently on the supported interpreter", () => {
     "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s services/article_intel_auth/tests -p 'test_*.py' -v",
     "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s services/article_intel_summary/tests -p 'test_*.py' -v",
     "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s services/content_fallback/tests -p 'test_*.py' -v",
+    "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/reader-wallhop-p1-r2 -p 'test_*.py' -v",
   ])
 })
 
@@ -189,6 +194,24 @@ const readE2eWorkflow = () => {
   const source = readFileSync(E2E_WORKFLOW_PATH, "utf8")
   return { source, workflow: parse(source) }
 }
+
+test("the Reader Recovery Docker gate runs for product changes, not its own harness edits", () => {
+  assert.ok(existsSync(READER_RECOVERY_DOCKER_WORKFLOW_PATH))
+  const workflow = parse(readFileSync(READER_RECOVERY_DOCKER_WORKFLOW_PATH, "utf8"))
+  const pullRequest = workflow.on.pull_request
+
+  assert.deepEqual(pullRequest.branches, ["main"])
+  assert.ok(pullRequest.paths.includes("services/content_fallback/**"))
+  assert.ok(pullRequest.paths.includes("src/components/Article/**"))
+  assert.ok(pullRequest.paths.includes("e2e/reader-content-recovery.spec.js"))
+  assert.ok(
+    !pullRequest.paths.some(
+      (path) =>
+        path.startsWith(".github/workflows/") || path.startsWith("scripts/reader-wallhop-p1-r2/"),
+    ),
+    "harness-only changes must be covered by harness unit tests without exercising main as the candidate",
+  )
+})
 
 test("the e2e workflow is read-only, runs in forks and pins its actions", () => {
   const { source, workflow } = readE2eWorkflow()
