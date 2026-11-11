@@ -2,7 +2,7 @@
 import "@arco-design/web-react/es/_util/react-19-adapter"
 import "@arco-design/web-react/dist/css/arco.css"
 import Polyglot from "node-polyglot"
-import React, { useEffect } from "react"
+import React, { useEffect, useState } from "react"
 import { createRoot } from "react-dom/client"
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router"
 
@@ -198,6 +198,7 @@ const report = () => {
     viewport: { width: window.innerWidth, height: window.innerHeight },
     scrollWidth: document.documentElement.scrollWidth,
   })
+  performance.mark("reader-report-published")
   output.dataset.status = Object.values(results).every(Boolean) ? "pass" : "fail"
   globalThis.__contentFallbackReaderReport = {
     mode,
@@ -223,6 +224,19 @@ const waitFor = async (predicate, timeoutMs = 3000) => {
 }
 
 const driveChecks = async () => {
+  performance.mark("reader-checks-started")
+  await waitFor(() => {
+    const originalReady = document.body.textContent.includes(
+      "Original Miniflux body stays visible on failure.",
+    )
+    const actionReady = articleSummaryMode
+      ? document.querySelector(".article-intelligence-summary__action")
+      : mode === "disabled" || document.querySelector(".reader-content-recovery__action")
+    return originalReady && actionReady
+  })
+  if (document.body.textContent.includes("Original Miniflux body stays visible on failure.")) {
+    performance.mark("reader-original-visible")
+  }
   const originalVisible = document.body.textContent.includes(
     "Original Miniflux body stays visible on failure.",
   )
@@ -414,6 +428,15 @@ const readerCommands = {
   navigateToPreviousArticle: () => {},
 }
 
+const ControlledArticle = () => {
+  const [ready, setReady] = useState(() => !globalThis.__readerMountGate)
+  useEffect(() => {
+    performance.mark("reader-fixture-mounted")
+    globalThis.__readerMountGate?.then(() => setReady(true))
+  }, [])
+  return ready ? <ArticleDetail /> : null
+}
+
 const HarnessPage = () => (
   <AppDataContext.Provider
     value={{ refreshCounts: async () => ({}), refreshFeedData: async () => ({}) }}
@@ -423,7 +446,7 @@ const HarnessPage = () => (
         <ContextProvider>
           <NavigateControls />
           <div className="article-container article-container-full-size content-wrapper">
-            <ArticleDetail />
+            <ControlledArticle />
           </div>
           <aside hidden aria-label="Content Fallback Reader report">
             <h2>Content Fallback Reader gate</h2>
@@ -443,4 +466,4 @@ createRoot(document.querySelector("#root")).render(
   </MemoryRouter>,
 )
 
-requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => void driveChecks(), 300)))
+await driveChecks()
