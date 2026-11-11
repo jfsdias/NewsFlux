@@ -90,6 +90,17 @@ def _reader_entry_matches_scope(
     )
 
 
+def _reader_cache_fingerprint(entry: EntrySnapshot, identity: MinifluxIdentity | None) -> str:
+    if identity is None:
+        return entry.content_fingerprint
+    return hashlib.sha256(
+        json.dumps(
+            ["reader-cache-v1", identity.id, identity.is_admin, entry.content_fingerprint],
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+
+
 def _assess_wallhop_content(title: str, content_html: str) -> ContentAssessment:
     raw_assessment = assess_content(title, content_html)
     if raw_assessment.blocked_page:
@@ -355,17 +366,18 @@ class ContentFallbackService:
                 "reason": decision.reason,
             }
 
+        key_parts: list[object] = [entry.id, entry.fingerprint, decision.policy.provider]
+        if reader_identity is not None:
+            key_parts.extend(("reader", reader_identity.id, reader_identity.is_admin))
         key = hashlib.sha256(
-            json.dumps(
-                [entry.id, entry.fingerprint, decision.policy.provider],
-                separators=(",", ":"),
-            ).encode("utf-8")
+            json.dumps(key_parts, separators=(",", ":")).encode("utf-8")
         ).hexdigest()
         cached = self._cache.get(key)
         if cached is not None:
             return {**cached, "cache_hit": True}
 
-        stored = self._get_stored(entry)
+        storage_fingerprint = _reader_cache_fingerprint(entry, reader_identity)
+        stored = self._get_stored(entry, storage_fingerprint)
         expected_stored_provider = (
             "wallhop.io" if decision.policy.provider == "wallhop" else "miniflux"
         )
@@ -499,7 +511,7 @@ class ContentFallbackService:
                         },
                     }
                     self._cache.put(key, result)
-                    self._put_stored(entry, provider_result)
+                    self._put_stored(entry, provider_result, storage_fingerprint)
         except UnsafeURL:
             result = {**original_response, "status": "skipped_security", "reason": "unsafe_source_url"}
         except RecoveryError as exc:
@@ -547,20 +559,25 @@ class ContentFallbackService:
         )
         return result
 
-    def _get_stored(self, entry: EntrySnapshot) -> StoredRecovery | None:
+    def _get_stored(self, entry: EntrySnapshot, source_fingerprint: str) -> StoredRecovery | None:
         try:
-            return self.store.get(entry.id, entry.content_fingerprint)
+            return self.store.get(entry.id, source_fingerprint)
         except Exception:
             LOGGER.warning("Content fallback persistent cache read failed", extra={"entry_id": entry.id})
             return None
 
-    def _put_stored(self, entry: EntrySnapshot, recovery: ProviderResult) -> None:
+    def _put_stored(
+        self,
+        entry: EntrySnapshot,
+        recovery: ProviderResult,
+        source_fingerprint: str,
+    ) -> None:
         try:
             self.store.put(
                 entry.id,
-                entry.content_fingerprint,
+                source_fingerprint,
                 StoredRecovery(
-                    source_fingerprint=entry.content_fingerprint,
+                    source_fingerprint=source_fingerprint,
                     content_html=recovery.assessment.safe_html,
                     validation=recovery.assessment.public_dict(),
                     provider=recovery.provider,

@@ -240,6 +240,50 @@ class ServiceTests(unittest.TestCase):
                 ).recover(requested.id, reader_scope=scope)
             self.assertEqual(provider.calls, 0)
 
+    def test_reader_scoped_recovery_rejects_tampered_resource_fingerprints(self) -> None:
+        item = entry(user_id=1, feed_user_id=1)
+        scope = reader_scope(item)
+        altered_scopes = (
+            ReaderRecoveryScope(
+                entry_id=scope.entry_id,
+                feed_id=scope.feed_id + 1,
+                url_fingerprint=scope.url_fingerprint,
+                title_sha256=scope.title_sha256,
+                content_sha256=scope.content_sha256,
+            ),
+            ReaderRecoveryScope(
+                entry_id=scope.entry_id,
+                feed_id=scope.feed_id,
+                url_fingerprint="d" * 64,
+                title_sha256=scope.title_sha256,
+                content_sha256=scope.content_sha256,
+            ),
+            ReaderRecoveryScope(
+                entry_id=scope.entry_id,
+                feed_id=scope.feed_id,
+                url_fingerprint=scope.url_fingerprint,
+                title_sha256="e" * 64,
+                content_sha256=scope.content_sha256,
+            ),
+            ReaderRecoveryScope(
+                entry_id=scope.entry_id,
+                feed_id=scope.feed_id,
+                url_fingerprint=scope.url_fingerprint,
+                title_sha256=scope.title_sha256,
+                content_sha256="f" * 64,
+            ),
+        )
+
+        for altered_scope in altered_scopes:
+            provider = FakeProvider()
+            with self.subTest(scope=altered_scope), self.assertRaises(RecoveryError):
+                ContentFallbackService(
+                    miniflux=FakeScopedMiniflux({item.id: item}),
+                    policies=enabled_registry(),
+                    provider=provider,
+                ).recover(item.id, reader_scope=altered_scope)
+            self.assertEqual(provider.calls, 0)
+
     def test_reader_scope_is_revalidated_after_provider_before_result_is_used(self) -> None:
         original = entry(user_id=1, feed_user_id=1)
         changed_owner = entry(user_id=2, feed_user_id=2)
@@ -302,6 +346,140 @@ class ServiceTests(unittest.TestCase):
         self.assertNotEqual(result["status"], "recovered")
         self.assertEqual(provider.calls, 1)
         self.assertIsNone(store.get(original.id, original.content_fingerprint))
+
+    def test_persistent_reader_cache_is_partitioned_by_verified_miniflux_identity(self) -> None:
+        first_item = entry(user_id=1, feed_user_id=1)
+        second_item = entry(user_id=2, feed_user_id=2)
+        self.assertEqual(first_item.content_fingerprint, second_item.content_fingerprint)
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "content-fallback.sqlite3"
+            first_store = SQLiteRecoveryStore(path)
+            first_provider = FakeProvider()
+            first_result = ContentFallbackService(
+                miniflux=FakeScopedMiniflux({first_item.id: first_item}, user_id=1, is_admin=True),
+                policies=enabled_registry(),
+                provider=first_provider,
+                store=first_store,
+            ).recover(first_item.id, reader_scope=reader_scope(first_item))
+            self.assertEqual(first_result["status"], "recovered")
+            first_store.close()
+
+            second_store = SQLiteRecoveryStore(path)
+            second_provider = FakeProvider()
+            second_result = ContentFallbackService(
+                miniflux=FakeScopedMiniflux({second_item.id: second_item}, user_id=2, is_admin=True),
+                policies=enabled_registry(),
+                provider=second_provider,
+                store=second_store,
+            ).recover(second_item.id, reader_scope=reader_scope(second_item))
+            second_store.close()
+
+        self.assertEqual(second_result["status"], "recovered")
+        self.assertFalse(second_result["cache_hit"])
+        self.assertEqual(second_provider.calls, 1)
+
+    def test_persistent_reader_cache_is_reused_for_the_same_verified_identity(self) -> None:
+        item = entry(user_id=1, feed_user_id=1)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "content-fallback.sqlite3"
+            first_store = SQLiteRecoveryStore(path)
+            first_provider = FakeProvider()
+            first_result = ContentFallbackService(
+                miniflux=FakeScopedMiniflux({item.id: item}, user_id=1, is_admin=True),
+                policies=enabled_registry(),
+                provider=first_provider,
+                store=first_store,
+            ).recover(item.id, reader_scope=reader_scope(item))
+            self.assertEqual(first_result["status"], "recovered")
+            first_store.close()
+
+            second_store = SQLiteRecoveryStore(path)
+            second_provider = FakeProvider()
+            second_result = ContentFallbackService(
+                miniflux=FakeScopedMiniflux({item.id: item}, user_id=1, is_admin=True),
+                policies=enabled_registry(),
+                provider=second_provider,
+                store=second_store,
+            ).recover(item.id, reader_scope=reader_scope(item))
+            second_store.close()
+
+        self.assertEqual(second_result["status"], "recovered")
+        self.assertTrue(second_result["cache_hit"])
+        self.assertEqual(second_provider.calls, 0)
+
+    def test_in_memory_reader_cache_is_partitioned_by_verified_miniflux_identity(self) -> None:
+        first_item = entry(user_id=1, feed_user_id=1)
+        second_item = entry(user_id=2, feed_user_id=2)
+        miniflux = FakeScopedMiniflux({first_item.id: first_item}, user_id=1, is_admin=True)
+        provider = FakeProvider()
+        service = ContentFallbackService(
+            miniflux=miniflux,
+            policies=enabled_registry(),
+            provider=provider,
+        )
+
+        first_result = service.recover(first_item.id, reader_scope=reader_scope(first_item))
+        miniflux.identity = type(
+            "IdentityFixture",
+            (),
+            {"id": 2, "username": "user-2", "is_admin": True},
+        )()
+        miniflux.entries[second_item.id] = second_item
+        second_result = service.recover(second_item.id, reader_scope=reader_scope(second_item))
+
+        self.assertEqual(first_result["status"], "recovered")
+        self.assertEqual(second_result["status"], "recovered")
+        self.assertFalse(second_result["cache_hit"])
+        self.assertEqual(provider.calls, 2)
+
+    def test_reader_recovery_requests_for_different_identities_are_not_deduplicated(self) -> None:
+        first_item = entry(user_id=1, feed_user_id=1)
+        second_item = entry(user_id=2, feed_user_id=2)
+        miniflux = FakeScopedMiniflux({first_item.id: first_item}, user_id=1, is_admin=True)
+        release_provider = threading.Event()
+        provider = FakeProvider(block=release_provider)
+        service = ContentFallbackService(
+            miniflux=miniflux,
+            policies=enabled_registry(),
+            provider=provider,
+            max_concurrent=2,
+            max_concurrent_per_domain=2,
+            follower_wait_seconds=0.2,
+        )
+        results: dict[str, dict[str, object]] = {}
+        first = threading.Thread(
+            target=lambda: results.__setitem__(
+                "first", service.recover(first_item.id, reader_scope=reader_scope(first_item))
+            )
+        )
+        first.start()
+        self.assertTrue(provider.started.wait(1))
+
+        miniflux.identity = type(
+            "IdentityFixture",
+            (),
+            {"id": 2, "username": "user-2", "is_admin": True},
+        )()
+        miniflux.entries[second_item.id] = second_item
+        second = threading.Thread(
+            target=lambda: results.__setitem__(
+                "second", service.recover(second_item.id, reader_scope=reader_scope(second_item))
+            )
+        )
+        second.start()
+
+        deadline = time.monotonic() + 1
+        while provider.calls < 2 and time.monotonic() < deadline:
+            time.sleep(0.005)
+        distinct_provider_call_started = provider.calls == 2
+        release_provider.set()
+        first.join(2)
+        second.join(2)
+
+        self.assertTrue(distinct_provider_call_started)
+        self.assertEqual(results["first"]["status"], "stale")
+        self.assertEqual(results["second"]["status"], "recovered")
 
     def test_miniflux_scraper_rejects_repeated_teaser_inflation(self) -> None:
         item = entry()

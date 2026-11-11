@@ -110,9 +110,14 @@ class ServerTests(unittest.TestCase):
         return status, json.loads(payload), headers
 
     def test_service_authentication_is_required(self) -> None:
-        status, payload = self.request("/v1/entries/42/recover")
-        self.assertEqual(status, 401)
-        self.assertEqual(payload["error"], "unauthorized")
+        for authorization in ("", "Bearer " + "x" * 40):
+            with self.subTest(authorization_set=bool(authorization)):
+                status, payload = self.request(
+                    "/v1/entries/42/recover",
+                    authorization=authorization,
+                )
+                self.assertEqual(status, 401)
+                self.assertEqual(payload["error"], "unauthorized")
         self.assertEqual(self.service.calls, [])
 
     def test_entry_endpoint_rejects_request_body(self) -> None:
@@ -133,6 +138,7 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(payload["entry_id"], 42)
         self.assertEqual(self.service.calls, [42])
+        self.assertEqual(self.service.reader_scopes, [None])
 
     def test_private_reader_scope_is_forwarded_only_after_exact_payload_validation(self) -> None:
         scope = ReaderRecoveryScope(
@@ -183,6 +189,48 @@ class ServerTests(unittest.TestCase):
         )
         self.assertEqual(status, 401)
         self.assertEqual(payload["error"], "unauthorized")
+        self.assertEqual(self.service.calls, [])
+
+    def test_private_reader_scope_rejects_duplicate_json_keys(self) -> None:
+        scope = {
+            "entry_id": 42,
+            "feed_id": 7,
+            "url_fingerprint": "a" * 64,
+            "title_sha256": "b" * 64,
+            "content_sha256": "c" * 64,
+        }
+        encoded_scope = json.dumps(scope, separators=(",", ":"))
+        duplicate_payloads = (
+            f'{{"reader_scope":{encoded_scope},"reader_scope":{encoded_scope}}}'.encode(),
+            (
+                '{"reader_scope":{"entry_id":42,"entry_id":42,"feed_id":7,'
+                f'"url_fingerprint":"{"a" * 64}","title_sha256":"{"b" * 64}",'
+                f'"content_sha256":"{"c" * 64}"}}'
+            ).encode(),
+        )
+
+        for body in duplicate_payloads:
+            with self.subTest(body=body[:80]):
+                status, payload = self.request(
+                    "/v1/entries/42/recover",
+                    authorization="Bearer " + "s" * 40,
+                    body=body,
+                    content_type="application/json",
+                )
+                self.assertEqual(status, 400)
+                self.assertEqual(payload["error"], "invalid_reader_scope")
+        self.assertEqual(self.service.calls, [])
+
+    def test_private_reader_scope_rejects_oversized_payload_before_service_call(self) -> None:
+        status, payload = self.request(
+            "/v1/entries/42/recover",
+            authorization="Bearer " + "s" * 40,
+            body=b" " * 8193,
+            content_type="application/json",
+        )
+
+        self.assertEqual(status, 413)
+        self.assertEqual(payload["error"], "invalid_reader_scope")
         self.assertEqual(self.service.calls, [])
 
     def test_invalid_entry_path_is_rejected(self) -> None:

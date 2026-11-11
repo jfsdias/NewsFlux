@@ -29,6 +29,15 @@ _READER_ENTRY_PATH_RE = re.compile(r"^/reader/v1/entries/([1-9][0-9]{0,18})/reco
 _MAX_READER_SCOPE_REQUEST_BYTES = 8192
 
 
+def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON object key")
+        result[key] = value
+    return result
+
+
 @dataclass(frozen=True)
 class Settings:
     host: str
@@ -181,7 +190,7 @@ def make_handler(
                     if len(raw_body) != content_length:
                         raise ValueError("incomplete request body")
                     reader_scope = ReaderRecoveryScope.from_payload(
-                        json.loads(raw_body.decode("utf-8")),
+                        json.loads(raw_body.decode("utf-8"), object_pairs_hook=_unique_json_object),
                         expected_entry_id=entry_id,
                     )
                 except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
