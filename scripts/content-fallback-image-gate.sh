@@ -20,15 +20,35 @@ docker build --file services/content_fallback/Dockerfile --tag "$image_tag" . >/
 printf 'DOCKER_BUILD_%s=PASS\n' "${mode^^}"
 
 if [[ "$mode" == "baseline" ]]; then
+  if ! docker run --rm --entrypoint python "$image_tag" -c 'import services.content_fallback.server'; then
+    printf '%s\n' 'BASELINE_IMAGE_IMPORT=FAIL' >&2
+    exit 1
+  fi
+  printf '%s\n' 'BASELINE_IMAGE_IMPORT=PASS'
+
+  fixture_dockerfile="${CONTENT_FALLBACK_MISSING_DEPENDENCY_DOCKERFILE:-scripts/tests/fixtures/content_fallback_image_gate_missing_auth.Dockerfile}"
+  if [[ ! -f "$fixture_dockerfile" ]]; then
+    printf '%s\n' 'MISSING_DEPENDENCY_FIXTURE=NOT_FOUND' >&2
+    exit 1
+  fi
+
+  fixture_tag="newsflux-content-fallback:missing-auth-fixture-${actual_sha:0:12}"
+  docker build \
+    --file "$fixture_dockerfile" \
+    --build-arg "BASE_IMAGE=$image_tag" \
+    --tag "$fixture_tag" \
+    . >/dev/null
+  printf '%s\n' 'MISSING_DEPENDENCY_FIXTURE_BUILD=PASS'
+
   set +e
-  import_output="$(docker run --rm --entrypoint python "$image_tag" -c 'import services.content_fallback.server' 2>&1)"
+  import_output="$(docker run --rm --entrypoint python "$fixture_tag" -c 'import services.content_fallback.server' 2>&1)"
   import_status=$?
   set -e
   if [[ "$import_status" -eq 0 ]] || ! grep -Fq "No module named 'services.article_intel_auth'" <<<"$import_output"; then
-    printf '%s\n' 'BASELINE_IMAGE_IMPORT_RED=NOT_REPRODUCED' >&2
+    printf '%s\n' 'MISSING_DEPENDENCY_FIXTURE_IMPORT_RED=NOT_REPRODUCED' >&2
     exit 1
   fi
-  printf '%s\n' 'BASELINE_IMAGE_IMPORT_RED=REPRODUCED'
+  printf '%s\n' 'MISSING_DEPENDENCY_FIXTURE_IMPORT_RED=PASS'
   exit 0
 fi
 
@@ -49,7 +69,7 @@ fi
 
 container_name="content-fallback-p0-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}"
 cleanup() {
-  docker rm --force "$container_name" >/dev/null 2>&1 || true
+  docker rm --force "$container_name" >/dev/null 2>&1
 }
 trap cleanup EXIT
 

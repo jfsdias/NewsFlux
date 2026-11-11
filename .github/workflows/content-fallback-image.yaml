@@ -8,6 +8,16 @@ on:
       - "services/article_intel_auth/**"
       - "scripts/content-fallback-image-gate.sh"
       - ".github/workflows/content-fallback-image.yaml"
+  workflow_dispatch:
+    inputs:
+      base_sha:
+        description: Exact base commit to validate
+        required: true
+        type: string
+      candidate_sha:
+        description: Exact candidate commit to build and validate
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -25,22 +35,45 @@ jobs:
       - name: Checkout exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
-      - name: Preserve image gate runner
-        run: cp scripts/content-fallback-image-gate.sh "$RUNNER_TEMP/content-fallback-image-gate.sh"
-
-      - name: Build exact base image and reproduce missing package import
+      - name: Select and verify exact source SHAs
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.base_sha }}
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || inputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          for sha in "$BASE_SHA" "$CANDIDATE_SHA"; do
+            if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+              printf '%s\n' 'SOURCE_SHA_GATE=FAIL' >&2
+              exit 1
+            fi
+            git cat-file -e "$sha^{commit}"
+          done
+          printf 'BASE_SHA=%s\nCANDIDATE_SHA=%s\n' "$BASE_SHA" "$CANDIDATE_SHA"
+          {
+            printf 'BASE_SHA=%s\n' "$BASE_SHA"
+            printf 'CANDIDATE_SHA=%s\n' "$CANDIDATE_SHA"
+          } >>"$GITHUB_ENV"
+
+      - name: Test image gate positive and negative behavior
+        run: bash scripts/content-fallback-image-gate.test.sh
+
+      - name: Preserve image gate and isolated negative fixture
+        run: |
+          mkdir -p "$RUNNER_TEMP/content-fallback-image-gate"
+          cp scripts/content-fallback-image-gate.sh "$RUNNER_TEMP/content-fallback-image-gate/gate.sh"
+          cp scripts/tests/fixtures/content_fallback_image_gate_missing_auth.Dockerfile \
+            "$RUNNER_TEMP/content-fallback-image-gate/missing-auth.Dockerfile"
+
+      - name: Build and import exact baseline; prove isolated missing-dependency fixture fails
         run: |
           git checkout --detach "$BASE_SHA"
-          bash "$RUNNER_TEMP/content-fallback-image-gate.sh" baseline "$BASE_SHA"
+          CONTENT_FALLBACK_MISSING_DEPENDENCY_DOCKERFILE="$RUNNER_TEMP/content-fallback-image-gate/missing-auth.Dockerfile" \
+            bash "$RUNNER_TEMP/content-fallback-image-gate/gate.sh" baseline "$BASE_SHA"
 
       - name: Build exact candidate image and verify startup contract
-        env:
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          git checkout --detach "$HEAD_SHA"
-          bash "$RUNNER_TEMP/content-fallback-image-gate.sh" candidate "$HEAD_SHA"
+          git checkout --detach "$CANDIDATE_SHA"
+          bash "$RUNNER_TEMP/content-fallback-image-gate/gate.sh" candidate "$CANDIDATE_SHA"
