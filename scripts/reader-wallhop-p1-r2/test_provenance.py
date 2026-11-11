@@ -67,24 +67,36 @@ class SourceProvenanceTests(unittest.TestCase):
                 candidate_is_based_on_base=False,
             )
 
-    def test_dispatch_requires_immutable_run_sha_to_remain_live_main(self) -> None:
+    def test_dispatch_accepts_exact_candidate_based_on_current_main(self) -> None:
         validate_source_provenance(
             event_name="workflow_dispatch",
             expected_base_sha=BASE,
-            candidate_sha=BASE,
+            candidate_sha=CANDIDATE,
             live_main_sha=BASE,
-            checkout_sha=BASE,
+            checkout_sha=CANDIDATE,
             candidate_is_based_on_base=True,
         )
 
-        with self.assertRaisesRegex(SourceProvenanceError, "dispatch SHA is not current main"):
+    def test_dispatch_rejects_live_main_that_moved_from_expected_base(self) -> None:
+        with self.assertRaisesRegex(SourceProvenanceError, "dispatched base is no longer current main"):
+            validate_source_provenance(
+                event_name="workflow_dispatch",
+                expected_base_sha=BASE,
+                candidate_sha=CANDIDATE,
+                live_main_sha="b" * 40,
+                checkout_sha=CANDIDATE,
+                candidate_is_based_on_base=True,
+            )
+
+    def test_dispatch_rejects_candidate_without_expected_base_ancestry(self) -> None:
+        with self.assertRaisesRegex(SourceProvenanceError, "not based on expected base"):
             validate_source_provenance(
                 event_name="workflow_dispatch",
                 expected_base_sha=BASE,
                 candidate_sha=CANDIDATE,
                 live_main_sha=BASE,
                 checkout_sha=CANDIDATE,
-                candidate_is_based_on_base=True,
+                candidate_is_based_on_base=False,
             )
 
     def test_rejects_unknown_event_or_malformed_shas(self) -> None:

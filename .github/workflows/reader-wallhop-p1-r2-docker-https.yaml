@@ -2,11 +2,18 @@ name: Reader WallHop P1-R2 Docker HTTPS integration
 
 on:
   workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact NewsFlux source SHA to validate
+        required: true
+        type: string
+      expected_base_sha:
+        description: Expected current main SHA for exact-source provenance
+        required: true
+        type: string
   pull_request:
     branches: [main]
     paths:
-      - ".github/workflows/reader-wallhop-p1-r2-docker-https.yaml"
-      - "scripts/reader-wallhop-p1-r2/**"
       - "src/components/Article/**"
       - "src/hooks/useReaderContentRecovery*"
       - "src/apis/content-fallback-reader*"
@@ -29,7 +36,8 @@ concurrency:
 jobs:
   isolated-docker-https:
     name: Exact-SHA images and same-origin HTTPS
-    runs-on: ubuntu-latest
+    # Docker-in-Docker access is required by this harness; pin the hosted OS generation.
+    runs-on: ubuntu-24.04
     timeout-minutes: 50
     steps:
       - name: Checkout dedicated harness
@@ -41,15 +49,15 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: jfsdias/NewsFlux
-          ref: ${{ github.sha }}
+          ref: ${{ inputs.source_sha || github.sha }}
           path: source
           fetch-depth: 0
           persist-credentials: false
 
       - name: Verify exact base and tested candidate
         env:
-          NEWSFLUX_EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
-          NEWSFLUX_CANDIDATE_SHA: ${{ github.sha }}
+          NEWSFLUX_EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.expected_base_sha || github.sha }}
+          NEWSFLUX_CANDIDATE_SHA: ${{ inputs.source_sha || github.sha }}
         run: |
           actual="$(git ls-remote https://github.com/jfsdias/NewsFlux.git refs/heads/main | cut -f1)"
           test "$actual" = "$NEWSFLUX_EXPECTED_BASE_SHA"
@@ -68,25 +76,29 @@ jobs:
           cache-dependency-path: source/pnpm-lock.yaml
 
       - name: Validate exact-SHA provenance rules
-        run: python3 -m unittest discover -s scripts/reader-wallhop-p1-r2 -p 'test_provenance.py'
+        run: python3 -m unittest discover -s scripts/reader-wallhop-p1-r2 -p 'test_*.py'
 
       - name: Install locked browser dependencies
         working-directory: source
         run: |
           pnpm install --frozen-lockfile --ignore-scripts
-          pnpm exec playwright install --with-deps chromium
-
-      - name: Add an isolated Chromium CA store tool
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes libnss3-tools
+          node -e 'const p = require("@playwright/test/package.json"); if (p.version !== "1.63.0") process.exit(1); console.log(`PLAYWRIGHT_PACKAGE=${p.version}`)'
+          pnpm exec playwright install chromium
+          browser="$(node -e 'process.stdout.write(require("@playwright/test").chromium.executablePath())')"
+          test -x "$browser"
+          ldd "$browser" | tee "$RUNNER_TEMP/chromium-ldd.txt"
+          if grep -q 'not found' "$RUNNER_TEMP/chromium-ldd.txt"; then
+            echo "CHROMIUM_DEPENDENCIES=FAIL"
+            exit 1
+          fi
+          echo "CHROMIUM_DEPENDENCIES=PASS"
 
       - name: Build and validate exact-SHA Docker HTTPS path
         env:
           NEWSFLUX_SOURCE_ROOT: ${{ github.workspace }}/source
           NEWSFLUX_OUTPUT_ROOT: ${{ github.workspace }}/test-results/reader-wallhop-p1-r2
-          NEWSFLUX_EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
-          NEWSFLUX_CANDIDATE_SHA: ${{ github.sha }}
+          NEWSFLUX_EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.expected_base_sha || github.sha }}
+          NEWSFLUX_CANDIDATE_SHA: ${{ inputs.source_sha || github.sha }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           PYTHONDONTWRITEBYTECODE: "1"
         run: python3 scripts/reader-wallhop-p1-r2/run.py

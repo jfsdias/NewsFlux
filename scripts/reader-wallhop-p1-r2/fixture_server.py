@@ -136,6 +136,7 @@ class Handler(BaseHTTPRequestHandler):
                 _writes.append(self.command)
 
     def do_GET(self) -> None:  # noqa: N802
+        global _fingerprint_mismatch
         path = urlsplit(self.path).path
         query = parse_qs(urlsplit(self.path).query)
         api_key = self.headers.get("X-Auth-Token", "")
@@ -146,9 +147,13 @@ class Handler(BaseHTTPRequestHandler):
             with _lock:
                 events = list(_events)
                 writes = list(_writes)
+                fingerprint_mismatch_enabled = _fingerprint_mismatch
+                fingerprint_mismatch_entry_reads = _entry_reads.get(901, 0)
             payload = {
                 "events": events,
                 "writes": writes,
+                "fingerprint_mismatch_enabled": fingerprint_mismatch_enabled,
+                "fingerprint_mismatch_entry_reads": fingerprint_mismatch_entry_reads,
                 "read_ids": [],
                 "unread_ids": list(_user_entry_ids),
                 "starred_ids": list(_user_entry_ids),
@@ -164,7 +169,6 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/__harness__/fingerprint-mode":
-            global _fingerprint_mismatch
             with _lock:
                 _fingerprint_mismatch = query.get("enabled") == ["1"]
                 _entry_reads[901] = 0
