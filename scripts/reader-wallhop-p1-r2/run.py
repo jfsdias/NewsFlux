@@ -1326,7 +1326,7 @@ def run() -> None:
                 "NEWSFLUX_MINIFLUX_BASE_URL": MINIFLUX_BASE_URL,
                 "NEWSFLUX_TEST_USER_KEY": USER_KEY,
                 "NEWSFLUX_TEST_ROTATED_KEY": ROTATED_KEY,
-                "NEWSFLUX_TEST_CA_SPKI_SHA256": certificate_spki_sha256(ca_cert),
+                "NEWSFLUX_TEST_LEAF_SPKI_SHA256": certificate_spki_sha256(leaf_cert),
             }
         )
         command(

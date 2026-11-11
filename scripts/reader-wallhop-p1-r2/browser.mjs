@@ -11,7 +11,7 @@ const minifluxBase = process.env.NEWSFLUX_MINIFLUX_BASE_URL
 const userKey = process.env.NEWSFLUX_TEST_USER_KEY
 const rotatedKey = process.env.NEWSFLUX_TEST_ROTATED_KEY
 const ingressIp = process.env.NEWSFLUX_INGRESS_IP
-const caSpkiSha256 = process.env.NEWSFLUX_TEST_CA_SPKI_SHA256
+const leafSpkiSha256 = process.env.NEWSFLUX_TEST_LEAF_SPKI_SHA256
 assert.ok(
   sourceRoot &&
     outputRoot &&
@@ -20,9 +20,9 @@ assert.ok(
     userKey &&
     rotatedKey &&
     ingressIp &&
-    caSpkiSha256,
+    leafSpkiSha256,
 )
-assert.match(caSpkiSha256, /^[A-Za-z0-9+/]{43}=$/)
+assert.match(leafSpkiSha256, /^[A-Za-z0-9+/]{43}=$/)
 
 const requireFromSource = createRequire(path.join(sourceRoot, "package.json"))
 const { chromium, expect } = requireFromSource("@playwright/test")
@@ -32,8 +32,8 @@ const browser = await chromium.launch({
   headless: true,
   args: [
     `--host-resolver-rules=MAP newsflux.test ${ingressIp}`,
-    // Trust only this ephemeral test CA; certificate validation stays strict for unrelated chains.
-    `--ignore-certificate-errors-spki-list=${caSpkiSha256}`,
+    // Trust only this ephemeral test leaf; certificate validation stays strict for unrelated keys.
+    `--ignore-certificate-errors-spki-list=${leafSpkiSha256}`,
   ],
 })
 const browserVersion = browser.version()

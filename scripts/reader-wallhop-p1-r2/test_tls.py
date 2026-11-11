@@ -11,7 +11,7 @@ from run import certificate_spki_sha256, fingerprint_mismatch_gate_passed
 
 
 class CertificatePinTests(unittest.TestCase):
-    def test_pin_matches_ephemeral_ca_subject_public_key_info(self) -> None:
+    def test_pin_matches_ephemeral_certificate_subject_public_key_info(self) -> None:
         with tempfile.TemporaryDirectory(prefix="reader-wallhop-ca-pin-") as directory:
             cert_path = Path(directory) / "ca.crt"
             subprocess.run(
@@ -29,7 +29,7 @@ class CertificatePinTests(unittest.TestCase):
                     "-days",
                     "1",
                     "-subj",
-                    "/CN=Ephemeral test CA",
+                    "/CN=Ephemeral test leaf",
                 ],
                 capture_output=True,
                 check=True,
