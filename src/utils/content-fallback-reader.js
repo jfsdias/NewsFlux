@@ -46,6 +46,14 @@ export const validateContentFallbackReaderResponse = (response, { entryId, urlFi
     return null
   }
 
+  const readableText = response.content_html
+    .replaceAll(/<\/?p>/gu, "")
+    .replaceAll(/&(?:amp|lt|gt);/gu, "x")
+    .trim()
+  if (!readableText) {
+    return null
+  }
+
   return {
     entryId: Number(entryId),
     urlFingerprint,

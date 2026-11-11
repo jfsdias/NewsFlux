@@ -73,6 +73,19 @@ test("rejects markup outside the paragraph-only sanitized service contract", () 
   }
 })
 
+test("rejects recovery bodies that contain only empty or whitespace paragraphs", () => {
+  for (const contentHtml of ["<p></p>", "<p> \n </p>", "<p></p><p>\t</p>"]) {
+    assert.equal(
+      validateContentFallbackReaderResponse(
+        { ...validResponse, content_html: contentHtml },
+        { entryId: 42, urlFingerprint: "a".repeat(64) },
+      ),
+      null,
+      contentHtml,
+    )
+  }
+})
+
 test("fences responses to the captured article, route and session", () => {
   const request = {
     requestId: 3,

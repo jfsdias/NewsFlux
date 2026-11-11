@@ -372,8 +372,30 @@ const ArticleDetail = forwardRef((_, ref) => {
 
   const activeContent = useStore(activeContentState)
   const { sessionRevision } = useStore(dataState, { keys: ["sessionRevision"] })
+  const scrollContainerRef = useRef(null)
+  const recoveryScrollPositionRef = useRef(null)
+  const recoveryActionRef = useRef(null)
+  const restoreRecoveryFocusRef = useRef(false)
+  const rememberRecoveryFocusIntent = useCallback(() => {
+    restoreRecoveryFocusRef.current =
+      typeof document !== "undefined" && document.activeElement === recoveryActionRef.current
+  }, [])
+  const rememberRecoveryScrollPosition = useCallback(() => {
+    const scrollElement = scrollContainerRef.current?.getScrollElement()
+    if (scrollElement) {
+      recoveryScrollPositionRef.current = {
+        articleId: activeContent?.id ?? null,
+        scrollTop: scrollElement.scrollTop,
+      }
+    }
+    if (typeof document !== "undefined" && document.activeElement === recoveryActionRef.current) {
+      restoreRecoveryFocusRef.current = true
+    }
+  }, [activeContent?.id])
   const readerRecovery = useReaderContentRecovery({
     activeContent,
+    onBeforeContentChange: rememberRecoveryScrollPosition,
+    onRecoveryStart: rememberRecoveryFocusIntent,
     routeEntryId,
     routePath: location.pathname,
   })
@@ -399,6 +421,36 @@ const ArticleDetail = forwardRef((_, ref) => {
   const deferredContentHtml = useDeferredValue(activeContentHtml, "")
   const isArticleBodyPending = deferredContentHtml !== activeContentHtml
   const renderableContentHtml = isArticleBodyPending ? "" : deferredContentHtml
+  useLayoutEffect(() => {
+    const savedPosition = recoveryScrollPositionRef.current
+    if (!savedPosition) {
+      return
+    }
+    if (savedPosition.articleId !== activeContent?.id) {
+      recoveryScrollPositionRef.current = null
+      return
+    }
+    if (deferredContentHtml !== activeContentHtml) {
+      return
+    }
+
+    const scrollElement = scrollContainerRef.current?.getScrollElement()
+    if (scrollElement) {
+      const maximumScrollTop = Math.max(0, scrollElement.scrollHeight - scrollElement.clientHeight)
+      scrollElement.scrollTop = Math.min(savedPosition.scrollTop, maximumScrollTop)
+    }
+    recoveryScrollPositionRef.current = null
+  }, [activeContent?.id, activeContentHtml, deferredContentHtml])
+  useLayoutEffect(() => {
+    if (
+      !restoreRecoveryFocusRef.current ||
+      (!readerRecovery.hasRecovery && readerRecovery.status !== "failed")
+    ) {
+      return
+    }
+    recoveryActionRef.current?.focus({ preventScroll: true })
+    restoreRecoveryFocusRef.current = false
+  }, [readerRecovery.hasRecovery, readerRecovery.isOriginalShown, readerRecovery.status])
   const {
     articleWidth,
     contentBrowsingDirection,
@@ -410,7 +462,6 @@ const ArticleDetail = forwardRef((_, ref) => {
     showFeedIcon,
     titleAlignment,
   } = useStore(articleDetailSettingsState)
-  const scrollContainerRef = useRef(null)
   const readPresentationRef = useRef({ handled: false, key: null })
   const photoSliderSessionRef = useRef(null)
   const preparedPhotoSliderSessionRef = useRef(false)
@@ -773,16 +824,41 @@ const ArticleDetail = forwardRef((_, ref) => {
               className="reader-content-recovery"
               style={{ maxWidth: responsiveMaxWidth }}
             >
-              {readerRecovery.status === "recovered" ? (
-                <span className="reader-content-recovery__source" role="status">
-                  {polyglot.t(
-                    readerRecovery.contentOrigin === "wallhop"
-                      ? "content.recovered_from_wallhop"
-                      : "content.recovered_from_miniflux_scraper",
-                  )}
-                </span>
+              {readerRecovery.hasRecovery ? (
+                <>
+                  <span className="reader-content-recovery__source" role="status">
+                    {polyglot.t(
+                      readerRecovery.isOriginalShown
+                        ? readerRecovery.contentOrigin === "wallhop"
+                          ? "content.original_restored_from_wallhop"
+                          : "content.original_restored_from_miniflux_scraper"
+                        : readerRecovery.contentOrigin === "wallhop"
+                          ? "content.recovered_from_wallhop"
+                          : "content.recovered_from_miniflux_scraper",
+                    )}
+                  </span>
+                  <button
+                    ref={recoveryActionRef}
+                    aria-busy={readerRecovery.status === "loading" || undefined}
+                    className="reader-content-recovery__action"
+                    type="button"
+                    onClick={() =>
+                      readerRecovery.isOriginalShown
+                        ? readerRecovery.showRecoveredContent()
+                        : readerRecovery.showOriginalContent()
+                    }
+                  >
+                    {polyglot.t(
+                      readerRecovery.isOriginalShown
+                        ? "content.show_recovered_text"
+                        : "content.show_original_text",
+                    )}
+                  </button>
+                </>
               ) : (
                 <button
+                  ref={recoveryActionRef}
+                  aria-busy={readerRecovery.status === "loading" || undefined}
                   className="reader-content-recovery__action"
                   disabled={readerRecovery.status === "loading"}
                   type="button"

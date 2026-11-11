@@ -9,6 +9,12 @@ import {
 
 const MAX_RESPONSE_TEXT_LENGTH = 2 * 1024 * 1024 + 16 * 1024
 
+const throwIfAborted = (signal) => {
+  if (signal?.aborted) {
+    throw signal.reason ?? new DOMException("The operation was aborted", "AbortError")
+  }
+}
+
 export const fingerprintArticleUrl = async (url) => {
   if (typeof url !== "string" || !url || url.length > 8192 || !globalThis.crypto?.subtle) {
     throw new Error("Reader recovery is unavailable")
@@ -17,7 +23,8 @@ export const fingerprintArticleUrl = async (url) => {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")
 }
 
-export const requestReaderContentRecovery = async ({ entryId, url, basePath } = {}) => {
+export const requestReaderContentRecovery = async ({ entryId, url, basePath, signal } = {}) => {
+  throwIfAborted(signal)
   const auth = authState.get()
   const sessionRevision = getDataSessionRevision()
   const expectedAuthSessionKey = getAuthSessionKey(auth)
@@ -30,6 +37,7 @@ export const requestReaderContentRecovery = async ({ entryId, url, basePath } = 
   }
 
   const urlFingerprint = await fingerprintArticleUrl(url)
+  throwIfAborted(signal)
   if (
     getDataSessionRevision() !== sessionRevision ||
     getAuthSessionKey(authState.get()) !== expectedAuthSessionKey
@@ -48,7 +56,9 @@ export const requestReaderContentRecovery = async ({ entryId, url, basePath } = 
     cache: "no-store",
     redirect: "error",
     referrerPolicy: "no-referrer",
+    signal,
   })
+  throwIfAborted(signal)
 
   if (
     !response.ok ||
@@ -58,6 +68,7 @@ export const requestReaderContentRecovery = async ({ entryId, url, basePath } = 
   }
 
   const responseText = await response.text()
+  throwIfAborted(signal)
   if (responseText.length > MAX_RESPONSE_TEXT_LENGTH) {
     throw new Error("Reader recovery is unavailable")
   }

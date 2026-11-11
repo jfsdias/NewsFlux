@@ -302,6 +302,10 @@
     "recovering_full_text": "Vollständiger Text wird abgerufen…",
     "recovered_from_wallhop": "Vollständiger Text von WallHop abgerufen",
     "recovered_from_miniflux_scraper": "Vollständiger Text mit dem Miniflux-Scraper abgerufen",
+    "show_original_text": "Originaltext anzeigen",
+    "show_recovered_text": "Abgerufenen Text anzeigen",
+    "original_restored_from_wallhop": "Originaltext von Miniflux wird angezeigt. Die WallHop-Version bleibt verfügbar.",
+    "original_restored_from_miniflux_scraper": "Originaltext von Miniflux wird angezeigt. Die Scraper-Version bleibt verfügbar.",
     "recovery_failed": "Der vollständige Text konnte nicht abgerufen werden. Der ursprüngliche Inhalt wird weiterhin angezeigt.",
     "back_to_list": "Zur Liste zurück"
   },

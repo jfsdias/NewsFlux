@@ -26,6 +26,9 @@ export default defineConfig({
   outputDir: process.env.E2E_OUTPUT_DIR ?? "test-results/artifacts",
   use: {
     baseURL: `http://localhost:${appPort}`,
+    ...(process.env.NEWSFLUX_CHROME_EXECUTABLE
+      ? { launchOptions: { executablePath: process.env.NEWSFLUX_CHROME_EXECUTABLE } }
+      : {}),
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },

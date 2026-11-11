@@ -302,6 +302,10 @@
     "recovering_full_text": "正在恢复全文…",
     "recovered_from_wallhop": "已从 WallHop 恢复全文",
     "recovered_from_miniflux_scraper": "已通过 Miniflux 抓取器恢复全文",
+    "show_original_text": "显示原文",
+    "show_recovered_text": "显示恢复的正文",
+    "original_restored_from_wallhop": "正在显示 Miniflux 原文。WallHop 版本仍可切换查看。",
+    "original_restored_from_miniflux_scraper": "正在显示 Miniflux 原文。抓取器版本仍可切换查看。",
     "recovery_failed": "无法恢复全文，仍显示原始内容。",
     "back_to_list": "返回列表"
   },
