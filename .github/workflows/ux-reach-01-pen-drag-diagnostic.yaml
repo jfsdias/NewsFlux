@@ -1,0 +1,142 @@
+name: UX-REACH-01 pen-drag controlled A/B diagnostic
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/ux-reach-01-pen-drag-diagnostic.yaml"
+      - "scripts/ux-reach-01/**"
+      - "scripts/quality-workflow.test.js"
+      - "ux-reach-e2e/mark-all-floating.spec.js"
+  workflow_dispatch:
+    inputs:
+      baseline_sha:
+        description: Exact main baseline SHA
+        required: true
+        type: string
+      candidate_sha:
+        description: Exact PR #229 candidate SHA
+        required: true
+        type: string
+      expected_base_sha:
+        description: Expected current main SHA for exact-source provenance
+        required: true
+        type: string
+      repeat_count:
+        description: Independent isolated pen-drag reproductions per SHA
+        required: true
+        default: "5"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ux-reach-01-pen-drag-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    name: Exact-SHA pinned-browser A/B and repeatability
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.number == 229 }}
+    runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+    timeout-minutes: 90
+    steps:
+      - name: Checkout diagnostic harness
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Checkout exact main baseline
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: jfsdias/NewsFlux
+          ref: ${{ github.event.pull_request.base.sha || inputs.baseline_sha }}
+          path: baseline
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout exact PR #229 candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: jfsdias/NewsFlux
+          ref: ${{ github.event.pull_request.head.sha || inputs.candidate_sha }}
+          path: candidate
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify live main, PR #229, exact SHAs and clean checkouts
+        env:
+          NEWSFLUX_EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.expected_base_sha }}
+          NEWSFLUX_BASELINE_SHA: ${{ github.event.pull_request.base.sha || inputs.baseline_sha }}
+          NEWSFLUX_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || inputs.candidate_sha }}
+        run: |
+          actual_main="$(git ls-remote https://github.com/jfsdias/NewsFlux.git refs/heads/main | cut -f1)"
+          actual_pr229="$(git ls-remote https://github.com/jfsdias/NewsFlux.git refs/pull/229/head | cut -f1)"
+          test "$actual_main" = "$NEWSFLUX_EXPECTED_BASE_SHA"
+          test "$NEWSFLUX_BASELINE_SHA" = "$NEWSFLUX_EXPECTED_BASE_SHA"
+          test "$actual_pr229" = "$NEWSFLUX_CANDIDATE_SHA"
+          test "$(git -C baseline rev-parse HEAD)" = "$NEWSFLUX_BASELINE_SHA"
+          test "$(git -C candidate rev-parse HEAD)" = "$NEWSFLUX_CANDIDATE_SHA"
+          git -C candidate merge-base --is-ancestor "$NEWSFLUX_EXPECTED_BASE_SHA" HEAD
+          test -z "$(git -C baseline status --porcelain)"
+          test -z "$(git -C candidate status --porcelain)"
+          printf 'MAIN_SHA=%s\nBASELINE_SHA=%s\nCANDIDATE_SHA=%s\n' "$actual_main" "$NEWSFLUX_BASELINE_SHA" "$NEWSFLUX_CANDIDATE_SHA"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Trust ephemeral checkouts and install locked dependencies once
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE/baseline"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE/candidate"
+          pnpm install --frozen-lockfile
+
+      - name: Verify pinned Playwright browser image
+        run: |
+          node -e 'const p = require("@playwright/test/package.json"); if (p.version !== "1.63.0") process.exit(1); console.log(`PLAYWRIGHT_PACKAGE=${p.version}`)'
+          browser="$(node -e 'process.stdout.write(require("@playwright/test").chromium.executablePath())')"
+          test -x "$browser"
+          ldd "$browser" | tee "$RUNNER_TEMP/chromium-ldd.txt"
+          if grep -q 'not found' "$RUNNER_TEMP/chromium-ldd.txt"; then
+            echo "CHROMIUM_DEPENDENCIES=FAIL"
+            exit 1
+          fi
+          echo "CHROMIUM_DEPENDENCIES=PASS"
+
+      - name: Run controlled exact-SHA A/B repetitions without retries
+        env:
+          BASELINE_SHA: ${{ github.event.pull_request.base.sha || inputs.baseline_sha }}
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || inputs.candidate_sha }}
+          EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.expected_base_sha }}
+          REPEAT_COUNT: ${{ inputs.repeat_count || '5' }}
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: >-
+          python3 scripts/ux-reach-01/run_controlled_repetitions.py
+          --expected-base-sha "$EXPECTED_BASE_SHA"
+          --baseline-sha "$BASELINE_SHA"
+          --candidate-sha "$CANDIDATE_SHA"
+          --repeat-count "$REPEAT_COUNT"
+
+      - name: Upload controlled A/B evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ux-reach-01-pen-drag-ab-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            test-results/ux-reach-d4d/
+            baseline/test-results/ux-reach-d4d/
+            candidate/test-results/ux-reach-d4d/
+          if-no-files-found: warn
+          retention-days: 14

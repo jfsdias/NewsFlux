@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import hashlib
 import ipaddress
 import json
 import os
@@ -53,6 +55,7 @@ RESULT: dict[str, Any] = {
     "PROXY_TRUST_GATE": "NOT_RUN",
     "AUTHORIZATION_GATE": "NOT_RUN",
     "NEGATIVE_SECURITY_TESTS": "NOT_RUN",
+    "FINGERPRINT_MISMATCH_GATE": "NOT_RUN",
     "READER_BROWSER_GATE": "NOT_RUN",
     "SESSION_PROTECTION": "NOT_RUN",
     "ORIGINAL_FALLBACK": "NOT_RUN",
@@ -282,28 +285,43 @@ def create_test_ca(temp_root: Path) -> tuple[Path, Path, Path, Path]:
     os.chmod(leaf_key, 0o644)
 
     browser_home = temp_root / "browser-home"
-    nss_db = browser_home / ".pki" / "nssdb"
-    nss_db.mkdir(parents=True)
-    command(
-        ["certutil", "-N", "-d", f"sql:{nss_db}", "--empty-password"],
-        step="Create isolated Chromium certificate store",
-    )
-    command(
-        [
-            "certutil",
-            "-A",
-            "-d",
-            f"sql:{nss_db}",
-            "-n",
-            "NewsFlux P1 R2 test CA",
-            "-t",
-            "CT,,",
-            "-i",
-            str(ca_cert),
-        ],
-        step="Trust isolated HTTPS test CA in Chromium store",
-    )
+    browser_home.mkdir(parents=True)
     return ca_cert, leaf_cert, leaf_key, browser_home
+
+
+def certificate_spki_sha256(cert_path: Path) -> str:
+    public_key = command(
+        ["openssl", "x509", "-in", str(cert_path), "-pubkey", "-noout"],
+        step="Read ephemeral HTTPS leaf public key",
+    ).stdout
+    der_result = subprocess.run(
+        ["openssl", "pkey", "-pubin", "-outform", "DER"],
+        input=public_key.encode(),
+        capture_output=True,
+        check=False,
+    )
+    if der_result.returncode != 0 or not der_result.stdout:
+        raise RuntimeError("Could not encode ephemeral HTTPS leaf public key")
+    return base64.b64encode(hashlib.sha256(der_result.stdout).digest()).decode("ascii")
+
+
+def fingerprint_mismatch_gate_passed(status: int, body: bytes, fixture_state: dict[str, Any]) -> bool:
+    try:
+        payload = json.loads(body)
+    except (TypeError, json.JSONDecodeError):
+        return False
+    reads = fixture_state.get("fingerprint_mismatch_entry_reads")
+    recovery_gets = fixture_state.get("reader_recovery_gets")
+    return (
+        status == 502
+        and payload == {"error": "recovery_unavailable"}
+        and fixture_state.get("fingerprint_mismatch_enabled") is True
+        and isinstance(reads, int)
+        and not isinstance(reads, bool)
+        and reads >= 2
+        and isinstance(recovery_gets, list)
+        and not any(str(path).endswith("/901/fetch-content") for path in recovery_gets)
+    )
 
 
 def write_proxy_config(path: Path) -> None:
@@ -1243,9 +1261,26 @@ def run() -> None:
             headers=reader_headers(USER_KEY),
             expected_statuses={502},
         )
+        fingerprint_fixture_state = fixture_state("newsflux-p1-r2-miniflux")
         fixture_fingerprint_mode("newsflux-p1-r2-miniflux", False)
-        if fingerprint_status != 502 or json.loads(fingerprint_body).get("error") != "recovery_identity_mismatch":
-            raise RuntimeError("A divergent recovery fingerprint was not rejected")
+        if not fingerprint_mismatch_gate_passed(
+            fingerprint_status,
+            fingerprint_body,
+            fingerprint_fixture_state,
+        ):
+            payload = json.loads(fingerprint_body) if fingerprint_body else {}
+            recovery_gets = fingerprint_fixture_state.get("reader_recovery_gets", [])
+            diagnostic = {
+                "status": fingerprint_status,
+                "error": payload.get("error") if isinstance(payload, dict) else "invalid_response",
+                "mismatch_reads": fingerprint_fixture_state.get("fingerprint_mismatch_entry_reads"),
+                "provider_fetch_attempted": any(
+                    str(path).endswith("/901/fetch-content") for path in recovery_gets
+                ) if isinstance(recovery_gets, list) else "unknown",
+            }
+            print("FINGERPRINT_MISMATCH_DIAGNOSTIC=" + json.dumps(diagnostic, sort_keys=True), flush=True)
+            raise RuntimeError("A divergent recovery fingerprint was not rejected before provider fetch")
+        RESULT["FINGERPRINT_MISMATCH_GATE"] = "PASS"
 
         health_route_status, health_route_body, _ = curl_request(
             ca_cert,
@@ -1291,6 +1326,7 @@ def run() -> None:
                 "NEWSFLUX_MINIFLUX_BASE_URL": MINIFLUX_BASE_URL,
                 "NEWSFLUX_TEST_USER_KEY": USER_KEY,
                 "NEWSFLUX_TEST_ROTATED_KEY": ROTATED_KEY,
+                "NEWSFLUX_TEST_LEAF_SPKI_SHA256": certificate_spki_sha256(leaf_cert),
             }
         )
         command(

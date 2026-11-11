@@ -40,9 +40,9 @@ def validate_source_provenance(
         if not candidate_is_based_on_base:
             raise SourceProvenanceError("candidate is not based on expected base SHA")
     else:
-        if expected_base_sha != candidate_sha or live_main_sha != candidate_sha:
-            raise SourceProvenanceError("workflow_dispatch SHA is not current main")
+        if live_main_sha != expected_base_sha:
+            raise SourceProvenanceError("dispatched base is no longer current main")
         if not candidate_is_based_on_base:
-            raise SourceProvenanceError("dispatch checkout provenance is inconsistent")
+            raise SourceProvenanceError("candidate is not based on expected base SHA")
 
     return {"base_sha": expected_base_sha, "candidate_sha": candidate_sha}
