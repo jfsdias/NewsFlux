@@ -820,8 +820,12 @@ test("UX-REACH-01: fine-pointer desktop retains the existing conventional Footer
         y: penY + 24,
         pointerType: "pen",
       })
-      const afterPenDrag = await floating.boundingBox()
-      expect(afterPenDrag.x).toBeGreaterThan(afterMouseDrag.x + 24)
+      await expect
+        .poll(async () => {
+          const position = await floating.boundingBox()
+          return position?.x
+        })
+        .toBeGreaterThan(afterMouseDrag.x + 24)
       expect(await getMutationRequests(mock)).toHaveLength(0)
       await expect(page.getByText("Mark all as read?", { exact: true })).toBeHidden()
       await client.detach()
