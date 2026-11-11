@@ -64,11 +64,11 @@ export const test = base.extend({
       height = 1104,
       touch = false,
       authenticated = true,
-      provisionedApiKey = false,
       serviceWorkers = "block",
       deviceScaleFactor = 2,
       storageState,
       settings,
+      provisionedApiKey = false,
     } = {}) => {
       const context = await browser.newContext({
         baseURL,
@@ -84,7 +84,7 @@ export const test = base.extend({
       if (authenticated) {
         await context.addInitScript(seedAuth, {
           server: mock.url,
-          apiKeyId: provisionedApiKey ? 17 : null,
+          apiKeyId: provisionedApiKey ? 9 : null,
         })
       }
       if (settings) {

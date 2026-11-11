@@ -276,6 +276,19 @@
     "preview_image": "Aperçu de %{name}",
     "media_error": "Ce média ne peut pas être lu ici. Utilisez le lien de la pièce jointe ci-dessous."
   },
+  "article_intelligence": {
+    "title": "Résumé de l’article",
+    "action": "Résumer avec l’IA",
+    "loading": "Génération du résumé…",
+    "retry": "Réessayer",
+    "error": "Le résumé n’a pas pu être créé. L’article original reste inchangé.",
+    "summary": "Résumé",
+    "key_points": "Points clés",
+    "partial_content": "Ce résumé peut ne couvrir qu’une partie de l’article.",
+    "limitations": "Limites",
+    "insufficient": "Le texte de l’article est insuffisant pour produire un résumé fiable.",
+    "unavailable": "Le résumé est indisponible pour le moment."
+  },
   "content": {
     "mark_as_read_error": "Impossible de marquer comme lu, veuillez réessayer plus tard",
     "entry_unavailable": "Cet article n’est plus disponible.",

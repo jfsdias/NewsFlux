@@ -220,6 +220,41 @@ test("the e2e workflow installs the pinned browser and runs three verified stabi
   )
 })
 
+test("the Article Intelligence Reader job builds both flag states before serving the production bundle", () => {
+  const { workflow } = readE2eWorkflow()
+  const steps = stepsOf(workflow.jobs.article_intelligence_reader)
+  const defaultBuildIndex = steps.findIndex(
+    (step) =>
+      step.name === "Build Reader with AI disabled by default" && step.run?.trim() === "pnpm build",
+  )
+  const enabledBuildIndex = steps.findIndex(
+    (step) =>
+      step.name === "Build Reader with explicit AI enablement" && step.run?.trim() === "pnpm build",
+  )
+  const defaultTestIndex = steps.findIndex(
+    (step) => step.name === "Run Article Intelligence Reader scenarios",
+  )
+  const enabledTestIndex = steps.findIndex(
+    (step) => step.name === "Run AI-enabled Reader scenarios",
+  )
+  const playwrightConfig = readFileSync(
+    new URL("../playwright.article-intelligence.config.js", import.meta.url),
+    "utf8",
+  )
+
+  assert.notEqual(defaultBuildIndex, -1, "the default-off Reader bundle must be built")
+  assert.notEqual(enabledBuildIndex, -1, "the explicitly enabled Reader bundle must be built")
+  assert.notEqual(defaultTestIndex, -1, "the default-off Reader scenarios must run")
+  assert.notEqual(enabledTestIndex, -1, "the AI-enabled Reader scenarios must run")
+  assert.equal(steps[enabledBuildIndex].env?.VITE_ARTICLE_INTELLIGENCE_ENABLED, "1")
+  assert.equal(steps[enabledTestIndex].env?.VITE_ARTICLE_INTELLIGENCE_ENABLED, "1")
+  assert.ok(defaultBuildIndex < defaultTestIndex)
+  assert.ok(defaultTestIndex < enabledBuildIndex)
+  assert.ok(enabledBuildIndex < enabledTestIndex)
+  assert.match(playwrightConfig, /pnpm exec vite --host 127\.0\.0\.1 --port/u)
+  assert.doesNotMatch(playwrightConfig, /start-app-server\.js/u)
+})
+
 test("the blocking UX-REACH job builds and executes its isolated 11-test Playwright suite", () => {
   const { workflow } = readE2eWorkflow()
   const job = workflow.jobs.ux_reach
@@ -328,7 +363,11 @@ for (const [file, read] of WORKFLOW_FILES) {
     for (const [where, node] of jobsAndSteps(workflow)) {
       const allowedDiagnosticUpload =
         file === ".github/workflows/e2e.yaml" &&
-        ["Upload synthetic E2E diagnostics", "Upload UX-REACH diagnostics"].includes(node.name)
+        [
+          "Upload synthetic E2E diagnostics",
+          "Upload UX-REACH diagnostics",
+          "Upload Article Intelligence Reader diagnostics",
+        ].includes(node.name)
       if (allowedDiagnosticUpload) {
         assert.equal(node.if, "${{ failure() }}", `${where} must upload only after a failure`)
       } else {

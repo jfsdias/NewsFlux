@@ -276,6 +276,19 @@
     "preview_image": "预览 %{name}",
     "media_error": "无法在此播放该媒体，请使用下方的附件链接。"
   },
+  "article_intelligence": {
+    "title": "文章摘要",
+    "action": "使用 AI 总结",
+    "loading": "正在生成摘要…",
+    "retry": "重试",
+    "error": "无法生成摘要，原文未作任何更改。",
+    "summary": "摘要",
+    "key_points": "要点",
+    "partial_content": "此摘要可能只涵盖文章的一部分。",
+    "limitations": "局限",
+    "insufficient": "文章文本不足，无法生成可靠的摘要。",
+    "unavailable": "摘要暂时不可用。"
+  },
   "content": {
     "mark_as_read_error": "标记为已读失败，请稍后再试",
     "entry_unavailable": "这篇文章已无法访问。",
