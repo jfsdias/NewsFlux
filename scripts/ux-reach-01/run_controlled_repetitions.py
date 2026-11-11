@@ -98,6 +98,10 @@ def suite_command(output_dir: Path) -> list[str]:
     ]
 
 
+def source_install_command() -> list[str]:
+    return ["pnpm", "install", "--offline", "--frozen-lockfile"]
+
+
 def command_output(args: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(args, cwd=cwd, check=False, capture_output=True, text=True)
 
@@ -179,12 +183,10 @@ def prepare_source(
         print(f"R8D4D_CLEAN_CHECKOUT_GATE=FAIL:{label}", flush=True)
         return False
 
-    source_node_modules = source / "node_modules"
-    if source_node_modules.exists() or source_node_modules.is_symlink():
+    if (source / "node_modules").exists() or (source / "node_modules").is_symlink():
         print(f"R8D4D_NODE_MODULES_GATE=FAIL:{label}", flush=True)
         return False
 
-    source_node_modules.symlink_to(ROOT / "node_modules", target_is_directory=True)
     diagnostic_dir = source / "r8-d4d-ux-reach-diagnostic"
     copied_test = diagnostic_dir / "pen-drag-diagnostic.spec.js"
     copied_config = source / "r8-d4d-playwright.config.js"
@@ -195,6 +197,7 @@ def prepare_source(
         "source_sha": expected_sha,
         "package_json_sha256": sha256_file(source / "package.json"),
         "lockfile_sha256": sha256_file(source / "pnpm-lock.yaml"),
+        "install_returncode": None,
         "build_returncode": None,
         "isolated_runs": [],
         "full_suite_runs": [],
@@ -202,35 +205,44 @@ def prepare_source(
     summary["sources"].append(record)
     success = True
     try:
-        record["build_returncode"] = stream_command(["pnpm", "run", "build"], cwd=source)
-        print(f"R8D4D_BUILD_SOURCE={label}:{expected_sha}", flush=True)
-        if record["build_returncode"] != 0:
+        record["install_returncode"] = stream_command(source_install_command(), cwd=source)
+        print(f"R8D4D_INSTALL_SOURCE={label}:{expected_sha}", flush=True)
+        if record["install_returncode"] != 0:
             success = False
         else:
-            diagnostic_dir.mkdir()
-            shutil.copy2(DIAGNOSTIC_TEST, copied_test)
-            copied_config.write_text(DIAGNOSTIC_CONFIG_CONTENT, encoding="utf-8")
-            shutil.copy2(UX_SUITE_TEST, ux_test)
-            isolated_dir = source / "test-results" / "ux-reach-d4d" / label / "isolated-pen-drag"
-            isolated_rc = print_run(
-                f"{label}-isolated-pen-drag",
-                isolated_command(isolated_dir, repeat_count),
-                source,
-                results,
-            )
-            record["isolated_runs"].append({"returncode": isolated_rc, "repeat_count": repeat_count})
-            success = success and isolated_rc == 0
-
-            for run_number in range(1, 4):
-                run_label = f"{label}-ux-suite-{run_number}"
-                output_dir = source / "test-results" / "ux-reach-d4d" / label / f"suite-{run_number}"
-                suite_rc = print_run(run_label, suite_command(output_dir), source, results)
-                reporter_summary = read_ux_report(output_dir)
-                record["full_suite_runs"].append(
-                    {"run": run_number, "returncode": suite_rc, "report": reporter_summary}
+            record["build_returncode"] = stream_command(["pnpm", "run", "build"], cwd=source)
+            print(f"R8D4D_BUILD_SOURCE={label}:{expected_sha}", flush=True)
+            if record["build_returncode"] != 0:
+                success = False
+            else:
+                diagnostic_dir.mkdir()
+                shutil.copy2(DIAGNOSTIC_TEST, copied_test)
+                copied_config.write_text(DIAGNOSTIC_CONFIG_CONTENT, encoding="utf-8")
+                shutil.copy2(UX_SUITE_TEST, ux_test)
+                isolated_dir = source / "test-results" / "ux-reach-d4d" / label / "isolated-pen-drag"
+                isolated_rc = print_run(
+                    f"{label}-isolated-pen-drag",
+                    isolated_command(isolated_dir, repeat_count),
+                    source,
+                    results,
                 )
-                success = success and suite_rc == 0
-                save_summary(summary_path, summary)
+                record["isolated_runs"].append(
+                    {"returncode": isolated_rc, "repeat_count": repeat_count}
+                )
+                success = success and isolated_rc == 0
+
+                for run_number in range(1, 4):
+                    run_label = f"{label}-ux-suite-{run_number}"
+                    output_dir = (
+                        source / "test-results" / "ux-reach-d4d" / label / f"suite-{run_number}"
+                    )
+                    suite_rc = print_run(run_label, suite_command(output_dir), source, results)
+                    reporter_summary = read_ux_report(output_dir)
+                    record["full_suite_runs"].append(
+                        {"run": run_number, "returncode": suite_rc, "report": reporter_summary}
+                    )
+                    success = success and suite_rc == 0
+                    save_summary(summary_path, summary)
     finally:
         if diagnostic_dir.exists():
             shutil.rmtree(diagnostic_dir)
@@ -240,8 +252,6 @@ def prepare_source(
             copied_test.unlink()
         if ux_test.read_bytes() != original_ux_test:
             ux_test.write_bytes(original_ux_test)
-        if source_node_modules.is_symlink():
-            source_node_modules.unlink()
         if not source_is_clean(source):
             print(f"R8D4D_POST_CLEAN_CHECK=FAIL:{label}", flush=True)
             success = False

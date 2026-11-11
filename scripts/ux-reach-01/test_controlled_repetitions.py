@@ -6,6 +6,7 @@ from pathlib import Path
 from run_controlled_repetitions import (
     DIAGNOSTIC_CONFIG_CONTENT,
     isolated_command,
+    source_install_command,
     suite_command,
     validate_repeat_count,
 )
@@ -37,6 +38,12 @@ class ControlledRepetitionTests(unittest.TestCase):
         self.assertIn("--workers=1", command)
         self.assertFalse(any(arg == "--grep" or arg.startswith("--grep=") for arg in command))
         self.assertFalse(any(arg.startswith("--repeat-each=") for arg in command))
+
+    def test_source_checkout_uses_the_frozen_lockfile_without_network(self) -> None:
+        self.assertEqual(
+            source_install_command(),
+            ["pnpm", "install", "--offline", "--frozen-lockfile"],
+        )
 
 
 if __name__ == "__main__":
