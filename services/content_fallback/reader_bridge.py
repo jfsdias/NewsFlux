@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import html
 import ipaddress
 import json
@@ -14,7 +15,7 @@ from urllib.parse import urlsplit
 from services.article_intel_auth.auth import AuthError, MinifluxAuthService
 from services.article_intel_auth.config import AuthSettings
 from services.content_fallback.http_client import FetchError, PinnedHTTPClient, UnsafeURL
-from services.content_fallback.miniflux import MinifluxClient, MinifluxError
+from services.content_fallback.miniflux import MinifluxClient, MinifluxError, ReaderRecoveryScope
 
 _SHA256_RE = re.compile(r"^[a-f0-9]{64}$")
 _MAX_READER_HTML_BYTES = 2 * 1024 * 1024
@@ -86,18 +87,36 @@ class ContentFallbackPrivateClient:
         self.service_token = service_token
         self.http = http or PinnedHTTPClient(resolver=_resolve_private_service)
 
-    def recover(self, entry_id: int) -> dict[str, object]:
+    def recover(
+        self,
+        entry_id: int,
+        *,
+        reader_scope: ReaderRecoveryScope | None = None,
+    ) -> dict[str, object]:
         if not _positive_id(entry_id):
             raise ReaderBridgeError("invalid_request", 400)
+        if reader_scope is not None and (
+            not isinstance(reader_scope, ReaderRecoveryScope)
+            or reader_scope.entry_id != entry_id
+        ):
+            raise ReaderBridgeError("invalid_request", 400)
+        body = b"" if reader_scope is None else json.dumps(
+            {"reader_scope": reader_scope.to_dict()},
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        headers = {
+            "Authorization": f"Bearer {self.service_token}",
+            "Accept": "application/json",
+        }
+        if reader_scope is not None:
+            headers["Content-Type"] = "application/json"
         url = f"{self.base_url}/v1/entries/{entry_id}/recover"
         try:
             response = self.http.post(
                 url,
-                b"",
-                headers={
-                    "Authorization": f"Bearer {self.service_token}",
-                    "Accept": "application/json",
-                },
+                body,
+                headers=headers,
                 timeout=8,
                 max_bytes=_MAX_READER_HTML_BYTES + 16 * 1024,
                 same_origin=self.base_url,
@@ -329,20 +348,65 @@ class ReaderContentBridge:
         url_fingerprint = authorized_entry.url_fingerprint
         if not isinstance(url_fingerprint, str) or not _SHA256_RE.fullmatch(url_fingerprint):
             raise ReaderBridgeError("entry_fingerprint_unavailable", 502)
+        if (
+            not isinstance(authorized_entry.is_admin, bool)
+            or not _positive_id(authorized_entry.feed_id)
+            or not isinstance(authorized_entry.title, str)
+            or not isinstance(authorized_entry.content_sha256, str)
+            or not _SHA256_RE.fullmatch(authorized_entry.content_sha256)
+        ):
+            raise ReaderBridgeError("entry_fingerprint_unavailable", 502)
+        reader_scope = ReaderRecoveryScope(
+            entry_id=authorized_entry.entry_id,
+            feed_id=authorized_entry.feed_id,
+            url_fingerprint=url_fingerprint,
+            title_sha256=hashlib.sha256(authorized_entry.title.encode("utf-8")).hexdigest(),
+            content_sha256=authorized_entry.content_sha256,
+        )
 
         try:
             service_identity = self.miniflux.get_current_user_identity()
         except MinifluxError:
             raise ReaderBridgeError("bridge_scope_unavailable", 503) from None
-        if service_identity.id != self.allowed_user_id or service_identity.is_admin:
+        if (
+            service_identity.id != self.allowed_user_id
+            or service_identity.id != authorized_entry.user_id
+            or service_identity.is_admin is not authorized_entry.is_admin
+        ):
             raise ReaderBridgeError("bridge_scope_unavailable", 503)
 
         try:
-            result = self.recovery.recover(entry_id)
+            result = self.recovery.recover(entry_id, reader_scope=reader_scope)
         except Exception:
             raise ReaderBridgeError("recovery_unavailable", 502) from None
-        return _validate_recovery_result(
+        validated_result = _validate_recovery_result(
             result,
             entry_id=authorized_entry.entry_id,
             url_fingerprint=url_fingerprint,
         )
+        try:
+            current_entry = self.auth.authorize_entry(
+                api_key=api_key,
+                claimed_miniflux_base_url=claimed_miniflux_base_url,
+                request_origin=request_origin,
+                request_is_secure=request_is_secure,
+                entry_id=entry_id,
+            )
+        except AuthError:
+            raise
+        if not _same_authorized_entry(current_entry, authorized_entry):
+            raise ReaderBridgeError("recovery_identity_mismatch", 409)
+        return validated_result
+
+
+def _same_authorized_entry(current: object, original: object) -> bool:
+    fields = (
+        "entry_id",
+        "feed_id",
+        "user_id",
+        "is_admin",
+        "title",
+        "content_sha256",
+        "url_fingerprint",
+    )
+    return all(getattr(current, field, None) == getattr(original, field, None) for field in fields)

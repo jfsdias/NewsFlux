@@ -351,6 +351,24 @@ class MinifluxAuthTests(unittest.TestCase):
         self.assertTrue(all(call["headers"]["X-Auth-Token"] == USER_KEY for call in http.calls))
         self.assertTrue(all(call["max_redirects"] == 0 for call in http.calls))
         self.assertNotIn("api_key", authorized.__dict__)
+
+    def test_authorized_entry_carries_admin_role_verified_by_request_key(self) -> None:
+        http = FakeHTTP(
+            lambda url, _headers: response(me(is_admin=True), url=url)
+            if url.endswith("/v1/me")
+            else response(entry(), url=url)
+        )
+
+        authorized = service(http).authorize_entry(
+            api_key=USER_KEY,
+            claimed_miniflux_base_url=TRUSTED_MINIFLUX,
+            request_origin=TRUSTED_WEB_ORIGIN,
+            request_is_secure=True,
+            entry_id=42,
+        )
+
+        self.assertTrue(authorized.is_admin)
+        self.assertEqual(authorized.user_id, 7)
         self.assertNotIn("url", authorized.__dict__)
 
         for payload in (

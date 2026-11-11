@@ -36,6 +36,7 @@ class AuthorizedEntry:
     content_html: str
     content_sha256: str
     url_fingerprint: str | None = None
+    is_admin: bool = False
 
 
 class MinifluxAuthService:
@@ -186,6 +187,7 @@ class MinifluxAuthService:
             content_html=content,
             content_sha256=content_digest,
             url_fingerprint=url_fingerprint,
+            is_admin=principal.is_admin,
         )
 
     def _assert_authorized_miniflux_base(self, claimed_base: str | None) -> None:

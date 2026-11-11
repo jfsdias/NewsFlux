@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
@@ -9,6 +10,8 @@ from services.content_fallback.http_client import FetchError, PinnedHTTPClient
 
 MAX_ENTRY_RESPONSE_BYTES = 2 * 1024 * 1024
 MAX_IDENTITY_RESPONSE_BYTES = 64 * 1024
+_SHA256_RE = re.compile(r"^[a-f0-9]{64}$")
+_MAX_MINIFLUX_ID = 9_223_372_036_854_775_807
 
 
 class MinifluxError(RuntimeError):
@@ -25,6 +28,8 @@ class EntrySnapshot:
     status: str
     starred: bool
     content: str
+    user_id: int | None = None
+    feed_user_id: int | None = None
 
     @property
     def content_fingerprint(self) -> str:
@@ -68,6 +73,53 @@ class MinifluxIdentity:
     id: int
     username: str
     is_admin: bool
+
+
+@dataclass(frozen=True)
+class ReaderRecoveryScope:
+    """Request-scoped resource binding for the private Reader handoff; identity is never client-claimed."""
+
+    entry_id: int
+    feed_id: int
+    url_fingerprint: str
+    title_sha256: str
+    content_sha256: str
+
+    def __post_init__(self) -> None:
+        for value in (self.entry_id, self.feed_id):
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, int)
+                or not 1 <= value <= _MAX_MINIFLUX_ID
+            ):
+                raise ValueError("Reader recovery scope IDs must be positive integers")
+        for value in (self.url_fingerprint, self.title_sha256, self.content_sha256):
+            if not isinstance(value, str) or not _SHA256_RE.fullmatch(value):
+                raise ValueError("Reader recovery scope fingerprints must be SHA-256 hex digests")
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "entry_id": self.entry_id,
+            "feed_id": self.feed_id,
+            "url_fingerprint": self.url_fingerprint,
+            "title_sha256": self.title_sha256,
+            "content_sha256": self.content_sha256,
+        }
+
+    @classmethod
+    def from_payload(cls, payload: object, *, expected_entry_id: int) -> ReaderRecoveryScope:
+        expected_keys = {
+            "entry_id", "feed_id", "url_fingerprint", "title_sha256", "content_sha256",
+        }
+        if not isinstance(payload, dict) or set(payload) != {"reader_scope"}:
+            raise ValueError("Reader recovery request has an invalid shape")
+        scope = payload["reader_scope"]
+        if not isinstance(scope, dict) or set(scope) != expected_keys:
+            raise ValueError("Reader recovery scope has an invalid shape")
+        result = cls(**scope)
+        if result.entry_id != expected_entry_id:
+            raise ValueError("Reader recovery scope targets a different entry")
+        return result
 
 
 class MinifluxClient:
@@ -243,6 +295,16 @@ def _entry_snapshot(raw: object, *, expected_id: int) -> EntrySnapshot:
     status = raw.get("status")
     starred = raw.get("starred")
     content = raw.get("content")
+    user_id = _optional_positive_int(raw.get("user_id"), "user_id")
+    feed_user_id = None
+    feed = raw.get("feed")
+    if feed is not None:
+        if not isinstance(feed, dict):
+            raise MinifluxError("Miniflux entry has invalid feed ownership")
+        nested_feed_id = _positive_int(feed.get("id"), "feed id")
+        if nested_feed_id != feed_id:
+            raise MinifluxError("Miniflux returned a different feed ID")
+        feed_user_id = _optional_positive_int(feed.get("user_id"), "feed user_id")
     if not isinstance(title, str) or not isinstance(url, str) or not url:
         raise MinifluxError("Miniflux entry is missing its title or URL")
     if not isinstance(published_at, str) or not isinstance(status, str):
@@ -258,4 +320,12 @@ def _entry_snapshot(raw: object, *, expected_id: int) -> EntrySnapshot:
         status=status,
         starred=starred,
         content=content,
+        user_id=user_id,
+        feed_user_id=feed_user_id,
     )
+
+
+def _optional_positive_int(value: object, field: str) -> int | None:
+    if value is None:
+        return None
+    return _positive_int(value, field)

@@ -8,15 +8,23 @@ from http.server import ThreadingHTTPServer
 
 from services.article_intel_auth.auth import AuthError
 from services.article_intel_auth.origin import OriginPolicy
+from services.content_fallback.miniflux import ReaderRecoveryScope
 from services.content_fallback.server import make_handler
 
 
 class FakeService:
     def __init__(self) -> None:
         self.calls: list[int] = []
+        self.reader_scopes: list[ReaderRecoveryScope | None] = []
 
-    def recover(self, entry_id: int) -> dict[str, object]:
+    def recover(
+        self,
+        entry_id: int,
+        *,
+        reader_scope: ReaderRecoveryScope | None = None,
+    ) -> dict[str, object]:
         self.calls.append(entry_id)
+        self.reader_scopes.append(reader_scope)
         return {"entry_id": entry_id, "status": "disabled", "content_html": "<p>Original</p>"}
 
 
@@ -60,9 +68,18 @@ class ServerTests(unittest.TestCase):
         self.server.server_close()
         self.thread.join(1)
 
-    def request(self, path: str, *, authorization: str = "", body: bytes = b""):
+    def request(
+        self,
+        path: str,
+        *,
+        authorization: str = "",
+        body: bytes = b"",
+        content_type: str | None = None,
+    ):
         connection = http.client.HTTPConnection("127.0.0.1", self.port, timeout=2)
         headers = {"Authorization": authorization, "Content-Length": str(len(body))}
+        if content_type is not None:
+            headers["Content-Type"] = content_type
         connection.request("POST", path, body=body, headers=headers)
         response = connection.getresponse()
         status = response.status
@@ -116,6 +133,57 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(payload["entry_id"], 42)
         self.assertEqual(self.service.calls, [42])
+
+    def test_private_reader_scope_is_forwarded_only_after_exact_payload_validation(self) -> None:
+        scope = ReaderRecoveryScope(
+            entry_id=42,
+            feed_id=7,
+            url_fingerprint="a" * 64,
+            title_sha256="b" * 64,
+            content_sha256="c" * 64,
+        )
+        body = json.dumps({"reader_scope": scope.to_dict()}).encode()
+
+        status, payload = self.request(
+            "/v1/entries/42/recover",
+            authorization="Bearer " + "s" * 40,
+            body=body,
+            content_type="application/json",
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["entry_id"], 42)
+        self.assertEqual(self.service.calls, [42])
+        self.assertEqual(self.service.reader_scopes, [scope])
+
+    def test_private_reader_scope_rejects_mismatched_entry_and_unauthenticated_direct_access(self) -> None:
+        scope = ReaderRecoveryScope(
+            entry_id=43,
+            feed_id=7,
+            url_fingerprint="a" * 64,
+            title_sha256="b" * 64,
+            content_sha256="c" * 64,
+        )
+        body = json.dumps({"reader_scope": scope.to_dict()}).encode()
+
+        status, payload = self.request(
+            "/v1/entries/42/recover",
+            authorization="Bearer " + "s" * 40,
+            body=body,
+            content_type="application/json",
+        )
+        self.assertEqual(status, 400)
+        self.assertEqual(payload["error"], "invalid_reader_scope")
+        self.assertEqual(self.service.calls, [])
+
+        status, payload = self.request(
+            "/v1/entries/42/recover",
+            body=json.dumps({"reader_scope": scope.to_dict()}).encode(),
+            content_type="application/json",
+        )
+        self.assertEqual(status, 401)
+        self.assertEqual(payload["error"], "unauthorized")
+        self.assertEqual(self.service.calls, [])
 
     def test_invalid_entry_path_is_rejected(self) -> None:
         status, payload = self.request(

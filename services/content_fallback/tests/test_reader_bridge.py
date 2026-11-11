@@ -7,6 +7,7 @@ import socket
 import unittest
 from unittest.mock import patch
 
+from services.article_intel_auth.auth import AuthError
 from services.content_fallback.reader_bridge import (
     ContentFallbackPrivateClient,
     ReaderBridgeError,
@@ -14,6 +15,7 @@ from services.content_fallback.reader_bridge import (
     ReaderContentBridge,
 )
 from services.content_fallback.http_client import HTTPResponse, UnsafeURL
+from services.content_fallback.miniflux import ReaderRecoveryScope
 
 
 BASE_URL = "https://miniflux.example"
@@ -29,10 +31,12 @@ class FakeAuth:
         self,
         *,
         user_id: int = 7,
+        is_admin: bool = False,
         accessible: bool = True,
         url_fingerprint: str | None = URL_FINGERPRINT,
     ) -> None:
         self.user_id = user_id
+        self.is_admin = is_admin
         self.accessible = accessible
         self.url_fingerprint = url_fingerprint
         self.calls = []
@@ -44,7 +48,15 @@ class FakeAuth:
         return type(
             "AuthorizedEntryFixture",
             (),
-            {"entry_id": ENTRY_ID, "user_id": self.user_id, "url_fingerprint": self.url_fingerprint},
+            {
+                "entry_id": ENTRY_ID,
+                "user_id": self.user_id,
+                "is_admin": self.is_admin,
+                "feed_id": 3,
+                "title": "Synthetic article",
+                "content_sha256": hashlib.sha256(b"Synthetic body.").hexdigest(),
+                "url_fingerprint": self.url_fingerprint,
+            },
         )()
 
 
@@ -75,9 +87,11 @@ class FakeRecovery:
             "provenance": {"provider": "wallhop.io", "fetched_at": "2026-11-01T12:00:00+00:00"},
         }
         self.calls = []
+        self.scopes = []
 
-    def recover(self, entry_id):
+    def recover(self, entry_id, *, reader_scope=None):
         self.calls.append(entry_id)
+        self.scopes.append(reader_scope)
         return dict(self.response)
 
 
@@ -97,12 +111,12 @@ class FakePostHTTP:
         )
 
 
-def make_bridge(*, auth=None, miniflux=None, recovery=None):
+def make_bridge(*, auth=None, miniflux=None, recovery=None, allowed_user_id=7):
     return ReaderContentBridge(
         auth=auth or FakeAuth(),
         miniflux=miniflux or FakeMiniflux(),
         recovery=recovery or FakeRecovery(),
-        allowed_user_id=7,
+        allowed_user_id=allowed_user_id,
     )
 
 
@@ -122,6 +136,30 @@ class ReaderContentBridgeTests(unittest.TestCase):
         self.assertEqual(call["headers"]["Authorization"], "Bearer " + "s" * 40)
         self.assertEqual(call["same_origin"], "http://127.0.0.1:8790")
         self.assertTrue(call["allow_private_origin"])
+
+    def test_private_client_sends_only_nonsecret_request_scoped_identity_and_fingerprints(self):
+        http = FakePostHTTP()
+        scope = ReaderRecoveryScope(
+            entry_id=ENTRY_ID,
+            feed_id=3,
+            url_fingerprint="a" * 64,
+            title_sha256="b" * 64,
+            content_sha256="c" * 64,
+        )
+        client = ContentFallbackPrivateClient(
+            "http://127.0.0.1:8790",
+            "s" * 40,
+            http=http,
+        )
+
+        client.recover(ENTRY_ID, reader_scope=scope)
+
+        call = http.calls[0]
+        self.assertEqual(json.loads(call["body"]), {"reader_scope": scope.to_dict()})
+        self.assertEqual(call["headers"]["Content-Type"], "application/json")
+        self.assertNotIn(API_KEY.encode(), call["body"])
+        self.assertNotIn("user_id", scope.to_dict())
+        self.assertNotIn("is_admin", scope.to_dict())
 
     def test_private_client_rejects_redirect_or_malformed_sidecar_response(self):
         client = ContentFallbackPrivateClient("http://127.0.0.1:8790", "s" * 40, http=FakePostHTTP(status=302))
@@ -170,7 +208,8 @@ class ReaderContentBridgeTests(unittest.TestCase):
         self.assertEqual(config.trusted_proxy_ips, frozenset({"10.0.0.2", "127.0.0.1"}))
 
     def test_authorized_same_user_recovery_returns_only_validated_fields(self):
-        bridge = make_bridge()
+        recovery = FakeRecovery()
+        bridge = make_bridge(recovery=recovery)
         result = bridge.recover(
             entry_id=ENTRY_ID,
             api_key=API_KEY,
@@ -185,6 +224,97 @@ class ReaderContentBridgeTests(unittest.TestCase):
         self.assertEqual(result["content_origin"], "wallhop")
         self.assertNotIn("token", result)
         self.assertNotIn("url", result)
+        self.assertEqual(recovery.scopes[0].entry_id, ENTRY_ID)
+        self.assertNotIn("user_id", recovery.scopes[0].to_dict())
+        self.assertNotIn("is_admin", recovery.scopes[0].to_dict())
+        self.assertNotIn(API_KEY, repr(recovery.scopes[0]))
+
+    def test_verified_admin_identity_can_recover_its_own_entry_without_a_bypass(self):
+        recovery = FakeRecovery()
+        bridge = make_bridge(
+            auth=FakeAuth(user_id=1, is_admin=True),
+            miniflux=FakeMiniflux(user_id=1, is_admin=True),
+            recovery=recovery,
+            allowed_user_id=1,
+        )
+
+        result = bridge.recover(
+            entry_id=ENTRY_ID,
+            api_key=API_KEY,
+            claimed_miniflux_base_url=BASE_URL,
+            request_origin=ORIGIN,
+            request_is_secure=True,
+        )
+
+        self.assertEqual(result["status"], "recovered")
+        self.assertEqual(recovery.calls, [ENTRY_ID])
+        self.assertEqual(recovery.scopes[0].entry_id, ENTRY_ID)
+        self.assertNotIn("user_id", recovery.scopes[0].to_dict())
+        self.assertNotIn("is_admin", recovery.scopes[0].to_dict())
+
+    def test_service_identity_must_match_request_identity_and_role(self):
+        for miniflux in (
+            FakeMiniflux(user_id=12),
+            FakeMiniflux(user_id=7, is_admin=True),
+        ):
+            recovery = FakeRecovery()
+            bridge = make_bridge(miniflux=miniflux, recovery=recovery)
+            with self.subTest(miniflux=miniflux), self.assertRaises(ReaderBridgeError):
+                bridge.recover(
+                    entry_id=ENTRY_ID,
+                    api_key=API_KEY,
+                    claimed_miniflux_base_url=BASE_URL,
+                    request_origin=ORIGIN,
+                    request_is_secure=True,
+                )
+            self.assertEqual(recovery.calls, [])
+
+    def test_revoked_request_key_is_rechecked_before_recovered_result_is_returned(self):
+        class RevokedAfterFirstAuthorization(FakeAuth):
+            def authorize_entry(self, **kwargs):
+                if self.calls:
+                    self.calls.append(kwargs)
+                    raise AuthError("unauthenticated", 401)
+                return super().authorize_entry(**kwargs)
+
+        auth = RevokedAfterFirstAuthorization()
+        recovery = FakeRecovery()
+        bridge = make_bridge(auth=auth, recovery=recovery)
+
+        with self.assertRaises(AuthError) as caught:
+            bridge.recover(
+                entry_id=ENTRY_ID,
+                api_key=API_KEY,
+                claimed_miniflux_base_url=BASE_URL,
+                request_origin=ORIGIN,
+                request_is_secure=True,
+            )
+
+        self.assertEqual(caught.exception.code, "unauthenticated")
+        self.assertEqual(len(auth.calls), 2)
+        self.assertEqual(recovery.calls, [ENTRY_ID])
+
+    def test_changed_authorized_fingerprint_invalidates_the_recovery_result(self):
+        class ChangedAfterRecovery(FakeAuth):
+            def authorize_entry(self, **kwargs):
+                authorized = super().authorize_entry(**kwargs)
+                if len(self.calls) > 1:
+                    authorized.url_fingerprint = "0" * 64
+                return authorized
+
+        recovery = FakeRecovery()
+        bridge = make_bridge(auth=ChangedAfterRecovery(), recovery=recovery)
+
+        with self.assertRaises(ReaderBridgeError) as caught:
+            bridge.recover(
+                entry_id=ENTRY_ID,
+                api_key=API_KEY,
+                claimed_miniflux_base_url=BASE_URL,
+                request_origin=ORIGIN,
+                request_is_secure=True,
+            )
+
+        self.assertEqual(caught.exception.code, "recovery_identity_mismatch")
 
     def test_entry_outside_single_user_allowlist_never_reaches_recovery_service(self):
         recovery = FakeRecovery()
