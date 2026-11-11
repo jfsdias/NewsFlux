@@ -19,6 +19,10 @@ const READER_RECOVERY_DOCKER_WORKFLOW_PATH = new URL(
   "../.github/workflows/reader-wallhop-p1-r2-docker-https.yaml",
   import.meta.url,
 )
+const UX_REACH_DIAGNOSTIC_WORKFLOW_PATH = new URL(
+  "../.github/workflows/ux-reach-01-pen-drag-diagnostic.yaml",
+  import.meta.url,
+)
 const PACKAGE_PATH = new URL("../package.json", import.meta.url)
 const PINNED_ACTION = /^[\w.-]+\/[\w.-]+@[\da-f]{40}$/
 const SUPPORTED_NODE_VERSIONS = ["22", "24"]
@@ -116,6 +120,7 @@ test("the Python suite runs independently on the supported interpreter", () => {
     "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s services/article_intel_summary/tests -p 'test_*.py' -v",
     "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s services/content_fallback/tests -p 'test_*.py' -v",
     "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/reader-wallhop-p1-r2 -p 'test_*.py' -v",
+    "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/ux-reach-01 -p 'test_*.py' -v",
   ])
 })
 
@@ -211,6 +216,54 @@ test("the Reader Recovery Docker gate runs for product changes, not its own harn
     ),
     "harness-only changes must be covered by harness unit tests without exercising main as the candidate",
   )
+})
+
+test("the UX-REACH pen diagnostic uses the pinned browser and records independent A/B repetitions", () => {
+  assert.ok(existsSync(UX_REACH_DIAGNOSTIC_WORKFLOW_PATH))
+  const source = readFileSync(UX_REACH_DIAGNOSTIC_WORKFLOW_PATH, "utf8")
+  const workflow = parse(source)
+  const job = workflow.jobs.diagnose
+  const summaryUpload = stepsOf(job).find((step) => step.name === "Upload controlled A/B evidence")
+
+  assert.deepEqual(Object.keys(workflow.on), ["pull_request", "workflow_dispatch"])
+  assert.deepEqual(workflow.on.pull_request.branches, ["main"])
+  assert.equal(workflow.permissions.contents, "read")
+  assert.equal(
+    job.container.image,
+    "mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27",
+  )
+  assert.equal(workflow.on.workflow_dispatch.inputs.baseline_sha.required, true)
+  assert.equal(workflow.on.workflow_dispatch.inputs.candidate_sha.required, true)
+  assert.equal(workflow.on.workflow_dispatch.inputs.expected_base_sha.required, true)
+  assert.equal(
+    job.if,
+    "${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.number == 229 }}",
+  )
+  assert.ok(
+    runCommands(job).some((command) =>
+      command.includes("python3 scripts/ux-reach-01/run_controlled_repetitions.py"),
+    ),
+  )
+  assert.ok(
+    summaryUpload,
+    "all A/B traces and outcomes must be uploaded even when an assertion fails",
+  )
+  assert.equal(summaryUpload.if, "${{ always() }}")
+  assert.doesNotMatch(source, /playwright install --with-deps|continue-on-error/u)
+
+  const runner = readFileSync(
+    new URL("../scripts/ux-reach-01/run_controlled_repetitions.py", import.meta.url),
+    "utf8",
+  )
+  const diagnostic = readFileSync(
+    new URL("../scripts/ux-reach-01/pen-drag-diagnostic.spec.js", import.meta.url),
+    "utf8",
+  )
+  assert.match(runner, /--repeat-each/u)
+  assert.match(runner, /--retries=0/u)
+  assert.match(diagnostic, /pointerType/u)
+  assert.match(diagnostic, /hasPointerCapture/u)
+  assert.match(diagnostic, /Input\.dispatchMouseEvent/u)
 })
 
 test("the e2e workflow is read-only, runs in forks and pins its actions", () => {
