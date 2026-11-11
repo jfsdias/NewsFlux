@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import hashlib
 import ipaddress
 import json
 import os
@@ -282,28 +284,24 @@ def create_test_ca(temp_root: Path) -> tuple[Path, Path, Path, Path]:
     os.chmod(leaf_key, 0o644)
 
     browser_home = temp_root / "browser-home"
-    nss_db = browser_home / ".pki" / "nssdb"
-    nss_db.mkdir(parents=True)
-    command(
-        ["certutil", "-N", "-d", f"sql:{nss_db}", "--empty-password"],
-        step="Create isolated Chromium certificate store",
-    )
-    command(
-        [
-            "certutil",
-            "-A",
-            "-d",
-            f"sql:{nss_db}",
-            "-n",
-            "NewsFlux P1 R2 test CA",
-            "-t",
-            "CT,,",
-            "-i",
-            str(ca_cert),
-        ],
-        step="Trust isolated HTTPS test CA in Chromium store",
-    )
+    browser_home.mkdir(parents=True)
     return ca_cert, leaf_cert, leaf_key, browser_home
+
+
+def certificate_spki_sha256(cert_path: Path) -> str:
+    public_key = command(
+        ["openssl", "x509", "-in", str(cert_path), "-pubkey", "-noout"],
+        step="Read ephemeral HTTPS leaf public key",
+    ).stdout
+    der_result = subprocess.run(
+        ["openssl", "pkey", "-pubin", "-outform", "DER"],
+        input=public_key.encode(),
+        capture_output=True,
+        check=False,
+    )
+    if der_result.returncode != 0 or not der_result.stdout:
+        raise RuntimeError("Could not encode ephemeral HTTPS leaf public key")
+    return base64.b64encode(hashlib.sha256(der_result.stdout).digest()).decode("ascii")
 
 
 def write_proxy_config(path: Path) -> None:
@@ -1291,6 +1289,7 @@ def run() -> None:
                 "NEWSFLUX_MINIFLUX_BASE_URL": MINIFLUX_BASE_URL,
                 "NEWSFLUX_TEST_USER_KEY": USER_KEY,
                 "NEWSFLUX_TEST_ROTATED_KEY": ROTATED_KEY,
+                "NEWSFLUX_TEST_CA_SPKI_SHA256": certificate_spki_sha256(ca_cert),
             }
         )
         command(
