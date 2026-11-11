@@ -4,7 +4,12 @@ import json
 import unittest
 
 from services.content_fallback.http_client import HTTPResponse
-from services.content_fallback.miniflux import EntrySnapshot, MinifluxClient, MinifluxError
+from services.content_fallback.miniflux import (
+    EntrySnapshot,
+    MinifluxClient,
+    MinifluxError,
+    ReaderRecoveryScope,
+)
 
 
 class FakeHTTP:
@@ -45,6 +50,30 @@ def identity_data(**changes) -> dict[str, object]:
 
 
 class MinifluxClientTests(unittest.TestCase):
+    def test_reader_recovery_scope_contains_only_resource_ids_and_fingerprints(self) -> None:
+        payload = {
+            "reader_scope": {
+                "entry_id": 42,
+                "feed_id": 7,
+                "url_fingerprint": "a" * 64,
+                "title_sha256": "b" * 64,
+                "content_sha256": "c" * 64,
+            }
+        }
+        scope = ReaderRecoveryScope.from_payload(payload, expected_entry_id=42)
+        self.assertEqual(scope.to_dict(), payload["reader_scope"])
+
+        invalid_payloads = (
+            {"reader_scope": {**payload["reader_scope"], "is_admin": True}},
+            {"reader_scope": {**payload["reader_scope"], "user_id": 1}},
+            {"reader_scope": {**payload["reader_scope"], "url_fingerprint": "not-a-digest"}},
+            {"reader_scope": {**payload["reader_scope"], "client_api_key": "secret"}},
+            {"reader_scope": {**payload["reader_scope"], "entry_id": 43}},
+        )
+        for invalid in invalid_payloads:
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                ReaderRecoveryScope.from_payload(invalid, expected_entry_id=42)
+
     def test_service_credential_identity_is_verified_with_get_me(self) -> None:
         http = FakeHTTP(identity_data())
         client = MinifluxClient("http://miniflux:8080", "api-token", http=http)
@@ -95,6 +124,25 @@ class MinifluxClientTests(unittest.TestCase):
         self.assertEqual(http.calls[0]["headers"], {"X-Auth-Token": "api-token", "Accept": "application/json"})
         self.assertEqual(http.calls[0]["max_redirects"], 0)
         self.assertFalse(hasattr(client, "put"))
+
+    def test_entry_snapshot_carries_article_and_feed_ownership(self) -> None:
+        payload = {
+            **entry_data(),
+            "user_id": 1,
+            "feed": {"id": 7, "user_id": 1},
+        }
+        snapshot = MinifluxClient(
+            "http://miniflux:8080", "api-token", http=FakeHTTP(payload)
+        ).get_entry(42)
+
+        self.assertEqual((snapshot.user_id, snapshot.feed_user_id), (1, 1))
+
+    def test_entry_snapshot_rejects_a_different_nested_feed(self) -> None:
+        payload = {**entry_data(), "feed": {"id": 8, "user_id": 7}}
+        with self.assertRaisesRegex(MinifluxError, "different feed ID"):
+            MinifluxClient(
+                "http://miniflux:8080", "api-token", http=FakeHTTP(payload)
+            ).get_entry(42)
 
     def test_native_scraper_uses_explicit_response_only_get(self) -> None:
         http = FakeHTTP({"content": "<article><p>Scraped content</p></article>", "reading_time": 4})

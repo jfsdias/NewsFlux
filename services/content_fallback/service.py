@@ -25,7 +25,13 @@ from services.content_fallback.http_client import (
     UnsafeURL,
     resolve_host,
 )
-from services.content_fallback.miniflux import EntrySnapshot, MinifluxClient, MinifluxError
+from services.content_fallback.miniflux import (
+    EntrySnapshot,
+    MinifluxClient,
+    MinifluxError,
+    MinifluxIdentity,
+    ReaderRecoveryScope,
+)
 from services.content_fallback.policy import PolicyRegistry
 from services.content_fallback.store import MemoryRecoveryStore, RecoveryStore, StoredRecovery
 
@@ -43,6 +49,56 @@ _SENSITIVE_QUERY_RE = re.compile(
 
 class RecoveryError(RuntimeError):
     pass
+
+
+def _valid_reader_identity(identity: MinifluxIdentity | None) -> bool:
+    return (
+        identity is not None
+        and isinstance(identity.id, int)
+        and not isinstance(identity.id, bool)
+        and identity.id > 0
+        and isinstance(identity.is_admin, bool)
+    )
+
+
+def _same_reader_identity(
+    original: MinifluxIdentity | None,
+    current: MinifluxIdentity | None,
+) -> bool:
+    return (
+        _valid_reader_identity(original)
+        and _valid_reader_identity(current)
+        and original.id == current.id
+        and original.is_admin is current.is_admin
+    )
+
+
+def _reader_entry_matches_scope(
+    entry: EntrySnapshot,
+    scope: ReaderRecoveryScope,
+    identity: MinifluxIdentity | None,
+) -> bool:
+    return (
+        _valid_reader_identity(identity)
+        and entry.id == scope.entry_id
+        and entry.user_id == identity.id
+        and entry.feed_id == scope.feed_id
+        and entry.feed_user_id == identity.id
+        and hashlib.sha256(entry.url.encode("utf-8")).hexdigest() == scope.url_fingerprint
+        and hashlib.sha256(entry.title.encode("utf-8")).hexdigest() == scope.title_sha256
+        and hashlib.sha256(entry.content.encode("utf-8")).hexdigest() == scope.content_sha256
+    )
+
+
+def _reader_cache_fingerprint(entry: EntrySnapshot, identity: MinifluxIdentity | None) -> str:
+    if identity is None:
+        return entry.content_fingerprint
+    return hashlib.sha256(
+        json.dumps(
+            ["reader-cache-v1", identity.id, identity.is_admin, entry.content_fingerprint],
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
 
 
 def _assess_wallhop_content(title: str, content_html: str) -> ContentAssessment:
@@ -270,13 +326,31 @@ class ContentFallbackService:
         self._domain_active: dict[str, int] = {}
         self._follower_wait_seconds = follower_wait_seconds
 
-    def recover(self, entry_id: int) -> dict[str, object]:
+    def recover(
+        self,
+        entry_id: int,
+        *,
+        reader_scope: ReaderRecoveryScope | None = None,
+    ) -> dict[str, object]:
+        reader_identity: MinifluxIdentity | None = None
+        if reader_scope is not None:
+            if not isinstance(reader_scope, ReaderRecoveryScope) or reader_scope.entry_id != entry_id:
+                raise RecoveryError("reader_scope_mismatch")
+            try:
+                service_identity = self.miniflux.get_current_user_identity()
+            except MinifluxError as exc:
+                raise RecoveryError("reader_scope_unavailable") from exc
+            if not _valid_reader_identity(service_identity):
+                raise RecoveryError("reader_scope_mismatch")
+            reader_identity = service_identity
         try:
             entry = self.miniflux.get_entry(entry_id)
         except MinifluxError as exc:
             if str(exc) == "entry not found":
                 self._delete_stored(entry_id)
             raise RecoveryError(str(exc)) from exc
+        if reader_scope is not None and not _reader_entry_matches_scope(entry, reader_scope, reader_identity):
+            raise RecoveryError("reader_scope_mismatch")
         original = assess_content(entry.title, entry.content)
         original_response = self._base_response(entry, original)
         if original.sufficient:
@@ -292,17 +366,18 @@ class ContentFallbackService:
                 "reason": decision.reason,
             }
 
+        key_parts: list[object] = [entry.id, entry.fingerprint, decision.policy.provider]
+        if reader_identity is not None:
+            key_parts.extend(("reader", reader_identity.id, reader_identity.is_admin))
         key = hashlib.sha256(
-            json.dumps(
-                [entry.id, entry.fingerprint, decision.policy.provider],
-                separators=(",", ":"),
-            ).encode("utf-8")
+            json.dumps(key_parts, separators=(",", ":")).encode("utf-8")
         ).hexdigest()
         cached = self._cache.get(key)
         if cached is not None:
             return {**cached, "cache_hit": True}
 
-        stored = self._get_stored(entry)
+        storage_fingerprint = _reader_cache_fingerprint(entry, reader_identity)
+        stored = self._get_stored(entry, storage_fingerprint)
         expected_stored_provider = (
             "wallhop.io" if decision.policy.provider == "wallhop" else "miniflux"
         )
@@ -377,21 +452,49 @@ class ContentFallbackService:
             # in flight makes the result stale. Read/star state is user state and does
             # not change which article the recovered text belongs to.
             try:
+                current_identity = (
+                    self.miniflux.get_current_user_identity()
+                    if reader_scope is not None
+                    else None
+                )
                 current = self.miniflux.get_entry(entry.id)
             except MinifluxError:
-                result = {
-                    **original_response,
-                    "status": "verification_unavailable",
-                    "reason": "unable_to_confirm_entry_snapshot",
-                }
-            else:
-                if current.content_fingerprint != entry.content_fingerprint:
-                    current_assessment = assess_content(current.title, current.content)
-                    result = {
-                        **self._base_response(current, current_assessment),
-                        "status": "stale",
-                        "reason": "entry_changed_during_recovery",
+                result = (
+                    {
+                        "entry_id": entry.id,
+                        "url_fingerprint": reader_scope.url_fingerprint,
+                        "content_html": "",
+                        "status": "verification_unavailable",
+                        "reason": "unable_to_confirm_entry_snapshot",
                     }
+                    if reader_scope is not None
+                    else {
+                        **original_response,
+                        "status": "verification_unavailable",
+                        "reason": "unable_to_confirm_entry_snapshot",
+                    }
+                )
+            else:
+                reader_scope_changed = reader_scope is not None and (
+                    not _same_reader_identity(reader_identity, current_identity)
+                    or not _reader_entry_matches_scope(current, reader_scope, current_identity)
+                )
+                if reader_scope_changed or current.content_fingerprint != entry.content_fingerprint:
+                    if reader_scope is not None:
+                        result = {
+                            "entry_id": entry.id,
+                            "url_fingerprint": reader_scope.url_fingerprint,
+                            "content_html": "",
+                            "status": "stale",
+                            "reason": "reader_authorization_changed_during_recovery",
+                        }
+                    else:
+                        current_assessment = assess_content(current.title, current.content)
+                        result = {
+                            **self._base_response(current, current_assessment),
+                            "status": "stale",
+                            "reason": "entry_changed_during_recovery",
+                        }
                 else:
                     result = {
                         **original_response,
@@ -408,7 +511,7 @@ class ContentFallbackService:
                         },
                     }
                     self._cache.put(key, result)
-                    self._put_stored(entry, provider_result)
+                    self._put_stored(entry, provider_result, storage_fingerprint)
         except UnsafeURL:
             result = {**original_response, "status": "skipped_security", "reason": "unsafe_source_url"}
         except RecoveryError as exc:
@@ -456,20 +559,25 @@ class ContentFallbackService:
         )
         return result
 
-    def _get_stored(self, entry: EntrySnapshot) -> StoredRecovery | None:
+    def _get_stored(self, entry: EntrySnapshot, source_fingerprint: str) -> StoredRecovery | None:
         try:
-            return self.store.get(entry.id, entry.content_fingerprint)
+            return self.store.get(entry.id, source_fingerprint)
         except Exception:
             LOGGER.warning("Content fallback persistent cache read failed", extra={"entry_id": entry.id})
             return None
 
-    def _put_stored(self, entry: EntrySnapshot, recovery: ProviderResult) -> None:
+    def _put_stored(
+        self,
+        entry: EntrySnapshot,
+        recovery: ProviderResult,
+        source_fingerprint: str,
+    ) -> None:
         try:
             self.store.put(
                 entry.id,
-                entry.content_fingerprint,
+                source_fingerprint,
                 StoredRecovery(
-                    source_fingerprint=entry.content_fingerprint,
+                    source_fingerprint=source_fingerprint,
                     content_html=recovery.assessment.safe_html,
                     validation=recovery.assessment.public_dict(),
                     provider=recovery.provider,

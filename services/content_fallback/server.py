@@ -12,7 +12,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from services.article_intel_auth.auth import AuthError, MinifluxAuthService
-from services.content_fallback.miniflux import MinifluxClient
+from services.content_fallback.miniflux import MinifluxClient, ReaderRecoveryScope
 from services.content_fallback.policy import PolicyRegistry
 from services.content_fallback.reader_bridge import (
     ContentFallbackPrivateClient,
@@ -26,6 +26,16 @@ from services.content_fallback.store import SQLiteRecoveryStore
 LOGGER = logging.getLogger("newsflux.content_fallback.http")
 _ENTRY_PATH_RE = re.compile(r"^/v1/entries/([1-9][0-9]{0,18})/recover$")
 _READER_ENTRY_PATH_RE = re.compile(r"^/reader/v1/entries/([1-9][0-9]{0,18})/recover$")
+_MAX_READER_SCOPE_REQUEST_BYTES = 8192
+
+
+def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON object key")
+        result[key] = value
+    return result
 
 
 @dataclass(frozen=True)
@@ -150,18 +160,54 @@ def make_handler(
             if path_match is None:
                 self._write_json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
                 return
-            if self.headers.get("content-length", "0") != "0" or self.headers.get("transfer-encoding"):
+            raw_content_length = self.headers.get("content-length", "0")
+            if (
+                not raw_content_length.isascii()
+                or not raw_content_length.isdecimal()
+                or self.headers.get("transfer-encoding")
+            ):
                 self._write_json(HTTPStatus.BAD_REQUEST, {"error": "request_body_not_allowed"})
                 return
             entry_id = int(path_match.group(1))
             if entry_id > 9_223_372_036_854_775_807:
                 self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_entry_id"})
                 return
+            if len(raw_content_length) > len(str(_MAX_READER_SCOPE_REQUEST_BYTES)):
+                self._write_json(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"error": "invalid_reader_scope"})
+                return
+            content_length = int(raw_content_length)
+            if content_length > _MAX_READER_SCOPE_REQUEST_BYTES:
+                self._write_json(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"error": "invalid_reader_scope"})
+                return
+            reader_scope = None
+            if content_length:
+                content_type = self.headers.get("content-type", "").split(";", 1)[0].strip().casefold()
+                if content_type != "application/json":
+                    self._write_json(HTTPStatus.BAD_REQUEST, {"error": "request_body_not_allowed"})
+                    return
+                try:
+                    raw_body = self.rfile.read(content_length)
+                    if len(raw_body) != content_length:
+                        raise ValueError("incomplete request body")
+                    reader_scope = ReaderRecoveryScope.from_payload(
+                        json.loads(raw_body.decode("utf-8"), object_pairs_hook=_unique_json_object),
+                        expected_entry_id=entry_id,
+                    )
+                except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
+                    self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_reader_scope"})
+                    return
             try:
-                result = service.recover(entry_id)
+                result = (
+                    service.recover(entry_id)
+                    if reader_scope is None
+                    else service.recover(entry_id, reader_scope=reader_scope)
+                )
             except RecoveryError as exc:
                 if str(exc) == "entry not found":
                     self._write_json(HTTPStatus.NOT_FOUND, {"error": "entry_not_found"})
+                    return
+                if str(exc) == "reader_scope_mismatch":
+                    self._write_json(HTTPStatus.FORBIDDEN, {"error": "entry_not_accessible"})
                     return
                 LOGGER.warning("Content fallback could not read Miniflux entry", extra={"entry_id": entry_id})
                 self._write_json(HTTPStatus.BAD_GATEWAY, {"error": "miniflux_unavailable"})
