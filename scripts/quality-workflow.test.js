@@ -264,6 +264,8 @@ test("the UX-REACH pen diagnostic uses the pinned browser and records independen
   assert.match(diagnostic, /pointerType/u)
   assert.match(diagnostic, /hasPointerCapture/u)
   assert.match(diagnostic, /Input\.dispatchMouseEvent/u)
+  assert.doesNotMatch(diagnostic, /visualViewport\.toJSON/u)
+  assert.match(diagnostic, /after-two-animation-frames/u)
 })
 
 test("the e2e workflow is read-only, runs in forks and pins its actions", () => {

@@ -156,6 +156,23 @@ test("R8-D4D PEN DIAGNOSTIC: fine-pointer drag records pen events and settles at
   })
   const events = await page.evaluate(() => globalThis.__newsFluxPenDiagnosticEvents)
   const penEvents = events.filter((event) => event.pointerType === "pen")
+  const viewportMetadata = await page.evaluate(() => {
+    const viewport = globalThis.visualViewport
+    return {
+      devicePixelRatio: globalThis.devicePixelRatio,
+      visualViewport: viewport
+        ? {
+            width: viewport.width,
+            height: viewport.height,
+            offsetLeft: viewport.offsetLeft,
+            offsetTop: viewport.offsetTop,
+            pageLeft: viewport.pageLeft,
+            pageTop: viewport.pageTop,
+            scale: viewport.scale,
+          }
+        : null,
+    }
+  })
   const penDown = penEvents.filter(
     (event) => event.type === "pointerdown" && event.phase === "capture",
   )
@@ -164,10 +181,7 @@ test("R8-D4D PEN DIAGNOSTIC: fine-pointer drag records pen events and settles at
   )
   const penUp = penEvents.filter((event) => event.type === "pointerup" && event.phase === "capture")
   const result = {
-    viewport: await page.evaluate(() => ({
-      ...globalThis.visualViewport.toJSON(),
-      devicePixelRatio: globalThis.devicePixelRatio,
-    })),
+    viewport: { ...page.viewportSize(), ...viewportMetadata },
     userAgent: await page.evaluate(() => navigator.userAgent),
     browserVersion: page.context().browser().version(),
     initialPenPoint: { x: penX, y: penY },
