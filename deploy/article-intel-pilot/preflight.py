@@ -49,6 +49,9 @@ def main() -> None:
     sha = required("NEWSFLUX_PILOT_APPROVED_SHA")
     if not re.fullmatch(r"[a-f0-9]{40}", sha):
         fail("APPROVED_SHA")
+    previous_config_sha = required("NEWSFLUX_PILOT_PREVIOUS_CONFIG_SHA256")
+    if not re.fullmatch(r"[a-f0-9]{64}", previous_config_sha):
+        fail("PREVIOUS_CONFIG_SHA256")
     if run("git", "rev-parse", "HEAD") != sha or run("git", "status", "--porcelain"):
         fail("CHECKOUT_IDENTITY")
     if run("docker", "context", "show") != "default":
@@ -88,7 +91,11 @@ def main() -> None:
         fail("PREVIOUS_IMAGE_MISMATCH")
     if run("docker", "image", "inspect", "--format", "{{.Id}}", previous_image) != previous_image:
         fail("PREVIOUS_IMAGE_UNAVAILABLE")
-    print("PREFLIGHT=PASS_IDENTITY_AND_FILE_METADATA_ONLY")
+    active_config_line = run("docker", "exec", previous_container, "sha256sum", "/etc/caddy/Caddyfile")
+    active_config_sha = active_config_line.split(maxsplit=1)[0] if active_config_line else ""
+    if active_config_sha != previous_config_sha:
+        fail("PREVIOUS_CONFIG_MISMATCH")
+    print("PREFLIGHT=PASS_IDENTITY_CONFIG_AND_FILE_METADATA_ONLY")
     print("MANUAL_GATES=PROXY_NETWORK_GATEWAY_BUDGET_PRIVACY_AND_ROLLBACK_STILL_REQUIRED")
 
 

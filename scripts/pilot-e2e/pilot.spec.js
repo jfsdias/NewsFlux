@@ -1,6 +1,10 @@
 /* eslint-disable unicorn/no-await-expression-member -- Playwright API responses are evaluated only in this synthetic test. */
 import { expect, test } from "@playwright/test"
 
+const harnessBasePath = process.env.PILOT_READER_HARNESS_PATH?.replace(/\/$/, "") ?? ""
+const harnessUrl = (query) =>
+  `${harnessBasePath}/scripts/tests/content-fallback-reader.html?${query}`
+
 test("opening and navigating articles never starts inference", async ({ page, request }) => {
   const summaryRequests = []
   page.on("request", (event) => {
@@ -9,9 +13,7 @@ test("opening and navigating articles never starts inference", async ({ page, re
     }
   })
   await request.post("/__pilot/mode/success")
-  await page.goto(
-    "/scripts/tests/content-fallback-reader.html?mode=disabled&article_summary=pilot-http",
-  )
+  await page.goto(harnessUrl("mode=disabled&article_summary=pilot-http"))
   await expect(page.getByTestId("reader-recovery-report")).toHaveAttribute("data-status", "pass")
   await page.evaluate(() => globalThis.__articleIntelligenceHarness.navigateToOther())
   await expect(page.getByText("Original body for entry 502.")).toBeVisible()
@@ -32,12 +34,11 @@ test("explicit Reader action reaches the real Summary API and synthetic gateway 
     }
   })
   await request.post("/__pilot/mode/success")
-  await page.goto(
-    "/scripts/tests/content-fallback-reader.html?mode=disabled&article_summary=pilot-http",
-  )
+  await page.goto(harnessUrl("mode=disabled&article_summary=pilot-http"))
   await expect(page.getByTestId("reader-recovery-report")).toHaveAttribute("data-status", "pass")
   expect((await (await request.get("/__pilot/metrics")).json()).inference_calls).toBe(0)
   expect(summaryRequests).toEqual([])
+  await page.setExtraHTTPHeaders({ "X-Forwarded-Proto": "http" })
   await page.getByRole("button", { name: "Summarize with AI" }).click()
   await expect(page.getByText("Synthetic pilot summary.")).toBeVisible()
   await expect(page.getByText("Synthetic pilot key point.")).toBeVisible()
@@ -47,6 +48,7 @@ test("explicit Reader action reaches the real Summary API and synthetic gateway 
   expect(summaryRequests).toEqual(["POST"])
   expect(metrics.inference_calls).toBe(1)
   expect(metrics.miniflux_methods).toEqual(["GET", "GET", "GET", "GET"])
+  expect(metrics.gateway_checks).toEqual([{ authorized: true, model_valid: true }])
 })
 
 for (const scenario of [
@@ -64,9 +66,7 @@ for (const scenario of [
 ]) {
   test(`explicit request handles ${scenario.mode} without prefetch`, async ({ page, request }) => {
     await request.post(`/__pilot/mode/${scenario.mode}`)
-    await page.goto(
-      "/scripts/tests/content-fallback-reader.html?mode=disabled&article_summary=pilot-http",
-    )
+    await page.goto(harnessUrl("mode=disabled&article_summary=pilot-http"))
     await expect(page.getByTestId("reader-recovery-report")).toHaveAttribute("data-status", "pass")
     const before = await (await request.get("/__pilot/metrics")).json()
     expect(before.inference_calls).toBe(0)
@@ -80,9 +80,7 @@ for (const scenario of [
 
 test("navigation discards a late real API response", async ({ page, request }) => {
   await request.post("/__pilot/mode/delayed")
-  await page.goto(
-    "/scripts/tests/content-fallback-reader.html?mode=disabled&article_summary=pilot-http",
-  )
+  await page.goto(harnessUrl("mode=disabled&article_summary=pilot-http"))
   await expect(page.getByTestId("reader-recovery-report")).toHaveAttribute("data-status", "pass")
   await page.getByRole("button", { name: "Summarize with AI" }).click()
   await expect
@@ -100,9 +98,7 @@ test("navigation discards a late real API response", async ({ page, request }) =
 
 test("session change discards a late real API response", async ({ page, request }) => {
   await request.post("/__pilot/mode/delayed")
-  await page.goto(
-    "/scripts/tests/content-fallback-reader.html?mode=disabled&article_summary=pilot-http",
-  )
+  await page.goto(harnessUrl("mode=disabled&article_summary=pilot-http"))
   await expect(page.getByTestId("reader-recovery-report")).toHaveAttribute("data-status", "pass")
   await page.getByRole("button", { name: "Summarize with AI" }).click()
   await expect
