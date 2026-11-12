@@ -61,9 +61,12 @@ test("explicit summary action renders grounded output without changing the artic
 
   await page.setViewportSize({ width: 884, height: 1104 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  const box = await page.getByTestId("article-intelligence-summary").boundingBox()
-  expect(box.x).toBeGreaterThanOrEqual(0)
-  expect(box.x + box.width).toBeLessThanOrEqual(885)
+  await expect
+    .poll(async () => {
+      const box = await page.getByTestId("article-intelligence-summary").boundingBox()
+      return box !== null && box.x >= 0 && box.x + box.width <= 885
+    })
+    .toBe(true)
 })
 
 test("loading is announced; a safe error remains recoverable with the original body visible", async ({
