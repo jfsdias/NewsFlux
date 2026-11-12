@@ -55,3 +55,48 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s services/article_intel
 The HTTP integration harness drives the actual ASGI route in-process through HTTPX and a synthetic Miniflux transport. It performs no network calls outside the process, uses no real credentials, never invokes providers, and never writes Miniflux data.
 
 The API remains one registered `editorial-default` profile and never accepts a client-side model choice. The synthetic adapter boundary is used for deterministic tests; operational provider configuration is not present in this checkout.
+
+## Optional S5 Free → Mistral Small fallback (separate functional PR)
+
+The service defaults to **one model and one request**. The optional S5 → Mistral
+fallback is disabled unless the operator explicitly sets
+`NEWSFLUX_AI_ENABLE_S5_MISTRAL_FALLBACK=true`. It is only available with
+`NEWSFLUX_AI_LITELLM_MODEL_CHOICE=s5-free`, configured and distinct S5 and
+Mistral LiteLLM aliases, valid nonzero Mistral input/output prices, and both
+`NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER=true` and
+`NEWSFLUX_AI_ALLOW_PAID_INFERENCE=true`. An incomplete opt-in fails closed:
+the service uses `DisabledInferenceAdapter` rather than silently routing
+some requests to paid inference.
+
+The first attempt targets only the configured S5 alias. The backend attempts
+Mistral **once at most** when S5 returns 429, 500, 502, 503, 504, or an HTTPX
+timeout. It does not fallback for authentication/permission errors, other 4xx,
+redirects, budget or rate denial, unsafe/unavailable source content, malformed
+model output, wrong model identity, or invalid/insufficient configuration.
+Neither model is retried; model selection is not browser-controlled. A bounded
+fraction of the request deadline is reserved for the fallback.
+
+Both model adapters use **the same private SQLite usage ledger** and the same
+virtual key. Every attempt makes its own pre-dispatch reservation and is
+accounted at **that model's configured prices**; unknown usage stays reserved
+conservatively. The selected alias must also be echoed by LiteLLM as the model
+identity before a result is accepted. The ordinary request-scoped Miniflux
+ownership and stale-source revalidation still apply. The API never writes
+Miniflux, schedules background inference, or persists prompts/responses.
+
+To allow the second attempt in one minute, the **backend** must have
+`NEWSFLUX_AI_MAX_REQUESTS_PER_MINUTE >= 2` and
+`NEWSFLUX_AI_MAX_TOKENS_PER_MINUTE >= 2 * (MAX_INPUT_TOKENS + MAX_OUTPUT_TOKENS)`.
+The LiteLLM virtual key needs independently verified permission to use
+**both aliases**, matching effective per-key RPM/TPM, and a bounded total
+budget/expiry; changing backend variables does not modify that key. Existing
+operator R15 settings (1 RPM / 4000 TPM) are **not ready** for fallback.
+Mistral and external transfer still require separate operator authorization.
+The S5 zero-price setting is an operator-supplied pricing assumption and must
+be rechecked when the provider's promotional offer changes.
+
+The fallback is deliberately not configured in the shared LiteLLM model router.
+Transparent gateway-side fallback could violate the application’s required
+model identity and per-model cost accounting. Keep the gateway and other
+consumers unchanged. This change does **not** authorize a production deployment,
+credential-policy change, or live inference.
