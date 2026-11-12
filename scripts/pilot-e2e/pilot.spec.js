@@ -2,6 +2,12 @@
 import { expect, test } from "@playwright/test"
 
 test("opening and navigating articles never starts inference", async ({ page, request }) => {
+  const summaryRequests = []
+  page.on("request", (event) => {
+    if (event.url().includes("/api/ai/v1/entries/")) {
+      summaryRequests.push(event.method())
+    }
+  })
   await request.post("/__pilot/mode/success")
   await page.goto(
     "/scripts/tests/content-fallback-reader.html?mode=disabled&article_summary=pilot-http",
@@ -10,6 +16,7 @@ test("opening and navigating articles never starts inference", async ({ page, re
   await page.evaluate(() => globalThis.__articleIntelligenceHarness.navigateToOther())
   await expect(page.getByText("Original body for entry 502.")).toBeVisible()
   const metrics = await (await request.get("/__pilot/metrics")).json()
+  expect(summaryRequests).toEqual([])
   expect(metrics.inference_calls).toBe(0)
   expect(metrics.miniflux_methods).toEqual([])
 })
@@ -18,18 +25,26 @@ test("explicit Reader action reaches the real Summary API and synthetic gateway 
   page,
   request,
 }) => {
+  const summaryRequests = []
+  page.on("request", (event) => {
+    if (event.url().includes("/api/ai/v1/entries/")) {
+      summaryRequests.push(event.method())
+    }
+  })
   await request.post("/__pilot/mode/success")
   await page.goto(
     "/scripts/tests/content-fallback-reader.html?mode=disabled&article_summary=pilot-http",
   )
   await expect(page.getByTestId("reader-recovery-report")).toHaveAttribute("data-status", "pass")
   expect((await (await request.get("/__pilot/metrics")).json()).inference_calls).toBe(0)
+  expect(summaryRequests).toEqual([])
   await page.getByRole("button", { name: "Summarize with AI" }).click()
   await expect(page.getByText("Synthetic pilot summary.")).toBeVisible()
   await expect(page.getByText("Synthetic pilot key point.")).toBeVisible()
   await expect(page.getByText("Synthetic pilot action.")).toBeVisible()
   await expect(page.getByText(/Miniflux does not establish/)).toBeVisible()
   const metrics = await (await request.get("/__pilot/metrics")).json()
+  expect(summaryRequests).toEqual(["POST"])
   expect(metrics.inference_calls).toBe(1)
   expect(metrics.miniflux_methods).toEqual(["GET", "GET", "GET", "GET"])
 })
