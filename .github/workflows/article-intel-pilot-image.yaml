@@ -249,6 +249,13 @@ jobs:
           NEWSFLUX_PILOT_PREVIOUS_WEB_IMAGE=$previous_tag
           EOF
 
+      - name: Pull pinned ingress and browser test images
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$PILOT_TEST_CADDY_IMAGE"
+          docker pull "$PILOT_PLAYWRIGHT_IMAGE"
+
       - name: Validate and start exact Compose pilot stack
         working-directory: candidate
         shell: bash
