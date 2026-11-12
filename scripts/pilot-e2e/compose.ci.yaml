@@ -42,7 +42,7 @@ services:
         aliases:
           - newsflux.example
       summary_private:
-        ipv4_address: 172.31.253.3
+        ipv4_address: 172.31.253.11
     depends_on:
       pilot-reader:
         condition: service_healthy
