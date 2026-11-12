@@ -24,6 +24,12 @@ from services.article_intel_summary.tests.test_litellm_adapter import (
     input_fixture,
     make_settings,
 )
+from services.article_intel_summary.tests.support import (
+    ENTRY_ID,
+    make_test_client,
+    request_headers,
+    valid_request,
+)
 
 
 class S5MistralFallbackTests(unittest.TestCase):
@@ -147,6 +153,38 @@ class S5MistralFallbackTests(unittest.TestCase):
             adapter.summarize(input_fixture(), timeout_seconds=12)
         self.assertEqual([self.model(r) for r in self.calls], [S5_ALIAS, MISTRAL_ALIAS])
         self.assertEqual(ledger.uncertain_count(), 2)
+
+    def test_wrong_model_identity_does_not_trigger_paid_fallback(self) -> None:
+        adapter, _ = self.make_fallback(
+            lambda _: completion_response(model="unapproved-model")
+        )
+        with self.assertRaises(InferenceUnavailable):
+            adapter.summarize(input_fixture(), timeout_seconds=12)
+        self.assertEqual([self.model(r) for r in self.calls], [S5_ALIAS])
+
+    def test_real_summary_api_reports_paid_fallback_and_revalidates_source(self) -> None:
+        adapter, ledger = self.make_fallback(
+            lambda request: (
+                httpx.Response(503)
+                if self.model(request) == S5_ALIAS
+                else completion_response(model=MISTRAL_ALIAS)
+            )
+        )
+        client, miniflux_http, _, snapshot = make_test_client(adapter=adapter)
+        response = client.post(
+            f"/api/ai/v1/entries/{ENTRY_ID}/summary",
+            headers=request_headers(),
+            json=valid_request(),
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertEqual(payload["status"], "partial")
+        self.assertEqual(payload["provenance"]["deployment_id"], "mistral-small")
+        self.assertEqual(payload["provenance"]["effective_model_id"], MISTRAL_ALIAS)
+        self.assertEqual(payload["provenance"]["content_fingerprint"], snapshot.content_fingerprint)
+        self.assertEqual(len(miniflux_http.calls), 4)
+        self.assertEqual([self.model(r) for r in self.calls], [S5_ALIAS, MISTRAL_ALIAS])
+        self.assertEqual(ledger.current_month_spend(), Decimal("0.000051"))
 
     def test_factory_requires_opt_in_paid_consent_and_two_attempt_capacity(self) -> None:
         key_file = Path(self.tmp.name) / "virtual-key"
