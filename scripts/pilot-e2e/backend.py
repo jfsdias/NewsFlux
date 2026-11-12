@@ -85,7 +85,14 @@ def mock_litellm(request):
 settings = AuthSettings(miniflux_base_url=MINIFLUX_BASE, allowed_web_origins=frozenset({WEB_ORIGIN}), admin_user_ids=frozenset(), admin_allowlist_state="empty")
 auth = MinifluxAuthService(settings, http=_miniflux)
 adapter = LiteLLMInferenceAdapter(
-    make_settings(_ledger_path, virtual_key=_virtual_key),
+    make_settings(
+        _ledger_path,
+        virtual_key=_virtual_key,
+        # The serial browser matrix exceeds the production default token quota.
+        # Keep those UI scenarios reaching the MockTransport; budget gates are unit-tested separately.
+        requests_per_minute=50,
+        tokens_per_minute=200_000,
+    ),
     client=httpx.Client(transport=httpx.MockTransport(mock_litellm)),
 )
 app = create_app(auth_service=auth, summary_service=SummaryService(adapter))

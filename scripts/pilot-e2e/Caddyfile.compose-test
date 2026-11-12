@@ -3,7 +3,7 @@
 	auto_https off
 }
 
-https://newsflux.example {
+https:// {
 	tls /certs/newsflux.crt /certs/newsflux.key
 
 	@pilotControl path /__pilot/*

@@ -87,6 +87,9 @@ test("navigation discards a late real API response", async ({ page, request }) =
   )
   await page.getByRole("button", { name: "Summarize with AI" }).click()
   await pendingSummaryRequest
+  await expect
+    .poll(async () => (await (await request.get("/__pilot/metrics")).json()).inference_calls)
+    .toBe(1)
   await page.evaluate(() => globalThis.__articleIntelligenceHarness.navigateToOther())
   await expect(page.getByText("Original body for entry 502.")).toBeVisible()
   await request.post("/__pilot/release")
@@ -107,6 +110,9 @@ test("session change discards a late real API response", async ({ page, request 
   )
   await page.getByRole("button", { name: "Summarize with AI" }).click()
   await pendingSummaryRequest
+  await expect
+    .poll(async () => (await (await request.get("/__pilot/metrics")).json()).inference_calls)
+    .toBe(1)
   await page.evaluate(() => globalThis.__articleIntelligenceHarness.changeSession())
   await request.post("/__pilot/release")
   await expect
