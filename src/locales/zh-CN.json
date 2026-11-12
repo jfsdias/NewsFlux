@@ -284,6 +284,8 @@
     "error": "无法生成摘要，原文未作任何更改。",
     "summary": "摘要",
     "key_points": "要点",
+    "action_points": "行动要点",
+    "original_source_notice": "摘要使用 Miniflux 原文，而不是恢复的文本。",
     "partial_content": "此摘要可能只涵盖文章的一部分。",
     "limitations": "局限",
     "insufficient": "文章文本不足，无法生成可靠的摘要。",

@@ -30,3 +30,9 @@ logs
 docs
 images
 tests
+
+# Keep local credentials and Python caches out of build contexts.
+.env
+.env.*
+**/__pycache__
+**/*.pyc

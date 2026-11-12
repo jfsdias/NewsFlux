@@ -1,0 +1,20 @@
+{
+	admin off
+	auto_https off
+}
+
+https:// {
+	tls /certs/newsflux.crt /certs/newsflux.key
+
+	@pilotControl path /__pilot/*
+	handle @pilotControl {
+		reverse_proxy summary-api:8788
+	}
+
+	handle {
+		reverse_proxy pilot-reader:2000 {
+			header_up Host {host}
+			header_up X-Forwarded-Proto https
+		}
+	}
+}

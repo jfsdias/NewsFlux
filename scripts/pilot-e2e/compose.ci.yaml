@@ -1,0 +1,88 @@
+services:
+  pilot-reader:
+    volumes:
+      - ${PILOT_HARNESS_DIR:?built component harness required}:/srv/pilot-test:ro
+    networks:
+      frontend:
+        ipv4_address: 172.31.252.3
+      summary_private:
+        ipv4_address: ${NEWSFLUX_PILOT_CADDY_IP:?fixed Reader address required}
+    healthcheck:
+      test:
+        ["CMD", "caddy", "validate", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  summary-api:
+    command:
+      - uvicorn
+      - scripts.pilot-e2e.backend:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8788"
+      - --proxy-headers
+      - --forwarded-allow-ips
+      - ${NEWSFLUX_PILOT_CADDY_IP:?fixed Reader address required}
+      - --no-access-log
+    environment:
+      NEWSFLUX_PILOT_LEDGER_PATH: /data/usage.sqlite3
+    volumes:
+      - ${PILOT_TEST_SOURCE_DIR:?synthetic harness source required}:/app/scripts/pilot-e2e:ro
+
+  pilot-test-ingress:
+    image: ${PILOT_TEST_CADDY_IMAGE:?pinned test Caddy image required}
+    volumes:
+      - ${PILOT_TEST_INGRESS_CADDYFILE:?test ingress Caddyfile required}:/etc/caddy/Caddyfile:ro
+      - ${PILOT_TEST_CERTS_DIR:?test certificate directory required}:/certs:ro
+    networks:
+      frontend:
+        ipv4_address: 172.31.252.2
+        aliases:
+          - newsflux.example
+      summary_private:
+        ipv4_address: 172.31.253.11
+    depends_on:
+      pilot-reader:
+        condition: service_healthy
+      summary-api:
+        condition: service_healthy
+
+  pilot-e2e:
+    image: ${PILOT_PLAYWRIGHT_IMAGE:?pinned Playwright image required}
+    profiles: [pilot-test]
+    working_dir: /workspace
+    volumes:
+      - ${PILOT_SOURCE_CHECKOUT:?exact source checkout required}:/workspace:ro
+      - ${PILOT_TEST_CERTS_DIR:?test certificate directory required}:/certs:ro
+      - ${PILOT_PLAYWRIGHT_OUTPUT_DIR:?test output directory required}:/artifacts
+    environment:
+      NODE_EXTRA_CA_CERTS: /certs/ca.crt
+      PILOT_BASE_URL: https://newsflux.example
+      PILOT_READER_HARNESS_PATH: /pilot-test
+      PILOT_PLAYWRIGHT_OUTPUT_DIR: /artifacts
+    command:
+      - node
+      - /workspace/node_modules/@playwright/test/cli.js
+      - test
+      - --config
+      - scripts/pilot-e2e/playwright-compose.config.js
+    networks:
+      - frontend
+      - summary_private
+    depends_on:
+      pilot-test-ingress:
+        condition: service_started
+
+networks:
+  frontend:
+    name: ${NEWSFLUX_PILOT_FRONTEND_NETWORK:?isolated test frontend network required}
+    external: false
+    ipam:
+      config:
+        - subnet: 172.31.252.0/24
+  gateway:
+    name: ${NEWSFLUX_PILOT_GATEWAY_NETWORK:?isolated test gateway network required}
+    external: false
+    internal: true

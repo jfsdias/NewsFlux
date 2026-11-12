@@ -1,3 +1,4 @@
+/* eslint-disable unicorn/no-await-expression-member, unicorn/consistent-function-scoping -- Local response fixtures. */
 /* eslint import/extensions: off -- Native node:test ESM requires explicit extensions. */
 import assert from "node:assert/strict"
 import { test } from "node:test"
@@ -5,6 +6,7 @@ import { test } from "node:test"
 import {
   buildArticleSummaryPath,
   isCurrentArticleSummaryRequest,
+  parseArticleSummaryResponse,
   validateArticleSummaryError,
   validateArticleSummaryResponse,
 } from "./article-intelligence-summary.js"
@@ -167,4 +169,47 @@ test("current-request guard rejects route, account, article and data-session cha
     isCurrentArticleSummaryRequest(request, { ...current, authSessionKey: "account-b" }),
     false,
   )
+})
+
+test("only the matching HTTP status admits validated non-generated summary states", async () => {
+  for (const [status, state] of [
+    [422, "insufficient"],
+    [503, "unavailable"],
+  ]) {
+    const payload = validPayload({
+      status: state,
+      summary: "",
+      summary_paragraph_ids: [],
+      key_points: [],
+      action_points: [],
+    })
+    const response = (body, code) =>
+      Response.json(body, {
+        status: code,
+        headers: { "content-type": "application/json" },
+      })
+    assert.equal(
+      (await parseArticleSummaryResponse(response(payload, status), { entryId: 42, requestId }))
+        .kind,
+      "summary",
+    )
+    assert.equal(
+      (
+        await parseArticleSummaryResponse(response(payload, status === 422 ? 503 : 422), {
+          entryId: 42,
+          requestId,
+        })
+      ).kind,
+      "invalid",
+    )
+    assert.equal(
+      (
+        await parseArticleSummaryResponse(response({ ...payload, summary: "unsafe" }, status), {
+          entryId: 42,
+          requestId,
+        })
+      ).kind,
+      "invalid",
+    )
+  }
 })

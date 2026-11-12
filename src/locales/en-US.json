@@ -284,6 +284,8 @@
     "error": "The summary could not be created. The original article is unchanged.",
     "summary": "Summary",
     "key_points": "Key points",
+    "action_points": "Action points",
+    "original_source_notice": "The summary uses the original Miniflux text, not the recovered text.",
     "partial_content": "This summary may cover only part of the article.",
     "limitations": "Limitations",
     "insufficient": "There is not enough article text to create a reliable summary.",

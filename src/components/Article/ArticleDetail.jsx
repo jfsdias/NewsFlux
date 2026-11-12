@@ -886,6 +886,11 @@ const ArticleDetail = forwardRef((_, ref) => {
               data-testid="article-intelligence-summary"
               style={{ maxWidth: responsiveMaxWidth }}
             >
+              {readerRecovery.hasRecovery && !readerRecovery.isOriginalShown && (
+                <p className="article-intelligence-summary__status">
+                  {polyglot.t("article_intelligence.original_source_notice")}
+                </p>
+              )}
               <button
                 className="article-intelligence-summary__action"
                 disabled={articleSummary.status === "loading"}
@@ -938,6 +943,16 @@ const ArticleDetail = forwardRef((_, ref) => {
                       <li key={`${point.paragraph_ids.join("-")}-${index}`}>{point.text}</li>
                     ))}
                   </ul>
+                  {articleSummary.summary.action_points.length > 0 && (
+                    <>
+                      <h3>{polyglot.t("article_intelligence.action_points")}</h3>
+                      <ul>
+                        {articleSummary.summary.action_points.map((point, index) => (
+                          <li key={`${point.paragraph_ids.join("-")}-${index}`}>{point.text}</li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
                   {(articleSummary.summary.status === "partial" ||
                     articleSummary.summary.content_scope !== "full") && (
                     <p className="article-intelligence-summary__status" role="status">

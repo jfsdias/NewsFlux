@@ -1,0 +1,43 @@
+# Review and validate all values and network isolation before any deployment.
+services:
+  pilot-reader:
+    image: ${NEWSFLUX_PILOT_WEB_IMAGE:?exact image digest required}
+    environment:
+      NEWSFLUX_PILOT_TRUSTED_PROXY_IP: ${NEWSFLUX_PILOT_TRUSTED_PROXY_IP:?exact proxy IP required}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    networks:
+      frontend: {}
+      summary_private:
+        ipv4_address: ${NEWSFLUX_PILOT_CADDY_IP:?exact private Caddy IP required}
+    depends_on:
+      summary-api:
+        condition: service_healthy
+
+  summary-api:
+    image: ${NEWSFLUX_PILOT_SUMMARY_IMAGE:?exact image digest required}
+    env_file:
+      - ${NEWSFLUX_PILOT_PRIVATE_ENV_FILE:?private settings file required}
+    environment:
+      FORWARDED_ALLOW_IPS: ${NEWSFLUX_PILOT_CADDY_IP:?exact private Caddy IP required}
+      NEWSFLUX_AI_LITELLM_VIRTUAL_KEY_FILE: /run/secrets/litellm-virtual-key
+      NEWSFLUX_AI_USAGE_DATABASE_PATH: /data/usage.sqlite3
+    volumes:
+      - ${NEWSFLUX_PILOT_KEY_FILE:?private key file required}:/run/secrets/litellm-virtual-key:ro
+      - ${NEWSFLUX_PILOT_LEDGER_DIR:?private persistent ledger directory required}:/data
+    networks:
+      summary_private: {}
+      gateway: {}
+
+networks:
+  frontend:
+    external: true
+    name: ${NEWSFLUX_PILOT_FRONTEND_NETWORK:?existing proxy network required}
+  gateway:
+    external: true
+    name: ${NEWSFLUX_PILOT_GATEWAY_NETWORK:?existing gateway network required}
+  summary_private:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${NEWSFLUX_PILOT_PRIVATE_SUBNET:?dedicated non-overlapping subnet required}

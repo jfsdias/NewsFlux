@@ -284,6 +284,8 @@
     "error": "要約を作成できませんでした。元の記事は変更されていません。",
     "summary": "要約",
     "key_points": "要点",
+    "action_points": "アクション",
+    "original_source_notice": "要約には復元されたテキストではなく、Miniflux の元のテキストを使用します。",
     "partial_content": "記事の一部だけを要約している可能性があります。",
     "limitations": "制限事項",
     "insufficient": "信頼できる要約を作成するには記事のテキストが不足しています。",

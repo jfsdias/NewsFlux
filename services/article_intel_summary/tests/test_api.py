@@ -24,6 +24,13 @@ class SummaryHTTPTests(unittest.TestCase):
         self.adapter = SyntheticFixtureAdapter(make_snapshot())
         self.client, self.miniflux_http, _, self.snapshot = make_test_client(adapter=self.adapter)
 
+    def test_health_endpoint_is_local_liveness_only(self) -> None:
+        response = self.client.get("/healthz")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "ok"})
+        self.assertEqual(self.adapter.calls, 0)
+        self.assertEqual(self.miniflux_http.calls, [])
+
     def test_summary_endpoint_reuses_miniflux_authorization_and_returns_grounded_partial_result(self) -> None:
         response = self.client.post(
             f"/api/ai/v1/entries/{ENTRY_ID}/summary",

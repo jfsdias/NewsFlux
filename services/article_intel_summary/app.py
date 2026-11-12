@@ -50,6 +50,10 @@ def create_app(
     app.state.auth_service = auth_service
     app.state.summary_service = summary_service
 
+    @app.get("/healthz", include_in_schema=False)
+    async def healthz() -> Response:
+        return JSONResponse({"status": "ok"}, headers={"Cache-Control": "no-store"})
+
     @app.api_route("/api/ai/v1/entries/{entry_id}/summary", methods=["POST", "OPTIONS"])
     async def summarize_entry(entry_id: str, request: Request) -> Response:
         request_id: str | None = None

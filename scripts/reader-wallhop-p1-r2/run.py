@@ -723,6 +723,8 @@ def run() -> None:
                 f"SOURCE_COMMIT_DATE={source_date}",
                 "--build-arg",
                 "VITE_BASE_PATH=/",
+                "--build-arg",
+                "VITE_CONTENT_FALLBACK_READER_BASE_PATH=/api/content-fallback",
                 "-t",
                 frontend_image,
                 "-f",

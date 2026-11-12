@@ -1,0 +1,14 @@
+services:
+  pilot-reader:
+    image: ${NEWSFLUX_PILOT_PREVIOUS_WEB_IMAGE:?previous exact Reader image required}
+    networks:
+      frontend:
+        ipv4_address: 172.31.252.3
+
+networks:
+  frontend:
+    name: ${NEWSFLUX_PILOT_FRONTEND_NETWORK:?isolated test frontend network required}
+    external: false
+    ipam:
+      config:
+        - subnet: 172.31.252.0/24
