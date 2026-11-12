@@ -46,4 +46,4 @@ if __name__ == "__main__":
     try:
         main(sys.argv[1])
     except (OSError, ValueError, json.JSONDecodeError) as error:
-        raise SystemExit(f"COMPOSE_PORT_AND_NETWORK_GATE=FAIL_{type(error).__name__}") from None
+        raise SystemExit(f"COMPOSE_PORT_AND_NETWORK_GATE=FAIL_{error}") from None
