@@ -42,10 +42,10 @@ class S5MistralFallbackTests(unittest.TestCase):
             input_price_usd_per_million=Decimal("0"),
             output_price_usd_per_million=Decimal("0"),
             monthly_budget_usd=Decimal(budget),
-            max_input_tokens=2048,
+            max_input_tokens=4096,
             max_output_tokens=512,
             requests_per_minute=2,
-            tokens_per_minute=6000,
+            tokens_per_minute=12000,
         )
         paid_settings = replace(
             primary_settings,
