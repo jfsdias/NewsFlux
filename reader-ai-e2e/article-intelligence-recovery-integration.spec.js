@@ -104,6 +104,9 @@ test("AI_RECOVERY_CROSS: recovered article remains intact while an explicit summ
   await page.getByRole("button", { name: "Recover full text" }).click()
   await expect(page.locator(".article-body")).toContainText("Synthetic recovered paragraph 1")
   expect(summaryRequestCount()).toBe(0)
+  await expect(
+    page.getByText("The summary uses the original Miniflux text, not the recovered text."),
+  ).toBeVisible()
   await expect(page.getByRole("button", { name: "Summarize with AI" })).toBeVisible()
   const summaryButton = page.getByRole("button", { name: "Summarize with AI" })
   await summaryButton.focus()

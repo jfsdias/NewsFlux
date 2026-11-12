@@ -284,6 +284,8 @@
     "error": "Le résumé n’a pas pu être créé. L’article original reste inchangé.",
     "summary": "Résumé",
     "key_points": "Points clés",
+    "action_points": "Actions",
+    "original_source_notice": "Le résumé utilise le texte original de Miniflux, pas le texte récupéré.",
     "partial_content": "Ce résumé peut ne couvrir qu’une partie de l’article.",
     "limitations": "Limites",
     "insufficient": "Le texte de l’article est insuffisant pour produire un résumé fiable.",

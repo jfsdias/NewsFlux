@@ -117,7 +117,7 @@ globalThis.fetch = async (url, options = {}) => {
       summary: "Synthetic AI summary for the current article.",
       summary_paragraph_ids: ["p1"],
       key_points: [{ text: "Synthetic grounded key point.", paragraph_ids: ["p1"] }],
-      action_points: [],
+      action_points: [{ text: "Synthetic grounded action.", paragraph_ids: ["p1"] }],
       limitations: ["Only the available Miniflux text was summarized."],
       provenance: {
         content_origin: "miniflux",

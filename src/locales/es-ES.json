@@ -284,6 +284,8 @@
     "error": "No se pudo crear el resumen. El artículo original no ha cambiado.",
     "summary": "Resumen",
     "key_points": "Puntos clave",
+    "action_points": "Puntos de acción",
+    "original_source_notice": "El resumen usa el texto original de Miniflux, no el texto recuperado.",
     "partial_content": "El resumen puede cubrir solo una parte del artículo.",
     "limitations": "Limitaciones",
     "insufficient": "No hay suficiente texto del artículo para crear un resumen fiable.",

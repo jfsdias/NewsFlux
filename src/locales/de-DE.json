@@ -284,6 +284,8 @@
     "error": "Die Zusammenfassung konnte nicht erstellt werden. Der Originalartikel bleibt unverändert.",
     "summary": "Zusammenfassung",
     "key_points": "Wichtige Punkte",
+    "action_points": "Handlungspunkte",
+    "original_source_notice": "Die Zusammenfassung verwendet den ursprünglichen Miniflux-Text, nicht den wiederhergestellten Text.",
     "partial_content": "Die Zusammenfassung kann nur einen Teil des Artikels abdecken.",
     "limitations": "Einschränkungen",
     "insufficient": "Der Artikel enthält nicht genug Text für eine zuverlässige Zusammenfassung.",
