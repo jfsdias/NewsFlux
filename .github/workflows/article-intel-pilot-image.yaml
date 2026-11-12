@@ -157,8 +157,8 @@ jobs:
             -extfile "$root/certs/newsflux.ext"
           chmod 600 "$root/certs/ca.key" "$root/certs/newsflux.key"
           printf '%s\n' 'synthetic-virtual-key' > "$root/litellm-virtual-key"
-          sudo chown 10001:10001 "$root/litellm-virtual-key" "$root/ledger"
           chmod 600 "$root/litellm-virtual-key"
+          sudo chown 10001:10001 "$root/litellm-virtual-key" "$root/ledger"
           sudo chmod 700 "$root/ledger"
           cat > "$root/private.env" <<'EOF'
           NEWSFLUX_AI_MINIFLUX_BASE_URL=https://miniflux.example
@@ -312,7 +312,8 @@ jobs:
           compose=(docker compose -p "$PILOT_PROJECT_NAME" \
             -f deploy/article-intel-pilot/compose.yaml \
             -f scripts/pilot-e2e/compose.ci.yaml)
-          before="$(python scripts/pilot-e2e/verify-ledger.py "$NEWSFLUX_PILOT_LEDGER_DIR/usage.sqlite3")"
+          before="$("${compose[@]}" exec -T summary-api python \
+            /app/scripts/pilot-e2e/verify-ledger.py /data/usage.sqlite3)"
           "${compose[@]}" restart summary-api
           summary_id="$("${compose[@]}" ps -q summary-api)"
           for attempt in $(seq 1 60); do
@@ -321,7 +322,8 @@ jobs:
             if [[ "$health" = unhealthy ]]; then exit 1; fi
             sleep 2
           done
-          after="$(python scripts/pilot-e2e/verify-ledger.py "$NEWSFLUX_PILOT_LEDGER_DIR/usage.sqlite3")"
+          after="$("${compose[@]}" exec -T summary-api python \
+            /app/scripts/pilot-e2e/verify-ledger.py /data/usage.sqlite3)"
           test "$before" = "$after"
           echo "LEDGER_PERSISTENCE_GATE=PASS" >> "$RUNNER_TEMP/newsflux-pilot/gates.txt"
 
