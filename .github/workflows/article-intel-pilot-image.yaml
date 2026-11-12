@@ -258,7 +258,8 @@ jobs:
           compose=(docker compose -p "$PILOT_PROJECT_NAME" \
             -f deploy/article-intel-pilot/compose.yaml \
             -f scripts/pilot-e2e/compose.ci.yaml)
-          "${compose[@]}" config --format json > "$RUNNER_TEMP/newsflux-pilot/compose.json"
+          "${compose[@]}" --profile pilot-test config --format json \
+            > "$RUNNER_TEMP/newsflux-pilot/compose.json"
           python scripts/pilot-e2e/verify-compose.py "$RUNNER_TEMP/newsflux-pilot/compose.json"
           "${compose[@]}" up --detach --pull never
 
