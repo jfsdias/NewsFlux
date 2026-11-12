@@ -6,7 +6,8 @@ import os
 import re
 import stat
 import threading
-from dataclasses import dataclass, field
+import time
+from dataclasses import dataclass, field, replace
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Mapping
@@ -37,6 +38,11 @@ MAX_REQUESTS_PER_MINUTE_SETTING = 600
 MAX_TOKENS_PER_MINUTE_SETTING = 1_000_000
 MAX_TIMEOUT_SECONDS = 30.0
 MAX_IN_FLIGHT_REQUESTS = 1
+TRANSIENT_GATEWAY_STATUSES = frozenset({429, 500, 502, 503, 504})
+
+
+class TransientLiteLLMFailure(InferenceUnavailable):
+    """A safe signal permitting one explicit, budget-controlled secondary model attempt."""
 _URL_RE = re.compile(
     r"(?i)(?:"
     r"\b(?:[a-z][a-z0-9+.-]{0,31}://|www\.)[^\s<>{}\[\]]+"
@@ -177,18 +183,53 @@ def load_litellm_settings(environ: Mapping[str, str] | None = None) -> LiteLLMSe
 
 
 def create_configured_inference_adapter(environ: Mapping[str, str] | None = None):
-    """Build the shared LiteLLM adapter only from complete explicit configuration."""
+    """Build only explicitly authorized model routing, without implicit paid fallback."""
     from services.article_intel_summary.inference import DisabledInferenceAdapter
 
-    settings = load_litellm_settings(environ)
+    values = os.environ if environ is None else environ
+    settings = load_litellm_settings(values)
     if not settings.is_ready():
         return DisabledInferenceAdapter()
+
+    fallback_requested = _read_bool(values, "NEWSFLUX_AI_ENABLE_S5_MISTRAL_FALLBACK")
+    paid_settings: LiteLLMSettings | None = None
+    if fallback_requested:
+        paid_alias = settings.mistral_small_model_alias
+        paid_input = _read_decimal(values.get("NEWSFLUX_AI_LITELLM_MISTRAL_SMALL_INPUT_USD_PER_MILLION"))
+        paid_output = _read_decimal(values.get("NEWSFLUX_AI_LITELLM_MISTRAL_SMALL_OUTPUT_USD_PER_MILLION"))
+        if not (
+            settings.model_choice == MODEL_CHOICE_S5_FREE
+            and settings.paid_inference_authorized
+            and _valid_model_alias(paid_alias)
+            and paid_alias != settings.s5_free_model_alias
+            and _positive_decimal(paid_input)
+            and _positive_decimal(paid_output)
+            and _positive_bounded_int(settings.requests_per_minute, MAX_REQUESTS_PER_MINUTE_SETTING)
+            and settings.requests_per_minute >= 2
+            and _positive_bounded_int(settings.tokens_per_minute, MAX_TOKENS_PER_MINUTE_SETTING)
+            and settings.tokens_per_minute >= 2 * (settings.max_input_tokens + settings.max_output_tokens)
+        ):
+            return DisabledInferenceAdapter()
+        paid_settings = replace(
+            settings,
+            model_choice=MODEL_CHOICE_MISTRAL_SMALL,
+            model_id=paid_alias,
+            input_price_usd_per_million=paid_input,
+            output_price_usd_per_million=paid_output,
+        )
+        if not paid_settings.is_ready():
+            return DisabledInferenceAdapter()
+
     try:
         ledger = BudgetLedger(settings.usage_database_path)
     except (UsageLedgerError, TypeError):
         return DisabledInferenceAdapter()
-    return LiteLLMInferenceAdapter(settings, ledger=ledger)
 
+    primary = LiteLLMInferenceAdapter(settings, ledger=ledger)
+    if paid_settings is None:
+        return primary
+    secondary = LiteLLMInferenceAdapter(paid_settings, ledger=ledger)
+    return S5MistralFallbackAdapter(primary, secondary)
 
 class LiteLLMInferenceAdapter:
     """One explicitly selected, server-configured model alias on shared LiteLLM."""
@@ -289,6 +330,9 @@ class LiteLLMInferenceAdapter:
             )
         except BudgetBlocked:
             raise InferenceUnavailable("inference budget or rate limit blocked the request") from None
+        except httpx.TimeoutException:
+            self._mark_uncertain(reservation_id, settled)
+            raise TransientLiteLLMFailure("LiteLLM gateway timed out") from None
         except (UsageLedgerError, httpx.HTTPError, OSError, UnicodeError, ValueError, TypeError, RecursionError):
             self._mark_uncertain(reservation_id, settled)
             raise InferenceUnavailable("inference request failed safely") from None
@@ -319,6 +363,8 @@ class LiteLLMInferenceAdapter:
             follow_redirects=False,
         ) as response:
             if response.status_code != 200:
+                if response.status_code in TRANSIENT_GATEWAY_STATUSES:
+                    raise TransientLiteLLMFailure("LiteLLM gateway is temporarily unavailable") from None
                 raise InferenceUnavailable("LiteLLM gateway returned a non-success status") from None
             body = bytearray()
             for chunk in response.iter_bytes():
@@ -345,6 +391,50 @@ class LiteLLMInferenceAdapter:
         except UsageLedgerError:
             # The original reservation remains chargeable at its worst-case estimate.
             return
+
+
+
+class S5MistralFallbackAdapter:
+    """At most one S5 call followed by one paid call for transient S5 failure."""
+
+    def __init__(self, primary: LiteLLMInferenceAdapter, paid: LiteLLMInferenceAdapter) -> None:
+        if not (
+            primary.settings.is_ready()
+            and paid.settings.is_ready()
+            and primary.settings.model_choice == MODEL_CHOICE_S5_FREE
+            and paid.settings.model_choice == MODEL_CHOICE_MISTRAL_SMALL
+            and primary.settings.model_id != paid.settings.model_id
+            and primary.settings.virtual_key == paid.settings.virtual_key
+            and primary.settings.gateway_base_url == paid.settings.gateway_base_url
+            and primary.settings.monthly_budget_usd == paid.settings.monthly_budget_usd
+            and primary.ledger is not None
+            and primary.ledger is paid.ledger
+            and paid.settings.paid_inference_authorized
+            and primary.settings.requests_per_minute >= 2
+            and primary.settings.tokens_per_minute
+                >= 2 * (primary.settings.max_input_tokens + primary.settings.max_output_tokens)
+        ):
+            raise ValueError("S5 paid fallback policy is not authorized")
+        self.primary = primary
+        self.paid = paid
+
+    def summarize(self, request: SummaryModelInput, *, timeout_seconds: float) -> InferenceResult:
+        if (
+            isinstance(timeout_seconds, bool)
+            or not isinstance(timeout_seconds, (int, float))
+            or not 0 < timeout_seconds <= MAX_TIMEOUT_SECONDS
+        ):
+            raise InferenceUnavailable("inference timeout is invalid") from None
+        deadline = time.monotonic() + float(timeout_seconds)
+        # Reserve part of the existing request deadline for the one allowed secondary model.
+        first_timeout = min(float(timeout_seconds) * 0.65, self.primary.settings.timeout_seconds)
+        try:
+            return self.primary.summarize(request, timeout_seconds=first_timeout)
+        except TransientLiteLLMFailure:
+            remaining = min(deadline - time.monotonic(), self.paid.settings.timeout_seconds)
+            if remaining <= 0:
+                raise InferenceUnavailable("inference deadline reached") from None
+            return self.paid.summarize(request, timeout_seconds=remaining)
 
 
 def _build_messages(request: SummaryModelInput) -> list[dict[str, str]]:
