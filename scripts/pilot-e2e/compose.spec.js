@@ -1,3 +1,5 @@
+import https from "node:https"
+
 import { expect, test } from "@playwright/test"
 
 const entryPath = "/api/ai/v1/entries/501/summary"
@@ -12,6 +14,26 @@ const validHeaders = {
   "X-NewsFlux-Miniflux-Server": "https://miniflux.example",
   Origin: "https://newsflux.example",
 }
+
+const postWithPinnedHost = (host) =>
+  new Promise((resolve, reject) => {
+    const request = https.request(
+      `${process.env.PILOT_BASE_URL}${entryPath}`,
+      {
+        method: "POST",
+        servername: "newsflux.example",
+        headers: { ...validHeaders, Host: host },
+        timeout: 5000,
+      },
+      (response) => {
+        response.resume()
+        response.on("end", () => resolve(response.statusCode))
+      },
+    )
+    request.on("timeout", () => request.destroy(new Error("Host probe timed out")))
+    request.on("error", reject)
+    request.end(JSON.stringify(validRequest))
+  })
 
 test("the candidate Reader image serves its built application shell", async ({ page }) => {
   await page.goto("/")
@@ -41,11 +63,8 @@ test("TLS proxy rejects wrong Host and Origin and blocks an untrusted proxy sour
 }) => {
   await request.post("/__pilot/mode/success")
 
-  const wrongHost = await request.post(entryPath, {
-    headers: { ...validHeaders, Host: "attacker.example" },
-    data: validRequest,
-  })
-  expect(wrongHost.status()).toBeGreaterThanOrEqual(400)
+  const wrongHostStatus = await postWithPinnedHost("attacker.example")
+  expect(wrongHostStatus).toBeGreaterThanOrEqual(400)
 
   const wrongOrigin = await request.post(entryPath, {
     headers: { ...validHeaders, Origin: "https://attacker.example" },

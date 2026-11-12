@@ -82,16 +82,18 @@ test("navigation discards a late real API response", async ({ page, request }) =
   await request.post("/__pilot/mode/delayed")
   await page.goto(harnessUrl("mode=disabled&article_summary=pilot-http"))
   await expect(page.getByTestId("reader-recovery-report")).toHaveAttribute("data-status", "pass")
+  const pendingSummaryRequest = page.waitForRequest(
+    (event) => event.url().includes("/api/ai/v1/entries/") && event.method() === "POST",
+  )
   await page.getByRole("button", { name: "Summarize with AI" }).click()
-  await expect
-    .poll(async () => (await (await request.get("/__pilot/metrics")).json()).inference_calls)
-    .toBe(1)
+  await pendingSummaryRequest
   await page.evaluate(() => globalThis.__articleIntelligenceHarness.navigateToOther())
   await expect(page.getByText("Original body for entry 502.")).toBeVisible()
   await request.post("/__pilot/release")
   await expect
     .poll(async () => (await (await request.get("/__pilot/metrics")).json()).completed)
     .toBe(true)
+  expect((await (await request.get("/__pilot/metrics")).json()).inference_calls).toBe(1)
   await expect(page.getByText("Synthetic pilot summary.")).toHaveCount(0)
   await expect(page.getByText("Original body for entry 502.")).toBeVisible()
 })
@@ -100,15 +102,17 @@ test("session change discards a late real API response", async ({ page, request 
   await request.post("/__pilot/mode/delayed")
   await page.goto(harnessUrl("mode=disabled&article_summary=pilot-http"))
   await expect(page.getByTestId("reader-recovery-report")).toHaveAttribute("data-status", "pass")
+  const pendingSummaryRequest = page.waitForRequest(
+    (event) => event.url().includes("/api/ai/v1/entries/") && event.method() === "POST",
+  )
   await page.getByRole("button", { name: "Summarize with AI" }).click()
-  await expect
-    .poll(async () => (await (await request.get("/__pilot/metrics")).json()).inference_calls)
-    .toBe(1)
+  await pendingSummaryRequest
   await page.evaluate(() => globalThis.__articleIntelligenceHarness.changeSession())
   await request.post("/__pilot/release")
   await expect
     .poll(async () => (await (await request.get("/__pilot/metrics")).json()).completed)
     .toBe(true)
+  expect((await (await request.get("/__pilot/metrics")).json()).inference_calls).toBe(1)
   await expect(page.getByText("Synthetic pilot summary.")).toHaveCount(0)
   await expect(page.getByText("Original Miniflux body stays visible on failure.")).toBeVisible()
 })
