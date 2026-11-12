@@ -176,6 +176,13 @@ export const parseArticleSummaryResponse = async (response, options) => {
     const summary = validateArticleSummaryResponse(payload, options)
     return summary ? { kind: "summary", summary } : { kind: "invalid" }
   }
+  if (
+    (response.status === 422 && payload?.status === "insufficient") ||
+    (response.status === 503 && payload?.status === "unavailable")
+  ) {
+    const summary = validateArticleSummaryResponse(payload, options)
+    return summary ? { kind: "summary", summary } : { kind: "invalid" }
+  }
   const error = validateArticleSummaryError(payload, options)
   return error ? { kind: "error", error } : { kind: "invalid" }
 }

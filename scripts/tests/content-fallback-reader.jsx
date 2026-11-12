@@ -1,3 +1,4 @@
+/* eslint-disable import/no-relative-parent-imports -- Shared synthetic article fixture. */
 /* eslint-disable react-refresh/only-export-components -- Browser regression harness entrypoint. */
 import "@arco-design/web-react/es/_util/react-19-adapter"
 import "@arco-design/web-react/dist/css/arco.css"
@@ -5,6 +6,8 @@ import Polyglot from "node-polyglot"
 import React, { useEffect, useState } from "react"
 import { createRoot } from "react-dom/client"
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router"
+
+import pilotArticle from "../pilot-e2e/article.json"
 
 import { fingerprintArticleUrl } from "@/apis/content-fallback-reader"
 import ArticleDetail from "@/components/Article/ArticleDetail"
@@ -52,7 +55,10 @@ const firstEntry = {
   author: "Synthetic author",
   published_at: "2026-11-01T12:00:00.000Z",
   reading_time: 3,
-  content: "<p>Original Miniflux body stays visible on failure.</p>",
+  content:
+    articleSummaryMode === "pilot-http"
+      ? pilotArticle.content
+      : "<p>Original Miniflux body stays visible on failure.</p>",
   url: "https://publisher.example/story-501",
   attachments: { items: [], primaryMedia: null },
 }
@@ -97,6 +103,7 @@ const responseFor = async (entry = firstEntry, changes = {}) => ({
   ...changes,
 })
 
+const nativeFetch = globalThis.fetch
 globalThis.fetch = async (url, options = {}) => {
   const requestUrl = String(url)
   if (requestUrl.includes("/api/ai/v1/entries/")) {
@@ -107,6 +114,9 @@ globalThis.fetch = async (url, options = {}) => {
       bodyKeys: Object.keys(JSON.parse(options.body ?? "{}")).toSorted(),
     })
     report()
+    if (articleSummaryMode === "pilot-http") {
+      return nativeFetch(url, options)
+    }
     const requestId = JSON.parse(options.body).request_id
     const payload = {
       schema_version: "1",
