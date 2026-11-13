@@ -25,6 +25,7 @@
             "HOST_NOT_AUTHORIZED",
             "REQUEST_TOO_LARGE",
             "SUMMARY_BUSY",
+            "SUMMARY_TIMEOUT",
             "MINIFLUX_UNAVAILABLE",
             "MODEL_OUTPUT_INVALID"
           ]

@@ -48,7 +48,7 @@ class SummaryService:
         self.resolver = resolver or ContentSnapshotResolver()
         self.timeout_seconds = float(timeout_seconds)
 
-    def summarize(self, entry: AuthorizedEntry, *, request_id: str) -> SummaryOutcome:
+    def summarize(self, entry: AuthorizedEntry, *, request_id: str, deadline=None, revalidation_reserve_seconds=0) -> SummaryOutcome:
         snapshot = self.resolver.resolve(entry)
         if not snapshot.is_sufficient:
             payload = self._base_payload(
@@ -71,14 +71,20 @@ class SummaryService:
                 http_status=422,
             )
 
+        model_input = build_model_input(snapshot)
+        if deadline is not None:
+            deadline.begin_inference(self.timeout_seconds, reserve_seconds=revalidation_reserve_seconds)
         try:
-            inference = self.adapter.summarize(build_model_input(snapshot), timeout_seconds=self.timeout_seconds)
+            inference = self.adapter.summarize(model_input, timeout_seconds=self.timeout_seconds)
         except (InferenceUnavailable, TimeoutError):
             return self._unavailable(snapshot, request_id)
         except Exception:
             # Adapter errors may carry credentials or provider payloads. Keep them inside
             # the boundary and return no exception text, article content, or trace details.
             return self._unavailable(snapshot, request_id)
+        finally:
+            if deadline is not None:
+                deadline.end_inference()
 
         if not isinstance(inference, InferenceResult):
             raise ModelOutputInvalid("adapter result has an invalid shape") from None

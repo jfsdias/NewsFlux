@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import sqlite3
+from contextlib import closing
 import tempfile
 import unittest
 from dataclasses import replace
@@ -9,13 +11,15 @@ from pathlib import Path
 
 import httpx
 
-from services.article_intel_summary.inference import InferenceUnavailable, SummaryModelInput
+from services.article_intel_summary.inference import InferenceUnavailable, SummaryModelInput, SYSTEM_INSTRUCTIONS
 from services.article_intel_summary.litellm_adapter import (
     MODEL_CHOICE_MISTRAL_SMALL,
     LiteLLMInferenceAdapter,
     LiteLLMSettings,
     create_configured_inference_adapter,
     load_litellm_settings,
+    _build_messages,
+    _estimate_input_tokens,
 )
 from services.article_intel_summary.tests.support import (
     API_KEY,
@@ -157,6 +161,7 @@ class LiteLLMAdapterTests(unittest.TestCase):
         self.assertEqual(body["model"], MISTRAL_ALIAS)
         self.assertEqual(body["max_tokens"], 512)
         self.assertEqual(body["temperature"], 0)
+        self.assertNotIn("reasoning_effort", body)
         self.assertNotIn("response_format", body)
         self.assertIs(body["stream"], False)
         self.assertNotIn("tools", body)
@@ -187,6 +192,7 @@ class LiteLLMAdapterTests(unittest.TestCase):
         self.assertEqual(result.effective_model_id, S5_ALIAS)
         self.assertEqual(json.loads(self.requests[0].content)["model"], S5_ALIAS)
         self.assertNotIn("temperature", json.loads(self.requests[0].content))
+        self.assertEqual(json.loads(self.requests[0].content)["reasoning_effort"], "low")
         self.assertEqual(len(self.requests), 1)
         self.assertEqual(adapter.ledger.current_month_spend(), Decimal("0"))
 
@@ -202,6 +208,52 @@ class LiteLLMAdapterTests(unittest.TestCase):
         with self.assertRaises(InferenceUnavailable):
             unavailable.summarize(input_fixture(), timeout_seconds=12)
         self.assertEqual(len(self.requests), 1)
+
+    def test_s5_output_limit_is_independent_of_mistral_limit(self) -> None:
+        values = approved_environment(self.database_path)
+        values.update({"NEWSFLUX_AI_LITELLM_MODEL_CHOICE": "s5-free", "NEWSFLUX_AI_S5_MAX_OUTPUT_TOKENS": "2048"})
+        self.assertEqual(load_litellm_settings(values).max_output_tokens, 2048)
+        values["NEWSFLUX_AI_LITELLM_MODEL_CHOICE"] = MODEL_CHOICE_MISTRAL_SMALL
+        self.assertEqual(load_litellm_settings(values).max_output_tokens, 512)
+
+    def test_s5_inference_timeout_cannot_exceed_25_seconds(self) -> None:
+        s5 = replace(self.settings, model_choice="s5-free", model_id=S5_ALIAS,
+                     input_price_usd_per_million=Decimal("0"), output_price_usd_per_million=Decimal("0"),
+                     timeout_seconds=25)
+        self.assertTrue(s5.is_ready())
+        self.assertFalse(replace(s5, timeout_seconds=25.01).is_ready())
+        self.assertTrue(replace(self.settings, timeout_seconds=30).is_ready())
+
+    def test_s5_reserves_full_output_limit_before_network(self) -> None:
+        request = SummaryModelInput(SYSTEM_INSTRUCTIONS, json.dumps({"title": "Synthetic", "paragraphs": [{"id": "p1", "text": "A short synthetic article."}]}), ("p1",))
+        self.assertLessEqual(_estimate_input_tokens(_build_messages(request)), 1500)
+        adapter = self.make_adapter(
+            handler=lambda _: completion_response(model=S5_ALIAS, completion_tokens=805),
+            model_choice="s5-free", model_id=S5_ALIAS,
+            paid_inference_authorized=False,
+            input_price_usd_per_million=Decimal("0"), output_price_usd_per_million=Decimal("0"),
+            max_input_tokens=1500, max_output_tokens=2048, tokens_per_minute=3547,
+        )
+        with self.assertRaises(InferenceUnavailable):
+            adapter.summarize(request, timeout_seconds=25)
+        self.assertEqual(len(self.requests), 0)
+        adapter.settings = replace(adapter.settings, tokens_per_minute=4000)
+        adapter.summarize(request, timeout_seconds=25)
+        self.assertEqual(json.loads(self.requests[0].content)["max_tokens"], 2048)
+        with closing(sqlite3.connect(self.database_path)) as db:
+            self.assertEqual(db.execute("SELECT reserved_input_tokens, reserved_output_tokens, state FROM inference_usage").fetchall(), [(1500, 2048, "settled")])
+
+    def test_oversized_s5_input_never_dispatches_or_writes_ledger(self) -> None:
+        request = SummaryModelInput(SYSTEM_INSTRUCTIONS, json.dumps({"title": "Synthetic", "paragraphs": [{"id": "p1", "text": "a" * 7000}]}), ("p1",))
+        self.assertGreater(_estimate_input_tokens(_build_messages(request)), 1500)
+        adapter = self.make_adapter(model_choice="s5-free", model_id=S5_ALIAS, paid_inference_authorized=False,
+                                    input_price_usd_per_million=Decimal("0"), output_price_usd_per_million=Decimal("0"),
+                                    max_input_tokens=1500, max_output_tokens=2048, tokens_per_minute=4000)
+        with self.assertRaisesRegex(InferenceUnavailable, "input token limit"):
+            adapter.summarize(request, timeout_seconds=25)
+        self.assertEqual(self.requests, [])
+        with closing(sqlite3.connect(self.database_path)) as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM inference_usage").fetchone()[0], 0)
 
     def test_disabled_or_unapproved_privacy_and_budget_policies_block_before_network(self) -> None:
         for override in (

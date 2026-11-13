@@ -1,7 +1,13 @@
 from __future__ import annotations
 
 import json
+import tempfile
 import unittest
+from unittest.mock import patch
+
+from services.article_intel_summary.app import create_app
+from services.article_intel_summary.litellm_adapter import LiteLLMInferenceAdapter
+from services.article_intel_summary.tests.test_litellm_adapter import make_settings
 
 from services.article_intel_summary.tests.support import (
     API_KEY,
@@ -23,6 +29,13 @@ class SummaryHTTPTests(unittest.TestCase):
     def setUp(self) -> None:
         self.adapter = SyntheticFixtureAdapter(make_snapshot())
         self.client, self.miniflux_http, _, self.snapshot = make_test_client(adapter=self.adapter)
+
+    def test_configured_service_passes_25_second_timeout_to_adapter(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            adapter = LiteLLMInferenceAdapter(make_settings(f'{directory}/usage.sqlite3', timeout_seconds=25))
+            with patch('services.article_intel_summary.app.create_configured_inference_adapter', return_value=adapter):
+                app = create_app(auth_service=self.client.app.state.auth_service)
+            self.assertEqual(app.state.summary_service.timeout_seconds, 25)
 
     def test_health_endpoint_is_local_liveness_only(self) -> None:
         response = self.client.get("/healthz")
