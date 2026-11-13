@@ -143,6 +143,52 @@ class ActiveCaddyGateTests(unittest.TestCase):
         self.assertFalse(result["routes_preserved"])
         self.assertFalse(result["summary"])
 
+    def test_route_parity_ignores_only_harness_generated_file_server_hide_paths(self) -> None:
+        baseline = {
+            "apps": {
+                "http": {
+                    "servers": {
+                        "srv0": {
+                            "routes": [
+                                {"handle": [{"handler": "file_server", "hide": ["/work/baseline.Caddyfile"]}]}
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+        candidate = {
+            "apps": {
+                "http": {
+                    "servers": {
+                        "srv0": {
+                            "routes": [
+                                {
+                                    "match": [{"path": ["/api/content-fallback/reader/*"]}],
+                                    "handle": [{"handler": "reverse_proxy"}],
+                                },
+                                {
+                                    "handle": [
+                                        {
+                                            "handler": "file_server",
+                                            "hide": ["/work/candidate.Caddyfile", "/work/reader-recovery.caddy"],
+                                        }
+                                    ]
+                                },
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+        result = GATE.compare_route_parity(baseline, candidate)
+        self.assertTrue(result["routes_preserved"])
+        self.assertTrue(result["static"])
+
+        candidate["apps"]["http"]["servers"]["srv0"]["routes"][1]["handle"][0]["hide"].append("/srv/private")
+        result = GATE.compare_route_parity(baseline, candidate)
+        self.assertFalse(result["routes_preserved"])
+
     def test_configuration_placeholders_are_replaced_only_with_synthetic_values(self) -> None:
         env = GATE._synthetic_env(
             "{$MINIFLUX_API_KEY} {$PUBLIC_HOST} {$SMTP_PORT} {env.READER_TOKEN}",

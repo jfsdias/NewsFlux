@@ -21,6 +21,11 @@ ROOT = Path(__file__).resolve().parents[1]
 FRAGMENT = ROOT / "deploy/content-fallback-reader-pilot/reader-recovery.caddy"
 CADDY_IMAGE = "caddy:2.11.7@sha256:685ae3d7c34d9b5f8caeddc5d14051db7bbd88ff1f5a2fa0c16bd8ca328fb7af"
 READER_ROUTE_MARKERS = ("/api/content-fallback/reader/", "/api/content-fallback/*")
+HARNESS_STAGING_PATHS = {
+    "/work/baseline.Caddyfile",
+    "/work/candidate.Caddyfile",
+    "/work/reader-recovery.caddy",
+}
 ENV_REFERENCE = re.compile(r"\{\$([A-Za-z_][A-Za-z0-9_]*)(?::[^}]*)?\}|\{env\.([A-Za-z_][A-Za-z0-9_]*)\}")
 
 
@@ -235,6 +240,21 @@ def _normalize_group_ids(value: Any) -> Any:
     return visit(value)
 
 
+def _normalize_harness_hide_paths(value: Any) -> Any:
+    """Drop only Caddy's automatic file_server hiding of temporary harness inputs."""
+    if isinstance(value, dict):
+        normalized = {}
+        for key, child in value.items():
+            if key == "hide" and isinstance(child, list):
+                normalized[key] = [item for item in child if item not in HARNESS_STAGING_PATHS]
+            else:
+                normalized[key] = _normalize_harness_hide_paths(child)
+        return normalized
+    if isinstance(value, list):
+        return [_normalize_harness_hide_paths(child) for child in value]
+    return value
+
+
 def _category_routes(routes: list[dict[str, Any]], category: str) -> list[dict[str, Any]]:
     patterns = {
         "summary": re.compile(r"summary", re.IGNORECASE),
@@ -247,12 +267,14 @@ def _category_routes(routes: list[dict[str, Any]], category: str) -> list[dict[s
 
 
 def compare_route_parity(baseline: dict[str, Any], candidate: dict[str, Any]) -> dict[str, bool]:
-    baseline_routes = _routes(baseline)
-    candidate_routes = [route for route in _routes(candidate) if not _is_reader_route(route)]
     baseline_servers = baseline.get("apps", {}).get("http", {}).get("servers", {})
     candidate_servers = _remove_reader_routes(candidate.get("apps", {}).get("http", {}).get("servers", {}))
-    all_preserved = json.dumps(_normalize_group_ids(baseline_servers), sort_keys=True, separators=(",", ":")) == json.dumps(
-        _normalize_group_ids(candidate_servers), sort_keys=True, separators=(",", ":")
+    normalized_baseline = _normalize_group_ids(_normalize_harness_hide_paths(baseline_servers))
+    normalized_candidate = _normalize_group_ids(_normalize_harness_hide_paths(candidate_servers))
+    baseline_routes = _routes({"apps": {"http": {"servers": normalized_baseline}}})
+    candidate_routes = _routes({"apps": {"http": {"servers": normalized_candidate}}})
+    all_preserved = json.dumps(normalized_baseline, sort_keys=True, separators=(",", ":")) == json.dumps(
+        normalized_candidate, sort_keys=True, separators=(",", ":")
     )
     result = {"routes_preserved": all_preserved}
     for category in ("summary", "story", "static", "spa"):
@@ -329,6 +351,8 @@ def run_gate(active_path: Path, expected_sha256: str, site_address: str) -> dict
         fragment = fragment_bytes.decode("utf-8")
     except (UnicodeDecodeError, OSError) as error:
         raise GateError("CADDY_INPUT_INVALID") from error
+    if any(path in source for path in HARNESS_STAGING_PATHS):
+        raise GateError("ACTIVE_CONFIG_REFERENCES_RESERVED_HARNESS_PATH")
 
     with tempfile.TemporaryDirectory(prefix="newsflux-r4-caddy-") as temp_name:
         temp_dir = Path(temp_name)
@@ -357,8 +381,8 @@ def run_gate(active_path: Path, expected_sha256: str, site_address: str) -> dict
             baseline_servers = baseline.get("apps", {}).get("http", {}).get("servers", {})
             candidate_servers = candidate.get("apps", {}).get("http", {}).get("servers", {})
             cleaned_servers = _remove_reader_routes(candidate_servers)
-            normalized_baseline = _normalize_group_ids(baseline_servers)
-            normalized_cleaned = _normalize_group_ids(cleaned_servers)
+            normalized_baseline = _normalize_group_ids(_normalize_harness_hide_paths(baseline_servers))
+            normalized_cleaned = _normalize_group_ids(_normalize_harness_hide_paths(cleaned_servers))
             preserved_families = ",".join(
                 name for name in ("summary", "story", "static", "spa") if parity[name]
             ) or "none"
