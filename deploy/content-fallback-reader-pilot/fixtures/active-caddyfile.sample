@@ -11,8 +11,8 @@
 		root * /srv/newsflux
 		file_server
 	}
-	handle {
+	handle {$REACTFLUX_BASE_PATH:/}* {
 		root * /srv/newsflux
-		try_files {path} /index.html
+		try_files {path} {path}/ {$REACTFLUX_BASE_PATH:/}index.html
 		file_server
 	}

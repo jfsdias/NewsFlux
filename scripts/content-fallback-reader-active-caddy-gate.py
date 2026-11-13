@@ -343,7 +343,9 @@ def _synthetic_env(source: str, trusted_proxy_ip: str) -> dict[str, str]:
         if name in values:
             continue
         upper = name.upper()
-        if "IP" in upper:
+        if name == "REACTFLUX_BASE_PATH":
+            values[name] = "/"
+        elif "IP" in upper:
             values[name] = "192.0.2.77"
         elif "PORT" in upper:
             values[name] = "2000"

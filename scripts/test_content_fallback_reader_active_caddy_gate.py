@@ -242,6 +242,14 @@ class ActiveCaddyGateTests(unittest.TestCase):
         self.assertEqual(env["SMTP_PORT"], "2000")
         self.assertEqual(env["READER_TOKEN"], "synthetic-r4-value")
 
+    def test_reactflux_base_path_uses_root_for_caddy_path_matcher(self) -> None:
+        env = GATE._synthetic_env(
+            "handle {$REACTFLUX_BASE_PATH:/}* { try_files {path} {$REACTFLUX_BASE_PATH:/}index.html }",
+            "192.0.2.45",
+        )
+
+        self.assertEqual(env["REACTFLUX_BASE_PATH"], "/")
+
     def test_caddy_errors_are_reported_without_adapter_output(self) -> None:
         failed = GATE.subprocess.CompletedProcess(
             args=["docker"], returncode=1, stdout="private config", stderr="synthetic secret"
