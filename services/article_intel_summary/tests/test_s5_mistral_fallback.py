@@ -101,7 +101,9 @@ class S5MistralFallbackTests(unittest.TestCase):
                 self.assertEqual(result.deployment_id, "mistral-small")
                 self.assertEqual([self.model(r) for r in self.calls], [S5_ALIAS, MISTRAL_ALIAS])
                 self.assertNotIn("temperature", json.loads(self.calls[0].content))
+                self.assertEqual(json.loads(self.calls[0].content)["reasoning_effort"], "none")
                 self.assertEqual(json.loads(self.calls[1].content)["temperature"], 0)
+                self.assertNotIn("reasoning_effort", json.loads(self.calls[1].content))
                 self.assertEqual(ledger.current_month_spend(), Decimal("0.000051"))
 
     def test_timeout_triggers_one_paid_attempt_with_no_secret_leak(self) -> None:
@@ -163,6 +165,22 @@ class S5MistralFallbackTests(unittest.TestCase):
         with self.assertRaises(InferenceUnavailable):
             adapter.summarize(input_fixture(), timeout_seconds=12)
         self.assertEqual([self.model(r) for r in self.calls], [S5_ALIAS])
+
+    def test_invalid_structured_s5_output_does_not_trigger_paid_fallback(self) -> None:
+        adapter, ledger = self.make_fallback(
+            lambda _: completion_response(model=S5_ALIAS, output={"summary": "incomplete"})
+        )
+        client, _, _, _ = make_test_client(adapter=adapter)
+        with self.assertLogs("services.article_intel_summary.service", level="WARNING"):
+            response = client.post(
+                f"/api/ai/v1/entries/{ENTRY_ID}/summary",
+                headers=request_headers(),
+                json=valid_request(),
+            )
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.json()["error"]["code"], "MODEL_OUTPUT_INVALID")
+        self.assertEqual([self.model(r) for r in self.calls], [S5_ALIAS])
+        self.assertEqual(ledger.uncertain_count(), 0)
 
     def test_real_summary_api_reports_paid_fallback_and_revalidates_source(self) -> None:
         adapter, ledger = self.make_fallback(

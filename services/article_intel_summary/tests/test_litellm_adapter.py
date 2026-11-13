@@ -151,6 +151,7 @@ class LiteLLMAdapterTests(unittest.TestCase):
         self.assertEqual(result.provider_id, "litellm")
         self.assertEqual(result.deployment_id, MODEL_CHOICE_MISTRAL_SMALL)
         self.assertEqual(result.effective_model_id, MISTRAL_ALIAS)
+        self.assertEqual(result.prompt_version, "editorial-summary-v1-litellm-v1")
         self.assertEqual(result.output, GOOD_OUTPUT)
         self.assertEqual(len(self.requests), 1)
         request = self.requests[0]
@@ -159,6 +160,7 @@ class LiteLLMAdapterTests(unittest.TestCase):
         self.assertEqual(request.headers["authorization"], "Bearer synthetic-virtual-key")
         body = json.loads(request.content)
         self.assertEqual(body["model"], MISTRAL_ALIAS)
+        self.assertEqual(body["messages"], _build_messages(input_fixture()))
         self.assertEqual(body["max_tokens"], 512)
         self.assertEqual(body["temperature"], 0)
         self.assertNotIn("reasoning_effort", body)
@@ -192,7 +194,7 @@ class LiteLLMAdapterTests(unittest.TestCase):
         self.assertEqual(result.effective_model_id, S5_ALIAS)
         self.assertEqual(json.loads(self.requests[0].content)["model"], S5_ALIAS)
         self.assertNotIn("temperature", json.loads(self.requests[0].content))
-        self.assertEqual(json.loads(self.requests[0].content)["reasoning_effort"], "low")
+        self.assertEqual(json.loads(self.requests[0].content)["reasoning_effort"], "none")
         self.assertEqual(len(self.requests), 1)
         self.assertEqual(adapter.ledger.current_month_spend(), Decimal("0"))
 

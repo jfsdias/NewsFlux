@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 from dataclasses import dataclass
 
@@ -22,6 +23,8 @@ from services.article_intel_summary.inference import (
 class ModelOutputInvalid(ValueError):
     """A model output failed local schema or paragraph-grounding validation."""
 
+
+_logger = logging.getLogger(__name__)
 
 MAX_MODEL_OUTPUT_BYTES = 64 * 1024
 MAX_MODEL_OUTPUT_DEPTH = 16
@@ -92,21 +95,26 @@ class SummaryService:
                 deadline.end_inference()
 
         if not isinstance(inference, InferenceResult):
-            raise ModelOutputInvalid("adapter result has an invalid shape") from None
+            _invalid_output("MODEL_OUTPUT_VALIDATION_UNKNOWN")
         if not isinstance(inference.output, dict):
-            raise ModelOutputInvalid("structured model output is not an object") from None
-        _ensure_bounded_json(inference.output)
+            _invalid_output("MODEL_OUTPUT_INVALID_FIELD_TYPE")
+        try:
+            _ensure_bounded_json(inference.output)
+        except ModelOutputInvalid:
+            _invalid_output("MODEL_OUTPUT_LENGTH_EXCEEDED")
         provider_id = _safe_metadata(inference.provider_id)
         deployment_id = _safe_metadata(inference.deployment_id, optional=True)
         model_id = _safe_metadata(inference.effective_model_id, optional=True)
         prompt_version = _safe_metadata(inference.prompt_version)
         if provider_id is None or prompt_version is None:
-            raise ModelOutputInvalid("adapter provenance is invalid") from None
+            _invalid_output("MODEL_OUTPUT_VALIDATION_UNKNOWN")
 
         output = inference.output
         expected_fields = {"summary", "summary_paragraph_ids", "key_points", "action_points"}
         if set(output) != expected_fields:
-            raise ModelOutputInvalid("structured model output has unexpected fields") from None
+            _invalid_output("MODEL_OUTPUT_MISSING_FIELD" if expected_fields - set(output) else "MODEL_OUTPUT_EXTRA_FIELD")
+        if isinstance(output["summary"], str) and not output["summary"].strip():
+            _invalid_output("MODEL_OUTPUT_LENGTH_EXCEEDED")
         payload = self._base_payload(
             snapshot,
             request_id=request_id,
@@ -123,11 +131,14 @@ class SummaryService:
             effective_model_id=model_id,
             prompt_version=prompt_version,
         )
-        _ensure_bounded_json(payload)
+        try:
+            _ensure_bounded_json(payload)
+        except ModelOutputInvalid:
+            _invalid_output("MODEL_OUTPUT_LENGTH_EXCEEDED")
         try:
             validate_summary(payload, allowed_paragraph_ids={paragraph.id for paragraph in snapshot.paragraphs})
-        except ValidationError:
-            raise ModelOutputInvalid("structured model output failed local validation") from None
+        except ValidationError as error:
+            _invalid_output(_validation_code(error))
         return SummaryOutcome(payload=payload, http_status=200)
 
     def _unavailable(self, snapshot: ResolvedContentSnapshot, request_id: str) -> SummaryOutcome:
@@ -184,6 +195,33 @@ class SummaryService:
                 "prompt_version": prompt_version,
             },
         }
+
+
+
+def _invalid_output(code: str) -> None:
+    # Only fixed classifications are logged; never log the exception, value, or path.
+    _logger.warning(code)
+    raise ModelOutputInvalid(code) from None
+
+
+def _validation_code(error: ValidationError) -> str:
+    path = tuple(error.absolute_path)
+    root = path[0] if path else None
+    if error.validator == "uniqueItems":
+        return "MODEL_OUTPUT_DUPLICATE_REFERENCE"
+    if not path and error.validator not in {"type", "required", "additionalProperties"}:
+        return "MODEL_OUTPUT_INVALID_PARAGRAPH_REFERENCE"
+    if root == "key_points" and error.validator == "maxItems" and len(path) == 1:
+        return "MODEL_OUTPUT_TOO_MANY_KEY_POINTS"
+    if root in {"key_points", "action_points"}:
+        return "MODEL_OUTPUT_INVALID_POINT_STRUCTURE"
+    if error.validator in {"maxLength", "minLength", "maxItems", "minItems"}:
+        return "MODEL_OUTPUT_LENGTH_EXCEEDED"
+    if error.validator == "pattern" and root == "summary_paragraph_ids":
+        return "MODEL_OUTPUT_INVALID_PARAGRAPH_REFERENCE"
+    if error.validator == "type":
+        return "MODEL_OUTPUT_INVALID_FIELD_TYPE"
+    return "MODEL_OUTPUT_VALIDATION_UNKNOWN"
 
 
 def _safe_metadata(value: object, *, optional: bool = False) -> str | None:
