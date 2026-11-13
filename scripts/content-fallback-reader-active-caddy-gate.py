@@ -121,8 +121,19 @@ def inject_import(source: str, site_address: str, import_path: str) -> str:
 def _routes(config: dict[str, Any]) -> list[dict[str, Any]]:
     servers = config.get("apps", {}).get("http", {}).get("servers", {})
     result: list[dict[str, Any]] = []
+
+    def visit(value: Any) -> None:
+        if isinstance(value, dict):
+            if "handle" in value:
+                result.append(value)
+            for child in value.values():
+                visit(child)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child)
+
     for server in servers.values():
-        result.extend(route for route in server.get("routes", []) if isinstance(route, dict))
+        visit(server.get("routes", []))
     return result
 
 
@@ -130,14 +141,36 @@ def _route_text(route: dict[str, Any]) -> str:
     return json.dumps(route, sort_keys=True, separators=(",", ":")).lower()
 
 
-def _without_reader_routes(routes: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    kept: list[dict[str, Any]] = []
-    for route in routes:
-        value = _route_text(route)
-        if any(marker in value for marker in READER_ROUTE_MARKERS):
-            continue
-        kept.append(route)
-    return kept
+def _route_local_text(route: dict[str, Any]) -> str:
+    def remove_children(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {key: remove_children(child) for key, child in value.items() if key != "routes"}
+        if isinstance(value, list):
+            return [remove_children(child) for child in value]
+        return value
+
+    return json.dumps(remove_children(route), sort_keys=True, separators=(",", ":")).lower()
+
+
+def _is_reader_route(route: Any) -> bool:
+    if not isinstance(route, dict):
+        return False
+    matcher_text = json.dumps(route.get("match", []), sort_keys=True, separators=(",", ":")).lower()
+    return any(marker in matcher_text for marker in READER_ROUTE_MARKERS)
+
+
+def _remove_reader_routes(value: Any) -> Any:
+    """Remove only fragment routes, retaining Caddy's parent subroute groups."""
+    if isinstance(value, dict):
+        return {key: _remove_reader_routes(child) for key, child in value.items()}
+    if isinstance(value, list):
+        kept = []
+        for child in value:
+            if _is_reader_route(child):
+                continue
+            kept.append(_remove_reader_routes(child))
+        return kept
+    return value
 
 
 def _category_routes(routes: list[dict[str, Any]], category: str) -> list[dict[str, Any]]:
@@ -148,15 +181,17 @@ def _category_routes(routes: list[dict[str, Any]], category: str) -> list[dict[s
         "spa": re.compile(r"index\.html|try_files", re.IGNORECASE),
     }
     matcher = patterns[category]
-    return [route for route in routes if matcher.search(_route_text(route))]
+    return [route for route in routes if matcher.search(_route_local_text(route))]
 
 
 def compare_route_parity(baseline: dict[str, Any], candidate: dict[str, Any]) -> dict[str, bool]:
     baseline_routes = _routes(baseline)
-    candidate_routes = _without_reader_routes(_routes(candidate))
-    baseline_fingerprints = Counter(_route_text(route) for route in baseline_routes)
-    candidate_fingerprints = Counter(_route_text(route) for route in candidate_routes)
-    all_preserved = baseline_fingerprints == candidate_fingerprints
+    candidate_routes = [route for route in _routes(candidate) if not _is_reader_route(route)]
+    baseline_servers = baseline.get("apps", {}).get("http", {}).get("servers", {})
+    candidate_servers = _remove_reader_routes(candidate.get("apps", {}).get("http", {}).get("servers", {}))
+    all_preserved = json.dumps(baseline_servers, sort_keys=True, separators=(",", ":")) == json.dumps(
+        candidate_servers, sort_keys=True, separators=(",", ":")
+    )
     result = {"routes_preserved": all_preserved}
     for category in ("summary", "story", "static", "spa"):
         original = _category_routes(baseline_routes, category)

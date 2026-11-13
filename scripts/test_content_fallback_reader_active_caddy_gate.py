@@ -88,6 +88,39 @@ class ActiveCaddyGateTests(unittest.TestCase):
         self.assertTrue(result["static"])
         self.assertTrue(result["spa"])
 
+    def test_reader_route_removal_keeps_sibling_routes_inside_caddy_subroute_group(self) -> None:
+        baseline = {
+            "apps": {
+                "http": {
+                    "servers": {
+                        "srv0": {
+                            "routes": [
+                                {
+                                    "handle": [
+                                        {
+                                            "handler": "subroute",
+                                            "routes": [
+                                                {"match": [{"path": ["/api/summary/*"]}], "handle": [{"handler": "reverse_proxy"}]},
+                                                {"match": [{"path": ["/api/story-ranker/*"]}], "handle": [{"handler": "reverse_proxy"}]},
+                                            ],
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+        candidate = json.loads(json.dumps(baseline))
+        candidate["apps"]["http"]["servers"]["srv0"]["routes"][0]["handle"][0]["routes"].append(
+            {"match": [{"path_regexp": {"name": "reader", "pattern": "^/api/content-fallback/reader/entries/1/recover$"}}], "handle": [{"handler": "reverse_proxy"}]}
+        )
+        result = GATE.compare_route_parity(baseline, candidate)
+        self.assertTrue(result["routes_preserved"])
+        self.assertTrue(result["summary"])
+        self.assertTrue(result["story"])
+
     def test_configuration_placeholders_are_replaced_only_with_synthetic_values(self) -> None:
         env = GATE._synthetic_env(
             "{$MINIFLUX_API_KEY} {$PUBLIC_HOST} {$SMTP_PORT} {env.READER_TOKEN}",
