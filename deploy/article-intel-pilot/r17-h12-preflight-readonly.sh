@@ -21,7 +21,65 @@ lslocks -o COMMAND,PID,TYPE,MODE,PATH | awk -v p="$LEDGER_DIR/usage.sqlite3.lock
 echo 'NPM TIMEOUT DIRECTIVES (operator must evaluate inheritance for both NewsFlux vhosts):'
 docker exec "$NPM_CONTAINER" nginx -T 2>&1 | awk '/^# configuration file/ || /proxy_(connect|send|read)_timeout/'
 echo 'CADDY SUMMARY ROUTE CONFIGURATION:'
-docker exec "$READER_CONTAINER" cat /etc/caddy/Caddyfile | awk '/pilotSummary/,/^}/'
+docker exec "$READER_CONTAINER" cat /etc/caddy/Caddyfile | awk '
+  {
+    line = $0
+    sub(/^[[:space:]]+/, "", line)
+    sub(/[[:space:]]+$/, "", line)
+    gsub(/[[:space:]]+/, " ", line)
+    if (line ~ /^#/ || line == "") next
+
+    if (section == "") {
+      if (line == "@pilotSummary {") {
+        section = "matcher"; depth = 1; matcher_count++; matcher_line = NR; next
+      }
+      if (line == "handle @pilotSummary {") {
+        section = "proxy"; depth = 1; proxy_count++; proxy_line = NR; next
+      }
+      if (line == "handle /api/ai/* {") {
+        section = "fallback"; depth = 1; fallback_count++; fallback_line = NR; next
+      }
+      next
+    }
+
+    if (section == "matcher") {
+      if (line == "path /api/ai/v1/entries/*/summary") matcher_path++
+      else if (line == "remote_ip {$NEWSFLUX_PILOT_TRUSTED_PROXY_IP}") matcher_ip++
+      else if (line == "header X-Forwarded-Proto https") matcher_https++
+      else if (line != "}") matcher_extra++
+    }
+    if (section == "proxy") {
+      if (depth == 1 && line == "reverse_proxy summary-api:8788 {") proxy_target++
+      else if (depth == 2 && line == "header_up X-Forwarded-Proto https") proxy_https++
+      else if (line != "}") proxy_extra++
+    }
+    if (section == "fallback") {
+      if (depth == 1 && line == "respond 403") fallback_deny++
+      else if (line != "}") fallback_extra++
+    }
+
+    if (line == "}") {
+      depth--
+      if (depth == 0) section = ""
+      next
+    }
+    if (line ~ /\{[[:space:]]*$/) depth++
+  }
+  END {
+    matcher_ok = matcher_count == 1 && matcher_path == 1 && matcher_ip == 1 && matcher_https == 1 && matcher_extra == 0
+    proxy_ok = proxy_count == 1 && proxy_target == 1 && proxy_https == 1 && proxy_extra == 0
+    fallback_ok = fallback_count == 1 && fallback_deny == 1 && fallback_extra == 0
+    structure_ok = section == "" && depth == 0
+    order_ok = matcher_ok && proxy_ok && fallback_ok && matcher_line < proxy_line && proxy_line < fallback_line
+    all_ok = order_ok && structure_ok
+    printf "CADDY_MATCHER_GATE=%s\n", matcher_ok ? "PASS" : "FAIL"
+    printf "CADDY_PROXY_GATE=%s\n", proxy_ok ? "PASS" : "FAIL"
+    printf "CADDY_AI_DENY_FALLBACK_GATE=%s\n", fallback_ok ? "PASS" : "FAIL"
+    printf "CADDY_ROUTE_ORDER_GATE=%s\n", order_ok ? "PASS" : "FAIL"
+    printf "CADDY_ROUTE_STATIC_GATE=%s\n", all_ok ? "PASS" : "FAIL"
+    if (!all_ok) exit 1
+  }
+'
 echo 'SUMMARY LIVENESS FROM READER NETWORK (requires wget in Reader):'
 docker exec "$READER_CONTAINER" wget -qO- http://summary-api:8788/healthz
 echo
