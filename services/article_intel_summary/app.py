@@ -112,7 +112,7 @@ def create_app(
             try:
                 document = await asyncio.wait_for(_read_request_json(request), timeout=max(0.001, request_timeout_seconds - (time.monotonic() - started)))
             except asyncio.TimeoutError:
-                raise _ApiError("SUMMARY_TIMEOUT", 504) from None
+                raise _ApiError("SUMMARY_BUSY", 504) from None
             request_id = document["request_id"]
 
             def work(deadline):
@@ -155,13 +155,13 @@ def create_app(
 
             remaining = request_timeout_seconds - (time.monotonic() - started)
             if remaining <= 0:
-                raise _ApiError("SUMMARY_TIMEOUT", 504, request_id)
+                raise _ApiError("SUMMARY_BUSY", 504, request_id)
             try:
                 outcome = await _supervised_request(request, supervisor, work, remaining)
             except OperationBusy:
                 raise _ApiError("SUMMARY_BUSY", 429, request_id, retryable=True) from None
             except OperationDeadline:
-                raise _ApiError("SUMMARY_TIMEOUT", 504, request_id) from None
+                raise _ApiError("SUMMARY_BUSY", 504, request_id) from None
 
             response = JSONResponse(outcome.payload, status_code=outcome.http_status)
             return _add_security_headers(response, auth_service, canonical_origin)

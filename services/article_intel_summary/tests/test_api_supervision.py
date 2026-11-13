@@ -104,6 +104,7 @@ class SupervisedAPITests(unittest.IsolatedAsyncioTestCase):
                 response = await http.post(f"/api/ai/v1/entries/{ENTRY_ID}/summary", headers=request_headers(), json=valid_request())
                 self.assertTrue(started.is_set())
                 self.assertEqual(response.status_code, 504)
+                self.assertEqual(response.json()["error"], {"code": "SUMMARY_BUSY", "retryable": False})
                 self.assertLess(time.monotonic() - begin, 0.8)
                 busy = await http.post(f"/api/ai/v1/entries/{ENTRY_ID}/summary", headers=request_headers(), json=valid_request())
                 self.assertEqual(busy.status_code, 429)
