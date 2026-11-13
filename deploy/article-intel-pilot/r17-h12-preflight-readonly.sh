@@ -8,6 +8,8 @@ set -euo pipefail
 
 echo 'FILESYSTEM (operator must confirm local filesystem and mount options):'
 findmnt -T "$LEDGER_DIR" -o TARGET,SOURCE,FSTYPE,OPTIONS
+echo 'LEDGER FILESYSTEM CAPACITY (operator must assess available space):'
+df -Pk "$LEDGER_DIR"
 echo 'SUMMARY MOUNTS (operator must confirm /data maps to LEDGER_DIR):'
 docker inspect --format '{{range .Mounts}}{{println .Source "->" .Destination "rw=" .RW}}{{end}}' "$SUMMARY_CONTAINER"
 echo 'READER NETWORKS:'
