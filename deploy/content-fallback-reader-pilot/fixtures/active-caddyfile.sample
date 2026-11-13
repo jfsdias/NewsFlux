@@ -1,0 +1,19 @@
+:2000 {
+	@summary path /api/summary/*
+	handle @summary {
+		reverse_proxy summary-api:8080
+	}
+	@story path /api/story-ranker/*
+	handle @story {
+		reverse_proxy story-ranker:8080
+	}
+	handle /assets/* {
+		root * /srv/newsflux
+		file_server
+	}
+	handle {
+		root * /srv/newsflux
+		try_files {path} /index.html
+		file_server
+	}
+}

@@ -114,12 +114,67 @@ This sequence cannot be executed safely until the active image IDs, Compose
 files, Caddyfile and networks are readable and the sidecar's Miniflux identity
 is confirmed. No route was applied to OMV in this task.
 
+## R4 OMV topology and evidence
+
+The R4 request supplied these destination references: active Caddyfile path
+`/dockerdata/compose/newsflux/pilot-230-008120a5eac4/Caddyfile`, SHA-256
+`6970ee2b48b3c2e904a3a7fb5460afcb2fcad6e3647b55b812b68a1c1fdc9108`; shared
+network `npm-proxyyml_default`; observed NPM, Reader, and sidecar addresses
+`172.21.0.45`, `172.21.0.28`, and `172.21.0.26`; 56 shared-network members;
+no static IPAM and no dedicated Reader-sidecar network. These are request
+references, not fresh observations from this run: the OMV account returned
+`Permission denied` for both `stat` and `sha256sum` on the active Caddyfile.
+The active hash and runtime identities therefore remain unverified here.
+
+The observed NPM address is not a stable trust identity on a shared network
+without static IPAM. Keep `remote_ip` restricted to one exact address so an
+address change fails closed; do not broaden it to the shared subnet. For a
+future authorized topology, keep NPM on its current network and add a
+dedicated internal NPM-to-Reader edge with static IPAM, assigning NPM a stable
+address there. Reader Caddy can retain its existing HTTPS connectivity while
+also joining a dedicated internal Reader-to-sidecar network. The sidecar must
+not join `npm-proxyyml_default` or publish a host port. Keep Summary API network
+attachments unchanged. Give the sidecar a separate private Miniflux path; if no
+existing private Miniflux network is available, attaching Miniflux to a new
+network is a separate production authorization and needs its own rollback.
+
+This topology is a plan only. Do not create or alter networks in R4. The exact
+rollback pre-state is incomplete: current Reader/sidecar image IDs, all active
+Compose override paths and hashes, volume identity, and network attachments
+could not be read. The supplied Caddyfile hash and observed IPs alone are not
+enough to claim `ROLLBACK_PLAN_GATE=PASS` or to execute a target rollback.
+
 ## Isolated test
 
 `python3 scripts/content-fallback-reader-caddy-gate.py` runs pinned Caddy,
 Nginx, and Python images on a temporary internal Docker network. It verifies
-the path rewrite, allowed headers, header overwrite/removal, method/path
-rejection, rejection of an untrusted direct peer, and absence of published
-ports. Its backend is synthetic and records no credentials. This complements
-the exact-SHA Reader/HTTPS harness; it does not validate the active NPM or
-OMV network.
+the Reader path rewrite, header overwrite/removal, Miniflux identity-header
+forwarding, method/path rejection, an untrusted direct peer, and an HTTP
+forwarding-protocol spoof. Synthetic Summary and Story upstreams, a static
+asset, and an SPA deep link check unrelated Caddy routes. No test ports are
+published. Synthetic services never contact the active NPM, OMV, Miniflux,
+WallHop, or LiteLLM.
+
+For a target Caddyfile, first make a temporary copy and run:
+
+```sh
+python3 scripts/content-fallback-reader-active-caddy-gate.py \
+  --active-caddyfile /path/to/temporary/Caddyfile \
+  --expected-sha256 <verified-sha256> \
+  --site-address :2000
+```
+
+The gate rejects a hash mismatch before parsing. It copies the verified bytes
+into a private temporary directory, adds the Reader fragment only to the
+matching site block in a disposable copy, then runs pinned `caddy validate`
+and `caddy adapt` with synthetic environment values. It does not print source
+lines, adapter output, or environment values. Baseline and candidate route
+trees are compared after removing only the Reader routes, so existing route
+structures must remain equivalent.
+
+The sample Caddyfile in `fixtures/` tests the harness in CI; it is not a
+substitute for the verified target file. If the target depends on imported
+files outside the supplied copy, validation remains unverified until those
+inputs are separately provided and hashed. The OMV account currently cannot
+read the active Caddyfile, so its target gate is pending an accessible,
+hash-matching temporary copy. The command never edits the active configuration.

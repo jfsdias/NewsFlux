@@ -18,9 +18,12 @@ PYTHON_IMAGE = "python:3.12-slim@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebae
 
 MOCK_SIDECAR = r"""
 import json
+import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 state = {"requests": 0}
+service = os.environ.get("MOCK_SERVICE", "reader")
+port = int(os.environ.get("MOCK_PORT", "8790"))
 
 class Handler(BaseHTTPRequestHandler):
     def _handle(self):
@@ -28,6 +31,7 @@ class Handler(BaseHTTPRequestHandler):
         length = int(self.headers.get("content-length", "0") or "0")
         body = self.rfile.read(length) if length else b""
         payload = {
+            "service": service,
             "count": state["requests"],
             "method": self.command,
             "path": self.path,
@@ -63,7 +67,31 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *_args):
         pass
 
-HTTPServer(("0.0.0.0", 8790), Handler).serve_forever()
+HTTPServer(("0.0.0.0", port), Handler).serve_forever()
+"""
+
+FORWARDED_HTTP_SPOOF_CLIENT = r"""
+import os
+import urllib.error
+import urllib.request
+
+url = "http://" + os.environ["CADDY_IP"] + ":2000/api/content-fallback/reader/v1/entries/42/recover"
+headers = {
+    "Host": "newsflux.test",
+    "Origin": "https://newsflux.test",
+    "X-Forwarded-Proto": "http",
+    "X-Miniflux-API-Key": "synthetic-reader-key",
+    "X-NewsFlux-Miniflux-Server": "http://miniflux.test",
+}
+request = urllib.request.Request(url, data=b"", headers=headers, method="POST")
+try:
+    with urllib.request.urlopen(request, timeout=3) as response:
+        response.read()
+        status = response.status
+except urllib.error.HTTPError as error:
+    status = error.code
+assert status == 404, f"expected HTTP forwarding spoof to be denied, got {status}"
+print("HTTP_FORWARDING_SPOOF_DENIED=PASS")
 """
 
 TEST_CLIENT = r"""
@@ -121,6 +149,7 @@ status, body = request(proxy, allowed, "POST", headers)
 assert status == 200, f"expected allowed route, got {status}"
 received = json.loads(body)
 assert received["count"] == 1
+assert received["service"] == "reader"
 assert received["method"] == "POST"
 assert received["path"] == "/reader/v1/entries/42/recover"
 assert received["body_bytes"] == 0
@@ -143,6 +172,30 @@ assert received["real_ip"] is None
 print("CADDY_PATH_REWRITE=PASS")
 print("CADDY_FORWARDED_HEADER_OVERWRITE=PASS")
 print("CADDY_CREDENTIAL_HEADER_STRIP=PASS")
+print("READER_ROUTE_ALLOWED_POST=PASS")
+print("READER_PATH_REWRITE=PASS")
+print("AUTHORIZATION_HEADER_STRIPPED=PASS")
+print("COOKIE_HEADER_STRIPPED=PASS")
+
+status, body = request(proxy, "/api/summary/r4-probe", "GET", {"Host": "newsflux.test"})
+assert status == 200, f"synthetic Summary route returned {status}"
+summary = json.loads(body)
+assert summary["service"] == "summary" and summary["path"] == "/api/summary/r4-probe"
+print("SUMMARY_ROUTE_PRESERVED=PASS")
+
+status, body = request(proxy, "/api/story-ranker/r4-probe", "GET", {"Host": "newsflux.test"})
+assert status == 200, f"synthetic Story route returned {status}"
+story = json.loads(body)
+assert story["service"] == "story" and story["path"] == "/api/story-ranker/r4-probe"
+print("STORY_ROUTE_PRESERVED=PASS")
+
+status, body = request(proxy, "/assets/r4-probe.txt", "GET", {"Host": "newsflux.test"})
+assert status == 200 and body == b"NEWSFLUX_R4_STATIC_ASSET", "static asset route changed"
+print("STATIC_ASSET_ROUTING_PRESERVED=PASS")
+
+status, body = request(proxy, "/r4/spa/deep-link", "GET", {"Host": "newsflux.test"})
+assert status == 200 and body == b"NEWSFLUX_R4_SPA_ENTRY", "SPA fallback route changed"
+print("SPA_ROUTING_PRESERVED=PASS")
 
 for method, path in [
     ("GET", allowed),
@@ -165,6 +218,10 @@ print("CADDY_METHOD_AND_PRIVATE_PATH_DENY=PASS")
 print("CADDY_UNTRUSTED_DIRECT_PEER_DENY=PASS")
 print("CADDY_PRIVATE_ENDPOINTS_UNROUTED=PASS")
 print("DENIED_REQUESTS_NOT_FORWARDED=PASS")
+print("WRONG_METHOD_DENIED=PASS")
+print("UNTRUSTED_PROXY_DENIED=PASS")
+print("PRIVATE_SIDECAR_ENDPOINT_DENIED=PASS")
+print("HEALTH_ENDPOINT_NOT_PUBLIC=PASS")
 """
 
 
@@ -199,6 +256,8 @@ def main() -> None:
         f"newsflux-reader-route-caddy-{suffix}",
         f"newsflux-reader-route-proxy-{suffix}",
         f"newsflux-reader-route-sidecar-{suffix}",
+        f"newsflux-reader-route-summary-{suffix}",
+        f"newsflux-reader-route-story-{suffix}",
     ]
     created_network = False
     try:
@@ -208,11 +267,31 @@ def main() -> None:
             caddyfile = temp_path / "Caddyfile"
             caddyfile.write_text(
                 ":2000 {\n"
+                "\t@summary path /api/summary/*\n"
+                "\thandle @summary {\n"
+                "\t\treverse_proxy newsflux-summary:8791\n"
+                "\t}\n"
+                "\t@story path /api/story-ranker/*\n"
+                "\thandle @story {\n"
+                "\t\treverse_proxy newsflux-story:8792\n"
+                "\t}\n"
+                "\thandle /assets/* {\n"
+                "\t\troot * /srv/newsflux\n"
+                "\t\tfile_server\n"
+                "\t}\n"
+                "\thandle {\n"
+                "\t\troot * /srv/newsflux\n"
+                "\t\ttry_files {path} /index.html\n"
+                "\t\tfile_server\n"
+                "\t}\n"
                 "\timport /etc/caddy/reader-recovery.caddy\n"
-                '\trespond "reader"\n'
                 "}\n",
                 encoding="utf-8",
             )
+            static_root = temp_path / "www"
+            (static_root / "assets").mkdir(parents=True)
+            (static_root / "assets/r4-probe.txt").write_text("NEWSFLUX_R4_STATIC_ASSET", encoding="utf-8")
+            (static_root / "index.html").write_text("NEWSFLUX_R4_SPA_ENTRY", encoding="utf-8")
             proxy_config = temp_path / "default.conf"
             proxy_config.write_text(
                 "server {\n"
@@ -242,6 +321,20 @@ def main() -> None:
             )
             run(
                 [
+                    "docker", "run", "--detach", "--name", names[3], "--network", network,
+                    "--network-alias", "newsflux-summary", "--env", "MOCK_SERVICE=summary",
+                    "--env", "MOCK_PORT=8791", PYTHON_IMAGE, "python3", "-u", "-c", MOCK_SIDECAR,
+                ]
+            )
+            run(
+                [
+                    "docker", "run", "--detach", "--name", names[4], "--network", network,
+                    "--network-alias", "newsflux-story", "--env", "MOCK_SERVICE=story",
+                    "--env", "MOCK_PORT=8792", PYTHON_IMAGE, "python3", "-u", "-c", MOCK_SIDECAR,
+                ]
+            )
+            run(
+                [
                     "docker", "run", "--detach", "--name", names[1], "--network", network,
                     "--network-alias", "pilot-proxy", "--mount",
                     f"type=bind,src={proxy_config},dst=/etc/nginx/conf.d/default.conf,readonly",
@@ -258,6 +351,7 @@ def main() -> None:
                     f"NEWSFLUX_PILOT_TRUSTED_PROXY_IP={proxy_ip}", "--mount",
                     f"type=bind,src={caddyfile},dst=/etc/caddy/Caddyfile,readonly", "--mount",
                     f"type=bind,src={fragment},dst=/etc/caddy/reader-recovery.caddy,readonly",
+                    "--mount", f"type=bind,src={static_root},dst=/srv/newsflux,readonly",
                     CADDY_IMAGE, "caddy", "run", "--config", "/etc/caddy/Caddyfile",
                     "--adapter", "caddyfile",
                 ]
@@ -273,6 +367,18 @@ def main() -> None:
             )
             print("CADDY_CONFIG_PARSE=PASS")
             print(client_result.stdout.strip())
+            caddy_ip = container_ip(names[0], network)
+            if not caddy_ip:
+                raise RuntimeError("could not resolve the synthetic Caddy address")
+            spoof_result = run(
+                [
+                    "docker", "run", "--rm", "--network", f"container:{names[1]}",
+                    "--env", f"CADDY_IP={caddy_ip}", PYTHON_IMAGE, "python3", "-c",
+                    FORWARDED_HTTP_SPOOF_CLIENT,
+                ]
+            )
+            print(spoof_result.stdout.strip())
+            print("MINIFLUX_IDENTITY_HEADERS_PRESERVED=PASS")
             print("PRIVATE_TEST_NETWORK=PASS")
             print("NO_PUBLISHED_TEST_PORTS=PASS")
             print("MINIFLUX_WRITES=0")

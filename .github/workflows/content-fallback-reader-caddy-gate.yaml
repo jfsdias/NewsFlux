@@ -6,6 +6,8 @@ on:
     paths:
       - "deploy/content-fallback-reader-pilot/**"
       - "scripts/content-fallback-reader-caddy-gate.py"
+      - "scripts/content-fallback-reader-active-caddy-gate.py"
+      - "scripts/test_content_fallback_reader_active_caddy_gate.py"
       - ".github/workflows/content-fallback-reader-caddy-gate.yaml"
   workflow_dispatch:
     inputs:
@@ -51,5 +53,16 @@ jobs:
           test -z "$(git status --porcelain)"
           printf 'MAIN_SHA=%s\nCANDIDATE_SHA=%s\n' "$actual_main" "$CANDIDATE_SHA"
 
-      - name: Exercise the Caddy route with synthetic private services
+      - name: Test the active-Caddy harness with a synthetic baseline fixture
+        run: |
+          set -euo pipefail
+          fixture=deploy/content-fallback-reader-pilot/fixtures/active-caddyfile.sample
+          fixture_sha256="$(sha256sum "$fixture" | cut -d ' ' -f 1)"
+          python3 scripts/test_content_fallback_reader_active_caddy_gate.py
+          python3 scripts/content-fallback-reader-active-caddy-gate.py \
+            --active-caddyfile "$fixture" \
+            --expected-sha256 "$fixture_sha256" \
+            --site-address :2000
+
+      - name: Exercise Caddy with synthetic Reader, Summary and Story services
         run: python3 scripts/content-fallback-reader-caddy-gate.py
