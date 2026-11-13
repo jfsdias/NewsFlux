@@ -100,8 +100,8 @@ class ActiveCaddyGateTests(unittest.TestCase):
                                         {
                                             "handler": "subroute",
                                             "routes": [
-                                                {"match": [{"path": ["/api/summary/*"]}], "handle": [{"handler": "reverse_proxy"}]},
-                                                {"match": [{"path": ["/api/story-ranker/*"]}], "handle": [{"handler": "reverse_proxy"}]},
+                                                {"group": "group0", "match": [{"path": ["/api/summary/*"]}], "handle": [{"handler": "reverse_proxy"}]},
+                                                {"group": "group1", "match": [{"path": ["/api/story-ranker/*"]}], "handle": [{"handler": "reverse_proxy"}]},
                                             ],
                                         }
                                     ]
@@ -114,8 +114,10 @@ class ActiveCaddyGateTests(unittest.TestCase):
         }
         candidate = json.loads(json.dumps(baseline))
         candidate["apps"]["http"]["servers"]["srv0"]["routes"][0]["handle"][0]["routes"].append(
-            {"match": [{"path_regexp": {"name": "reader", "pattern": "^/api/content-fallback/reader/entries/1/recover$"}}], "handle": [{"handler": "reverse_proxy"}]}
+            {"group": "group0", "match": [{"path_regexp": {"name": "reader", "pattern": "^/api/content-fallback/reader/entries/1/recover$"}}], "handle": [{"handler": "reverse_proxy"}]}
         )
+        candidate["apps"]["http"]["servers"]["srv0"]["routes"][0]["handle"][0]["routes"][0]["group"] = "group1"
+        candidate["apps"]["http"]["servers"]["srv0"]["routes"][0]["handle"][0]["routes"][1]["group"] = "group2"
         result = GATE.compare_route_parity(baseline, candidate)
         self.assertTrue(result["routes_preserved"])
         self.assertTrue(result["summary"])

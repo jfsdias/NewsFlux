@@ -173,6 +173,42 @@ def _remove_reader_routes(value: Any) -> Any:
     return value
 
 
+def _stable_digest(value: Any) -> str:
+    encoded = json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()[:12]
+
+
+def _count_reader_routes(value: Any) -> int:
+    if isinstance(value, dict):
+        own = 1 if _is_reader_route(value) else 0
+        return own + sum(_count_reader_routes(child) for child in value.values())
+    if isinstance(value, list):
+        return sum(_count_reader_routes(child) for child in value)
+    return 0
+
+
+def _normalize_group_ids(value: Any) -> Any:
+    """Normalize Caddy's generated group labels while preserving group membership."""
+    labels: dict[str, str] = {}
+
+    def visit(node: Any) -> Any:
+        if isinstance(node, dict):
+            result = {}
+            for key, child in node.items():
+                if key == "group" and isinstance(child, str):
+                    if child not in labels:
+                        labels[child] = f"normalized-{len(labels)}"
+                    result[key] = labels[child]
+                else:
+                    result[key] = visit(child)
+            return result
+        if isinstance(node, list):
+            return [visit(child) for child in node]
+        return node
+
+    return visit(value)
+
+
 def _category_routes(routes: list[dict[str, Any]], category: str) -> list[dict[str, Any]]:
     patterns = {
         "summary": re.compile(r"summary", re.IGNORECASE),
@@ -189,14 +225,18 @@ def compare_route_parity(baseline: dict[str, Any], candidate: dict[str, Any]) ->
     candidate_routes = [route for route in _routes(candidate) if not _is_reader_route(route)]
     baseline_servers = baseline.get("apps", {}).get("http", {}).get("servers", {})
     candidate_servers = _remove_reader_routes(candidate.get("apps", {}).get("http", {}).get("servers", {}))
-    all_preserved = json.dumps(baseline_servers, sort_keys=True, separators=(",", ":")) == json.dumps(
-        candidate_servers, sort_keys=True, separators=(",", ":")
+    all_preserved = json.dumps(_normalize_group_ids(baseline_servers), sort_keys=True, separators=(",", ":")) == json.dumps(
+        _normalize_group_ids(candidate_servers), sort_keys=True, separators=(",", ":")
     )
     result = {"routes_preserved": all_preserved}
     for category in ("summary", "story", "static", "spa"):
         original = _category_routes(baseline_routes, category)
         present = _category_routes(candidate_routes, category)
-        result[category] = bool(original) and Counter(map(_route_text, original)) == Counter(map(_route_text, present))
+        normalized_original = _normalize_group_ids(original)
+        normalized_present = _normalize_group_ids(present)
+        result[category] = bool(original) and Counter(map(_route_text, normalized_original)) == Counter(
+            map(_route_text, normalized_present)
+        )
     return result
 
 
@@ -288,7 +328,18 @@ def run_gate(active_path: Path, expected_sha256: str, site_address: str) -> dict
         candidate = _adapt(temp_dir, "candidate.Caddyfile", env)
         parity = compare_route_parity(baseline, candidate)
         if not parity["routes_preserved"]:
-            raise GateError("BASELINE_ROUTE_PARITY_FAILED")
+            baseline_servers = baseline.get("apps", {}).get("http", {}).get("servers", {})
+            candidate_servers = candidate.get("apps", {}).get("http", {}).get("servers", {})
+            cleaned_servers = _remove_reader_routes(candidate_servers)
+            raise GateError(
+                "BASELINE_ROUTE_PARITY_FAILED"
+                f"_base={_stable_digest(baseline_servers)}"
+                f"_candidate={_stable_digest(cleaned_servers)}"
+                f"_base_nodes={len(_routes(baseline))}"
+                f"_candidate_nodes={len(_routes(candidate))}"
+                f"_reader_nodes={_count_reader_routes(candidate_servers)}"
+                f"_clean_nodes={len(_routes({'apps': {'http': {'servers': cleaned_servers}}}))}"
+            )
         return {
             "sha256": sha256_bytes(source_bytes),
             "parity": parity,
