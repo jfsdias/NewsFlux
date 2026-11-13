@@ -57,6 +57,43 @@ class ActiveCaddyGateTests(unittest.TestCase):
         self.assertLess(merged.index("import /work/reader-recovery.caddy"), merged.index("respond ok"))
         self.assertIn("header X-Template {http.request.host}", merged)
 
+    def test_import_supports_a_single_blockless_site(self) -> None:
+        source = (
+            ":2000\n"
+            "@summary path /api/summary/*\n"
+            "handle @summary {\n"
+            "  reverse_proxy summary-api:8080\n"
+            "}\n"
+            "handle {\n"
+            "  root * /srv/newsflux\n"
+            "  file_server\n"
+            "}\n"
+        )
+
+        merged = GATE.inject_import(source, ":2000", "/work/reader-recovery.caddy")
+
+        self.assertTrue(merged.startswith(source))
+        self.assertTrue(merged.endswith("import /work/reader-recovery.caddy\n"))
+        self.assertEqual(merged.count("import /work/reader-recovery.caddy"), 1)
+
+    def test_import_fails_closed_for_ambiguous_blockless_sites(self) -> None:
+        source = ":2000\nrespond primary\n:2010\nrespond other\n"
+
+        with self.assertRaisesRegex(GATE.GateError, "CADDY_SITE_LAYOUT_AMBIGUOUS"):
+            GATE.inject_import(source, ":2000", "/work/reader-recovery.caddy")
+
+    def test_blockless_site_with_a_braced_sibling_fails_closed(self) -> None:
+        source = ":2000\nrespond primary\n:2010 {\n respond other\n}\n"
+
+        with self.assertRaisesRegex(GATE.GateError, "CADDY_SITE_LAYOUT_AMBIGUOUS"):
+            GATE.inject_import(source, ":2000", "/work/reader-recovery.caddy")
+
+    def test_import_rejects_duplicate_import(self) -> None:
+        source = ":2000 {\n import /work/reader-recovery.caddy\n}\n"
+
+        with self.assertRaisesRegex(GATE.GateError, "CADDY_IMPORT_ALREADY_PRESENT"):
+            GATE.inject_import(source, ":2000", "/work/reader-recovery.caddy")
+
     def test_import_fails_closed_when_site_is_absent(self) -> None:
         with self.assertRaises(GATE.GateError):
             GATE.inject_import(":80 {\n respond ok\n}\n", ":2000", "/work/reader.caddy")

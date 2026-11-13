@@ -166,13 +166,17 @@ python3 scripts/content-fallback-reader-active-caddy-gate.py \
 
 The gate rejects a hash mismatch before parsing. It copies the verified bytes
 into a private temporary directory, adds the Reader fragment only to the
-matching site block in a disposable copy, then runs pinned `caddy validate`
-and `caddy adapt` with synthetic environment values. It does not print source
-lines, adapter output, or environment values. Baseline and candidate route
-trees are compared after removing only the Reader routes, so existing route
-structures must remain equivalent. The comparator ignores only Caddy's
-automatic `file_server` hide entries for the three temporary harness files;
-explicit hide rules and all other route fields remain part of the parity gate.
+matching site context in a disposable copy, then runs pinned `caddy validate`
+and `caddy adapt` with synthetic environment values. Both braced site blocks
+and a single blockless site such as `:2000` followed by directives are
+supported. A blockless site is treated as continuing to end-of-file; mixing it
+with another site declaration fails closed. Import duplication and malformed
+or ambiguous site layouts are rejected. The gate does not print source lines,
+adapter output, or environment values. Baseline and candidate route trees are
+compared after removing only the Reader routes, so existing route structures
+must remain equivalent. The comparator ignores only Caddy's automatic
+`file_server` hide entries for the three temporary harness files; explicit
+hide rules and all other route fields remain part of the parity gate.
 
 The sample Caddyfile in `fixtures/` tests the harness in CI; it is not a
 substitute for the verified target file. CI passes `--synthetic-fixture`, so

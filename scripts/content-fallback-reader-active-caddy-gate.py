@@ -27,6 +27,9 @@ HARNESS_STAGING_PATHS = {
     "/work/reader-recovery.caddy",
 }
 ENV_REFERENCE = re.compile(r"\{\$([A-Za-z_][A-Za-z0-9_]*)(?::[^}]*)?\}|\{env\.([A-Za-z_][A-Za-z0-9_]*)\}")
+SITE_ADDRESS_TOKEN = re.compile(
+    r"^(?:https?://)?(?:\*\.)?(?:\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9][A-Za-z0-9.-]*)?(?::\d+)?(?:/[^,\s]*)?$"
+)
 
 
 class GateError(RuntimeError):
@@ -74,11 +77,33 @@ def _address_matches(candidate: str, requested: str) -> bool:
     return False
 
 
+def _site_addresses(header: str) -> list[str] | None:
+    """Parse an unambiguous Caddy site-address header, not a directive line."""
+    try:
+        addresses = shlex.split(header.replace(",", " "))
+    except ValueError as error:
+        raise GateError("CADDY_BLOCK_HEADER_INVALID") from error
+    if not addresses or any(not SITE_ADDRESS_TOKEN.fullmatch(value) for value in addresses):
+        return None
+    if not any(
+        ":" in value
+        or "." in value
+        or "*" in value
+        or value.lower() == "localhost"
+        for value in addresses
+    ):
+        return None
+    return addresses
+
+
 def _site_block_closures(source: str, requested_address: str) -> list[int]:
-    """Return line indexes closing top-level site blocks matching the address."""
+    """Return insertion indexes for matching braced or single blockless sites."""
     lines = source.splitlines(keepends=True)
     stack: list[bool] = []
     closures: list[int] = []
+    braced_site_count = 0
+    blockless_site_count = 0
+    blockless_target = False
     for line_index, line in enumerate(lines):
         stripped = _without_comment(line).strip()
         if not stripped:
@@ -94,14 +119,27 @@ def _site_block_closures(source: str, requested_address: str) -> list[int]:
             header = stripped[:-1].strip()
             is_target = False
             if not stack:
-                try:
-                    addresses = shlex.split(header.replace(",", " "))
-                except ValueError as error:
-                    raise GateError("CADDY_BLOCK_HEADER_INVALID") from error
-                is_target = any(_address_matches(value, requested_address) for value in addresses)
+                addresses = _site_addresses(header)
+                if addresses is not None:
+                    if blockless_site_count:
+                        raise GateError("CADDY_SITE_LAYOUT_AMBIGUOUS")
+                    braced_site_count += 1
+                    is_target = any(_address_matches(value, requested_address) for value in addresses)
             stack.append(is_target)
+            continue
+        if not stack:
+            addresses = _site_addresses(stripped)
+            if addresses is not None:
+                if braced_site_count or blockless_site_count:
+                    raise GateError("CADDY_SITE_LAYOUT_AMBIGUOUS")
+                blockless_site_count += 1
+                blockless_target = any(_address_matches(value, requested_address) for value in addresses)
     if stack:
         raise GateError("CADDY_BLOCK_STRUCTURE_INVALID")
+    if blockless_site_count:
+        if blockless_site_count != 1 or braced_site_count:
+            raise GateError("CADDY_SITE_LAYOUT_AMBIGUOUS")
+        return [len(lines)] if blockless_target else []
     return closures
 
 
@@ -116,6 +154,11 @@ def inject_import(source: str, site_address: str, import_path: str) -> str:
     if not closures:
         raise GateError("CADDY_SITE_BLOCK_NOT_FOUND")
     for line_index in reversed(closures):
+        if line_index == len(lines):
+            if lines and not lines[-1].endswith(("\n", "\r")):
+                lines[-1] = f"{lines[-1]}\n"
+            lines.append(f"import {import_path}\n")
+            continue
         closing = lines[line_index]
         indent = re.match(r"\s*", closing).group(0)  # type: ignore[union-attr]
         newline = "\r\n" if closing.endswith("\r\n") else "\n"
