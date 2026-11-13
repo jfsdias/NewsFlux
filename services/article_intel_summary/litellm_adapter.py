@@ -94,6 +94,8 @@ class LiteLLMSettings:
             return False
         if not _positive_bounded_int(self.max_output_tokens, MAX_OUTPUT_TOKEN_SETTING):
             return False
+        if self.model_choice == MODEL_CHOICE_S5_FREE and self.max_output_tokens > 2048:
+            return False
         if not _positive_bounded_int(self.requests_per_minute, MAX_REQUESTS_PER_MINUTE_SETTING):
             return False
         if not _positive_bounded_int(self.tokens_per_minute, MAX_TOKENS_PER_MINUTE_SETTING):

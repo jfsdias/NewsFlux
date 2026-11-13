@@ -224,6 +224,14 @@ class LiteLLMAdapterTests(unittest.TestCase):
         self.assertFalse(replace(s5, timeout_seconds=25.01).is_ready())
         self.assertTrue(replace(self.settings, timeout_seconds=30).is_ready())
 
+    def test_s5_output_cap_cannot_exceed_2048(self) -> None:
+        s5 = replace(self.settings, model_choice="s5-free", model_id=S5_ALIAS,
+                     input_price_usd_per_million=Decimal("0"), output_price_usd_per_million=Decimal("0"),
+                     max_output_tokens=2048)
+        self.assertTrue(s5.is_ready())
+        self.assertFalse(replace(s5, max_output_tokens=2049).is_ready())
+        self.assertTrue(replace(self.settings, max_output_tokens=2049).is_ready())
+
     def test_s5_reserves_full_output_limit_before_network(self) -> None:
         request = SummaryModelInput(SYSTEM_INSTRUCTIONS, json.dumps({"title": "Synthetic", "paragraphs": [{"id": "p1", "text": "A short synthetic article."}]}), ("p1",))
         self.assertLessEqual(_estimate_input_tokens(_build_messages(request)), 1500)
