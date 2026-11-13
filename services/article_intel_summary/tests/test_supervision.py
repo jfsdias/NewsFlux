@@ -12,6 +12,13 @@ class SupervisorTests(unittest.IsolatedAsyncioTestCase):
         deadline = Deadline(1)
         with self.assertRaises(OperationDeadline):
             deadline.begin_inference(0.8, reserve_seconds=0.3)
+
+    async def test_inference_phase_expiry_is_observed_by_worker(self):
+        deadline = Deadline(1)
+        deadline.begin_inference(0.001)
+        await asyncio.sleep(0.01)
+        with self.assertRaises(OperationDeadline):
+            deadline.remaining()
     async def test_expired_http_wait_retains_capacity_until_worker_finishes(self):
         supervisor = Supervisor(limit=1)
         started, release, finished = threading.Event(), threading.Event(), threading.Event()

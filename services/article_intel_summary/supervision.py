@@ -54,7 +54,9 @@ class Deadline:
     def remaining(self) -> float:
         if self.cancelled.is_set():
             raise OperationDeadline()
-        remaining = self.end - time.monotonic()
+        with self._lock:
+            end = min(self.end, self._inference_end) if self._inference_end is not None else self.end
+        remaining = end - time.monotonic()
         if remaining <= 0:
             raise OperationDeadline()
         return remaining

@@ -269,7 +269,7 @@ class LiteLLMInferenceAdapter:
         )
         self._in_flight = threading.BoundedSemaphore(MAX_IN_FLIGHT_REQUESTS)
 
-    def summarize(self, request: SummaryModelInput, *, timeout_seconds: float) -> InferenceResult:
+    def summarize(self, request: SummaryModelInput, *, timeout_seconds: float, deadline=None) -> InferenceResult:
         if self._requires_owner and (self._owner is None or not self._owner.is_held()):
             raise InferenceUnavailable("inference ownership is unavailable") from None
         if not self.settings.is_ready() or self.ledger is None:
@@ -286,6 +286,8 @@ class LiteLLMInferenceAdapter:
         reservation_id: str | None = None
         settled = False
         try:
+            if deadline is not None:
+                deadline.remaining()
             messages = _build_messages(request)
             estimated_input_tokens = _estimate_input_tokens(messages)
             if estimated_input_tokens > self.settings.max_input_tokens:
@@ -312,6 +314,8 @@ class LiteLLMInferenceAdapter:
             else:
                 payload["reasoning_effort"] = "low"
             timeout = min(float(timeout_seconds), self.settings.timeout_seconds)
+            if deadline is not None:
+                timeout = min(timeout, deadline.remaining())
             response_document = self._post(payload, timeout)
             usage = _read_usage(response_document)
             actual_cost = _calculate_cost(
@@ -439,23 +443,23 @@ class S5MistralFallbackAdapter:
         self.primary = primary
         self.paid = paid
 
-    def summarize(self, request: SummaryModelInput, *, timeout_seconds: float) -> InferenceResult:
+    def summarize(self, request: SummaryModelInput, *, timeout_seconds: float, deadline=None) -> InferenceResult:
         if (
             isinstance(timeout_seconds, bool)
             or not isinstance(timeout_seconds, (int, float))
             or not 0 < timeout_seconds <= MAX_TIMEOUT_SECONDS
         ):
             raise InferenceUnavailable("inference timeout is invalid") from None
-        deadline = time.monotonic() + float(timeout_seconds)
+        deadline_at = time.monotonic() + float(timeout_seconds)
         # Reserve part of the existing request deadline for the one allowed secondary model.
         first_timeout = min(float(timeout_seconds) * 0.65, self.primary.settings.timeout_seconds)
         try:
-            return self.primary.summarize(request, timeout_seconds=first_timeout)
+            return self.primary.summarize(request, timeout_seconds=first_timeout, deadline=deadline)
         except TransientLiteLLMFailure:
-            remaining = min(deadline - time.monotonic(), self.paid.settings.timeout_seconds)
+            remaining = min(deadline_at - time.monotonic(), self.paid.settings.timeout_seconds)
             if remaining <= 0:
                 raise InferenceUnavailable("inference deadline reached") from None
-            return self.paid.summarize(request, timeout_seconds=remaining)
+            return self.paid.summarize(request, timeout_seconds=remaining, deadline=deadline)
 
 
 def _build_messages(request: SummaryModelInput) -> list[dict[str, str]]:

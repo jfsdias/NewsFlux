@@ -255,6 +255,24 @@ class LiteLLMAdapterTests(unittest.TestCase):
         with closing(sqlite3.connect(self.database_path)) as db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM inference_usage").fetchone()[0], 0)
 
+    def test_deadline_after_reservation_prevents_dispatch(self) -> None:
+        from services.article_intel_summary.supervision import Deadline
+
+        adapter = self.make_adapter()
+        deadline = Deadline(10)
+        reserve = adapter.ledger.reserve
+
+        def reserve_then_cancel(**kwargs):
+            reservation = reserve(**kwargs)
+            deadline.cancelled.set()
+            return reservation
+
+        adapter.ledger.reserve = reserve_then_cancel
+        with self.assertRaises(InferenceUnavailable):
+            adapter.summarize(input_fixture(), timeout_seconds=10, deadline=deadline)
+        self.assertEqual(self.requests, [])
+        self.assertEqual(adapter.ledger.uncertain_count(), 1)
+
     def test_disabled_or_unapproved_privacy_and_budget_policies_block_before_network(self) -> None:
         for override in (
             {"enabled": False},

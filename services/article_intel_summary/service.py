@@ -75,7 +75,12 @@ class SummaryService:
         if deadline is not None:
             deadline.begin_inference(self.timeout_seconds, reserve_seconds=revalidation_reserve_seconds)
         try:
-            inference = self.adapter.summarize(model_input, timeout_seconds=self.timeout_seconds)
+            from services.article_intel_summary.litellm_adapter import LiteLLMInferenceAdapter, S5MistralFallbackAdapter
+
+            if isinstance(self.adapter, (LiteLLMInferenceAdapter, S5MistralFallbackAdapter)):
+                inference = self.adapter.summarize(model_input, timeout_seconds=self.timeout_seconds, deadline=deadline)
+            else:
+                inference = self.adapter.summarize(model_input, timeout_seconds=self.timeout_seconds)
         except (InferenceUnavailable, TimeoutError):
             return self._unavailable(snapshot, request_id)
         except Exception:
