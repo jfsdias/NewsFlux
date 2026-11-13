@@ -15,7 +15,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
-from services.article_intel_summary.budget import BudgetBlocked, BudgetLedger, UsageLedgerError
+from services.article_intel_summary.budget import BudgetBlocked, BudgetLedger, LedgerOwner, UsageLedgerError
 from services.article_intel_summary.inference import (
     InferenceResult,
     InferenceUnavailable,
@@ -94,6 +94,8 @@ class LiteLLMSettings:
             return False
         if not _positive_bounded_int(self.max_output_tokens, MAX_OUTPUT_TOKEN_SETTING):
             return False
+        if self.model_choice == MODEL_CHOICE_S5_FREE and self.max_output_tokens > 2048:
+            return False
         if not _positive_bounded_int(self.requests_per_minute, MAX_REQUESTS_PER_MINUTE_SETTING):
             return False
         if not _positive_bounded_int(self.tokens_per_minute, MAX_TOKENS_PER_MINUTE_SETTING):
@@ -114,6 +116,8 @@ class LiteLLMSettings:
         if not isinstance(self.timeout_seconds, (int, float)) or isinstance(self.timeout_seconds, bool):
             return False
         if not 0 < self.timeout_seconds <= MAX_TIMEOUT_SECONDS:
+            return False
+        if self.model_choice == MODEL_CHOICE_S5_FREE and self.timeout_seconds > 25:
             return False
         if not isinstance(self.usage_database_path, str) or not Path(self.usage_database_path).is_absolute():
             return False
@@ -174,7 +178,7 @@ def load_litellm_settings(environ: Mapping[str, str] | None = None) -> LiteLLMSe
         output_price_usd_per_million=output_price,
         monthly_budget_usd=_read_decimal(values.get("NEWSFLUX_AI_MONTHLY_BUDGET_USD")),
         max_input_tokens=_read_int(values.get("NEWSFLUX_AI_MAX_INPUT_TOKENS")),
-        max_output_tokens=_read_int(values.get("NEWSFLUX_AI_MAX_OUTPUT_TOKENS")),
+        max_output_tokens=_read_int(values.get("NEWSFLUX_AI_S5_MAX_OUTPUT_TOKENS", values.get("NEWSFLUX_AI_MAX_OUTPUT_TOKENS")) if choice == MODEL_CHOICE_S5_FREE else values.get("NEWSFLUX_AI_MAX_OUTPUT_TOKENS")),
         requests_per_minute=_read_int(values.get("NEWSFLUX_AI_MAX_REQUESTS_PER_MINUTE")),
         tokens_per_minute=_read_int(values.get("NEWSFLUX_AI_MAX_TOKENS_PER_MINUTE")),
         timeout_seconds=_read_float(values.get("NEWSFLUX_AI_INFERENCE_TIMEOUT_SECONDS"), default=15.0),
@@ -207,28 +211,40 @@ def create_configured_inference_adapter(environ: Mapping[str, str] | None = None
             and _positive_bounded_int(settings.requests_per_minute, MAX_REQUESTS_PER_MINUTE_SETTING)
             and settings.requests_per_minute >= 2
             and _positive_bounded_int(settings.tokens_per_minute, MAX_TOKENS_PER_MINUTE_SETTING)
-            and settings.tokens_per_minute >= 2 * (settings.max_input_tokens + settings.max_output_tokens)
+            and _positive_bounded_int(_read_int(values.get("NEWSFLUX_AI_MAX_OUTPUT_TOKENS")), MAX_OUTPUT_TOKEN_SETTING)
+            and settings.tokens_per_minute >= 2 * settings.max_input_tokens + settings.max_output_tokens + _read_int(values.get("NEWSFLUX_AI_MAX_OUTPUT_TOKENS"))
         ):
             return DisabledInferenceAdapter()
         paid_settings = replace(
             settings,
             model_choice=MODEL_CHOICE_MISTRAL_SMALL,
             model_id=paid_alias,
+            max_output_tokens=_read_int(values.get("NEWSFLUX_AI_MAX_OUTPUT_TOKENS")),
             input_price_usd_per_million=paid_input,
             output_price_usd_per_million=paid_output,
         )
         if not paid_settings.is_ready():
             return DisabledInferenceAdapter()
 
+    owner = None
     try:
         ledger = BudgetLedger(settings.usage_database_path)
+        owner = LedgerOwner(settings.usage_database_path)
+        owner.__enter__()
+        owner.recover_orphans(ledger)
     except (UsageLedgerError, TypeError):
+        if owner is not None:
+            owner.__exit__()
         return DisabledInferenceAdapter()
 
     primary = LiteLLMInferenceAdapter(settings, ledger=ledger)
+    primary._owner = owner
+    primary._requires_owner = True
     if paid_settings is None:
         return primary
     secondary = LiteLLMInferenceAdapter(paid_settings, ledger=ledger)
+    secondary._owner = owner
+    secondary._requires_owner = True
     return S5MistralFallbackAdapter(primary, secondary)
 
 class LiteLLMInferenceAdapter:
@@ -242,6 +258,8 @@ class LiteLLMInferenceAdapter:
         client: httpx.Client | None = None,
     ) -> None:
         self.settings = settings
+        self._owner = None
+        self._requires_owner = False
         self.ledger = ledger or (
             BudgetLedger(settings.usage_database_path) if settings.usage_database_path else None
         )
@@ -253,7 +271,9 @@ class LiteLLMInferenceAdapter:
         )
         self._in_flight = threading.BoundedSemaphore(MAX_IN_FLIGHT_REQUESTS)
 
-    def summarize(self, request: SummaryModelInput, *, timeout_seconds: float) -> InferenceResult:
+    def summarize(self, request: SummaryModelInput, *, timeout_seconds: float, deadline=None) -> InferenceResult:
+        if self._requires_owner and (self._owner is None or not self._owner.is_held()):
+            raise InferenceUnavailable("inference ownership is unavailable") from None
         if not self.settings.is_ready() or self.ledger is None:
             raise InferenceUnavailable("inference policy is not authorized") from None
         if (
@@ -268,6 +288,8 @@ class LiteLLMInferenceAdapter:
         reservation_id: str | None = None
         settled = False
         try:
+            if deadline is not None:
+                deadline.remaining()
             messages = _build_messages(request)
             estimated_input_tokens = _estimate_input_tokens(messages)
             if estimated_input_tokens > self.settings.max_input_tokens:
@@ -291,7 +313,11 @@ class LiteLLMInferenceAdapter:
             }
             if self.settings.model_choice == MODEL_CHOICE_MISTRAL_SMALL:
                 payload["temperature"] = 0
+            else:
+                payload["reasoning_effort"] = "low"
             timeout = min(float(timeout_seconds), self.settings.timeout_seconds)
+            if deadline is not None:
+                timeout = min(timeout, deadline.remaining())
             response_document = self._post(payload, timeout)
             usage = _read_usage(response_document)
             actual_cost = _calculate_cost(
@@ -413,29 +439,29 @@ class S5MistralFallbackAdapter:
             and paid.settings.paid_inference_authorized
             and primary.settings.requests_per_minute >= 2
             and primary.settings.tokens_per_minute
-                >= 2 * (primary.settings.max_input_tokens + primary.settings.max_output_tokens)
+                >= primary.settings.max_input_tokens + primary.settings.max_output_tokens + paid.settings.max_input_tokens + paid.settings.max_output_tokens
         ):
             raise ValueError("S5 paid fallback policy is not authorized")
         self.primary = primary
         self.paid = paid
 
-    def summarize(self, request: SummaryModelInput, *, timeout_seconds: float) -> InferenceResult:
+    def summarize(self, request: SummaryModelInput, *, timeout_seconds: float, deadline=None) -> InferenceResult:
         if (
             isinstance(timeout_seconds, bool)
             or not isinstance(timeout_seconds, (int, float))
             or not 0 < timeout_seconds <= MAX_TIMEOUT_SECONDS
         ):
             raise InferenceUnavailable("inference timeout is invalid") from None
-        deadline = time.monotonic() + float(timeout_seconds)
+        deadline_at = time.monotonic() + float(timeout_seconds)
         # Reserve part of the existing request deadline for the one allowed secondary model.
         first_timeout = min(float(timeout_seconds) * 0.65, self.primary.settings.timeout_seconds)
         try:
-            return self.primary.summarize(request, timeout_seconds=first_timeout)
+            return self.primary.summarize(request, timeout_seconds=first_timeout, deadline=deadline)
         except TransientLiteLLMFailure:
-            remaining = min(deadline - time.monotonic(), self.paid.settings.timeout_seconds)
+            remaining = min(deadline_at - time.monotonic(), self.paid.settings.timeout_seconds)
             if remaining <= 0:
                 raise InferenceUnavailable("inference deadline reached") from None
-            return self.paid.summarize(request, timeout_seconds=remaining)
+            return self.paid.summarize(request, timeout_seconds=remaining, deadline=deadline)
 
 
 def _build_messages(request: SummaryModelInput) -> list[dict[str, str]]:

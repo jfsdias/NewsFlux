@@ -64,6 +64,28 @@ class SharedLiteLLMContractTests(unittest.TestCase):
         self.assertEqual(settings.output_price_usd_per_million, Decimal("0"))
         self.assertIsInstance(create_configured_inference_adapter(self.environment), LiteLLMInferenceAdapter)
 
+    def test_factory_fails_closed_when_another_instance_owns_ledger(self) -> None:
+        from services.article_intel_summary.budget import LedgerOwner
+
+        path = self.environment["NEWSFLUX_AI_USAGE_DATABASE_PATH"]
+        with LedgerOwner(path):
+            self.assertIsInstance(create_configured_inference_adapter(self.environment), DisabledInferenceAdapter)
+
+    def test_factory_adapter_does_not_dispatch_after_ownership_is_lost(self) -> None:
+        from services.article_intel_summary.inference import InferenceUnavailable
+        from services.article_intel_summary.tests.test_litellm_adapter import input_fixture
+        import httpx
+
+        adapter = create_configured_inference_adapter(self.environment)
+        calls = []
+        adapter.client.close()
+        adapter.client = httpx.Client(transport=httpx.MockTransport(lambda request: calls.append(request)))
+        adapter._owner.__exit__()
+        with self.assertRaises(InferenceUnavailable):
+            adapter.summarize(input_fixture(), timeout_seconds=15)
+        self.assertEqual(calls, [])
+        adapter.client.close()
+
     def test_mistral_choice_requires_explicit_paid_inference_authorization(self) -> None:
         environment = {
             **self.environment,

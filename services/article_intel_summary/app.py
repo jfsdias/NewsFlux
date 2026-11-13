@@ -3,7 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-import threading
+import time
+from contextlib import asynccontextmanager
 from collections.abc import Iterable
 from typing import Any
 
@@ -14,8 +15,9 @@ from jsonschema.exceptions import ValidationError
 from services.article_intel_auth.auth import AuthError, AuthSettings, MinifluxAuthService
 from services.article_intel_auth.config import AuthConfigurationError, canonicalize_web_origin
 from services.article_intel_summary.contracts import validate_error, validate_request
-from services.article_intel_summary.litellm_adapter import create_configured_inference_adapter
+from services.article_intel_summary.litellm_adapter import LiteLLMInferenceAdapter, S5MistralFallbackAdapter, create_configured_inference_adapter
 from services.article_intel_summary.service import ModelOutputInvalid, SummaryService
+from services.article_intel_summary.supervision import OperationBusy, OperationDeadline, Supervisor
 
 MAX_REQUEST_BODY_BYTES = 8 * 1024
 MAX_IN_FLIGHT_SUMMARIES = 2
@@ -37,18 +39,39 @@ def create_app(
     auth_service: MinifluxAuthService | None = None,
     summary_service: SummaryService | None = None,
     settings: AuthSettings | None = None,
+    request_timeout_seconds: float = 60.0,
+    max_in_flight: int = MAX_IN_FLIGHT_SUMMARIES,
+    revalidation_reserve_seconds: float = 10.0,
 ) -> FastAPI:
     if auth_service is None:
         trusted_settings = settings or AuthSettings.from_env()
         auth_service = MinifluxAuthService(trusted_settings)
     elif settings is not None and settings != auth_service.settings:
         raise AuthConfigurationError("Provided app settings differ from the authentication service settings")
-    summary_service = summary_service or SummaryService(create_configured_inference_adapter())
+    if summary_service is None:
+        adapter = create_configured_inference_adapter()
+        primary = adapter.primary if isinstance(adapter, S5MistralFallbackAdapter) else adapter
+        if isinstance(primary, LiteLLMInferenceAdapter):
+            summary_service = SummaryService(adapter, timeout_seconds=primary.settings.timeout_seconds)
+        else:
+            summary_service = SummaryService(adapter)
     origins = frozenset(auth_service.settings.allowed_web_origins)
-    in_flight = threading.BoundedSemaphore(MAX_IN_FLIGHT_SUMMARIES)
-    app = FastAPI(title="NewsFlux Article Intelligence API", version="1", docs_url=None, redoc_url=None, openapi_url=None)
+    supervisor = Supervisor(limit=max_in_flight)
+
+    @asynccontextmanager
+    async def lifespan(_app):
+        yield
+        await supervisor.shutdown()
+        adapter = summary_service.adapter
+        primary = adapter.primary if isinstance(adapter, S5MistralFallbackAdapter) else adapter
+        owner = getattr(primary, "_owner", None)
+        if owner is not None:
+            owner.__exit__()
+
+    app = FastAPI(title="NewsFlux Article Intelligence API", version="1", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.auth_service = auth_service
     app.state.summary_service = summary_service
+    app.state.supervisor = supervisor
 
     @app.get("/healthz", include_in_schema=False)
     async def healthz() -> Response:
@@ -58,6 +81,7 @@ def create_app(
     async def summarize_entry(entry_id: str, request: Request) -> Response:
         request_id: str | None = None
         origin = request.headers.get("origin")
+        started = time.monotonic()
         try:
             if request.url.query:
                 raise _ApiError("INVALID_REQUEST", 400)
@@ -85,43 +109,59 @@ def create_app(
                 raise _ApiError("INVALID_REQUEST", 400)
             if request.headers.get("content-type", "").split(";", 1)[0].strip().casefold() != "application/json":
                 raise _ApiError("INVALID_REQUEST", 415)
-            document = await _read_request_json(request)
+            try:
+                document = await asyncio.wait_for(_read_request_json(request), timeout=max(0.001, request_timeout_seconds - (time.monotonic() - started)))
+            except asyncio.TimeoutError:
+                raise _ApiError("SUMMARY_BUSY", 504) from None
             request_id = document["request_id"]
 
-            if not in_flight.acquire(blocking=False):
-                raise _ApiError("SUMMARY_BUSY", 429, request_id, retryable=True)
-            try:
-                authorized_entry = await asyncio.to_thread(
-                    auth_service.authorize_entry,
+            def work(deadline):
+                deadline.remaining()
+                authorized_entry = auth_service.authorize_entry(
                     api_key=request.headers.get("x-miniflux-api-key"),
                     claimed_miniflux_base_url=request.headers.get("x-newsflux-miniflux-server"),
                     request_origin=origin,
                     entry_id=parsed_entry_id,
                     request_is_secure=True,
+                    deadline=deadline,
                 )
-                outcome = await asyncio.to_thread(
-                    summary_service.summarize,
+                deadline.remaining()
+                outcome = summary_service.summarize(
                     authorized_entry,
                     request_id=request_id,
+                    deadline=deadline,
+                    revalidation_reserve_seconds=revalidation_reserve_seconds,
                 )
                 if outcome.http_status == 200:
-                    current_entry = await asyncio.to_thread(
-                        auth_service.authorize_entry,
+                    deadline.remaining()
+                    current_entry = auth_service.authorize_entry(
                         api_key=request.headers.get("x-miniflux-api-key"),
                         claimed_miniflux_base_url=request.headers.get("x-newsflux-miniflux-server"),
                         request_origin=origin,
                         entry_id=parsed_entry_id,
                         request_is_secure=True,
+                        deadline=deadline,
                     )
-                    current_snapshot = await asyncio.to_thread(summary_service.resolver.resolve, current_entry)
+                    deadline.remaining()
+                    current_snapshot = summary_service.resolver.resolve(current_entry)
                     if (
                         current_entry.user_id != authorized_entry.user_id
                         or current_snapshot.content_fingerprint
                         != outcome.payload["provenance"]["content_fingerprint"]
                     ):
                         raise _ApiError("STALE_SNAPSHOT", 409, request_id)
-            finally:
-                in_flight.release()
+                deadline.remaining()
+                return outcome
+
+            remaining = request_timeout_seconds - (time.monotonic() - started)
+            if remaining <= 0:
+                raise _ApiError("SUMMARY_BUSY", 504, request_id)
+            try:
+                outcome = await _supervised_request(request, supervisor, work, remaining)
+            except OperationBusy:
+                raise _ApiError("SUMMARY_BUSY", 429, request_id, retryable=True) from None
+            except OperationDeadline:
+                raise _ApiError("SUMMARY_BUSY", 504, request_id) from None
 
             response = JSONResponse(outcome.payload, status_code=outcome.http_status)
             return _add_security_headers(response, auth_service, canonical_origin)
@@ -135,6 +175,30 @@ def create_app(
             return _error_response(_ApiError("MODEL_OUTPUT_INVALID", 502, request_id), auth_service, canonical_origin=origin if _is_allowed_origin(auth_service, origin) else None)
 
     return app
+
+
+async def _supervised_request(request: Request, supervisor: Supervisor, work, timeout: float):
+    operation = asyncio.create_task(supervisor.run(work, timeout=timeout))
+
+    async def disconnected():
+        while True:
+            if await request.is_disconnected():
+                return
+            await asyncio.sleep(0.1)
+
+    watcher = asyncio.create_task(disconnected())
+    try:
+        done, _ = await asyncio.wait({operation, watcher}, return_when=asyncio.FIRST_COMPLETED)
+        if watcher in done and operation not in done:
+            operation.cancel()
+            await asyncio.gather(operation, return_exceptions=True)
+            raise asyncio.CancelledError()
+        return await operation
+    finally:
+        watcher.cancel()
+        if not operation.done():
+            operation.cancel()
+        await asyncio.gather(watcher, operation, return_exceptions=True)
 
 
 async def _read_request_json(request: Request) -> dict[str, Any]:

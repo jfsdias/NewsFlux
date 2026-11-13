@@ -64,6 +64,7 @@ class MinifluxAuthService:
         request_origin: str | None,
         request_is_secure: bool = False,
         client_claims: Mapping[str, object] | None = None,
+        deadline=None,
     ) -> AuthenticatedPrincipal:
         if request_is_secure is not True:
             raise AuthError("https_required", 400)
@@ -72,7 +73,7 @@ class MinifluxAuthService:
         self._assert_authorized_miniflux_base(claimed_miniflux_base_url)
         self._validate_api_key(api_key)
 
-        payload = self._get_json("/v1/me", api_key, max_bytes=MAX_IDENTITY_RESPONSE_BYTES)
+        payload = self._get_json("/v1/me", api_key, max_bytes=MAX_IDENTITY_RESPONSE_BYTES, deadline=deadline)
         if not isinstance(payload, dict):
             raise AuthError("invalid_miniflux_response", 502)
         user_id = _strict_positive_int(payload.get("id"))
@@ -129,6 +130,7 @@ class MinifluxAuthService:
         entry_id: int,
         request_is_secure: bool = False,
         client_claims: Mapping[str, object] | None = None,
+        deadline=None,
     ) -> AuthorizedEntry:
         if _strict_positive_int(entry_id) is None:
             raise AuthError("invalid_request", 400)
@@ -138,12 +140,14 @@ class MinifluxAuthService:
             request_origin=request_origin,
             request_is_secure=request_is_secure,
             client_claims=client_claims,
+            deadline=deadline,
         )
         payload = self._get_json(
             f"/v1/entries/{entry_id}",
             api_key,
             max_bytes=MAX_ENTRY_RESPONSE_BYTES,
             entry_request=True,
+            deadline=deadline,
         )
         if not isinstance(payload, dict):
             raise AuthError("invalid_miniflux_response", 502)
@@ -229,6 +233,7 @@ class MinifluxAuthService:
         *,
         max_bytes: int,
         entry_request: bool = False,
+        deadline=None,
     ) -> object:
         url = f"{self.settings.miniflux_base_url}{path}"
         try:
@@ -239,7 +244,7 @@ class MinifluxAuthService:
                     "Accept": "application/json",
                     "User-Agent": _USER_AGENT,
                 },
-                timeout=self.timeout_seconds,
+                timeout=min(self.timeout_seconds, deadline.remaining()) if deadline is not None else self.timeout_seconds,
                 max_bytes=max_bytes,
                 max_redirects=0,
                 same_origin=self.settings.miniflux_base_url,

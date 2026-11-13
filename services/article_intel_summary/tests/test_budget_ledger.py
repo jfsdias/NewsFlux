@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 
-from services.article_intel_summary.budget import BudgetBlocked, BudgetLedger, UsageLedgerError
+from services.article_intel_summary.budget import BudgetBlocked, BudgetLedger, UsageLedgerError, LedgerOwner
 
 
 class BudgetLedgerTests(unittest.TestCase):
@@ -79,24 +80,30 @@ class BudgetLedgerTests(unittest.TestCase):
         with self.assertRaisesRegex(BudgetBlocked, "token rate"):
             token_ledger.reserve(**base)
 
-    def test_single_concurrent_reservation_and_lease_expiry(self) -> None:
+    def test_single_concurrent_reservation_survives_lease_expiry(self) -> None:
         self.reserve(max_concurrent=1, lease_seconds=10)
         with self.assertRaisesRegex(BudgetBlocked, "concurrency"):
             self.reserve(max_concurrent=1, lease_seconds=10)
 
         next_minute = self.now + timedelta(seconds=11)
-        reservation_id = self.ledger.reserve(
-            estimated_cost_usd=Decimal("0.10"),
-            input_tokens=100,
-            output_tokens=25,
-            monthly_budget_usd=Decimal("1.00"),
-            requests_per_minute=10,
-            tokens_per_minute=10_000,
-            max_concurrent=1,
-            lease_seconds=10,
-            now=next_minute,
-        )
-        self.assertTrue(reservation_id)
+        with self.assertRaisesRegex(BudgetBlocked, "concurrency"):
+            self.ledger.reserve(
+                estimated_cost_usd=Decimal("0.10"), input_tokens=100, output_tokens=25,
+                monthly_budget_usd=Decimal("1.00"), requests_per_minute=10,
+                tokens_per_minute=10_000, max_concurrent=1, lease_seconds=10,
+                now=next_minute,
+            )
+
+    def test_expired_lease_does_not_admit_another_dispatch_while_worker_is_alive(self) -> None:
+        self.reserve(max_concurrent=1, lease_seconds=1)
+        second_ledger = BudgetLedger(self.path)
+        with self.assertRaises(BudgetBlocked):
+            second_ledger.reserve(
+                estimated_cost_usd=Decimal("0.10"), input_tokens=100, output_tokens=25,
+                monthly_budget_usd=Decimal("1.00"), requests_per_minute=10,
+                tokens_per_minute=10_000, max_concurrent=1, lease_seconds=10,
+                now=self.now + timedelta(seconds=2),
+            )
 
     def test_uncertain_outcome_keeps_worst_case_cost_without_content(self) -> None:
         reservation_id = self.reserve()
@@ -108,6 +115,27 @@ class BudgetLedgerTests(unittest.TestCase):
         self.assertNotIn(b"article body synthetic", raw)
         self.assertNotIn(b"miniflux-user-42", raw)
         self.assertNotIn(b"synthetic-virtual-key", raw)
+
+    def test_admission_does_not_delete_historical_uncertain_reservation(self) -> None:
+        old = self.reserve(now=datetime(2024, 1, 1, tzinfo=timezone.utc))
+        self.ledger.mark_uncertain(old)
+        self.reserve(now=self.now)
+        with closing(sqlite3.connect(self.path)) as connection:
+            row = connection.execute("SELECT state FROM inference_usage WHERE reservation_id = ?", (old,)).fetchone()
+        self.assertEqual(row, ("uncertain",))
+
+    def test_exclusive_owner_recovers_inflight_conservatively(self) -> None:
+        reservation = self.reserve()
+        with LedgerOwner(self.path) as owner:
+            with self.assertRaises(UsageLedgerError):
+                with LedgerOwner(self.path):
+                    pass
+            self.assertEqual(owner.recover_orphans(self.ledger), 1)
+            self.assertEqual(self.ledger.uncertain_count(), 1)
+        with closing(sqlite3.connect(self.path)) as db:
+            self.assertEqual(db.execute("SELECT state, actual_cost_usd FROM inference_usage WHERE reservation_id = ?", (reservation,)).fetchone(), ("uncertain", None))
+        with LedgerOwner(self.path) as owner:
+            self.assertEqual(owner.recover_orphans(self.ledger), 0)
 
     def test_insecure_existing_file_or_directory_fails_closed(self) -> None:
         self.path.chmod(0o644)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import fcntl
 import secrets
 import sqlite3
 import stat
@@ -15,6 +16,67 @@ class BudgetBlocked(RuntimeError):
 
 class UsageLedgerError(RuntimeError):
     """The local usage ledger cannot safely authorize a request."""
+
+
+class LedgerOwner:
+    """Exclusive process ownership; hold until all inference workers have exited."""
+
+    def __init__(self, database_path: str | Path) -> None:
+        self._fd: int | None = None
+        self.path = Path(database_path)
+        self._recovered = False
+
+    def __enter__(self):
+        flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+        try:
+            fd = os.open(str(self.path) + ".lock", flags, 0o600)
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_nlink != 1 or stat.S_IMODE(info.st_mode) & 0o077:
+                os.close(fd)
+                raise UsageLedgerError("unsafe ownership lock")
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                os.close(fd)
+                raise UsageLedgerError("inference ownership unavailable") from None
+            self._fd = fd
+            return self
+        except OSError:
+            raise UsageLedgerError("inference ownership unavailable") from None
+
+    def recover_orphans(self, ledger: "BudgetLedger") -> int:
+        if self._fd is None or self._recovered or ledger.path != self.path:
+            raise UsageLedgerError("exclusive ownership required")
+        connection = ledger._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            result = connection.execute("UPDATE inference_usage SET state = 'uncertain', lease_until = 0 WHERE state = 'in_flight'")
+            connection.commit()
+            self._recovered = True
+            return result.rowcount
+        except sqlite3.Error:
+            connection.rollback()
+            raise UsageLedgerError("orphan recovery failed") from None
+        finally:
+            connection.close()
+
+    def is_held(self) -> bool:
+        if self._fd is None:
+            return False
+        try:
+            opened = os.fstat(self._fd)
+            current = os.stat(str(self.path) + ".lock", follow_symlinks=False)
+            return (opened.st_dev, opened.st_ino) == (current.st_dev, current.st_ino) and opened.st_nlink == 1
+        except OSError:
+            return False
+
+    def __exit__(self, *_args) -> None:
+        if self._fd is not None:
+            os.close(self._fd)
+            self._fd = None
+
+    def __del__(self) -> None:
+        self.__exit__()
 
 
 class BudgetLedger:
@@ -153,9 +215,6 @@ class BudgetLedger:
         reservation_id = secrets.token_hex(16)
         try:
             connection.execute("BEGIN IMMEDIATE")
-            cutoff_month = _month_offset(current.year, current.month, -self.RETENTION_MONTHS)
-            connection.execute("DELETE FROM inference_usage WHERE budget_month < ?", (cutoff_month,))
-
             monthly_rows = connection.execute(
                 "SELECT state, estimated_cost_usd, actual_cost_usd FROM inference_usage WHERE budget_month = ?",
                 (month,),
@@ -178,8 +237,7 @@ class BudgetLedger:
                 raise BudgetBlocked("token rate limit reached") from None
 
             active_count = connection.execute(
-                "SELECT COUNT(*) FROM inference_usage WHERE state = 'in_flight' AND lease_until > ?",
-                (epoch,),
+                "SELECT COUNT(*) FROM inference_usage WHERE state = 'in_flight'",
             ).fetchone()[0]
             if active_count >= max_concurrent:
                 raise BudgetBlocked("concurrency limit reached") from None
