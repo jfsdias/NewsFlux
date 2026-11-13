@@ -55,6 +55,33 @@ class S5R6Tests(unittest.TestCase):
         with closing(sqlite3.connect(self.adapter.ledger.path)) as db:
             self.assertEqual(db.execute("SELECT state FROM inference_usage").fetchall(), [("settled",)])
 
+    def test_changed_authorized_snapshot_rejects_summary_and_does_not_persist_content(self):
+        client, miniflux, _, original = make_test_client(adapter=self.adapter)
+        original_content = miniflux.content
+        changed_content = original_content.replace("3.200 passageiros", "3.201 passageiros")
+        self.assertNotEqual(original_content, changed_content)
+        def change_before_response(request):
+            self.calls.append(request)
+            miniflux.content = changed_content
+            return self.response
+        self.adapter.client.close()
+        self.adapter.client = httpx.Client(transport=httpx.MockTransport(change_before_response))
+        result = client.post(f"/api/ai/v1/entries/{ENTRY_ID}/summary", headers=request_headers(), json=valid_request())
+        self.assertEqual(result.status_code, 409)
+        self.assertEqual(result.json()["error"]["code"], "STALE_SNAPSHOT")
+        self.assertNotIn("summary", result.json())
+        self.assertNotIn("A cidade de Aurora", result.text)
+        self.assertNotIn(original.content_fingerprint, result.text)
+        self.assertNotIn(GOOD_OUTPUT["summary"], result.text)
+        self.assertEqual([call["method"] for call in miniflux.calls], ["GET"] * 4)
+        self.assertEqual(len(self.calls), 1)
+        with closing(sqlite3.connect(self.adapter.ledger.path)) as db:
+            self.assertEqual(db.execute("SELECT state FROM inference_usage").fetchall(), [("settled",)])
+            dump = "\n".join(db.iterdump())
+        self.assertNotIn("A cidade de Aurora", dump)
+        self.assertNotIn("3.201 passageiros", dump)
+        self.assertNotIn(GOOD_OUTPUT["summary"], dump)
+
     def test_invalid_structures_fail_closed_with_only_safe_diagnostic(self):
         point = {"text": "synthetic-secret-content", "paragraph_ids": ["p1"]}
         cases = [
