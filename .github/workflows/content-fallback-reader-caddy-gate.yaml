@@ -1,0 +1,55 @@
+name: Content Fallback Reader Caddy route
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "deploy/content-fallback-reader-pilot/**"
+      - "scripts/content-fallback-reader-caddy-gate.py"
+      - ".github/workflows/content-fallback-reader-caddy-gate.yaml"
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact NewsFlux source SHA to validate
+        required: true
+        type: string
+      expected_base_sha:
+        description: Expected current main SHA for exact-source provenance
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: content-fallback-reader-caddy-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  isolated-caddy-route:
+    name: Isolated Caddy route and private sidecar boundary
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify source provenance
+        env:
+          EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.expected_base_sha || github.sha }}
+          CANDIDATE_SHA: ${{ inputs.source_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          actual_main="$(git ls-remote https://github.com/jfsdias/NewsFlux.git refs/heads/main | cut -f1)"
+          test "$actual_main" = "$EXPECTED_BASE_SHA"
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git merge-base --is-ancestor "$EXPECTED_BASE_SHA" "$CANDIDATE_SHA"
+          test -z "$(git status --porcelain)"
+          printf 'MAIN_SHA=%s\nCANDIDATE_SHA=%s\n' "$actual_main" "$CANDIDATE_SHA"
+
+      - name: Exercise the Caddy route with synthetic private services
+        run: python3 scripts/content-fallback-reader-caddy-gate.py
