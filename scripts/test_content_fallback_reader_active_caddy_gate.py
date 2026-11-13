@@ -123,6 +123,26 @@ class ActiveCaddyGateTests(unittest.TestCase):
         self.assertTrue(result["summary"])
         self.assertTrue(result["story"])
 
+    def test_route_parity_still_fails_when_an_existing_route_changes(self) -> None:
+        baseline = {
+            "apps": {
+                "http": {
+                    "servers": {
+                        "srv0": {
+                            "routes": [
+                                {"match": [{"path": ["/api/summary/*"]}], "handle": [{"handler": "reverse_proxy"}]}
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+        candidate = json.loads(json.dumps(baseline))
+        candidate["apps"]["http"]["servers"]["srv0"]["routes"][0]["match"][0]["path"] = ["/api/changed/*"]
+        result = GATE.compare_route_parity(baseline, candidate)
+        self.assertFalse(result["routes_preserved"])
+        self.assertFalse(result["summary"])
+
     def test_configuration_placeholders_are_replaced_only_with_synthetic_values(self) -> None:
         env = GATE._synthetic_env(
             "{$MINIFLUX_API_KEY} {$PUBLIC_HOST} {$SMTP_PORT} {env.READER_TOKEN}",
@@ -143,6 +163,11 @@ class ActiveCaddyGateTests(unittest.TestCase):
                 GATE._adapt(Path("/private/tmp"), "candidate.Caddyfile", {})
         self.assertNotIn("synthetic secret", str(error.exception))
         self.assertNotIn("private config", str(error.exception))
+
+    def test_parity_diagnostics_include_structure_paths_without_values(self) -> None:
+        paths = GATE._mismatch_paths({"match": ["secret-value"]}, {"match": ["changed-secret"]})
+        self.assertEqual(paths, ["root.match[0]"])
+        self.assertNotIn("secret", ",".join(paths))
 
 
 if __name__ == "__main__":

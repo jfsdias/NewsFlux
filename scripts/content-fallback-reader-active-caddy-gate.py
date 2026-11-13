@@ -178,6 +178,32 @@ def _stable_digest(value: Any) -> str:
     return hashlib.sha256(encoded).hexdigest()[:12]
 
 
+def _mismatch_paths(left: Any, right: Any, path: str = "root", limit: int = 24) -> list[str]:
+    if left == right:
+        return []
+    if isinstance(left, dict) and isinstance(right, dict):
+        differences: list[str] = []
+        for key in sorted(set(left) | set(right)):
+            child_path = f"{path}.{key}"
+            if key not in left or key not in right:
+                differences.append(child_path)
+            else:
+                differences.extend(_mismatch_paths(left[key], right[key], child_path, limit - len(differences)))
+            if len(differences) >= limit:
+                break
+        return differences[:limit]
+    if isinstance(left, list) and isinstance(right, list):
+        differences = []
+        if len(left) != len(right):
+            differences.append(f"{path}.length")
+        for index, (left_item, right_item) in enumerate(zip(left, right)):
+            differences.extend(_mismatch_paths(left_item, right_item, f"{path}[{index}]", limit - len(differences)))
+            if len(differences) >= limit:
+                break
+        return differences[:limit]
+    return [path]
+
+
 def _count_reader_routes(value: Any) -> int:
     if isinstance(value, dict):
         own = 1 if _is_reader_route(value) else 0
@@ -331,14 +357,21 @@ def run_gate(active_path: Path, expected_sha256: str, site_address: str) -> dict
             baseline_servers = baseline.get("apps", {}).get("http", {}).get("servers", {})
             candidate_servers = candidate.get("apps", {}).get("http", {}).get("servers", {})
             cleaned_servers = _remove_reader_routes(candidate_servers)
+            normalized_baseline = _normalize_group_ids(baseline_servers)
+            normalized_cleaned = _normalize_group_ids(cleaned_servers)
+            preserved_families = ",".join(
+                name for name in ("summary", "story", "static", "spa") if parity[name]
+            ) or "none"
             raise GateError(
                 "BASELINE_ROUTE_PARITY_FAILED"
-                f"_base={_stable_digest(baseline_servers)}"
-                f"_candidate={_stable_digest(cleaned_servers)}"
+                f"_base={_stable_digest(normalized_baseline)}"
+                f"_candidate={_stable_digest(normalized_cleaned)}"
                 f"_base_nodes={len(_routes(baseline))}"
                 f"_candidate_nodes={len(_routes(candidate))}"
                 f"_reader_nodes={_count_reader_routes(candidate_servers)}"
                 f"_clean_nodes={len(_routes({'apps': {'http': {'servers': cleaned_servers}}}))}"
+                f"_families={preserved_families}"
+                f"_diff_paths={','.join(_mismatch_paths(normalized_baseline, normalized_cleaned))}"
             )
         return {
             "sha256": sha256_bytes(source_bytes),
