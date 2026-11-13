@@ -79,8 +79,13 @@ def _address_matches(candidate: str, requested: str) -> bool:
 
 def _site_addresses(header: str) -> list[str] | None:
     """Parse an unambiguous Caddy site-address header, not a directive line."""
+    addresses: list[str] = []
     try:
-        addresses = shlex.split(header.replace(",", " "))
+        for item in header.split(","):
+            tokens = shlex.split(item)
+            if len(tokens) != 1:
+                return None
+            addresses.append(tokens[0])
     except ValueError as error:
         raise GateError("CADDY_BLOCK_HEADER_INVALID") from error
     if not addresses or any(not SITE_ADDRESS_TOKEN.fullmatch(value) for value in addresses):
