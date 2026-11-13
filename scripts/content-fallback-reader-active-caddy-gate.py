@@ -409,24 +409,41 @@ def main() -> int:
     parser.add_argument("--active-caddyfile", type=Path, required=True)
     parser.add_argument("--expected-sha256", required=True)
     parser.add_argument("--site-address", default=":2000")
+    parser.add_argument("--synthetic-fixture", action="store_true")
     args = parser.parse_args()
     try:
         result = run_gate(args.active_caddyfile, args.expected_sha256, args.site_address)
     except GateError as error:
-        print(f"ACTIVE_CADDY_BASELINE=FAIL ({error})")
-        print("CADDY_MERGED_CONFIG_GATE=NOT_VERIFIED")
+        if args.synthetic_fixture:
+            print(f"SYNTHETIC_CADDY_HARNESS=FAIL ({error})")
+            print("ACTIVE_CADDY_BASELINE=NOT_VERIFIED")
+            print("CADDY_MERGED_CONFIG_GATE=NOT_VERIFIED")
+        else:
+            print(f"ACTIVE_CADDY_BASELINE=FAIL ({error})")
+            print("CADDY_MERGED_CONFIG_GATE=NOT_VERIFIED")
         return 1
 
     parity = result["parity"]
-    print("ACTIVE_CADDY_BASELINE=PASS")
-    print("ACTIVE_CADDY_SHA256=PASS")
-    print(f"ACTIVE_CADDY_SHA256_VALUE={result['sha256']}")
-    print("CADDY_BASELINE_VALIDATE=PASS")
-    print("CADDY_MERGED_CONFIG_GATE=PASS")
-    print(f"BASELINE_ROUTE_PARITY={'PASS' if parity['routes_preserved'] else 'FAIL'}")
+    if args.synthetic_fixture:
+        print("SYNTHETIC_CADDY_HARNESS=PASS")
+        print(f"SYNTHETIC_FIXTURE_SHA256={result['sha256']}")
+        print("SYNTHETIC_BASELINE_VALIDATE=PASS")
+        print("SYNTHETIC_MERGED_CONFIG_GATE=PASS")
+        print(f"SYNTHETIC_ROUTE_PARITY={'PASS' if parity['routes_preserved'] else 'FAIL'}")
+        prefix = "SYNTHETIC_"
+        print("ACTIVE_CADDY_BASELINE=NOT_VERIFIED")
+        print("CADDY_MERGED_CONFIG_GATE=NOT_VERIFIED")
+    else:
+        print("ACTIVE_CADDY_BASELINE=PASS")
+        print("ACTIVE_CADDY_SHA256=PASS")
+        print(f"ACTIVE_CADDY_SHA256_VALUE={result['sha256']}")
+        print("CADDY_BASELINE_VALIDATE=PASS")
+        print("CADDY_MERGED_CONFIG_GATE=PASS")
+        print(f"BASELINE_ROUTE_PARITY={'PASS' if parity['routes_preserved'] else 'FAIL'}")
+        prefix = ""
     for category, gate in (("summary", "SUMMARY_ROUTE_PRESERVED"), ("story", "STORY_ROUTE_PRESERVED"), ("static", "STATIC_ASSET_ROUTING_PRESERVED"), ("spa", "SPA_ROUTING_PRESERVED")):
-        print(f"{gate}={'PASS' if parity[category] else 'NOT_VERIFIED'}")
-    print(f"READER_ROUTE_ADAPTED={'PASS' if result['reader_route_present'] else 'FAIL'}")
+        print(f"{prefix}{gate}={'PASS' if parity[category] else 'NOT_VERIFIED'}")
+    print(f"{prefix}READER_ROUTE_ADAPTED={'PASS' if result['reader_route_present'] else 'FAIL'}")
     print("CONFIG_CONTENT_LOGGED=NO")
     required_routes = all(parity[name] for name in ("summary", "story", "static", "spa"))
     return 0 if result["reader_route_present"] and required_routes else 1

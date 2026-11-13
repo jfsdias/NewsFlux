@@ -175,7 +175,9 @@ automatic `file_server` hide entries for the three temporary harness files;
 explicit hide rules and all other route fields remain part of the parity gate.
 
 The sample Caddyfile in `fixtures/` tests the harness in CI; it is not a
-substitute for the verified target file. If the target depends on imported
+substitute for the verified target file. CI passes `--synthetic-fixture`, so
+its successful output explicitly leaves `ACTIVE_CADDY_BASELINE` and the target
+merged-config gate `NOT_VERIFIED`. If the target depends on imported
 files outside the supplied copy, validation remains unverified until those
 inputs are separately provided and hashed. The OMV account currently cannot
 read the active Caddyfile, so its target gate is pending an accessible,

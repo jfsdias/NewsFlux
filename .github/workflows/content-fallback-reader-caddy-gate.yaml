@@ -62,7 +62,8 @@ jobs:
           python3 scripts/content-fallback-reader-active-caddy-gate.py \
             --active-caddyfile "$fixture" \
             --expected-sha256 "$fixture_sha256" \
-            --site-address :2000
+            --site-address :2000 \
+            --synthetic-fixture
 
       - name: Exercise Caddy with synthetic Reader, Summary and Story services
         run: python3 scripts/content-fallback-reader-caddy-gate.py

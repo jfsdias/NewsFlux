@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import importlib.util
+import io
 import json
 import unittest
 from pathlib import Path
@@ -214,6 +216,23 @@ class ActiveCaddyGateTests(unittest.TestCase):
         paths = GATE._mismatch_paths({"match": ["secret-value"]}, {"match": ["changed-secret"]})
         self.assertEqual(paths, ["root.match[0]"])
         self.assertNotIn("secret", ",".join(paths))
+
+    def test_synthetic_fixture_run_never_claims_active_target_pass(self) -> None:
+        result = {
+            "sha256": "a" * 64,
+            "parity": {"routes_preserved": True, "summary": True, "story": True, "static": True, "spa": True},
+            "reader_route_present": True,
+        }
+        output = io.StringIO()
+        arguments = ["gate", "--active-caddyfile", "fixture", "--expected-sha256", "a" * 64, "--synthetic-fixture"]
+        with patch.object(GATE, "run_gate", return_value=result), patch.object(GATE.sys, "argv", arguments):
+            with contextlib.redirect_stdout(output):
+                exit_code = GATE.main()
+        self.assertEqual(exit_code, 0)
+        self.assertIn("SYNTHETIC_CADDY_HARNESS=PASS", output.getvalue())
+        self.assertIn("ACTIVE_CADDY_BASELINE=NOT_VERIFIED", output.getvalue())
+        self.assertNotIn("ACTIVE_CADDY_BASELINE=PASS", output.getvalue())
+        self.assertNotIn("ACTIVE_CADDY_SHA256_VALUE", output.getvalue())
 
 
 if __name__ == "__main__":
