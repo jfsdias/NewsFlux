@@ -2099,9 +2099,9 @@ For the MVP, selection is scoped to a request or session without adding persiste
 
 Design follows the existing NewsFlux editorial and OLED-aware direction, with Material interactions and Liquid Glass restricted to chrome. Support mobile, tablet, Fold and the critical 884×1104 viewport, including accessible states for unavailable models, exhausted limits, and unpaid or unauthorized cost. This proposal excludes a Home redesign and card changes.
 
-| Step | Scope | Gate |
-| --- | --- | --- |
-| AI-UI-01A | Approved backend catalog and safe selection | Dedicated PR; authentication, allowlist, limits, privacy, paid authorization and provenance tests. |
-| AI-UI-01B | Summary model selector | Dedicated PR; accessibility, responsive/device and on-demand-only tests. |
-| AI-UI-01C | Optional persistent preference | Separate storage/privacy architecture decision and dedicated PR. |
-| AI-UI-01D | Optional extension to other editorial intelligence functions | Separate function-specific contracts and dedicated PR. |
+| Step      | Scope                                                        | Gate                                                                                               |
+| --------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| AI-UI-01A | Approved backend catalog and safe selection                  | Dedicated PR; authentication, allowlist, limits, privacy, paid authorization and provenance tests. |
+| AI-UI-01B | Summary model selector                                       | Dedicated PR; accessibility, responsive/device and on-demand-only tests.                           |
+| AI-UI-01C | Optional persistent preference                               | Separate storage/privacy architecture decision and dedicated PR.                                   |
+| AI-UI-01D | Optional extension to other editorial intelligence functions | Separate function-specific contracts and dedicated PR.                                             |
