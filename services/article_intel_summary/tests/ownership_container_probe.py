@@ -1,9 +1,13 @@
 """Synthetic ownership probe; all state must reside in an isolated test volume."""
 from decimal import Decimal
+import importlib.util
 import sys
 import time
 
-from services.article_intel_summary.budget import BudgetLedger, LedgerOwner, UsageLedgerError
+spec = importlib.util.spec_from_file_location("budget", "/app/services/article_intel_summary/budget.py")
+budget = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(budget)
+BudgetLedger, LedgerOwner, UsageLedgerError = budget.BudgetLedger, budget.LedgerOwner, budget.UsageLedgerError
 
 path = "/data/usage.sqlite3"
 mode = sys.argv[1]

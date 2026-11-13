@@ -10,7 +10,7 @@ cleanup() {
 trap cleanup EXIT
 docker volume create "$volume" >/dev/null
 docker run --rm --mount "type=volume,src=$volume,dst=/data" "$image" chmod 700 /data
-common=(--mount "type=volume,src=$volume,dst=/data" --mount "type=bind,src=$PWD,dst=/app,readonly" -w /app "$image" python -m services.article_intel_summary.tests.ownership_container_probe)
+common=(--mount "type=volume,src=$volume,dst=/data" --mount "type=bind,src=$PWD,dst=/app,readonly" -w /app "$image" python /app/services/article_intel_summary/tests/ownership_container_probe.py)
 docker run -d --name "$holder" "${common[@]}" holder >/dev/null
 ready=0
 for _ in {1..50}; do
