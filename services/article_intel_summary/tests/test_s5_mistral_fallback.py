@@ -100,6 +100,8 @@ class S5MistralFallbackTests(unittest.TestCase):
                 self.assertEqual(result.effective_model_id, MISTRAL_ALIAS)
                 self.assertEqual(result.deployment_id, "mistral-small")
                 self.assertEqual([self.model(r) for r in self.calls], [S5_ALIAS, MISTRAL_ALIAS])
+                self.assertNotIn("temperature", json.loads(self.calls[0].content))
+                self.assertEqual(json.loads(self.calls[1].content)["temperature"], 0)
                 self.assertEqual(ledger.current_month_spend(), Decimal("0.000051"))
 
     def test_timeout_triggers_one_paid_attempt_with_no_secret_leak(self) -> None:

@@ -287,9 +287,10 @@ class LiteLLMInferenceAdapter:
                 "model": self.settings.model_id,
                 "messages": messages,
                 "max_tokens": self.settings.max_output_tokens,
-                "temperature": 0,
                 "stream": False,
             }
+            if self.settings.model_choice == MODEL_CHOICE_MISTRAL_SMALL:
+                payload["temperature"] = 0
             timeout = min(float(timeout_seconds), self.settings.timeout_seconds)
             response_document = self._post(payload, timeout)
             usage = _read_usage(response_document)
