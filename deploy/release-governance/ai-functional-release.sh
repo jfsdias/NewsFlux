@@ -64,10 +64,15 @@ prepare() {
   mkdir -p "$RELEASE_DIR"
   local filter=()
   [[ "$REPO_URL" == https://* ]] && filter=(--filter=blob:none)
-  [[ -d "$SRC/.git" ]] || git clone --quiet "${filter[@]}" --no-checkout "$REPO_URL" "$SRC"
-  git -C "$SRC" fetch --quiet origin main
-  git -C "$SRC" merge-base --is-ancestor "$APPROVED_SHA" origin/main || die SOURCE_GATE APPROVED_SHA_NOT_ON_MAIN
-  git -C "$SRC" -c advice.detachedHead=false checkout --quiet --force "$APPROVED_SHA"
+  # R12F-09: source is not secret. Check it out with umask 022 so build-context modes are
+  # readable by non-root image users (the Dockerfiles also normalize modes defensively).
+  (
+    umask 022
+    [[ -d "$SRC/.git" ]] || git clone --quiet "${filter[@]}" --no-checkout "$REPO_URL" "$SRC"
+    git -C "$SRC" fetch --quiet origin main
+    git -C "$SRC" merge-base --is-ancestor "$APPROVED_SHA" origin/main || exit 3
+    git -C "$SRC" -c advice.detachedHead=false checkout --quiet --force "$APPROVED_SHA"
+  ) || die SOURCE_GATE APPROVED_SHA_NOT_ON_MAIN_OR_CHECKOUT_FAILED
   require_source
   gate RELEASE_DIR "$RELEASE_DIR"
   gate PREPARE PASS
@@ -123,7 +128,37 @@ build() {
     [[ "$(image_revision "newsflux-$kind:$APPROVED_SHA")" == "$APPROVED_SHA" ]] || die BUILD "${kind^^}_REVISION_LABEL_MISMATCH"
     gate "${kind^^}_IMAGE_ID" "$(image_id "newsflux-$kind:$APPROVED_SHA")"
   done
+  candidate_start_gate
   gate BUILD PASS
+}
+
+# R12F-09: prove the candidate Summary image starts and serves /healthz as its own non-root user,
+# isolated (no network, synthetic non-secret settings), BEFORE any production container is touched.
+candidate_start_gate() {
+  local image="newsflux-summary:$APPROVED_SHA" cid ok=0 i
+  cid="$(docker run -d --network none \
+    -e NEWSFLUX_AI_MINIFLUX_BASE_URL=https://miniflux.invalid -e NEWSFLUX_AI_ALLOWED_WEB_ORIGINS=https://newsflux.invalid \
+    "$image")"
+  for i in $(seq 1 30); do
+    if docker exec "$cid" python -c "import json,urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8788/healthz', timeout=2); assert json.load(r)['status']=='ok'" >/dev/null 2>&1; then ok=1; break; fi
+    [[ "$(docker inspect -f '{{.State.Running}}' "$cid")" == true ]] || break
+    sleep 1
+  done
+  if [[ "$ok" != 1 ]]; then
+    gate CANDIDATE_START "FAIL status=$(docker inspect -f '{{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}}' "$cid")"
+    # Sanitized log tail goes to a private file (best effort); never to the operator terminal.
+    if ( umask 077; docker logs --tail 40 "$cid" 2>&1 \
+      | sed -E 's#https?://[^ ]+#[URL]#g; s#(authorization|bearer|token|key|secret|password)[^ ]*#[REDACTED]#Ig' \
+      >"$RELEASE_DIR/candidate-start-failure.log" ) 2>/dev/null; then
+      gate FORENSIC_CAPTURE CAPTURED
+    else
+      gate FORENSIC_CAPTURE UNAVAILABLE
+    fi
+    docker rm -f "$cid" >/dev/null
+    die BUILD CANDIDATE_DOES_NOT_START
+  fi
+  docker rm -f "$cid" >/dev/null
+  gate CANDIDATE_START PASS
 }
 
 promote() { # service kind [extra plan args...]
