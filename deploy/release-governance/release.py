@@ -180,14 +180,32 @@ class Docker:
         require(len(document) == 1 and document[0]["Id"] == image_id, "IMAGE_NOT_FOUND")
         return document[0].get("Config", {}).get("Labels") or {}
 
-    def compose_up(self, identity: ContainerIdentity, files: Sequence[str], override: Path, service: str) -> None:
+    def compose_args(self, identity: ContainerIdentity, files: Sequence[str]) -> list[str]:
         args = ["compose", "-p", identity.project, "--project-directory", identity.working_dir]
         for env_file in identity.env_files:
             args += ["--env-file", env_file]
         for item in files:
             args += ["-f", item]
-        args += ["-f", str(override), "up", "-d", "--no-deps", "--no-build", "--pull", "never", service]
-        self.run(args)
+        return args
+
+    def compose_up(self, identity: ContainerIdentity, files: Sequence[str], service: str) -> None:
+        self.run([*self.compose_args(identity, files), "up", "-d", "--no-deps", "--no-build", "--pull", "never", service])
+
+    def resolved_service_image(self, identity: ContainerIdentity, files: Sequence[str], service: str) -> str | None:
+        """Image ID the given Compose sequence resolves to. Config output stays in memory (it may hold secrets)."""
+        try:
+            document = json.loads(self.run([*self.compose_args(identity, files), "config", "--format", "json"]))
+            reference = document["services"][service]["image"]
+            return json.loads(self.run(["image", "inspect", reference]))[0]["Id"]
+        except (GateError, KeyError, IndexError, TypeError, json.JSONDecodeError):
+            return None
+
+    def exec_probe(self, container_id: str, argv: Sequence[str]) -> bool:
+        try:
+            self.run(["exec", container_id, *argv])
+            return True
+        except GateError:
+            return False
 
 
 @contextlib.contextmanager
@@ -235,6 +253,8 @@ def build_manifest(
     protected: Sequence[str],
     policy: set[tuple[str, str]],
     release_dir: Path,
+    ready_probe: Sequence[str] | None = None,
+    extra_overrides: Sequence[str] = (),
 ) -> dict:
     require((project, service) in policy, "SERVICE_NOT_AUTHORIZED")
     require(IMAGE_ID_RE.fullmatch(candidate_image), "CANDIDATE_IMAGE_NOT_IMMUTABLE")
@@ -244,12 +264,25 @@ def build_manifest(
     target = docker.service_container(project, service)
     require(target.name not in protected, "TARGET_IS_PROTECTED")
     require(target.config_files and target.working_dir, "COMPOSE_LABELS_MISSING")
-    require(target.image_id != candidate_image, "CANDIDATE_EQUALS_CURRENT")
+    require(target.running, "TARGET_NOT_RUNNING")
+    # A pure configuration change (e.g. a policy override) may keep the image; otherwise the image must change.
+    require(target.image_id != candidate_image or extra_overrides, "CANDIDATE_EQUALS_CURRENT")
     labels = docker.image_labels(candidate_image)
     require(any(labels.get(label) == approved_sha for label in REVISION_LABELS), "CANDIDATE_REVISION_MISMATCH")
-    compose = [{"path": item, "sha256": sha256_file(Path(item))} for item in target.config_files]
+    # Readiness must be provable: a Docker healthcheck or an explicit in-container probe.
+    require(target.health is not None or ready_probe, "READINESS_UNDEFINED")
+    if ready_probe:
+        require(all(isinstance(item, str) and item for item in ready_probe), "READINESS_PROBE_INVALID")
+        require(docker.exec_probe(target.container_id, ready_probe), "READINESS_PROBE_FAILS_ON_CURRENT")
+    base_files = list(target.config_files)
+    compose = [{"path": item, "sha256": sha256_file(Path(item))} for item in base_files]
+    extras = [{"path": str(Path(item)), "sha256": sha256_file(Path(item))} for item in extra_overrides]
+    require(not {item["path"] for item in extras} & set(base_files), "EXTRA_OVERRIDE_IN_BASE")
     env_files = [{"path": item, "sha256": sha256_file(Path(item))} for item in target.env_files]
     protected_state = {name: docker.container_by_name(name).protected_fingerprint() for name in protected}
+    # Exact restoration: when the approved base sequence alone resolves to the current image,
+    # rollback re-applies that sequence unchanged and must reproduce the original config hash.
+    base_resolves = docker.resolved_service_image(target, base_files, service) == target.image_id
     manifest = {
         "version": MANIFEST_VERSION,
         "created_at": int(time.time()),
@@ -259,12 +292,16 @@ def build_manifest(
         "candidate_image": candidate_image,
         "previous_image": target.image_id,
         "previous_container_id": target.container_id,
+        "previous_config_hash": target.config_hash,
+        "base_resolves_to_previous": base_resolves,
         "working_dir": target.working_dir,
         "compose_files": compose,
+        "extra_overrides": extras,
         "env_files": env_files,
         "networks": list(target.networks),
         "mounts": [list(item) for item in target.mounts],
         "published_ports": target.published_ports,
+        "ready_probe": list(ready_probe) if ready_probe else None,
         "protected": protected_state,
         "release_dir": str(release_dir),
     }
@@ -284,28 +321,46 @@ def _override_document(manifest: dict, image: str) -> str:
     return json.dumps({"services": {manifest["service"]: {"image": image, "pull_policy": "never"}}}, indent=2) + "\n"
 
 
-def _release_overrides(manifest: dict) -> dict[str, str]:
-    directory = Path(manifest["release_dir"])
-    return {
-        str(directory / "candidate.override.json"): _override_document(manifest, manifest["candidate_image"]),
-        str(directory / "rollback.override.json"): _override_document(manifest, manifest["previous_image"]),
-    }
+def _base(manifest: dict) -> list[str]:
+    return [item["path"] for item in manifest["compose_files"]]
+
+
+def _candidate_override(manifest: dict) -> str:
+    return str(Path(manifest["release_dir"]) / "candidate.override.json")
+
+
+def _rollback_override(manifest: dict) -> str:
+    return str(Path(manifest["release_dir"]) / "rollback.override.json")
+
+
+def _candidate_files(manifest: dict) -> list[str]:
+    return _base(manifest) + [item["path"] for item in manifest["extra_overrides"]] + [_candidate_override(manifest)]
+
+
+def _state(manifest: dict, identity: ContainerIdentity) -> str:
+    """CANDIDATE, PREVIOUS or FOREIGN, from image ID *and* the recorded Compose sequence."""
+    files = list(identity.config_files)
+    if identity.image_id == manifest["candidate_image"] and files == _candidate_files(manifest):
+        return "CANDIDATE"
+    if identity.image_id == manifest["previous_image"] and files in (_base(manifest), _base(manifest) + [_rollback_override(manifest)]):
+        return "PREVIOUS"
+    return "FOREIGN"
 
 
 def _check_configuration(manifest: dict, identity: ContainerIdentity) -> None:
-    base = [item["path"] for item in manifest["compose_files"]]
-    files = list(identity.config_files)
-    # Compose records every -f file in the container labels. After a release-owned
-    # transition the sequence is the approved base plus exactly one release override,
-    # whose content must be byte-identical to what this manifest produces.
-    if files != base:
-        overrides = _release_overrides(manifest)
-        require(files[:-1] == base and files[-1] in overrides, "COMPOSE_SEQUENCE_DRIFT")
-        override = Path(files[-1])
-        require(override.is_file() and not override.is_symlink(), "COMPOSE_SEQUENCE_DRIFT")
-        require(override.read_text(encoding="utf-8") == overrides[files[-1]], "CONFIGURATION_DRIFT")
-    for item in manifest["compose_files"] + manifest["env_files"]:
+    require(_state(manifest, identity) != "FOREIGN", "LIVE_STATE_DOES_NOT_MATCH_RELEASE")
+    for item in manifest["compose_files"] + manifest["env_files"] + manifest["extra_overrides"]:
         require(sha256_file(Path(item["path"])) == item["sha256"], "CONFIGURATION_DRIFT")
+    # Release-owned overrides must be byte-identical to what this manifest generates.
+    expected = {
+        _candidate_override(manifest): _override_document(manifest, manifest["candidate_image"]),
+        _rollback_override(manifest): _override_document(manifest, manifest["previous_image"]),
+    }
+    for item in identity.config_files:
+        if item in expected:
+            path = Path(item)
+            require(path.is_file() and not path.is_symlink(), "CONFIGURATION_DRIFT")
+            require(path.read_text(encoding="utf-8") == expected[item], "CONFIGURATION_DRIFT")
     require(identity.working_dir == manifest["working_dir"], "CONFIGURATION_DRIFT")
     require(list(identity.env_files) == [item["path"] for item in manifest["env_files"]], "CONFIGURATION_DRIFT")
 
@@ -321,22 +376,35 @@ def _check_protected(docker: Docker, manifest: dict) -> None:
         require(docker.container_by_name(name).protected_fingerprint() == expected, "PROTECTED_SERVICE_DRIFT")
 
 
-def _wait_healthy(docker: Docker, manifest: dict, image: str, timeout: float) -> ContainerIdentity:
+READY_CONSECUTIVE_PROBES = 3
+
+
+def _wait_ready(docker: Docker, manifest: dict, image: str, timeout: float) -> ContainerIdentity:
+    """Healthy Docker healthcheck (when defined) AND consecutive successful probes (when defined).
+
+    Absence of a healthcheck is never accepted as readiness on its own."""
     deadline = time.monotonic() + timeout
+    probe = manifest.get("ready_probe")
+    successes = 0
     while True:
         identity = docker.service_container(manifest["project"], manifest["service"])
-        healthy = identity.running and identity.image_id == image and identity.health in (None, "healthy")
-        if healthy:
-            return identity
-        if identity.health == "unhealthy" or time.monotonic() > deadline:
-            raise GateError("HEALTHCHECK_FAILED")
+        require(identity.health is not None or probe, "READINESS_UNDEFINED")
+        if identity.health == "unhealthy" or (identity.image_id == image and not identity.running and time.monotonic() > deadline - timeout + 5):
+            raise GateError("READINESS_FAILED")
+        health_ok = identity.health in (None, "healthy")
+        if identity.running and identity.image_id == image and health_ok:
+            if not probe:
+                return identity
+            successes = successes + 1 if docker.exec_probe(identity.container_id, probe) else 0
+            if successes >= READY_CONSECUTIVE_PROBES:
+                return identity
+        if time.monotonic() > deadline:
+            raise GateError("READINESS_FAILED")
         time.sleep(1)
 
 
-def _override(manifest: dict, image: str, name: str) -> Path:
-    path = Path(manifest["release_dir"]) / f"{name}.override.json"
-    _atomic_write(path, _override_document(manifest, image), 0o644)
-    return path
+def _write_override(manifest: dict, path: str, image: str) -> None:
+    _atomic_write(Path(path), _override_document(manifest, image), 0o644)
 
 
 def _journal(manifest: dict, event: str, **details: object) -> None:
@@ -348,19 +416,37 @@ def _journal(manifest: dict, event: str, **details: object) -> None:
         os.fsync(output.fileno())
 
 
-def _transition(docker: Docker, manifest: dict, *, source: str, target: str, name: str, timeout: float) -> str:
+def _apply(docker: Docker, manifest: dict, identity: ContainerIdentity, target: str, timeout: float) -> None:
+    if target == "CANDIDATE":
+        _write_override(manifest, _candidate_override(manifest), manifest["candidate_image"])
+        files, image = _candidate_files(manifest), manifest["candidate_image"]
+    else:
+        # Re-check now: a moved tag in the base must never bring up a different image.
+        use_base = manifest["base_resolves_to_previous"] and (
+            docker.resolved_service_image(identity, _base(manifest), manifest["service"]) == manifest["previous_image"]
+        )
+        if use_base:
+            files = _base(manifest)
+        else:
+            _write_override(manifest, _rollback_override(manifest), manifest["previous_image"])
+            files = _base(manifest) + [_rollback_override(manifest)]
+        image = manifest["previous_image"]
+    docker.compose_up(identity, files, manifest["service"])
+    after = _wait_ready(docker, manifest, image, timeout)
+    require(_state(manifest, after) == target, "POST_TRANSITION_STATE_MISMATCH")
+    if target == "PREVIOUS" and list(after.config_files) == _base(manifest):
+        require(after.config_hash == manifest["previous_config_hash"], "PREVIOUS_CONFIG_NOT_RESTORED")
+
+
+def _transition(docker: Docker, manifest: dict, *, target: str, timeout: float) -> str:
     identity = docker.service_container(manifest["project"], manifest["service"])
-    if identity.image_id == target:
-        _check_configuration(manifest, identity)
-        _check_protected(docker, manifest)
-        return "ALREADY_APPLIED"
-    require(identity.image_id == source, "LIVE_STATE_DOES_NOT_MATCH_RELEASE")
+    state = _state(manifest, identity)
     _check_configuration(manifest, identity)
-    _check_shape(manifest, identity)
     _check_protected(docker, manifest)
-    override = _override(manifest, target, name)
-    docker.compose_up(identity, [item["path"] for item in manifest["compose_files"]], override, manifest["service"])
-    _wait_healthy(docker, manifest, target, timeout)
+    if state == target:
+        return "ALREADY_APPLIED"
+    _check_shape(manifest, identity)
+    _apply(docker, manifest, identity, target, timeout)
     _check_shape(manifest, docker.service_container(manifest["project"], manifest["service"]))
     _check_protected(docker, manifest)
     return "APPLIED"
@@ -371,18 +457,21 @@ def promote(docker: Docker, manifest: dict, policy: set, *, lock: str, timeout: 
     with release_lock(lock):
         _journal(manifest, "promote_started")
         try:
-            result = _transition(docker, manifest, source=manifest["previous_image"], target=manifest["candidate_image"], name="candidate", timeout=timeout)
+            result = _transition(docker, manifest, target="CANDIDATE", timeout=timeout)
         except GateError as error:
-            current = docker.service_container(manifest["project"], manifest["service"]).image_id
-            if current == manifest["previous_image"]:
+            identity = docker.service_container(manifest["project"], manifest["service"])
+            if identity.image_id == manifest["previous_image"] and list(identity.config_files) in (
+                _base(manifest), _base(manifest) + [_rollback_override(manifest)]
+            ):
                 # Blocked before any change (drift, concurrency, protected services): nothing to undo.
                 _journal(manifest, "promote_blocked", code=error.code)
                 raise
-            if current != manifest["candidate_image"]:
+            if identity.image_id != manifest["candidate_image"]:
                 _journal(manifest, "promote_unknown_state", code=error.code)
                 raise GateError("UNKNOWN_STATE_MANUAL_DECISION_REQUIRED") from None
             _journal(manifest, "promote_failed_auto_rollback", code=error.code)
-            _transition(docker, manifest, source=manifest["candidate_image"], target=manifest["previous_image"], name="rollback", timeout=timeout)
+            _apply(docker, manifest, identity, "PREVIOUS", timeout)
+            _check_protected(docker, manifest)
             _journal(manifest, "auto_rollback_completed")
             raise GateError(f"PROMOTION_FAILED_ROLLED_BACK:{error.code}") from None
         _journal(manifest, "promote_completed", result=result)
@@ -392,7 +481,7 @@ def promote(docker: Docker, manifest: dict, policy: set, *, lock: str, timeout: 
 def rollback(docker: Docker, manifest: dict, policy: set, *, lock: str, timeout: float = 120) -> str:
     verify_manifest(manifest, policy)
     with release_lock(lock):
-        result = _transition(docker, manifest, source=manifest["candidate_image"], target=manifest["previous_image"], name="rollback", timeout=timeout)
+        result = _transition(docker, manifest, target="PREVIOUS", timeout=timeout)
         _journal(manifest, "rollback_completed", result=result)
         return result
 
@@ -435,6 +524,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     p_plan.add_argument("--approved-sha", required=True)
     p_plan.add_argument("--protected", action="append", default=[])
     p_plan.add_argument("--release-dir", required=True)
+    p_plan.add_argument("--ready-probe", help="JSON argv run with docker exec; required when no healthcheck exists")
+    p_plan.add_argument("--extra-override", action="append", default=[], help="Approved configuration-only Compose override")
     for name in ("promote", "rollback"):
         p = sub.add_parser(name)
         p.add_argument("--manifest", required=True)
@@ -451,6 +542,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             manifest = build_manifest(
                 docker, project=args.project, service=args.service, candidate_image=args.candidate_image,
                 approved_sha=args.approved_sha, protected=args.protected, policy=policy, release_dir=release_dir,
+                ready_probe=json.loads(args.ready_probe) if args.ready_probe else None,
+                extra_overrides=args.extra_override,
             )
             path = release_dir / "manifest.json"
             require(not path.exists(), "MANIFEST_ALREADY_EXISTS")
