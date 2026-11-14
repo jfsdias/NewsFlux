@@ -179,6 +179,25 @@ class LiteLLMAdapterTests(unittest.TestCase):
         self.assertNotIn("synthetic-virtual-key", repr(adapter.settings))
         self.assertGreater(adapter.ledger.current_month_spend(), Decimal("0"))
 
+    def test_each_model_disables_gateway_retry_and_fallback(self) -> None:
+        for model, alias in (("s5-free", S5_ALIAS), (MODEL_CHOICE_MISTRAL_SMALL, MISTRAL_ALIAS)):
+            with self.subTest(model=model):
+                self.requests.clear()
+                adapter = self.make_adapter(
+                    handler=lambda _request, alias=alias: completion_response(model=alias),
+                    model_choice=model,
+                    model_id=alias,
+                    usage_database_path=str(Path(self.tempdir.name) / f"controls-{model}.sqlite3"),
+                )
+                adapter.summarize(input_fixture(), timeout_seconds=12)
+                self.assertEqual(len(self.requests), 1)
+                request = self.requests[0]
+                body = json.loads(request.content)
+                self.assertIs(body["disable_fallbacks"], True)
+                self.assertIs(type(body["num_retries"]), int)
+                self.assertEqual(body["num_retries"], 0)
+                self.assertEqual(request.headers["x-litellm-num-retries"], "0")
+
     def test_selected_s5_alias_is_sent_once_without_paid_model_fallback(self) -> None:
         adapter = self.make_adapter(
             handler=lambda _request: completion_response(model=S5_ALIAS),
@@ -336,7 +355,7 @@ class LiteLLMAdapterTests(unittest.TestCase):
         self.assertNotIn("private.example", body["messages"][1]["content"])
 
     def test_non_success_statuses_are_sanitized_and_never_retried(self) -> None:
-        for status in (302, 307, 400, 401, 403, 429, 500):
+        for status in (302, 307, 400, 401, 403, 429, 500, 502, 503, 504):
             self.requests.clear()
             adapter = self.make_adapter(
                 handler=lambda _request, status=status: httpx.Response(status, text="secret provider body"),

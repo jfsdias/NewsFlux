@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import sqlite3
+from contextlib import closing
 import tempfile
 import unittest
 from dataclasses import replace
@@ -100,11 +102,20 @@ class S5MistralFallbackTests(unittest.TestCase):
                 self.assertEqual(result.effective_model_id, MISTRAL_ALIAS)
                 self.assertEqual(result.deployment_id, "mistral-small")
                 self.assertEqual([self.model(r) for r in self.calls], [S5_ALIAS, MISTRAL_ALIAS])
+                for attempt in self.calls:
+                    body = json.loads(attempt.content)
+                    self.assertIs(body["disable_fallbacks"], True)
+                    self.assertIs(type(body["num_retries"]), int)
+                    self.assertEqual(body["num_retries"], 0)
+                    self.assertEqual(attempt.headers["x-litellm-num-retries"], "0")
                 self.assertNotIn("temperature", json.loads(self.calls[0].content))
                 self.assertEqual(json.loads(self.calls[0].content)["reasoning_effort"], "none")
                 self.assertEqual(json.loads(self.calls[1].content)["temperature"], 0)
                 self.assertNotIn("reasoning_effort", json.loads(self.calls[1].content))
                 self.assertEqual(ledger.current_month_spend(), Decimal("0.000051"))
+                with closing(sqlite3.connect(self.database)) as db:
+                    states = db.execute("SELECT state FROM inference_usage ORDER BY rowid").fetchall()
+                self.assertEqual(states, [("uncertain",), ("settled",)])
 
     def test_timeout_triggers_one_paid_attempt_with_no_secret_leak(self) -> None:
         def handler(request):

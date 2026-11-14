@@ -313,6 +313,8 @@ class LiteLLMInferenceAdapter:
                 "messages": messages,
                 "max_tokens": self.settings.max_output_tokens,
                 "stream": False,
+                "disable_fallbacks": True,
+                "num_retries": 0,
             }
             if self.settings.model_choice == MODEL_CHOICE_MISTRAL_SMALL:
                 payload["temperature"] = 0
@@ -382,6 +384,7 @@ class LiteLLMInferenceAdapter:
             "Authorization": f"Bearer {self.settings.virtual_key}",
             "Accept": "application/json",
             "Content-Type": "application/json",
+            "x-litellm-num-retries": "0",
         }
         timeout = httpx.Timeout(timeout_seconds, connect=timeout_seconds, read=timeout_seconds, write=timeout_seconds, pool=timeout_seconds)
         with self.client.stream(
