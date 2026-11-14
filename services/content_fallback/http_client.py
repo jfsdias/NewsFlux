@@ -215,6 +215,13 @@ class PinnedHTTPClient:
         self._requester = requester
         self._post_requester = post_requester
 
+    def validate_public_destination(self, host: str, port: int) -> str:
+        """Validate a third-party destination without routing it (public addresses only)."""
+        validate = getattr(self._resolver, "validate_public", None)
+        if validate is not None:
+            return validate(host, port)
+        return self._resolver(host, port, False)
+
     def get(
         self,
         url: str,
@@ -327,6 +334,11 @@ class EgressRelayResolver:
         self.relay_host = relay_host
         self.allowed_hosts = frozenset(normalized)
         self._resolver = resolver
+
+    def validate_public(self, host: str, port: int) -> str:
+        """SSRF check for a destination the sidecar never contacts itself (e.g. the publisher that
+        WallHop will fetch): public DNS, every answer must be a global address."""
+        return self._resolver(host, port, False)
 
     def __call__(self, host: str, port: int, allow_private: bool = False) -> str:
         del allow_private

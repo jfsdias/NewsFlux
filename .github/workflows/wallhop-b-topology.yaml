@@ -20,3 +20,7 @@ jobs:
           docker pull -q haproxy:3.0.5-alpine
           docker pull -q caddy:2.10.2-alpine
           bash deploy/wallhop-b/rehearse-topology.sh
+      - name: Reader recovery end to end (real Caddyfile.wallhop, sidecar, relay; synthetic WallHop/Miniflux)
+        run: |
+          docker pull -q python:3.12-slim
+          bash deploy/wallhop-b/rehearse-reader-recovery.sh

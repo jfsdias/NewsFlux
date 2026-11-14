@@ -82,3 +82,50 @@ class EgressRelayTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WallHopThroughRelayTests(unittest.TestCase):
+    """Regression: with the relay, publisher SSRF validation must use public DNS, not the egress map."""
+
+    def _provider(self, publisher_answer):
+        from services.content_fallback.content import assess_content
+        from services.content_fallback.service import WallHopProvider
+
+        calls = []
+
+        def underlying(host, port, allow_private):
+            calls.append((host, port, allow_private))
+            if host == "wallhop-egress":
+                return RELAY_IP
+            if isinstance(publisher_answer, Exception):
+                raise publisher_answer
+            return publisher_answer
+
+        sentences = (
+            "Researchers compared water temperature, wind direction and shoreline movement at several coastal stations.",
+            "Field notes recorded rainfall totals and tide levels across the northern survey locations every week.",
+            "Analysts checked the collected records for gaps before comparing results from each monitoring station.",
+            "Local observers documented conditions and shared dated reports with the coordinating research group.",
+        )
+        paragraphs = "".join(f"<p>{' '.join(sentences)} Survey number {i} extended the same method.</p>" for i in range(10))
+
+        def requester(url, ip, port, headers, timeout, max_bytes):
+            self.assertEqual(ip, RELAY_IP)
+            return HTTPResponse(200, {"content-type": "text/html"}, f"<article>{paragraphs}</article>".encode(), url)
+
+        resolver = EgressRelayResolver("wallhop-egress", frozenset({"wallhop.io"}), resolver=underlying)
+        provider = WallHopProvider(http=PinnedHTTPClient(resolver=resolver, requester=requester), sleep=lambda _s: None)
+        entry = type("Entry", (), {"url": "https://publisher.example/a", "title": "Synthetic story"})()
+        original = assess_content("Synthetic story", "<p>Short teaser.</p>")
+        return provider, entry, original, calls
+
+    def test_public_publisher_is_validated_by_public_dns_then_fetched_via_relay(self) -> None:
+        provider, entry, original, calls = self._provider("93.184.216.34")
+        result = provider.recover(entry, original)
+        self.assertEqual(result.provider, "wallhop.io")
+        self.assertIn(("publisher.example", 443, False), calls)
+
+    def test_private_publisher_address_is_still_refused(self) -> None:
+        provider, entry, original, _ = self._provider(UnsafeURL("private"))
+        with self.assertRaises(UnsafeURL):
+            provider.recover(entry, original)
