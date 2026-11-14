@@ -2,8 +2,8 @@ name: WallHop B isolated topology rehearsal
 on:
   pull_request:
     paths:
-      - 'deploy/wallhop-b/**'
-      - '.github/workflows/wallhop-b-isolated.yaml'
+      - "deploy/wallhop-b/**"
+      - ".github/workflows/wallhop-b-isolated.yaml"
 permissions:
   contents: read
 jobs:

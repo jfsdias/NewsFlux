@@ -1,8 +1,20 @@
 {
   "services": {
-    "reader": {"image": "python:3.12-slim@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704", "command": ["python", "-m", "http.server", "8000"], "networks": ["reader_net"]},
-    "sidecar": {"image": "python:3.12-slim@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704", "command": ["python", "-m", "http.server", "8000"], "networks": ["reader_net", "miniflux_net"]},
-    "miniflux": {"image": "python:3.12-slim@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704", "command": ["python", "-m", "http.server", "8000"], "networks": ["miniflux_net"]}
+    "reader": {
+      "image": "python:3.12-slim@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704",
+      "command": ["python", "-m", "http.server", "8000"],
+      "networks": ["reader_net"]
+    },
+    "sidecar": {
+      "image": "python:3.12-slim@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704",
+      "command": ["python", "-m", "http.server", "8000"],
+      "networks": ["reader_net", "miniflux_net"]
+    },
+    "miniflux": {
+      "image": "python:3.12-slim@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704",
+      "command": ["python", "-m", "http.server", "8000"],
+      "networks": ["miniflux_net"]
+    }
   },
-  "networks": {"reader_net": {"internal": true}, "miniflux_net": {"internal": true}}
+  "networks": { "reader_net": { "internal": true }, "miniflux_net": { "internal": true } }
 }
