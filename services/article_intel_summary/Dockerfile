@@ -14,6 +14,10 @@ COPY services/__init__.py /app/services/__init__.py
 COPY services/article_intel_auth /app/services/article_intel_auth
 COPY services/content_fallback /app/services/content_fallback
 COPY services/article_intel_summary /app/services/article_intel_summary
+# R12F-09: COPY preserves build-context modes. A checkout made under a restrictive umask (077)
+# produced 0600/0700 sources that USER 10001 could not read, so the candidate exited at import.
+# Normalize to world-readable, non-writable code regardless of how the context was checked out.
+RUN chmod -R a+rX,go-w /app/services
 USER 10001:10001
 EXPOSE 8788
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD ["python", "-c", "import json, urllib.request; r = urllib.request.urlopen('http://127.0.0.1:8788/healthz', timeout=2); assert r.status == 200 and json.load(r).get('status') == 'ok'"]

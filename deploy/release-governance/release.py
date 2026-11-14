@@ -408,6 +408,60 @@ def _wait_ready(docker: Docker, manifest: dict, image: str, timeout: float) -> C
         time.sleep(1)
 
 
+_SECRET_PATTERNS = (
+    re.compile(r"(?i)(authorization|x-auth-token|x-miniflux-api-key|api[_-]?key|token|secret|password)\s*[:=]\s*\S+"),
+    re.compile(r"(?i)bearer\s+[A-Za-z0-9._~+/=-]+"),
+    re.compile(r"\bsk-[A-Za-z0-9_-]{8,}"),
+    re.compile(r"https?://[^\s\"']+"),
+)
+MAX_DIAGNOSTIC_LOG_LINES = 40
+
+
+def _sanitize(line: str) -> str:
+    for pattern in _SECRET_PATTERNS:
+        line = pattern.sub("[REDACTED]", line)
+    return line[:300]
+
+
+def _capture_failure(docker: Docker, manifest: dict, identity: ContainerIdentity, code: str) -> dict:
+    """Record why a candidate failed BEFORE rollback removes it (R12F-09 forensics).
+
+    Stored in the release dir with mode 0600: container state, exit code, OOM flag, health probe
+    exit codes and the last log lines with credentials and URLs redacted. Never environment values."""
+    diagnostic: dict[str, object] = {"code": code, "container_id": identity.container_id, "image_id": identity.image_id}
+    try:
+        document = json.loads(docker.run(["inspect", identity.container_id]))[0]
+        state = document.get("State", {})
+        health = state.get("Health") or {}
+        diagnostic.update(
+            {
+                "status": state.get("Status"),
+                "exit_code": state.get("ExitCode"),
+                "oom_killed": state.get("OOMKilled"),
+                "error": _sanitize(str(state.get("Error") or "")),
+                "started_at": state.get("StartedAt"),
+                "finished_at": state.get("FinishedAt"),
+                "restart_count": document.get("RestartCount"),
+                "health_status": health.get("Status"),
+                "health_exit_codes": [item.get("ExitCode") for item in (health.get("Log") or [])][-5:],
+            }
+        )
+    except (GateError, json.JSONDecodeError, IndexError, KeyError, TypeError):
+        diagnostic["inspect"] = "UNAVAILABLE"
+    try:
+        completed = subprocess.run(
+            ["docker", "logs", "--tail", str(MAX_DIAGNOSTIC_LOG_LINES), identity.container_id],
+            check=False, capture_output=True, text=True, timeout=30,
+        )
+        lines = (completed.stdout + completed.stderr).splitlines()[-MAX_DIAGNOSTIC_LOG_LINES:]
+        diagnostic["log_tail"] = [_sanitize(line) for line in lines]
+    except (OSError, subprocess.TimeoutExpired):
+        diagnostic["log_tail"] = "UNAVAILABLE"
+    path = Path(manifest["release_dir"]) / f"failure-{int(time.time())}.json"
+    _atomic_write(path, json.dumps(diagnostic, indent=2) + "\n", 0o600)
+    return diagnostic
+
+
 def _write_override(manifest: dict, path: str, image: str) -> None:
     _atomic_write(Path(path), _override_document(manifest, image), 0o644)
 
@@ -474,7 +528,17 @@ def promote(docker: Docker, manifest: dict, policy: set, *, lock: str, timeout: 
             if identity.image_id != manifest["candidate_image"]:
                 _journal(manifest, "promote_unknown_state", code=error.code)
                 raise GateError("UNKNOWN_STATE_MANUAL_DECISION_REQUIRED") from None
-            _journal(manifest, "promote_failed_auto_rollback", code=error.code)
+            diagnostic = _capture_failure(docker, manifest, identity, error.code)
+            _journal(
+                manifest, "promote_failed_auto_rollback", code=error.code,
+                candidate_status=diagnostic.get("status"), candidate_exit_code=diagnostic.get("exit_code"),
+                candidate_oom_killed=diagnostic.get("oom_killed"), candidate_health=diagnostic.get("health_status"),
+            )
+            print(
+                f"CANDIDATE_STATUS={diagnostic.get('status')} CANDIDATE_EXIT_CODE={diagnostic.get('exit_code')} "
+                f"CANDIDATE_OOM_KILLED={diagnostic.get('oom_killed')} DIAGNOSTIC_FILE=failure-*.json",
+                file=sys.stderr,
+            )
             _apply(docker, manifest, identity, "PREVIOUS", timeout)
             _check_protected(docker, manifest)
             _journal(manifest, "auto_rollback_completed")
