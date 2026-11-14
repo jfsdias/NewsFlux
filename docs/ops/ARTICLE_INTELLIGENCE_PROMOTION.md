@@ -29,9 +29,13 @@ Rollback, in reverse order and each idempotent: `rollback-reader`, `rollback-cad
 ## Stage 2 — S5 activation (separate approval; free model only)
 
 ```bash
+sudo python3 deploy/release-governance/s5_key_audit.py ...  # operator-only admin read (see S5_KEY_GATE.md)
 sudo -E bash ai-functional-release.sh s5-preflight     # read-only: key, alias, prices, budget, callbacks
 sudo -E bash ai-functional-release.sh enable-s5        # hash-pinned config-only override
 ```
+
+The key gate contract (why `/key/info` returns 403 for a least-privilege key, what counts as evidence,
+and the admin attestation) is in [S5_KEY_GATE.md](S5_KEY_GATE.md).
 
 Gates required before `enable-s5`: `S5_PREFLIGHT=PASS`, plus the operator's attestation of provider
 privacy/retention (not technically verifiable). Mistral and the S5→Mistral fallback stay forced off.

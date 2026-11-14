@@ -9,6 +9,7 @@
 #   sudo -E bash ai-functional-release.sh update-caddy     # adds the GET-only catalog route (in-place, validated)
 #   sudo -E bash ai-functional-release.sh promote-reader   # new Reader image, readiness proven by HTTP probe
 #   sudo -E bash ai-functional-release.sh smoke            # fail-closed production checks + receipt
+#   sudo python3 s5_key_audit.py ... --out "$RELEASE_DIR/s5-key-attestation.json"   # operator-only admin read (host)
 #   sudo -E bash ai-functional-release.sh s5-preflight     # read-only LiteLLM key/model/price/budget/logging gates
 #   sudo -E bash ai-functional-release.sh enable-s5        # only after s5-preflight PASS (re-run internally)
 #   sudo -E bash ai-functional-release.sh all              # prepare..smoke, stops at the first failed gate
@@ -261,8 +262,16 @@ smoke() {
   echo "NEXT=open NewsFlux over HTTPS > Settings > Reading > Article intelligence (catalog must list S5)."
 }
 
+S5_KEY_ATTESTATION="$RELEASE_DIR/s5-key-attestation.json"
+
 s5_preflight() {
-  docker exec "$(summary_container)" python -m services.article_intel_summary.s5_preflight
+  # The attestation (written by s5_key_audit.py on the host with a read-only admin credential) goes in on
+  # stdin; the admin credential itself never enters the Summary container.
+  if [[ -f "$S5_KEY_ATTESTATION" && ! -L "$S5_KEY_ATTESTATION" ]]; then
+    docker exec -i "$(summary_container)" python -m services.article_intel_summary.s5_preflight --attestation-stdin <"$S5_KEY_ATTESTATION"
+  else
+    docker exec "$(summary_container)" python -m services.article_intel_summary.s5_preflight
+  fi
 }
 
 enable_s5() {
