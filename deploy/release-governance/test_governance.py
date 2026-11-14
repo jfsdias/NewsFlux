@@ -23,6 +23,12 @@ class GovernanceTests(unittest.TestCase):
         self.manifest['rollback_sha256'] = hashlib.sha256((self.root/'rollback.json').read_bytes()).hexdigest()
         self.effective = {'services':{'summary-api':{'image':self.manifest['candidate_image'],'environment':{'NEWSFLUX_AI_INFERENCE_ENABLED':'false','NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER':'false','NEWSFLUX_AI_ALLOW_PAID_INFERENCE':'false','NEWSFLUX_AI_ENABLE_S5_MISTRAL_FALLBACK':'false'},'networks':{'private':{},'gateway':{}},'volumes':[{'target':'/data'},{'target':'/run/secrets/key'}]}}}
 
+    def test_docker_rehearsal_has_only_synthetic_private_services(self):
+        config = json.loads(Path(__file__).with_name("compose.rehearsal.json").read_text())
+        self.assertEqual(set(config["services"]), {"summary-api", "reader"})
+        self.assertTrue(config["networks"]["private"]["internal"])
+        for service in config["services"].values(): self.assertNotIn("ports", service)
+
     def test_preflight_accepts_exact_snapshot(self):
         g.validate(self.manifest,self.files,self.effective,{'reader':'id-reader','miniflux':'id-miniflux'})
 
