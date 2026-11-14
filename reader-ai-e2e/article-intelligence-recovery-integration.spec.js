@@ -29,6 +29,13 @@ const openSyntheticArticle = async (openApp, options = {}) => {
   await cards(opened.page).first().click()
   await expect(opened.page).toHaveURL(/\/all\/entry\/1$/)
   await expect(opened.page.getByRole("heading", { name: "Subtítulo" })).toBeVisible()
+  await opened.page.route("**/api/ai/v1/models", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(MODEL_CATALOG),
+    }),
+  )
   return opened
 }
 
@@ -42,26 +49,61 @@ const recoveryPayload = (entry) => ({
   provenance: { provider: "wallhop.io", fetched_at: "2026-11-10T12:00:00+00:00" },
 })
 
-const summaryPayload = (requestId, entryId) => ({
-  schema_version: "1",
-  request_id: requestId,
+const summaryPayload = (request, entryId) => ({
+  schema_version: "2",
+  request_id: request.request_id,
   entry_id: entryId,
   status: "partial",
   content_scope: "unknown",
   summary: "Synthetic integrated Reader summary.",
   summary_paragraph_ids: ["p1"],
   key_points: [{ text: "Synthetic grounded point.", paragraph_ids: ["p1"] }],
+  facts: [],
+  implications: [],
   action_points: [],
+  open_questions: [],
   limitations: ["Synthetic source may be partial."],
+  profile: request.profile,
   provenance: {
-    content_origin: "miniflux",
+    content_origin: "ORIGINAL_MINIFLUX",
     content_fingerprint: "a".repeat(64),
     provider_id: "litellm",
-    deployment_id: "synthetic",
+    model_id: request.model_id,
     effective_model_id: "synthetic-model",
-    prompt_version: "synthetic-v1",
+    prompt_version: "synthetic-v2",
+    profile_version: "summary-profile-v1",
+    fallback_used: false,
   },
 })
+
+const MODEL_CATALOG = {
+  schema_version: "1",
+  default_model_id: "s5-free",
+  profile_version: "summary-profile-v1",
+  default_profile: {},
+  models: [
+    {
+      id: "s5-free",
+      label: "S5",
+      provider: "LiteLLM",
+      available: true,
+      unavailable_reason: null,
+      requires_paid_authorization: false,
+      pricing: {
+        status: "operator_declared_zero",
+        input_usd_per_million: "0",
+        output_usd_per_million: "0",
+      },
+      limits: {
+        max_input_tokens: 4096,
+        max_output_tokens: 2048,
+        requests_per_minute: 5,
+        timeout_seconds: 25,
+      },
+      notices: ["ARTICLE_SENT_TO_MODEL_PROVIDER", "PRICE_DECLARED_BY_OPERATOR"],
+    },
+  ],
+}
 
 const setSyntheticSummaryRoute = async (page, entryId, onRequest = () => {}) => {
   let requests = 0
@@ -72,7 +114,7 @@ const setSyntheticSummaryRoute = async (page, entryId, onRequest = () => {}) => 
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify(summaryPayload(request.request_id, entryId)),
+      body: JSON.stringify(summaryPayload(request, entryId)),
     })
   })
   return () => requests
@@ -102,6 +144,7 @@ test("AI_RECOVERY_CROSS: recovered article remains intact while an explicit summ
 
   await expect(page.getByRole("button", { name: "Recover full text" })).toBeVisible()
   await page.getByRole("button", { name: "Recover full text" }).click()
+  await page.getByRole("button", { name: "Recover now" }).click()
   await expect(page.locator(".article-body")).toContainText("Synthetic recovered paragraph 1")
   expect(summaryRequestCount()).toBe(0)
   await expect(
@@ -114,11 +157,14 @@ test("AI_RECOVERY_CROSS: recovered article remains intact while an explicit summ
   await expect(page.getByText("Synthetic integrated Reader summary.")).toBeVisible()
   await expect(page.locator(".article-body")).toContainText("Synthetic recovered paragraph 1")
   expect(summaryRequestCount()).toBe(1)
+  // Only identifiers are sent: never the recovered HTML, prompts or model aliases.
   expect(Object.keys(summaryRequests[0]).toSorted()).toEqual([
-    "profile_id",
+    "model_id",
+    "profile",
     "request_id",
     "schema_version",
   ])
+  expect(JSON.stringify(summaryRequests[0])).not.toContain("Synthetic recovered paragraph")
 
   await page.getByRole("button", { name: "Show original text" }).click()
   await expect(page.locator(".article-body")).toContainText("const x = 1")
@@ -140,6 +186,7 @@ test("AI_RECOVERY_CROSS: failed recovery preserves the original and does not blo
   const summaryRequestCount = await setSyntheticSummaryRoute(page, 1)
 
   await page.getByRole("button", { name: "Recover full text" }).click()
+  await page.getByRole("button", { name: "Recover now" }).click()
   await expect(page.locator(".reader-content-recovery__error")).toBeVisible()
   await expect(page.locator(".article-body")).toContainText("const x = 1")
   await page.getByRole("button", { name: "Summarize with AI" }).click()
@@ -199,7 +246,7 @@ test("AI_RECOVERY_CROSS: session change cancels simultaneous recovery and summar
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify(summaryPayload(request.request_id, 1)),
+        body: JSON.stringify(summaryPayload(request, 1)),
       })
     } catch {
       // The current session intentionally aborts both browser requests.
@@ -207,6 +254,7 @@ test("AI_RECOVERY_CROSS: session change cancels simultaneous recovery and summar
   })
 
   await page.getByRole("button", { name: "Recover full text" }).click()
+  await page.getByRole("button", { name: "Recover now" }).click()
   await recoveryRequest
   await page.getByRole("button", { name: "Summarize with AI" }).click()
   await summaryRequest

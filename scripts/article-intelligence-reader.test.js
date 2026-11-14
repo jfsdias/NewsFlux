@@ -11,8 +11,11 @@ test("Reader summary is explicit, localized, and separate from the original arti
   assert.ok(actionIndex !== -1)
   assert.ok(articleBodyIndex > actionIndex)
   assert.ok(component.includes("onClick={() => void articleSummary.summarize()}"))
-  assert.match(component, /articleSummary\.summary\.key_points\.map/u)
-  assert.match(component, /articleSummary\.summary\.limitations\.map/u)
+  assert.match(component, /<ArticleSummaryResult/u)
+  const result = await read("src/components/Article/ArticleSummaryResult.jsx")
+  assert.match(result, /summary\.limitations\.map/u)
+  assert.match(result, /section_not_supported/u)
+  assert.match(result, /origin_original_miniflux/u)
   assert.doesNotMatch(component, /useEffect\([^)]*articleSummary\.summarize/su)
 })
 
@@ -46,6 +49,16 @@ test("summary action copy and safe states exist in every shipped locale", async 
       "limitations",
       "insufficient",
       "unavailable",
+      "transfer_notice",
+      "model_unavailable_error",
+      "provenance_line",
+      "section_not_supported",
+      "settings_section",
+      "model_label",
+      "length_label",
+      "focus_label",
+      "sections_label",
+      "language_label",
     ]) {
       assert.equal(typeof text?.[key], "string", `${locale} is missing ${key}`)
       assert.ok(text[key].trim(), `${locale} has empty ${key}`)

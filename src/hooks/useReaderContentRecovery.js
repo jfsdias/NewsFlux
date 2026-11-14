@@ -132,6 +132,31 @@ const useReaderContentRecovery = ({
     }
   }
 
+  // Contextual consent: the reader is told that an external service is used before any request.
+  const requestConsent = () => {
+    if (!canRecover || inFlightRef.current || hasRecovery) {
+      return
+    }
+    setStoredState({ contextKey, status: "confirming" })
+  }
+
+  const dismissConsent = () => {
+    if (visibleState.status === "confirming") {
+      setStoredState(EMPTY_STATE)
+    }
+  }
+
+  const cancel = () => {
+    if (visibleState.status !== "loading") {
+      return
+    }
+    requestIdRef.current += 1
+    abortControllerRef.current?.abort()
+    abortControllerRef.current = null
+    inFlightRef.current = false
+    setStoredState({ contextKey, status: "cancelled" })
+  }
+
   const showOriginalContent = () => {
     if (visibleState.status !== "recovered") {
       return
@@ -153,6 +178,9 @@ const useReaderContentRecovery = ({
     contentHtml: visibleState.status === "recovered" ? visibleState.contentHtml : null,
     contentOrigin: hasRecovery ? visibleState.contentOrigin : null,
     recover,
+    requestConsent,
+    dismissConsent,
+    cancel,
     hasRecovery,
     isOriginalShown: visibleState.status === "original_restored",
     showOriginalContent,

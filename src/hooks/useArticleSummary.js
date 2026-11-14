@@ -1,10 +1,12 @@
 import { useStore } from "@nanostores/react"
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
 
-import requestArticleSummary from "@/apis/article-intelligence"
+import requestArticleSummary, { fetchModelCatalog } from "@/apis/article-intelligence"
 import { authState } from "@/store/authState"
 import { getDataSessionRevision } from "@/store/dataState"
+import { settingsState } from "@/store/settingsState"
 import isArticleIntelligenceEnabled from "@/utils/article-intelligence-feature"
+import { buildSummaryProfile, resolveSummaryModel } from "@/utils/article-intelligence-profile"
 import { isCurrentArticleSummaryRequest } from "@/utils/article-intelligence-summary"
 import { getAuthSessionKey, hasProvisionedApiKey } from "@/utils/auth"
 
@@ -18,6 +20,15 @@ const idleState = (entryId, authSessionKey, sessionRevision) => ({
 
 const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => {
   const auth = useStore(authState)
+  const settings = useStore(settingsState, {
+    keys: [
+      "aiSummaryModel",
+      "aiSummaryLength",
+      "aiSummaryFocus",
+      "aiSummarySections",
+      "aiSummaryLanguage",
+    ],
+  })
   const authSessionKey = getAuthSessionKey(auth)
   const [state, setState] = useState(() =>
     idleState(activeContent?.id ?? null, authSessionKey, sessionRevision),
@@ -87,9 +98,40 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
       summary: null,
     })
 
+    const setModelUnavailable = () =>
+      setState({
+        entryId,
+        authSessionKey,
+        sessionRevision: request.sessionRevision,
+        status: "model_unavailable",
+        summary: null,
+        retryable: false,
+      })
+
     try {
-      const result = await requestArticleSummary({ entryId, signal: controller.signal })
+      // The catalog is revalidated on every explicit action; a stored choice is never
+      // silently replaced by another model.
+      const catalog = await fetchModelCatalog({ signal: controller.signal })
+      if (!catalog || !isCurrent()) {
+        return
+      }
+      const selection = resolveSummaryModel(settings.aiSummaryModel, catalog)
+      if (!selection.modelId) {
+        setModelUnavailable()
+        return
+      }
+      const profile = buildSummaryProfile(settings)
+      const result = await requestArticleSummary({
+        entryId,
+        signal: controller.signal,
+        modelId: selection.modelId,
+        profile,
+      })
       if (!result || !isCurrent()) {
+        return
+      }
+      if (result.kind === "error" && result.error.code.startsWith("MODEL_NOT_")) {
+        setModelUnavailable()
         return
       }
       if (result.kind === "summary") {
@@ -99,6 +141,7 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
           sessionRevision: request.sessionRevision,
           status: result.summary.status,
           summary: result.summary,
+          modelLabel: selection.entry.label,
         })
       } else if (result.kind === "error") {
         setState({
@@ -131,7 +174,7 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
         })
       }
     }
-  }, [authSessionKey, canSummarize, entryId])
+  }, [authSessionKey, canSummarize, entryId, settings])
 
   const stateIsCurrent =
     state.entryId === entryId &&
@@ -144,6 +187,7 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
     status: stateIsCurrent ? state.status : "idle",
     summary: stateIsCurrent ? state.summary : null,
     retryable: stateIsCurrent ? Boolean(state.retryable) : false,
+    modelLabel: stateIsCurrent ? (state.modelLabel ?? null) : null,
   }
 }
 

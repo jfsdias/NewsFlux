@@ -64,8 +64,18 @@ test.describe("Reader content recovery", () => {
     await expect(button(page, "Recover full text")).toBeVisible()
     await button(page, "Recover full text").focus()
     await page.keyboard.press("Enter")
+    // Contextual consent precedes any external request; focus moves to the confirmation.
+    await expect(page.getByRole("group", { name: "Recover full text" })).toContainText(
+      "external service",
+    )
+    expect(recoveryRequests).toBe(0)
+    await expect(button(page, "Recover now")).toBeFocused()
+    await page.keyboard.press("Enter")
     await requestStarted
-    await expect(button(page, "Recovering full text…")).toBeDisabled()
+    await expect(
+      page.getByRole("status").filter({ hasText: "Recovering full text…" }),
+    ).toBeVisible()
+    await expect(button(page, "Cancel")).toBeVisible()
     expect(recoveryRequests).toBe(1)
     const scrollArea = page
       .locator(
@@ -172,6 +182,7 @@ test.describe("Reader content recovery", () => {
     for (const nextResponse of [response, ...cases]) {
       response = nextResponse
       await button(page, "Recover full text").click()
+      await button(page, "Recover now").click()
       await expect(page.locator(".reader-content-recovery__error")).toContainText(
         "Full text could not be recovered. The original content is still shown.",
       )
@@ -228,6 +239,7 @@ test.describe("Reader content recovery", () => {
     await page.locator("a.article-entry").first().click()
     await expect(button(page, "Recover full text")).toBeVisible()
     await button(page, "Recover full text").click()
+    await button(page, "Recover now").click()
     await requestGate
     await button(page, "Close article").click()
     await expect(page.locator("a.article-entry").nth(1)).toBeVisible()
@@ -276,6 +288,7 @@ test.describe("Reader content recovery", () => {
     })
 
     await button(page, "Recover full text").click()
+    await button(page, "Recover now").click()
     await requestStarted
     await page.evaluate((server) => {
       const updatedAuth = {
@@ -322,8 +335,49 @@ test.describe("Reader content recovery", () => {
     })
 
     await button(page, "Recover full text").tap()
+    await button(page, "Recover now").tap()
     await expect(page.locator(".article-body")).toContainText("Synthetic recovered article body")
     await button(page, "Show original text").tap()
+    await expect(page.locator(".article-body")).toContainText("const x = 1")
+    expect(recoveryRequests).toBe(1)
+    expect(await mock.mutations()).toEqual([])
+  })
+
+  test("READER-RECOVERY-R2-6: declining or cancelling keeps the original without a request or mutation", async ({
+    openApp,
+    mock,
+  }) => {
+    const { page } = await openApp({
+      path: "/all/entry/1",
+      width: 884,
+      height: 1104,
+      provisionedApiKey: true,
+      settings: { markReadBy: "manually" },
+    })
+    let recoveryRequests = 0
+    const aborted = new Promise((resolve) => {
+      page.on("requestfailed", (request) => {
+        if (request.url().includes(RECOVERY_PATH)) {
+          resolve(true)
+        }
+      })
+    })
+    await page.route(`**${RECOVERY_PATH}`, async () => {
+      recoveryRequests += 1
+      // Never answered: the reader cancels it.
+    })
+
+    await button(page, "Recover full text").click()
+    await button(page, "Cancel").click()
+    await expect(button(page, "Recover full text")).toBeVisible()
+    expect(recoveryRequests).toBe(0)
+
+    await button(page, "Recover full text").click()
+    await button(page, "Recover now").click()
+    await expect.poll(() => recoveryRequests).toBe(1)
+    await button(page, "Cancel").click()
+    await expect(page.getByText("Recovery cancelled. The original text is shown.")).toBeVisible()
+    expect(await aborted).toBe(true)
     await expect(page.locator(".article-body")).toContainText("const x = 1")
     expect(recoveryRequests).toBe(1)
     expect(await mock.mutations()).toEqual([])
