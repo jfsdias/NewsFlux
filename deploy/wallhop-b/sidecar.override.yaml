@@ -17,7 +17,7 @@ services:
       CONTENT_FALLBACK_EGRESS_ALLOWED_HOSTS: "wallhop.io,${WALLHOP_MINIFLUX_PUBLIC_HOST:?}"
       CONTENT_FALLBACK_READER_ENABLED: "${WALLHOP_READER_ENABLED:-false}"
       CONTENT_FALLBACK_READER_TRUSTED_PROXY_IPS: "${WALLHOP_READER_IP:?static Reader IP on wallhop_reader required}"
-      CONTENT_FALLBACK_POLICIES_JSON: "${WALLHOP_POLICIES_JSON:-{\"enabled\":false}}"
+      CONTENT_FALLBACK_POLICIES_JSON: '${WALLHOP_POLICIES_JSON:-{"enabled":false}}'
   wallhop-egress:
     image: "${WALLHOP_EGRESS_IMAGE:?pinned haproxy image ID required}"
     read_only: true
