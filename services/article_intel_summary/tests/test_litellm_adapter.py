@@ -198,6 +198,52 @@ class LiteLLMAdapterTests(unittest.TestCase):
                 self.assertEqual(body["num_retries"], 0)
                 self.assertEqual(request.headers["x-litellm-num-retries"], "0")
 
+    def test_private_docker_gateway_uses_peer_dns_with_original_tls_identity(self) -> None:
+        adapter = self.make_adapter(
+            handler=lambda _: completion_response(model=S5_ALIAS),
+            private_docker_peer="npm",
+            model_choice="s5-free",
+            model_id=S5_ALIAS,
+            paid_inference_authorized=False,
+            input_price_usd_per_million=Decimal("0"),
+            output_price_usd_per_million=Decimal("0"),
+            max_output_tokens=2048,
+        )
+
+        result = adapter.summarize(input_fixture(), timeout_seconds=12)
+
+        self.assertEqual(result.effective_model_id, S5_ALIAS)
+        self.assertEqual(len(self.requests), 1)
+        request = self.requests[0]
+        self.assertEqual(str(request.url), "https://npm/v1/chat/completions")
+        self.assertEqual(request.headers["host"], "litellm.example")
+        self.assertEqual(request.extensions.get("sni_hostname"), "litellm.example")
+        self.assertEqual(request.headers["x-litellm-num-retries"], "0")
+        body = json.loads(request.content)
+        self.assertEqual(body["model"], S5_ALIAS)
+        self.assertTrue(body["disable_fallbacks"])
+        self.assertEqual(body["num_retries"], 0)
+        self.assertEqual(adapter.ledger.uncertain_count(), 0)
+
+    def test_private_docker_gateway_rejects_unapproved_peers_and_nonstandard_port(self) -> None:
+        for invalid_peer in ("evil.example", "npm:443", "localhost", "npm/path", "npm\\n", ""):
+            with self.subTest(peer=repr(invalid_peer)):
+                self.assertFalse(replace(self.settings, private_docker_peer=invalid_peer).is_ready())
+        self.assertFalse(
+            replace(
+                self.settings, private_docker_peer="npm",
+                gateway_base_url="https://litellm.example:444",
+            ).is_ready()
+        )
+        self.assertTrue(replace(self.settings, private_docker_peer="npm").is_ready())
+        self.assertTrue(replace(self.settings, private_docker_peer=None).is_ready())
+
+    def test_private_docker_peer_environment_is_opt_in(self) -> None:
+        values = approved_environment(self.database_path)
+        self.assertIsNone(load_litellm_settings(values).private_docker_peer)
+        values["NEWSFLUX_AI_LITELLM_PRIVATE_DOCKER_PEER"] = "npm"
+        self.assertEqual(load_litellm_settings(values).private_docker_peer, "npm")
+
     def test_selected_s5_alias_is_sent_once_without_paid_model_fallback(self) -> None:
         adapter = self.make_adapter(
             handler=lambda _request: completion_response(model=S5_ALIAS),
