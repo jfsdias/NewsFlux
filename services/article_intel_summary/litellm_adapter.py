@@ -59,6 +59,7 @@ _TRAILING_URL_PUNCTUATION = ".,;:!?)]}»\"'”’"
 @dataclass(frozen=True)
 class LiteLLMSettings:
     gateway_base_url: str | None = None
+    private_docker_peer: str | None = None
     virtual_key: str | None = field(default=None, repr=False)
     model_choice: str | None = None
     model_id: str | None = None
@@ -82,6 +83,13 @@ class LiteLLMSettings:
             return False
         if not _valid_gateway_base_url(self.gateway_base_url):
             return False
+        if self.private_docker_peer is not None:
+            # Only the specifically authorized, internal Docker service may be used.
+            # Original HTTPS Host and TLS SNI remain tied to gateway_base_url.
+            if self.private_docker_peer != "npm":
+                return False
+            if urlsplit(self.gateway_base_url).port not in (None, 443):
+                return False
         if not _valid_virtual_key(self.virtual_key):
             return False
         if self.model_choice not in SUPPORTED_MODEL_CHOICES:
@@ -169,6 +177,7 @@ def load_litellm_settings(environ: Mapping[str, str] | None = None) -> LiteLLMSe
     virtual_key = _read_private_secret_file(secret_path) if dispatch_configured else None
     return LiteLLMSettings(
         gateway_base_url=values.get("NEWSFLUX_AI_LITELLM_BASE_URL"),
+        private_docker_peer=values.get("NEWSFLUX_AI_LITELLM_PRIVATE_DOCKER_PEER") or None,
         virtual_key=virtual_key,
         model_choice=choice,
         model_id=model_alias,
@@ -386,15 +395,23 @@ class LiteLLMInferenceAdapter:
             "Content-Type": "application/json",
             "x-litellm-num-retries": "0",
         }
+        extensions: dict[str, str] = {}
+        if self.settings.private_docker_peer == "npm":
+            # Resolve the internal Docker peer dynamically, never its ephemeral IP.
+            # TLS validates the original public gateway hostname (not "npm").
+            gateway_host = urlsplit(self.settings.gateway_base_url).hostname
+            if not gateway_host:
+                raise InferenceUnavailable("LiteLLM gateway hostname is unavailable") from None
+            url = f"https://npm{LITELLM_CHAT_COMPLETIONS_PATH}"
+            headers["Host"] = gateway_host
+            extensions["sni_hostname"] = gateway_host
+
         timeout = httpx.Timeout(timeout_seconds, connect=timeout_seconds, read=timeout_seconds, write=timeout_seconds, pool=timeout_seconds)
-        with self.client.stream(
-            "POST",
-            url,
-            headers=headers,
-            json=payload,
-            timeout=timeout,
-            follow_redirects=False,
-        ) as response:
+        request = self.client.build_request(
+            "POST", url, headers=headers, json=payload, timeout=timeout, extensions=extensions,
+        )
+        response = self.client.send(request, stream=True, follow_redirects=False)
+        try:
             if response.status_code != 200:
                 if response.status_code in TRANSIENT_GATEWAY_STATUSES:
                     raise TransientLiteLLMFailure("LiteLLM gateway is temporarily unavailable") from None
@@ -404,6 +421,8 @@ class LiteLLMInferenceAdapter:
                 if len(body) + len(chunk) > MAX_GATEWAY_RESPONSE_BYTES:
                     raise InferenceUnavailable("LiteLLM response exceeded the configured limit") from None
                 body.extend(chunk)
+        finally:
+            response.close()
         try:
             document = json.loads(
                 body.decode("utf-8", errors="strict"),
