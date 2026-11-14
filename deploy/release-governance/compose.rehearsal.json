@@ -1,7 +1,13 @@
 {
   "services": {
-    "reader": {"image": "${REHEARSAL_READER_IMAGE:?synthetic image required}", "networks": ["private"]},
-    "summary-api": {"image": "${REHEARSAL_SUMMARY_IMAGE:?synthetic image required}", "networks": ["private"]}
+    "reader": {
+      "image": "${REHEARSAL_READER_IMAGE:?synthetic image required}",
+      "networks": ["private"]
+    },
+    "summary-api": {
+      "image": "${REHEARSAL_SUMMARY_IMAGE:?synthetic image required}",
+      "networks": ["private"]
+    }
   },
-  "networks": {"private": {"internal": true}}
+  "networks": { "private": { "internal": true } }
 }

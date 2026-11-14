@@ -2,8 +2,8 @@ name: Summary release isolated rehearsal
 on:
   pull_request:
     paths:
-      - 'deploy/release-governance/**'
-      - '.github/workflows/summary-release-rehearsal.yaml'
+      - "deploy/release-governance/**"
+      - ".github/workflows/summary-release-rehearsal.yaml"
 permissions:
   contents: read
 jobs:
