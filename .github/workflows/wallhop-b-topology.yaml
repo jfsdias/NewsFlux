@@ -1,0 +1,22 @@
+name: WallHop B isolated topology
+on:
+  pull_request:
+    paths:
+      - "deploy/wallhop-b/**"
+      - "services/content_fallback/**"
+      - ".github/workflows/wallhop-b-topology.yaml"
+permissions:
+  contents: read
+jobs:
+  topology:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sidecar unit tests (egress relay, policy, bridge)
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s services/content_fallback/tests -t . -p 'test_*.py'
+      - name: Real-Docker isolation rehearsal (real sidecar image, real relay config, synthetic endpoints)
+        run: |
+          docker pull -q haproxy:3.0.5-alpine
+          docker pull -q caddy:2.10.2-alpine
+          bash deploy/wallhop-b/rehearse-topology.sh

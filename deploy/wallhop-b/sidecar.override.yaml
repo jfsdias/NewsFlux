@@ -1,0 +1,48 @@
+# Overlay for the EXISTING sidecar project `newsflux-pr188-p2b-minimal` (applied after its compose.yaml).
+# Replaces the sidecar's networks: it leaves npm-proxyyml_default and keeps only internal networks.
+# Adds the egress relay to the same project, so WallHop is rolled back as one unit without touching
+# Reader, Miniflux, miniflux-db, NPM or the Summary API.
+services:
+  content-fallback:
+    networks: !override
+      wallhop_reader:
+        aliases: [content-fallback-reader]
+      wallhop_egress: {}
+    ports: !reset []
+    environment:
+      MINIFLUX_BASE_URL: "${WALLHOP_MINIFLUX_PUBLIC_URL:?public HTTPS Miniflux URL required}"
+      CONTENT_FALLBACK_HOST: 0.0.0.0
+      CONTENT_FALLBACK_EGRESS_RELAY: wallhop-egress
+      CONTENT_FALLBACK_REQUIRE_EGRESS_RELAY: "true"
+      CONTENT_FALLBACK_EGRESS_ALLOWED_HOSTS: "wallhop.io,${WALLHOP_MINIFLUX_PUBLIC_HOST:?}"
+      CONTENT_FALLBACK_READER_ENABLED: "${WALLHOP_READER_ENABLED:-false}"
+      CONTENT_FALLBACK_READER_TRUSTED_PROXY_IPS: "${WALLHOP_READER_IP:?static Reader IP on wallhop_reader required}"
+      CONTENT_FALLBACK_POLICIES_JSON: "${WALLHOP_POLICIES_JSON:-{\"enabled\":false}}"
+  wallhop-egress:
+    image: "${WALLHOP_EGRESS_IMAGE:?pinned haproxy image ID required}"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    user: "99:99"
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: "443"
+    environment:
+      MINIFLUX_PUBLIC_HOST: "${WALLHOP_MINIFLUX_PUBLIC_HOST:?}"
+      MINIFLUX_UPSTREAM: "${WALLHOP_MINIFLUX_UPSTREAM:-npm:443}"
+      WALLHOP_UPSTREAM: "${WALLHOP_UPSTREAM:-wallhop.io:443}"
+    volumes:
+      - "${WALLHOP_HAPROXY_CFG:?}:/usr/local/etc/haproxy/haproxy.cfg:ro"
+    networks:
+      wallhop_egress: {}
+      npm_proxy: {}
+    restart: unless-stopped
+networks:
+  wallhop_reader:
+    external: true
+    name: newsflux_wallhop_reader
+  wallhop_egress:
+    external: true
+    name: newsflux_wallhop_egress
+  npm_proxy:
+    external: true
+    name: npm-proxyyml_default
