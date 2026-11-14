@@ -3,15 +3,19 @@ on:
   pull_request:
     paths:
       - "deploy/release-governance/**"
+      - "deploy/article-intel-pilot/Caddyfile"
+      - "services/article_intel_summary/s5_preflight.py"
       - ".github/workflows/summary-release-rehearsal.yaml"
 permissions:
   contents: read
 jobs:
   synthetic-release:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Validate offline evidence logic and release policy
         run: python3 -m unittest discover -s deploy/release-governance -p 'test*.py'
       - name: Rehearse the real release tool against a disposable Docker Compose project
@@ -19,5 +23,10 @@ jobs:
           RELEASE_DOCKER_TESTS: "1"
         working-directory: deploy/release-governance
         run: python3 -m unittest -v test_release_docker
+      - name: Rehearse the operator procedure end to end (production naming, disposable stack)
+        run: |
+          docker pull -q caddy:2.10.2-alpine
+          docker pull -q busybox:1.36.1
+          bash deploy/release-governance/rehearse-operator-script.sh
       - name: Rehearse synthetic scoped promotion and rollback (shell)
         run: bash deploy/release-governance/rehearsal.sh
