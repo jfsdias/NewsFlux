@@ -102,3 +102,25 @@ Transparent gateway-side fallback could violate the application’s required
 model identity and per-model cost accounting. Keep the gateway and other
 consumers unchanged. This change does **not** authorize a production deployment,
 credential-policy change, or live inference.
+
+## Contract v2 — approved model catalog and summary profiles
+
+`GET /api/ai/v1/models` (same-origin, Miniflux key revalidated against `/v1/me` on every call) returns the
+server-authorized catalog (`contracts/model-catalog.schema.json`). It is derived exclusively from operator
+configuration: `s5-free` and `mistral-small` are the only catalog IDs; LiteLLM aliases, gateway URL and keys are
+never returned. Each entry reports availability with a closed reason (`INFERENCE_DISABLED`,
+`EXTERNAL_TRANSFER_NOT_AUTHORIZED`, `NOT_CONFIGURED`, `PAID_NOT_AUTHORIZED`, `PRICE_NOT_VERIFIED`,
+`RUNTIME_UNAVAILABLE`), the operator-declared price (`operator_declared_zero` is a declaration in the environment, not
+an independent proof of zero cost), limits and privacy notices. The default model is
+`NEWSFLUX_AI_LITELLM_MODEL_CHOICE`. Mistral Small becomes available only with `NEWSFLUX_AI_ALLOW_PAID_INFERENCE=true`
+and verified positive prices; nothing new is enabled by this contract.
+
+`POST /api/ai/v1/entries/{id}/summary` accepts `schema_version: "2"` with `model_id` (catalog ID) and a versioned
+`profile` (`summary-profile-v1`: `length`, `focus[]`, `sections[]`, `language`). See
+`contracts/summary-request-v2.schema.json`. The browser sends identifiers only; `profiles.py` maps them to fixed
+instruction fragments. An unauthorized model returns `403 MODEL_NOT_AUTHORIZED`, an unavailable one
+`409 MODEL_NOT_AVAILABLE`, both before any Miniflux or model access. A v2 request dispatches exactly one call to the
+selected model; a failure returns `unavailable` and never tries another model (`provenance.fallback_used` is always
+`false`). Output sections that were not requested, paragraph references outside the snapshot and summaries longer than
+the selected length are rejected. `provenance.content_origin` is `ORIGINAL_MINIFLUX`: this service still summarizes
+only its own authorized Miniflux snapshot, never text recovered in the browser. Contract v1 is unchanged.
