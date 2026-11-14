@@ -42,12 +42,14 @@ test("explicit Reader action reaches the real Summary API and synthetic gateway 
   await page.getByRole("button", { name: "Summarize with AI" }).click()
   await expect(page.getByText("Synthetic pilot summary.")).toBeVisible()
   await expect(page.getByText("Synthetic pilot key point.")).toBeVisible()
-  await expect(page.getByText("Synthetic pilot action.")).toBeVisible()
+  await expect(page.getByText("Synthetic pilot open question.")).toBeVisible()
+  await expect(page.getByText(/Model: Mistral Small/)).toBeVisible()
   await expect(page.getByText(/Miniflux does not establish/)).toBeVisible()
   const metrics = await (await request.get("/__pilot/metrics")).json()
   expect(summaryRequests).toEqual(["POST"])
   expect(metrics.inference_calls).toBe(1)
-  expect(metrics.miniflux_methods).toEqual(["GET", "GET", "GET", "GET"])
+  // One extra read-only /v1/me: the model catalog revalidates the Miniflux identity per click.
+  expect(metrics.miniflux_methods).toEqual(["GET", "GET", "GET", "GET", "GET"])
   expect(metrics.gateway_checks).toEqual([{ authorized: true, model_valid: true }])
 })
 

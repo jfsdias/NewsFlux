@@ -103,9 +103,96 @@ const responseFor = async (entry = firstEntry, changes = {}) => ({
   ...changes,
 })
 
+const syntheticModelCatalog = {
+  schema_version: "1",
+  default_model_id: "s5-free",
+  profile_version: "summary-profile-v1",
+  default_profile: {},
+  models: [
+    {
+      id: "s5-free",
+      label: "S5",
+      provider: "LiteLLM",
+      available: true,
+      unavailable_reason: null,
+      requires_paid_authorization: false,
+      pricing: {
+        status: "operator_declared_zero",
+        input_usd_per_million: "0",
+        output_usd_per_million: "0",
+      },
+      limits: {
+        max_input_tokens: 4096,
+        max_output_tokens: 2048,
+        requests_per_minute: 5,
+        timeout_seconds: 25,
+      },
+      notices: ["ARTICLE_SENT_TO_MODEL_PROVIDER", "PRICE_DECLARED_BY_OPERATOR"],
+    },
+    {
+      id: "mistral-small",
+      label: "Mistral Small",
+      provider: "LiteLLM",
+      available: false,
+      unavailable_reason: "PAID_NOT_AUTHORIZED",
+      requires_paid_authorization: true,
+      pricing: {
+        status: "operator_declared_paid",
+        input_usd_per_million: "0.15",
+        output_usd_per_million: "0.6",
+      },
+      limits: {
+        max_input_tokens: 4096,
+        max_output_tokens: 512,
+        requests_per_minute: 5,
+        timeout_seconds: 15,
+      },
+      notices: ["ARTICLE_SENT_TO_MODEL_PROVIDER", "PRICE_DECLARED_BY_OPERATOR", "PAID_INFERENCE"],
+    },
+  ],
+}
+
+const syntheticPoint = (text) => [{ text, paragraph_ids: ["p1"] }]
+const syntheticV2Summary = (requestUrl, requestBody) => {
+  const { sections } = requestBody.profile
+  const point = syntheticPoint
+  return {
+    schema_version: "2",
+    request_id: requestBody.request_id,
+    entry_id: Number(requestUrl.match(/entries\/(\d+)/)?.[1]),
+    status: "partial",
+    content_scope: "unknown",
+    summary: "Synthetic AI summary for the current article.",
+    summary_paragraph_ids: ["p1"],
+    key_points: sections.includes("key_points") ? point("Synthetic grounded key point.") : [],
+    facts: sections.includes("facts") ? point("Synthetic grounded fact.") : [],
+    implications: [],
+    action_points: sections.includes("actions") ? point("Synthetic grounded action.") : [],
+    open_questions: sections.includes("limitations") ? point("Synthetic open question.") : [],
+    limitations: ["Only the available Miniflux text was summarized."],
+    profile: requestBody.profile,
+    provenance: {
+      content_origin: "ORIGINAL_MINIFLUX",
+      content_fingerprint: "a".repeat(64),
+      provider_id: "litellm",
+      model_id: requestBody.model_id,
+      effective_model_id: "synthetic-s5-free",
+      prompt_version: "editorial-summary-v2-profile-litellm",
+      profile_version: "summary-profile-v1",
+      fallback_used: false,
+    },
+  }
+}
+
 const nativeFetch = globalThis.fetch
 globalThis.fetch = async (url, options = {}) => {
   const requestUrl = String(url)
+  if (requestUrl.endsWith("/api/ai/v1/models")) {
+    if (articleSummaryMode === "pilot-http") {
+      return nativeFetch(url, options)
+    }
+    return Response.json(syntheticModelCatalog)
+  }
   if (requestUrl.includes("/api/ai/v1/entries/")) {
     articleSummaryLedger.push({
       path: requestUrl,
@@ -117,27 +204,31 @@ globalThis.fetch = async (url, options = {}) => {
     if (articleSummaryMode === "pilot-http") {
       return nativeFetch(url, options)
     }
-    const requestId = JSON.parse(options.body).request_id
-    const payload = {
-      schema_version: "1",
-      request_id: requestId,
-      entry_id: Number(requestUrl.match(/entries\/(\d+)/)?.[1]),
-      status: "partial",
-      content_scope: "unknown",
-      summary: "Synthetic AI summary for the current article.",
-      summary_paragraph_ids: ["p1"],
-      key_points: [{ text: "Synthetic grounded key point.", paragraph_ids: ["p1"] }],
-      action_points: [{ text: "Synthetic grounded action.", paragraph_ids: ["p1"] }],
-      limitations: ["Only the available Miniflux text was summarized."],
-      provenance: {
-        content_origin: "miniflux",
-        content_fingerprint: "a".repeat(64),
-        provider_id: "litellm",
-        deployment_id: "s5-free",
-        effective_model_id: "synthetic-s5-free",
-        prompt_version: "summary-v1",
-      },
-    }
+    const requestBody = JSON.parse(options.body)
+    const requestId = requestBody.request_id
+    const payload =
+      requestBody.schema_version === "2"
+        ? syntheticV2Summary(requestUrl, requestBody)
+        : {
+            schema_version: "1",
+            request_id: requestId,
+            entry_id: Number(requestUrl.match(/entries\/(\d+)/)?.[1]),
+            status: "partial",
+            content_scope: "unknown",
+            summary: "Synthetic AI summary for the current article.",
+            summary_paragraph_ids: ["p1"],
+            key_points: [{ text: "Synthetic grounded key point.", paragraph_ids: ["p1"] }],
+            action_points: [{ text: "Synthetic grounded action.", paragraph_ids: ["p1"] }],
+            limitations: ["Only the available Miniflux text was summarized."],
+            provenance: {
+              content_origin: "miniflux",
+              content_fingerprint: "a".repeat(64),
+              provider_id: "litellm",
+              deployment_id: "s5-free",
+              effective_model_id: "synthetic-s5-free",
+              prompt_version: "summary-v1",
+            },
+          }
     if (articleSummaryMode === "retry" && articleSummaryLedger.length === 1) {
       return Response.json(
         {
@@ -308,7 +399,13 @@ const driveChecks = async () => {
   }
 
   action.click()
-  action.click()
+  await waitFor(() => document.querySelector(".reader-content-recovery__consent"))
+  results.CONSENT_BEFORE_REQUEST = requestLedger.length === 0
+  const confirm = document.querySelector(
+    ".reader-content-recovery__consent .reader-content-recovery__action",
+  )
+  confirm?.click()
+  confirm?.click()
   if (mode === "stale") {
     const requestStarted = await waitFor(() => requestLedger.length > 0 && Boolean(pendingResolve))
     results.REQUEST_STARTED_ONCE = requestStarted && requestLedger.length === 1

@@ -24,6 +24,7 @@ import EnclosurePlayer from "./EnclosurePlayer"
 import ImageLinkTag from "./ImageLinkTag"
 import ImageOverlayButton from "./ImageOverlayButton"
 
+import ArticleSummaryResult from "@/components/Article/ArticleSummaryResult"
 import AdaptiveScrollArea from "@/components/ui/AdaptiveScrollArea"
 import FadeTransition from "@/components/ui/FadeTransition"
 import FeedSourceMark from "@/components/ui/FeedSourceMark"
@@ -399,6 +400,12 @@ const ArticleDetail = forwardRef((_, ref) => {
     routeEntryId,
     routePath: location.pathname,
   })
+  useEffect(() => {
+    // Keyboard flow: the consent confirmation receives focus when it appears.
+    if (readerRecovery.status === "confirming") {
+      recoveryActionRef.current?.focus({ preventScroll: true })
+    }
+  }, [readerRecovery.status])
   const articleSummary = useArticleSummary({
     activeContent,
     routeEntryId,
@@ -855,25 +862,64 @@ const ArticleDetail = forwardRef((_, ref) => {
                     )}
                   </button>
                 </>
+              ) : readerRecovery.status === "confirming" ? (
+                <div
+                  aria-label={polyglot.t("content.recovery_consent_title")}
+                  className="reader-content-recovery__consent"
+                  role="group"
+                >
+                  <p>{polyglot.t("content.recovery_consent_notice")}</p>
+                  <div className="reader-content-recovery__consent-actions">
+                    <button
+                      ref={recoveryActionRef}
+                      className="reader-content-recovery__action"
+                      type="button"
+                      onClick={() => void readerRecovery.recover()}
+                    >
+                      {polyglot.t("content.recovery_consent_confirm")}
+                    </button>
+                    <button
+                      className="reader-content-recovery__action reader-content-recovery__action--secondary"
+                      type="button"
+                      onClick={readerRecovery.dismissConsent}
+                    >
+                      {polyglot.t("content.recovery_cancel")}
+                    </button>
+                  </div>
+                </div>
+              ) : readerRecovery.status === "loading" ? (
+                <>
+                  <span className="reader-content-recovery__source" role="status">
+                    {polyglot.t("content.recovering_full_text")}
+                  </span>
+                  <button
+                    ref={recoveryActionRef}
+                    aria-busy
+                    className="reader-content-recovery__action reader-content-recovery__action--secondary"
+                    type="button"
+                    onClick={readerRecovery.cancel}
+                  >
+                    {polyglot.t("content.recovery_cancel")}
+                  </button>
+                </>
               ) : (
                 <button
                   ref={recoveryActionRef}
-                  aria-busy={readerRecovery.status === "loading" || undefined}
                   className="reader-content-recovery__action"
-                  disabled={readerRecovery.status === "loading"}
                   type="button"
-                  onClick={() => void readerRecovery.recover()}
+                  onClick={readerRecovery.requestConsent}
                 >
-                  {polyglot.t(
-                    readerRecovery.status === "loading"
-                      ? "content.recovering_full_text"
-                      : "content.recover_full_text",
-                  )}
+                  {polyglot.t("content.recover_full_text")}
                 </button>
               )}
               {readerRecovery.status === "failed" && (
                 <span className="reader-content-recovery__error" role="status">
                   {polyglot.t("content.recovery_failed")}
+                </span>
+              )}
+              {readerRecovery.status === "cancelled" && (
+                <span className="reader-content-recovery__source" role="status">
+                  {polyglot.t("content.recovery_cancelled")}
                 </span>
               )}
             </div>
@@ -891,6 +937,11 @@ const ArticleDetail = forwardRef((_, ref) => {
                   {polyglot.t("article_intelligence.original_source_notice")}
                 </p>
               )}
+              {articleSummary.status === "idle" && (
+                <p className="article-intelligence-summary__notice">
+                  {polyglot.t("article_intelligence.transfer_notice")}
+                </p>
+              )}
               <button
                 className="article-intelligence-summary__action"
                 disabled={articleSummary.status === "loading"}
@@ -900,7 +951,8 @@ const ArticleDetail = forwardRef((_, ref) => {
                 {polyglot.t(
                   articleSummary.status === "loading"
                     ? "article_intelligence.loading"
-                    : articleSummary.status === "error"
+                    : articleSummary.status === "error" ||
+                        articleSummary.status === "model_unavailable"
                       ? "article_intelligence.retry"
                       : "article_intelligence.action",
                 )}
@@ -919,6 +971,11 @@ const ArticleDetail = forwardRef((_, ref) => {
                   {polyglot.t("article_intelligence.error")}
                 </p>
               )}
+              {articleSummary.status === "model_unavailable" && (
+                <p aria-live="polite" className="article-intelligence-summary__error" role="status">
+                  {polyglot.t("article_intelligence.model_unavailable_error")}
+                </p>
+              )}
               {(articleSummary.status === "insufficient" ||
                 articleSummary.status === "unavailable") && (
                 <p
@@ -934,42 +991,11 @@ const ArticleDetail = forwardRef((_, ref) => {
                 </p>
               )}
               {articleSummary.summary && (
-                <div className="article-intelligence-summary__result">
-                  <h2>{polyglot.t("article_intelligence.summary")}</h2>
-                  <p>{articleSummary.summary.summary}</p>
-                  <h3>{polyglot.t("article_intelligence.key_points")}</h3>
-                  <ul>
-                    {articleSummary.summary.key_points.map((point, index) => (
-                      <li key={`${point.paragraph_ids.join("-")}-${index}`}>{point.text}</li>
-                    ))}
-                  </ul>
-                  {articleSummary.summary.action_points.length > 0 && (
-                    <>
-                      <h3>{polyglot.t("article_intelligence.action_points")}</h3>
-                      <ul>
-                        {articleSummary.summary.action_points.map((point, index) => (
-                          <li key={`${point.paragraph_ids.join("-")}-${index}`}>{point.text}</li>
-                        ))}
-                      </ul>
-                    </>
-                  )}
-                  {(articleSummary.summary.status === "partial" ||
-                    articleSummary.summary.content_scope !== "full") && (
-                    <p className="article-intelligence-summary__status" role="status">
-                      {polyglot.t("article_intelligence.partial_content")}
-                    </p>
-                  )}
-                  {articleSummary.summary.limitations.length > 0 && (
-                    <>
-                      <h3>{polyglot.t("article_intelligence.limitations")}</h3>
-                      <ul>
-                        {articleSummary.summary.limitations.map((limitation, index) => (
-                          <li key={`${index}-${limitation.slice(0, 24)}`}>{limitation}</li>
-                        ))}
-                      </ul>
-                    </>
-                  )}
-                </div>
+                <ArticleSummaryResult
+                  modelLabel={articleSummary.modelLabel}
+                  polyglot={polyglot}
+                  summary={articleSummary.summary}
+                />
               )}
             </section>
           )}

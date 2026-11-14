@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 
 from services.article_intel_auth.auth import AuthSettings, MinifluxAuthService
 from services.article_intel_summary.app import create_app
+from services.article_intel_summary.catalog import CatalogEntry, ModelRouter
 from services.article_intel_summary.litellm_adapter import LiteLLMInferenceAdapter
 from services.article_intel_summary.service import SummaryService
 from services.article_intel_summary.tests.support import FakeMinifluxHTTP, MINIFLUX_BASE, WEB_ORIGIN, SHORT_HTML
@@ -80,6 +81,18 @@ def mock_litellm(request):
         "key_points": [{"text": "Synthetic pilot key point.", "paragraph_ids": ["p1"]}],
         "action_points": [{"text": "Synthetic pilot action.", "paragraph_ids": ["p1"]}],
     }
+    system = json.loads(request.content)["messages"][0]["content"]
+    if "open_questions" in system:
+        # Contract v2 (profile): only the default requested sections are filled.
+        output = {
+            "summary": "Synthetic pilot summary.",
+            "summary_paragraph_ids": ["p1"],
+            "key_points": [{"text": "Synthetic pilot key point.", "paragraph_ids": ["p1"]}],
+            "facts": [],
+            "implications": [],
+            "action_points": [],
+            "open_questions": [{"text": "Synthetic pilot open question.", "paragraph_ids": ["p1"]}],
+        }
     return completion_response(output=output)
 
 settings = AuthSettings(miniflux_base_url=MINIFLUX_BASE, allowed_web_origins=frozenset({WEB_ORIGIN}), admin_user_ids=frozenset(), admin_allowlist_state="empty")
@@ -95,7 +108,17 @@ adapter = LiteLLMInferenceAdapter(
     ),
     client=httpx.Client(transport=httpx.MockTransport(mock_litellm)),
 )
-app = create_app(auth_service=auth, summary_service=SummaryService(adapter))
+# Catalog: the synthetic gateway serves only the Mistral alias, so that is the
+# single available (and default) model; S5 is listed but not configured.
+router = ModelRouter(
+    {
+        "s5-free": CatalogEntry("s5-free", False, "NOT_CONFIGURED", None),
+        "mistral-small": CatalogEntry("mistral-small", True, None, adapter.settings),
+    },
+    {"mistral-small": adapter},
+    "mistral-small",
+)
+app = create_app(auth_service=auth, summary_service=SummaryService(adapter, router=router))
 
 @app.get("/__pilot/metrics")
 async def metrics():

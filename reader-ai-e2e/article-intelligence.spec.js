@@ -38,7 +38,10 @@ test("explicit summary action renders grounded output without changing the artic
   await summaryButton(page).click()
   await expect(page.getByText("Synthetic AI summary for the current article.")).toBeVisible()
   await expect(page.getByText("Synthetic grounded key point.")).toBeVisible()
-  await expect(page.getByText("Synthetic grounded action.")).toBeVisible()
+  await expect(page.getByText("Synthetic open question.")).toBeVisible()
+  await expect(
+    page.getByText("Model: S5 (synthetic-s5-free) · Source: original Miniflux text"),
+  ).toBeVisible()
   await expect(page.getByText("Only the available Miniflux text was summarized.")).toBeVisible()
   await expect(page.getByText("This summary may cover only part of the article.")).toBeVisible()
   await expect(page.getByText("Original Miniflux body stays visible on failure.")).toBeVisible()
@@ -54,7 +57,8 @@ test("explicit summary action renders grounded output without changing the artic
     "X-NewsFlux-Miniflux-Server",
   ])
   expect(report.articleSummaryRequests[0].bodyKeys).toEqual([
-    "profile_id",
+    "model_id",
+    "profile",
     "request_id",
     "schema_version",
   ])

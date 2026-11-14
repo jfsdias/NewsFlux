@@ -1,0 +1,48 @@
+/* Article Intelligence settings: opaque, editorial controls inside the existing settings surface. */
+.ai-model-catalog,
+.ai-checkbox-list {
+  max-width: 360px;
+}
+
+.ai-model-catalog .arco-radio,
+.ai-checkbox-list .arco-checkbox {
+  align-items: flex-start;
+  display: flex;
+  min-height: 44px;
+  padding-block: 6px;
+  white-space: normal;
+}
+
+.ai-model-catalog .arco-radio-text,
+.ai-checkbox-list .arco-checkbox-text {
+  line-height: 1.4;
+}
+
+.ai-model-option__title {
+  display: block;
+  font-weight: 600;
+}
+
+.ai-model-option__details {
+  color: var(--color-text-3);
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  gap: 2px;
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
+.ai-model-catalog__error {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media screen and (max-width: 768px) {
+  .ai-model-catalog,
+  .ai-checkbox-list {
+    max-width: none;
+  }
+}

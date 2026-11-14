@@ -137,6 +137,8 @@ try {
     animations: "disabled",
   })
   await small.page.getByRole("button", { name: /recover full text/i }).tap()
+  // Contextual consent precedes any recovery request.
+  await small.page.getByRole("button", { name: "Recover now" }).tap()
   await expect(
     small.page.getByText("Full text recovered with Miniflux scraper", { exact: true }),
   ).toBeVisible()
@@ -167,6 +169,8 @@ try {
   const largeReaderContent = large.page.getByRole("region", { name: "scrollable content" })
   await expect(largeReaderContent.getByText("Original teaser 502", { exact: false })).toBeVisible()
   await large.page.getByRole("button", { name: /recover full text/i }).click()
+  // Contextual consent precedes any recovery request.
+  await large.page.getByRole("button", { name: "Recover now" }).click()
   await expect(
     large.page.getByText("Full text could not be recovered. The original content is still shown.", {
       exact: true,
@@ -193,6 +197,8 @@ try {
   )
   const staleRecoveryOutcome = waitForRecoveryOutcome(stale.page, 503)
   await stale.page.getByRole("button", { name: /recover full text/i }).tap()
+  // Contextual consent precedes any recovery request.
+  await stale.page.getByRole("button", { name: "Recover now" }).tap()
   await pendingRecovery
   const previousAuth = await stale.page.evaluate(() => globalThis.localStorage.getItem("auth"))
   const nextAuth = JSON.stringify({

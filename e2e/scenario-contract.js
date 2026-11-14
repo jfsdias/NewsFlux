@@ -77,4 +77,5 @@ export const EXPECTED_SCENARIOS = [
   { id: "READER-RECOVERY-R2-3", state: "PASSED" },
   { id: "READER-RECOVERY-R2-4", state: "PASSED" },
   { id: "READER-RECOVERY-R2-5", state: "PASSED" },
+  { id: "READER-RECOVERY-R2-6", state: "PASSED" },
 ]
