@@ -32,7 +32,8 @@ cleanup() {
   docker rm -f "$run-litellm" "$run-pg" "$run-tls" >/dev/null 2>&1 || true
   docker network rm "$net" >/dev/null 2>&1 || true
   docker image rm "$run-summary:synthetic" >/dev/null 2>&1 || true
-  rm -rf "$work"
+  # Key copies are owned by the Summary uid (10001); a non-root runner needs sudo to remove them.
+  sudo -n rm -rf "$work" 2>/dev/null || rm -rf "$work" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -104,9 +105,10 @@ PY
   build_args=(-f "$context/Dockerfile.sandbox" --network host --build-arg "HTTPS_PROXY=${HTTPS_PROXY:-}")
 fi
 docker build -q "${build_args[@]}" -t "$run-summary:synthetic" "$context" >/dev/null
+calls=0
 preflight() { # $1 key name, $2 alias, stdin: optional attestation
-  local secrets="$work/secrets-$1"
-  rm -rf "$secrets"
+  calls=$((calls + 1))
+  local secrets="$work/secrets-$calls-$1" # fresh per call: earlier copies belong to uid 10001
   mkdir -p "$secrets"
   cp "$work/$1.key" "$secrets/key"
   sudo chown -R 10001:10001 "$secrets" 2>/dev/null || chown -R 10001:10001 "$secrets"
