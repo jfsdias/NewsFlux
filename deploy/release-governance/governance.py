@@ -3,7 +3,10 @@
 No Docker or production operation is provided. Inputs are evidence supplied by
 an operator and must be independently collected and authenticated.
 """
+import fcntl
 import hashlib
+import os
+import tempfile
 import json
 from pathlib import Path
 import re
@@ -62,6 +65,42 @@ class SimulatedRelease:
             current = self.state.get('summary-api')
             require(current in (source, target), 'SUMMARY_DRIFT')
             if current == source: self.state['summary-api'] = target
+
+    def promote(self):
+        self.transition(self.manifest['previous_image'], self.manifest['candidate_image'])
+
+    def rollback(self):
+        self.transition(self.manifest['candidate_image'], self.manifest['previous_image'])
+
+
+class FileReleaseRehearsal:
+    """File-backed synthetic state; not an implementation for a Docker runtime."""
+    def __init__(self, manifest, state_path):
+        self.manifest = manifest
+        self.state_path = Path(state_path)
+        self.lock_path = self.state_path.with_suffix(self.state_path.suffix + '.lock')
+
+    def transition(self, source, target):
+        with self.lock_path.open('a+') as lock:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+            try:
+                state = json.loads(self.state_path.read_text())
+                require(all(state.get(k) == v for k, v in self.manifest['protected_containers'].items()), 'PROTECTED_DRIFT')
+                require(state.get('summary-api') in (source, target), 'SUMMARY_DRIFT')
+                if state['summary-api'] == target:
+                    return
+                state['summary-api'] = target
+                fd, path = tempfile.mkstemp(prefix='.release-rehearsal-', dir=self.state_path.parent)
+                try:
+                    with os.fdopen(fd, 'w') as output:
+                        json.dump(state, output)
+                        output.flush()
+                        os.fsync(output.fileno())
+                    os.replace(path, self.state_path)
+                finally:
+                    if os.path.exists(path): os.unlink(path)
+            finally:
+                fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
 
     def promote(self):
         self.transition(self.manifest['previous_image'], self.manifest['candidate_image'])

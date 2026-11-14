@@ -47,6 +47,22 @@ class GovernanceTests(unittest.TestCase):
                 if change=='network': effective['services']['summary-api']['networks']['public']={}
                 with self.assertRaises(g.GateError): g.validate(self.manifest,self.files,effective,ids)
 
+    def test_locked_file_rehearsal_is_idempotent_and_refuses_drift(self):
+        state_path = self.root / "state.json"
+        initial = {"summary-api": self.manifest["previous_image"], "reader": "id-reader", "miniflux": "id-miniflux"}
+        state_path.write_text(json.dumps(initial))
+        first = g.FileReleaseRehearsal(self.manifest, state_path)
+        second = g.FileReleaseRehearsal(self.manifest, state_path)
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            list(pool.map(lambda item: item.promote(), (first, second)))
+        self.assertEqual(json.loads(state_path.read_text())["summary-api"], self.manifest["candidate_image"])
+        second.rollback(); first.rollback()
+        self.assertEqual(json.loads(state_path.read_text()), initial)
+        initial["reader"] = "changed"; state_path.write_text(json.dumps(initial))
+        with self.assertRaises(g.GateError): first.promote()
+        self.assertEqual(json.loads(state_path.read_text())["reader"], "changed")
+
     def test_simulated_release_and_rollback_are_idempotent_and_refuse_drift(self):
         state={'summary-api':self.manifest['previous_image'],'reader':'id-reader','miniflux':'id-miniflux'}
         release=g.SimulatedRelease(self.manifest,state)
