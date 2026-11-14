@@ -53,3 +53,32 @@ exact-image promotion, forced health failure with automatic restoration, configu
 protected-service drift, revision mismatch, unauthorized service, manifest tampering, idempotent rollback and refusal
 when the live state no longer matches the release. It never touches a production host. The earlier offline validator
 (`governance.py`) is kept for evidence bundles.
+
+## Closeout changes (state model, readiness, exact restoration)
+
+- **State = image ID + recorded Compose sequence.** `CANDIDATE` is `base + approved extra overrides +
+candidate.override.json` with the candidate image; `PREVIOUS` is the previous image with the base
+  sequence (or base + `rollback.override.json`). Anything else is `FOREIGN` and is never touched.
+- **Exact restoration.** At plan time the tool records whether the approved base sequence alone resolves
+  to the current image. Rollback re-checks this at execution time (a moved tag never brings up another
+  image) and, when true, re-applies the base sequence unchanged and requires the original Compose
+  `config-hash` (`PREVIOUS_CONFIG_NOT_RESTORED` otherwise). The Summary API's seven Compose files,
+  including the R12F-06 override, are therefore restored byte-for-byte as the live sequence.
+- **Readiness.** A missing Docker healthcheck is never readiness. Services without one (the Reader)
+  require `--ready-probe` (JSON argv run with `docker exec`, 3 consecutive successes); otherwise
+  `READINESS_UNDEFINED` at plan time.
+- **Configuration-only releases.** `--extra-override` (hash-pinned) supports policy changes with the same
+  image, e.g. enabling S5; `--network-added` declares networks such an override adds. Undeclared network
+  changes fail with `NETWORK_DRIFT` and roll back.
+
+`ai-functional-release.sh` separates `prepare` (creates the release dir and exact source) from
+`preflight` (strictly read-only, proven by the rehearsal), checks the public catalog fail-closed
+(exact status + Summary-API JSON error code through NPM → Caddy → Summary), proves Reader readiness with
+an HTTP probe, and offers `s5-preflight` / `enable-s5` / `disable-s5`.
+
+`rehearse-operator-script.sh` runs the operator procedure end to end in a disposable stack with the
+production names (`newsflux`, `summary-api`, `miniflux`, `miniflux-db`), two Summary Compose layers, the
+old pilot Caddyfile (`6970ee…`) and a TLS front standing in for NPM: 21 gates, including read-only
+preflight, preserved layers, fail-closed catalog smoke before the Caddy route exists, exact
+image/config-hash restoration, Caddy restoration, idempotent rollback and automatic rollback of a Reader
+that does not serve the app.
