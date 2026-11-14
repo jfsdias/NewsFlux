@@ -57,3 +57,24 @@ Not changed: healthcheck parameters, readiness timeouts, Miniflux, NPM, LiteLLM,
 
 Same defect class exists in `services/content_fallback/Dockerfile` (also `USER 10001` + `COPY`); it is fixed
 in the WallHop PR, not here.
+
+## Safety follow-up (PM review): forensics can never block the rollback
+
+In the first version of this PR `_capture_failure()` and `_journal()` ran before the automatic rollback, so
+an `OSError` (for example `ENOSPC` on the release volume) could have skipped the rollback. Now:
+
+| Situation                                              | Behaviour                                                                     |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| `failure-*.json` cannot be written (ENOSPC, read-only) | rollback runs; `FORENSIC_CAPTURE=UNAVAILABLE`                                 |
+| `docker inspect` / `docker logs` fail                  | rollback runs; `FORENSIC_CAPTURE=PARTIAL` (file kept when writable)           |
+| journal cannot be written after the change             | rollback runs; `JOURNAL=UNAVAILABLE`                                          |
+| journal cannot be written **before** any change        | nothing is touched; `JOURNAL_UNAVAILABLE_BEFORE_CHANGE`                       |
+| the rollback itself fails                              | reported distinctly: `ROLLBACK_FAILED:<code>:AFTER:<code>` (incl. `IO_ERROR`) |
+
+The operator terminal receives safe codes only (status, exit code, OOM flag, capture/journal state). Application
+log content goes, sanitized, to 0600 files only — also for the operator script's `CANDIDATE_START` gate.
+
+Tests: `test_release_failure_io.py` — 7 tests, RED 6/7 on the previous head, GREEN 7/7. `rehearse-r12f09.sh`
+adds the same incident with ENOSPC on forensics, failing `docker logs` and failing journal at once, on seven
+Compose files with real images: rollback still runs, exact image/config-hash/7-file sequence restored,
+protected containers unchanged, no raw log on the terminal.
