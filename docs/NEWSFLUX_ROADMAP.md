@@ -2084,3 +2084,24 @@ DESIGN-CLOSE-00 is the first visual activity and is a read-only audit. No token 
 The owner-approved order is: (1) finish visual evolution through evidence-led work, beginning with the read-only DESIGN-CLOSE-00 audit; (2) conclude selective upstream review/integration without bulk sync, then consider optional package maintenance only if justified; (3) resume deferred roadmap items after their product or architecture gates. There is no automatic implementation queue beyond DESIGN-CLOSE-00.
 
 All earlier snapshots remain historical. One purpose per PR; no blind upstream sync; Miniflux remains source of truth; no new persistent NewsFlux content state without an architecture decision; All/Unread remain chronological; deploy exact approved SHA only; no merge without explicit authorization.
+
+---
+
+## AI-UI-01 — In-app model selection (proposal)
+
+**Status:** PLANNED. **Priority/dependency:** after production stabilization of Summary S5. This prospective entry does not alter historical snapshots or authorize implementation, a merge, or a deployment.
+
+The Summary interface should let a user select among approved and currently available models without a code edit, environment change, or redeployment for each selection. The backend supplies an approved model catalog; technical approval remains necessary when a model is added or updated. The selector must identify provider and model, availability, known cost, applicable limits, and privacy warnings. It must distinguish free and paid models and explicitly label unknown pricing; paid inference requires explicit user authorization. The result identifies the model actually used. Users can return to the default, and fallback between models must never be silent.
+
+The backend remains responsible for authentication, a model allowlist, budget and rate limits, privacy and external transfer policies, transport, output validation, and provenance. The client must not receive API keys, internal configuration, or privileged endpoints, and must not permit arbitrary unapproved models. Summary generation remains strictly on demand; opening an article must not trigger inference, prefetch, or batch generation.
+
+For the MVP, selection is scoped to a request or session without adding persistent state. Persistent user preference requires a separate storage and privacy architecture decision. Miniflux remains the source of truth for feeds, categories, read state, and favorites.
+
+Design follows the existing NewsFlux editorial and OLED-aware direction, with Material interactions and Liquid Glass restricted to chrome. Support mobile, tablet, Fold and the critical 884×1104 viewport, including accessible states for unavailable models, exhausted limits, and unpaid or unauthorized cost. This proposal excludes a Home redesign and card changes.
+
+| Step      | Scope                                                        | Gate                                                                                               |
+| --------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| AI-UI-01A | Approved backend catalog and safe selection                  | Dedicated PR; authentication, allowlist, limits, privacy, paid authorization and provenance tests. |
+| AI-UI-01B | Summary model selector                                       | Dedicated PR; accessibility, responsive/device and on-demand-only tests.                           |
+| AI-UI-01C | Optional persistent preference                               | Separate storage/privacy architecture decision and dedicated PR.                                   |
+| AI-UI-01D | Optional extension to other editorial intelligence functions | Separate function-specific contracts and dedicated PR.                                             |

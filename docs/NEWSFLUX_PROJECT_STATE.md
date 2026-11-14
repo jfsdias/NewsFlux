@@ -1369,3 +1369,9 @@ Current sequence: this planning documentation PR (`PWA_ARCHITECTURE.md`, `DESIGN
 - The historical PR #44 promotion remains in the completion history. Current production state is recorded above.
 - Docs-only work does not need a production deployment.
 - Do not delete rollback images or backups incidentally.
+
+---
+
+## Prospective proposal — AI-UI-01
+
+**AI-UI-01 — IN-APP MODEL SELECTION:** PLANNED after production stabilization of Summary S5. The [roadmap entry](./NEWSFLUX_ROADMAP.md#ai-ui-01--in-app-model-selection-proposal) proposes an approved backend catalog and an on-demand Summary selector; MVP selection is per request or session, with persistence deferred to a separate storage/privacy decision. This is a forward-looking proposal, not a change to the historical snapshots or authorization to implement, merge, or deploy. It is independent of the Summary S5 and WallHop PR approvals.
