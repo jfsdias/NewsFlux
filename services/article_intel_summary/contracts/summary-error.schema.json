@@ -26,7 +26,9 @@
             "REQUEST_TOO_LARGE",
             "SUMMARY_BUSY",
             "MINIFLUX_UNAVAILABLE",
-            "MODEL_OUTPUT_INVALID"
+            "MODEL_OUTPUT_INVALID",
+            "MODEL_NOT_AVAILABLE",
+            "MODEL_NOT_AUTHORIZED"
           ]
         },
         "retryable": { "type": "boolean" }

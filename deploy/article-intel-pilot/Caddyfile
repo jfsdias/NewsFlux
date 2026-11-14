@@ -26,6 +26,19 @@ handle @pilotSummary {
         header_up X-Forwarded-Proto https
     }
 }
+# Contract v2: authenticated, read-only catalog of server-approved models. Same
+# trusted-proxy and HTTPS requirements as the summary route; GET only.
+@pilotModels {
+    path /api/ai/v1/models
+    method GET
+    remote_ip {$NEWSFLUX_PILOT_TRUSTED_PROXY_IP}
+    header X-Forwarded-Proto https
+}
+handle @pilotModels {
+    reverse_proxy summary-api:8788 {
+        header_up X-Forwarded-Proto https
+    }
+}
 handle /api/ai/* {
     respond 403
 }

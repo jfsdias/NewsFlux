@@ -16,6 +16,8 @@ from services.article_intel_auth.auth import AuthError, AuthSettings, MinifluxAu
 from services.article_intel_auth.config import AuthConfigurationError, canonicalize_web_origin
 from services.article_intel_summary.contracts import validate_error, validate_request
 from services.article_intel_summary.litellm_adapter import LiteLLMInferenceAdapter, S5MistralFallbackAdapter, create_configured_inference_adapter
+from services.article_intel_summary.catalog import ModelNotAvailable, create_model_router
+from services.article_intel_summary.profiles import ProfileInvalid, parse_profile
 from services.article_intel_summary.service import ModelOutputInvalid, SummaryService
 from services.article_intel_summary.supervision import OperationBusy, OperationDeadline, Supervisor
 
@@ -50,11 +52,12 @@ def create_app(
         raise AuthConfigurationError("Provided app settings differ from the authentication service settings")
     if summary_service is None:
         adapter = create_configured_inference_adapter()
+        router, adapter = create_model_router(default_adapter=adapter)
         primary = adapter.primary if isinstance(adapter, S5MistralFallbackAdapter) else adapter
         if isinstance(primary, LiteLLMInferenceAdapter):
-            summary_service = SummaryService(adapter, timeout_seconds=primary.settings.timeout_seconds)
+            summary_service = SummaryService(adapter, timeout_seconds=primary.settings.timeout_seconds, router=router)
         else:
-            summary_service = SummaryService(adapter)
+            summary_service = SummaryService(adapter, router=router)
     origins = frozenset(auth_service.settings.allowed_web_origins)
     supervisor = Supervisor(limit=max_in_flight)
 
@@ -76,6 +79,43 @@ def create_app(
     @app.get("/healthz", include_in_schema=False)
     async def healthz() -> Response:
         return JSONResponse({"status": "ok"}, headers={"Cache-Control": "no-store"})
+
+    @app.get("/api/ai/v1/models")
+    async def model_catalog(request: Request) -> Response:
+        origin = request.headers.get("origin")
+        allowed_origin = origin if _is_allowed_origin(auth_service, origin) else None
+        try:
+            if request.url.query:
+                raise _ApiError("INVALID_REQUEST", 400)
+            if request.url.scheme.casefold() != "https":
+                raise _ApiError("HTTPS_REQUIRED", 400)
+            _validate_host(request, origins)
+            auth_service.origin_policy.validate_origin(origin)
+
+            def authenticate(deadline):
+                return auth_service.authenticate(
+                    api_key=request.headers.get("x-miniflux-api-key"),
+                    claimed_miniflux_base_url=request.headers.get("x-newsflux-miniflux-server"),
+                    request_origin=origin,
+                    request_is_secure=True,
+                    deadline=deadline,
+                )
+
+            try:
+                await _supervised_request(request, supervisor, authenticate, request_timeout_seconds)
+            except OperationBusy:
+                raise _ApiError("SUMMARY_BUSY", 429, retryable=True) from None
+            except OperationDeadline:
+                raise _ApiError("SUMMARY_BUSY", 504) from None
+            router = summary_service.router
+            if router is None:
+                raise _ApiError("MODEL_NOT_AVAILABLE", 503)
+            response = JSONResponse(router.catalog_document(), status_code=200)
+            return _add_security_headers(response, auth_service, allowed_origin)
+        except _ApiError as exc:
+            return _error_response(exc, auth_service, canonical_origin=allowed_origin)
+        except AuthError as exc:
+            return _error_response(_auth_api_error(exc, None), auth_service, canonical_origin=allowed_origin)
 
     @app.api_route("/api/ai/v1/entries/{entry_id}/summary", methods=["POST", "OPTIONS"])
     async def summarize_entry(entry_id: str, request: Request) -> Response:
@@ -114,6 +154,16 @@ def create_app(
             except asyncio.TimeoutError:
                 raise _ApiError("SUMMARY_BUSY", 504) from None
             request_id = document["request_id"]
+            is_v2 = document["schema_version"] == "2"
+            profile = parse_profile(document["profile"]) if is_v2 else None
+            if is_v2:
+                # Refuse unauthorized or unavailable models before any Miniflux or model access.
+                try:
+                    if summary_service.router is None:
+                        raise ModelNotAvailable("MODEL_NOT_AVAILABLE")
+                    summary_service.router.adapter_for(document["model_id"])
+                except ModelNotAvailable as exc:
+                    raise _ApiError(exc.code, 403 if exc.code == "MODEL_NOT_AUTHORIZED" else 409, request_id) from None
 
             def work(deadline):
                 deadline.remaining()
@@ -126,12 +176,22 @@ def create_app(
                     deadline=deadline,
                 )
                 deadline.remaining()
-                outcome = summary_service.summarize(
-                    authorized_entry,
-                    request_id=request_id,
-                    deadline=deadline,
-                    revalidation_reserve_seconds=revalidation_reserve_seconds,
-                )
+                if is_v2:
+                    outcome = summary_service.summarize_v2(
+                        authorized_entry,
+                        request_id=request_id,
+                        model_id=document["model_id"],
+                        profile=profile,
+                        deadline=deadline,
+                        revalidation_reserve_seconds=revalidation_reserve_seconds,
+                    )
+                else:
+                    outcome = summary_service.summarize(
+                        authorized_entry,
+                        request_id=request_id,
+                        deadline=deadline,
+                        revalidation_reserve_seconds=revalidation_reserve_seconds,
+                    )
                 if outcome.http_status == 200:
                     deadline.remaining()
                     current_entry = auth_service.authorize_entry(
@@ -169,8 +229,10 @@ def create_app(
             return _error_response(exc, auth_service, canonical_origin=origin if _is_allowed_origin(auth_service, origin) else None)
         except AuthError as exc:
             return _error_response(_auth_api_error(exc, request_id), auth_service, canonical_origin=origin if _is_allowed_origin(auth_service, origin) else None)
-        except ValidationError:
+        except (ValidationError, ProfileInvalid):
             return _error_response(_ApiError("INVALID_REQUEST", 422, request_id), auth_service, canonical_origin=origin if _is_allowed_origin(auth_service, origin) else None)
+        except ModelNotAvailable as exc:
+            return _error_response(_ApiError(exc.code, 403 if exc.code == "MODEL_NOT_AUTHORIZED" else 409, request_id), auth_service, canonical_origin=origin if _is_allowed_origin(auth_service, origin) else None)
         except ModelOutputInvalid:
             return _error_response(_ApiError("MODEL_OUTPUT_INVALID", 502, request_id), auth_service, canonical_origin=origin if _is_allowed_origin(auth_service, origin) else None)
 

@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://newsflux.example/schemas/article-model-catalog-v1.json",
+  "title": "NewsFlux approved model catalog v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "default_model_id",
+    "profile_version",
+    "default_profile",
+    "models"
+  ],
+  "properties": {
+    "schema_version": { "const": "1" },
+    "default_model_id": { "enum": ["s5-free", "mistral-small", null] },
+    "profile_version": { "const": "summary-profile-v1" },
+    "default_profile": { "type": "object" },
+    "models": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "label",
+          "provider",
+          "available",
+          "unavailable_reason",
+          "requires_paid_authorization",
+          "pricing",
+          "limits",
+          "notices"
+        ],
+        "properties": {
+          "id": { "enum": ["s5-free", "mistral-small"] },
+          "label": { "type": "string", "maxLength": 64 },
+          "provider": { "type": "string", "maxLength": 64 },
+          "available": { "type": "boolean" },
+          "unavailable_reason": {
+            "enum": [
+              null,
+              "INFERENCE_DISABLED",
+              "EXTERNAL_TRANSFER_NOT_AUTHORIZED",
+              "NOT_CONFIGURED",
+              "PAID_NOT_AUTHORIZED",
+              "PRICE_NOT_VERIFIED",
+              "RUNTIME_UNAVAILABLE"
+            ]
+          },
+          "requires_paid_authorization": { "type": "boolean" },
+          "pricing": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["status", "input_usd_per_million", "output_usd_per_million"],
+            "properties": {
+              "status": {
+                "enum": ["operator_declared_zero", "operator_declared_paid", "not_verified"]
+              },
+              "input_usd_per_million": { "type": ["string", "null"], "maxLength": 32 },
+              "output_usd_per_million": { "type": ["string", "null"], "maxLength": 32 }
+            }
+          },
+          "limits": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "max_input_tokens",
+              "max_output_tokens",
+              "requests_per_minute",
+              "timeout_seconds"
+            ],
+            "properties": {
+              "max_input_tokens": { "type": ["integer", "null"] },
+              "max_output_tokens": { "type": ["integer", "null"] },
+              "requests_per_minute": { "type": ["integer", "null"] },
+              "timeout_seconds": { "type": ["number", "null"] }
+            }
+          },
+          "notices": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "enum": [
+                "ARTICLE_SENT_TO_MODEL_PROVIDER",
+                "PRICE_DECLARED_BY_OPERATOR",
+                "PAID_INFERENCE"
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}
