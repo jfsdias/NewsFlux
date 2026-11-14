@@ -14,3 +14,5 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s services/content_fallb
 ```
 
 These validate the declared candidate and existing application-layer checks. They do not start Docker, inspect target state, prove live isolation, validate TLS/DNS/redirect behavior over the candidate topology, or test a rollback. A disposable Compose stack with synthetic Reader, Miniflux, DNS and HTTPS provider is required to validate those gates with zero real publishers, zero WallHop calls and zero Miniflux writes. A reviewed exact prestate and isolated rollback rehearsal are prerequisites to preparing an operator-only rollback; the present document is not a rollback procedure.
+
+A separate CI-only Docker rehearsal uses synthetic HTTP servers on two internal networks. It checks Reader-to-sidecar and sidecar-to-Miniflux reachability, Reader DNS separation, no published ports and failed access to a reserved documentation IP. It performs no real publisher, WallHop or Miniflux request. This rehearsal models the topology; it does not execute the candidate overlay, validate controlled HTTPS egress, or prove production rollback.
