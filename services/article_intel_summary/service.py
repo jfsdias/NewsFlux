@@ -9,7 +9,8 @@ from jsonschema.exceptions import ValidationError
 
 from services.article_intel_auth.auth import AuthorizedEntry
 from services.article_intel_summary.content import ContentSnapshotResolver, ResolvedContentSnapshot
-from services.article_intel_summary.contracts import validate_summary
+from services.article_intel_summary.contracts import validate_summary, validate_summary_v2
+from services.article_intel_summary.profiles import PROFILE_VERSION, V2_OUTPUT_FIELDS, SummaryProfile
 from services.article_intel_summary.inference import (
     DEFAULT_INFERENCE_TIMEOUT_SECONDS,
     PROMPT_VERSION,
@@ -44,12 +45,14 @@ class SummaryService:
         *,
         resolver: ContentSnapshotResolver | None = None,
         timeout_seconds: float = DEFAULT_INFERENCE_TIMEOUT_SECONDS,
+        router=None,
     ) -> None:
         if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)) or not 0 < timeout_seconds <= 30:
             raise ValueError("summary inference timeout must be between 0 and 30 seconds")
         self.adapter = adapter
         self.resolver = resolver or ContentSnapshotResolver()
         self.timeout_seconds = float(timeout_seconds)
+        self.router = router
 
     def summarize(self, entry: AuthorizedEntry, *, request_id: str, deadline=None, revalidation_reserve_seconds=0) -> SummaryOutcome:
         snapshot = self.resolver.resolve(entry)
@@ -140,6 +143,129 @@ class SummaryService:
         except ValidationError as error:
             _invalid_output(_validation_code(error))
         return SummaryOutcome(payload=payload, http_status=200)
+
+    def summarize_v2(
+        self,
+        entry: AuthorizedEntry,
+        *,
+        request_id: str,
+        model_id: str,
+        profile: SummaryProfile,
+        deadline=None,
+        revalidation_reserve_seconds=0,
+    ) -> SummaryOutcome:
+        """Summarize with one explicitly selected catalog model; never substitutes another model."""
+        from services.article_intel_summary.catalog import ModelNotAvailable
+
+        if self.router is None:
+            raise ModelNotAvailable("MODEL_NOT_AVAILABLE")
+        # Raises before any content is resolved or sent when the model is not authorized.
+        adapter = self.router.adapter_for(model_id)
+        snapshot = self.resolver.resolve(entry)
+        allowed = {paragraph.id for paragraph in snapshot.paragraphs}
+        if not snapshot.is_sufficient:
+            payload = self._v2_payload(
+                snapshot, request_id=request_id, status="insufficient", model_id=model_id, profile=profile,
+                output=None, limitations=["The authorized Miniflux content is too short, incomplete, or structurally unsuitable for a safe summary."],
+                provider_id=None, effective_model_id=None, prompt_version=None,
+            )
+            validate_summary_v2(payload, allowed_paragraph_ids=allowed)
+            return SummaryOutcome(payload=payload, http_status=422)
+
+        model_input = build_model_input(snapshot, profile)
+        if deadline is not None:
+            deadline.begin_inference(self.timeout_seconds, reserve_seconds=revalidation_reserve_seconds)
+        try:
+            # Exactly one adapter call: the selected model. No secondary model is attempted.
+            if hasattr(adapter, "settings"):
+                inference = adapter.summarize(model_input, timeout_seconds=self.timeout_seconds, deadline=deadline)
+            else:
+                inference = adapter.summarize(model_input, timeout_seconds=self.timeout_seconds)
+        except Exception:
+            payload = self._v2_payload(
+                snapshot, request_id=request_id, status="unavailable", model_id=model_id, profile=profile,
+                output=None, limitations=["No model result is available; no summary was generated."],
+                provider_id=None, effective_model_id=None, prompt_version=None,
+            )
+            validate_summary_v2(payload, allowed_paragraph_ids=allowed)
+            return SummaryOutcome(payload=payload, http_status=503)
+        finally:
+            if deadline is not None:
+                deadline.end_inference()
+
+        if not isinstance(inference, InferenceResult) or not isinstance(inference.output, dict):
+            _invalid_output("MODEL_OUTPUT_INVALID_FIELD_TYPE")
+        try:
+            _ensure_bounded_json(inference.output)
+        except ModelOutputInvalid:
+            _invalid_output("MODEL_OUTPUT_LENGTH_EXCEEDED")
+        output = inference.output
+        if set(output) != set(V2_OUTPUT_FIELDS):
+            _invalid_output("MODEL_OUTPUT_MISSING_FIELD" if set(V2_OUTPUT_FIELDS) - set(output) else "MODEL_OUTPUT_EXTRA_FIELD")
+        provider_id = _safe_metadata(inference.provider_id)
+        effective_model_id = _safe_metadata(inference.effective_model_id, optional=True)
+        prompt_version = _safe_metadata(inference.prompt_version)
+        if provider_id is None or prompt_version is None:
+            _invalid_output("MODEL_OUTPUT_VALIDATION_UNKNOWN")
+        payload = self._v2_payload(
+            snapshot, request_id=request_id, status="partial", model_id=model_id, profile=profile, output=output,
+            limitations=["Miniflux does not establish whether its article content is complete; this summary may omit source material."],
+            provider_id=provider_id, effective_model_id=effective_model_id, prompt_version=prompt_version,
+        )
+        try:
+            validate_summary_v2(
+                payload,
+                allowed_paragraph_ids=allowed,
+                requested_fields=profile.requested_output_fields,
+                summary_max_chars=profile.summary_max_chars,
+                max_points=profile.max_points,
+            )
+        except ValidationError as error:
+            _invalid_output(_validation_code(error))
+        return SummaryOutcome(payload=payload, http_status=200)
+
+    @staticmethod
+    def _v2_payload(
+        snapshot: ResolvedContentSnapshot,
+        *,
+        request_id: str,
+        status: str,
+        model_id: str,
+        profile: SummaryProfile,
+        output: dict | None,
+        limitations: list[str],
+        provider_id: str | None,
+        effective_model_id: str | None,
+        prompt_version: str | None,
+    ) -> dict[str, object]:
+        output = output or {}
+        return {
+            "schema_version": "2",
+            "request_id": request_id,
+            "entry_id": snapshot.entry_id,
+            "status": status,
+            "content_scope": snapshot.content_scope,
+            "summary": output.get("summary", ""),
+            "summary_paragraph_ids": output.get("summary_paragraph_ids", []),
+            "key_points": output.get("key_points", []),
+            "facts": output.get("facts", []),
+            "implications": output.get("implications", []),
+            "action_points": output.get("action_points", []),
+            "open_questions": output.get("open_questions", []),
+            "limitations": limitations,
+            "profile": profile.to_document(),
+            "provenance": {
+                # The summary backend only reads its own authorized Miniflux snapshot.
+                "content_origin": "ORIGINAL_MINIFLUX",
+                "content_fingerprint": snapshot.content_fingerprint,
+                "provider_id": provider_id,
+                "model_id": model_id,
+                "effective_model_id": effective_model_id,
+                "prompt_version": prompt_version,
+                "profile_version": PROFILE_VERSION,
+                "fallback_used": False,
+            },
+        }
 
     def _unavailable(self, snapshot: ResolvedContentSnapshot, request_id: str) -> SummaryOutcome:
         payload = self._base_payload(

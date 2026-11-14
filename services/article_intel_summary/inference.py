@@ -4,6 +4,8 @@ import json
 from dataclasses import dataclass
 from typing import Protocol
 
+from services.article_intel_summary.profiles import SummaryProfile
+
 from services.article_intel_summary.content import ResolvedContentSnapshot
 
 SYSTEM_INSTRUCTIONS = (
@@ -20,6 +22,7 @@ class SummaryModelInput:
     system_instructions: str
     article_data_json: str
     allowed_paragraph_ids: tuple[str, ...]
+    profile: SummaryProfile | None = None
 
 
 @dataclass(frozen=True)
@@ -47,7 +50,7 @@ class DisabledInferenceAdapter:
         raise InferenceUnavailable("inference is not configured") from None
 
 
-def build_model_input(snapshot: ResolvedContentSnapshot) -> SummaryModelInput:
+def build_model_input(snapshot: ResolvedContentSnapshot, profile: SummaryProfile | None = None) -> SummaryModelInput:
     article_data = {
         "title": snapshot.title,
         "paragraphs": [{"id": paragraph.id, "text": paragraph.text} for paragraph in snapshot.paragraphs],
@@ -56,4 +59,5 @@ def build_model_input(snapshot: ResolvedContentSnapshot) -> SummaryModelInput:
         system_instructions=SYSTEM_INSTRUCTIONS,
         article_data_json=json.dumps(article_data, ensure_ascii=False, separators=(",", ":")),
         allowed_paragraph_ids=tuple(paragraph.id for paragraph in snapshot.paragraphs),
+        profile=profile,
     )
