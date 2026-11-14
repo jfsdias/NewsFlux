@@ -26,7 +26,9 @@ READER_CONTAINER="${NEWSFLUX_READER_CONTAINER:-newsflux}"
 NEWSFLUX_PROJECT="${NEWSFLUX_PROJECT:-newsflux}"
 NPM_NETWORK="${WALLHOP_NPM_NETWORK:-npm-proxyyml_default}"
 READER_NET=newsflux_wallhop_reader; EGRESS_NET=newsflux_wallhop_egress
-WALLHOP_READER_SUBNET="${WALLHOP_READER_SUBNET:-172.31.250.0/29}"; WALLHOP_READER_IP="${WALLHOP_READER_IP:-172.31.250.2}"
+# The Reader's static address sits OUTSIDE the dynamic range, so the sidecar can never take it.
+WALLHOP_READER_SUBNET="${WALLHOP_READER_SUBNET:-172.31.250.0/28}"; WALLHOP_READER_DYNAMIC_RANGE="${WALLHOP_READER_DYNAMIC_RANGE:-172.31.250.8/29}"
+WALLHOP_READER_IP="${WALLHOP_READER_IP:-172.31.250.2}"
 WALLHOP_UPSTREAM="${WALLHOP_UPSTREAM:-wallhop.io:443}"; WALLHOP_MINIFLUX_UPSTREAM="${WALLHOP_MINIFLUX_UPSTREAM:-npm:443}"
 HAPROXY_REF="${WALLHOP_HAPROXY_IMAGE:-haproxy:3.0.5-alpine}"
 read -r -a PROTECTED_NAMES <<<"${NEWSFLUX_PROTECTED_CONTAINERS:-miniflux miniflux-db}"
@@ -137,7 +139,7 @@ activate_infra() {
     cp -p "$(caddy_source)" "$RELEASE_DIR/Caddyfile.before"
   fi
   # 2. Internal networks.
-  docker network inspect "$READER_NET" >/dev/null 2>&1 || docker network create --internal --subnet "$WALLHOP_READER_SUBNET" --label org.newsflux.wallhop=1 "$READER_NET" >/dev/null
+  docker network inspect "$READER_NET" >/dev/null 2>&1 || docker network create --internal --subnet "$WALLHOP_READER_SUBNET" --ip-range "$WALLHOP_READER_DYNAMIC_RANGE" --label org.newsflux.wallhop=1 "$READER_NET" >/dev/null
   docker network inspect "$EGRESS_NET" >/dev/null 2>&1 || docker network create --internal --label org.newsflux.wallhop=1 "$EGRESS_NET" >/dev/null
   # 3. Rendered overlays (service name from the live container), relay image pinned by ID.
   sed "s/^  content-fallback:/  $svc:/" "$SRC/deploy/wallhop-b/sidecar.override.yaml" >"$RELEASE_DIR/sidecar.override.yaml"

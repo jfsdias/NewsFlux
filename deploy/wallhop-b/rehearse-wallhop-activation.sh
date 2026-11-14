@@ -149,7 +149,8 @@ J
 cat >"$work/contract.json" <<'J'
 {"version":"wallhop-contract-evidence-v1","checked_by":"rehearsal","checked_at":"2026-11-14","endpoint":"https://wallhop.io/raw/","http_status":200,"content_type":"text/html; charset=utf-8","sample_domain":"publisher.example.test","terms_reviewed":true,"no_credentials_or_cookies_used":true}
 J
-WALLHOP_APPROVED_SOURCES="$work/paywalled.json" WALLHOP_CONTRACT_EVIDENCE="$work/contract.json" op enable-policy 2>&1 | grep -q 'CODE=PAYWALLED_SOURCE\|SOURCE_POLICY_GATE=BLOCKED' && ok PAYWALLED_SOURCE_REFUSED || ko PAYWALLED_SOURCE_REFUSED
+pw="$(WALLHOP_APPROVED_SOURCES="$work/paywalled.json" WALLHOP_CONTRACT_EVIDENCE="$work/contract.json" op enable-policy 2>&1 || true)"
+grep -q 'SOURCE_POLICY_GATE=BLOCKED CODE=PAYWALLED_SOURCE' <<<"$pw" && ok PAYWALLED_SOURCE_REFUSED || ko PAYWALLED_SOURCE_REFUSED "$pw"
 WALLHOP_APPROVED_SOURCES="$work/partial.json" op enable-policy >/dev/null 2>&1 && ko CONTRACT_EVIDENCE_REQUIRED || ok CONTRACT_EVIDENCE_REQUIRED
 WALLHOP_APPROVED_SOURCES="$work/partial.json" WALLHOP_CONTRACT_EVIDENCE="$work/contract.json" op enable-policy >/dev/null 2>&1 && ok ENABLE_WITH_SYNTHETIC_EVIDENCE || ko ENABLE_WITH_SYNTHETIC_EVIDENCE
 st="$(recover)"
