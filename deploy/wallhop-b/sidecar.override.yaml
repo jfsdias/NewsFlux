@@ -17,6 +17,9 @@ services:
       CONTENT_FALLBACK_EGRESS_ALLOWED_HOSTS: "wallhop.io,${WALLHOP_MINIFLUX_PUBLIC_HOST:?}"
       CONTENT_FALLBACK_READER_ENABLED: "${WALLHOP_READER_ENABLED:-false}"
       CONTENT_FALLBACK_READER_TRUSTED_PROXY_IPS: "${WALLHOP_READER_IP:?static Reader IP on wallhop_reader required}"
+      CONTENT_FALLBACK_READER_USER_ID: "${WALLHOP_READER_USER_ID:-0}"
+      NEWSFLUX_AI_MINIFLUX_BASE_URL: "${WALLHOP_MINIFLUX_PUBLIC_URL:?}"
+      NEWSFLUX_AI_ALLOWED_WEB_ORIGINS: "${WALLHOP_ALLOWED_WEB_ORIGINS:?public Reader origin required}"
       CONTENT_FALLBACK_POLICIES_JSON: '${WALLHOP_POLICIES_JSON:-{"enabled":false}}'
   wallhop-egress:
     image: "${WALLHOP_EGRESS_IMAGE:?pinned haproxy image ID required}"
@@ -45,4 +48,4 @@ networks:
     name: newsflux_wallhop_egress
   npm_proxy:
     external: true
-    name: npm-proxyyml_default
+    name: "${WALLHOP_NPM_NETWORK:-npm-proxyyml_default}"
