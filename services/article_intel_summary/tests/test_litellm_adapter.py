@@ -151,6 +151,7 @@ class LiteLLMAdapterTests(unittest.TestCase):
         self.assertEqual(result.provider_id, "litellm")
         self.assertEqual(result.deployment_id, MODEL_CHOICE_MISTRAL_SMALL)
         self.assertEqual(result.effective_model_id, MISTRAL_ALIAS)
+        self.assertEqual(result.prompt_version, "editorial-summary-v1-litellm-v1")
         self.assertEqual(result.output, GOOD_OUTPUT)
         self.assertEqual(len(self.requests), 1)
         request = self.requests[0]
@@ -159,6 +160,7 @@ class LiteLLMAdapterTests(unittest.TestCase):
         self.assertEqual(request.headers["authorization"], "Bearer synthetic-virtual-key")
         body = json.loads(request.content)
         self.assertEqual(body["model"], MISTRAL_ALIAS)
+        self.assertEqual(body["messages"], _build_messages(input_fixture()))
         self.assertEqual(body["max_tokens"], 512)
         self.assertEqual(body["temperature"], 0)
         self.assertNotIn("reasoning_effort", body)
@@ -177,6 +179,25 @@ class LiteLLMAdapterTests(unittest.TestCase):
         self.assertNotIn("synthetic-virtual-key", repr(adapter.settings))
         self.assertGreater(adapter.ledger.current_month_spend(), Decimal("0"))
 
+    def test_each_model_disables_gateway_retry_and_fallback(self) -> None:
+        for model, alias in (("s5-free", S5_ALIAS), (MODEL_CHOICE_MISTRAL_SMALL, MISTRAL_ALIAS)):
+            with self.subTest(model=model):
+                self.requests.clear()
+                adapter = self.make_adapter(
+                    handler=lambda _request, alias=alias: completion_response(model=alias),
+                    model_choice=model,
+                    model_id=alias,
+                    usage_database_path=str(Path(self.tempdir.name) / f"controls-{model}.sqlite3"),
+                )
+                adapter.summarize(input_fixture(), timeout_seconds=12)
+                self.assertEqual(len(self.requests), 1)
+                request = self.requests[0]
+                body = json.loads(request.content)
+                self.assertIs(body["disable_fallbacks"], True)
+                self.assertIs(type(body["num_retries"]), int)
+                self.assertEqual(body["num_retries"], 0)
+                self.assertEqual(request.headers["x-litellm-num-retries"], "0")
+
     def test_selected_s5_alias_is_sent_once_without_paid_model_fallback(self) -> None:
         adapter = self.make_adapter(
             handler=lambda _request: completion_response(model=S5_ALIAS),
@@ -192,7 +213,7 @@ class LiteLLMAdapterTests(unittest.TestCase):
         self.assertEqual(result.effective_model_id, S5_ALIAS)
         self.assertEqual(json.loads(self.requests[0].content)["model"], S5_ALIAS)
         self.assertNotIn("temperature", json.loads(self.requests[0].content))
-        self.assertEqual(json.loads(self.requests[0].content)["reasoning_effort"], "low")
+        self.assertEqual(json.loads(self.requests[0].content)["reasoning_effort"], "none")
         self.assertEqual(len(self.requests), 1)
         self.assertEqual(adapter.ledger.current_month_spend(), Decimal("0"))
 
@@ -334,7 +355,7 @@ class LiteLLMAdapterTests(unittest.TestCase):
         self.assertNotIn("private.example", body["messages"][1]["content"])
 
     def test_non_success_statuses_are_sanitized_and_never_retried(self) -> None:
-        for status in (302, 307, 400, 401, 403, 429, 500):
+        for status in (302, 307, 400, 401, 403, 429, 500, 502, 503, 504):
             self.requests.clear()
             adapter = self.make_adapter(
                 handler=lambda _request, status=status: httpx.Response(status, text="secret provider body"),
