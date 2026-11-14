@@ -424,11 +424,14 @@ def _sanitize(line: str) -> str:
 
 
 def _capture_failure(docker: Docker, manifest: dict, identity: ContainerIdentity, code: str) -> dict:
-    """Record why a candidate failed BEFORE rollback removes it (R12F-09 forensics).
+    """Record why a candidate failed BEFORE rollback removes it (R12F-09 forensics). Best effort only.
 
-    Stored in the release dir with mode 0600: container state, exit code, OOM flag, health probe
-    exit codes and the last log lines with credentials and URLs redacted. Never environment values."""
+    Never raises: any inspection, log or storage error (including ENOSPC) degrades the result to
+    `forensic_capture` = PARTIAL or UNAVAILABLE so that the rollback is always attempted. The file
+    (mode 0600) holds container state, exit code, OOM flag, health codes and a log tail with
+    credentials and URLs redacted. Never environment values. Nothing raw is printed."""
     diagnostic: dict[str, object] = {"code": code, "container_id": identity.container_id, "image_id": identity.image_id}
+    complete = True
     try:
         document = json.loads(docker.run(["inspect", identity.container_id]))[0]
         state = document.get("State", {})
@@ -446,20 +449,35 @@ def _capture_failure(docker: Docker, manifest: dict, identity: ContainerIdentity
                 "health_exit_codes": [item.get("ExitCode") for item in (health.get("Log") or [])][-5:],
             }
         )
-    except (GateError, json.JSONDecodeError, IndexError, KeyError, TypeError):
+    except Exception:  # noqa: BLE001 - forensics must never block the rollback
         diagnostic["inspect"] = "UNAVAILABLE"
+        complete = False
     try:
         completed = subprocess.run(
             ["docker", "logs", "--tail", str(MAX_DIAGNOSTIC_LOG_LINES), identity.container_id],
             check=False, capture_output=True, text=True, timeout=30,
         )
-        lines = (completed.stdout + completed.stderr).splitlines()[-MAX_DIAGNOSTIC_LOG_LINES:]
+        lines = (str(completed.stdout) + str(completed.stderr)).splitlines()[-MAX_DIAGNOSTIC_LOG_LINES:]
         diagnostic["log_tail"] = [_sanitize(line) for line in lines]
-    except (OSError, subprocess.TimeoutExpired):
+    except Exception:  # noqa: BLE001
         diagnostic["log_tail"] = "UNAVAILABLE"
-    path = Path(manifest["release_dir"]) / f"failure-{int(time.time())}.json"
-    _atomic_write(path, json.dumps(diagnostic, indent=2) + "\n", 0o600)
+        complete = False
+    try:
+        path = Path(manifest["release_dir"]) / f"failure-{int(time.time())}.json"
+        _atomic_write(path, json.dumps(diagnostic, indent=2) + "\n", 0o600)
+        diagnostic["forensic_capture"] = "CAPTURED" if complete else "PARTIAL"
+    except Exception:  # noqa: BLE001 - e.g. ENOSPC, read-only release dir
+        diagnostic["forensic_capture"] = "UNAVAILABLE"
     return diagnostic
+
+
+def _safe_journal(manifest: dict, event: str, **details: object) -> bool:
+    """Journal without ever blocking a safety action; returns False when storage is unavailable."""
+    try:
+        _journal(manifest, event, **details)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def _write_override(manifest: dict, path: str, image: str) -> None:
@@ -514,7 +532,9 @@ def _transition(docker: Docker, manifest: dict, *, target: str, timeout: float) 
 def promote(docker: Docker, manifest: dict, policy: set, *, lock: str, timeout: float = 120) -> str:
     verify_manifest(manifest, policy)
     with release_lock(lock):
-        _journal(manifest, "promote_started")
+        # Before any change the journal must be writable; afterwards it can never block safety actions.
+        if not _safe_journal(manifest, "promote_started"):
+            raise GateError("JOURNAL_UNAVAILABLE_BEFORE_CHANGE")
         try:
             result = _transition(docker, manifest, target="CANDIDATE", timeout=timeout)
         except GateError as error:
@@ -523,27 +543,39 @@ def promote(docker: Docker, manifest: dict, policy: set, *, lock: str, timeout: 
                 _base(manifest), _base(manifest) + [_rollback_override(manifest)]
             ):
                 # Blocked before any change (drift, concurrency, protected services): nothing to undo.
-                _journal(manifest, "promote_blocked", code=error.code)
+                _safe_journal(manifest, "promote_blocked", code=error.code)
                 raise
             if identity.image_id != manifest["candidate_image"]:
-                _journal(manifest, "promote_unknown_state", code=error.code)
+                _safe_journal(manifest, "promote_unknown_state", code=error.code)
                 raise GateError("UNKNOWN_STATE_MANUAL_DECISION_REQUIRED") from None
             diagnostic = _capture_failure(docker, manifest, identity, error.code)
-            _journal(
+            journal_ok = _safe_journal(
                 manifest, "promote_failed_auto_rollback", code=error.code,
                 candidate_status=diagnostic.get("status"), candidate_exit_code=diagnostic.get("exit_code"),
                 candidate_oom_killed=diagnostic.get("oom_killed"), candidate_health=diagnostic.get("health_status"),
+                forensic_capture=diagnostic.get("forensic_capture"),
             )
+            # Safe codes only: never application log content on the operator terminal.
             print(
+                f"FORENSIC_CAPTURE={diagnostic.get('forensic_capture')} JOURNAL={'WRITTEN' if journal_ok else 'UNAVAILABLE'} "
                 f"CANDIDATE_STATUS={diagnostic.get('status')} CANDIDATE_EXIT_CODE={diagnostic.get('exit_code')} "
-                f"CANDIDATE_OOM_KILLED={diagnostic.get('oom_killed')} DIAGNOSTIC_FILE=failure-*.json",
+                f"CANDIDATE_OOM_KILLED={diagnostic.get('oom_killed')}",
                 file=sys.stderr,
             )
-            _apply(docker, manifest, identity, "PREVIOUS", timeout)
-            _check_protected(docker, manifest)
-            _journal(manifest, "auto_rollback_completed")
+            try:
+                _apply(docker, manifest, identity, "PREVIOUS", timeout)
+                _check_protected(docker, manifest)
+            except GateError as rollback_error:
+                _safe_journal(manifest, "auto_rollback_failed", code=rollback_error.code, after=error.code)
+                raise GateError(f"ROLLBACK_FAILED:{rollback_error.code}:AFTER:{error.code}") from None
+            except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError):
+                _safe_journal(manifest, "auto_rollback_failed", code="IO_ERROR", after=error.code)
+                raise GateError(f"ROLLBACK_FAILED:IO_ERROR:AFTER:{error.code}") from None
+            if not _safe_journal(manifest, "auto_rollback_completed"):
+                print("JOURNAL=UNAVAILABLE", file=sys.stderr)
             raise GateError(f"PROMOTION_FAILED_ROLLED_BACK:{error.code}") from None
-        _journal(manifest, "promote_completed", result=result)
+        if not _safe_journal(manifest, "promote_completed", result=result):
+            print("JOURNAL=UNAVAILABLE", file=sys.stderr)
         return result
 
 
@@ -551,7 +583,8 @@ def rollback(docker: Docker, manifest: dict, policy: set, *, lock: str, timeout:
     verify_manifest(manifest, policy)
     with release_lock(lock):
         result = _transition(docker, manifest, target="PREVIOUS", timeout=timeout)
-        _journal(manifest, "rollback_completed", result=result)
+        if not _safe_journal(manifest, "rollback_completed", result=result):
+            print("JOURNAL=UNAVAILABLE", file=sys.stderr)
         return result
 
 

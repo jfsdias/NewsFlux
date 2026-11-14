@@ -146,7 +146,14 @@ candidate_start_gate() {
   done
   if [[ "$ok" != 1 ]]; then
     gate CANDIDATE_START "FAIL status=$(docker inspect -f '{{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}}' "$cid")"
-    docker logs --tail 15 "$cid" 2>&1 | sed -E 's#https?://[^ ]+#[URL]#g; s#(token|key|secret|password)[^ ]*#[REDACTED]#Ig' | sed 's/^/CANDIDATE_LOG: /'
+    # Sanitized log tail goes to a private file (best effort); never to the operator terminal.
+    if ( umask 077; docker logs --tail 40 "$cid" 2>&1 \
+      | sed -E 's#https?://[^ ]+#[URL]#g; s#(authorization|bearer|token|key|secret|password)[^ ]*#[REDACTED]#Ig' \
+      >"$RELEASE_DIR/candidate-start-failure.log" ) 2>/dev/null; then
+      gate FORENSIC_CAPTURE CAPTURED
+    else
+      gate FORENSIC_CAPTURE UNAVAILABLE
+    fi
     docker rm -f "$cid" >/dev/null
     die BUILD CANDIDATE_DOES_NOT_START
   fi

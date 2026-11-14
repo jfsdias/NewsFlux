@@ -109,6 +109,40 @@ then ok FORENSICS_CAPTURED_BEFORE_ROLLBACK; else ko FORENSICS_CAPTURED_BEFORE_RO
 restored && ok EXACT_RESTORE_AFTER_FAILED_PROMOTION || ko EXACT_RESTORE_AFTER_FAILED_PROMOTION
 [[ "$(docker inspect -f '{{.State.Health.Status}}' newsflux-summary-api-1)" =~ ^(healthy|starting)$ ]] && ok PREVIOUS_RUNNING_AFTER_ROLLBACK || ko PREVIOUS_RUNNING_AFTER_ROLLBACK
 
+# ---- 1b. same incident while forensics, docker logs and the journal all fail (ENOSPC) ------------
+plan "$BROKEN" "$BROKEN_SHA" broken-io
+io_out="$(python3 - "$here" "$work" <<'PY' 2>&1 || true
+import errno, sys
+from unittest import mock
+sys.path.insert(0, sys.argv[1])
+import release
+work = sys.argv[2]
+real_write, real_run, real_journal = release._atomic_write, release.subprocess.run, release._journal
+def write(path, *a, **k):
+    if str(path).rsplit("/", 1)[-1].startswith("failure-"):
+        raise OSError(errno.ENOSPC, "No space left on device")
+    return real_write(path, *a, **k)
+def run(args, *a, **k):
+    if list(args[:2]) == ["docker", "logs"]:
+        raise OSError("docker logs unavailable")
+    return real_run(args, *a, **k)
+def journal(manifest, event, **details):
+    if event != "promote_started":
+        raise OSError(errno.ENOSPC, "No space left on device")
+    return real_journal(manifest, event, **details)
+with mock.patch.object(release, "_atomic_write", write), mock.patch.object(release.subprocess, "run", run), \
+        mock.patch.object(release, "_journal", journal):
+    release.main(["--policy", f"{work}/policy.json", "--lock", f"{work}/release.lock", "promote",
+                  "--manifest", f"{work}/releases/broken-io/manifest.json", "--timeout", "60"])
+PY
+)"
+grep -q 'CODE=PROMOTION_FAILED_ROLLED_BACK:READINESS_FAILED' <<<"$io_out" && ok IO_FAILURES_STILL_ROLL_BACK || { echo "$io_out"; ko IO_FAILURES_STILL_ROLL_BACK; }
+grep -q 'FORENSIC_CAPTURE=UNAVAILABLE JOURNAL=UNAVAILABLE' <<<"$io_out" && ok SAFE_CODES_REPORTED || ko SAFE_CODES_REPORTED
+grep -qiE 'PermissionError|Traceback|token=' <<<"$io_out" && ko NO_RAW_LOGS_ON_TERMINAL || ok NO_RAW_LOGS_ON_TERMINAL
+[[ -z "$(ls "$work"/releases/broken-io/failure-*.json 2>/dev/null)" ]] && ok NO_FORENSIC_FILE_UNDER_ENOSPC || ko NO_FORENSIC_FILE_UNDER_ENOSPC
+restored && ok EXACT_RESTORE_UNDER_IO_FAILURE || ko EXACT_RESTORE_UNDER_IO_FAILURE
+[[ "$(docker inspect -f '{{.Id}} {{.Image}}' miniflux miniflux-db)" == "$protected" ]] && ok PROTECTED_UNCHANGED_UNDER_IO_FAILURE || ko PROTECTED_UNCHANGED_UNDER_IO_FAILURE
+
 # ---- 2. fixed candidate ---------------------------------------------------------------------------
 plan "$FIXED" "$FIX_SHA" fixed
 rt promote --manifest "$work/releases/fixed/manifest.json" --timeout 120 >/dev/null 2>&1 && ok FIXED_CANDIDATE_PROMOTED || ko FIXED_CANDIDATE_PROMOTED
