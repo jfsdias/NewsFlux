@@ -297,3 +297,41 @@ class PinnedHTTPClient:
         if response.headers.get("content-encoding", "identity").casefold() not in {"", "identity"}:
             raise FetchError("compressed responses are not accepted")
         return response
+
+
+class EgressRelayResolver:
+    """Route only allowlisted HTTPS destinations through the private egress relay.
+
+    The sidecar has no direct route to the Internet or to Miniflux. Each allowlisted
+    (host, 443) pair is pinned to the relay's private address; TLS still validates the
+    original hostname end-to-end, and the relay forwards by SNI only for the same
+    allowlist. Any other host, any IP literal, any other port, and therefore any redirect
+    to such a destination, fails closed before a connection is opened.
+    """
+
+    def __init__(self, relay_host: str, allowed_hosts: frozenset[str], *, resolver: Resolver = resolve_host) -> None:
+        if not relay_host or not allowed_hosts:
+            raise ValueError("egress relay host and allowlist are required")
+        normalized = set()
+        for host in allowed_hosts:
+            candidate = host.strip().casefold().rstrip(".")
+            try:
+                ipaddress.ip_address(candidate)
+            except ValueError:
+                pass
+            else:
+                raise ValueError("egress allowlist must contain hostnames, not IP literals")
+            if not candidate or "/" in candidate or ":" in candidate:
+                raise ValueError("egress allowlist entries must be bare hostnames")
+            normalized.add(candidate)
+        self.relay_host = relay_host
+        self.allowed_hosts = frozenset(normalized)
+        self._resolver = resolver
+
+    def __call__(self, host: str, port: int, allow_private: bool = False) -> str:
+        del allow_private
+        candidate = (host or "").casefold().rstrip(".")
+        if port != 443 or candidate not in self.allowed_hosts:
+            raise UnsafeURL("destination is outside the egress allowlist")
+        # The relay is a private service on an internal network; nothing else may be private.
+        return self._resolver(self.relay_host, 443, True)

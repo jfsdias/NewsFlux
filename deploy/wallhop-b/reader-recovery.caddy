@@ -1,0 +1,33 @@
+# Import this fragment inside the existing NewsFlux site block. Do not replace
+# the active Caddyfile with this fragment.
+
+@readerRecovery {
+	path_regexp readerRecovery ^/api/content-fallback/reader/v1/entries/[1-9][0-9]*/recover$
+	method POST
+	remote_ip {$NEWSFLUX_PILOT_TRUSTED_PROXY_IP}
+	header X-Forwarded-Proto https
+}
+
+handle @readerRecovery {
+	handle_path /api/content-fallback/* {
+		reverse_proxy content-fallback-reader:8790 {
+			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Host {host}
+			header_up -Forwarded
+			header_up -Authorization
+			header_up -Cookie
+			header_up -X-Forwarded-Client-Cert
+			header_up -X-Forwarded-User
+			header_up -X-Forwarded-Prefix
+			header_up -X-Forwarded-Port
+			header_up -X-Forwarded-Server
+			header_up -X-Forwarded-SSL
+			header_up -X-Real-IP
+		}
+	}
+}
+
+handle /api/content-fallback/* {
+	respond 404
+}
