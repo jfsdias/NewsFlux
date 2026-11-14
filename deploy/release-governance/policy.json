@@ -1,0 +1,9 @@
+{
+  "version": "newsflux-release-policy-v1",
+  "description": "Closed set of (Compose project, service) pairs the release tool may recreate. Service names must be confirmed with `release.py inspect` before the first plan; a wrong name fails closed (SERVICE_CONTAINER_NOT_UNIQUE). Miniflux, its database and NPM are rejected by code regardless of this file.",
+  "allowed": [
+    { "project": "newsflux", "service": "summary-api" },
+    { "project": "newsflux", "service": "newsflux" },
+    { "project": "newsflux-pr188-p2b-minimal", "service": "content-fallback" }
+  ]
+}

@@ -1,0 +1,23 @@
+name: Summary release isolated rehearsal
+on:
+  pull_request:
+    paths:
+      - "deploy/release-governance/**"
+      - ".github/workflows/summary-release-rehearsal.yaml"
+permissions:
+  contents: read
+jobs:
+  synthetic-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate offline evidence logic and release policy
+        run: python3 -m unittest discover -s deploy/release-governance -p 'test*.py'
+      - name: Rehearse the real release tool against a disposable Docker Compose project
+        env:
+          RELEASE_DOCKER_TESTS: "1"
+        working-directory: deploy/release-governance
+        run: python3 -m unittest -v test_release_docker
+      - name: Rehearse synthetic scoped promotion and rollback (shell)
+        run: bash deploy/release-governance/rehearsal.sh
