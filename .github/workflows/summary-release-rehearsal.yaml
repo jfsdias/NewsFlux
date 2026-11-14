@@ -8,6 +8,8 @@ on:
       - ".github/workflows/summary-release-rehearsal.yaml"
 permissions:
   contents: read
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
 jobs:
   synthetic-release:
     runs-on: ubuntu-latest

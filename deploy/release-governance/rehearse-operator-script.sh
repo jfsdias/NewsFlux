@@ -14,7 +14,7 @@ set -Eeuo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(git -C "$here" rev-parse --show-toplevel)"
 SHA="$(git -C "$repo" rev-parse HEAD)"
-[[ -z "$(git -C "$repo" status --porcelain -- deploy/release-governance deploy/article-intel-pilot)" ]] || { echo "commit release files first"; exit 1; }
+[[ -z "$(git -C "$repo" status --porcelain --untracked-files=no -- deploy/release-governance deploy/article-intel-pilot)" ]] || { echo "commit release files first"; exit 1; }
 for name in newsflux miniflux miniflux-db; do
   if docker inspect "$name" >/dev/null 2>&1; then echo "REHEARSAL=REFUSED CODE=CONTAINER_${name}_EXISTS (never run on a real host)"; exit 1; fi
 done
