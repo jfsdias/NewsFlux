@@ -24,13 +24,19 @@ def docker(*args: str) -> str:
     return subprocess.run(["docker", *args], check=True, capture_output=True, text=True, timeout=300).stdout.strip()
 
 
-def build_image(directory: Path, tag: str, revision: str, healthy: bool) -> str:
+def build_image(directory: Path, tag: str, revision: str, healthy: bool | None, *, ready_file: bool = True) -> str:
     dockerfile = directory / f"Dockerfile.{tag.split(':')[0].rsplit('-', 1)[-1]}"
+    health = (
+        ""
+        if healthy is None
+        else f"HEALTHCHECK --interval=1s --timeout=2s --retries=2 --start-period=1s CMD {'true' if healthy else 'false'}\n"
+    )
+    command = "touch /tmp/ready; sleep 3600" if ready_file else "sleep 3600"
     dockerfile.write_text(
         f"FROM {BASE_IMAGE}\n"
         f"LABEL org.opencontainers.image.revision={revision}\n"
-        f"HEALTHCHECK --interval=1s --timeout=2s --retries=2 --start-period=1s CMD {'true' if healthy else 'false'}\n"
-        'CMD ["sh", "-c", "sleep 3600"]\n',
+        f"{health}"
+        f'CMD ["sh", "-c", "{command}"]\n',
         encoding="utf-8",
     )
     docker("build", "-q", "-f", str(dockerfile), "-t", tag, str(directory))
@@ -51,10 +57,14 @@ class DockerReleaseRehearsal(unittest.TestCase):
         cls.candidate = build_image(cls.dir, f"{cls.run_id}-candidate:test", cls.sha_candidate, True)
         cls.broken = build_image(cls.dir, f"{cls.run_id}-broken:test", cls.sha_broken, False)
         cls.other = build_image(cls.dir, f"{cls.run_id}-other:test", "d" * 40, True)
+        # Reader-like images: no Docker healthcheck, readiness only provable by a probe.
+        cls.web_previous = build_image(cls.dir, f"{cls.run_id}-webprev:test", cls.sha_previous, None)
+        cls.web_candidate = build_image(cls.dir, f"{cls.run_id}-webcand:test", cls.sha_candidate, None)
+        cls.web_unready = build_image(cls.dir, f"{cls.run_id}-webbad:test", cls.sha_broken, None, ready_file=False)
 
     @classmethod
     def tearDownClass(cls) -> None:
-        for tag in ("previous", "candidate", "broken", "other"):
+        for tag in ("previous", "candidate", "broken", "other", "webprev", "webcand", "webbad"):
             subprocess.run(["docker", "image", "rm", "-f", f"{cls.run_id}-{tag}:test"], capture_output=True)
         cls.tmp.cleanup()
 
@@ -69,7 +79,8 @@ class DockerReleaseRehearsal(unittest.TestCase):
             json.dumps(
                 {
                     "services": {
-                        "summary-api": {"image": self.previous, "networks": ["private"], "volumes": ["ledger:/data"]},
+                        "summary-api": {"image": f"{self.run_id}-previous:test", "networks": ["private"], "volumes": ["ledger:/data"]},
+                        "web": {"image": self.web_previous, "networks": ["private"]},
                         "reader": {"image": self.previous, "networks": ["private"]},
                         "miniflux": {"image": self.previous, "networks": ["private"]},
                     },
@@ -84,10 +95,11 @@ class DockerReleaseRehearsal(unittest.TestCase):
         docker(*self.compose, "up", "-d", "--wait")
         self.release_dir = work / "release"
         self.lock = str(work / "release.lock")
-        self.policy = {(self.project, "summary-api")}
+        self.policy = {(self.project, "summary-api"), (self.project, "web")}
         self.client = release.Docker()
         self.protected = [f"{self.project}-reader-1", f"{self.project}-miniflux-1"]
         self.protected_before = {name: self.client.container_by_name(name).protected_fingerprint() for name in self.protected}
+        self.summary_before = self.current()
 
     def tearDown(self) -> None:
         subprocess.run(["docker", *self.compose, "down", "-v", "--remove-orphans"], capture_output=True, timeout=300)
@@ -125,7 +137,7 @@ class DockerReleaseRehearsal(unittest.TestCase):
         manifest = self.plan(self.broken, self.sha_broken)
         with self.assertRaises(release.GateError) as raised:
             release.promote(self.client, manifest, self.policy, lock=self.lock, timeout=30)
-        self.assertEqual(raised.exception.code, "PROMOTION_FAILED_ROLLED_BACK:HEALTHCHECK_FAILED")
+        self.assertEqual(raised.exception.code, "PROMOTION_FAILED_ROLLED_BACK:READINESS_FAILED")
         self.assertEqual(self.current().image_id, self.previous)
         self.assertTrue(self.current().running)
         self.assert_protected_unchanged()
@@ -187,6 +199,113 @@ class DockerReleaseRehearsal(unittest.TestCase):
         self.assertEqual(raised.exception.code, "MANIFEST_TAMPERED")
         self.assertEqual(self.current().image_id, self.previous)
 
+    PROBE = ["test", "-f", "/tmp/ready"]
+
+    def web(self) -> release.ContainerIdentity:
+        return self.client.service_container(self.project, "web")
+
+    def plan_web(self, image: str, sha: str, probe=None) -> dict:
+        return release.build_manifest(
+            self.client, project=self.project, service="web", candidate_image=image, approved_sha=sha,
+            protected=self.protected + [f"{self.project}-summary-api-1"], policy=self.policy,
+            release_dir=self.release_dir / "web", ready_probe=probe,
+        )
+
+    def test_rollback_restores_exact_base_configuration_hash(self) -> None:
+        manifest = self.plan(self.candidate, self.sha_candidate)
+        self.assertTrue(manifest["base_resolves_to_previous"])
+        release.promote(self.client, manifest, self.policy, lock=self.lock)
+        self.assertNotEqual(self.current().config_hash, self.summary_before.config_hash)
+        release.rollback(self.client, manifest, self.policy, lock=self.lock)
+        after = self.current()
+        self.assertEqual(after.image_id, self.previous)
+        self.assertEqual(list(after.config_files), [str(self.base), str(self.overlay)])
+        self.assertEqual(after.config_hash, self.summary_before.config_hash)
+
+    def test_moved_base_tag_never_brings_up_another_image_on_rollback(self) -> None:
+        manifest = self.plan(self.candidate, self.sha_candidate)
+        release.promote(self.client, manifest, self.policy, lock=self.lock)
+        docker("tag", f"{self.run_id}-other:test", f"{self.run_id}-previous:test")
+        try:
+            self.assertEqual(release.rollback(self.client, manifest, self.policy, lock=self.lock), "APPLIED")
+            self.assertEqual(self.current().image_id, self.previous)
+            self.assertEqual(self.current().config_files[-1], str(self.release_dir / "rollback.override.json"))
+        finally:
+            docker("tag", self.previous, f"{self.run_id}-previous:test")
+
+    def test_service_without_healthcheck_requires_a_readiness_probe(self) -> None:
+        with self.assertRaises(release.GateError) as raised:
+            self.plan_web(self.web_candidate, self.sha_candidate)
+        self.assertEqual(raised.exception.code, "READINESS_UNDEFINED")
+        manifest = self.plan_web(self.web_candidate, self.sha_candidate, probe=self.PROBE)
+        self.assertEqual(release.promote(self.client, manifest, self.policy, lock=self.lock), "APPLIED")
+        self.assertEqual(self.web().image_id, self.web_candidate)
+        self.assert_protected_unchanged()
+
+    def test_unready_candidate_without_healthcheck_is_rolled_back(self) -> None:
+        manifest = self.plan_web(self.web_unready, self.sha_broken, probe=self.PROBE)
+        with self.assertRaises(release.GateError) as raised:
+            release.promote(self.client, manifest, self.policy, lock=self.lock, timeout=15)
+        self.assertEqual(raised.exception.code, "PROMOTION_FAILED_ROLLED_BACK:READINESS_FAILED")
+        self.assertEqual(self.web().image_id, self.web_previous)
+
+    def test_configuration_only_override_applies_and_rolls_back_exactly(self) -> None:
+        policy = self.release_dir.parent / "policy.override.json"
+        policy.write_text(json.dumps({"services": {"summary-api": {"environment": {"FEATURE_ENABLED": "true"}}}}), encoding="utf-8")
+        manifest = release.build_manifest(
+            self.client, project=self.project, service="summary-api", candidate_image=self.previous,
+            approved_sha=self.sha_previous, protected=self.protected, policy=self.policy,
+            release_dir=self.release_dir, extra_overrides=[str(policy)],
+        )
+        self.assertEqual(release.promote(self.client, manifest, self.policy, lock=self.lock), "APPLIED")
+        env = docker("inspect", "-f", "{{range .Config.Env}}{{println .}}{{end}}", self.current().container_id)
+        self.assertIn("FEATURE_ENABLED=true", env)
+        self.assertEqual(release.rollback(self.client, manifest, self.policy, lock=self.lock), "APPLIED")
+        self.assertEqual(self.current().config_hash, self.summary_before.config_hash)
+        env = docker("inspect", "-f", "{{range .Config.Env}}{{println .}}{{end}}", self.current().container_id)
+        self.assertNotIn("FEATURE_ENABLED", env)
+        # The approved override file itself is hash-pinned.
+        manifest2 = release.build_manifest(
+            self.client, project=self.project, service="summary-api", candidate_image=self.previous,
+            approved_sha=self.sha_previous, protected=self.protected, policy=self.policy,
+            release_dir=self.release_dir / "second", extra_overrides=[str(policy)],
+        )
+        policy.write_text(json.dumps({"services": {"summary-api": {"environment": {"FEATURE_ENABLED": "evil"}}}}), encoding="utf-8")
+        with self.assertRaises(release.GateError) as raised:
+            release.promote(self.client, manifest2, self.policy, lock=self.lock)
+        self.assertEqual(raised.exception.code, "CONFIGURATION_DRIFT")
+    def test_override_may_add_a_declared_network_and_rollback_removes_it(self) -> None:
+        network = f"{self.project}-wallhop"
+        docker("network", "create", "--internal", network)
+        self.addCleanup(subprocess.run, ["docker", "network", "rm", network], capture_output=True)
+        overlay = self.release_dir.parent / "network.override.json"
+        overlay.write_text(
+            json.dumps(
+                {
+                    "services": {"summary-api": {"networks": {"wallhop": {}}}},
+                    "networks": {"wallhop": {"external": True, "name": network}},
+                }
+            ),
+            encoding="utf-8",
+        )
+        undeclared = release.build_manifest(
+            self.client, project=self.project, service="summary-api", candidate_image=self.previous,
+            approved_sha=self.sha_previous, protected=self.protected, policy=self.policy,
+            release_dir=self.release_dir / "undeclared", extra_overrides=[str(overlay)],
+        )
+        with self.assertRaises(release.GateError) as raised:
+            release.promote(self.client, undeclared, self.policy, lock=self.lock)
+        self.assertEqual(raised.exception.code, "PROMOTION_FAILED_ROLLED_BACK:NETWORK_DRIFT")
+        manifest = release.build_manifest(
+            self.client, project=self.project, service="summary-api", candidate_image=self.previous,
+            approved_sha=self.sha_previous, protected=self.protected, policy=self.policy,
+            release_dir=self.release_dir / "declared", extra_overrides=[str(overlay)], networks_added=[network],
+        )
+        self.assertEqual(release.promote(self.client, manifest, self.policy, lock=self.lock), "APPLIED")
+        self.assertIn(network, self.current().networks)
+        self.assertEqual(release.rollback(self.client, manifest, self.policy, lock=self.lock), "APPLIED")
+        self.assertNotIn(network, self.current().networks)
+        self.assertEqual(self.current().config_hash, self.summary_before.config_hash)
 
 class PolicyTests(unittest.TestCase):
     def test_policy_rejects_forbidden_services(self) -> None:
