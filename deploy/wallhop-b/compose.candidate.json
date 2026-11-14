@@ -1,0 +1,20 @@
+{
+  "services": {
+    "newsflux": {"networks": ["wallhop_reader"]},
+    "miniflux": {"networks": ["wallhop_miniflux"]},
+    "content-fallback": {
+      "image": "${WALLHOP_B_IMAGE:?reviewed immutable image required}",
+      "env_file": ["${WALLHOP_B_PRIVATE_ENV_FILE:?private environment file required}"],
+      "environment": {
+        "CONTENT_FALLBACK_READER_ENABLED": "false",
+        "CONTENT_FALLBACK_POLICIES_JSON": "{\"enabled\":false}"
+      },
+      "volumes": ["${WALLHOP_B_DATA_DIR:?private data directory required}:/data"],
+      "networks": ["wallhop_reader", "wallhop_miniflux"]
+    }
+  },
+  "networks": {
+    "wallhop_reader": {"internal": true},
+    "wallhop_miniflux": {"internal": true}
+  }
+}
