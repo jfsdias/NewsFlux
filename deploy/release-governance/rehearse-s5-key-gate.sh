@@ -105,14 +105,13 @@ PY
   build_args=(-f "$context/Dockerfile.sandbox" --network host --build-arg "HTTPS_PROXY=${HTTPS_PROXY:-}")
 fi
 docker build -q "${build_args[@]}" -t "$run-summary:synthetic" "$context" >/dev/null
-calls=0
 preflight() { # $1 key name, $2 alias, stdin: optional attestation
-  calls=$((calls + 1))
-  local secrets="$work/secrets-$calls-$1" # fresh per call: earlier copies belong to uid 10001
-  mkdir -p "$secrets"
+  local secrets # fresh per call (each call runs in a subshell): earlier copies belong to uid 10001
+  secrets="$(mktemp -d "$work/secrets-$1.XXXXXX")"
+  chmod 0755 "$secrets"
   cp "$work/$1.key" "$secrets/key"
-  sudo chown -R 10001:10001 "$secrets" 2>/dev/null || chown -R 10001:10001 "$secrets"
-  chmod 0400 "$secrets/key"
+  chmod 0400 "$secrets/key" # before the hand-over: a non-root runner cannot chmod it afterwards
+  sudo -n chown -R 10001:10001 "$secrets" 2>/dev/null || chown -R 10001:10001 "$secrets"
   docker run --rm -i --network "$net" --read-only --cap-drop ALL --security-opt no-new-privileges \
     -v "$secrets:/run/secrets/litellm:ro" -v "$work/tls.crt:/run/ca.crt:ro" -e SSL_CERT_FILE=/run/ca.crt \
     -e NEWSFLUX_AI_LITELLM_BASE_URL="https://$run-tls:8443" -e NEWSFLUX_AI_LITELLM_VIRTUAL_KEY_FILE=/run/secrets/litellm/key \
