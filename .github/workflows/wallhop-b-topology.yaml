@@ -24,3 +24,7 @@ jobs:
         run: |
           docker pull -q python:3.12-slim
           bash deploy/wallhop-b/rehearse-reader-recovery.sh
+      - name: Activation and exact rollback of the operator procedure (separate projects, gates enforced)
+        run: |
+          docker pull -q busybox:1.36.1
+          bash deploy/wallhop-b/rehearse-wallhop-activation.sh
