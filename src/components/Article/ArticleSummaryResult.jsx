@@ -18,8 +18,42 @@ const SECTION_TITLES = {
 
 // Renders the validated summary. Requested sections without evidence are shown as
 // explicitly unavailable instead of being filled with invented content.
-const ArticleSummaryResult = ({ summary, modelLabel, polyglot }) => {
-  const isV2 = summary.schema_version === "2"
+const FALLBACK_NOT_USED_OUTCOMES = new Set([
+  "NOT_AVAILABLE",
+  "PAID_NOT_CONSENTED",
+  "CROSS_PROVIDER_NOT_CONSENTED",
+  "DEADLINE",
+  "FAILED",
+])
+
+// v3 only: say plainly when the fallback answered (and why), or why it was not used.
+const FallbackNotice = ({ provenance, modelLabels, polyglot }) => {
+  const label = (id) => modelLabels?.[id] ?? id
+  if (provenance.fallback_used) {
+    return (
+      <p className="article-intelligence-summary__meta" role="status">
+        {polyglot.t(`article_intelligence.fallback_used_${provenance.fallback_reason}`, {
+          primary: label(provenance.primary_model_id),
+          fallback: label(provenance.fallback_model_id),
+        })}
+      </p>
+    )
+  }
+  if (provenance.fallback_model_id && FALLBACK_NOT_USED_OUTCOMES.has(provenance.fallback_outcome)) {
+    return (
+      <p className="article-intelligence-summary__meta" role="status">
+        {polyglot.t(`article_intelligence.fallback_outcome_${provenance.fallback_outcome}`, {
+          fallback: label(provenance.fallback_model_id),
+        })}
+      </p>
+    )
+  }
+  return null
+}
+
+const ArticleSummaryResult = ({ summary, modelLabel, modelLabels, polyglot }) => {
+  const isV3 = summary.schema_version === "3"
+  const isV2 = summary.schema_version === "2" || isV3
   const sections = isV2
     ? summary.profile.sections.filter((section) => section !== "summary")
     : ["key_points", ...(summary.action_points.length > 0 ? ["actions"] : [])]
@@ -61,11 +95,20 @@ const ArticleSummaryResult = ({ summary, modelLabel, polyglot }) => {
       )}
       <p className="article-intelligence-summary__meta">
         {polyglot.t("article_intelligence.provenance_line", {
-          model: modelLabel ?? provenance.model_id ?? "—",
-          effective: provenance.effective_model_id ?? "—",
+          model: isV3
+            ? (modelLabels?.[provenance.effective_model_id] ??
+              provenance.effective_model_id ??
+              modelLabel ??
+              "—")
+            : (modelLabel ?? provenance.model_id ?? "—"),
+          effective:
+            (isV3 ? provenance.effective_model_alias : provenance.effective_model_id) ?? "—",
           origin: polyglot.t("article_intelligence.origin_original_miniflux"),
         })}
       </p>
+      {isV3 && (
+        <FallbackNotice modelLabels={modelLabels} polyglot={polyglot} provenance={provenance} />
+      )}
     </div>
   )
 }

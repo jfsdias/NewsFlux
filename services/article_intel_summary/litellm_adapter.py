@@ -47,8 +47,21 @@ MAX_IN_FLIGHT_REQUESTS = 1
 TRANSIENT_GATEWAY_STATUSES = frozenset({429, 500, 502, 503, 504})
 
 
+TRANSIENT_KINDS = frozenset({"TIMEOUT", "RATE_LIMITED", "UPSTREAM_UNAVAILABLE"})
+
+
 class TransientLiteLLMFailure(InferenceUnavailable):
-    """A safe signal permitting one explicit, budget-controlled secondary model attempt."""
+    """A safe signal permitting one explicit, budget-controlled secondary model attempt.
+
+    ``kind`` is a closed classification (TIMEOUT, RATE_LIMITED, UPSTREAM_UNAVAILABLE); it never
+    carries gateway text, which may contain credentials or article data.
+    """
+
+    def __init__(self, message: str = "LiteLLM gateway is temporarily unavailable", *, kind: str = "UPSTREAM_UNAVAILABLE") -> None:
+        if kind not in TRANSIENT_KINDS:
+            raise ValueError("unknown transient failure kind")
+        super().__init__(message)
+        self.kind = kind
 _URL_RE = re.compile(
     r"(?i)(?:"
     r"\b(?:[a-z][a-z0-9+.-]{0,31}://|www\.)[^\s<>{}\[\]]+"
@@ -431,7 +444,7 @@ class LiteLLMInferenceAdapter:
             raise InferenceUnavailable("inference budget or rate limit blocked the request") from None
         except httpx.TimeoutException:
             self._mark_uncertain(reservation_id, settled)
-            raise TransientLiteLLMFailure("LiteLLM gateway timed out") from None
+            raise TransientLiteLLMFailure("LiteLLM gateway timed out", kind="TIMEOUT") from None
         except (UsageLedgerError, httpx.HTTPError, OSError, UnicodeError, ValueError, TypeError, RecursionError):
             self._mark_uncertain(reservation_id, settled)
             raise InferenceUnavailable("inference request failed safely") from None
@@ -472,7 +485,10 @@ class LiteLLMInferenceAdapter:
         try:
             if response.status_code != 200:
                 if response.status_code in TRANSIENT_GATEWAY_STATUSES:
-                    raise TransientLiteLLMFailure("LiteLLM gateway is temporarily unavailable") from None
+                    raise TransientLiteLLMFailure(
+                        "LiteLLM gateway is temporarily unavailable",
+                        kind="RATE_LIMITED" if response.status_code == 429 else "UPSTREAM_UNAVAILABLE",
+                    ) from None
                 raise InferenceUnavailable("LiteLLM gateway returned a non-success status") from None
             body = bytearray()
             for chunk in response.iter_bytes():

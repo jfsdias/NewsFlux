@@ -9,7 +9,7 @@ from jsonschema.exceptions import ValidationError
 
 from services.article_intel_auth.auth import AuthorizedEntry
 from services.article_intel_summary.content import ContentSnapshotResolver, ResolvedContentSnapshot
-from services.article_intel_summary.contracts import validate_summary, validate_summary_v2
+from services.article_intel_summary.contracts import validate_summary, validate_summary_v2, validate_summary_v3
 from services.article_intel_summary.profiles import PROFILE_VERSION, V2_OUTPUT_FIELDS, SummaryProfile
 from services.article_intel_summary.inference import (
     DEFAULT_INFERENCE_TIMEOUT_SECONDS,
@@ -223,6 +223,224 @@ class SummaryService:
         except ValidationError as error:
             _invalid_output(_validation_code(error))
         return SummaryOutcome(payload=payload, http_status=200)
+
+    # ---------------------------------------------------------------------------------------------
+    # v3: primary + optional fallback, at most one secondary attempt
+    # ---------------------------------------------------------------------------------------------
+
+    PRIMARY_SHARE_WITH_FALLBACK = 0.65
+    MIN_FALLBACK_SECONDS = 1.0
+
+    def summarize_v3(
+        self,
+        entry: AuthorizedEntry,
+        *,
+        request_id: str,
+        primary_model_id: str,
+        fallback_model_id: str | None,
+        consent_paid: bool,
+        consent_cross_provider: bool,
+        profile: SummaryProfile,
+        deadline=None,
+        revalidation_reserve_seconds=0,
+        revalidate=None,
+    ) -> SummaryOutcome:
+        """Primary model, then at most ONE fallback attempt, only after a transient primary failure.
+
+        Never falls back on authentication/authorization, budget, policy, invalid output, stale
+        session, cancellation or deadline. The fallback is revalidated against the current catalog
+        and the caller's explicit consent (paid / cross-provider) at the moment of the attempt, and
+        the session/content is revalidated (``revalidate``) before it. Both attempts use the same
+        budget ledger through their adapters; nothing is retried silently.
+        """
+        import time
+
+        from services.article_intel_summary.catalog import ModelNotAvailable
+        from services.article_intel_summary.litellm_adapter import TransientLiteLLMFailure
+
+        if self.router is None:
+            raise ModelNotAvailable("MODEL_NOT_AVAILABLE")
+        primary = self.router.adapter_for(primary_model_id)  # refuses before any content access
+        snapshot = self.resolver.resolve(entry)
+        allowed = {paragraph.id for paragraph in snapshot.paragraphs}
+        trace = {
+            "primary": primary_model_id,
+            "fallback": fallback_model_id,
+            "effective": None,
+            "alias": None,
+            "used": False,
+            "reason": None,
+            "outcome": "NOT_NEEDED",
+            "attempts": 0,
+            "pricing": None,
+        }
+        if not snapshot.is_sufficient:
+            payload = self._v3_payload(
+                snapshot, request_id=request_id, status="insufficient", profile=profile, output=None,
+                limitations=["The authorized Miniflux content is too short, incomplete, or structurally unsuitable for a safe summary."],
+                provider_id=None, prompt_version=None, trace=trace,
+            )
+            validate_summary_v3(payload, allowed_paragraph_ids=allowed)
+            return SummaryOutcome(payload=payload, http_status=422)
+
+        model_input = build_model_input(snapshot, profile)
+        started = time.monotonic()
+        primary_timeout = self.timeout_seconds * (self.PRIMARY_SHARE_WITH_FALLBACK if fallback_model_id else 1.0)
+        if deadline is not None:
+            deadline.begin_inference(self.timeout_seconds, reserve_seconds=revalidation_reserve_seconds)
+        inference = None
+        try:
+            trace["attempts"] = 1
+            primary_failure = None
+            try:
+                inference = self._call(primary, model_input, primary_timeout, deadline)
+                trace["effective"] = primary_model_id
+            except TransientLiteLLMFailure as failure:
+                primary_failure = failure
+            except Exception:  # noqa: BLE001 - non-transient primary failure: never eligible
+                trace["outcome"] = "NOT_ELIGIBLE" if fallback_model_id else "NOT_CONFIGURED"
+            if primary_failure is not None:
+                # Outside any exception handler: a stale session/content raised by `revalidate`
+                # must abort the request, never be mistaken for a model failure.
+                trace["reason"] = f"PRIMARY_{primary_failure.kind}"
+                fallback = self._fallback_decision(
+                    trace, primary_model_id, fallback_model_id, consent_paid, consent_cross_provider, started, deadline
+                )
+                if fallback is not None:
+                    if revalidate is not None:
+                        revalidate(snapshot.content_fingerprint)
+                    remaining = self.timeout_seconds - (time.monotonic() - started)
+                    if deadline is not None:
+                        remaining = min(remaining, deadline.remaining())
+                    trace["attempts"] = 2
+                    try:
+                        inference = self._call(fallback, model_input, remaining, deadline)
+                        trace["effective"], trace["used"], trace["outcome"] = fallback_model_id, True, "USED"
+                    except Exception:  # noqa: BLE001 - the fallback result is final, no third attempt
+                        trace["outcome"] = "FAILED"
+        finally:
+            if deadline is not None:
+                deadline.end_inference()
+
+        if inference is None:
+            payload = self._v3_payload(
+                snapshot, request_id=request_id, status="unavailable", profile=profile, output=None,
+                limitations=["No model result is available; no summary was generated."],
+                provider_id=None, prompt_version=None, trace=trace,
+            )
+            validate_summary_v3(payload, allowed_paragraph_ids=allowed)
+            return SummaryOutcome(payload=payload, http_status=503)
+
+        if not isinstance(inference, InferenceResult) or not isinstance(inference.output, dict):
+            _invalid_output("MODEL_OUTPUT_INVALID_FIELD_TYPE")
+        try:
+            _ensure_bounded_json(inference.output)
+        except ModelOutputInvalid:
+            _invalid_output("MODEL_OUTPUT_LENGTH_EXCEEDED")
+        output = inference.output
+        if set(output) != set(V2_OUTPUT_FIELDS):
+            _invalid_output("MODEL_OUTPUT_MISSING_FIELD" if set(V2_OUTPUT_FIELDS) - set(output) else "MODEL_OUTPUT_EXTRA_FIELD")
+        provider_id = _safe_metadata(inference.provider_id)
+        trace["alias"] = _safe_metadata(inference.effective_model_id, optional=True)
+        prompt_version = _safe_metadata(inference.prompt_version)
+        if provider_id is None or prompt_version is None:
+            _invalid_output("MODEL_OUTPUT_VALIDATION_UNKNOWN")
+        effective_entry = self.router.entry_for(trace["effective"])
+        trace["pricing"] = (
+            "paid" if effective_entry is not None and effective_entry.to_document()["requires_paid_authorization"] else "free"
+        )
+        payload = self._v3_payload(
+            snapshot, request_id=request_id, status="partial", profile=profile, output=output,
+            limitations=["Miniflux does not establish whether its article content is complete; this summary may omit source material."],
+            provider_id=provider_id, prompt_version=prompt_version, trace=trace,
+        )
+        try:
+            validate_summary_v3(
+                payload,
+                allowed_paragraph_ids=allowed,
+                requested_fields=profile.requested_output_fields,
+                summary_max_chars=profile.summary_max_chars,
+                max_points=profile.max_points,
+            )
+        except ValidationError as error:
+            _invalid_output(_validation_code(error))
+        return SummaryOutcome(payload=payload, http_status=200)
+
+    @staticmethod
+    def _call(adapter, model_input, timeout_seconds, deadline):
+        if hasattr(adapter, "settings"):
+            return adapter.summarize(model_input, timeout_seconds=timeout_seconds, deadline=deadline)
+        return adapter.summarize(model_input, timeout_seconds=timeout_seconds)
+
+    def _fallback_decision(self, trace, primary_id, fallback_id, consent_paid, consent_cross, started, deadline):
+        """Return the fallback adapter, or None with trace['outcome'] explaining why."""
+        import time
+
+        from services.article_intel_summary.catalog import ModelNotAvailable
+
+        if not fallback_id:
+            trace["outcome"] = "NOT_CONFIGURED"
+            return None
+        remaining = self.timeout_seconds - (time.monotonic() - started)
+        if deadline is not None:
+            try:
+                remaining = min(remaining, deadline.remaining())
+            except Exception:  # noqa: BLE001 - deadline reached or cancelled
+                remaining = 0
+        if remaining < self.MIN_FALLBACK_SECONDS:
+            trace["outcome"] = "DEADLINE"
+            return None
+        try:
+            adapter = self.router.adapter_for(fallback_id)  # current catalog: approved, priced, authorized
+        except ModelNotAvailable:
+            trace["outcome"] = "NOT_AVAILABLE"
+            return None
+        primary_doc = self.router.entry_for(primary_id).to_document()
+        fallback_doc = self.router.entry_for(fallback_id).to_document()
+        if fallback_doc["requires_paid_authorization"] and not primary_doc["requires_paid_authorization"] and not consent_paid:
+            trace["outcome"] = "PAID_NOT_CONSENTED"
+            return None
+        if fallback_doc["provider"] != primary_doc["provider"] and not consent_cross:
+            trace["outcome"] = "CROSS_PROVIDER_NOT_CONSENTED"
+            return None
+        return adapter
+
+    @staticmethod
+    def _v3_payload(snapshot, *, request_id, status, profile, output, limitations, provider_id, prompt_version, trace):
+        output = output or {}
+        return {
+            "schema_version": "3",
+            "request_id": request_id,
+            "entry_id": snapshot.entry_id,
+            "status": status,
+            "content_scope": snapshot.content_scope,
+            "summary": output.get("summary", ""),
+            "summary_paragraph_ids": output.get("summary_paragraph_ids", []),
+            "key_points": output.get("key_points", []),
+            "facts": output.get("facts", []),
+            "implications": output.get("implications", []),
+            "action_points": output.get("action_points", []),
+            "open_questions": output.get("open_questions", []),
+            "limitations": limitations,
+            "profile": profile.to_document(),
+            "provenance": {
+                "content_origin": "ORIGINAL_MINIFLUX",
+                "content_fingerprint": snapshot.content_fingerprint,
+                "provider_id": provider_id,
+                "requested_model_id": trace["primary"],
+                "primary_model_id": trace["primary"],
+                "fallback_model_id": trace["fallback"],
+                "effective_model_id": trace["effective"] if status == "partial" else None,
+                "effective_model_alias": trace["alias"] if status == "partial" else None,
+                "fallback_used": bool(trace["used"]) and status == "partial",
+                "fallback_reason": trace["reason"],
+                "fallback_outcome": trace["outcome"],
+                "attempts": trace["attempts"],
+                "pricing_class": trace["pricing"] if status == "partial" else None,
+                "prompt_version": prompt_version,
+                "profile_version": PROFILE_VERSION,
+            },
+        }
 
     @staticmethod
     def _v2_payload(

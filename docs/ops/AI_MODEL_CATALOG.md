@@ -121,3 +121,75 @@ stay `UNVERIFIED` because its price could not be checked against the gateway.
 Unset `NEWSFLUX_AI_MODEL_POLICY_JSON` to return to legacy mode. Set
 `NEWSFLUX_AI_MODEL_DISCOVERY_ENABLED=false` to make no gateway calls; every model then becomes
 unavailable. Both are configuration-only changes applied with the governed `release.py` override.
+
+## Primary and fallback (Track B, request/response v3)
+
+The user picks a **primary** model and an optional **fallback** in Settings → Reading → Article
+intelligence. The fallback is off by default and must be a different model. Preferences stay
+where the existing Reader settings already live (this browser's local settings, identifiers only);
+no new server-side or Miniflux state is created. Miniflux remains the source of truth for feeds,
+categories, read and starred.
+
+- Without a fallback, the Reader keeps using the unchanged v2 contract, which never falls back.
+- With a fallback, it sends v3: `primary_model_id`, `fallback_model_id`, `fallback_consent`
+  (`paid`, `cross_provider`), and the profile.
+
+### Policy (server-enforced)
+
+1. **One primary attempt, then at most one fallback attempt.** There is no third attempt, and
+   gateway retries and gateway fallbacks are disabled per request (`num_retries: 0`,
+   `disable_fallbacks: true`, `x-litellm-num-retries: 0`).
+2. **Transient failures only.** The fallback runs only after the primary failed with
+   `TIMEOUT`, `RATE_LIMITED` (HTTP 429) or `UPSTREAM_UNAVAILABLE` (HTTP 500/502/503/504).
+3. **No fallback for anything else.** Authentication, authorization, budget/rate refusal,
+   policy, invalid or ungrounded output, stale session or content, cancellation and deadline
+   never trigger a fallback.
+4. **Revalidated at the moment of the attempt:**
+   - **Model:** the fallback must be `AVAILABLE` in the current catalog (approved, discovered,
+     priced, authorized).
+   - **Paid:** a paid fallback after a free primary needs `fallback_consent.paid`.
+   - **Provider:** a fallback from another provider needs `fallback_consent.cross_provider`.
+   - **Session and content:** the same user must still be authorized for the same entry, with
+     the same content fingerprint. Otherwise the request ends with 401 or `STALE_SNAPSHOT`.
+5. **Same budget ledger.** Both attempts reserve in the one budget ledger, which enforces the
+   monthly budget, rate and token limits. A timeout keeps its worst-case reservation
+   (`uncertain`), and nothing is deleted to free budget.
+6. **Time split.** With a fallback configured, the primary gets 65 % of the summary timeout and
+   the fallback the remainder (at least 1 s, otherwise `DEADLINE`).
+
+### Provenance (response v3)
+
+| Field                                                         | Meaning                                                                                                                                             |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `requested_model_id`, `primary_model_id`, `fallback_model_id` | Exactly what was requested                                                                                                                          |
+| `effective_model_id` / `effective_model_alias`                | Catalog ID / gateway alias that produced the result (`null` if none)                                                                                |
+| `fallback_used`, `fallback_reason`                            | Whether the fallback produced the result; the primary's transient failure class                                                                     |
+| `fallback_outcome`                                            | `NOT_NEEDED`, `NOT_CONFIGURED`, `NOT_ELIGIBLE`, `NOT_AVAILABLE`, `PAID_NOT_CONSENTED`, `CROSS_PROVIDER_NOT_CONSENTED`, `DEADLINE`, `USED`, `FAILED` |
+| `attempts`                                                    | 0–2                                                                                                                                                 |
+| `pricing_class`                                               | `free` / `paid` of the effective model                                                                                                              |
+
+The Reader cross-checks every field against its own request. It rejects responses where:
+
+- the effective model is not the primary or the fallback;
+- `fallback_used` is set but `attempts` is not 2;
+- the requested IDs differ from what was sent;
+- the content origin is not the original Miniflux text.
+
+The result shows a plain sentence when the fallback answered, and why, or why it was not used.
+Nothing about prompts, article text or keys is recorded.
+
+### LiteLLM native fallbacks: not used
+
+LiteLLM can fall back between model groups on the gateway. We do not use that for article
+summaries, because the gateway cannot enforce NewsFlux's per-request rules:
+
+- the user's choice and explicit paid / cross-provider consent;
+- one shared budget ledger with conservative accounting;
+- "transient failures only, at most one extra attempt";
+- revalidation of the session and content before the second call.
+
+Failover therefore stays explicit in the Summary API, and gateway fallbacks and retries are
+disabled per request.
+
+The legacy env-driven S5 → Mistral fallback (`NEWSFLUX_AI_ENABLE_S5_MISTRAL_FALLBACK`, v1
+endpoint only) is unchanged and stays off by default.

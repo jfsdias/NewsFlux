@@ -589,6 +589,9 @@ class ModelRouter:
         }
         return validate_catalog(document)
 
+    def entry_for(self, model_id: str) -> CatalogEntry | None:
+        return self._state().entries.get(model_id)
+
     def adapter_for(self, model_id: str):
         state = self._state()
         entry = state.entries.get(model_id)

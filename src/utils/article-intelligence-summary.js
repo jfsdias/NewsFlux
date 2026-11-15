@@ -125,9 +125,106 @@ const validateArticleSummaryResponseV2 = (payload, { entryId, requestId, modelId
   return payload
 }
 
-export const validateArticleSummaryResponse = (payload, { entryId, requestId, modelId } = {}) => {
+const V3_PROVENANCE_KEYS = [
+  "content_origin",
+  "content_fingerprint",
+  "provider_id",
+  "requested_model_id",
+  "primary_model_id",
+  "fallback_model_id",
+  "effective_model_id",
+  "effective_model_alias",
+  "fallback_used",
+  "fallback_reason",
+  "fallback_outcome",
+  "attempts",
+  "pricing_class",
+  "prompt_version",
+  "profile_version",
+]
+const V3_FALLBACK_REASONS = new Set([
+  null,
+  "PRIMARY_TIMEOUT",
+  "PRIMARY_RATE_LIMITED",
+  "PRIMARY_UPSTREAM_UNAVAILABLE",
+])
+const V3_FALLBACK_OUTCOMES = new Set([
+  "NOT_NEEDED",
+  "NOT_CONFIGURED",
+  "NOT_ELIGIBLE",
+  "NOT_AVAILABLE",
+  "PAID_NOT_CONSENTED",
+  "CROSS_PROVIDER_NOT_CONSENTED",
+  "DEADLINE",
+  "USED",
+  "FAILED",
+])
+
+// v3 = v2 content rules + verifiable primary/fallback provenance. The response must describe
+// exactly the request: same primary and fallback, effective model one of the two, and a
+// fallback result only after exactly two attempts with a transient primary failure.
+const validateArticleSummaryResponseV3 = (
+  payload,
+  { entryId, requestId, modelId, fallbackModelId },
+) => {
+  const provenance = payload?.provenance
+  if (
+    !provenance ||
+    typeof provenance !== "object" ||
+    Array.isArray(provenance) ||
+    Object.keys(provenance).length !== V3_PROVENANCE_KEYS.length ||
+    !V3_PROVENANCE_KEYS.every((key) => key in provenance) ||
+    provenance.content_origin !== "ORIGINAL_MINIFLUX" ||
+    !FINGERPRINT_PATTERN.test(provenance.content_fingerprint ?? "") ||
+    provenance.requested_model_id !== modelId ||
+    provenance.primary_model_id !== modelId ||
+    provenance.fallback_model_id !== (fallbackModelId ?? null) ||
+    ![null, modelId, fallbackModelId].includes(provenance.effective_model_id) ||
+    typeof provenance.fallback_used !== "boolean" ||
+    provenance.fallback_used !== (provenance.effective_model_id === fallbackModelId) ||
+    !V3_FALLBACK_REASONS.has(provenance.fallback_reason) ||
+    !V3_FALLBACK_OUTCOMES.has(provenance.fallback_outcome) ||
+    ![0, 1, 2].includes(provenance.attempts) ||
+    (provenance.fallback_used &&
+      (provenance.attempts !== 2 ||
+        provenance.fallback_outcome !== "USED" ||
+        provenance.fallback_reason === null)) ||
+    ![null, "free", "paid"].includes(provenance.pricing_class) ||
+    !["provider_id", "effective_model_alias", "prompt_version"].every(
+      (key) => provenance[key] === null || isShortText(provenance[key], 128),
+    )
+  ) {
+    return null
+  }
+  // Reuse the v2 content rules on the same document with v2 provenance shape.
+  const asV2 = {
+    ...payload,
+    schema_version: "2",
+    provenance: {
+      content_origin: provenance.content_origin,
+      content_fingerprint: provenance.content_fingerprint,
+      provider_id: provenance.provider_id,
+      model_id: modelId,
+      effective_model_id: provenance.effective_model_alias,
+      prompt_version: provenance.prompt_version,
+      profile_version: provenance.profile_version,
+      fallback_used: false,
+    },
+  }
+  return validateArticleSummaryResponseV2(asV2, { entryId, requestId, modelId }) ? payload : null
+}
+
+export const validateArticleSummaryResponse = (
+  payload,
+  { entryId, requestId, modelId, fallbackModelId } = {},
+) => {
+  if (payload && typeof payload === "object" && payload.schema_version === "3") {
+    return modelId && fallbackModelId
+      ? validateArticleSummaryResponseV3(payload, { entryId, requestId, modelId, fallbackModelId })
+      : null
+  }
   if (payload && typeof payload === "object" && payload.schema_version === "2") {
-    return modelId
+    return modelId && !fallbackModelId
       ? validateArticleSummaryResponseV2(payload, { entryId, requestId, modelId })
       : null
   }
