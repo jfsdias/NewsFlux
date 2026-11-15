@@ -86,6 +86,15 @@ print(hashlib.sha256(json.dumps(snapshot, sort_keys=True).encode()).hexdigest()[
 '
 }
 
+protected_running() {
+  for protected in npm "$LEGACY" newsflux; do
+    local state
+    state="$(docker inspect -f '{{.State.Running}}' "$protected" 2>/dev/null)" || return 1
+    [[ "$state" == "true" ]] || return 1
+  done
+  return 0
+}
+
 npm111_sha() {
   # Hash only. Do not emit the config body, URLs, IP addresses or credentials.
   docker exec npm sha256sum /data/nginx/proxy_host/111.conf | awk '{print $1}'
@@ -116,6 +125,13 @@ cleanup() {
     candidate_absent || cleanup_failed=1
   fi
   if [[ -n "$BASE_FINGERPRINT" ]]; then
+    protected_running
+    if [[ "$?" -ne 0 ]]; then
+      echo "G4_PROTECTED_RUNNING_POSTSTATE=FAIL"
+      cleanup_failed=1
+    else
+      echo "G4_PROTECTED_RUNNING_POSTSTATE=PASS"
+    fi
     current="$(fingerprint_protected 2>/dev/null)"
     if [[ "$current" == "$BASE_FINGERPRINT" ]]; then
       echo "G4_PROTECTED_POSTSTATE=PASS"
@@ -157,6 +173,8 @@ if [[ "$BASE_FINGERPRINT" != "$G4_EXPECTED_FINGERPRINT" ]]; then
 fi
 echo "G4_G3_FINGERPRINT=PASS"
 
+protected_running || { echo "G4_GATE=BLOCKED CODE=PROTECTED_SERVICE_STOPPED"; exit 2; }
+echo "G4_PROTECTED_SERVICES_RUNNING=PASS"
 BASE_NPM111_SHA="$(npm111_sha)" || { echo "G4_GATE=BLOCKED CODE=NPM111_READ"; exit 2; }
 [[ "$BASE_NPM111_SHA" =~ ^[0-9a-f]{64}$ ]] || { echo "G4_GATE=BLOCKED CODE=NPM111_HASH"; exit 2; }
 
@@ -293,6 +311,7 @@ echo "G4_TMPFS_EFFECTIVE=PASS"
   echo "G4_GATE=BLOCKED CODE=NPM111_CONF_DRIFT_DURING"
   exit 2
 }
+protected_running || { echo "G4_GATE=BLOCKED CODE=PROTECTED_SERVICE_STOPPED_DURING"; exit 2; }
 echo "G4_LEGACY_DURING=PASS"
 
 docker stop "$NEW_RELAY" >/dev/null
@@ -300,6 +319,7 @@ docker stop "$NEW_RELAY" >/dev/null
   echo "G4_GATE=BLOCKED CODE=PROTECTED_DRIFT_ON_RELAY_FAILURE"
   exit 2
 }
+protected_running || { echo "G4_GATE=BLOCKED CODE=PROTECTED_SERVICE_STOPPED_AFTER_RELAY"; exit 2; }
 echo "G4_LEGACY_ON_RELAY_FAILURE=PASS"
 echo "G4_DARK_CANARY=PASS"
 echo "WALLHOP_EXTERNAL_ARTICLE_REQUESTS=NOT_ISSUED_BY_OPERATOR"
