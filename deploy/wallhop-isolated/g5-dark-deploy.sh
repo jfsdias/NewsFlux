@@ -242,11 +242,22 @@ checks=[
  all(not x["HostConfig"].get("PortBindings") for x in (a,b)),
  all(x["HostConfig"].get("ReadonlyRootfs") for x in (a,b)),
  "/data" in (a["HostConfig"].get("Tmpfs") or {}),
- all(m.get("Type")!="volume" for m in a["Mounts"])
+ all(m.get("Type")!="volume" for m in a["Mounts"]),
+ dict(v.split("=",1) for v in b["Config"]["Env"] if "=" in v).get("WALLHOP_UPSTREAM")=="127.0.0.1:9",
+ dict(v.split("=",1) for v in b["Config"]["Env"] if "=" in v).get("MINIFLUX_UPSTREAM")=="127.0.0.1:9"
 ]
 if not all(checks): sys.exit(2)
 print("G5_RUNTIME_ISOLATION=PASS")
 ' || block RUNTIME_ISOLATION
+# Verify effective runtime tmpfs rather than trusting only Docker HostConfig.
+docker exec "$NEW_RECOVERY" python -c '
+from pathlib import Path
+matches=[line.split(" - ",1)[1].split()[0]
+         for line in Path("/proc/self/mountinfo").read_text().splitlines()
+         if line.split(" - ",1)[0].split()[4]=="/data"]
+assert matches==["tmpfs"]
+' >/dev/null || block RUNTIME_TMPFS_NOT_EFFECTIVE
+echo "G5_RUNTIME_TMPFS=PASS"
 docker network inspect newsflux_wallhop_reader_isolated newsflux_wallhop_egress_isolated |
   python3 -c '
 import json,sys
