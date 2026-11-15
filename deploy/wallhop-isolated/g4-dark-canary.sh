@@ -161,6 +161,7 @@ cleanup() {
   exit "$original"
 }
 trap 'cleanup $?' EXIT
+trap 'exit 130' INT TERM HUP
 
 echo "=== NEWSFLUX G4 DARK — EXACT-SHA OPERATOR CANARY ==="
 echo "G4_SOURCE_SHA=$G4_SOURCE_SHA"
