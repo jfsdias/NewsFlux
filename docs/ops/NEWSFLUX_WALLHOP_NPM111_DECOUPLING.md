@@ -1,8 +1,11 @@
 # NEWSFLUX-WALLHOP-NPM111-DECOUPLE-01 — compatibility-preserving architecture gate
 
 **Status:** PROPOSED / DRAFT / NO DEPLOY / NO MERGE AUTHORIZATION.
+
 **Source GitHub main audited:** `4ea6581d1c8641e8619aa974e04b856695831e10` (PR #250 merged and deployed, per operator receipt on 2026-11-15).
+
 **Existing WallHop candidate:** PR #244 HEAD `1ccd10a4309761a02c838a35e2fa86229baaa559` (DRAFT/HOLD, historically based on `f7b2987...`).
+
 **Governance:** no update to NPM host 111, Miniflux, NewsFlux Reader, PR188 runtime/volume, LiteLLM, DNS, Caddy or production Compose in this documentation PR.
 
 ## The confirmed incompatibility
