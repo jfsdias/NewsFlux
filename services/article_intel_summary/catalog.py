@@ -74,6 +74,15 @@ LEGACY_IDS = (MODEL_CHOICE_S5_FREE, MODEL_CHOICE_MISTRAL_SMALL)
 LEGACY_LABELS = {MODEL_CHOICE_S5_FREE: "S5", MODEL_CHOICE_MISTRAL_SMALL: "Mistral Small"}
 _PROVIDER_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}")
 _LABEL_MAX = 64
+# Provider IDENTITY (security, never displayed): the LiteLLM provider adapter, plus the upstream
+# endpoint host when the deployment exposes one, e.g. "mistral" or "openai@api.example.net".
+_IDENTITY_PROVIDER_RE = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
+_IDENTITY_RE = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}(?:@[a-z0-9.-]{1,253}(?::[0-9]{1,5})?)?")
+# Dialects that only describe an API shape: without a visible api_base the real upstream is unknown.
+_GENERIC_DIALECTS = frozenset({
+    "openai", "openai_like", "custom_openai", "text-completion-openai", "hosted_vllm", "vllm", "ollama",
+    "ollama_chat", "lm_studio", "litellm_proxy", "custom", "llamafile", "xinference", "oobabooga",
+})
 
 # unavailable_reason -> status (for entries built without discovery, e.g. in tests)
 _REASON_STATUS = {
@@ -120,6 +129,7 @@ class PolicyModel:
     transfer_authorized: bool
     max_output_tokens: int | None = None
     legacy: bool = False
+    provider_identity: str | None = None  # optional expected gateway identity; a mismatch fails closed
 
 
 _POLICY_KEYS = {
@@ -133,8 +143,9 @@ _POLICY_KEYS = {
     "paid_authorized",
     "transfer_authorized",
     "max_output_tokens",
+    "provider_identity",
 }
-_POLICY_REQUIRED = _POLICY_KEYS - {"max_output_tokens"}
+_POLICY_REQUIRED = _POLICY_KEYS - {"max_output_tokens", "provider_identity"}
 
 
 def load_model_policy(values: Mapping[str, str]) -> tuple[str, tuple[PolicyModel, ...]]:
@@ -207,6 +218,9 @@ def _parse_policy(document: object) -> tuple[PolicyModel, ...]:
         max_output = item.get("max_output_tokens")
         if max_output is not None and (isinstance(max_output, bool) or not isinstance(max_output, int) or max_output < 1):
             raise ValueError("policy max output")
+        identity = item.get("provider_identity")
+        if identity is not None and not (isinstance(identity, str) and _IDENTITY_RE.fullmatch(identity)):
+            raise ValueError("policy provider identity")
         models.append(
             PolicyModel(
                 model_id=model_id,
@@ -219,6 +233,7 @@ def _parse_policy(document: object) -> tuple[PolicyModel, ...]:
                 paid_authorized=item["paid_authorized"],
                 transfer_authorized=item["transfer_authorized"],
                 max_output_tokens=max_output,
+                provider_identity=identity,
             )
         )
     if len({m.model_id for m in models}) != len(models) or len({m.alias for m in models}) != len(models):
@@ -245,6 +260,7 @@ class GatewayModel:
     input_price: Decimal | None = None  # USD per million tokens, None = not published
     output_price: Decimal | None = None
     price_conflict: bool = False
+    provider_identity: str | None = None  # verified, identical for every deployment, else None
 
 
 @dataclass(frozen=True)
@@ -367,16 +383,57 @@ def _parse_model_info(document: object) -> dict[str, GatewayModel]:
     if not isinstance(document, dict) or not isinstance(document.get("data"), list):
         raise ValueError("model info")
     grouped: dict[str, list[dict]] = {}
+    identities: dict[str, list[str | None]] = {}
     for item in document["data"]:
         if not isinstance(item, dict) or not _valid_model_alias(item.get("model_name")):
             raise ValueError("model info item")
         info = item.get("model_info")
         grouped.setdefault(item["model_name"], []).append(info if isinstance(info, dict) else {})
-    return {alias: _aggregate(alias, infos) for alias, infos in list(grouped.items())[:MAX_DISCOVERED_ALIASES]}
+        identities.setdefault(item["model_name"], []).append(_deployment_identity(item))
+    return {
+        alias: _aggregate(alias, infos, identities[alias])
+        for alias, infos in list(grouped.items())[:MAX_DISCOVERED_ALIASES]
+    }
 
 
-def _aggregate(alias: str, infos: list[dict]) -> GatewayModel:
+def _deployment_identity(item: dict) -> str | None:
+    """The verified provider identity of ONE deployment, or None when it cannot be proven.
+
+    Built only from what the gateway's own inventory states: ``model_info.litellm_provider`` (the
+    LiteLLM provider adapter), which must agree with the ``litellm_params.model`` prefix when there is
+    one, plus the ``litellm_params.api_base`` host when the deployment exposes it. A generic API
+    dialect (OpenAI-compatible, vLLM, Ollama, ...) without a visible endpoint proves nothing.
+    """
+    info = item.get("model_info")
+    params = item.get("litellm_params")
+    params = params if isinstance(params, dict) else {}
+    provider = info.get("litellm_provider") if isinstance(info, dict) else None
+    if not isinstance(provider, str) or not _IDENTITY_PROVIDER_RE.fullmatch(provider.lower()):
+        return None
+    provider = provider.lower()
+    model = params.get("model")
+    if model is not None and (not isinstance(model, str) or ("/" in model and model.split("/", 1)[0].lower() != provider)):
+        return None
+    api_base = params.get("api_base")
+    if api_base is None:
+        return None if provider in _GENERIC_DIALECTS else provider
+    if not isinstance(api_base, str):
+        return None
+    try:
+        parts = urlsplit(api_base.strip())
+        host, port = (parts.hostname or "").lower(), parts.port
+    except ValueError:
+        return None
+    if parts.scheme not in ("http", "https") or not host or parts.username or parts.password:
+        return None
+    identity = f"{provider}@{host}" + (f":{port}" if port else "")
+    return identity if _IDENTITY_RE.fullmatch(identity) else None
+
+
+def _aggregate(alias: str, infos: list[dict], identities: list[str | None] | None = None) -> GatewayModel:
     """Combine every deployment of one alias conservatively."""
+    distinct = set(identities or [None])
+    provider_identity = distinct.pop() if len(distinct) == 1 else None  # mixed deployments: unknown
     modes = {info.get("mode") if isinstance(info.get("mode"), str) else None for info in infos}
     mode = modes.pop() if len(modes) == 1 else ("mixed" if None not in modes else None)
     providers = {info.get("litellm_provider") for info in infos}
@@ -401,6 +458,7 @@ def _aggregate(alias: str, infos: list[dict]) -> GatewayModel:
         input_price=prices[0],
         output_price=prices[1],
         price_conflict=conflict,
+        provider_identity=provider_identity,
     )
 
 
@@ -434,6 +492,9 @@ class CatalogEntry:
     paid: bool | None = None
     gateway_max_input_tokens: int | None = None
     gateway_max_output_tokens: int | None = None
+    # Security identity for fallback decisions (SEC-249-02). Internal: never in to_document().
+    # `provider` above is a display label only.
+    provider_identity: str | None = None
 
     def to_document(self) -> dict[str, Any]:
         settings = self.settings
@@ -589,6 +650,9 @@ class ModelRouter:
         }
         return validate_catalog(document)
 
+    def entry_for(self, model_id: str) -> CatalogEntry | None:
+        return self._state().entries.get(model_id)
+
     def adapter_for(self, model_id: str):
         state = self._state()
         entry = state.entries.get(model_id)
@@ -599,6 +663,14 @@ class ModelRouter:
                 "MODEL_NOT_AUTHORIZED" if entry.unavailable_reason in _NOT_AUTHORIZED_REASONS else "MODEL_NOT_AVAILABLE"
             )
         return state.adapters[model_id]
+
+    def fallback_view(self, primary_id: str, fallback_id: str):
+        """(primary entry, fallback entry, fallback adapter) from ONE current catalog state."""
+        state = self._state()
+        fallback = state.entries.get(fallback_id)
+        if fallback is None or not fallback.available:
+            raise ModelNotAvailable("MODEL_NOT_AVAILABLE")
+        return state.entries.get(primary_id), fallback, state.adapters[fallback_id]
 
 
 def create_model_router(
@@ -747,6 +819,9 @@ def _evaluate(item: PolicyModel, policy_status: str, snapshot: DiscoverySnapshot
         reason = "NOT_CONFIGURED"
     else:
         reason = None
+    identity = gateway_model.provider_identity if (discovered and gateway_model is not None) else None
+    if item.provider_identity is not None and identity != item.provider_identity:
+        identity = None  # policy and gateway disagree: unverified, fail closed for fallback
     adapter = adapter_for_settings(item.model_id, settings) if reason is None else None
     if reason is None and adapter is None:
         reason = "RUNTIME_UNAVAILABLE"
@@ -764,6 +839,7 @@ def _evaluate(item: PolicyModel, policy_status: str, snapshot: DiscoverySnapshot
         paid=paid,
         gateway_max_input_tokens=gateway_model.max_input_tokens if gateway_model and discovered else None,
         gateway_max_output_tokens=gateway_model.max_output_tokens if gateway_model and discovered else None,
+        provider_identity=identity,
     )
     return entry, adapter
 

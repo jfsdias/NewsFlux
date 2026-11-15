@@ -1,4 +1,4 @@
-import { Button, Checkbox, Radio, Select, Typography } from "@arco-design/web-react"
+import { Button, Checkbox, Radio, Select, Switch, Typography } from "@arco-design/web-react"
 import { useStore } from "@nanostores/react"
 import { useEffect, useState } from "react"
 
@@ -13,6 +13,7 @@ import isArticleIntelligenceEnabled from "@/utils/article-intelligence-feature"
 import {
   sanitizeSummaryFocus,
   sanitizeSummarySections,
+  SUMMARY_FALLBACK_NONE,
   SUMMARY_FOCUSES,
   SUMMARY_LANGUAGES,
   SUMMARY_LENGTHS,
@@ -77,16 +78,29 @@ const ArticleIntelligence = () => {
   const { polyglot } = useStore(polyglotState)
   const auth = useStore(authState)
   const authSessionKey = getAuthSessionKey(auth)
-  const { aiSummaryFocus, aiSummaryLanguage, aiSummaryLength, aiSummaryModel, aiSummarySections } =
-    useStore(settingsState, {
-      keys: [
-        "aiSummaryFocus",
-        "aiSummaryLanguage",
-        "aiSummaryLength",
-        "aiSummaryModel",
-        "aiSummarySections",
-      ],
-    })
+  const {
+    aiSummaryFallbackAllowCrossProvider,
+    aiSummaryFallbackAllowPaid,
+    aiSummaryFallbackEnabled,
+    aiSummaryFallbackModel,
+    aiSummaryFocus,
+    aiSummaryLanguage,
+    aiSummaryLength,
+    aiSummaryModel,
+    aiSummarySections,
+  } = useStore(settingsState, {
+    keys: [
+      "aiSummaryFallbackAllowCrossProvider",
+      "aiSummaryFallbackAllowPaid",
+      "aiSummaryFallbackEnabled",
+      "aiSummaryFallbackModel",
+      "aiSummaryFocus",
+      "aiSummaryLanguage",
+      "aiSummaryLength",
+      "aiSummaryModel",
+      "aiSummarySections",
+    ],
+  })
   const [reloadCount, setReloadCount] = useState(0)
   const [loaded, setLoaded] = useState({ key: null, status: "loading", catalog: null })
   const requestKey = `${authSessionKey}:${reloadCount}`
@@ -121,6 +135,15 @@ const ArticleIntelligence = () => {
     loaded.key === requestKey ? loaded : { key: requestKey, status: "loading", catalog: null }
   const { catalog } = catalogState
   const defaultModel = catalog?.models.find((model) => model.id === catalog.default_model_id)
+  const primaryId =
+    aiSummaryModel === SUMMARY_MODEL_AUTO ? catalog?.default_model_id : aiSummaryModel
+  const primaryEntry = catalog?.models.find((model) => model.id === primaryId)
+  const fallbackEntry = catalog?.models.find((model) => model.id === aiSummaryFallbackModel)
+  const fallbackIsUnavailable =
+    catalog &&
+    aiSummaryFallbackEnabled &&
+    aiSummaryFallbackModel !== SUMMARY_FALLBACK_NONE &&
+    !fallbackEntry?.available
   const selectedIsUnavailable =
     catalog &&
     aiSummaryModel !== SUMMARY_MODEL_AUTO &&
@@ -176,6 +199,71 @@ const ArticleIntelligence = () => {
           </Typography.Text>
         )}
       </SettingItem>
+      {catalog && (
+        <SettingItem
+          description={polyglot.t("article_intelligence.fallback_description")}
+          title={polyglot.t("article_intelligence.fallback_label")}
+        >
+          <Switch
+            aria-label={polyglot.t("article_intelligence.fallback_label")}
+            checked={aiSummaryFallbackEnabled}
+            onChange={(value) => updateSettings({ aiSummaryFallbackEnabled: value })}
+          />
+          {aiSummaryFallbackEnabled && (
+            <>
+              <Radio.Group
+                aria-label={polyglot.t("article_intelligence.fallback_label")}
+                className="ai-model-catalog"
+                direction="vertical"
+                value={aiSummaryFallbackModel}
+                onChange={(value) => updateSettings({ aiSummaryFallbackModel: value })}
+              >
+                <Radio value={SUMMARY_FALLBACK_NONE}>
+                  <span className="ai-model-option__title">
+                    {polyglot.t("article_intelligence.fallback_none")}
+                  </span>
+                </Radio>
+                {catalog.models
+                  .filter((model) => model.id !== primaryId)
+                  .map((model) => (
+                    <Radio key={model.id} disabled={!model.available} value={model.id}>
+                      <span className="ai-model-option__title">{model.label}</span>
+                      <ModelDetails model={model} polyglot={polyglot} />
+                    </Radio>
+                  ))}
+              </Radio.Group>
+              {fallbackEntry?.requiresPaidAuthorization && (
+                <Checkbox
+                  checked={aiSummaryFallbackAllowPaid}
+                  onChange={(value) => updateSettings({ aiSummaryFallbackAllowPaid: value })}
+                >
+                  {polyglot.t("article_intelligence.fallback_allow_paid")}
+                </Checkbox>
+              )}
+              {fallbackEntry &&
+                primaryEntry &&
+                fallbackEntry.provider !== primaryEntry.provider && (
+                  <Checkbox
+                    checked={aiSummaryFallbackAllowCrossProvider}
+                    onChange={(value) =>
+                      updateSettings({ aiSummaryFallbackAllowCrossProvider: value })
+                    }
+                  >
+                    {polyglot.t("article_intelligence.fallback_allow_cross_provider", {
+                      primary: primaryEntry.provider,
+                      fallback: fallbackEntry.provider,
+                    })}
+                  </Checkbox>
+                )}
+              {fallbackIsUnavailable && (
+                <Typography.Text role="status" type="warning">
+                  {polyglot.t("article_intelligence.fallback_selection_unavailable")}
+                </Typography.Text>
+              )}
+            </>
+          )}
+        </SettingItem>
+      )}
       <SettingItem
         description={polyglot.t("article_intelligence.length_description")}
         title={polyglot.t("article_intelligence.length_label")}

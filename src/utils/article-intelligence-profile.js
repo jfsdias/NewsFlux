@@ -100,3 +100,29 @@ export const resolveSummaryModel = (preference, catalog) => {
   }
   return { modelId, entry, reason: null }
 }
+
+export const SUMMARY_FALLBACK_NONE = "none"
+
+// Primary + optional fallback. The fallback is sent only when explicitly enabled, well-formed
+// and different from the primary; consent for paid / cross-provider fallback is explicit and
+// off by default. A saved fallback is never swapped for another model on the client: the server
+// revalidates it against the current catalog at the moment of the (single) secondary attempt.
+export const resolveSummaryRouting = (settings = {}, catalog) => {
+  const primary = resolveSummaryModel(settings.aiSummaryModel, catalog)
+  const fallback = settings.aiSummaryFallbackModel
+  const fallbackModelId =
+    primary.modelId &&
+    settings.aiSummaryFallbackEnabled === true &&
+    isSummaryModelId(fallback) &&
+    fallback !== primary.modelId
+      ? fallback
+      : null
+  return {
+    ...primary,
+    fallbackModelId,
+    consent: {
+      paid: settings.aiSummaryFallbackAllowPaid === true,
+      cross_provider: settings.aiSummaryFallbackAllowCrossProvider === true,
+    },
+  }
+}

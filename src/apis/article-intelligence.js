@@ -62,7 +62,35 @@ export const fetchModelCatalog = async ({ signal } = {}) => {
   return { ...catalog, sessionKey }
 }
 
-const requestArticleSummary = async ({ entryId, signal, modelId, profile } = {}) => {
+const buildSummaryBody = ({ requestId, modelId, fallbackModelId, consent, profile }) => {
+  if (!(modelId && profile)) {
+    return { schema_version: "1", request_id: requestId, profile_id: "editorial-default" }
+  }
+  if (fallbackModelId) {
+    // v3 only when a distinct fallback is explicitly configured; otherwise the v2 contract.
+    return {
+      schema_version: "3",
+      request_id: requestId,
+      primary_model_id: modelId,
+      fallback_model_id: fallbackModelId,
+      fallback_consent: {
+        paid: consent?.paid === true,
+        cross_provider: consent?.cross_provider === true,
+      },
+      profile,
+    }
+  }
+  return { schema_version: "2", request_id: requestId, model_id: modelId, profile }
+}
+
+const requestArticleSummary = async ({
+  entryId,
+  signal,
+  modelId,
+  fallbackModelId = null,
+  consent,
+  profile,
+} = {}) => {
   const path = buildArticleSummaryPath(entryId)
   const auth = authState.get()
   const revision = getDataSessionRevision()
@@ -87,9 +115,7 @@ const requestArticleSummary = async ({ entryId, signal, modelId, profile } = {})
       ...authHeaders(auth),
     },
     body: JSON.stringify(
-      modelId && profile
-        ? { schema_version: "2", request_id: requestId, model_id: modelId, profile }
-        : { schema_version: "1", request_id: requestId, profile_id: "editorial-default" },
+      buildSummaryBody({ requestId, modelId, fallbackModelId, consent, profile }),
     ),
     credentials: "omit",
     cache: "no-store",
@@ -102,6 +128,7 @@ const requestArticleSummary = async ({ entryId, signal, modelId, profile } = {})
     entryId: Number(entryId),
     requestId,
     modelId: modelId && profile ? modelId : undefined,
+    fallbackModelId: modelId && profile ? fallbackModelId : undefined,
   })
   if (!isSameSession(revision, sessionKey)) {
     return null

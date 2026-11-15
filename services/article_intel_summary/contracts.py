@@ -19,10 +19,9 @@ def _load_schema(name: str) -> dict[str, Any]:
 
 
 def validate_request(document: object) -> dict[str, Any]:
-    name = (
-        "summary-request-v2.schema.json"
-        if isinstance(document, dict) and document.get("schema_version") == "2"
-        else "summary-request.schema.json"
+    version = document.get("schema_version") if isinstance(document, dict) else None
+    name = {"2": "summary-request-v2.schema.json", "3": "summary-request-v3.schema.json"}.get(
+        version, "summary-request.schema.json"
     )
     schema = _load_schema(name)
     Draft202012Validator(schema, format_checker=FormatChecker()).validate(document)
@@ -66,6 +65,11 @@ def validate_catalog(document: object) -> dict[str, Any]:
     return document
 
 
+def validate_summary_v3(document: object, **kwargs) -> dict[str, Any]:
+    """v3 = v2 content rules + primary/fallback provenance (schema summary-response-v3)."""
+    return validate_summary_v2(document, schema_name="summary-response-v3.schema.json", **kwargs)
+
+
 def validate_summary_v2(
     document: object,
     *,
@@ -73,8 +77,9 @@ def validate_summary_v2(
     requested_fields: tuple[str, ...] = (),
     summary_max_chars: int = 3000,
     max_points: int = 6,
+    schema_name: str = "summary-response-v2.schema.json",
 ) -> dict[str, Any]:
-    schema = _load_schema("summary-response-v2.schema.json")
+    schema = _load_schema(schema_name)
     Draft202012Validator(schema, format_checker=FormatChecker()).validate(document)
     if not isinstance(document, dict):
         raise ValidationError("summary response must be an object")

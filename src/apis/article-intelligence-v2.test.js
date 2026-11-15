@@ -419,3 +419,192 @@ test("v2 summary provenance accepts a dynamic model id only when it matches the 
     fetchImplementation = null
   }
 })
+
+// --- Primary / fallback (request + response v3) ------------------------------------------------
+
+const { resolveSummaryRouting } = await import("@/utils/article-intelligence-profile")
+
+const v3Response = (requestId, provenance = {}, changes = {}) => {
+  const base = v2Response(requestId)
+  return {
+    ...base,
+    schema_version: "3",
+    provenance: {
+      content_origin: "ORIGINAL_MINIFLUX",
+      content_fingerprint: "a".repeat(64),
+      provider_id: "litellm",
+      requested_model_id: "free-a",
+      primary_model_id: "free-a",
+      fallback_model_id: "free-b",
+      effective_model_id: "free-a",
+      effective_model_alias: "alias-a",
+      fallback_used: false,
+      fallback_reason: null,
+      fallback_outcome: "NOT_NEEDED",
+      attempts: 1,
+      pricing_class: "free",
+      prompt_version: "editorial-summary-v2-profile-litellm",
+      profile_version: "summary-profile-v1",
+      ...provenance,
+    },
+    ...changes,
+  }
+}
+
+test("routing: fallback only when enabled, well-formed and distinct; consent is explicit", () => {
+  const catalog = {
+    default_model_id: "free-a",
+    models: [
+      { id: "free-a", label: "A", available: true },
+      { id: "free-b", label: "B", available: true },
+    ],
+  }
+  const base = { aiSummaryModel: "free-a", aiSummaryFallbackModel: "free-b" }
+  assert.equal(resolveSummaryRouting(base, catalog).fallbackModelId, null)
+  const enabled = { ...base, aiSummaryFallbackEnabled: true }
+  assert.equal(resolveSummaryRouting(enabled, catalog).fallbackModelId, "free-b")
+  assert.deepEqual(resolveSummaryRouting(enabled, catalog).consent, {
+    paid: false,
+    cross_provider: false,
+  })
+  assert.equal(
+    resolveSummaryRouting({ ...enabled, aiSummaryFallbackModel: "free-a" }, catalog)
+      .fallbackModelId,
+    null,
+  )
+  assert.equal(
+    resolveSummaryRouting({ ...enabled, aiSummaryFallbackModel: "none" }, catalog).fallbackModelId,
+    null,
+  )
+  // A saved fallback that disappeared is still sent: the server reports NOT_AVAILABLE; it is
+  // never replaced by another model on the client.
+  assert.equal(
+    resolveSummaryRouting({ ...enabled, aiSummaryFallbackModel: "gone-model" }, catalog)
+      .fallbackModelId,
+    "gone-model",
+  )
+  assert.deepEqual(
+    resolveSummaryRouting(
+      { ...enabled, aiSummaryFallbackAllowPaid: true, aiSummaryFallbackAllowCrossProvider: true },
+      catalog,
+    ).consent,
+    { paid: true, cross_provider: true },
+  )
+})
+
+test("fallback settings are sanitized and default to off", () => {
+  const defaults = sanitizeSettings({})
+  assert.equal(defaults.aiSummaryFallbackEnabled, false)
+  assert.equal(defaults.aiSummaryFallbackModel, "none")
+  assert.equal(defaults.aiSummaryFallbackAllowPaid, false)
+  assert.equal(defaults.aiSummaryFallbackAllowCrossProvider, false)
+  const stored = sanitizeSettings({
+    aiSummaryFallbackEnabled: "yes",
+    aiSummaryFallbackModel: "Bad/ID",
+    aiSummaryFallbackAllowPaid: 1,
+  })
+  assert.equal(stored.aiSummaryFallbackEnabled, false)
+  assert.equal(stored.aiSummaryFallbackModel, "none")
+  assert.equal(stored.aiSummaryFallbackAllowPaid, false)
+  assert.equal(
+    sanitizeSettings({ aiSummaryFallbackModel: "free-b" }).aiSummaryFallbackModel,
+    "free-b",
+  )
+})
+
+test("v3 request carries primary, fallback and consent only; provenance is cross-checked", async () => {
+  installFetchDispatcher()
+  const profile = buildSummaryProfile({})
+  const ask = () =>
+    requestArticleSummary({
+      entryId: 42,
+      modelId: "free-a",
+      fallbackModelId: "free-b",
+      consent: { paid: false, cross_provider: false },
+      profile,
+    })
+  try {
+    let body
+    fetchImplementation = async (_url, options) => {
+      body = JSON.parse(options.body)
+      return Response.json(v3Response(body.request_id))
+    }
+    const first = await ask()
+    assert.equal(first.kind, "summary")
+    assert.deepEqual(Object.keys(body).toSorted(), [
+      "fallback_consent",
+      "fallback_model_id",
+      "primary_model_id",
+      "profile",
+      "request_id",
+      "schema_version",
+    ])
+    assert.equal(body.schema_version, "3")
+
+    const used = {
+      effective_model_id: "free-b",
+      effective_model_alias: "alias-b",
+      fallback_used: true,
+      fallback_reason: "PRIMARY_TIMEOUT",
+      fallback_outcome: "USED",
+      attempts: 2,
+    }
+    fetchImplementation = async (_url, options) =>
+      Response.json(v3Response(JSON.parse(options.body).request_id, used))
+    const viaFallback = await ask()
+    assert.equal(viaFallback.kind, "summary")
+    assert.equal(viaFallback.summary.provenance.fallback_used, true)
+
+    const forged = [
+      { effective_model_id: "other-c" },
+      { ...used, attempts: 1 },
+      { fallback_used: true },
+      { requested_model_id: "free-b" },
+      { fallback_model_id: "other-c" },
+      { content_origin: "RECOVERED_WALLHOP" },
+      { fallback_outcome: "SOMETHING" },
+      { attempts: 3 },
+    ]
+    for (const provenance of forged) {
+      fetchImplementation = async (_url, options) =>
+        Response.json(v3Response(JSON.parse(options.body).request_id, provenance))
+      const result = await ask()
+      assert.equal(result.kind, "invalid", JSON.stringify(provenance))
+    }
+
+    // SEC-249-02: an unverified provider identity is a known "not used" outcome, never a fallback.
+    fetchImplementation = async (_url, options) =>
+      Response.json(
+        v3Response(JSON.parse(options.body).request_id, {
+          fallback_outcome: "PROVIDER_UNVERIFIED",
+        }),
+      )
+    const unverified = await ask()
+    assert.equal(unverified.kind, "summary")
+    assert.equal(unverified.summary.provenance.fallback_used, false)
+    for (const provenance of [
+      { ...used, fallback_outcome: "PROVIDER_UNVERIFIED" },
+      { fallback_outcome: "provider_unverified" },
+    ]) {
+      fetchImplementation = async (_url, options) =>
+        Response.json(v3Response(JSON.parse(options.body).request_id, provenance))
+      const rejected = await ask()
+      assert.equal(rejected.kind, "invalid", JSON.stringify(provenance))
+    }
+
+    // Without a fallback the request stays on the unchanged v2 contract.
+    fetchImplementation = async (_url, options) => {
+      body = JSON.parse(options.body)
+      return Response.json(
+        v2Response(body.request_id, {
+          provenance: { ...v2Response(body.request_id).provenance, model_id: "free-a" },
+        }),
+      )
+    }
+    const single = await requestArticleSummary({ entryId: 42, modelId: "free-a", profile })
+    assert.equal(body.schema_version, "2")
+    assert.equal(single.kind, "summary")
+  } finally {
+    fetchImplementation = null
+  }
+})

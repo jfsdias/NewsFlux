@@ -4,6 +4,7 @@ import {
   isSummaryModelId,
   sanitizeSummaryFocus,
   sanitizeSummarySections,
+  SUMMARY_FALLBACK_NONE,
   SUMMARY_LANGUAGES,
   SUMMARY_LENGTHS,
   SUMMARY_MODEL_AUTO,
@@ -126,6 +127,15 @@ const SETTINGS_SCHEMA = {
       value === SUMMARY_MODEL_AUTO || isSummaryModelId(value) ? value : fallback,
   },
   aiSummarySections: { defaultValue: DEFAULT_SUMMARY_SECTIONS, sanitize: sanitizeSummarySections },
+  // Fallback is off by default; consent for paid or cross-provider fallback is explicit.
+  aiSummaryFallbackEnabled: booleanSetting(false),
+  aiSummaryFallbackModel: {
+    defaultValue: SUMMARY_FALLBACK_NONE,
+    sanitize: (value, fallback) =>
+      value === SUMMARY_FALLBACK_NONE || isSummaryModelId(value) ? value : fallback,
+  },
+  aiSummaryFallbackAllowPaid: booleanSetting(false),
+  aiSummaryFallbackAllowCrossProvider: booleanSetting(false),
   articleListLayout: enumSetting("column", ARTICLE_LIST_LAYOUTS),
   articleWidth: numberSetting(75, MIN_ARTICLE_WIDTH, MAX_ARTICLE_WIDTH, { precision: 2 }),
   checkForUpdates: booleanSetting(false),
