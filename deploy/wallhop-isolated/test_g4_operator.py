@@ -60,6 +60,22 @@ class G4OperatorAdmissionTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("G4_ADMISSION=BLOCKED CODE=EXPLICIT_ACK_REQUIRED", result.stdout)
 
+    def test_ci_environment_cannot_execute(self) -> None:
+        result = invoke(
+            "--execute",
+            extras={
+                "NEWSFLUX_G4_ACK": "ISOLATED_DARK_ONLY",
+                "GITHUB_ACTIONS": "true",
+            },
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("G4_ADMISSION=BLOCKED CODE=OMV_ROOT_ONLY", result.stdout)
+
+    def test_signal_handler_uses_exit_rollback(self) -> None:
+        source = SCRIPT.read_text()
+        self.assertIn("trap 'exit 130' INT TERM HUP", source)
+        self.assertIn("trap 'cleanup $?' EXIT", source)
+
     def test_protected_services_must_remain_running(self) -> None:
         source = SCRIPT.read_text()
         self.assertIn("protected_running()", source)
