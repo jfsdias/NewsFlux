@@ -136,5 +136,25 @@ class S5KeyAuditTests(unittest.TestCase):
                 s5_key_audit.http_requester(url, ADMIN, None)
 
 
+
+class AttestationPathContractTests(unittest.TestCase):
+    """The documented --out path must be the file ai-functional-release.sh actually reads."""
+
+    def test_docs_and_script_agree_on_the_attestation_path(self) -> None:
+        import re
+
+        here = Path(__file__).resolve().parent
+        script = (here / "ai-functional-release.sh").read_text()
+        doc = (here.parents[1] / "docs" / "ops" / "S5_KEY_GATE.md").read_text()
+        root = re.search(r'RELEASE_ROOT="\$\{NEWSFLUX_RELEASE_ROOT:-([^}]+)\}"', script).group(1)
+        self.assertIn('RELEASE_DIR="$RELEASE_ROOT/ai-functional-${APPROVED_SHA:0:12}"', script)
+        self.assertIn('S5_KEY_ATTESTATION="$RELEASE_DIR/s5-key-attestation.json"', script)
+        self.assertIn('s5-attestation-path) require_source; echo "$S5_KEY_ATTESTATION" ;;', script)
+        self.assertIn(f"`{root}/ai-functional-<first 12 hex of APPROVED_SHA>/s5-key-attestation.json`", doc)
+        self.assertIn('--out "$ATTESTATION"', doc)
+        self.assertNotIn("/var/lib/newsflux-release", doc)
+        self.assertNotIn("/var/lib/newsflux-release", (here / "s5_key_audit.py").read_text())
+
+
 if __name__ == "__main__":
     unittest.main()

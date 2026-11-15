@@ -73,9 +73,10 @@ LP="$(new_key '{"models":["newsflux-s5-free"],"allowed_routes":["llm_api_routes"
 OPEN="$(new_key '{}')"
 UNPRICED="$(new_key '{"models":["newsflux-s5-unpriced"],"allowed_routes":["llm_api_routes"],"max_budget":0.5,"budget_duration":"30d","tpm_limit":20000,"rpm_limit":5}')"
 PAID="$(new_key '{"models":["newsflux-s5-paid"],"allowed_routes":["llm_api_routes"],"max_budget":0.5,"budget_duration":"30d","tpm_limit":20000,"rpm_limit":5}')"
+ADMINROUTE="$(new_key '{"models":["newsflux-s5-free"],"allowed_routes":["llm_api_routes","/key/generate"],"max_budget":0.5,"budget_duration":"30d","tpm_limit":20000,"rpm_limit":5}')"
 api /user/new "$MASTER" '{"user_id":"viewer","user_role":"proxy_admin_viewer"}' >/dev/null
 VIEW="$(new_key '{"user_id":"viewer"}')"
-for name in LP OPEN UNPRICED PAID VIEW; do
+for name in LP OPEN UNPRICED PAID ADMINROUTE VIEW; do
   umask 077
   printf '%s\n' "${!name}" >"$work/$name.key"
   umask 022
@@ -134,7 +135,8 @@ has "$out" CATALOG_ACCESS_GATE=PASS && has "$out" KEY_INFO_ACCESS=HTTP_403 && ha
 grep -q "$(cat "$work/LP.key")" <<<"$out" && ko NO_KEY_IN_OUTPUT || ok NO_KEY_IN_OUTPUT
 
 out="$(preflight OPEN newsflux-s5-free </dev/null)"
-has "$out" KEY_INFO_ACCESS=OK && has "$out" KEY_SCOPE_GATE=FAIL && has "$out" KEY_BUDGET_GATE=FAIL && has "$out" S5_PREFLIGHT=BLOCKED \
+has "$out" KEY_INFO_ACCESS=OK && has "$out" KEY_SCOPE_GATE=FAIL && has "$out" KEY_BUDGET_GATE=FAIL \
+  && has "$out" KEY_ALLOWED_ROUTES_GATE=FAIL && has "$out" S5_PREFLIGHT=BLOCKED \
   && ok UNRESTRICTED_KEY_FAILS || ko UNRESTRICTED_KEY_FAILS
 
 audit_out="$(audit LP newsflux-s5-free)"
@@ -160,6 +162,16 @@ has "$out" GATEWAY_PRICE=NOT_PUBLISHED && has "$out" PRICING_GATE=NOT_VERIFIED &
 audit PAID newsflux-s5-paid --confirm-provider-cost-zero --reference "synthetic rehearsal" >/dev/null
 out="$(preflight PAID newsflux-s5-paid --attestation-stdin <"$work/PAID.attestation.json")"
 has "$out" PRICING_GATE=FAIL && has "$out" S5_PREFLIGHT=BLOCKED && ok PAID_PRICE_FAILS || ko PAID_PRICE_FAILS
+
+# Extra administrative route next to llm_api_routes: LiteLLM grants it, so the gate must block.
+[[ "$(code -X POST "$G/key/generate" -H "Authorization: Bearer $ADMINROUTE" -H 'Content-Type: application/json' -d '{}')" != 403 ]] \
+  && ok EXTRA_ROUTE_IS_REALLY_GRANTED || ko EXTRA_ROUTE_IS_REALLY_GRANTED
+audit ADMINROUTE newsflux-s5-free --confirm-provider-cost-zero --reference "synthetic rehearsal" >/dev/null
+out="$(preflight ADMINROUTE newsflux-s5-free --attestation-stdin <"$work/ADMINROUTE.attestation.json")"
+has "$out" KEY_SCOPE_GATE=PASS && has "$out" PRICING_GATE=PASS && has "$out" KEY_ALLOWED_ROUTES_GATE=FAIL && has "$out" S5_PREFLIGHT=BLOCKED \
+  && ok EXTRA_ADMIN_ROUTE_BLOCKS || ko EXTRA_ADMIN_ROUTE_BLOCKS
+has "$(preflight LP newsflux-s5-free --attestation-stdin <"$work/LP.attestation.json")" KEY_ALLOWED_ROUTES_GATE=PASS \
+  && ok LLM_API_ROUTES_ONLY_PASSES || ko LLM_API_ROUTES_ONLY_PASSES
 
 grep -qE "$(cat "$work/LP.key")|$(cat "$work/VIEW.key")|$MASTER" "$work/LP.attestation.json" && ko NO_SECRET_IN_ATTESTATION || ok NO_SECRET_IN_ATTESTATION
 [[ "$(stat -c %a "$work/LP.attestation.json")" == 600 ]] && ok ATTESTATION_MODE_0600 || ko ATTESTATION_MODE_0600

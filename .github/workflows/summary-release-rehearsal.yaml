@@ -38,5 +38,7 @@ jobs:
         run: bash deploy/release-governance/rehearse-r12f09.sh
       - name: S5 key gate against a real disposable LiteLLM (least-privilege 403, admin attestation, pricing)
         run: bash deploy/release-governance/rehearse-s5-key-gate.sh
+      - name: Upgrade from the deployed Stage 1 (57f1c6a) with exact rollback to Stage 1
+        run: bash deploy/release-governance/rehearse-stage1-upgrade.sh
       - name: Rehearse synthetic scoped promotion and rollback (shell)
         run: bash deploy/release-governance/rehearsal.sh

@@ -33,7 +33,7 @@ def key_info(**overrides):
         "spend": 0.0,
         "tpm_limit": 20000,
         "rpm_limit": 5,
-        "allowed_routes": [],
+        "allowed_routes": ["llm_api_routes"],
     }
     info.update(overrides)
     return info
@@ -210,6 +210,56 @@ class S5PreflightTests(unittest.TestCase):
             self.assertEqual(gates["KEY_RATE_LIMIT_GATE"], "FAIL", overrides)
             self.assertFalse(s5_preflight.overall(gates))
 
+    # --- Allowed routes (least privilege is a required gate, not a diagnostic) ----------------------
+
+    def _routes_cases(self):
+        return (
+            (["llm_api_routes"], "PASS"),
+            ([], "FAIL"),  # LiteLLM: empty allowlist = no route restriction
+            (None, "FAIL"),  # null = no route restriction
+            (_DELETE, "NOT_VERIFIED"),
+            (["llm_api_routes", "/key/generate"], "FAIL"),
+            (["llm_api_routes", "/key/info"], "FAIL"),
+            (["llm_api_routes", "management_routes"], "FAIL"),
+            (["llm_api_routes", "info_routes"], "FAIL"),
+            (["/chat/completions"], "FAIL"),  # not the approved policy, even if narrower
+            (["*"], "FAIL"),
+            (["/*"], "FAIL"),
+            (["llm_api_routes", "/v1/*"], "FAIL"),
+            ("llm_api_routes", "FAIL"),  # a string, not a list
+            ([["llm_api_routes"]], "FAIL"),
+        )
+
+    def test_allowed_routes_gate_with_self_introspection(self) -> None:
+        for routes, expected in self._routes_cases():
+            info = key_info()
+            if routes is _DELETE:
+                info.pop("allowed_routes")
+            else:
+                info["allowed_routes"] = routes
+            get, _ = gateway(info=info)
+            gates = self.run_preflight(get, attestation())
+            self.assertEqual(gates["KEY_EVIDENCE_SOURCE"], "SELF_INTROSPECTION")
+            self.assertEqual(gates["KEY_ALLOWED_ROUTES_GATE"], expected, routes)
+            self.assertEqual(s5_preflight.overall(gates), expected == "PASS", (routes, gates))
+
+    def test_allowed_routes_gate_with_admin_attestation(self) -> None:
+        get, _ = gateway(key_info_error=403, model_info_error=403)
+        for routes, expected in self._routes_cases():
+            gates = self.run_preflight(get, attestation(**{"key.allowed_routes": routes}))
+            self.assertEqual(gates["KEY_EVIDENCE_SOURCE"], "ADMIN_ATTESTATION")
+            self.assertEqual(gates["KEY_ALLOWED_ROUTES_GATE"], expected, routes)
+            self.assertEqual(s5_preflight.overall(gates), expected == "PASS", (routes, gates))
+
+    def test_allowed_routes_gate_is_required(self) -> None:
+        self.assertIn("KEY_ALLOWED_ROUTES_GATE", s5_preflight.REQUIRED_GATES)
+
+    def test_routes_gate_not_verified_without_key_evidence(self) -> None:
+        get, _ = gateway(key_info_error=403)
+        gates = self.run_preflight(get)
+        self.assertEqual(gates["KEY_ALLOWED_ROUTES_GATE"], "NOT_VERIFIED")
+        self.assertFalse(s5_preflight.overall(gates))
+
     # --- Pricing -----------------------------------------------------------------------------------
 
     def test_unpublished_gateway_price_is_not_zero_cost_evidence(self) -> None:
@@ -254,7 +304,7 @@ class S5PreflightTests(unittest.TestCase):
         self.assertTrue(s5_preflight.overall(gates), gates)
         self.assertEqual(gates["KEY_INFO_ACCESS"], "HTTP_403")
         self.assertEqual(gates["KEY_EVIDENCE_SOURCE"], "ADMIN_ATTESTATION")
-        self.assertEqual(gates["KEY_ROUTES"], "RESTRICTED")
+        self.assertEqual(gates["KEY_ALLOWED_ROUTES_GATE"], "PASS")
         self.assertEqual(gates["PRICING_GATE"], "PASS")
 
     # --- Attestation integrity ---------------------------------------------------------------------

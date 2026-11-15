@@ -9,7 +9,8 @@
 #   sudo -E bash ai-functional-release.sh update-caddy     # adds the GET-only catalog route (in-place, validated)
 #   sudo -E bash ai-functional-release.sh promote-reader   # new Reader image, readiness proven by HTTP probe
 #   sudo -E bash ai-functional-release.sh smoke            # fail-closed production checks + receipt
-#   sudo python3 s5_key_audit.py ... --out "$RELEASE_DIR/s5-key-attestation.json"   # operator-only admin read (host)
+#   sudo -E bash ai-functional-release.sh s5-attestation-path   # prints $RELEASE_DIR/s5-key-attestation.json
+#   sudo python3 s5_key_audit.py ... --out "$(sudo -E bash ai-functional-release.sh s5-attestation-path)"
 #   sudo -E bash ai-functional-release.sh s5-preflight     # read-only LiteLLM key/model/price/budget/logging gates
 #   sudo -E bash ai-functional-release.sh enable-s5        # only after s5-preflight PASS (re-run internally)
 #   sudo -E bash ai-functional-release.sh all              # prepare..smoke, stops at the first failed gate
@@ -180,7 +181,13 @@ update_caddy() {
   caddy="$(caddy_source)"
   new="$SRC/deploy/article-intel-pilot/Caddyfile"
   backup="$RELEASE_DIR/Caddyfile.before-$EXPECTED_ACTIVE_CADDY_SHA"
-  if [[ "$(sha256sum "$caddy" | cut -d' ' -f1)" == "$(sha256sum "$new" | cut -d' ' -f1)" ]]; then gate CADDY_UPDATE ALREADY_APPLIED; return; fi
+  if [[ "$(sha256sum "$caddy" | cut -d' ' -f1)" == "$(sha256sum "$new" | cut -d' ' -f1)" ]]; then
+    # Upgrade from an installed Stage 1: this release does not touch Caddy. Record the hash so that
+    # rollback-caddy for this release is an explicit, verified no-op instead of BACKUP_MISSING.
+    sha256sum "$caddy" | cut -d' ' -f1 >"$RELEASE_DIR/caddy-unchanged.sha256"
+    gate CADDY_UPDATE ALREADY_APPLIED
+    return
+  fi
   [[ "$(sha256sum "$caddy" | cut -d' ' -f1)" == "$EXPECTED_ACTIVE_CADDY_SHA" ]] || die CADDY_UPDATE ACTIVE_CADDY_DRIFT
   docker run --rm --network none -e NEWSFLUX_PILOT_TRUSTED_PROXY_IP=127.0.0.1 -v "$new:/etc/caddy/Caddyfile:ro" \
     "$(docker inspect -f '{{.Image}}' "$READER_CONTAINER")" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1 \
@@ -197,8 +204,15 @@ update_caddy() {
 }
 
 rollback_caddy() {
-  local caddy backup="$RELEASE_DIR/Caddyfile.before-$EXPECTED_ACTIVE_CADDY_SHA"
+  local caddy backup="$RELEASE_DIR/Caddyfile.before-$EXPECTED_ACTIVE_CADDY_SHA" unchanged="$RELEASE_DIR/caddy-unchanged.sha256"
   caddy="$(caddy_source)"
+  if [[ ! -f "$backup" && -f "$unchanged" ]]; then
+    # This release found the route already installed and changed nothing: nothing to restore, but
+    # the active file must still be exactly what it found.
+    [[ "$(sha256sum "$caddy" | cut -d' ' -f1)" == "$(cat "$unchanged")" ]] || die CADDY_ROLLBACK DRIFT_SINCE_RELEASE
+    gate CADDY_ROLLBACK NOT_APPLICABLE_UNCHANGED_BY_THIS_RELEASE
+    return
+  fi
   [[ -f "$backup" ]] || die CADDY_ROLLBACK BACKUP_MISSING
   cat "$backup" >"$caddy"
   docker exec "$READER_CONTAINER" caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1 || die CADDY_ROLLBACK RELOAD_FAILED
@@ -305,6 +319,7 @@ case "${1:-}" in
   update-caddy) update_caddy ;;
   promote-reader) require_source; promote "$(reader_service)" reader --ready-probe "$READER_PROBE" ;;
   smoke) smoke ;;
+  s5-attestation-path) require_source; echo "$S5_KEY_ATTESTATION" ;;
   s5-preflight) s5_preflight ;;
   enable-s5) enable_s5 ;;
   disable-s5) require_source; release_tool rollback --manifest "$RELEASE_DIR/s5-enable/manifest.json" ;;
@@ -317,5 +332,5 @@ case "${1:-}" in
     update_caddy
     promote "$(reader_service)" reader --ready-probe "$READER_PROBE" || { gate ALL "STOPPED_AT_PROMOTE_READER"; exit 1; }
     smoke ;;
-  *) sed -n '2,18p' "$0"; exit 2 ;;
+  *) sed -n '2,/^# Scope:/p' "$0" | sed '$d'; exit 2 ;;
 esac

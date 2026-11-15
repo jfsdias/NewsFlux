@@ -20,6 +20,9 @@ Gates (PASS | FAIL | NOT_VERIFIED):
               KEY_BUDGET_GATE      0 < max_budget <= NEWSFLUX_AI_MONTHLY_BUDGET_USD, a budget window,
                                    and spend below max_budget
               KEY_RATE_LIMIT_GATE  positive tpm_limit and rpm_limit at the gateway
+              KEY_ALLOWED_ROUTES_GATE  allowed_routes is exactly ["llm_api_routes"]. In LiteLLM an
+                                   empty/null list means no route restriction; any extra entry
+                                   (admin route, other route group, wildcard) grants extra access
   pricing     PRICING_GATE         every S5 deployment publishes explicit zero input/output cost at the
                                    gateway AND the operator confirmed the provider's real cost is zero.
                                    Unpublished prices (NOT_PUBLISHED) are not zero-cost evidence.
@@ -71,6 +74,7 @@ ATTESTATION_EVIDENCE_KIND = "LIVE_LITELLM_ADMIN_READ"
 ATTESTATION_MAX_AGE = timedelta(hours=24)
 FINGERPRINT_DOMAIN = b"newsflux-s5-key-attestation-v1\x00"
 WILDCARD_SCOPES = frozenset({"*", "all-proxy-models", "all-team-models"})
+APPROVED_ALLOWED_ROUTES = frozenset({"llm_api_routes"})
 
 PASS, FAIL, NOT_VERIFIED = "PASS", "FAIL", "NOT_VERIFIED"
 
@@ -209,6 +213,18 @@ def evaluate_rate_limits(info: Mapping[str, Any]) -> str:
     return PASS
 
 
+def evaluate_allowed_routes(info: Mapping[str, Any]) -> str:
+    """Least privilege: the NewsFlux key may call inference routes only."""
+    if "allowed_routes" not in info:
+        return NOT_VERIFIED
+    routes = info["allowed_routes"]
+    if not isinstance(routes, list) or not routes:
+        return FAIL  # None or [] = unrestricted in LiteLLM
+    if not all(isinstance(route, str) for route in routes):
+        return FAIL
+    return PASS if set(routes) == APPROVED_ALLOWED_ROUTES else FAIL
+
+
 def classify_prices(entries: list[Mapping[str, Any]]) -> str:
     """ZERO only when every deployment publishes explicit zero input and output cost."""
     if not entries:
@@ -314,15 +330,14 @@ def run(
         gates["KEY_EVIDENCE_SOURCE"] = "ADMIN_ATTESTATION"
     if info is None:
         gates["KEY_EVIDENCE_SOURCE"] = "NONE"
-        for name in ("KEY_VALIDITY_GATE", "KEY_SCOPE_GATE", "KEY_BUDGET_GATE", "KEY_RATE_LIMIT_GATE"):
+        for name in ("KEY_VALIDITY_GATE", "KEY_SCOPE_GATE", "KEY_BUDGET_GATE", "KEY_RATE_LIMIT_GATE", "KEY_ALLOWED_ROUTES_GATE"):
             gates[name] = NOT_VERIFIED
     else:
         gates["KEY_VALIDITY_GATE"] = evaluate_validity(info, now)
         gates["KEY_SCOPE_GATE"] = evaluate_scope(info, alias)
         gates["KEY_BUDGET_GATE"] = evaluate_budget(info, settings)
         gates["KEY_RATE_LIMIT_GATE"] = evaluate_rate_limits(info)
-        routes = info.get("allowed_routes")
-        gates["KEY_ROUTES"] = "RESTRICTED" if isinstance(routes, list) and routes else "UNRESTRICTED"
+        gates["KEY_ALLOWED_ROUTES_GATE"] = evaluate_allowed_routes(info)
 
     # 3. Pricing: explicit zero at the gateway AND the operator's confirmation of real provider cost.
     gateway_price = "NOT_PUBLISHED"
@@ -376,6 +391,7 @@ REQUIRED_GATES = (
     "KEY_SCOPE_GATE",
     "KEY_BUDGET_GATE",
     "KEY_RATE_LIMIT_GATE",
+    "KEY_ALLOWED_ROUTES_GATE",
     "PRICING_GATE",
     "LOGGING_GATE",
 )

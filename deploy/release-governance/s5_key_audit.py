@@ -10,7 +10,7 @@ interactively and never stored next to the application):
         --admin-key-file /root/secrets/litellm-admin-viewer.key \
         --virtual-key-file /srv/newsflux/secrets/litellm-virtual-key \
         --alias newsflux-s5-free \
-        --out /var/lib/newsflux-release/<sha>/s5-key-attestation.json \
+        --out "$(sudo -E bash deploy/release-governance/ai-functional-release.sh s5-attestation-path)" \
         [--confirm-provider-cost-zero --reference "provider free-tier terms, reviewed 2026-11-15"]
 
 Requests (both read-only):
