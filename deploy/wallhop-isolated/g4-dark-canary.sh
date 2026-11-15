@@ -158,7 +158,15 @@ cleanup() {
     echo "G4_ROLLBACK=PARTIAL_FAIL_CLOSED"
     exit 3
   fi
-  if (( START_ARMED )); then echo "G4_ROLLBACK=PASS"; fi
+  if (( START_ARMED )); then
+    echo "G4_NEW_CONTAINERS_PERSIST=NO"
+    echo "G4_ROLLBACK=PASS"
+    if (( original == 0 )); then
+      echo "G4_DARK_CANARY=PASS"
+    else
+      echo "G4_DARK_CANARY=FAIL_SAFE"
+    fi
+  fi
   exit "$original"
 }
 trap 'cleanup $?' EXIT
@@ -344,7 +352,5 @@ docker stop "$NEW_RELAY" >/dev/null
 }
 protected_running || { echo "G4_GATE=BLOCKED CODE=PROTECTED_SERVICE_STOPPED_AFTER_RELAY"; exit 2; }
 echo "G4_LEGACY_ON_RELAY_FAILURE=PASS"
-echo "G4_DARK_CANARY=PASS"
 echo "WALLHOP_EXTERNAL_ARTICLE_REQUESTS=NOT_ISSUED_BY_OPERATOR"
-echo "G4_NEW_CONTAINERS_PERSIST=NO_AFTER_AUTO_ROLLBACK"
-# EXIT trap removes the new sidecar/relay and reports exact protected parity.
+# Only the EXIT cleanup may assert final PASS after successful teardown/readback.
