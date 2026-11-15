@@ -139,6 +139,9 @@ BASE_NPM111_SHA="$(npm111_sha)" || block NPM111_READ
 if [[ "$BASE_NPM111_SHA" != "$EXPECTED_NPM111_SHA" ]]; then block NPM111_PRESTATE_DRIFT; fi
 candidate_absent || block EXISTING_CANDIDATE_OR_NETWORK
 [[ "$(docker image inspect -f '{{.Id}}' "$EGRESS_IMAGE_ID" 2>/dev/null)" == "$EGRESS_IMAGE_ID" ]] || block RELAY_IMAGE_NOT_PINNED_LOCAL
+# Reject arbitrary locally tagged images even if they have a valid-looking SHA.
+# G4's pre-audited HAProxy 3.0.5 image must resolve to this exact operator-approved ID.
+[[ "$(docker image inspect -f '{{.Id}}' haproxy:3.0.5-alpine 2>/dev/null)" == "$EGRESS_IMAGE_ID" ]] || block RELAY_IMAGE_NOT_APPROVED_HAPROXY
 python3 - "$REPO" <<'PY' || block DISK_HEADROOM
 import shutil,sys
 if shutil.disk_usage(sys.argv[1]).free < 10*1024**3: sys.exit(2)
