@@ -572,6 +572,26 @@ test("v3 request carries primary, fallback and consent only; provenance is cross
       assert.equal(result.kind, "invalid", JSON.stringify(provenance))
     }
 
+    // SEC-249-02: an unverified provider identity is a known "not used" outcome, never a fallback.
+    fetchImplementation = async (_url, options) =>
+      Response.json(
+        v3Response(JSON.parse(options.body).request_id, {
+          fallback_outcome: "PROVIDER_UNVERIFIED",
+        }),
+      )
+    const unverified = await ask()
+    assert.equal(unverified.kind, "summary")
+    assert.equal(unverified.summary.provenance.fallback_used, false)
+    for (const provenance of [
+      { ...used, fallback_outcome: "PROVIDER_UNVERIFIED" },
+      { fallback_outcome: "provider_unverified" },
+    ]) {
+      fetchImplementation = async (_url, options) =>
+        Response.json(v3Response(JSON.parse(options.body).request_id, provenance))
+      const rejected = await ask()
+      assert.equal(rejected.kind, "invalid", JSON.stringify(provenance))
+    }
+
     // Without a fallback the request stays on the unchanged v2 contract.
     fetchImplementation = async (_url, options) => {
       body = JSON.parse(options.body)

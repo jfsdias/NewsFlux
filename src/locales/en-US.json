@@ -343,6 +343,7 @@
     "fallback_outcome_NOT_AVAILABLE": "The fallback model %{fallback} was not used: it is not available now.",
     "fallback_outcome_PAID_NOT_CONSENTED": "The fallback model %{fallback} was not used: it is paid and paid fallback is not allowed in Settings.",
     "fallback_outcome_CROSS_PROVIDER_NOT_CONSENTED": "The fallback model %{fallback} was not used: it is from another provider and that is not allowed in Settings.",
+    "fallback_outcome_PROVIDER_UNVERIFIED": "The fallback model %{fallback} was not used: its provider could not be verified at the gateway.",
     "fallback_outcome_DEADLINE": "The fallback model %{fallback} was not used: there was not enough time left.",
     "fallback_outcome_FAILED": "The fallback model %{fallback} was tried once and also failed.",
     "length_label": "Length",

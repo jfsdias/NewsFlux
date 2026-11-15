@@ -55,10 +55,12 @@ class Adapter:
         )
 
 
-def entry(model_id, adapter, *, provider="LiteLLM", paid=False, reason=None):
+def entry(model_id, adapter, *, provider="LiteLLM", identity="synthetic", paid=False, reason=None):
+    # `provider` is the display label; `identity` is the gateway-verified provider identity.
     available = adapter is not None and reason is None
     return CatalogEntry(
-        model_id, available, None if available else (reason or "INFERENCE_DISABLED"), None, provider=provider, paid=paid
+        model_id, available, None if available else (reason or "INFERENCE_DISABLED"), None, provider=provider, paid=paid,
+        provider_identity=identity,
     )
 
 
@@ -200,7 +202,7 @@ class PrimaryFallbackTests(unittest.TestCase):
     def test_cross_provider_fallback_needs_explicit_consent(self) -> None:
         for consent, expected_calls, outcome in ((False, 0, "CROSS_PROVIDER_NOT_CONSENTED"), (True, 1, "USED")):
             a, b = Adapter("a", error=TransientLiteLLMFailure("t", kind="TIMEOUT")), Adapter("b")
-            client, _ = client_for(router(("free-a", a, {"provider": "Acme"}), ("free-b", b, {"provider": "Other"})))
+            client, _ = client_for(router(("free-a", a, {"identity": "acme"}), ("free-b", b, {"identity": "other"})))
             response = post(client, v3(cross=consent))
             self.assertEqual(b.calls, expected_calls, consent)
             self.assertEqual(response.json()["provenance"]["fallback_outcome"], outcome)
@@ -329,7 +331,11 @@ class RealAdapterLedgerTests(unittest.TestCase):
             "NEWSFLUX_AI_MAX_REQUESTS_PER_MINUTE": str(requests_per_minute),
         })
         listing = {"data": [{"id": "alias-free-a"}, {"id": "alias-free-b"}]}
-        info = {"data": [{"model_name": f"alias-{m}", "model_info": {"mode": "chat", "input_cost_per_token": 0, "output_cost_per_token": 0}} for m in ("free-a", "free-b")]}
+        info = {"data": [
+            {"model_name": f"alias-{m}", "litellm_params": {"model": f"mistral/alias-{m}"},
+             "model_info": {"mode": "chat", "litellm_provider": "mistral", "input_cost_per_token": 0, "output_cost_per_token": 0}}
+            for m in ("free-a", "free-b")
+        ]}
         self.router, _ = create_model_router(env, discovery_getter=lambda path: listing if path == "/v1/models" else info)
         self.addCleanup(self.router.ledger_owner.__exit__)
         self.calls = []

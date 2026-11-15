@@ -343,6 +343,7 @@
     "fallback_outcome_NOT_AVAILABLE": "No se usó el modelo de respaldo %{fallback}: no está disponible ahora.",
     "fallback_outcome_PAID_NOT_CONSENTED": "No se usó el modelo de respaldo %{fallback}: es de pago y eso no está permitido en Ajustes.",
     "fallback_outcome_CROSS_PROVIDER_NOT_CONSENTED": "No se usó el modelo de respaldo %{fallback}: es de otro proveedor y eso no está permitido en Ajustes.",
+    "fallback_outcome_PROVIDER_UNVERIFIED": "No se usó el modelo de respaldo %{fallback}: no se pudo verificar su proveedor en la pasarela.",
     "fallback_outcome_DEADLINE": "No se usó el modelo de respaldo %{fallback}: no quedaba tiempo suficiente.",
     "fallback_outcome_FAILED": "El modelo de respaldo %{fallback} se intentó una vez y también falló.",
     "length_label": "Extensión",

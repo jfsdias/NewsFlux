@@ -343,6 +343,7 @@
     "fallback_outcome_NOT_AVAILABLE": "未使用备用模型 %{fallback}：目前不可用。",
     "fallback_outcome_PAID_NOT_CONSENTED": "未使用备用模型 %{fallback}：它是付费模型，设置中未允许。",
     "fallback_outcome_CROSS_PROVIDER_NOT_CONSENTED": "未使用备用模型 %{fallback}：它来自其他服务商，设置中未允许。",
+    "fallback_outcome_PROVIDER_UNVERIFIED": "未使用备用模型 %{fallback}：无法在网关上验证其服务商。",
     "fallback_outcome_DEADLINE": "未使用备用模型 %{fallback}：剩余时间不足。",
     "fallback_outcome_FAILED": "备用模型 %{fallback} 已尝试一次，也失败了。",
     "length_label": "长度",

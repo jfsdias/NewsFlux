@@ -343,6 +343,7 @@
     "fallback_outcome_NOT_AVAILABLE": "Le modèle de secours %{fallback} n’a pas été utilisé : il n’est pas disponible.",
     "fallback_outcome_PAID_NOT_CONSENTED": "Le modèle de secours %{fallback} n’a pas été utilisé : il est payant et ce n’est pas autorisé dans les réglages.",
     "fallback_outcome_CROSS_PROVIDER_NOT_CONSENTED": "Le modèle de secours %{fallback} n’a pas été utilisé : il vient d’un autre fournisseur et ce n’est pas autorisé.",
+    "fallback_outcome_PROVIDER_UNVERIFIED": "Le modèle de secours %{fallback} n’a pas été utilisé : son fournisseur n’a pas pu être vérifié sur la passerelle.",
     "fallback_outcome_DEADLINE": "Le modèle de secours %{fallback} n’a pas été utilisé : il ne restait pas assez de temps.",
     "fallback_outcome_FAILED": "Le modèle de secours %{fallback} a été essayé une fois et a aussi échoué.",
     "length_label": "Longueur",

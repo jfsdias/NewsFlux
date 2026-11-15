@@ -343,6 +343,7 @@
     "fallback_outcome_NOT_AVAILABLE": "代替モデル %{fallback} は使用されませんでした: 現在利用できません。",
     "fallback_outcome_PAID_NOT_CONSENTED": "代替モデル %{fallback} は使用されませんでした: 有料で、設定で許可されていません。",
     "fallback_outcome_CROSS_PROVIDER_NOT_CONSENTED": "代替モデル %{fallback} は使用されませんでした: 別プロバイダーで、設定で許可されていません。",
+    "fallback_outcome_PROVIDER_UNVERIFIED": "代替モデル %{fallback} は使用されませんでした: ゲートウェイでプロバイダーを確認できませんでした。",
     "fallback_outcome_DEADLINE": "代替モデル %{fallback} は使用されませんでした: 時間が足りませんでした。",
     "fallback_outcome_FAILED": "代替モデル %{fallback} を1回試しましたが、失敗しました。",
     "length_label": "長さ",

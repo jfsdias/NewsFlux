@@ -343,6 +343,7 @@
     "fallback_outcome_NOT_AVAILABLE": "Das Ersatzmodell %{fallback} wurde nicht genutzt: Es ist derzeit nicht verfügbar.",
     "fallback_outcome_PAID_NOT_CONSENTED": "Das Ersatzmodell %{fallback} wurde nicht genutzt: Es ist kostenpflichtig und das ist in den Einstellungen nicht erlaubt.",
     "fallback_outcome_CROSS_PROVIDER_NOT_CONSENTED": "Das Ersatzmodell %{fallback} wurde nicht genutzt: Es stammt von einem anderen Anbieter und das ist nicht erlaubt.",
+    "fallback_outcome_PROVIDER_UNVERIFIED": "Das Ersatzmodell %{fallback} wurde nicht genutzt: Sein Anbieter ließ sich am Gateway nicht überprüfen.",
     "fallback_outcome_DEADLINE": "Das Ersatzmodell %{fallback} wurde nicht genutzt: Es blieb nicht genug Zeit.",
     "fallback_outcome_FAILED": "Das Ersatzmodell %{fallback} wurde einmal versucht und ist ebenfalls fehlgeschlagen.",
     "length_label": "Länge",

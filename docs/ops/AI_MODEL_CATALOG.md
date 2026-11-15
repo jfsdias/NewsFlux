@@ -63,6 +63,11 @@ Each model also carries `checks` (`discovered`, `compatible`, `operator_approved
 - Prices are decimal strings in USD per million tokens.
 - At most 32 models; IDs and aliases must be unique.
 - Unknown keys are rejected.
+- `provider` is a **display label only**. It never decides anything.
+- Optional `provider_identity` (for example `"mistral"` or `"openai@api.example.net"`): the provider
+  identity the operator expects the gateway to report for this alias (see
+  [Provider identity](#provider-identity-sec-249-02)). If the gateway reports another identity, the
+  model can still be used as a primary, but it is never used as a fallback (`PROVIDER_UNVERIFIED`).
 
 **Fail-closed behavior:** an invalid policy disables every model (`POLICY_INVALID`). It never falls
 back to the legacy pair.
@@ -147,26 +152,64 @@ categories, read and starred.
 4. **Revalidated at the moment of the attempt:**
    - **Model:** the fallback must be `AVAILABLE` in the current catalog (approved, discovered,
      priced, authorized).
-   - **Paid:** a paid fallback after a free primary needs `fallback_consent.paid`.
-   - **Provider:** a fallback from another provider needs `fallback_consent.cross_provider`.
+   - **Paid:** **every** paid fallback needs `fallback_consent.paid`, whatever the primary costs
+     (free→paid and paid→paid alike; SEC-249-01). The global paid gate, the model's
+     `paid_authorized`, verified prices and the budget still apply on top.
+   - **Provider:** both models need a verified provider identity, the same one they had when the
+     request started. A fallback whose identity differs from the primary's needs
+     `fallback_consent.cross_provider` (SEC-249-02).
    - **Session and content:** the same user must still be authorized for the same entry, with
      the same content fingerprint. Otherwise the request ends with 401 or `STALE_SNAPSHOT`.
 5. **Same budget ledger.** Both attempts reserve in the one budget ledger, which enforces the
    monthly budget, rate and token limits. A timeout keeps its worst-case reservation
    (`uncertain`), and nothing is deleted to free budget.
-6. **Time split.** With a fallback configured, the primary gets 65 % of the summary timeout and
+6. **Checked twice.** Model, price, consent and provider identity are checked before the session
+   revalidation and again right after it, immediately before the fallback call. Each check reads
+   one consistent catalog state.
+7. **Time split.** With a fallback configured, the primary gets 65 % of the summary timeout and
    the fallback the remainder (at least 1 s, otherwise `DEADLINE`).
+
+### Provider identity (SEC-249-02)
+
+The cross-provider decision never uses the operator's `provider` label. It uses an identity built
+only from the gateway's own `/model/info` inventory, which the NewsFlux virtual key can already
+read (`llm_api_routes`; no key change):
+
+- `model_info.litellm_provider`: the LiteLLM provider adapter, for example `mistral`;
+- it must agree with the `litellm_params.model` prefix when there is one (`mistral/...`);
+- the `litellm_params.api_base` host is added when the deployment exposes it, for example
+  `openai@api.example.net`. Two endpoints of the same dialect are two providers.
+
+**Fails closed** (`PROVIDER_UNVERIFIED`; no fallback call and no reservation, even with consent) when:
+
+- `litellm_provider` is missing or malformed;
+- the model prefix contradicts it;
+- `api_base` is malformed;
+- a generic dialect has no visible endpoint (OpenAI-compatible, vLLM, Ollama, ...). The real
+  upstream behind it is unknown.
+- the deployments of one alias disagree (mixed providers, or load balancing across providers);
+- the policy's `provider_identity` differs from the gateway's;
+- discovery is off or unavailable;
+- either model's identity changed between the start of the request and the attempt (drift).
+
+The identity is internal. It is not in the catalog document, the response or the logs.
+
+**Known limit:** identity granularity is what the gateway states. A deployment that hides its
+endpoint behind a provider-specific adapter (for example a proxied `mistral` with no visible
+`api_base`) is trusted at the adapter level. Settings still shows the cross-provider checkbox by
+display label. When two labels are equal but the verified identities differ, the user cannot
+consent, so that fallback stays blocked (safe default). Give different providers different labels.
 
 ### Provenance (response v3)
 
-| Field                                                         | Meaning                                                                                                                                             |
-| ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `requested_model_id`, `primary_model_id`, `fallback_model_id` | Exactly what was requested                                                                                                                          |
-| `effective_model_id` / `effective_model_alias`                | Catalog ID / gateway alias that produced the result (`null` if none)                                                                                |
-| `fallback_used`, `fallback_reason`                            | Whether the fallback produced the result; the primary's transient failure class                                                                     |
-| `fallback_outcome`                                            | `NOT_NEEDED`, `NOT_CONFIGURED`, `NOT_ELIGIBLE`, `NOT_AVAILABLE`, `PAID_NOT_CONSENTED`, `CROSS_PROVIDER_NOT_CONSENTED`, `DEADLINE`, `USED`, `FAILED` |
-| `attempts`                                                    | 0–2                                                                                                                                                 |
-| `pricing_class`                                               | `free` / `paid` of the effective model                                                                                                              |
+| Field                                                         | Meaning                                                                                                                                                                    |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `requested_model_id`, `primary_model_id`, `fallback_model_id` | Exactly what was requested                                                                                                                                                 |
+| `effective_model_id` / `effective_model_alias`                | Catalog ID / gateway alias that produced the result (`null` if none)                                                                                                       |
+| `fallback_used`, `fallback_reason`                            | Whether the fallback produced the result; the primary's transient failure class                                                                                            |
+| `fallback_outcome`                                            | `NOT_NEEDED`, `NOT_CONFIGURED`, `NOT_ELIGIBLE`, `NOT_AVAILABLE`, `PAID_NOT_CONSENTED`, `CROSS_PROVIDER_NOT_CONSENTED`, `PROVIDER_UNVERIFIED`, `DEADLINE`, `USED`, `FAILED` |
+| `attempts`                                                    | 0–2                                                                                                                                                                        |
+| `pricing_class`                                               | `free` / `paid` of the effective model                                                                                                                                     |
 
 The Reader cross-checks every field against its own request. It rejects responses where:
 

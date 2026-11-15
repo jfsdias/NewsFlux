@@ -261,6 +261,12 @@ class SummaryService:
         if self.router is None:
             raise ModelNotAvailable("MODEL_NOT_AVAILABLE")
         primary = self.router.adapter_for(primary_model_id)  # refuses before any content access
+        # Provider identities as verified when the request started; the fallback decision demands
+        # the very same identities at the attempt (drift fails closed).
+        identities = tuple(
+            getattr(self.router.entry_for(model_id), "provider_identity", None) if model_id else None
+            for model_id in (primary_model_id, fallback_model_id)
+        )
         snapshot = self.resolver.resolve(entry)
         allowed = {paragraph.id for paragraph in snapshot.paragraphs}
         trace = {
@@ -303,12 +309,16 @@ class SummaryService:
                 # Outside any exception handler: a stale session/content raised by `revalidate`
                 # must abort the request, never be mistaken for a model failure.
                 trace["reason"] = f"PRIMARY_{primary_failure.kind}"
-                fallback = self._fallback_decision(
-                    trace, primary_model_id, fallback_model_id, consent_paid, consent_cross_provider, started, deadline
+                decide = lambda: self._fallback_decision(  # noqa: E731
+                    trace, primary_model_id, fallback_model_id, consent_paid, consent_cross_provider, started,
+                    deadline, identities,
                 )
+                fallback = decide()
+                if fallback is not None and revalidate is not None:
+                    revalidate(snapshot.content_fingerprint)
+                    # Model, price, consent and provider identity again, immediately before the attempt.
+                    fallback = decide()
                 if fallback is not None:
-                    if revalidate is not None:
-                        revalidate(snapshot.content_fingerprint)
                     remaining = self.timeout_seconds - (time.monotonic() - started)
                     if deadline is not None:
                         remaining = min(remaining, deadline.remaining())
@@ -372,8 +382,15 @@ class SummaryService:
             return adapter.summarize(model_input, timeout_seconds=timeout_seconds, deadline=deadline)
         return adapter.summarize(model_input, timeout_seconds=timeout_seconds)
 
-    def _fallback_decision(self, trace, primary_id, fallback_id, consent_paid, consent_cross, started, deadline):
-        """Return the fallback adapter, or None with trace['outcome'] explaining why."""
+    def _fallback_decision(self, trace, primary_id, fallback_id, consent_paid, consent_cross, started, deadline, identities):
+        """Return the fallback adapter, or None with trace['outcome'] explaining why.
+
+        Everything is read from ONE current catalog state at the moment of the attempt. A paid
+        fallback always needs the caller's paid consent (SEC-249-01), whatever the primary costs.
+        Providers are compared by their gateway-verified identity, never by display label
+        (SEC-249-02); an unknown identity, or one that changed since the request started, fails
+        closed even with consent.
+        """
         import time
 
         from services.article_intel_summary.catalog import ModelNotAvailable
@@ -391,16 +408,24 @@ class SummaryService:
             trace["outcome"] = "DEADLINE"
             return None
         try:
-            adapter = self.router.adapter_for(fallback_id)  # current catalog: approved, priced, authorized
+            # current catalog: approved, discovered, priced, authorized
+            primary_entry, fallback_entry, adapter = self.router.fallback_view(primary_id, fallback_id)
         except ModelNotAvailable:
             trace["outcome"] = "NOT_AVAILABLE"
             return None
-        primary_doc = self.router.entry_for(primary_id).to_document()
-        fallback_doc = self.router.entry_for(fallback_id).to_document()
-        if fallback_doc["requires_paid_authorization"] and not primary_doc["requires_paid_authorization"] and not consent_paid:
+        if fallback_entry.to_document()["requires_paid_authorization"] and not consent_paid:
             trace["outcome"] = "PAID_NOT_CONSENTED"
             return None
-        if fallback_doc["provider"] != primary_doc["provider"] and not consent_cross:
+        primary_identity = getattr(primary_entry, "provider_identity", None)
+        fallback_identity = getattr(fallback_entry, "provider_identity", None)
+        if (
+            primary_identity is None
+            or fallback_identity is None
+            or (primary_identity, fallback_identity) != identities
+        ):
+            trace["outcome"] = "PROVIDER_UNVERIFIED"
+            return None
+        if fallback_identity != primary_identity and not consent_cross:
             trace["outcome"] = "CROSS_PROVIDER_NOT_CONSENTED"
             return None
         return adapter

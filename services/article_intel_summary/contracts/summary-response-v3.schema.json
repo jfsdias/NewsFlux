@@ -179,6 +179,7 @@
             "NOT_AVAILABLE",
             "PAID_NOT_CONSENTED",
             "CROSS_PROVIDER_NOT_CONSENTED",
+            "PROVIDER_UNVERIFIED",
             "DEADLINE",
             "USED",
             "FAILED"
