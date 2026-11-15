@@ -40,7 +40,7 @@ if [[ "$MODE" == "--execute" ]]; then
   [[ "${NEWSFLUX_G5_STOP_ACK:-}" == "STOP_ISOLATED_DARK_ONLY" ]] || block EXPLICIT_ACK_REQUIRED
   [[ "${GITHUB_ACTIONS:-false}" != true && "$EUID" == 0 ]] || block OMV_ROOT_ONLY
 fi
-for cmd in docker python3 flock awk; do
+for cmd in docker python3 flock awk sha256sum; do
   command -v "$cmd" >/dev/null 2>&1 || block DEPENDENCY_MISSING
 done
 docker info >/dev/null 2>&1 || block DOCKER_UNAVAILABLE
@@ -56,6 +56,12 @@ RELEASE_DIR="/dockerdata/compose/newsflux/wallhop-dark/releases/$SOURCE_SHA"
 [[ -f "$RELEASE_DIR/deploy/wallhop-isolated/compose.yaml" &&
    -f "$RELEASE_DIR/deploy/wallhop-isolated/g5-dark-override.yaml" &&
    -f "$RELEASE_DIR/deploy/wallhop-isolated/haproxy.cfg" ]] || block RELEASE_FILES_MISSING
+[[ -f "$RELEASE_DIR/deploy/wallhop-isolated/g5-dark-teardown.sh" ]] || block TEARDOWN_SOURCE_MISSING
+# Do not let an unrelated operator script remove an otherwise valid candidate.
+ARCHIVED_WRAPPER_HASH="$(sha256sum "$RELEASE_DIR/deploy/wallhop-isolated/g5-dark-teardown.sh" | awk '{print $1}')" || block ARCHIVED_TEARDOWN_HASH
+RUNNING_WRAPPER_HASH="$(sha256sum "$0" | awk '{print $1}')" || block RUNNING_TEARDOWN_HASH
+[[ "$ARCHIVED_WRAPPER_HASH" == "$RUNNING_WRAPPER_HASH" ]] || block TEARDOWN_WRAPPER_BYTES_DRIFT
+echo "G5_TEARDOWN_WRAPPER_IDENTITY=PASS"
 
 protected_running() {
   local n
