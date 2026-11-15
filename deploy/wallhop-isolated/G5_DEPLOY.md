@@ -4,7 +4,7 @@ Status: **DRAFT / NOT MERGED / NOT EXECUTED ON OMV**. This is a proposed operato
 
 ## What this does
 
-G5 is the next stage after the **historical** PR #255 G4 canary. G4 remains unchanged and pinned to its old SHA/fingerprint. This G5 executor accepts an operator-approved **40-character full SHA** of `jfsdias/NewsFlux/main`, the independently recorded protected Docker fingerprint, the NPM111 file SHA256, and a locally present immutable relay **image ID**.
+G5 is the next stage after the **historical** PR #255 G4 canary. G4 remains unchanged and pinned to its old SHA/fingerprint. This G5 executor accepts an operator-approved **40-character full SHA** of `jfsdias/NewsFlux/main`, the independently recorded protected Docker fingerprint, the NPM111 file SHA256, and a locally present immutable relay **image ID** that must also be the local image ID of the reviewed `haproxy:3.0.5-alpine` reference (no pulling or unapproved relay).
 
 Two explicit modes: `--check-only` (no Docker resources created; remote main, current protected state, local image, space and visible IPAM/VPN routes checked) and `--execute` (requires a **separate operator GO**, `NEWSFLUX_G5_ACK=ISOLATED_DARK_DEPLOY_ONLY`, root and non-CI environment). No arguments => NOOP. The command refuses a moved `main`, changed protected fingerprint/NPM111 hash, pre-existing candidate/network, occupied /28s, unverified active VPN route fields, insufficient disk space, mutable relay image tags, or invalid topology.
 
