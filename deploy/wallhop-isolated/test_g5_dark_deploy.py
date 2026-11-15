@@ -118,6 +118,8 @@ class G5DarkDeployAdmissionTests(unittest.TestCase):
         self.assertIn("G5_PROVIDER_CONTRACT=HOLD", s)
         self.assertIn("G5_PRODUCT_ACTIVATION=NOT_AUTHORIZED", s)
         self.assertIn("G5_PERSISTENCE=EPHEMERAL_TMPFS", s)
+        self.assertIn("G5_RUNTIME_TMPFS=PASS", s)
+        self.assertIn("RUNTIME_TMPFS_NOT_EFFECTIVE", s)
 
 
 if __name__ == "__main__":
