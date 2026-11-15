@@ -271,3 +271,151 @@ test("v2 summary request sends only model id and closed profile, and checks prov
     globalThis.fetch = nativeFetch
   }
 })
+
+// --- Dynamic catalog (schema v2) ---------------------------------------------------------------
+
+// The previous test restores the native fetch; reinstall the dispatcher for this block.
+const installFetchDispatcher = () => {
+  globalThis.fetch = (...args) =>
+    fetchImplementation ? fetchImplementation(...args) : nativeFetch(...args)
+}
+
+const dynamicModel = (changes = {}) => ({
+  id: "acme-7b",
+  label: "Acme 7B",
+  provider: "Synthetic",
+  status: "AVAILABLE",
+  available: true,
+  unavailable_reason: null,
+  requires_paid_authorization: false,
+  checks: {
+    discovered: true,
+    compatible: true,
+    operator_approved: true,
+    pricing_verified: true,
+    paid_authorized: false,
+    transfer_authorized: true,
+  },
+  pricing: { status: "verified_zero", input_usd_per_million: "0", output_usd_per_million: "0" },
+  limits: {
+    max_input_tokens: 4096,
+    max_output_tokens: 512,
+    requests_per_minute: 5,
+    timeout_seconds: 15,
+  },
+  notices: ["ARTICLE_SENT_TO_MODEL_PROVIDER", "PRICE_VERIFIED_BY_GATEWAY"],
+  ...changes,
+})
+const catalogV2 = (changes = {}) => ({
+  schema_version: "2",
+  default_model_id: "acme-7b",
+  profile_version: "summary-profile-v1",
+  default_profile: {},
+  discovery: { status: "OK" },
+  policy: { status: "CONFIGURED" },
+  models: [
+    dynamicModel(),
+    dynamicModel({
+      id: "gw-0123456789ab",
+      label: "unapproved-alias",
+      status: "OPERATOR_APPROVAL_REQUIRED",
+      available: false,
+      unavailable_reason: "OPERATOR_APPROVAL_REQUIRED",
+      checks: { ...dynamicModel().checks, operator_approved: false, pricing_verified: false },
+      pricing: {
+        status: "not_verified",
+        input_usd_per_million: null,
+        output_usd_per_million: null,
+      },
+      notices: ["ARTICLE_SENT_TO_MODEL_PROVIDER"],
+    }),
+  ],
+  ...changes,
+})
+
+test("v2 catalog accepts gateway-discovered models without fixed identifiers", async () => {
+  installFetchDispatcher()
+  try {
+    fetchImplementation = async () => Response.json(catalogV2())
+    const catalog = await fetchModelCatalog()
+    assert.equal(catalog.default_model_id, "acme-7b")
+    assert.equal(catalog.discoveryStatus, "OK")
+    assert.equal(catalog.models[0].status, "AVAILABLE")
+    assert.equal(catalog.models[0].checks.pricing_verified, true)
+    assert.equal(catalog.models[1].status, "OPERATOR_APPROVAL_REQUIRED")
+    assert.equal(resolveSummaryModel("acme-7b", catalog).modelId, "acme-7b")
+    assert.equal(resolveSummaryModel("gw-0123456789ab", catalog).reason, "model_unavailable")
+  } finally {
+    fetchImplementation = null
+  }
+})
+
+test("v2 catalog is rejected when malformed, inconsistent or oversized", async () => {
+  installFetchDispatcher()
+  const broken = [
+    catalogV2({ models: [dynamicModel({ id: "Bad/ID" })] }),
+    catalogV2({ models: [dynamicModel({ status: "DISABLED" })] }),
+    catalogV2({
+      models: [dynamicModel({ status: "WHATEVER", available: false, unavailable_reason: "X" })],
+    }),
+    catalogV2({
+      models: [
+        dynamicModel({ available: false, status: "UNVERIFIED", unavailable_reason: "MADE_UP" }),
+      ],
+    }),
+    catalogV2({
+      models: [dynamicModel({ pricing: { ...dynamicModel().pricing, status: "free!" } })],
+    }),
+    catalogV2({ models: [dynamicModel({ checks: { discovered: true } })] }),
+    catalogV2({ discovery: { status: "MAYBE" } }),
+    catalogV2({ default_model_id: "Not An Id" }),
+    catalogV2({ models: Array.from({ length: 33 }, (_, i) => dynamicModel({ id: `m${i}` })) }),
+    catalogV2({ models: [dynamicModel(), dynamicModel()] }),
+    catalogV2({ models: [dynamicModel({ id: "auto" })], default_model_id: null }),
+    catalogV2({ models: [dynamicModel({ id: "none" })], default_model_id: null }),
+  ]
+  try {
+    fetchImplementation = async () => Response.json(catalogV2())
+    const valid = await fetchModelCatalog()
+    assert.equal(valid.models.length, 2)
+    for (const payload of broken) {
+      fetchImplementation = async () => Response.json(payload)
+      await assert.rejects(fetchModelCatalog(), JSON.stringify(payload).slice(0, 120))
+    }
+  } finally {
+    fetchImplementation = null
+  }
+})
+
+test("a saved dynamic model survives its removal and is never substituted", () => {
+  const stored = sanitizeSettings({ aiSummaryModel: "acme-7b" })
+  assert.equal(stored.aiSummaryModel, "acme-7b")
+  assert.equal(sanitizeSettings({ aiSummaryModel: "Bad/ID" }).aiSummaryModel, "auto")
+  assert.equal(sanitizeSettings({ aiSummaryModel: "x".repeat(65) }).aiSummaryModel, "auto")
+  const withoutIt = { default_model_id: "s5-free", models: [{ id: "s5-free", available: true }] }
+  assert.deepEqual(resolveSummaryModel("acme-7b", withoutIt), {
+    modelId: null,
+    reason: "model_unavailable",
+  })
+})
+
+test("v2 summary provenance accepts a dynamic model id only when it matches the request", async () => {
+  installFetchDispatcher()
+  try {
+    fetchImplementation = async (_url, options) => {
+      const { request_id: requestId } = JSON.parse(options.body)
+      return Response.json(
+        v2Response(requestId, {
+          provenance: { ...v2Response(requestId).provenance, model_id: "acme-7b" },
+        }),
+      )
+    }
+    const profile = buildSummaryProfile({})
+    const ok = await requestArticleSummary({ entryId: 42, modelId: "acme-7b", profile })
+    assert.equal(ok.kind, "summary")
+    const mismatch = await requestArticleSummary({ entryId: 42, modelId: "s5-free", profile })
+    assert.notEqual(mismatch.kind, "summary")
+  } finally {
+    fetchImplementation = null
+  }
+})
