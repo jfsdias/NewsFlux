@@ -48,11 +48,24 @@ The browser flow (consent, cancel, Original/Recovered toggle, failure keeps orig
 
 ## Gates that block activation
 
-| Gate                    | State                    | Evidence / what unblocks it                                                                                                                                                                                                                                                                                                                                        |
-| ----------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `WALLHOP_REAL_CONTRACT` | **BLOCKED**              | From the agent environment every request to `wallhop.io` is refused by the egress proxy (`CONNECT tunnel failed, response 403`). `/raw/<url>` behaviour, `/api`, formats, limits and terms are unverified. Unblock: the operator authorizes one documented check from the OMV of the public homepage/terms and one `/raw` request for one approved public article. |
-| `SOURCE_POLICY`         | **BLOCKED**              | No operator-approved source list. Policies stay `{"enabled": false}`. Only publicly readable sources whose terms permit automated retrieval may be listed; paywalled sources (the old `config.example.json` candidates) must not be enabled.                                                                                                                       |
-| `ACTIVATION_PROCEDURE`  | **REHEARSED (isolated)** | `wallhop-activation.sh` is transactional and rehearsed in disposable Docker by `rehearse-wallhop-activation.sh` (35 gates, CI job `wallhop-b-topology`). Not run against the live host.                                                                                                                                                                            |
+| Gate                    | State                    | Evidence / what unblocks it                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ----------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WALLHOP_REAL_CONTRACT` | **BLOCKED**              | Re-checked 2026-11-15: the agent egress proxy refuses `wallhop.io` (`connect_rejected`). `/raw/<url>` behaviour, formats, limits and terms are unverified. Prepared, not run: `wallhop_contract_audit.py` (operator-only; authorization token for the current date; 3 GET requests at most, no retries or redirects; approved public article only; paywalled domains refused; private output). Unblock: the operator authorizes and runs it once from the OMV, then reviews the saved terms. |
+| `SOURCE_POLICY`         | **BLOCKED**              | No operator-approved source. Policies stay `{"enabled": false}`; `config.example.json` is now an empty, disabled policy (the paywalled candidates were removed). Candidate matrix and required evidence: [`docs/ops/WALLHOP_SOURCE_POLICY.md`](../../docs/ops/WALLHOP_SOURCE_POLICY.md).                                                                                                                                                                                                     |
+| `ACTIVATION_PROCEDURE`  | **REHEARSED (isolated)** | `wallhop-activation.sh` is transactional and rehearsed in disposable Docker by `rehearse-wallhop-activation.sh` (CI job `wallhop-b-topology`). Faults are injected in every activation stage and every restore step (Caddy, Reader, sidecar, relay, networks). Not run against the live host.                                                                                                                                                                                                |
+
+**`NPM_UPSTREAM` gate (new, blocks activation):** the ledger's G2 audit found the protected
+**NPM host 111** with a literal `proxy_pass` to `newsflux-pr188-content-fallback`. That is the
+container this procedure takes off `npm-proxyyml_default`. Activating would leave that host without
+an upstream, so `activate-infra` now refuses before any change unless both of these hold:
+
+- the operator provides the NPM proxy-host directory read-only (`WALLHOP_NPM_PROXY_HOST_DIR`);
+- no non-comment line there names the sidecar's container, its Compose service or its network
+  aliases.
+
+Only file names are reported. NPM itself is never edited. Unblocking it is a separate NPM decision
+(host 111 is protected): either retire that route through the PR188 retirement audit, or point it
+elsewhere.
 
 Activation order once unblocked: networks → relay project → sidecar override (record previous config hash) →
 Reader network release (`release.py --extra-override reader.override.yaml --network-added newsflux_wallhop_reader`)

@@ -15,7 +15,7 @@ The container listens on port `8790`. It needs these environment variables:
 - `CONTENT_FALLBACK_DB_PATH`: absolute persistent SQLite database path; defaults to `/data/content-fallback.sqlite3` in the container.
 - `CONTENT_FALLBACK_HOST` and `CONTENT_FALLBACK_PORT`: default to `127.0.0.1:8790` outside the container image. The image binds to `0.0.0.0` for private container-network use; do not publish the port publicly.
 
-`config.example.json` contains the candidate policy for NYT, Bloomberg, WSJ, and Folha. Its global `enabled` value is `false`; an operator must pass its JSON contents in `CONTENT_FALLBACK_POLICIES_JSON` to enable those policies. Economist remains disabled.
+`config.example.json` is an empty, disabled policy (`"enabled": false`, no domains). It previously listed paywalled publishers (NYT, Bloomberg, WSJ, Folha, Economist) as candidates; those must never be enabled. Candidate sources, the evidence each one needs and the operator decision are tracked in [`docs/ops/WALLHOP_SOURCE_POLICY.md`](../../docs/ops/WALLHOP_SOURCE_POLICY.md). Nothing is enabled without the operator's approval.
 
 To use Miniflux's native scraper for a known public feed, add its ID to `feeds` with `"provider":"miniflux"`. The sidecar reads the feed's URL rewrite rules before scraping and again after; it skips or discards extraction if any rule is configured or the rules changed during the request. It calls `GET /v1/entries/{id}/fetch-content?update_content=false`. Keep Miniflux 2.3.5's `FETCHER_ALLOW_PRIVATE_NETWORKS` disabled. Its default is disabled; verify the deployed setting before enabling a feed policy.
 

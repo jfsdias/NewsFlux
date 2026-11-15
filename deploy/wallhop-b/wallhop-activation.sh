@@ -91,6 +91,25 @@ except Exception as error:  # noqa: BLE001
 print("SOURCE_POLICY_GATE=PASS SOURCES=" + ",".join(domains))
 PY
 }
+# NPM proxy hosts must not target the sidecar: activation takes it off the NPM network, which would
+# leave such a host (e.g. protected NPM host 111, found in the ledger G2 audit) without upstream.
+# Read-only scan of the operator-provided NPM proxy-host directory; fail closed when not provided.
+npm_upstream_gate() {
+  local dir="${WALLHOP_NPM_PROXY_HOST_DIR:-}" names=() name alias f hits=0
+  if [[ -z "$dir" || ! -d "$dir" ]]; then gate NPM_UPSTREAM_GATE "BLOCKED CODE=NPM_PROXY_HOSTS_NOT_VERIFIED"; return 1; fi
+  names+=("$SIDECAR_CONTAINER" "$(label "$SIDECAR_CONTAINER" com.docker.compose.service)")
+  while read -r alias; do [[ "$alias" =~ [a-z] && ${#alias} -gt 3 ]] && names+=("$alias"); done < <(
+    docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{range $v.Aliases}}{{println .}}{{end}}{{end}}' "$SIDECAR_CONTAINER" 2>/dev/null)
+  for f in "$dir"/*.conf; do
+    [[ -f "$f" ]] || continue
+    for name in "${names[@]}"; do
+      [[ -n "$name" ]] || continue
+      if grep -v '^[[:space:]]*#' "$f" | grep -qwF -- "$name"; then hits=$((hits + 1)); gate NPM_UPSTREAM_REFERENCE "$(basename "$f")"; break; fi
+    done
+  done
+  if ((hits)); then gate NPM_UPSTREAM_GATE "BLOCKED CODE=NPM_PROXY_HOST_TARGETS_SIDECAR"; return 1; fi
+  gate NPM_UPSTREAM_GATE PASS
+}
 contract_gate() {
   python3 - "${WALLHOP_CONTRACT_EVIDENCE:-}" "${WALLHOP_APPROVED_SOURCES:-}" <<'PY'
 import json, sys
@@ -124,6 +143,7 @@ preflight() { # read-only
       [[ "$(docker network inspect -f '{{.Internal}}' "$net")" == true ]] || die PREFLIGHT "${net}_NOT_INTERNAL"; gate "$net" EXISTS_INTERNAL
     else gate "$net" ABSENT; fi
   done
+  npm_upstream_gate || true
   source_policy_gate || true
   contract_gate || true
   gate PREFLIGHT PASS
@@ -225,6 +245,8 @@ stage_caddy() {
 activate_infra() {
   require_source
   docker inspect "$SIDECAR_CONTAINER" >/dev/null 2>&1 || die ACTIVATE_INFRA SIDECAR_NOT_FOUND
+  # Before any change: never cut an NPM proxy host that still targets the sidecar.
+  npm_upstream_gate || die ACTIVATE_INFRA NPM_UPSTREAM_DEPENDENCY
   record_baseline
   local stage
   for stage in networks relay sidecar reader caddy; do
@@ -267,7 +289,7 @@ rollback() { # idempotent, reverse order, then readback against the recorded bas
   local failures=() caddy svc relay net
   caddy="$(caddy_source)"
   if ! cmp -s "$BASE/Caddyfile" "$caddy"; then
-    { cat "$BASE/Caddyfile" >"$caddy" && docker exec "$READER_CONTAINER" caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1; } \
+    { fault rollback_caddy && cat "$BASE/Caddyfile" >"$caddy" && docker exec "$READER_CONTAINER" caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1; } \
       || failures+=(CADDY_RELOAD)
   fi
   if [[ -f "$RELEASE_DIR/reader/manifest.json" ]]; then
@@ -276,7 +298,7 @@ rollback() { # idempotent, reverse order, then readback against the recorded bas
   svc="$(cat "$BASE/sidecar.service")"
   { fault rollback_sidecar && run_sidecar_compose "up -d --no-deps $svc" >/dev/null 2>&1 && wait_healthy "$SIDECAR_CONTAINER"; } || failures+=(SIDECAR_RESTORE)
   relay="$(docker ps -aq --filter "label=com.docker.compose.service=wallhop-egress" --filter "label=com.docker.compose.project=$(cat "$BASE/sidecar.project")")"
-  if [[ -n "$relay" ]]; then docker rm -f $relay >/dev/null 2>&1 || failures+=(RELAY_REMOVE); fi
+  if [[ -n "$relay" ]]; then { fault rollback_relay && docker rm -f $relay >/dev/null 2>&1; } || failures+=(RELAY_REMOVE); fi
   for net in "$READER_NET" "$EGRESS_NET"; do
     if created_net "$net" && docker network inspect "$net" >/dev/null 2>&1; then
       { fault rollback_network && docker network rm "$net" >/dev/null 2>&1; } || failures+=("NETWORK_REMOVE_$net")

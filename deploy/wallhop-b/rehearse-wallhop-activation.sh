@@ -135,6 +135,10 @@ export APPROVED_SHA="$SHA" NEWSFLUX_REPO_URL="file://$work/origin.git" NEWSFLUX_
   WALLHOP_MINIFLUX_PUBLIC_URL=https://miniflux.rehearsal.test WALLHOP_ALLOWED_WEB_ORIGINS=https://news.rehearsal.test \
   WALLHOP_READER_USER_ID=7 WALLHOP_UPSTREAM=wallhop-origin:443 WALLHOP_HAPROXY_IMAGE=haproxy:3.0.5-alpine \
   WALLHOP_READER_IMAGE="$(docker image inspect -f '{{.Id}}' "$run-reader:new")" WALLHOP_REHEARSAL_OVERRIDE="$work/rehearsal.override.yaml"
+# Synthetic NPM proxy-host directory (read-only for the procedure): one unrelated host by default.
+mkdir -p "$work/npm-proxy-host"
+printf 'server {\n  set $server "unrelated-app";\n  proxy_pass http://$server:8080;\n}\n' >"$work/npm-proxy-host/37.conf"
+export WALLHOP_NPM_PROXY_HOST_DIR="$work/npm-proxy-host"
 op() { bash "${WALLHOP_ACTIVATION_SCRIPT:-$here/wallhop-activation.sh}" "$@"; }
 recover() {
   curl -sS --noproxy '*' --max-time 30 --resolve "news.rehearsal.test:443:$FRONT_IP" --cacert "$work/ca.crt" -o "$work/out.json" -w '%{http_code}' \
@@ -162,6 +166,22 @@ grep -q 'SOURCE_POLICY_GATE=BLOCKED' <<<"$out" && grep -q 'WALLHOP_REAL_CONTRACT
 WALLHOP_REHEARSAL_OVERRIDE= WALLHOP_TEST_FAULT=network_create op preflight >/dev/null 2>&1 && ko FAULT_INJECTION_REFUSED_OUTSIDE_REHEARSAL || ok FAULT_INJECTION_REFUSED_OUTSIDE_REHEARSAL
 op enable-policy >/dev/null 2>&1 && ko ENABLE_REFUSED_WITHOUT_EVIDENCE || ok ENABLE_REFUSED_WITHOUT_EVIDENCE
 
+# ---- 0a. NPM upstream gate: an NPM proxy host that still targets the sidecar blocks before any change ----
+reset_release
+npm_conf_before="$(sha256sum "$work"/npm-proxy-host/*.conf)"
+set +e; WALLHOP_NPM_PROXY_HOST_DIR= op activate-infra >"$work/npm0.out" 2>&1; rc=$?; set -e
+[[ "$rc" == 1 ]] && grep -q '^CODE=NPM_UPSTREAM_DEPENDENCY' "$work/npm0.out" && grep -q 'NPM_PROXY_HOSTS_NOT_VERIFIED' "$work/npm0.out" && baseline_ok \
+  && ok NPM_UPSTREAMS_NOT_VERIFIED_BLOCKS || { cat "$work/npm0.out"; ko NPM_UPSTREAMS_NOT_VERIFIED_BLOCKS "rc=$rc"; }
+printf 'server {\n  set $server "newsflux-pr188-content-fallback";\n  proxy_pass http://$server:8080;\n}\n' >"$work/npm-proxy-host/111.conf"
+set +e; op activate-infra >"$work/npm1.out" 2>&1; rc=$?; set -e
+[[ "$rc" == 1 ]] && grep -q '^NPM_UPSTREAM_REFERENCE=111.conf$' "$work/npm1.out" && grep -q '^CODE=NPM_UPSTREAM_DEPENDENCY' "$work/npm1.out" && baseline_ok \
+  && ok NPM_HOST_TARGETING_SIDECAR_BLOCKS || { cat "$work/npm1.out"; ko NPM_HOST_TARGETING_SIDECAR_BLOCKS "rc=$rc"; }
+grep -q 'newsflux-pr188-content-fallback' "$work/npm1.out" && ko NPM_CONF_CONTENT_NOT_PRINTED || ok NPM_CONF_CONTENT_NOT_PRINTED
+printf 'server {\n  # set $server "newsflux-pr188-content-fallback";  (retired)\n  set $server "unrelated-app";\n}\n' >"$work/npm-proxy-host/111.conf"
+op preflight 2>/dev/null | grep -qx 'NPM_UPSTREAM_GATE=PASS' && ok NPM_COMMENTED_REFERENCE_IGNORED || ko NPM_COMMENTED_REFERENCE_IGNORED
+rm -f "$work/npm-proxy-host/111.conf"
+[[ "$(sha256sum "$work"/npm-proxy-host/*.conf)" == "$npm_conf_before" ]] && ok NPM_CONF_NEVER_MODIFIED || ko NPM_CONF_NEVER_MODIFIED
+
 # ---- 0. REAL fault (no injection): relay image unavailable after the networks were created ---------------
 reset_release
 set +e; WALLHOP_HAPROXY_IMAGE="$run-missing:none" op activate-infra >"$work/real.out" 2>&1; rc=$?; set -e
@@ -178,7 +198,7 @@ for f in network_create relay_up sidecar_up reader_plan reader_promote caddy_val
 done
 
 # ---- 2. rollback-stage failures => ROLLBACK_PARTIAL, non-zero, evidence kept; a clean re-run restores -----
-for f in rollback_reader rollback_sidecar rollback_network; do
+for f in rollback_caddy rollback_reader rollback_sidecar rollback_relay rollback_network; do
   reset_release
   op activate-infra >/dev/null 2>&1 || ko "SETUP_FOR_${f^^}"
   set +e; WALLHOP_TEST_FAULT="$f" op rollback >"$work/r.out" 2>&1; rc=$?; set -e
