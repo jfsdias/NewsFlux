@@ -145,8 +145,16 @@ class LiteLLMSettings:
         return True
 
 
+# Reserved by the Reader's settings ("auto" = operator default, "none" = no fallback).
+RESERVED_CATALOG_MODEL_IDS = frozenset({"auto", "none"})
+
+
 def valid_catalog_model_id(value: object) -> bool:
-    return isinstance(value, str) and CATALOG_MODEL_ID_RE.fullmatch(value) is not None
+    return (
+        isinstance(value, str)
+        and CATALOG_MODEL_ID_RE.fullmatch(value) is not None
+        and value not in RESERVED_CATALOG_MODEL_IDS
+    )
 
 
 def load_gateway_settings(environ: Mapping[str, str] | None = None, *, read_key: bool) -> LiteLLMSettings:

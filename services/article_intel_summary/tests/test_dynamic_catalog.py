@@ -261,7 +261,8 @@ class DynamicCatalogTests(unittest.TestCase):
         for raw in ("not json", json.dumps({"version": 2, "models": []}),
                     policy(policy_model("Bad ID", "x")), policy(policy_model("a", "x"), policy_model("a", "y")),
                     policy(policy_model("a", "x"), policy_model("b", "x")), policy({**policy_model("a", "x"), "extra": 1}),
-                    policy(policy_model("a", "x", input_usd_per_million="-1"))):
+                    policy(policy_model("a", "x", input_usd_per_million="-1")),
+                    policy(policy_model("auto", "x")), policy(policy_model("none", "x"))):
             router = self.router(FakeGateway(), NEWSFLUX_AI_MODEL_POLICY_JSON=raw)
             document, models = self.models(router)
             self.assertEqual(document["policy"]["status"], "INVALID", raw)

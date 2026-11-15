@@ -371,6 +371,8 @@ test("v2 catalog is rejected when malformed, inconsistent or oversized", async (
     catalogV2({ default_model_id: "Not An Id" }),
     catalogV2({ models: Array.from({ length: 33 }, (_, i) => dynamicModel({ id: `m${i}` })) }),
     catalogV2({ models: [dynamicModel(), dynamicModel()] }),
+    catalogV2({ models: [dynamicModel({ id: "auto" })], default_model_id: null }),
+    catalogV2({ models: [dynamicModel({ id: "none" })], default_model_id: null }),
   ]
   try {
     fetchImplementation = async () => Response.json(catalogV2())

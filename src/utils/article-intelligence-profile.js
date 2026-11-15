@@ -5,8 +5,12 @@ const SUMMARY_PROFILE_VERSION = "summary-profile-v1"
 // shape. Whether a model may be used is decided by the server catalog on every request.
 const SUMMARY_MODEL_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/u
 export const SUMMARY_MODEL_AUTO = "auto"
+// "auto" and "none" are reserved setting values, never catalog IDs.
 export const isSummaryModelId = (value) =>
-  typeof value === "string" && SUMMARY_MODEL_ID_PATTERN.test(value)
+  typeof value === "string" &&
+  SUMMARY_MODEL_ID_PATTERN.test(value) &&
+  value !== "auto" &&
+  value !== "none"
 export const SUMMARY_LENGTHS = ["brief", "standard", "detailed"]
 export const SUMMARY_FOCUSES = [
   "factual_synthesis",

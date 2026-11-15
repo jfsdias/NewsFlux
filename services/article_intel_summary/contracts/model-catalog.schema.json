@@ -178,6 +178,6 @@
     }
   },
   "$defs": {
-    "modelId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$" }
+    "modelId": { "type": "string", "pattern": "^(?!(?:auto|none)$)[a-z0-9][a-z0-9._-]{0,63}$" }
   }
 }

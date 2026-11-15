@@ -400,7 +400,11 @@ const CATALOG_V2_CHECKS = [
   "transfer_authorized",
 ]
 const NULLABLE_CHECKS = new Set(["discovered", "compatible"])
-const isV2Id = (value) => typeof value === "string" && CATALOG_V2_ID_PATTERN.test(value)
+const isV2Id = (value) =>
+  typeof value === "string" &&
+  CATALOG_V2_ID_PATTERN.test(value) &&
+  value !== "auto" &&
+  value !== "none"
 
 const validateCatalogChecks = (checks) =>
   Boolean(checks) &&
