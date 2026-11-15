@@ -228,6 +228,13 @@ if [[ -z "${NEWSFLUX_G4_IPAM_GATE:-}" || ! -f "$NEWSFLUX_G4_IPAM_GATE" ]]; then
   echo "G4_GATE=BLOCKED CODE=IPAM_GATE_MISSING"
   exit 2
 fi
+# Git blob identity pins the helper to the audited PR255 source, even though
+# the standalone G4 script itself is executed outside a checkout.
+if [[ "$(git hash-object -- "$NEWSFLUX_G4_IPAM_GATE")" != "c01d709cb42a34ca185bb27049b57440b7193b8f" ]]; then
+  echo "G4_GATE=BLOCKED CODE=IPAM_GATE_BLOB_DRIFT"
+  exit 2
+fi
+echo "G4_IPAM_HELPER_BLOB=PASS"
 python3 "$NEWSFLUX_G4_IPAM_GATE" --output "$OVERRIDE" || {
   echo "G4_GATE=BLOCKED CODE=IPAM_PRESTART_UNVERIFIED"
   exit 2
