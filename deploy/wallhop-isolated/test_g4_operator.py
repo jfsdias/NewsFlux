@@ -60,6 +60,13 @@ class G4OperatorAdmissionTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("G4_ADMISSION=BLOCKED CODE=EXPLICIT_ACK_REQUIRED", result.stdout)
 
+    def test_canary_pass_is_emitted_only_after_successful_rollback(self) -> None:
+        source = SCRIPT.read_text()
+        self.assertIn("G4_ROLLBACK=PASS", source)
+        self.assertIn("G4_DARK_CANARY=PASS", source)
+        self.assertLess(source.index("G4_ROLLBACK=PASS"), source.index("G4_DARK_CANARY=PASS"))
+        self.assertIn("if (( original == 0 )); then", source)
+
     def test_dark_relay_backends_are_locally_blackholed(self) -> None:
         source = SCRIPT.read_text()
         self.assertIn('WALLHOP_UPSTREAM: "127.0.0.1:9"', source)
