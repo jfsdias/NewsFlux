@@ -38,7 +38,7 @@ if [[ "$MODE" == "--execute" ]]; then
   [[ "${NEWSFLUX_G5_ACK:-}" == "ISOLATED_DARK_DEPLOY_ONLY" ]] || block EXPLICIT_ACK_REQUIRED
   [[ "${GITHUB_ACTIONS:-false}" != true && "$EUID" == 0 ]] || block OMV_ROOT_ONLY
 fi
-for cmd in docker git python3 tar mktemp flock awk; do
+for cmd in docker git python3 tar mktemp flock awk sha256sum; do
   command -v "$cmd" >/dev/null 2>&1 || block DEPENDENCY_MISSING
 done
 REPO="${NEWSFLUX_G5_REPO:-/dockerdata/compose/newsflux/repo}"
@@ -156,6 +156,11 @@ if [[ "$MODE" == "--execute" ]]; then
   [[ "$(git -C "$REPO" rev-parse FETCH_HEAD)" == "$SOURCE_SHA" ]] || block SOURCE_FETCH_DRIFT
 fi
 git -C "$REPO" cat-file -e "${SOURCE_SHA}^{commit}" || block EXACT_COMMIT_NOT_LOCAL
+# The RUNNING OPERATOR WRAPPER itself must match the approved exact source commit.
+REVIEWED_WRAPPER_HASH="$(git -C "$REPO" show "$SOURCE_SHA:deploy/wallhop-isolated/g5-dark-deploy.sh" | sha256sum | awk '{print $1}')" || block WRAPPER_SOURCE_UNAVAILABLE
+LOCAL_WRAPPER_HASH="$(sha256sum "$0" | awk '{print $1}')" || block WRAPPER_HASH_UNAVAILABLE
+[[ "$REVIEWED_WRAPPER_HASH" == "$LOCAL_WRAPPER_HASH" ]] || block WRAPPER_BYTES_DRIFT
+echo "G5_WRAPPER_SOURCE_IDENTITY=PASS"
 echo "G5_EXACT_SOURCE=PASS"
 if [[ "$MODE" == "--check-only" ]]; then
   git -C "$REPO" show "$SOURCE_SHA:deploy/wallhop-isolated/g4_ipam_gate.py" |
