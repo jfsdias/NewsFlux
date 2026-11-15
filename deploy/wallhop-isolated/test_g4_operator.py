@@ -67,6 +67,16 @@ class G4OperatorAdmissionTests(unittest.TestCase):
         self.assertLess(source.index("G4_ROLLBACK=PASS"), source.index("G4_DARK_CANARY=PASS"))
         self.assertIn("if (( original == 0 )); then", source)
 
+    def test_ipam_helper_is_pinned_to_exact_git_blob(self) -> None:
+        source = SCRIPT.read_text()
+        import subprocess
+        blob = subprocess.run(
+            ["git", "hash-object", str(ROOT / "g4_ipam_gate.py")],
+            capture_output=True, text=True, check=True
+        ).stdout.strip()
+        self.assertIn(blob, source)
+        self.assertIn("G4_IPAM_HELPER_BLOB=PASS", source)
+
     def test_dark_relay_backends_are_locally_blackholed(self) -> None:
         source = SCRIPT.read_text()
         helper = (ROOT / "g4_ipam_gate.py").read_text()
