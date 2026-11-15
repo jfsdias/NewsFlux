@@ -57,6 +57,7 @@ NEW_RELAY=newsflux-wallhop-egress
 LEGACY=newsflux-pr188-content-fallback
 STAGE=""
 COMPOSE=""
+OVERRIDE=""
 START_ARMED=0
 BASE_FINGERPRINT=""
 BASE_NPM111_SHA=""
@@ -120,7 +121,7 @@ cleanup() {
   trap - EXIT
   set +e
   if (( START_ARMED )) && [[ -n "$COMPOSE" ]]; then
-    docker compose -f "$COMPOSE" down --remove-orphans >/dev/null 2>&1
+    docker compose -f "$COMPOSE" -f "$OVERRIDE" down --remove-orphans >/dev/null 2>&1
     [[ "$?" -eq 0 ]] || cleanup_failed=1
     candidate_absent || cleanup_failed=1
   fi
@@ -209,6 +210,18 @@ COMPOSE="$STAGE/deploy/wallhop-isolated/compose.yaml"
   exit 2
 }
 
+# In a dark canary both relay backends are forcibly blackholed to loopback.
+# This prevents any possible third-party request even if another service
+# unexpectedly connects to the new, temporary SNI relay on the NPM network.
+OVERRIDE="$STAGE/deploy/wallhop-isolated/g4-dark-override.yaml"
+cat > "$OVERRIDE" <<'YAML'
+services:
+  wallhop-egress:
+    environment:
+      WALLHOP_UPSTREAM: "127.0.0.1:9"
+      MINIFLUX_UPSTREAM: "127.0.0.1:9"
+YAML
+
 # Verify NPM111 on-disk and expanded Nginx config using the merged read-only tool.
 python3 "$STAGE/deploy/npm111-g2c/audit.py" || {
   echo "G4_GATE=BLOCKED CODE=NPM111_STATIC_G2C"
@@ -241,11 +254,20 @@ export WALLHOP_MINIFLUX_API_TOKEN=synthetic-only-not-real-account
 export WALLHOP_RECOVERY_API_TOKEN=synthetic-only-not-real-service-token-1234567890
 export WALLHOP_HAPROXY_CONFIG="$STAGE/deploy/wallhop-isolated/haproxy.cfg"
 
-docker compose -f "$COMPOSE" config --format json |
+docker compose -f "$COMPOSE" -f "$OVERRIDE" config --format json |
   python3 "$STAGE/deploy/wallhop-isolated/topology_guard.py" || {
     echo "G4_GATE=BLOCKED CODE=DISABLED_TOPOLOGY"
     exit 2
   }
+
+docker compose -f "$COMPOSE" -f "$OVERRIDE" config --format json |
+  python3 -c '
+import json,sys
+env=json.load(sys.stdin)["services"]["wallhop-egress"]["environment"]
+assert env.get("WALLHOP_UPSTREAM") == "127.0.0.1:9"
+assert env.get("MINIFLUX_UPSTREAM") == "127.0.0.1:9"
+' || { echo "G4_GATE=BLOCKED CODE=EXTERNAL_RELAY_NOT_BLACKHOLED"; exit 2; }
+echo "G4_EXTERNAL_BACKENDS=BLACKHOLED"
 
 # Protect against a race between preflight and the only create step.
 BASE_BEFORE_UP="$(fingerprint_protected)"
@@ -258,7 +280,7 @@ candidate_absent || { echo "G4_GATE=BLOCKED CODE=CANDIDATE_RACE"; exit 2; }
 # At this point the only permitted mutations are the NEW Compose project's
 # candidate containers and networks; rollback is armed *before* calling up.
 START_ARMED=1
-docker compose -f "$COMPOSE" up -d --pull never --no-build >/dev/null || {
+docker compose -f "$COMPOSE" -f "$OVERRIDE" up -d --pull never --no-build >/dev/null || {
   echo "G4_GATE=BLOCKED CODE=DARK_START"
   exit 2
 }
