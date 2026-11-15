@@ -1372,6 +1372,12 @@ Current sequence: this planning documentation PR (`PWA_ARCHITECTURE.md`, `DESIGN
 
 ---
 
-## Prospective proposal — AI-UI-01
+## AI-UI-01 — State reconciled against merged PR #250 (2026-11-15)
 
-**AI-UI-01 — IN-APP MODEL SELECTION:** PLANNED after production stabilization of Summary S5. The [roadmap entry](./NEWSFLUX_ROADMAP.md#ai-ui-01--in-app-model-selection-proposal) proposes an approved backend catalog and an on-demand Summary selector; MVP selection is per request or session, with persistence deferred to a separate storage/privacy decision. This is a forward-looking proposal, not a change to the historical snapshots or authorization to implement, merge, or deploy. It is independent of the Summary S5 and WallHop PR approvals.
+**CONFIRMED GitHub:** main/PR250 merge SHA `4ea6581d1c8641e8619aa974e04b856695831e10`. The original #236 text called AI-UI-01A/B `PLANNED`; that is superseded for implementation status by merged PR #241 (Reader selector), #248 (operator-policy dynamic catalog/read-only discovery), #249 (primary/fallback + provenance), and #250 (visual layout/accessibility). See the final AI-UI-01 section in [the roadmap](./NEWSFLUX_ROADMAP.md) for the file-level matrix.
+
+**OPERATOR_REPORTED OMV:** Summary+Reader exact-main promotion `RESULT=PASS`; inference, external transfer, paid and discovery OFF. The existence of an on-demand selector and catalog is not permission to activate any model, and the catalog smoke is not evidence of real provider inference.
+
+**Architectural finding, source CONFIRMED:** `src/store/settingsState.js` uses `persistentAtom("settings", ...)`, while `src/utils/settings-schema.js` includes `aiSummaryModel` and fallback/consent fields. Thus the original “selection only for request/session, no persistent settings” proposal is out of date: the client already retains these choices in its own browser settings. Do not confuse this with server-side or Miniflux storage. A separate privacy/source-of-truth decision is required before account-scoped synchronization, revocation and any new persistent state. No feature extension is approved.
+
+**State:** `AI_UI_01A=IMPLEMENTED_CODE_RUNTIME_DISABLED`; `AI_UI_01B=IMPLEMENTED_CODE_VISUAL_QA_OPERATOR_REPORTED`; `AI_UI_01C=CLIENT_PERSISTENCE_PRESENT_REQUIRES_ARCHITECTURE_REVIEW`; `AI_UI_01D=HOLD_NOT_AUTHORIZED`. This documentation-only PR requires review, CI and explicit permission before merge. WallHop/host111 remains a separate protected HOLD track. No code, infrastructure, provider keys, external transfer, production or NPM changes are authorized here.
