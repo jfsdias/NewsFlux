@@ -168,7 +168,8 @@ class WallHopProvider:
         # Reject private, loopback, link-local and metadata destinations before a third
         # party receives the URL. The provider fetch itself is also pinned and checked.
         try:
-            self.http._resolver(parts.hostname or "", port, False)
+            # Public-DNS validation, independent of egress routing (the relay only routes WallHop).
+            self.http.validate_public_destination(parts.hostname or "", port)
         except UnsafeURL:
             raise
         except FetchError as exc:

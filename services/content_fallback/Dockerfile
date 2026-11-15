@@ -10,7 +10,9 @@ COPY services/__init__.py /app/services/__init__.py
 COPY services/article_intel_auth /app/services/article_intel_auth
 COPY services/content_fallback /app/services/content_fallback
 
-RUN mkdir -p /data && chown 10001:10001 /data && chmod 700 /data
+# Same defect class as R12F-09: never depend on the build context's file modes.
+RUN chmod -R a+rX,go-w /app/services && \
+    mkdir -p /data && chown 10001:10001 /data && chmod 700 /data
 VOLUME ["/data"]
 
 USER 10001:10001
