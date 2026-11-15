@@ -70,6 +70,9 @@ def create_app(
         owner = getattr(primary, "_owner", None)
         if owner is not None:
             owner.__exit__()
+        router_owner = getattr(summary_service.router, "ledger_owner", None)
+        if router_owner is not None and router_owner is not owner:
+            router_owner.__exit__()
 
     app = FastAPI(title="NewsFlux Article Intelligence API", version="1", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.auth_service = auth_service
@@ -155,13 +158,17 @@ def create_app(
                 raise _ApiError("SUMMARY_BUSY", 504) from None
             request_id = document["request_id"]
             is_v2 = document["schema_version"] == "2"
-            profile = parse_profile(document["profile"]) if is_v2 else None
-            if is_v2:
+            is_v3 = document["schema_version"] == "3"
+            profile = parse_profile(document["profile"]) if (is_v2 or is_v3) else None
+            if is_v3 and document["fallback_model_id"] == document["primary_model_id"]:
+                raise _ApiError("INVALID_REQUEST", 422, request_id)
+            if is_v2 or is_v3:
                 # Refuse unauthorized or unavailable models before any Miniflux or model access.
+                # (v3: only the primary is required here; the fallback is revalidated at its attempt.)
                 try:
                     if summary_service.router is None:
                         raise ModelNotAvailable("MODEL_NOT_AVAILABLE")
-                    summary_service.router.adapter_for(document["model_id"])
+                    summary_service.router.adapter_for(document["primary_model_id"] if is_v3 else document["model_id"])
                 except ModelNotAvailable as exc:
                     raise _ApiError(exc.code, 403 if exc.code == "MODEL_NOT_AUTHORIZED" else 409, request_id) from None
 
@@ -176,7 +183,36 @@ def create_app(
                     deadline=deadline,
                 )
                 deadline.remaining()
-                if is_v2:
+
+                def revalidate(expected_fingerprint):
+                    # Before a fallback attempt: same user, same entry, same content, still authorized.
+                    deadline.remaining()
+                    current = auth_service.authorize_entry(
+                        api_key=request.headers.get("x-miniflux-api-key"),
+                        claimed_miniflux_base_url=request.headers.get("x-newsflux-miniflux-server"),
+                        request_origin=origin,
+                        entry_id=parsed_entry_id,
+                        request_is_secure=True,
+                        deadline=deadline,
+                    )
+                    snapshot = summary_service.resolver.resolve(current)
+                    if current.user_id != authorized_entry.user_id or snapshot.content_fingerprint != expected_fingerprint:
+                        raise _ApiError("STALE_SNAPSHOT", 409, request_id)
+
+                if is_v3:
+                    outcome = summary_service.summarize_v3(
+                        authorized_entry,
+                        request_id=request_id,
+                        primary_model_id=document["primary_model_id"],
+                        fallback_model_id=document["fallback_model_id"],
+                        consent_paid=document["fallback_consent"]["paid"],
+                        consent_cross_provider=document["fallback_consent"]["cross_provider"],
+                        profile=profile,
+                        deadline=deadline,
+                        revalidation_reserve_seconds=revalidation_reserve_seconds,
+                        revalidate=revalidate,
+                    )
+                elif is_v2:
                     outcome = summary_service.summarize_v2(
                         authorized_entry,
                         request_id=request_id,

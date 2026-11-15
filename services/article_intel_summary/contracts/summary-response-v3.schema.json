@@ -1,0 +1,243 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://newsflux.example/schemas/article-summary-response-v3.json",
+  "title": "NewsFlux article summary response v3 (verifiable primary/fallback provenance)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_id",
+    "entry_id",
+    "status",
+    "content_scope",
+    "summary",
+    "summary_paragraph_ids",
+    "key_points",
+    "facts",
+    "implications",
+    "action_points",
+    "open_questions",
+    "limitations",
+    "profile",
+    "provenance"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "3"
+    },
+    "request_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "entry_id": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9223372036854775807
+    },
+    "status": {
+      "enum": ["complete", "partial", "insufficient", "unavailable"]
+    },
+    "content_scope": {
+      "enum": ["full", "partial", "unknown"]
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 3000
+    },
+    "summary_paragraph_ids": {
+      "$ref": "#/$defs/paragraphIds32"
+    },
+    "key_points": {
+      "$ref": "#/$defs/points"
+    },
+    "facts": {
+      "$ref": "#/$defs/points"
+    },
+    "implications": {
+      "$ref": "#/$defs/points"
+    },
+    "action_points": {
+      "$ref": "#/$defs/points"
+    },
+    "open_questions": {
+      "$ref": "#/$defs/points"
+    },
+    "limitations": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      }
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "length", "focus", "sections", "language"],
+      "properties": {
+        "version": {
+          "const": "summary-profile-v1"
+        },
+        "length": {
+          "type": "string"
+        },
+        "focus": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sections": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "language": {
+          "type": "string"
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "content_origin",
+        "content_fingerprint",
+        "provider_id",
+        "requested_model_id",
+        "primary_model_id",
+        "fallback_model_id",
+        "effective_model_id",
+        "effective_model_alias",
+        "fallback_used",
+        "fallback_reason",
+        "fallback_outcome",
+        "attempts",
+        "pricing_class",
+        "prompt_version",
+        "profile_version"
+      ],
+      "properties": {
+        "content_origin": {
+          "const": "ORIGINAL_MINIFLUX"
+        },
+        "content_fingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "provider_id": {
+          "type": ["string", "null"],
+          "maxLength": 128
+        },
+        "requested_model_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+        },
+        "primary_model_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+        },
+        "fallback_model_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "effective_model_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "effective_model_alias": {
+          "type": ["string", "null"],
+          "maxLength": 128
+        },
+        "fallback_used": {
+          "type": "boolean"
+        },
+        "fallback_reason": {
+          "enum": [null, "PRIMARY_TIMEOUT", "PRIMARY_RATE_LIMITED", "PRIMARY_UPSTREAM_UNAVAILABLE"]
+        },
+        "fallback_outcome": {
+          "enum": [
+            "NOT_NEEDED",
+            "NOT_CONFIGURED",
+            "NOT_ELIGIBLE",
+            "NOT_AVAILABLE",
+            "PAID_NOT_CONSENTED",
+            "CROSS_PROVIDER_NOT_CONSENTED",
+            "PROVIDER_UNVERIFIED",
+            "DEADLINE",
+            "USED",
+            "FAILED"
+          ]
+        },
+        "attempts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "pricing_class": {
+          "enum": [null, "free", "paid"]
+        },
+        "prompt_version": {
+          "type": ["string", "null"],
+          "maxLength": 128
+        },
+        "profile_version": {
+          "const": "summary-profile-v1"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "paragraphIds32": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^p[1-9][0-9]{0,2}$"
+      }
+    },
+    "points": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["text", "paragraph_ids"],
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "paragraph_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 8,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^p[1-9][0-9]{0,2}$"
+            }
+          }
+        }
+      }
+    }
+  }
+}

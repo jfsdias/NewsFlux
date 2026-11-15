@@ -993,6 +993,7 @@ const ArticleDetail = forwardRef((_, ref) => {
               {articleSummary.summary && (
                 <ArticleSummaryResult
                   modelLabel={articleSummary.modelLabel}
+                  modelLabels={articleSummary.modelLabels}
                   polyglot={polyglot}
                   summary={articleSummary.summary}
                 />

@@ -125,9 +125,107 @@ const validateArticleSummaryResponseV2 = (payload, { entryId, requestId, modelId
   return payload
 }
 
-export const validateArticleSummaryResponse = (payload, { entryId, requestId, modelId } = {}) => {
+const V3_PROVENANCE_KEYS = [
+  "content_origin",
+  "content_fingerprint",
+  "provider_id",
+  "requested_model_id",
+  "primary_model_id",
+  "fallback_model_id",
+  "effective_model_id",
+  "effective_model_alias",
+  "fallback_used",
+  "fallback_reason",
+  "fallback_outcome",
+  "attempts",
+  "pricing_class",
+  "prompt_version",
+  "profile_version",
+]
+const V3_FALLBACK_REASONS = new Set([
+  null,
+  "PRIMARY_TIMEOUT",
+  "PRIMARY_RATE_LIMITED",
+  "PRIMARY_UPSTREAM_UNAVAILABLE",
+])
+const V3_FALLBACK_OUTCOMES = new Set([
+  "NOT_NEEDED",
+  "NOT_CONFIGURED",
+  "NOT_ELIGIBLE",
+  "NOT_AVAILABLE",
+  "PAID_NOT_CONSENTED",
+  "CROSS_PROVIDER_NOT_CONSENTED",
+  "PROVIDER_UNVERIFIED",
+  "DEADLINE",
+  "USED",
+  "FAILED",
+])
+
+// v3 = v2 content rules + verifiable primary/fallback provenance. The response must describe
+// exactly the request: same primary and fallback, effective model one of the two, and a
+// fallback result only after exactly two attempts with a transient primary failure.
+const validateArticleSummaryResponseV3 = (
+  payload,
+  { entryId, requestId, modelId, fallbackModelId },
+) => {
+  const provenance = payload?.provenance
+  if (
+    !provenance ||
+    typeof provenance !== "object" ||
+    Array.isArray(provenance) ||
+    Object.keys(provenance).length !== V3_PROVENANCE_KEYS.length ||
+    !V3_PROVENANCE_KEYS.every((key) => key in provenance) ||
+    provenance.content_origin !== "ORIGINAL_MINIFLUX" ||
+    !FINGERPRINT_PATTERN.test(provenance.content_fingerprint ?? "") ||
+    provenance.requested_model_id !== modelId ||
+    provenance.primary_model_id !== modelId ||
+    provenance.fallback_model_id !== (fallbackModelId ?? null) ||
+    ![null, modelId, fallbackModelId].includes(provenance.effective_model_id) ||
+    typeof provenance.fallback_used !== "boolean" ||
+    provenance.fallback_used !== (provenance.effective_model_id === fallbackModelId) ||
+    !V3_FALLBACK_REASONS.has(provenance.fallback_reason) ||
+    !V3_FALLBACK_OUTCOMES.has(provenance.fallback_outcome) ||
+    ![0, 1, 2].includes(provenance.attempts) ||
+    (provenance.fallback_used &&
+      (provenance.attempts !== 2 ||
+        provenance.fallback_outcome !== "USED" ||
+        provenance.fallback_reason === null)) ||
+    ![null, "free", "paid"].includes(provenance.pricing_class) ||
+    !["provider_id", "effective_model_alias", "prompt_version"].every(
+      (key) => provenance[key] === null || isShortText(provenance[key], 128),
+    )
+  ) {
+    return null
+  }
+  // Reuse the v2 content rules on the same document with v2 provenance shape.
+  const asV2 = {
+    ...payload,
+    schema_version: "2",
+    provenance: {
+      content_origin: provenance.content_origin,
+      content_fingerprint: provenance.content_fingerprint,
+      provider_id: provenance.provider_id,
+      model_id: modelId,
+      effective_model_id: provenance.effective_model_alias,
+      prompt_version: provenance.prompt_version,
+      profile_version: provenance.profile_version,
+      fallback_used: false,
+    },
+  }
+  return validateArticleSummaryResponseV2(asV2, { entryId, requestId, modelId }) ? payload : null
+}
+
+export const validateArticleSummaryResponse = (
+  payload,
+  { entryId, requestId, modelId, fallbackModelId } = {},
+) => {
+  if (payload && typeof payload === "object" && payload.schema_version === "3") {
+    return modelId && fallbackModelId
+      ? validateArticleSummaryResponseV3(payload, { entryId, requestId, modelId, fallbackModelId })
+      : null
+  }
   if (payload && typeof payload === "object" && payload.schema_version === "2") {
-    return modelId
+    return modelId && !fallbackModelId
       ? validateArticleSummaryResponseV2(payload, { entryId, requestId, modelId })
       : null
   }
@@ -301,11 +399,8 @@ const isNullableNumber = (value) =>
 const isNullablePrice = (value) =>
   value === null || (typeof value === "string" && /^[0-9]{1,12}(\.[0-9]{1,12})?$/u.test(value))
 
-export const validateModelCatalog = (payload) => {
+const validateModelCatalogV1 = (payload) => {
   if (
-    !payload ||
-    typeof payload !== "object" ||
-    payload.schema_version !== "1" ||
     !(payload.default_model_id === null || CATALOG_MODEL_IDS.has(payload.default_model_id)) ||
     !Array.isArray(payload.models) ||
     payload.models.length > 8
@@ -341,13 +436,161 @@ export const validateModelCatalog = (payload) => {
       id: model.id,
       label: model.label,
       provider: model.provider,
+      status: model.available ? "AVAILABLE" : "DISABLED",
       available: model.available,
       unavailableReason: model.unavailable_reason,
       requiresPaidAuthorization: model.requires_paid_authorization,
+      checks: null,
       pricing: { ...model.pricing },
       limits: { ...model.limits },
       notices: [...model.notices],
     })
   }
-  return { default_model_id: payload.default_model_id, models }
+  return { default_model_id: payload.default_model_id, discoveryStatus: null, models }
+}
+
+// Schema v2: operator policy + read-only gateway discovery. IDs are dynamic but strictly shaped;
+// every other field is a closed vocabulary.
+const CATALOG_V2_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/u
+const CATALOG_V2_STATUSES = new Set([
+  "AVAILABLE",
+  "DISABLED",
+  "UNVERIFIED",
+  "NOT_DISCOVERED",
+  "OPERATOR_APPROVAL_REQUIRED",
+  "PAID_AUTHORIZATION_REQUIRED",
+  "UNSUPPORTED",
+])
+const CATALOG_V2_REASONS = new Set([
+  null,
+  "POLICY_INVALID",
+  "INFERENCE_DISABLED",
+  "EXTERNAL_TRANSFER_NOT_AUTHORIZED",
+  "TRANSFER_NOT_AUTHORIZED",
+  "NOT_CONFIGURED",
+  "DISCOVERY_DISABLED",
+  "GATEWAY_UNAVAILABLE",
+  "NOT_DISCOVERED",
+  "OPERATOR_APPROVAL_REQUIRED",
+  "NOT_COMPATIBLE",
+  "COMPATIBILITY_UNVERIFIED",
+  "PRICE_MISMATCH",
+  "PRICE_NOT_VERIFIED",
+  "PAID_NOT_AUTHORIZED",
+  "RUNTIME_UNAVAILABLE",
+])
+const CATALOG_V2_PRICING = new Set([
+  "verified_zero",
+  "verified_paid",
+  "operator_declared_zero",
+  "operator_declared_paid",
+  "gateway_published_only",
+  "mismatch",
+  "not_verified",
+])
+const CATALOG_V2_NOTICES = new Set([...CATALOG_NOTICES, "PRICE_VERIFIED_BY_GATEWAY"])
+const CATALOG_V2_CHECKS = [
+  "discovered",
+  "compatible",
+  "operator_approved",
+  "pricing_verified",
+  "paid_authorized",
+  "transfer_authorized",
+]
+const NULLABLE_CHECKS = new Set(["discovered", "compatible"])
+const isV2Id = (value) =>
+  typeof value === "string" &&
+  CATALOG_V2_ID_PATTERN.test(value) &&
+  value !== "auto" &&
+  value !== "none"
+
+const validateCatalogChecks = (checks) =>
+  Boolean(checks) &&
+  typeof checks === "object" &&
+  !Array.isArray(checks) &&
+  Object.keys(checks).length === CATALOG_V2_CHECKS.length &&
+  CATALOG_V2_CHECKS.every(
+    (key) => typeof checks[key] === "boolean" || (NULLABLE_CHECKS.has(key) && checks[key] === null),
+  )
+
+const validateModelCatalogV2 = (payload) => {
+  if (
+    !(payload.default_model_id === null || isV2Id(payload.default_model_id)) ||
+    !["DISABLED", "OK", "UNAVAILABLE"].includes(payload.discovery?.status) ||
+    !["LEGACY", "CONFIGURED", "INVALID"].includes(payload.policy?.status) ||
+    !Array.isArray(payload.models) ||
+    payload.models.length > 32
+  ) {
+    return null
+  }
+  const models = []
+  const seen = new Set()
+  for (const model of payload.models) {
+    if (
+      !model ||
+      typeof model !== "object" ||
+      !isV2Id(model.id) ||
+      seen.has(model.id) ||
+      !isShortText(model.label, 64) ||
+      !isShortText(model.provider, 64) ||
+      !CATALOG_V2_STATUSES.has(model.status) ||
+      typeof model.available !== "boolean" ||
+      model.available !== (model.status === "AVAILABLE") ||
+      !CATALOG_V2_REASONS.has(model.unavailable_reason) ||
+      model.available !== (model.unavailable_reason === null) ||
+      typeof model.requires_paid_authorization !== "boolean" ||
+      !validateCatalogChecks(model.checks) ||
+      !model.pricing ||
+      !CATALOG_V2_PRICING.has(model.pricing.status) ||
+      !isNullablePrice(model.pricing.input_usd_per_million) ||
+      !isNullablePrice(model.pricing.output_usd_per_million) ||
+      !model.limits ||
+      !["max_input_tokens", "max_output_tokens", "requests_per_minute", "timeout_seconds"].every(
+        (key) => isNullableNumber(model.limits[key]),
+      ) ||
+      !Array.isArray(model.notices) ||
+      model.notices.length > 4 ||
+      !model.notices.every((notice) => CATALOG_V2_NOTICES.has(notice))
+    ) {
+      return null
+    }
+    seen.add(model.id)
+    models.push({
+      id: model.id,
+      label: model.label,
+      provider: model.provider,
+      status: model.status,
+      available: model.available,
+      unavailableReason: model.unavailable_reason,
+      requiresPaidAuthorization: model.requires_paid_authorization,
+      checks: { ...model.checks },
+      pricing: { ...model.pricing },
+      limits: { ...model.limits },
+      notices: [...model.notices],
+    })
+  }
+  if (
+    payload.default_model_id !== null &&
+    !models.some((m) => m.id === payload.default_model_id && m.available)
+  ) {
+    return null
+  }
+  return {
+    default_model_id: payload.default_model_id,
+    discoveryStatus: payload.discovery.status,
+    models,
+  }
+}
+
+export const validateModelCatalog = (payload) => {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null
+  }
+  if (payload.schema_version === "2") {
+    return validateModelCatalogV2(payload)
+  }
+  if (payload.schema_version === "1") {
+    return validateModelCatalogV1(payload)
+  }
+  return null
 }

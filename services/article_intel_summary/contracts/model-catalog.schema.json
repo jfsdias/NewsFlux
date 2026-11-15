@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://newsflux.example/schemas/article-model-catalog-v1.json",
-  "title": "NewsFlux approved model catalog v1",
+  "$id": "https://newsflux.example/schemas/article-model-catalog-v2.json",
+  "title": "NewsFlux model catalog v2 (operator policy + read-only gateway discovery)",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -9,16 +9,32 @@
     "default_model_id",
     "profile_version",
     "default_profile",
+    "discovery",
+    "policy",
     "models"
   ],
   "properties": {
-    "schema_version": { "const": "1" },
-    "default_model_id": { "enum": ["s5-free", "mistral-small", null] },
+    "schema_version": { "const": "2" },
+    "default_model_id": {
+      "anyOf": [{ "$ref": "#/$defs/modelId" }, { "type": "null" }]
+    },
     "profile_version": { "const": "summary-profile-v1" },
     "default_profile": { "type": "object" },
+    "discovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": { "status": { "enum": ["DISABLED", "OK", "UNAVAILABLE"] } }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": { "status": { "enum": ["LEGACY", "CONFIGURED", "INVALID"] } }
+    },
     "models": {
       "type": "array",
-      "maxItems": 8,
+      "maxItems": 32,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -26,37 +42,87 @@
           "id",
           "label",
           "provider",
+          "status",
           "available",
           "unavailable_reason",
           "requires_paid_authorization",
+          "checks",
           "pricing",
           "limits",
           "notices"
         ],
         "properties": {
-          "id": { "enum": ["s5-free", "mistral-small"] },
-          "label": { "type": "string", "maxLength": 64 },
-          "provider": { "type": "string", "maxLength": 64 },
+          "id": { "$ref": "#/$defs/modelId" },
+          "label": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "provider": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "status": {
+            "enum": [
+              "AVAILABLE",
+              "DISABLED",
+              "UNVERIFIED",
+              "NOT_DISCOVERED",
+              "OPERATOR_APPROVAL_REQUIRED",
+              "PAID_AUTHORIZATION_REQUIRED",
+              "UNSUPPORTED"
+            ]
+          },
           "available": { "type": "boolean" },
           "unavailable_reason": {
             "enum": [
               null,
+              "POLICY_INVALID",
               "INFERENCE_DISABLED",
               "EXTERNAL_TRANSFER_NOT_AUTHORIZED",
+              "TRANSFER_NOT_AUTHORIZED",
               "NOT_CONFIGURED",
-              "PAID_NOT_AUTHORIZED",
+              "DISCOVERY_DISABLED",
+              "GATEWAY_UNAVAILABLE",
+              "NOT_DISCOVERED",
+              "OPERATOR_APPROVAL_REQUIRED",
+              "NOT_COMPATIBLE",
+              "COMPATIBILITY_UNVERIFIED",
+              "PRICE_MISMATCH",
               "PRICE_NOT_VERIFIED",
+              "PAID_NOT_AUTHORIZED",
               "RUNTIME_UNAVAILABLE"
             ]
           },
           "requires_paid_authorization": { "type": "boolean" },
+          "checks": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "discovered",
+              "compatible",
+              "operator_approved",
+              "pricing_verified",
+              "paid_authorized",
+              "transfer_authorized"
+            ],
+            "properties": {
+              "discovered": { "type": ["boolean", "null"] },
+              "compatible": { "type": ["boolean", "null"] },
+              "operator_approved": { "type": "boolean" },
+              "pricing_verified": { "type": "boolean" },
+              "paid_authorized": { "type": "boolean" },
+              "transfer_authorized": { "type": "boolean" }
+            }
+          },
           "pricing": {
             "type": "object",
             "additionalProperties": false,
             "required": ["status", "input_usd_per_million", "output_usd_per_million"],
             "properties": {
               "status": {
-                "enum": ["operator_declared_zero", "operator_declared_paid", "not_verified"]
+                "enum": [
+                  "verified_zero",
+                  "verified_paid",
+                  "operator_declared_zero",
+                  "operator_declared_paid",
+                  "gateway_published_only",
+                  "mismatch",
+                  "not_verified"
+                ]
               },
               "input_usd_per_million": { "type": ["string", "null"], "maxLength": 32 },
               "output_usd_per_million": { "type": ["string", "null"], "maxLength": 32 }
@@ -85,12 +151,33 @@
               "enum": [
                 "ARTICLE_SENT_TO_MODEL_PROVIDER",
                 "PRICE_DECLARED_BY_OPERATOR",
+                "PRICE_VERIFIED_BY_GATEWAY",
                 "PAID_INFERENCE"
               ]
             }
           }
-        }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "available": { "const": true } } },
+            "then": {
+              "properties": {
+                "status": { "const": "AVAILABLE" },
+                "unavailable_reason": { "const": null }
+              }
+            },
+            "else": {
+              "properties": {
+                "status": { "not": { "const": "AVAILABLE" } },
+                "unavailable_reason": { "type": "string" }
+              }
+            }
+          }
+        ]
       }
     }
+  },
+  "$defs": {
+    "modelId": { "type": "string", "pattern": "^(?!(?:auto|none)$)[a-z0-9][a-z0-9._-]{0,63}$" }
   }
 }

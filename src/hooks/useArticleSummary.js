@@ -6,7 +6,7 @@ import { authState } from "@/store/authState"
 import { getDataSessionRevision } from "@/store/dataState"
 import { settingsState } from "@/store/settingsState"
 import isArticleIntelligenceEnabled from "@/utils/article-intelligence-feature"
-import { buildSummaryProfile, resolveSummaryModel } from "@/utils/article-intelligence-profile"
+import { buildSummaryProfile, resolveSummaryRouting } from "@/utils/article-intelligence-profile"
 import { isCurrentArticleSummaryRequest } from "@/utils/article-intelligence-summary"
 import { getAuthSessionKey, hasProvisionedApiKey } from "@/utils/auth"
 
@@ -23,6 +23,10 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
   const settings = useStore(settingsState, {
     keys: [
       "aiSummaryModel",
+      "aiSummaryFallbackEnabled",
+      "aiSummaryFallbackModel",
+      "aiSummaryFallbackAllowPaid",
+      "aiSummaryFallbackAllowCrossProvider",
       "aiSummaryLength",
       "aiSummaryFocus",
       "aiSummarySections",
@@ -115,7 +119,7 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
       if (!catalog || !isCurrent()) {
         return
       }
-      const selection = resolveSummaryModel(settings.aiSummaryModel, catalog)
+      const selection = resolveSummaryRouting(settings, catalog)
       if (!selection.modelId) {
         setModelUnavailable()
         return
@@ -125,6 +129,8 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
         entryId,
         signal: controller.signal,
         modelId: selection.modelId,
+        fallbackModelId: selection.fallbackModelId,
+        consent: selection.consent,
         profile,
       })
       if (!result || !isCurrent()) {
@@ -142,6 +148,8 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
           status: result.summary.status,
           summary: result.summary,
           modelLabel: selection.entry.label,
+          // Labels for verifiable primary/fallback provenance (catalog IDs -> display labels).
+          modelLabels: Object.fromEntries(catalog.models.map((model) => [model.id, model.label])),
         })
       } else if (result.kind === "error") {
         setState({

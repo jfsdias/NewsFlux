@@ -1,8 +1,16 @@
 // Closed, versioned summary options. The browser stores and sends identifiers only;
 // the Summary API maps them to fixed server-side instructions.
 const SUMMARY_PROFILE_VERSION = "summary-profile-v1"
-export const SUMMARY_MODEL_IDS = ["s5-free", "mistral-small"]
+// Catalog IDs are chosen by the operator policy (dynamic catalog); the Reader only checks their
+// shape. Whether a model may be used is decided by the server catalog on every request.
+const SUMMARY_MODEL_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/u
 export const SUMMARY_MODEL_AUTO = "auto"
+// "auto" and "none" are reserved setting values, never catalog IDs.
+export const isSummaryModelId = (value) =>
+  typeof value === "string" &&
+  SUMMARY_MODEL_ID_PATTERN.test(value) &&
+  value !== "auto" &&
+  value !== "none"
 export const SUMMARY_LENGTHS = ["brief", "standard", "detailed"]
 export const SUMMARY_FOCUSES = [
   "factual_synthesis",
@@ -83,7 +91,7 @@ export const resolveSummaryModel = (preference, catalog) => {
     return { modelId: null, reason: "catalog_unavailable" }
   }
   const modelId = preference === SUMMARY_MODEL_AUTO ? catalog.default_model_id : preference
-  if (!SUMMARY_MODEL_IDS.includes(modelId)) {
+  if (!isSummaryModelId(modelId)) {
     return { modelId: null, reason: "model_unavailable" }
   }
   const entry = catalog.models.find((model) => model.id === modelId)
@@ -91,4 +99,30 @@ export const resolveSummaryModel = (preference, catalog) => {
     return { modelId: null, reason: "model_unavailable" }
   }
   return { modelId, entry, reason: null }
+}
+
+export const SUMMARY_FALLBACK_NONE = "none"
+
+// Primary + optional fallback. The fallback is sent only when explicitly enabled, well-formed
+// and different from the primary; consent for paid / cross-provider fallback is explicit and
+// off by default. A saved fallback is never swapped for another model on the client: the server
+// revalidates it against the current catalog at the moment of the (single) secondary attempt.
+export const resolveSummaryRouting = (settings = {}, catalog) => {
+  const primary = resolveSummaryModel(settings.aiSummaryModel, catalog)
+  const fallback = settings.aiSummaryFallbackModel
+  const fallbackModelId =
+    primary.modelId &&
+    settings.aiSummaryFallbackEnabled === true &&
+    isSummaryModelId(fallback) &&
+    fallback !== primary.modelId
+      ? fallback
+      : null
+  return {
+    ...primary,
+    fallbackModelId,
+    consent: {
+      paid: settings.aiSummaryFallbackAllowPaid === true,
+      cross_provider: settings.aiSummaryFallbackAllowCrossProvider === true,
+    },
+  }
 }

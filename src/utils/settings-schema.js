@@ -1,12 +1,13 @@
 import {
   DEFAULT_SUMMARY_FOCUS,
   DEFAULT_SUMMARY_SECTIONS,
+  isSummaryModelId,
   sanitizeSummaryFocus,
   sanitizeSummarySections,
+  SUMMARY_FALLBACK_NONE,
   SUMMARY_LANGUAGES,
   SUMMARY_LENGTHS,
   SUMMARY_MODEL_AUTO,
-  SUMMARY_MODEL_IDS,
 } from "@/utils/article-intelligence-profile"
 import { MAX_ENTRIES_PER_PAGE, MIN_ENTRIES_PER_PAGE } from "@/utils/constants"
 import {
@@ -118,8 +119,23 @@ const SETTINGS_SCHEMA = {
   aiSummaryFocus: { defaultValue: DEFAULT_SUMMARY_FOCUS, sanitize: sanitizeSummaryFocus },
   aiSummaryLanguage: enumSetting("pt-BR", SUMMARY_LANGUAGES),
   aiSummaryLength: enumSetting("standard", SUMMARY_LENGTHS),
-  aiSummaryModel: enumSetting(SUMMARY_MODEL_AUTO, [SUMMARY_MODEL_AUTO, ...SUMMARY_MODEL_IDS]),
+  // Dynamic catalog: any well-formed catalog ID is kept (even if the model later disappears, so
+  // it is never silently replaced); availability is checked against the server catalog.
+  aiSummaryModel: {
+    defaultValue: SUMMARY_MODEL_AUTO,
+    sanitize: (value, fallback) =>
+      value === SUMMARY_MODEL_AUTO || isSummaryModelId(value) ? value : fallback,
+  },
   aiSummarySections: { defaultValue: DEFAULT_SUMMARY_SECTIONS, sanitize: sanitizeSummarySections },
+  // Fallback is off by default; consent for paid or cross-provider fallback is explicit.
+  aiSummaryFallbackEnabled: booleanSetting(false),
+  aiSummaryFallbackModel: {
+    defaultValue: SUMMARY_FALLBACK_NONE,
+    sanitize: (value, fallback) =>
+      value === SUMMARY_FALLBACK_NONE || isSummaryModelId(value) ? value : fallback,
+  },
+  aiSummaryFallbackAllowPaid: booleanSetting(false),
+  aiSummaryFallbackAllowCrossProvider: booleanSetting(false),
   articleListLayout: enumSetting("column", ARTICLE_LIST_LAYOUTS),
   articleWidth: numberSetting(75, MIN_ARTICLE_WIDTH, MAX_ARTICLE_WIDTH, { precision: 2 }),
   checkForUpdates: booleanSetting(false),

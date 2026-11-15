@@ -4,8 +4,23 @@
   max-width: 360px;
 }
 
+/* Fallback: switch, then the list, then the consents, stacked in one column. */
+.ai-fallback-control {
+  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* The fallback consents are long sentences: they wrap within the column like the lists above,
+   one per line under the fallback list, instead of widening the row. */
+.ai-fallback-consent.arco-checkbox {
+  max-width: 360px;
+}
+
 .ai-model-catalog .arco-radio,
-.ai-checkbox-list .arco-checkbox {
+.ai-checkbox-list .arco-checkbox,
+.ai-fallback-consent.arco-checkbox {
   align-items: flex-start;
   display: flex;
   min-height: 44px;
@@ -45,9 +60,26 @@
   width: 220px;
 }
 
+/* The list lives in <body>: never wider than the screen; long names wrap instead of being cut.
+   The touch-sized minimum height of options on phones (App.css) is kept; only wrapped lines
+   get a normal line height. */
+.ai-language-select-popup {
+  max-width: calc(100vw - 16px);
+}
+
+.ai-language-select-popup .arco-select-popup .arco-select-option {
+  display: flex;
+  align-items: center;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  line-height: 20px;
+  white-space: normal;
+}
+
 @media screen and (max-width: 768px) {
   .ai-model-catalog,
-  .ai-checkbox-list {
+  .ai-checkbox-list,
+  .ai-fallback-consent.arco-checkbox {
     max-width: none;
   }
 
