@@ -1369,3 +1369,19 @@ Current sequence: this planning documentation PR (`PWA_ARCHITECTURE.md`, `DESIGN
 - The historical PR #44 promotion remains in the completion history. Current production state is recorded above.
 - Docs-only work does not need a production deployment.
 - Do not delete rollback images or backups incidentally.
+
+---
+
+## AI-UI-01 — reconciled state after PR250
+
+Main at the reconciliation baseline: `4ea6581d1c8641e8619aa974e04b856695831e10` (PR #250 merged). This section is an updated current-state addendum. Earlier roadmap proposals remain historical, not pending implementation commitments.
+
+**AI-UI-01A:** catalog and server-authorized model routing exist in merged code (#240 and #248). Dynamic gateway discovery is optional and disabled in the operator-reported release. Availability and pricing still depend on live gateway authorization, budget, provider terms, key scope, privacy, and pricing evidence. No inference or external article transfer is authorized.
+
+**AI-UI-01B:** Reader model selection, primary/fallback consent and provenance exist in merged code (#241 and #249); the language selector's visual layout was corrected in #250. Mac, iPhone and Fold/Tab QA were reported by the operator. These gates do not demonstrate authorized live inference.
+
+**AI-UI-01C:** the original plan assumed no persistent selection. In current code, `src/store/settingsState.js` uses `persistentAtom("settings", ...)` and `src/utils/settings-schema.js` includes the model and fallback consent fields. Browser-level persistence exists. This is not a new server-side or Miniflux source of truth. Account-scope, lifetime, cross-device sync, revocation and privacy require a separate architecture decision before expansion.
+
+**AI-UI-01D:** optional extension to other editorial features remains on hold. The Reader's on-demand-only contract, backend authorizations and Miniflux source-of-truth rules are unchanged.
+
+**Release boundary:** the operator-reported #250 exact-main deployment has inference, paid use, external transfer, fallback and discovery disabled. No merge, deploy, key changes or activation is authorized by this documentation. WallHop host 111 is a separate held architectural dependency, tracked independently.
