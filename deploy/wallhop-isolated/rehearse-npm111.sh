@@ -133,12 +133,17 @@ done
 docker inspect "$READER" "$RELAY" | python -c '
 import json,sys
 a,b=json.load(sys.stdin)
-assert set(a["NetworkSettings"]["Networks"]) == {"newsflux_wallhop_reader_isolated","newsflux_wallhop_egress_isolated"}
-assert set(b["NetworkSettings"]["Networks"]) == {"newsflux_wallhop_egress_isolated","npm-proxyyml_default"}
-assert a["HostConfig"]["ReadonlyRootfs"] and b["HostConfig"]["ReadonlyRootfs"]
-assert not a["HostConfig"]["PortBindings"] and not b["HostConfig"]["PortBindings"]
-assert all(m["Type"] != "volume" for m in a["Mounts"])
-assert any(m["Destination"] == "/data" for m in a["Mounts"])
+checks = {
+    "RECOVERY_NETWORKS": set(a["NetworkSettings"]["Networks"]) == {"newsflux_wallhop_reader_isolated","newsflux_wallhop_egress_isolated"},
+    "RELAY_NETWORKS": set(b["NetworkSettings"]["Networks"]) == {"newsflux_wallhop_egress_isolated","npm-proxyyml_default"},
+    "READONLY_ROOTFS": bool(a["HostConfig"]["ReadonlyRootfs"]) and bool(b["HostConfig"]["ReadonlyRootfs"]),
+    "NO_PUBLISHED_PORTS": not a["HostConfig"]["PortBindings"] and not b["HostConfig"]["PortBindings"],
+    "RECOVERY_NO_VOLUME": all(m["Type"] != "volume" for m in a["Mounts"]),
+    "RECOVERY_TMPFS_DATA": any(m["Destination"] == "/data" and m["Type"] == "tmpfs" for m in a["Mounts"]),
+}
+for name, passed in checks.items():
+    print("DISPOSABLE_" + name + "=" + ("PASS" if passed else "FAIL"), flush=True)
+if not all(checks.values()): sys.exit(2)
 ' || fail CANDIDATE_RUNTIME_NETWORK_OR_VOLUME
 
 docker exec "$READER" python -c '
