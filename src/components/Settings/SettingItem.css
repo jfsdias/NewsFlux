@@ -10,7 +10,10 @@
 }
 
 .setting-row-header .arco-typography {
-  overflow-wrap: anywhere;
+  /* Arco typography sets word-break: break-all, which splits ordinary words ("t|he").
+     Break only words that cannot fit on a line (long URLs). */
+  word-break: normal;
+  overflow-wrap: break-word;
 }
 
 .setting-row-header .arco-typography-secondary {
