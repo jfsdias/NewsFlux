@@ -9,6 +9,8 @@
 #   sudo -E bash ai-functional-release.sh update-caddy     # adds the GET-only catalog route (in-place, validated)
 #   sudo -E bash ai-functional-release.sh promote-reader   # new Reader image, readiness proven by HTTP probe
 #   sudo -E bash ai-functional-release.sh smoke            # fail-closed production checks + receipt
+#   sudo -E bash ai-functional-release.sh s5-attestation-path   # prints $RELEASE_DIR/s5-key-attestation.json
+#   sudo python3 s5_key_audit.py ... --out "$(sudo -E bash ai-functional-release.sh s5-attestation-path)"
 #   sudo -E bash ai-functional-release.sh s5-preflight     # read-only LiteLLM key/model/price/budget/logging gates
 #   sudo -E bash ai-functional-release.sh enable-s5        # only after s5-preflight PASS (re-run internally)
 #   sudo -E bash ai-functional-release.sh all              # prepare..smoke, stops at the first failed gate
@@ -64,10 +66,15 @@ prepare() {
   mkdir -p "$RELEASE_DIR"
   local filter=()
   [[ "$REPO_URL" == https://* ]] && filter=(--filter=blob:none)
-  [[ -d "$SRC/.git" ]] || git clone --quiet "${filter[@]}" --no-checkout "$REPO_URL" "$SRC"
-  git -C "$SRC" fetch --quiet origin main
-  git -C "$SRC" merge-base --is-ancestor "$APPROVED_SHA" origin/main || die SOURCE_GATE APPROVED_SHA_NOT_ON_MAIN
-  git -C "$SRC" -c advice.detachedHead=false checkout --quiet --force "$APPROVED_SHA"
+  # R12F-09: source is not secret. Check it out with umask 022 so build-context modes are
+  # readable by non-root image users (the Dockerfiles also normalize modes defensively).
+  (
+    umask 022
+    [[ -d "$SRC/.git" ]] || git clone --quiet "${filter[@]}" --no-checkout "$REPO_URL" "$SRC"
+    git -C "$SRC" fetch --quiet origin main
+    git -C "$SRC" merge-base --is-ancestor "$APPROVED_SHA" origin/main || exit 3
+    git -C "$SRC" -c advice.detachedHead=false checkout --quiet --force "$APPROVED_SHA"
+  ) || die SOURCE_GATE APPROVED_SHA_NOT_ON_MAIN_OR_CHECKOUT_FAILED
   require_source
   gate RELEASE_DIR "$RELEASE_DIR"
   gate PREPARE PASS
@@ -123,7 +130,37 @@ build() {
     [[ "$(image_revision "newsflux-$kind:$APPROVED_SHA")" == "$APPROVED_SHA" ]] || die BUILD "${kind^^}_REVISION_LABEL_MISMATCH"
     gate "${kind^^}_IMAGE_ID" "$(image_id "newsflux-$kind:$APPROVED_SHA")"
   done
+  candidate_start_gate
   gate BUILD PASS
+}
+
+# R12F-09: prove the candidate Summary image starts and serves /healthz as its own non-root user,
+# isolated (no network, synthetic non-secret settings), BEFORE any production container is touched.
+candidate_start_gate() {
+  local image="newsflux-summary:$APPROVED_SHA" cid ok=0 i
+  cid="$(docker run -d --network none \
+    -e NEWSFLUX_AI_MINIFLUX_BASE_URL=https://miniflux.invalid -e NEWSFLUX_AI_ALLOWED_WEB_ORIGINS=https://newsflux.invalid \
+    "$image")"
+  for i in $(seq 1 30); do
+    if docker exec "$cid" python -c "import json,urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8788/healthz', timeout=2); assert json.load(r)['status']=='ok'" >/dev/null 2>&1; then ok=1; break; fi
+    [[ "$(docker inspect -f '{{.State.Running}}' "$cid")" == true ]] || break
+    sleep 1
+  done
+  if [[ "$ok" != 1 ]]; then
+    gate CANDIDATE_START "FAIL status=$(docker inspect -f '{{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}}' "$cid")"
+    # Sanitized log tail goes to a private file (best effort); never to the operator terminal.
+    if ( umask 077; docker logs --tail 40 "$cid" 2>&1 \
+      | sed -E 's#https?://[^ ]+#[URL]#g; s#(authorization|bearer|token|key|secret|password)[^ ]*#[REDACTED]#Ig' \
+      >"$RELEASE_DIR/candidate-start-failure.log" ) 2>/dev/null; then
+      gate FORENSIC_CAPTURE CAPTURED
+    else
+      gate FORENSIC_CAPTURE UNAVAILABLE
+    fi
+    docker rm -f "$cid" >/dev/null
+    die BUILD CANDIDATE_DOES_NOT_START
+  fi
+  docker rm -f "$cid" >/dev/null
+  gate CANDIDATE_START PASS
 }
 
 promote() { # service kind [extra plan args...]
@@ -144,7 +181,13 @@ update_caddy() {
   caddy="$(caddy_source)"
   new="$SRC/deploy/article-intel-pilot/Caddyfile"
   backup="$RELEASE_DIR/Caddyfile.before-$EXPECTED_ACTIVE_CADDY_SHA"
-  if [[ "$(sha256sum "$caddy" | cut -d' ' -f1)" == "$(sha256sum "$new" | cut -d' ' -f1)" ]]; then gate CADDY_UPDATE ALREADY_APPLIED; return; fi
+  if [[ "$(sha256sum "$caddy" | cut -d' ' -f1)" == "$(sha256sum "$new" | cut -d' ' -f1)" ]]; then
+    # Upgrade from an installed Stage 1: this release does not touch Caddy. Record the hash so that
+    # rollback-caddy for this release is an explicit, verified no-op instead of BACKUP_MISSING.
+    sha256sum "$caddy" | cut -d' ' -f1 >"$RELEASE_DIR/caddy-unchanged.sha256"
+    gate CADDY_UPDATE ALREADY_APPLIED
+    return
+  fi
   [[ "$(sha256sum "$caddy" | cut -d' ' -f1)" == "$EXPECTED_ACTIVE_CADDY_SHA" ]] || die CADDY_UPDATE ACTIVE_CADDY_DRIFT
   docker run --rm --network none -e NEWSFLUX_PILOT_TRUSTED_PROXY_IP=127.0.0.1 -v "$new:/etc/caddy/Caddyfile:ro" \
     "$(docker inspect -f '{{.Image}}' "$READER_CONTAINER")" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1 \
@@ -161,8 +204,15 @@ update_caddy() {
 }
 
 rollback_caddy() {
-  local caddy backup="$RELEASE_DIR/Caddyfile.before-$EXPECTED_ACTIVE_CADDY_SHA"
+  local caddy backup="$RELEASE_DIR/Caddyfile.before-$EXPECTED_ACTIVE_CADDY_SHA" unchanged="$RELEASE_DIR/caddy-unchanged.sha256"
   caddy="$(caddy_source)"
+  if [[ ! -f "$backup" && -f "$unchanged" ]]; then
+    # This release found the route already installed and changed nothing: nothing to restore, but
+    # the active file must still be exactly what it found.
+    [[ "$(sha256sum "$caddy" | cut -d' ' -f1)" == "$(cat "$unchanged")" ]] || die CADDY_ROLLBACK DRIFT_SINCE_RELEASE
+    gate CADDY_ROLLBACK NOT_APPLICABLE_UNCHANGED_BY_THIS_RELEASE
+    return
+  fi
   [[ -f "$backup" ]] || die CADDY_ROLLBACK BACKUP_MISSING
   cat "$backup" >"$caddy"
   docker exec "$READER_CONTAINER" caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1 || die CADDY_ROLLBACK RELOAD_FAILED
@@ -226,8 +276,16 @@ smoke() {
   echo "NEXT=open NewsFlux over HTTPS > Settings > Reading > Article intelligence (catalog must list S5)."
 }
 
+S5_KEY_ATTESTATION="$RELEASE_DIR/s5-key-attestation.json"
+
 s5_preflight() {
-  docker exec "$(summary_container)" python -m services.article_intel_summary.s5_preflight
+  # The attestation (written by s5_key_audit.py on the host with a read-only admin credential) goes in on
+  # stdin; the admin credential itself never enters the Summary container.
+  if [[ -f "$S5_KEY_ATTESTATION" && ! -L "$S5_KEY_ATTESTATION" ]]; then
+    docker exec -i "$(summary_container)" python -m services.article_intel_summary.s5_preflight --attestation-stdin <"$S5_KEY_ATTESTATION"
+  else
+    docker exec "$(summary_container)" python -m services.article_intel_summary.s5_preflight
+  fi
 }
 
 enable_s5() {
@@ -261,6 +319,7 @@ case "${1:-}" in
   update-caddy) update_caddy ;;
   promote-reader) require_source; promote "$(reader_service)" reader --ready-probe "$READER_PROBE" ;;
   smoke) smoke ;;
+  s5-attestation-path) require_source; echo "$S5_KEY_ATTESTATION" ;;
   s5-preflight) s5_preflight ;;
   enable-s5) enable_s5 ;;
   disable-s5) require_source; release_tool rollback --manifest "$RELEASE_DIR/s5-enable/manifest.json" ;;
@@ -273,5 +332,5 @@ case "${1:-}" in
     update_caddy
     promote "$(reader_service)" reader --ready-probe "$READER_PROBE" || { gate ALL "STOPPED_AT_PROMOTE_READER"; exit 1; }
     smoke ;;
-  *) sed -n '2,18p' "$0"; exit 2 ;;
+  *) sed -n '2,/^# Scope:/p' "$0" | sed '$d'; exit 2 ;;
 esac
