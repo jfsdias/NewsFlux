@@ -178,7 +178,9 @@ set +e; op activate-infra >"$work/npm1.out" 2>&1; rc=$?; set -e
   && ok NPM_HOST_TARGETING_SIDECAR_BLOCKS || { cat "$work/npm1.out"; ko NPM_HOST_TARGETING_SIDECAR_BLOCKS "rc=$rc"; }
 grep -q 'newsflux-pr188-content-fallback' "$work/npm1.out" && ko NPM_CONF_CONTENT_NOT_PRINTED || ok NPM_CONF_CONTENT_NOT_PRINTED
 printf 'server {\n  # set $server "newsflux-pr188-content-fallback";  (retired)\n  set $server "unrelated-app";\n}\n' >"$work/npm-proxy-host/111.conf"
-op preflight 2>/dev/null | grep -qx 'NPM_UPSTREAM_GATE=PASS' && ok NPM_COMMENTED_REFERENCE_IGNORED || ko NPM_COMMENTED_REFERENCE_IGNORED
+# Capture first: with pipefail, `grep -q` closing the pipe early would fail the pipeline.
+pf="$(op preflight 2>/dev/null || true)"
+grep -qx 'NPM_UPSTREAM_GATE=PASS' <<<"$pf" && ok NPM_COMMENTED_REFERENCE_IGNORED || { echo "$pf" | grep NPM_; ko NPM_COMMENTED_REFERENCE_IGNORED; }
 rm -f "$work/npm-proxy-host/111.conf"
 [[ "$(sha256sum "$work"/npm-proxy-host/*.conf)" == "$npm_conf_before" ]] && ok NPM_CONF_NEVER_MODIFIED || ko NPM_CONF_NEVER_MODIFIED
 
