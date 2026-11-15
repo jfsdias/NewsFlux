@@ -103,6 +103,8 @@ class G5DarkDeployAdmissionTests(unittest.TestCase):
         self.assertLess(s.index("G5_EXACT_SOURCE=PASS"), s.index("docker compose -f \"$COMPOSE\" -f \"$OVERRIDE\" up"))
         self.assertIn("G5_IPAM_GATE=PASS", s)
         self.assertIn("RELAY_IMAGE_NOT_APPROVED_HAPROXY", s)
+        self.assertIn("G5_WRAPPER_SOURCE_IDENTITY=PASS", s)
+        self.assertIn("WRAPPER_BYTES_DRIFT", s)
         self.assertIn("haproxy:3.0.5-alpine", s)
 
     def test_failed_start_rolls_back_only_new_project(self):
