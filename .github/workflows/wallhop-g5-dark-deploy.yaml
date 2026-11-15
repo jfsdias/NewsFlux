@@ -4,6 +4,8 @@ on:
     paths:
       - "deploy/wallhop-isolated/g5-dark-deploy.sh"
       - "deploy/wallhop-isolated/test_g5_dark_deploy.py"
+      - "deploy/wallhop-isolated/g5-dark-teardown.sh"
+      - "deploy/wallhop-isolated/test_g5_dark_teardown.py"
       - "deploy/wallhop-isolated/G5_DEPLOY.md"
       - ".github/workflows/wallhop-g5-dark-deploy.yaml"
   workflow_dispatch:
@@ -22,7 +24,9 @@ jobs:
         run: |
           set -euo pipefail
           bash -n deploy/wallhop-isolated/g5-dark-deploy.sh
+          bash -n deploy/wallhop-isolated/g5-dark-teardown.sh
           python -m unittest discover -s deploy/wallhop-isolated -p "test_g5_dark_deploy.py" -v
+          python -m unittest discover -s deploy/wallhop-isolated -p "test_g5_dark_teardown.py" -v
       - name: Preserve baseline G4 and isolated topology tests
         run: |
           set -euo pipefail
