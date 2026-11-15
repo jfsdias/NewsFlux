@@ -147,6 +147,11 @@ echo "G5_PROTECTED_PRESTATE=PASS"
 
 REMOTE_MAIN="$(git -C "$REPO" ls-remote origin refs/heads/main | awk '{print $1}')" || block REMOTE_MAIN_UNAVAILABLE
 if [[ "$REMOTE_MAIN" != "$SOURCE_SHA" ]]; then block REMOTE_MAIN_DRIFT; fi
+# Execute may fetch the exact approved main ref; check-only stays fetch-free.
+if [[ "$MODE" == "--execute" ]]; then
+  git -C "$REPO" fetch --quiet --no-tags origin refs/heads/main || block SOURCE_FETCH
+  [[ "$(git -C "$REPO" rev-parse FETCH_HEAD)" == "$SOURCE_SHA" ]] || block SOURCE_FETCH_DRIFT
+fi
 git -C "$REPO" cat-file -e "${SOURCE_SHA}^{commit}" || block EXACT_COMMIT_NOT_LOCAL
 echo "G5_EXACT_SOURCE=PASS"
 if [[ "$MODE" == "--check-only" ]]; then
@@ -159,8 +164,8 @@ if [[ "$MODE" == "--check-only" ]]; then
   exit 0
 fi
 
-git -C "$REPO" fetch --quiet --no-tags origin refs/heads/main || block SOURCE_FETCH
-[[ "$(git -C "$REPO" rev-parse FETCH_HEAD)" == "$SOURCE_SHA" ]] || block SOURCE_FETCH_DRIFT
+# No descendant of the deployment directory may redirect writes via symlinks.
+[[ ! -L "/dockerdata/compose/newsflux" && ! -L "/dockerdata/compose/newsflux/wallhop-dark" ]] || block RELEASE_PARENT_SYMLINK
 [[ ! -L "$RELEASE_ROOT" ]] || block RELEASE_ROOT_SYMLINK
 mkdir -p -m 0700 -- "$RELEASE_ROOT" || block RELEASE_ROOT_CREATE
 [[ ! -L "$RELEASE_ROOT" ]] || block RELEASE_ROOT_SYMLINK
