@@ -46,7 +46,7 @@ class G4IPAMTests(unittest.TestCase):
 
     def test_reject_prefixes_that_overlap_each_other(self):
         with self.assertRaisesRegex(GateError, "CANDIDATE_OVERLAP"):
-            validate_inventory("10.240.0.96/28", "10.240.0.104/29", [], vpn_verified=True)
+            validate_inventory("10.240.0.96/28", "10.240.0.96/28", [], vpn_verified=True)
 
     def test_reject_wrong_size_or_unspecified_candidate(self):
         for reader in ("10.240.0.0/16", "10.240.0.100/28", "0.0.0.0/0"):
