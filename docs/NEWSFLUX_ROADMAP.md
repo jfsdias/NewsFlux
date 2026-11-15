@@ -2084,3 +2084,19 @@ DESIGN-CLOSE-00 is the first visual activity and is a read-only audit. No token 
 The owner-approved order is: (1) finish visual evolution through evidence-led work, beginning with the read-only DESIGN-CLOSE-00 audit; (2) conclude selective upstream review/integration without bulk sync, then consider optional package maintenance only if justified; (3) resume deferred roadmap items after their product or architecture gates. There is no automatic implementation queue beyond DESIGN-CLOSE-00.
 
 All earlier snapshots remain historical. One purpose per PR; no blind upstream sync; Miniflux remains source of truth; no new persistent NewsFlux content state without an architecture decision; All/Unread remain chronological; deploy exact approved SHA only; no merge without explicit authorization.
+
+---
+
+## AI-UI-01 — current implementation and residual gates
+
+This section reconciles the old AI-UI-01 draft against GitHub main `4ea6581d1c8641e8619aa974e04b856695831e10` on 2026-11-15. It is a documentation-only proposal for closing stale requirements; it does not retroactively authorize activation or supersede the original evidence.
+
+**AI-UI-01A — implemented in source, runtime disabled.** The operator-policy catalog, an authenticated catalog GET, model-specific availability and safe routing are present in `services/article_intel_summary/catalog.py` and `src/apis/article-intelligence.js`, following PRs #240/#248. Gateway discovery remains optional and was absent/default OFF at the latest operator-reported runtime check. Provider price, key scope, budgets, retention, legal terms and permission for external transfer require separate live gates.
+
+**AI-UI-01B — implemented in source, visual QA reported.** `src/components/Settings/ArticleIntelligence.jsx` provides model choices, notices, pricing, constraints and primary/fallback consent; `src/utils/article-intelligence-profile.js` builds the request. PRs #241/#249/#250 cover this code. Mac, iPhone and Fold/Tab tests were user-reported PASS. This does not authorize model execution.
+
+**AI-UI-01C — client persistence already present; architecture review pending.** The original draft's request/session-only assumption is inaccurate: `src/store/settingsState.js` uses `persistentAtom("settings", ...)`, and `src/utils/settings-schema.js` includes `aiSummaryModel`, fallback model and consent. This is browser-local persistence, not a Miniflux or backend database. New server storage, account sync, preference revocation and privacy semantics remain HOLD pending a separate architecture decision.
+
+**AI-UI-01D — hold.** Any extension to editorial features requires separate function contracts and authorization.
+
+**Sequencing:** review this current-main documentation PR independently of WallHop. Do not merge the old #236 as written, reactivate inference, change paid/external transfer or model discovery, or alter NPM host 111, PR188, LiteLLM, Miniflux, Reader, Caddy or production. PR #244 remains Draft/HOLD. Deploy only an exact user-approved commit in a separate later release.
