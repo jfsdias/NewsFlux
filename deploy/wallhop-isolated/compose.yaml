@@ -1,0 +1,68 @@
+# Isolated dark WallHop candidate. NEVER an overlay of the PR188 sidecar.
+# No Reader route, provider calls, new durable volume or NPM host edits.
+name: newsflux-wallhop-isolated
+
+services:
+  wallhop-recovery:
+    container_name: newsflux-wallhop-recovery
+    image: "${WALLHOP_SIDECAR_IMAGE:?exact approved image digest required}"
+    pull_policy: never
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - "/data:rw,noexec,nosuid,size=32m,uid=10001,gid=10001,mode=0700"
+    networks:
+      reader_internal:
+        aliases: [wallhop-recovery-reader]
+      egress_internal: {}
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+      CONTENT_FALLBACK_DB_PATH: "/data/content-fallback.sqlite3"
+      CONTENT_FALLBACK_HOST: "0.0.0.0"
+      CONTENT_FALLBACK_PORT: "8790"
+      CONTENT_FALLBACK_REQUIRE_EGRESS_RELAY: "true"
+      CONTENT_FALLBACK_EGRESS_RELAY: "wallhop-egress"
+      CONTENT_FALLBACK_EGRESS_ALLOWED_HOSTS: "wallhop.io,${WALLHOP_MINIFLUX_PUBLIC_HOST:?approved public host required}"
+      CONTENT_FALLBACK_READER_ENABLED: "false"
+      CONTENT_FALLBACK_POLICIES_JSON: '{"enabled":false}'
+      MINIFLUX_BASE_URL: "${WALLHOP_MINIFLUX_PUBLIC_URL:?public HTTPS Miniflux URL required}"
+      MINIFLUX_API_TOKEN: "${WALLHOP_MINIFLUX_API_TOKEN:?separate token required}"
+      CONTENT_FALLBACK_API_TOKEN: "${WALLHOP_RECOVERY_API_TOKEN:?separate token required}"
+    depends_on:
+      wallhop-egress:
+        condition: service_started
+    restart: "no"
+
+  wallhop-egress:
+    container_name: newsflux-wallhop-egress
+    image: "${WALLHOP_EGRESS_IMAGE:?exact approved image digest required}"
+    pull_policy: never
+    read_only: true
+    user: "99:99"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: "443"
+    environment:
+      MINIFLUX_PUBLIC_HOST: "${WALLHOP_MINIFLUX_PUBLIC_HOST:?}"
+      MINIFLUX_UPSTREAM: "npm:443"
+      WALLHOP_UPSTREAM: "wallhop.io:443"
+    volumes:
+      - "${WALLHOP_HAPROXY_CONFIG:?reviewed local config required}:/usr/local/etc/haproxy/haproxy.cfg:ro"
+    networks:
+      egress_internal: {}
+      npm_proxy: {}
+    restart: "no"
+
+networks:
+  reader_internal:
+    name: newsflux_wallhop_reader_isolated
+    internal: true
+  egress_internal:
+    name: newsflux_wallhop_egress_isolated
+    internal: true
+  npm_proxy:
+    external: true
+    name: "npm-proxyyml_default"

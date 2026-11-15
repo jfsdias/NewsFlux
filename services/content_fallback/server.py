@@ -10,8 +10,10 @@ import ssl
 from dataclasses import dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlsplit
 
 from services.article_intel_auth.auth import AuthError, MinifluxAuthService
+from services.content_fallback.http_client import EgressRelayResolver, PinnedHTTPClient
 from services.content_fallback.miniflux import MinifluxClient, ReaderRecoveryScope
 from services.content_fallback.policy import PolicyRegistry
 from services.content_fallback.reader_bridge import (
@@ -20,7 +22,7 @@ from services.content_fallback.reader_bridge import (
     ReaderBridgeRuntimeConfig,
     ReaderContentBridge,
 )
-from services.content_fallback.service import ContentFallbackService, RecoveryError
+from services.content_fallback.service import ContentFallbackService, RecoveryError, WallHopProvider
 from services.content_fallback.store import SQLiteRecoveryStore
 
 LOGGER = logging.getLogger("newsflux.content_fallback.http")
@@ -273,10 +275,31 @@ def make_handler(
     return ContentFallbackHandler
 
 
-def build_service(settings: Settings) -> ContentFallbackService:
-    miniflux = MinifluxClient(settings.miniflux_base_url, settings.miniflux_api_token)
+def build_egress_http(environ: dict[str, str] | None = None) -> PinnedHTTPClient | None:
+    """Optional controlled egress. When required, startup fails closed without a relay."""
+    values = os.environ if environ is None else environ
+    relay = values.get("CONTENT_FALLBACK_EGRESS_RELAY", "").strip()
+    required = values.get("CONTENT_FALLBACK_REQUIRE_EGRESS_RELAY", "false").strip().casefold() == "true"
+    if not relay:
+        if required:
+            raise ValueError("CONTENT_FALLBACK_EGRESS_RELAY is required")
+        return None
+    allowed = frozenset(
+        item for item in values.get("CONTENT_FALLBACK_EGRESS_ALLOWED_HOSTS", "").split(",") if item.strip()
+    )
+    return PinnedHTTPClient(resolver=EgressRelayResolver(relay, allowed))
+
+
+def build_service(settings: Settings, http: PinnedHTTPClient | None = None) -> ContentFallbackService:
+    http = http if http is not None else build_egress_http()
+    if http is not None:
+        miniflux_parts = urlsplit(settings.miniflux_base_url)
+        if miniflux_parts.scheme != "https":
+            raise ValueError("MINIFLUX_BASE_URL must be HTTPS when the egress relay is used")
+    miniflux = MinifluxClient(settings.miniflux_base_url, settings.miniflux_api_token, http=http)
     store = SQLiteRecoveryStore(settings.database_path)
-    return ContentFallbackService(miniflux=miniflux, policies=settings.policies, store=store)
+    provider = WallHopProvider(http=http) if http is not None else None
+    return ContentFallbackService(miniflux=miniflux, policies=settings.policies, store=store, provider=provider)
 
 
 def build_reader_bridge(settings: Settings, service: ContentFallbackService) -> ReaderContentBridge | None:

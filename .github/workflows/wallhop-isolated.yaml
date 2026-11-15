@@ -1,0 +1,41 @@
+name: WallHop independent sidecar and egress regression
+on:
+  pull_request:
+    paths:
+      - "services/content_fallback/**"
+      - "deploy/wallhop-isolated/**"
+      - ".github/workflows/wallhop-isolated.yaml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Test egress resolver and publisher SSRF boundary
+        run: python -m unittest services.content_fallback.tests.test_egress_relay -v
+      - name: Test independent topology invariants
+        run: python -m unittest discover -s deploy/wallhop-isolated -p "test_*.py" -v
+      - name: Validate exact standalone Compose expansion without publishing secrets
+        env:
+          WALLHOP_SIDECAR_IMAGE: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          WALLHOP_EGRESS_IMAGE: "haproxy@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          WALLHOP_MINIFLUX_PUBLIC_HOST: "miniflux.example.test"
+          WALLHOP_MINIFLUX_PUBLIC_URL: "https://miniflux.example.test"
+          WALLHOP_MINIFLUX_API_TOKEN: "synthetic-token-never-real"
+          WALLHOP_RECOVERY_API_TOKEN: "synthetic-service-token-not-for-production-0123456789"
+          WALLHOP_HAPROXY_CONFIG: "/tmp/synthetic-haproxy.cfg"
+        run: |
+          set -euo pipefail
+          docker compose -f deploy/wallhop-isolated/compose.yaml config --format json |
+            python deploy/wallhop-isolated/topology_guard.py
+      - name: Rehearse real Docker candidate with synthetic NPM111 and PR188
+        timeout-minutes: 18
+        run: |
+          set -euo pipefail
+          bash deploy/wallhop-isolated/rehearse-npm111.sh
