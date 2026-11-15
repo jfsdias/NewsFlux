@@ -40,9 +40,18 @@
   gap: 8px;
 }
 
+/* The language names are longer than the generic 130 px settings select. */
+.setting-control .ai-language-select {
+  width: 220px;
+}
+
 @media screen and (max-width: 768px) {
   .ai-model-catalog,
   .ai-checkbox-list {
     max-width: none;
+  }
+
+  .setting-control .ai-language-select {
+    width: 100%;
   }
 }

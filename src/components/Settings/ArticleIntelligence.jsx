@@ -1,6 +1,6 @@
 import { Button, Checkbox, Radio, Select, Typography } from "@arco-design/web-react"
 import { useStore } from "@nanostores/react"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import SettingItem from "./SettingItem"
 import SettingSection from "./SettingSection"
@@ -22,6 +22,8 @@ import {
 import { getAuthSessionKey, hasProvisionedApiKey } from "@/utils/auth"
 
 import "./ArticleIntelligence.css"
+
+const LANGUAGE_REFOCUS_WINDOW_MS = 600
 
 const formatPrice = (polyglot, pricing) => {
   if (pricing.status === "not_verified") {
@@ -77,6 +79,8 @@ const ArticleIntelligence = () => {
       ],
     })
   const [reloadCount, setReloadCount] = useState(0)
+  const languageSelectRef = useRef(null)
+  const languageClosedAtRef = useRef(Number.NEGATIVE_INFINITY)
   const [loaded, setLoaded] = useState({ key: null, status: "loading", catalog: null })
   const requestKey = `${authSessionKey}:${reloadCount}`
 
@@ -232,10 +236,37 @@ const ArticleIntelligence = () => {
         description={polyglot.t("article_intelligence.language_description")}
         title={polyglot.t("article_intelligence.language_label")}
       >
+        {/*
+          The list is rendered in <body>, like the sidebar and footer pickers: the settings modal
+          and its scroll area clip overflowing children, which cut it at the modal's bottom edge.
+          Arco blurs the select when its list closes; if that happens right after closing and
+          focus went nowhere, focus returns to the select so keyboard users are not dropped on
+          <body> inside the open modal.
+        */}
         <Select
-          className="input-select"
+          ref={languageSelectRef}
+          className="input-select ai-language-select"
+          getPopupContainer={() => document.body}
+          triggerProps={{ autoAlignPopupWidth: false, autoAlignPopupMinWidth: true }}
           value={aiSummaryLanguage}
           onChange={(value) => updateSettings({ aiSummaryLanguage: value })}
+          onBlur={(event) => {
+            if (
+              !event.relatedTarget &&
+              performance.now() - languageClosedAtRef.current < LANGUAGE_REFOCUS_WINDOW_MS
+            ) {
+              globalThis.setTimeout(() => {
+                if (document.activeElement === document.body) {
+                  languageSelectRef.current?.focus()
+                }
+              }, 0)
+            }
+          }}
+          onVisibleChange={(visible) => {
+            if (!visible) {
+              languageClosedAtRef.current = performance.now()
+            }
+          }}
         >
           {SUMMARY_LANGUAGES.map((language) => (
             <Select.Option key={language} value={language}>
