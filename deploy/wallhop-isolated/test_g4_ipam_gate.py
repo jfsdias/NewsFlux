@@ -13,6 +13,7 @@ from g4_ipam_gate import (  # red: module intentionally introduced after tests
     validate_inventory,
     render_override,
     extract_vpn_prefixes,
+    extract_tailscale_prefixes,
 )
 
 
@@ -61,6 +62,35 @@ class G4IPAMTests(unittest.TestCase):
         lines = "wg0\tpeerkey\t10.50.0.0/16, 192.168.8.0/24\nwg1\tpeerkey2\t100.100.1.1/32\n"
         result = extract_vpn_prefixes(lines)
         self.assertEqual(result, {"10.50.0.0/16", "192.168.8.0/24", "100.100.1.1/32"})
+
+    def test_tailscale_advertised_remote_subnet_is_included(self):
+        state = {
+            "BackendState": "Running",
+            "Peer": {
+                "node1": {"AllowedIPs": ["100.88.1.2/32", "10.240.0.0/24"]},
+            },
+        }
+        self.assertIn("10.240.0.0/24", extract_tailscale_prefixes(state))
+
+    def test_tailscale_unknown_advertised_routes_fail_closed(self):
+        state = {
+            "BackendState": "Running",
+            "Peer": {"node1": {"HostName": "synthetic"}},
+        }
+        with self.assertRaisesRegex(GateError, "TAILSCALE_REMOTE_ROUTES_UNVERIFIED"):
+            extract_tailscale_prefixes(state)
+
+    def test_check_only_does_not_create_overlay(self):
+        import tempfile
+        from unittest.mock import patch
+        from g4_ipam_gate import main
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "must-not-exist.yaml"
+            occupied = ["192.168.1.0/24"]
+            with patch("g4_ipam_gate.discover_occupied", return_value=(occupied, {})):
+                with patch.object(sys, "argv", ["g4_ipam_gate.py", "--check-only"]):
+                    self.assertEqual(main(), 0)
+            self.assertFalse(target.exists())
 
     def test_render_override_blackholes_both_upstreams(self):
         data = render_override(CANDIDATE_READER, CANDIDATE_EGRESS)
