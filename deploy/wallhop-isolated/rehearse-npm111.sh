@@ -139,12 +139,28 @@ checks = {
     "READONLY_ROOTFS": bool(a["HostConfig"]["ReadonlyRootfs"]) and bool(b["HostConfig"]["ReadonlyRootfs"]),
     "NO_PUBLISHED_PORTS": not a["HostConfig"]["PortBindings"] and not b["HostConfig"]["PortBindings"],
     "RECOVERY_NO_VOLUME": all(m["Type"] != "volume" for m in a["Mounts"]),
-    "RECOVERY_TMPFS_DATA": any(m["Destination"] == "/data" and m["Type"] == "tmpfs" for m in a["Mounts"]),
+    "RECOVERY_TMPFS_CONFIG": "/data" in (a["HostConfig"].get("Tmpfs") or {}),
 }
 for name, passed in checks.items():
     print("DISPOSABLE_" + name + "=" + ("PASS" if passed else "FAIL"), flush=True)
 if not all(checks.values()): sys.exit(2)
 ' || fail CANDIDATE_RUNTIME_NETWORK_OR_VOLUME
+
+# Docker inspect Mounts lists bind/volume mounts; tmpfs is in HostConfig.Tmpfs.
+# Independently prove that /data is actually backed by tmpfs in the running
+# container's mount namespace, not an anonymous volume or writable overlay.
+docker exec "$READER" python -c '
+from pathlib import Path
+entries = []
+for line in Path("/proc/self/mountinfo").read_text().splitlines():
+    left, right = line.split(" - ", 1)
+    mountpoint = left.split()[4]
+    fstype = right.split()[0]
+    if mountpoint == "/data":
+        entries.append(fstype)
+assert entries == ["tmpfs"], "DATA_NOT_MOUNTED_AS_TMPFS"
+print("DISPOSABLE_RECOVERY_TMPFS_EFFECTIVE=PASS")
+' || fail CANDIDATE_DATA_NOT_TMPFS
 
 docker exec "$READER" python -c '
 import socket
