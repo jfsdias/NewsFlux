@@ -60,6 +60,13 @@ class G4OperatorAdmissionTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("G4_ADMISSION=BLOCKED CODE=EXPLICIT_ACK_REQUIRED", result.stdout)
 
+    def test_dark_relay_backends_are_locally_blackholed(self) -> None:
+        source = SCRIPT.read_text()
+        self.assertIn('WALLHOP_UPSTREAM: "127.0.0.1:9"', source)
+        self.assertIn('MINIFLUX_UPSTREAM: "127.0.0.1:9"', source)
+        self.assertIn("G4_EXTERNAL_BACKENDS=BLACKHOLED", source)
+        self.assertIn(' -f "$OVERRIDE"', source)
+
     def test_ci_environment_cannot_execute(self) -> None:
         result = invoke(
             "--execute",
