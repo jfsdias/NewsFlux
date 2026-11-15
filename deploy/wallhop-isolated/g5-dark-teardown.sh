@@ -96,8 +96,9 @@ verify_candidate() {
   docker inspect "$NEW_RECOVERY" "$NEW_RELAY" | python3 -c '
 import json,sys
 a,b=json.load(sys.stdin)
-rec_id,relay_id,release_dir=sys.argv[1:4]
+rec_id,relay_id,release_dir,source_sha=sys.argv[1:5]
 if a["Image"]!=rec_id or b["Image"]!=relay_id: sys.exit(2)
+if a["Config"]["Labels"].get("org.opencontainers.image.revision")!=source_sha: sys.exit(2)
 if (a["Name"].lstrip("/"),b["Name"].lstrip("/"))!=("newsflux-wallhop-recovery","newsflux-wallhop-egress"): sys.exit(2)
 if any(x["Config"]["Labels"].get("com.docker.compose.project")!="newsflux-wallhop-isolated" for x in (a,b)): sys.exit(2)
 if set(a["NetworkSettings"]["Networks"])!={"newsflux_wallhop_reader_isolated","newsflux_wallhop_egress_isolated"}: sys.exit(2)
@@ -115,7 +116,7 @@ if r.get("MINIFLUX_BASE_URL")!="https://miniflux.example.test": sys.exit(2)
 if not r.get("MINIFLUX_API_TOKEN","").startswith("synthetic-only-"): sys.exit(2)
 if not r.get("CONTENT_FALLBACK_API_TOKEN","").startswith("synthetic-only-"): sys.exit(2)
 if e.get("WALLHOP_UPSTREAM")!="127.0.0.1:9" or e.get("MINIFLUX_UPSTREAM")!="127.0.0.1:9": sys.exit(2)
-' "$REC_ID" "$RELAY_ID" "$RELEASE_DIR" || return 1
+' "$REC_ID" "$RELAY_ID" "$RELEASE_DIR" "$SOURCE_SHA" || return 1
 
   docker network inspect newsflux_wallhop_reader_isolated newsflux_wallhop_egress_isolated |
     python3 -c '
