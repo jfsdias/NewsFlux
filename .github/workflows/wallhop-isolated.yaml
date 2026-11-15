@@ -34,3 +34,8 @@ jobs:
           set -euo pipefail
           docker compose -f deploy/wallhop-isolated/compose.yaml config --format json |
             python deploy/wallhop-isolated/topology_guard.py
+      - name: Rehearse real Docker candidate with synthetic NPM111 and PR188
+        timeout-minutes: 18
+        run: |
+          set -euo pipefail
+          bash deploy/wallhop-isolated/rehearse-npm111.sh
