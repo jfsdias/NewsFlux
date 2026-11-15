@@ -69,10 +69,14 @@ class G4OperatorAdmissionTests(unittest.TestCase):
 
     def test_dark_relay_backends_are_locally_blackholed(self) -> None:
         source = SCRIPT.read_text()
-        self.assertIn('WALLHOP_UPSTREAM: "127.0.0.1:9"', source)
-        self.assertIn('MINIFLUX_UPSTREAM: "127.0.0.1:9"', source)
+        helper = (ROOT / "g4_ipam_gate.py").read_text()
+        self.assertIn('WALLHOP_UPSTREAM: "127.0.0.1:9"', helper)
+        self.assertIn('MINIFLUX_UPSTREAM: "127.0.0.1:9"', helper)
         self.assertIn("G4_EXTERNAL_BACKENDS=BLACKHOLED", source)
         self.assertIn(' -f "$OVERRIDE"', source)
+        self.assertIn('python3 "$NEWSFLUX_G4_IPAM_GATE" --output "$OVERRIDE"', source)
+        self.assertLess(source.index("IPAM_RACE_RECHECK"), source.index("START_ARMED=1\ndocker compose"))
+        self.assertIn("G4_RUNTIME_EXPLICIT_IPAM=PASS", source)
 
     def test_ci_environment_cannot_execute(self) -> None:
         result = invoke(
