@@ -222,13 +222,16 @@ COMPOSE="$STAGE/deploy/wallhop-isolated/compose.yaml"
 # This prevents any possible third-party request even if another service
 # unexpectedly connects to the new, temporary SNI relay on the NPM network.
 OVERRIDE="$STAGE/deploy/wallhop-isolated/g4-dark-override.yaml"
-cat > "$OVERRIDE" <<'YAML'
-services:
-  wallhop-egress:
-    environment:
-      WALLHOP_UPSTREAM: "127.0.0.1:9"
-      MINIFLUX_UPSTREAM: "127.0.0.1:9"
-YAML
+# Source controlled by PR255, always fetched separately with the same audited HEAD.
+# If missing or unable to verify even one local/vpn prefix, fail before docker up.
+if [[ -z "${NEWSFLUX_G4_IPAM_GATE:-}" || ! -f "$NEWSFLUX_G4_IPAM_GATE" ]]; then
+  echo "G4_GATE=BLOCKED CODE=IPAM_GATE_MISSING"
+  exit 2
+fi
+python3 "$NEWSFLUX_G4_IPAM_GATE" --output "$OVERRIDE" || {
+  echo "G4_GATE=BLOCKED CODE=IPAM_PRESTART_UNVERIFIED"
+  exit 2
+}
 
 # Verify NPM111 on-disk and expanded Nginx config using the merged read-only tool.
 python3 "$STAGE/deploy/npm111-g2c/audit.py" || {
@@ -277,6 +280,18 @@ assert env.get("MINIFLUX_UPSTREAM") == "127.0.0.1:9"
 ' || { echo "G4_GATE=BLOCKED CODE=EXTERNAL_RELAY_NOT_BLACKHOLED"; exit 2; }
 echo "G4_EXTERNAL_BACKENDS=BLACKHOLED"
 
+docker compose -f "$COMPOSE" -f "$OVERRIDE" config --format json |
+  python3 -c '
+import json,sys
+nets=json.load(sys.stdin)["networks"]
+expected={"reader_internal":"10.240.0.96/28", "egress_internal":"10.240.0.112/28"}
+for name,cidr in expected.items():
+    settings=nets.get(name,{}).get("ipam",{}).get("config",[])
+    if len(settings)!=1 or settings[0].get("subnet")!=cidr:
+        raise SystemExit(2)
+print("G4_COMPOSE_EXPLICIT_IPAM=PASS")
+' || { echo "G4_GATE=BLOCKED CODE=IPAM_COMPOSE_NOT_EXACT"; exit 2; }
+
 # Protect against a race between preflight and the only create step.
 BASE_BEFORE_UP="$(fingerprint_protected)"
 [[ "$BASE_BEFORE_UP" == "$G4_EXPECTED_FINGERPRINT" ]] || {
@@ -284,6 +299,15 @@ BASE_BEFORE_UP="$(fingerprint_protected)"
   exit 2
 }
 candidate_absent || { echo "G4_GATE=BLOCKED CODE=CANDIDATE_RACE"; exit 2; }
+
+# Re-run the IPAM gate as close to network creation as possible, including
+# VPN peer route fields; overwrite is disallowed so remove only our new staging
+# file (never any Docker resource) and require the same candidate contents.
+rm -f -- "$OVERRIDE"
+python3 "$NEWSFLUX_G4_IPAM_GATE" --output "$OVERRIDE" || {
+  echo "G4_GATE=BLOCKED CODE=IPAM_RACE_RECHECK"
+  exit 2
+}
 
 # At this point the only permitted mutations are the NEW Compose project's
 # candidate containers and networks; rollback is armed *before* calling up.
@@ -306,6 +330,22 @@ if (( ! READY )); then
   exit 2
 fi
 echo "G4_NEW_RECOVERY_HEALTH=PASS"
+
+docker network inspect newsflux_wallhop_reader_isolated newsflux_wallhop_egress_isolated |
+  python3 -c '
+import json,sys
+data=json.load(sys.stdin)
+expected={"newsflux_wallhop_reader_isolated":"10.240.0.96/28",
+          "newsflux_wallhop_egress_isolated":"10.240.0.112/28"}
+for network in data:
+    name=network["Name"]
+    cfg=network["IPAM"].get("Config") or []
+    if name not in expected or len(cfg)!=1 or cfg[0].get("Subnet")!=expected[name]:
+        raise SystemExit(2)
+if len(data)!=2:
+    raise SystemExit(2)
+print("G4_RUNTIME_EXPLICIT_IPAM=PASS")
+' || { echo "G4_GATE=BLOCKED CODE=IPAM_RUNTIME_MISMATCH"; exit 2; }
 
 docker inspect "$NEW_RECOVERY" "$NEW_RELAY" | python3 -c '
 import json,sys
