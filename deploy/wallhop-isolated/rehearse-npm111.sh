@@ -157,7 +157,8 @@ import socket,ssl
 s=socket.create_connection(("wallhop-egress",443),timeout=3)
 s.settimeout(7)
 try: ssl.create_default_context().wrap_socket(s,server_hostname="unapproved.example.test")
-except (ssl.SSLError,OSError,TimeoutError): pass
+except TimeoutError: raise SystemExit("UNAPPROVED_SNI_TIMEOUT")
+except (ssl.SSLError,ConnectionResetError,ConnectionAbortedError,BrokenPipeError): pass
 else: raise SystemExit("UNAPPROVED_SNI")
 ' >/dev/null || fail RELAY_SNI_REJECTION
 
