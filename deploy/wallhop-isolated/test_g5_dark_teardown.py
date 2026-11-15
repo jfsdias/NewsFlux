@@ -73,6 +73,8 @@ class TeardownG5Tests(unittest.TestCase):
         self.assertIn("docker network rm newsflux_wallhop_reader_isolated newsflux_wallhop_egress_isolated", script)
         self.assertIn('org.opencontainers.image.revision', script)
         self.assertIn("G5_TEARDOWN_PRECHECK=PASS", script)
+        self.assertIn("G5_TEARDOWN_WRAPPER_IDENTITY=PASS", script)
+        self.assertIn("TEARDOWN_WRAPPER_BYTES_DRIFT", script)
         self.assertIn("G5_TEARDOWN=PASS", script)
         self.assertIn("G5_TEARDOWN=PARTIAL_HOLD", script)
         self.assertNotIn("docker system prune", script)
