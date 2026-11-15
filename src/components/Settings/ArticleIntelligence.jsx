@@ -23,16 +23,27 @@ import { getAuthSessionKey, hasProvisionedApiKey } from "@/utils/auth"
 
 import "./ArticleIntelligence.css"
 
+// Closed mapping from catalog price states to messages; unknown states never show a price.
+const PRICE_MESSAGES = {
+  verified_zero: "article_intelligence.price_verified_zero",
+  verified_paid: "article_intelligence.price_verified_paid",
+  operator_declared_zero: "article_intelligence.price_declared_zero",
+  operator_declared_paid: "article_intelligence.price_declared_paid",
+  gateway_published_only: "article_intelligence.price_gateway_only",
+}
+
 const formatPrice = (polyglot, pricing) => {
-  if (pricing.status === "not_verified") {
+  if (pricing.status === "mismatch") {
+    return polyglot.t("article_intelligence.price_mismatch")
+  }
+  const key = PRICE_MESSAGES[pricing.status]
+  if (!key || pricing.input_usd_per_million === null || pricing.output_usd_per_million === null) {
     return polyglot.t("article_intelligence.price_not_verified")
   }
-  return polyglot.t(
-    pricing.status === "operator_declared_zero"
-      ? "article_intelligence.price_declared_zero"
-      : "article_intelligence.price_declared_paid",
-    { input: pricing.input_usd_per_million, output: pricing.output_usd_per_million },
-  )
+  return polyglot.t(key, {
+    input: pricing.input_usd_per_million,
+    output: pricing.output_usd_per_million,
+  })
 }
 
 const ModelDetails = ({ model, polyglot }) => (

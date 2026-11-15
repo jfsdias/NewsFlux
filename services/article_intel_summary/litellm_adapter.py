@@ -29,6 +29,8 @@ from services.article_intel_summary.inference import (
 MODEL_CHOICE_S5_FREE = "s5-free"
 MODEL_CHOICE_MISTRAL_SMALL = "mistral-small"
 SUPPORTED_MODEL_CHOICES = frozenset({MODEL_CHOICE_S5_FREE, MODEL_CHOICE_MISTRAL_SMALL})
+# Catalog IDs are operator-chosen identifiers (dynamic catalog); the two legacy IDs match this too.
+CATALOG_MODEL_ID_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}")
 LITELLM_PROVIDER_ID = "litellm"
 LITELLM_PROMPT_VERSION = f"{PROMPT_VERSION}-litellm-v1"
 S5_LITELLM_PROMPT_VERSION = f"{PROMPT_VERSION}-litellm-s5-v2"
@@ -78,6 +80,9 @@ class LiteLLMSettings:
     tokens_per_minute: int | None = None
     timeout_seconds: float = 15.0
     usage_database_path: str | None = None
+    # Set only by the catalog for an entry of the operator model policy. A non-legacy catalog ID
+    # is never ready without it, so an arbitrary choice/alias cannot reach the gateway.
+    operator_approved: bool = False
 
     def is_ready(self) -> bool:
         if not self.enabled or not self.external_transfer_authorized:
@@ -93,14 +98,18 @@ class LiteLLMSettings:
                 return False
         if not _valid_virtual_key(self.virtual_key):
             return False
-        if self.model_choice not in SUPPORTED_MODEL_CHOICES:
+        if not valid_catalog_model_id(self.model_choice):
             return False
-        expected_alias = (
-            self.s5_free_model_alias
-            if self.model_choice == MODEL_CHOICE_S5_FREE
-            else self.mistral_small_model_alias
-        )
-        if not _valid_model_alias(expected_alias) or self.model_id != expected_alias:
+        if self.model_choice in SUPPORTED_MODEL_CHOICES:
+            # Legacy catalog IDs keep their dedicated alias variables.
+            expected_alias = (
+                self.s5_free_model_alias
+                if self.model_choice == MODEL_CHOICE_S5_FREE
+                else self.mistral_small_model_alias
+            )
+            if not _valid_model_alias(expected_alias) or self.model_id != expected_alias:
+                return False
+        elif not self.operator_approved or not _valid_model_alias(self.model_id):
             return False
         if not _positive_bounded_int(self.max_input_tokens, MAX_INPUT_TOKEN_SETTING):
             return False
@@ -134,6 +143,40 @@ class LiteLLMSettings:
         if not isinstance(self.usage_database_path, str) or not Path(self.usage_database_path).is_absolute():
             return False
         return True
+
+
+def valid_catalog_model_id(value: object) -> bool:
+    return isinstance(value, str) and CATALOG_MODEL_ID_RE.fullmatch(value) is not None
+
+
+def load_gateway_settings(environ: Mapping[str, str] | None = None, *, read_key: bool) -> LiteLLMSettings:
+    """Model-independent gateway, budget and limit settings shared by every catalog model.
+
+    The virtual key is read only when the caller needs it (dispatch or read-only discovery) and
+    only for an HTTPS gateway. Model choice, alias and prices are filled per catalog entry.
+    """
+    values = os.environ if environ is None else environ
+    base_url = values.get("NEWSFLUX_AI_LITELLM_BASE_URL")
+    virtual_key = (
+        _read_private_secret_file(values.get("NEWSFLUX_AI_LITELLM_VIRTUAL_KEY_FILE"))
+        if read_key and _valid_gateway_base_url(base_url)
+        else None
+    )
+    return LiteLLMSettings(
+        gateway_base_url=base_url,
+        private_docker_peer=values.get("NEWSFLUX_AI_LITELLM_PRIVATE_DOCKER_PEER") or None,
+        virtual_key=virtual_key,
+        enabled=_read_bool(values, "NEWSFLUX_AI_INFERENCE_ENABLED"),
+        external_transfer_authorized=_read_bool(values, "NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER"),
+        paid_inference_authorized=_read_bool(values, "NEWSFLUX_AI_ALLOW_PAID_INFERENCE"),
+        monthly_budget_usd=_read_decimal(values.get("NEWSFLUX_AI_MONTHLY_BUDGET_USD")),
+        max_input_tokens=_read_int(values.get("NEWSFLUX_AI_MAX_INPUT_TOKENS")),
+        max_output_tokens=_read_int(values.get("NEWSFLUX_AI_MAX_OUTPUT_TOKENS")),
+        requests_per_minute=_read_int(values.get("NEWSFLUX_AI_MAX_REQUESTS_PER_MINUTE")),
+        tokens_per_minute=_read_int(values.get("NEWSFLUX_AI_MAX_TOKENS_PER_MINUTE")),
+        timeout_seconds=_read_float(values.get("NEWSFLUX_AI_INFERENCE_TIMEOUT_SECONDS"), default=15.0),
+        usage_database_path=values.get("NEWSFLUX_AI_USAGE_DATABASE_PATH"),
+    )
 
 
 def load_litellm_settings(environ: Mapping[str, str] | None = None) -> LiteLLMSettings:

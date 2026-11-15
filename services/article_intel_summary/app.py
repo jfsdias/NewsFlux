@@ -70,6 +70,9 @@ def create_app(
         owner = getattr(primary, "_owner", None)
         if owner is not None:
             owner.__exit__()
+        router_owner = getattr(summary_service.router, "ledger_owner", None)
+        if router_owner is not None and router_owner is not owner:
+            router_owner.__exit__()
 
     app = FastAPI(title="NewsFlux Article Intelligence API", version="1", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.auth_service = auth_service

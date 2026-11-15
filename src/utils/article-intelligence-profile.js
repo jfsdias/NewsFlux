@@ -1,8 +1,12 @@
 // Closed, versioned summary options. The browser stores and sends identifiers only;
 // the Summary API maps them to fixed server-side instructions.
 const SUMMARY_PROFILE_VERSION = "summary-profile-v1"
-export const SUMMARY_MODEL_IDS = ["s5-free", "mistral-small"]
+// Catalog IDs are chosen by the operator policy (dynamic catalog); the Reader only checks their
+// shape. Whether a model may be used is decided by the server catalog on every request.
+const SUMMARY_MODEL_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/u
 export const SUMMARY_MODEL_AUTO = "auto"
+export const isSummaryModelId = (value) =>
+  typeof value === "string" && SUMMARY_MODEL_ID_PATTERN.test(value)
 export const SUMMARY_LENGTHS = ["brief", "standard", "detailed"]
 export const SUMMARY_FOCUSES = [
   "factual_synthesis",
@@ -83,7 +87,7 @@ export const resolveSummaryModel = (preference, catalog) => {
     return { modelId: null, reason: "catalog_unavailable" }
   }
   const modelId = preference === SUMMARY_MODEL_AUTO ? catalog.default_model_id : preference
-  if (!SUMMARY_MODEL_IDS.includes(modelId)) {
+  if (!isSummaryModelId(modelId)) {
     return { modelId: null, reason: "model_unavailable" }
   }
   const entry = catalog.models.find((model) => model.id === modelId)

@@ -68,7 +68,7 @@
         "content_origin": { "const": "ORIGINAL_MINIFLUX" },
         "content_fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
         "provider_id": { "type": ["string", "null"], "maxLength": 128 },
-        "model_id": { "enum": ["s5-free", "mistral-small"] },
+        "model_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$" },
         "effective_model_id": { "type": ["string", "null"], "maxLength": 128 },
         "prompt_version": { "type": ["string", "null"], "maxLength": 128 },
         "profile_version": { "const": "summary-profile-v1" },

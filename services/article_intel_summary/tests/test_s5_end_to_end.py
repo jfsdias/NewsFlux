@@ -28,7 +28,8 @@ from services.article_intel_summary.tests.support import (
     SyncASGIClient,
     request_headers,
 )
-from services.article_intel_summary.tests.test_litellm_adapter import S5_ALIAS, approved_environment
+from services.article_intel_summary import catalog as catalog_module
+from services.article_intel_summary.tests.test_litellm_adapter import MISTRAL_ALIAS, S5_ALIAS, approved_environment
 
 REQUEST_ID = "33333333-3333-4333-8333-333333333333"
 V2_OUTPUT = {
@@ -49,7 +50,21 @@ class SyntheticGateway:
         self.model = model
         self.output = output if output is not None else V2_OUTPUT
 
+    discovery: list[str]
+
     def __call__(self, request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            # Read-only catalog discovery with the same virtual key; never a model call.
+            self.discovery = getattr(self, "discovery", [])
+            self.discovery.append(request.url.path)
+            if request.url.path == "/v1/models":
+                return httpx.Response(200, json={"data": [{"id": S5_ALIAS}, {"id": MISTRAL_ALIAS}]})
+            if request.url.path == "/model/info":
+                return httpx.Response(200, json={"data": [
+                    {"model_name": S5_ALIAS, "model_info": {"mode": "chat", "input_cost_per_token": 0, "output_cost_per_token": 0}},
+                    {"model_name": MISTRAL_ALIAS, "model_info": {"mode": "chat", "input_cost_per_token": 1.5e-7, "output_cost_per_token": 6e-7}},
+                ]})
+            return httpx.Response(404)
         body = json.loads(request.content)
         self.requests.append({"path": request.url.path, "auth": request.headers.get("authorization"), "body": body})
         if self.status != 200:
@@ -81,6 +96,7 @@ class S5EndToEndTests(unittest.TestCase):
                 "NEWSFLUX_AI_ENABLE_S5_MISTRAL_FALLBACK": "false",
                 "NEWSFLUX_AI_S5_MAX_OUTPUT_TOKENS": "2048",
                 "NEWSFLUX_AI_INFERENCE_TIMEOUT_SECONDS": "20",
+                "NEWSFLUX_AI_MODEL_DISCOVERY_ENABLED": "true",
             }
         )
         self.env = env
@@ -94,7 +110,12 @@ class S5EndToEndTests(unittest.TestCase):
         )
         self.miniflux = FakeMinifluxHTTP()
         auth = MinifluxAuthService(settings, http=self.miniflux)
-        with patch.dict(os.environ, self.env, clear=False):
+        real_getter = catalog_module.gateway_getter
+
+        def mocked_getter(base_url, peer, key):
+            return real_getter(base_url, peer, key, client=httpx.Client(transport=httpx.MockTransport(gateway)))
+
+        with patch.dict(os.environ, self.env, clear=False), patch.object(catalog_module, "gateway_getter", mocked_getter):
             app = create_app(auth_service=auth)
         router = app.state.summary_service.router
         adapter = router.adapter_for("s5-free")

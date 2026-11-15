@@ -301,11 +301,8 @@ const isNullableNumber = (value) =>
 const isNullablePrice = (value) =>
   value === null || (typeof value === "string" && /^[0-9]{1,12}(\.[0-9]{1,12})?$/u.test(value))
 
-export const validateModelCatalog = (payload) => {
+const validateModelCatalogV1 = (payload) => {
   if (
-    !payload ||
-    typeof payload !== "object" ||
-    payload.schema_version !== "1" ||
     !(payload.default_model_id === null || CATALOG_MODEL_IDS.has(payload.default_model_id)) ||
     !Array.isArray(payload.models) ||
     payload.models.length > 8
@@ -341,13 +338,157 @@ export const validateModelCatalog = (payload) => {
       id: model.id,
       label: model.label,
       provider: model.provider,
+      status: model.available ? "AVAILABLE" : "DISABLED",
       available: model.available,
       unavailableReason: model.unavailable_reason,
       requiresPaidAuthorization: model.requires_paid_authorization,
+      checks: null,
       pricing: { ...model.pricing },
       limits: { ...model.limits },
       notices: [...model.notices],
     })
   }
-  return { default_model_id: payload.default_model_id, models }
+  return { default_model_id: payload.default_model_id, discoveryStatus: null, models }
+}
+
+// Schema v2: operator policy + read-only gateway discovery. IDs are dynamic but strictly shaped;
+// every other field is a closed vocabulary.
+const CATALOG_V2_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/u
+const CATALOG_V2_STATUSES = new Set([
+  "AVAILABLE",
+  "DISABLED",
+  "UNVERIFIED",
+  "NOT_DISCOVERED",
+  "OPERATOR_APPROVAL_REQUIRED",
+  "PAID_AUTHORIZATION_REQUIRED",
+  "UNSUPPORTED",
+])
+const CATALOG_V2_REASONS = new Set([
+  null,
+  "POLICY_INVALID",
+  "INFERENCE_DISABLED",
+  "EXTERNAL_TRANSFER_NOT_AUTHORIZED",
+  "TRANSFER_NOT_AUTHORIZED",
+  "NOT_CONFIGURED",
+  "DISCOVERY_DISABLED",
+  "GATEWAY_UNAVAILABLE",
+  "NOT_DISCOVERED",
+  "OPERATOR_APPROVAL_REQUIRED",
+  "NOT_COMPATIBLE",
+  "COMPATIBILITY_UNVERIFIED",
+  "PRICE_MISMATCH",
+  "PRICE_NOT_VERIFIED",
+  "PAID_NOT_AUTHORIZED",
+  "RUNTIME_UNAVAILABLE",
+])
+const CATALOG_V2_PRICING = new Set([
+  "verified_zero",
+  "verified_paid",
+  "operator_declared_zero",
+  "operator_declared_paid",
+  "gateway_published_only",
+  "mismatch",
+  "not_verified",
+])
+const CATALOG_V2_NOTICES = new Set([...CATALOG_NOTICES, "PRICE_VERIFIED_BY_GATEWAY"])
+const CATALOG_V2_CHECKS = [
+  "discovered",
+  "compatible",
+  "operator_approved",
+  "pricing_verified",
+  "paid_authorized",
+  "transfer_authorized",
+]
+const NULLABLE_CHECKS = new Set(["discovered", "compatible"])
+const isV2Id = (value) => typeof value === "string" && CATALOG_V2_ID_PATTERN.test(value)
+
+const validateCatalogChecks = (checks) =>
+  Boolean(checks) &&
+  typeof checks === "object" &&
+  !Array.isArray(checks) &&
+  Object.keys(checks).length === CATALOG_V2_CHECKS.length &&
+  CATALOG_V2_CHECKS.every(
+    (key) => typeof checks[key] === "boolean" || (NULLABLE_CHECKS.has(key) && checks[key] === null),
+  )
+
+const validateModelCatalogV2 = (payload) => {
+  if (
+    !(payload.default_model_id === null || isV2Id(payload.default_model_id)) ||
+    !["DISABLED", "OK", "UNAVAILABLE"].includes(payload.discovery?.status) ||
+    !["LEGACY", "CONFIGURED", "INVALID"].includes(payload.policy?.status) ||
+    !Array.isArray(payload.models) ||
+    payload.models.length > 32
+  ) {
+    return null
+  }
+  const models = []
+  const seen = new Set()
+  for (const model of payload.models) {
+    if (
+      !model ||
+      typeof model !== "object" ||
+      !isV2Id(model.id) ||
+      seen.has(model.id) ||
+      !isShortText(model.label, 64) ||
+      !isShortText(model.provider, 64) ||
+      !CATALOG_V2_STATUSES.has(model.status) ||
+      typeof model.available !== "boolean" ||
+      model.available !== (model.status === "AVAILABLE") ||
+      !CATALOG_V2_REASONS.has(model.unavailable_reason) ||
+      model.available !== (model.unavailable_reason === null) ||
+      typeof model.requires_paid_authorization !== "boolean" ||
+      !validateCatalogChecks(model.checks) ||
+      !model.pricing ||
+      !CATALOG_V2_PRICING.has(model.pricing.status) ||
+      !isNullablePrice(model.pricing.input_usd_per_million) ||
+      !isNullablePrice(model.pricing.output_usd_per_million) ||
+      !model.limits ||
+      !["max_input_tokens", "max_output_tokens", "requests_per_minute", "timeout_seconds"].every(
+        (key) => isNullableNumber(model.limits[key]),
+      ) ||
+      !Array.isArray(model.notices) ||
+      model.notices.length > 4 ||
+      !model.notices.every((notice) => CATALOG_V2_NOTICES.has(notice))
+    ) {
+      return null
+    }
+    seen.add(model.id)
+    models.push({
+      id: model.id,
+      label: model.label,
+      provider: model.provider,
+      status: model.status,
+      available: model.available,
+      unavailableReason: model.unavailable_reason,
+      requiresPaidAuthorization: model.requires_paid_authorization,
+      checks: { ...model.checks },
+      pricing: { ...model.pricing },
+      limits: { ...model.limits },
+      notices: [...model.notices],
+    })
+  }
+  if (
+    payload.default_model_id !== null &&
+    !models.some((m) => m.id === payload.default_model_id && m.available)
+  ) {
+    return null
+  }
+  return {
+    default_model_id: payload.default_model_id,
+    discoveryStatus: payload.discovery.status,
+    models,
+  }
+}
+
+export const validateModelCatalog = (payload) => {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null
+  }
+  if (payload.schema_version === "2") {
+    return validateModelCatalogV2(payload)
+  }
+  if (payload.schema_version === "1") {
+    return validateModelCatalogV1(payload)
+  }
+  return null
 }
