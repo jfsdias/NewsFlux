@@ -108,6 +108,26 @@ def as_json(*parts: str):
         raise GateError("INVALID_JSON_RESPONSE") from exc
 
 
+def extract_tailscale_prefixes(state: dict) -> list[str]:
+    """Extract VPN peer route declarations without emitting peer identifiers."""
+    if state.get("BackendState") != "Running":
+        raise GateError("TAILSCALE_ROUTES_UNVERIFIED")
+    peers = state.get("Peer") or {}
+    out = []
+    for peer in peers.values():
+        if not any(field in peer for field in ("AllowedIPs", "PrimaryRoutes")):
+            raise GateError("TAILSCALE_REMOTE_ROUTES_UNVERIFIED")
+        for field in ("AllowedIPs", "PrimaryRoutes"):
+            val = peer.get(field) or []
+            if not isinstance(val, list):
+                raise GateError("TAILSCALE_REMOTE_ROUTES_UNVERIFIED")
+            for item in val:
+                prefix = parse_ipv4(item)
+                if prefix is not None:
+                    out.append(str(prefix))
+    return out
+
+
 def discover_occupied() -> tuple[list[str], dict[str, int | str]]:
     ids = command("docker", "network", "ls", "-q").split()
     networks = as_json("docker", "network", "inspect", *ids) if ids else []
@@ -176,21 +196,7 @@ def discover_occupied() -> tuple[list[str], dict[str, int | str]]:
             state = {"BackendState": "Stopped"}
         backend = state.get("BackendState", "Unknown")
         if backend == "Running":
-            peers = state.get("Peer") or {}
-            tailscale_prefixes = []
-            for peer in peers.values():
-                # Treat missing peer route information as unknown, not as no routes.
-                if not any(field in peer for field in ("AllowedIPs", "PrimaryRoutes")):
-                    raise GateError("TAILSCALE_REMOTE_ROUTES_UNVERIFIED")
-                for field in ("AllowedIPs", "PrimaryRoutes"):
-                    val = peer.get(field) or []
-                    if not isinstance(val, list):
-                        raise GateError("TAILSCALE_REMOTE_ROUTES_UNVERIFIED")
-                    for item in val:
-                        prefix = parse_ipv4(item)
-                        if prefix is not None:
-                            tailscale_prefixes.append(str(prefix))
-            occupied.extend(tailscale_prefixes)
+            occupied.extend(extract_tailscale_prefixes(state))
             tailscale_status = "PEER_ROUTE_FIELDS_PARSED"
         elif tailscale_present:
             raise GateError("TAILSCALE_ROUTES_UNVERIFIED")
@@ -208,7 +214,9 @@ def discover_occupied() -> tuple[list[str], dict[str, int | str]]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="G4 only, no Docker mutations")
-    parser.add_argument("--output", required=True)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--output", help="Write only this new temporary Compose override")
+    mode.add_argument("--check-only", action="store_true", help="Read-only host IPAM/VPN route admission")
     args = parser.parse_args()
     try:
         occupied, stats = discover_occupied()
@@ -216,13 +224,14 @@ def main() -> int:
             CANDIDATE_READER, CANDIDATE_EGRESS,
             occupied, vpn_verified=True
         )
-        rendered = render_override(CANDIDATE_READER, CANDIDATE_EGRESS)
-        output = pathlib.Path(args.output)
-        if output.is_symlink() or not output.parent.is_dir() or output.exists():
-            raise GateError("OVERRIDE_PATH_UNSAFE")
-        with output.open("x", encoding="utf-8") as handle:
-            handle.write(rendered)
-        output.chmod(0o600)
+        if args.output:
+            rendered = render_override(CANDIDATE_READER, CANDIDATE_EGRESS)
+            output = pathlib.Path(args.output)
+            if output.is_symlink() or not output.parent.is_dir() or output.exists():
+                raise GateError("OVERRIDE_PATH_UNSAFE")
+            with output.open("x", encoding="utf-8") as handle:
+                handle.write(rendered)
+            output.chmod(0o600)
     except (GateError, OSError) as exc:
         code = str(exc) if isinstance(exc, GateError) else "OVERRIDE_WRITE_ERROR"
         if not re.fullmatch(r"[A-Z_]+", code):
