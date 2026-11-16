@@ -168,6 +168,8 @@
     "mark_articles_above_as_read_tooltip": "Marcar como leídos los artículos de arriba",
     "mark_articles_below_as_read_tooltip": "Marcar como leídos los artículos de abajo",
     "open_link_externally_tooltip": "Abrir enlace de origen en una pestaña nueva",
+    "open_with_wallhop": "Abrir con WallHop",
+    "wallhop_external_consent": "Esto envía la URL del artículo al servicio externo WallHop. ¿Abrir en una pestaña nueva?",
     "open_in_reactflux_tooltip": "Abrir en ReactFlux",
     "invalid_source_link_fallback": "El enlace de origen no es válido. El artículo se abrirá en ReactFlux.",
     "unread_article_aria_label": "%{title}, sin leer",
