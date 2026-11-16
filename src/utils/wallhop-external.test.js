@@ -1,5 +1,7 @@
+/* eslint-disable import/extensions -- Native Node ESM tests require explicit file extensions. */
 import assert from "node:assert/strict"
 import test from "node:test"
+
 import { buildWallhopExternalUrl } from "./wallhop-external.js"
 
 test("public HTTPS article creates an explicit third-party WallHop URL", () => {
@@ -12,6 +14,7 @@ test("public HTTPS article creates an explicit third-party WallHop URL", () => {
 test("never forwards private, credentialed, non-HTTPS or local URLs", () => {
   const refused = [
     "javascript:alert(1)",
+    // eslint-disable-next-line unicorn/prefer-https -- insecure URLs must be rejected.
     "http://example.com/article",
     "https://u:secret@example.com/a",
     "https://localhost/a",
