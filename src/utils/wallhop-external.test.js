@@ -20,6 +20,7 @@ test("never forwards private, credentialed, non-HTTPS or local URLs", () => {
     "https://[::1]/",
     "https://127.0.0.1/",
     "https://example.com:444/a",
+    "https://example.com/a?api%5Fkey=topsecret",
     "https://example.com@127.0.0.1/a",
     "",
     null,
