@@ -368,28 +368,43 @@ class GatewayDiscovery:
 def _parse_listing(document: object) -> tuple[str, ...]:
     if not isinstance(document, dict) or not isinstance(document.get("data"), list):
         raise ValueError("listing")
+    rows = document["data"]
+    if len(rows) > MAX_DISCOVERED_ALIASES * 8:
+        raise ValueError("listing too large")
     aliases: list[str] = []
-    for item in document["data"]:
+    for item in rows:
+        # LiteLLM can expose unrelated aliases with shapes that NewsFlux cannot safely
+        # address. Never let one such row hide *other* valid, operator-approved models.
+        # Skipped names are never discoverable, approved or dispatched.
         if not isinstance(item, dict) or not _valid_model_alias(item.get("id")):
-            raise ValueError("listing item")
+            continue
         if item["id"] not in aliases:
             aliases.append(item["id"])
         if len(aliases) > MAX_DISCOVERED_ALIASES:
             raise ValueError("listing too large")
+    if rows and not aliases:
+        raise ValueError("listing has no valid aliases")
     return tuple(aliases)
 
 
 def _parse_model_info(document: object) -> dict[str, GatewayModel]:
     if not isinstance(document, dict) or not isinstance(document.get("data"), list):
         raise ValueError("model info")
+    rows = document["data"]
+    if len(rows) > MAX_DISCOVERED_ALIASES * 8:
+        raise ValueError("model info too large")
     grouped: dict[str, list[dict]] = {}
     identities: dict[str, list[str | None]] = {}
-    for item in document["data"]:
+    for item in rows:
+        # Never reuse metadata from an invalid/unaddressable model entry; retaining
+        # only valid aliases preserves conservative price and provider aggregation.
         if not isinstance(item, dict) or not _valid_model_alias(item.get("model_name")):
-            raise ValueError("model info item")
+            continue
         info = item.get("model_info")
         grouped.setdefault(item["model_name"], []).append(info if isinstance(info, dict) else {})
         identities.setdefault(item["model_name"], []).append(_deployment_identity(item))
+    if rows and not grouped:
+        raise ValueError("model info has no valid aliases")
     return {
         alias: _aggregate(alias, infos, identities[alias])
         for alias, infos in list(grouped.items())[:MAX_DISCOVERED_ALIASES]

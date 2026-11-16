@@ -232,6 +232,67 @@ class DynamicCatalogTests(unittest.TestCase):
             _, models = self.models(router)
             self.assertFalse(models["s5-free"]["available"], listing)
 
+
+    def test_mixed_litellm_listing_preserves_valid_approved_alias_without_approving_invalid_rows(self) -> None:
+        """One malformed/unrelated LiteLLM alias must not hide an approved, valid chat model."""
+        gateway = FakeGateway(listed=("newsflux-s5-free",))
+
+        def mixed_listing(path):
+            if path == "/v1/models":
+                return {"data": [
+                    {"id": "newsflux-s5-free", "object": "model"},
+                    {"id": "unsupported model with spaces", "object": "model"},
+                    {"id": None},
+                    {"name": "missing-id"},
+                ]}
+            return gateway(path)
+
+        router = self.router(mixed_listing)
+        document, models = self.models(router)
+        self.assertEqual(document["discovery"]["status"], "OK")
+        self.assertTrue(models["s5-free"]["available"])
+        self.assertEqual(set(models), {"s5-free", "mistral-small"})
+        self.assertEqual(document["default_model_id"], "s5-free")
+
+    def test_mixed_litellm_metadata_preserves_valid_price_and_rejects_unpriced_rows(self) -> None:
+        """Bad entries cannot hide a valid model or supply price/identity to another alias."""
+        gateway = FakeGateway(listed=("newsflux-s5-free",))
+
+        def mixed_metadata(path):
+            if path == "/model/info":
+                return {"data": [
+                    model_info("newsflux-s5-free", input_cost=0.0, output_cost=0.0),
+                    {"model_name": "unsupported model with spaces", "model_info": {
+                        "mode": "chat", "input_cost_per_token": 0, "output_cost_per_token": 0,
+                    }},
+                    {"model_name": None, "model_info": {
+                        "mode": "chat", "input_cost_per_token": 0, "output_cost_per_token": 0,
+                    }},
+                    {"model_info": {"mode": "chat"}},
+                ]}
+            return gateway(path)
+
+        router = self.router(mixed_metadata)
+        document, models = self.models(router)
+        self.assertEqual(document["discovery"]["status"], "OK")
+        self.assertTrue(models["s5-free"]["available"])
+        self.assertEqual(models["s5-free"]["pricing"]["status"], "verified_zero")
+
+    def test_invalid_only_listing_stays_unavailable_and_cannot_be_dispatched(self) -> None:
+        gateway = FakeGateway()
+
+        def invalid_only(path):
+            if path == "/v1/models":
+                return {"data": [{"id": None}, {"id": "invalid whitespace"}]}
+            return gateway(path)
+
+        router = self.router(invalid_only)
+        document, models = self.models(router)
+        self.assertEqual(document["discovery"]["status"], "UNAVAILABLE")
+        self.assertFalse(models["s5-free"]["available"])
+        with self.assertRaises(ModelNotAvailable):
+            router.adapter_for("s5-free")
+
     def test_model_info_failure_leaves_compatibility_unverified(self) -> None:
         router = self.router(FakeGateway(errors={"/model/info": RuntimeError("HTTP_403")}))
         entry = self.models(router)[1]["s5-free"]
