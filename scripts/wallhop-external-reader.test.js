@@ -18,10 +18,7 @@ test("opening external WallHop requires explicit consent and no referrer", async
     source,
     /globalThis\.confirm\(polyglot\.t\("article_card\.wallhop_external_consent"\)\)/u,
   )
-  assert.match(
-    source,
-    /globalThis\.open\(wallhopExternalUrl, "_blank", "noopener,noreferrer"\)/u,
-  )
+  assert.match(source, /globalThis\.open\(wallhopExternalUrl, "_blank", "noopener,noreferrer"\)/u)
   assert.doesNotMatch(source, /useEffect\([^)]*wallhopExternalUrl/su)
 })
 
