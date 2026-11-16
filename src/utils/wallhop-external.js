@@ -1,6 +1,10 @@
 /** Build a user-initiated third-party link; never accept internal or credentialed article URLs. */
 export const buildWallhopExternalUrl = (articleUrl) => {
-  if (typeof articleUrl !== "string" || articleUrl.length > 8192 || articleUrl.trim() !== articleUrl) {
+  if (
+    typeof articleUrl !== "string" ||
+    articleUrl.length > 8192 ||
+    articleUrl.trim() !== articleUrl
+  ) {
     return null
   }
   try {
