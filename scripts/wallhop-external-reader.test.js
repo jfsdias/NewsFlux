@@ -14,8 +14,14 @@ test("Reader exposes explicit WallHop external action only for safe URLs", async
 
 test("opening external WallHop requires explicit consent and no referrer", async () => {
   const source = await read("src/components/Article/ActionButtons.jsx")
-  assert.match(source, /globalThis\.confirm\(polyglot\.t\("article_card\.wallhop_external_consent"\)\)/u)
-  assert.match(source, /globalThis\.open\(wallhopExternalUrl, "_blank", "noopener,noreferrer"\)/u)
+  assert.match(
+    source,
+    /globalThis\.confirm\(polyglot\.t\("article_card\.wallhop_external_consent"\)\)/u,
+  )
+  assert.match(
+    source,
+    /globalThis\.open\(wallhopExternalUrl, "_blank", "noopener,noreferrer"\)/u,
+  )
   assert.doesNotMatch(source, /useEffect\([^)]*wallhopExternalUrl/su)
 })
 
