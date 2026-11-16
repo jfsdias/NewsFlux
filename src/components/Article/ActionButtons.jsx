@@ -39,7 +39,6 @@ import {
 import { dataState } from "@/store/dataState"
 import { settingsState, updateSettings } from "@/store/settingsState"
 import { isRightToLeftBrowsing } from "@/utils/content-browsing-direction"
-import { buildWallhopExternalUrl } from "@/utils/wallhop-external"
 import {
   createFontFamilyOptions,
   MAX_ARTICLE_FONT_SIZE,
@@ -48,6 +47,7 @@ import {
   MIN_ARTICLE_WIDTH,
   TITLE_ALIGNMENT_OPTIONS,
 } from "@/utils/settings-options"
+import { buildWallhopExternalUrl } from "@/utils/wallhop-external"
 import "./ActionButtons.css"
 
 const TITLE_ALIGNMENT_ICONS = {
