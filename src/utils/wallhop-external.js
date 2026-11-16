@@ -20,7 +20,9 @@ export const buildWallhopExternalUrl = (articleUrl) => {
       /^\[|:/.test(host) ||
       /^[0-9.]+$/.test(host) ||
       /\.(?:home|internal|local|lan|localhost|invalid|test|example)$/.test(host) ||
-      /(?:^|[?&])(?:token|api[_-]?key|secret|session|password|auth|code)=/i.test(url.search)
+      [...url.searchParams.keys()].some((key) =>
+        /^(token|api[_-]?key|secret|session|password|auth|code)$/i.test(key),
+      )
     ) {
       return null
     }
