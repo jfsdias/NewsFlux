@@ -239,7 +239,10 @@ const ActionButtons = ({ isPhotoSliderVisible = false, scrollContainerRef = null
   const handleViewComments = () => window.open(activeContent.comments_url, "_blank")
 
   const handleOpenViaWallhop = () => {
-    if (wallhopExternalUrl && globalThis.confirm(polyglot.t("article_card.wallhop_external_consent"))) {
+    if (
+      wallhopExternalUrl &&
+      globalThis.confirm(polyglot.t("article_card.wallhop_external_consent"))
+    ) {
       globalThis.open(wallhopExternalUrl, "_blank", "noopener,noreferrer")
     }
   }
