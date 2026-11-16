@@ -168,6 +168,8 @@
     "mark_articles_above_as_read_tooltip": "上の記事をすべて既読にする",
     "mark_articles_below_as_read_tooltip": "下の記事をすべて既読にする",
     "open_link_externally_tooltip": "配信元リンクを新しいタブで開く",
+    "open_with_wallhop": "WallHop で開く",
+    "wallhop_external_consent": "記事のURLが外部サービス WallHop に送信されます。新しいタブで開きますか？",
     "open_in_reactflux_tooltip": "ReactFlux で開く",
     "invalid_source_link_fallback": "この記事の配信元リンクは無効です。代わりに ReactFlux で開きます。",
     "unread_article_aria_label": "%{title}、未読",
