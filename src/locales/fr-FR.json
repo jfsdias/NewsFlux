@@ -168,6 +168,8 @@
     "mark_articles_above_as_read_tooltip": "Marquer les articles au-dessus comme lus",
     "mark_articles_below_as_read_tooltip": "Marquer les articles en dessous comme lus",
     "open_link_externally_tooltip": "Ouvrir le lien source dans un nouvel onglet",
+    "open_with_wallhop": "Ouvrir avec WallHop",
+    "wallhop_external_consent": "L’adresse de l’article sera transmise au service externe WallHop. Ouvrir dans un nouvel onglet ?",
     "open_in_reactflux_tooltip": "Ouvrir dans ReactFlux",
     "invalid_source_link_fallback": "Le lien source n’est pas valide. L’article sera ouvert dans ReactFlux.",
     "unread_article_aria_label": "%{title}, non lu",
