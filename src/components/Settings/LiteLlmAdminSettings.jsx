@@ -16,15 +16,11 @@ import {
   testLiteLLMKey,
 } from "@/apis/article-intelligence-admin"
 import { polyglotState } from "@/hooks/useLanguage"
-import { authState } from "@/store/authState"
-import { getAuthSessionKey, hasProvisionedApiKey } from "@/utils/auth"
 
 import "./LiteLLMAdminSettings.css"
 
 const LiteLlmAdminSettings = ({ onPolicyChanged }) => {
   const { polyglot } = useStore(polyglotState)
-  const auth = useStore(authState)
-  const sessionKey = getAuthSessionKey(auth)
   const [page, setPage] = useState({ kind: "loading", status: null, models: [], policy: null })
   const [secret, setSecret] = useState("")
   const [verified, setVerified] = useState(false)
@@ -37,10 +33,6 @@ const LiteLlmAdminSettings = ({ onPolicyChanged }) => {
 
   const load = useCallback(
     async (signal) => {
-      if (!hasProvisionedApiKey(auth)) {
-        setPage({ kind: "hidden", status: null, models: [], policy: null })
-        return
-      }
       try {
         const status = await readLiteLLMStatus({ signal })
         if (!status || signal?.aborted) {
@@ -78,7 +70,7 @@ const LiteLlmAdminSettings = ({ onPolicyChanged }) => {
         }
       }
     },
-    [auth, sessionKey],
+    [],
   )
 
   useEffect(() => {
