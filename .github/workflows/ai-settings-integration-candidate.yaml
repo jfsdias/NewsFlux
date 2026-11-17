@@ -1,0 +1,102 @@
+name: AI settings exact-SHA integration candidate gates
+
+on:
+  push:
+    branches:
+      - integration/newsflux-ai-settings-01-r1-validated-candidate
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r services/article_intel_summary/requirements.lock
+      - name: Full synthetic Summary regressions
+        run: python -B -m unittest discover -s services/article_intel_summary/tests -p 'test_*.py' -q
+      - name: Syntax check all touched backend modules
+        run: |
+          python -B -m py_compile \
+            services/article_intel_summary/admin_settings.py \
+            services/article_intel_summary/admin_api.py \
+            services/article_intel_summary/operator_restore_ai_settings.py \
+            services/article_intel_summary/catalog.py \
+            services/article_intel_summary/app.py
+
+  reader:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm test:src
+      - name: Build Reader with Article Intelligence controls enabled
+        env:
+          VITE_ARTICLE_INTELLIGENCE_ENABLED: "1"
+        run: pnpm build
+
+  route:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: "24"
+      - name: Extract exact-version Caddy binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          image='caddy:2.11.7@sha256:685ae3d7c34d9b5f8caeddc5d14051db7bbd88ff1f5a2fa0c16bd8ca328fb7af'
+          docker pull "$image"
+          cid="$(docker create "$image")"
+          trap 'docker rm "$cid" >/dev/null 2>&1 || true' EXIT
+          docker cp "$cid:/usr/bin/caddy" "$RUNNER_TEMP/newsflux-caddy"
+          chmod 0755 "$RUNNER_TEMP/newsflux-caddy"
+      - name: Verify admin Caddy positive and negative routing
+        run: PILOT_CADDY_BINARY="$RUNNER_TEMP/newsflux-caddy" node scripts/pilot-e2e/test-caddy-route.mjs
+
+  summary-image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Build exact immutable candidate revision in isolated Docker
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          docker build \
+            -f services/article_intel_summary/Dockerfile \
+            --build-arg SOURCE_COMMIT="$sha" \
+            -t "newsflux-ai-settings-integration:$sha" .
+          test "$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "newsflux-ai-settings-integration:$sha")" = "$sha"
+          test "$(docker image inspect -f '{{.Config.User}}' "newsflux-ai-settings-integration:$sha")" = "10001:10001"
+          cid="$(docker run --rm -d --network none \
+            -e NEWSFLUX_AI_MINIFLUX_BASE_URL=https://miniflux.example \
+            -e NEWSFLUX_AI_ALLOWED_WEB_ORIGINS=https://newsflux.example \
+            -e NEWSFLUX_AI_ADMIN_CONFIG_WRITES_ENABLED=false \
+            "newsflux-ai-settings-integration:$sha")"
+          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+          for index in $(seq 1 50); do
+            status="$(docker inspect -f '{{.State.Health.Status}}' "$cid")"
+            if [[ "$status" == healthy ]]; then break; fi
+            if [[ "$status" == unhealthy ]]; then exit 1; fi
+            sleep 1
+          done
+          test "$(docker inspect -f '{{.State.Health.Status}}' "$cid")" = healthy
+          test "$(docker inspect -f '{{len .HostConfig.PortBindings}}' "$cid")" = 0
+          echo "EXACT_SHA_IMAGE_HEALTH=PASS"
