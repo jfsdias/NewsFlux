@@ -764,7 +764,7 @@ def create_model_router(
             local_candidate = any(
                 _is_unpriced_local_ollama(
                     item, (candidate_snapshot.info or {}).get(item.alias), item.alias in candidate_snapshot.listed
-                ) for item in policy if item.alias is not None
+                ) for item in policy if item.alias is not None and item.transfer_authorized
             )
     if ledger is None and gateway.enabled and (
         gateway.external_transfer_authorized or local_candidate
@@ -880,7 +880,7 @@ def _evaluate(item: PolicyModel, policy_status: str, snapshot: DiscoverySnapshot
         reason = "POLICY_INVALID"
     elif not gateway.enabled:
         reason = "INFERENCE_DISABLED"
-    elif not transfer_authorized:
+    elif not (gateway.external_transfer_authorized or (gateway.local_processing_authorized and local_unpriced)):
         reason = "EXTERNAL_TRANSFER_NOT_AUTHORIZED"
     elif not item.transfer_authorized:
         reason = "TRANSFER_NOT_AUTHORIZED"
