@@ -227,6 +227,21 @@ class DynamicCatalogTests(unittest.TestCase):
         self.assertIsNotNone(adapter.settings.requests_per_minute)
         self.assertIsNotNone(adapter.settings.tokens_per_minute)
 
+    def test_pinned_local_ollama_with_gateway_zero_prices_still_needs_no_policy_price(self) -> None:
+        entry = policy_model("local-3b", "llama3.2:3b", provider_identity="ollama@ollama:11434")
+        del entry["input_usd_per_million"]
+        del entry["output_usd_per_million"]
+        gateway_info = model_info("llama3.2:3b", provider="ollama", input_cost=0.0, output_cost=0.0)
+        gateway_info["litellm_params"].update(model="ollama/llama3.2:3b", api_base="http://ollama:11434")
+        router = self.router(
+            FakeGateway(listed=("llama3.2:3b",), infos=[gateway_info]),
+            NEWSFLUX_AI_MODEL_POLICY_JSON=policy(entry),
+        )
+        model = self.models(router)[1]["local-3b"]
+        self.assertTrue(model["available"], model)
+        self.assertEqual(model["pricing"]["status"], "local_unpriced")
+        self.assertFalse(model["checks"]["pricing_verified"])
+
     def test_unpriced_remote_or_unpinned_ollama_never_gets_local_exemption(self) -> None:
         variants = (
             ("remote-provider", "openai", "http://external-provider:9", "openai@external-provider:9"),
