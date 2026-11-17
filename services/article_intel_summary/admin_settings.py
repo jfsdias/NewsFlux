@@ -149,11 +149,9 @@ class ManagedSettingsStore:
         managed = self._managed()
         if managed is None:
             return result
-        result["NEWSFLUX_AI_LITELLM_VIRTUAL_KEY_FILE"] = str(self.root / "key-current")
-        # key-current is populated at each managed write. Corrupt/missing => fail closed.
-        raw = self._read_private(self.root / "key-current", limit=MAX_KEY_BYTES)
-        if raw is None or raw.decode("utf-8") != managed["key"]:
-            raise ManagedSettingsError("CONFIG_UNSAFE")
+        # In-memory, private backend-only override: one atomic canonical JSON file.
+        # Never expose this key in API responses, settings documents or logs.
+        result["__newsflux_managed_virtual_key"] = managed["key"]
         if managed["policy"] is not None:
             result["NEWSFLUX_AI_MODEL_POLICY_JSON"] = json.dumps(managed["policy"], separators=(",", ":"))
         else:
@@ -262,9 +260,7 @@ class ManagedSettingsStore:
             raw = json.dumps(next_state, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
             if len(raw) > MAX_RECORD_BYTES:
                 raise ManagedSettingsError("CONFIG_INVALID")
-            # In an existing managed state the secret current and record must agree.
-            # All readers fail closed on in-flight/crash mismatch; no old bootstrap fallback.
-            self._write_bytes(self.root / "key-current", next_state["key"].encode("utf-8"))
+            # One atomic record; no two-file consistency window or implicit fallback.
             self._write_bytes(self.root / "settings.json", raw)
             check = self._managed()
             if check is None or check["revision"] != next_state["revision"]:
@@ -274,6 +270,8 @@ class ManagedSettingsStore:
             os.close(fd)
 
     def save_key(self, key: str, expected_revision: str) -> dict:
+        if not self.enabled:
+            raise ManagedSettingsError("CHANGES_DISABLED")
         key = _parse_key(key)
         self.validate_candidate(key)  # cannot destroy working key with an unverified credential
         return self._save(expected_revision, key=key, change="key")
