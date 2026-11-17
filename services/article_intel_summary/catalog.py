@@ -11,8 +11,9 @@ Three independent inputs decide what a user may select; none of them alone grant
   key's ``allowed_routes=["llm_api_routes"]`` is never widened;
 * the global switches and budget (inference, external transfer, paid inference, ledger).
 
-A model is AVAILABLE only when it is approved, discovered, compatible (chat), priced (the gateway
-publishes exactly the operator-declared price) and authorized. Discovered but unapproved aliases
+A model is AVAILABLE only when it is approved, discovered, compatible (chat), authorized and
+either has a price matched to the gateway or is an identity-pinned local Ollama deployment
+with no per-token gateway price published. Discovered but unapproved aliases
 are listed under an opaque ID and can never be selected. A model that disappears from the gateway
 becomes NOT_DISCOVERED; nothing is substituted. The browser receives catalog IDs, labels, states
 and prices only: never the gateway URL, key, provider parameters or deployment details.
@@ -145,7 +146,7 @@ _POLICY_KEYS = {
     "max_output_tokens",
     "provider_identity",
 }
-_POLICY_REQUIRED = _POLICY_KEYS - {"max_output_tokens", "provider_identity"}
+_POLICY_REQUIRED = _POLICY_KEYS - {"max_output_tokens", "provider_identity", "input_usd_per_million", "output_usd_per_million"}
 
 
 def load_model_policy(values: Mapping[str, str]) -> tuple[str, tuple[PolicyModel, ...]]:
@@ -205,7 +206,7 @@ def _parse_policy(document: object) -> tuple[PolicyModel, ...]:
             raise ValueError("policy flags")
         prices = []
         for field in ("input_usd_per_million", "output_usd_per_million"):
-            value = item[field]
+            value = item.get(field)
             if value is None:
                 prices.append(None)
                 continue
@@ -460,7 +461,9 @@ def _aggregate(alias: str, infos: list[dict], identities: list[str | None] | Non
     for field in ("input_cost_per_token", "output_cost_per_token"):
         values = {_per_million(info.get(field)) for info in infos}
         if len(values) > 1:
-            conflict = conflict or None not in values
+            # An unknown price mixed with a published price is also a conflict.
+            # Never let a mixed deployment alias look like a wholly unpriced local model.
+            conflict = True
             prices.append(None)
         else:
             prices.append(values.pop())
@@ -604,6 +607,30 @@ def _gateway_pricing(entry: PolicyModel | None, gateway: GatewayModel | None) ->
             "output_usd_per_million": _decimal_text(gateway.output_price),
         }, False
     return {"status": "not_verified", "input_usd_per_million": None, "output_usd_per_million": None}, False
+
+
+# The only no-price exception is the separately approved Ollama service inside the
+# gateway's Docker network. A proxy, remote Ollama, omitted endpoint, or another
+# identity remains subject to explicit price verification.
+_LOCAL_OLLAMA_IDENTITY = "ollama@ollama:11434"
+
+
+def _is_unpriced_local_ollama(item: PolicyModel, model: GatewayModel | None, discovered: bool | None) -> bool:
+    return bool(
+        discovered is True
+        and not item.legacy
+        and item.model_id not in LEGACY_IDS
+        and item.provider_identity == _LOCAL_OLLAMA_IDENTITY
+        and item.input_price is None
+        and item.output_price is None
+        and model is not None
+        and model.provider == "ollama"
+        and model.provider_identity == _LOCAL_OLLAMA_IDENTITY
+        and model.mode == "chat"
+        and not model.price_conflict
+        and model.input_price is None
+        and model.output_price is None
+    )
 
 
 def discovered_model_id(alias: str) -> str:
@@ -778,9 +805,10 @@ def create_model_router(
 
 
 def _evaluate(item: PolicyModel, policy_status: str, snapshot: DiscoverySnapshot, gateway: LiteLLMSettings, values, adapter_for_settings):
-    settings = _settings_for(item, gateway, values)
     gateway_model = (snapshot.info or {}).get(item.alias) if item.alias else None
     discovered = None if snapshot.status != "OK" else (item.alias in snapshot.listed)
+    local_unpriced = _is_unpriced_local_ollama(item, gateway_model, discovered)
+    settings = _settings_for(item, gateway, values, local_unpriced=local_unpriced)
     if snapshot.status == "OK" and discovered and snapshot.info is not None and gateway_model is not None and gateway_model.mode is not None:
         compatible: bool | None = item.compatible_for_summary and gateway_model.mode == "chat"
     elif not item.compatible_for_summary:
@@ -790,6 +818,10 @@ def _evaluate(item: PolicyModel, policy_status: str, snapshot: DiscoverySnapshot
     pricing, pricing_verified = _gateway_pricing(item, gateway_model if discovered else None)
     if snapshot.status != "OK":
         pricing, pricing_verified = _declared_pricing(item.input_price, item.output_price), False
+    elif local_unpriced:
+        # Public catalog prices remain unknown (not falsely verified as 0).
+        # Only per-API-call currency accounting in the private token ledger is zero.
+        pricing = {"status": "local_unpriced", "input_usd_per_million": None, "output_usd_per_million": None}
     paid = (
         item.model_id == MODEL_CHOICE_MISTRAL_SMALL
         or any(p is not None and p > 0 for p in (item.input_price, item.output_price))
@@ -826,7 +858,7 @@ def _evaluate(item: PolicyModel, policy_status: str, snapshot: DiscoverySnapshot
         reason = "COMPATIBILITY_UNVERIFIED"
     elif pricing["status"] == "mismatch":
         reason = "PRICE_MISMATCH"
-    elif not pricing_verified:
+    elif not pricing_verified and not local_unpriced:
         reason = "PRICE_NOT_VERIFIED"
     elif paid and not settings.paid_inference_authorized:
         reason = "PAID_NOT_AUTHORIZED"
@@ -859,7 +891,9 @@ def _evaluate(item: PolicyModel, policy_status: str, snapshot: DiscoverySnapshot
     return entry, adapter
 
 
-def _settings_for(item: PolicyModel, gateway: LiteLLMSettings, values: Mapping[str, str]) -> LiteLLMSettings:
+def _settings_for(
+    item: PolicyModel, gateway: LiteLLMSettings, values: Mapping[str, str], *, local_unpriced: bool = False
+) -> LiteLLMSettings:
     if item.legacy:
         # Exact legacy semantics (alias variables, S5 limits, paid rule) for the two legacy IDs.
         scoped = dict(values)
@@ -874,8 +908,10 @@ def _settings_for(item: PolicyModel, gateway: LiteLLMSettings, values: Mapping[s
         model_id=item.alias,
         s5_free_model_alias=item.alias if item.model_id == MODEL_CHOICE_S5_FREE else None,
         mistral_small_model_alias=item.alias if item.model_id == MODEL_CHOICE_MISTRAL_SMALL else None,
-        input_price_usd_per_million=item.input_price,
-        output_price_usd_per_million=item.output_price,
+        # A pinned, local-only Ollama deployment has no metered provider API fee.
+        # This is private ledger accounting, not a published gateway price.
+        input_price_usd_per_million=Decimal("0") if local_unpriced else item.input_price,
+        output_price_usd_per_million=Decimal("0") if local_unpriced else item.output_price,
         paid_inference_authorized=gateway.paid_inference_authorized and item.paid_authorized,
         external_transfer_authorized=gateway.external_transfer_authorized and item.transfer_authorized,
         max_output_tokens=max_output,
