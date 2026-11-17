@@ -77,7 +77,11 @@ const LiteLlmAdminSettings = ({ onPolicyChanged }) => {
     const controller = new AbortController()
     // The component is keyed by the Miniflux session: unmount clears transient
     // credentials and selections without synchronous setState in this effect.
-    void load(controller.signal)
+    queueMicrotask(() => {
+      if (!controller.signal.aborted) {
+        void load(controller.signal)
+      }
+    })
     return () => controller.abort()
   }, [load])
 
