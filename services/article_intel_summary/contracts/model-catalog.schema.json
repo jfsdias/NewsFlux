@@ -14,56 +14,23 @@
     "models"
   ],
   "properties": {
-    "schema_version": {
-      "const": "2"
-    },
+    "schema_version": { "const": "2" },
     "default_model_id": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/modelId"
-        },
-        {
-          "type": "null"
-        }
-      ]
+      "anyOf": [{ "$ref": "#/$defs/modelId" }, { "type": "null" }]
     },
-    "profile_version": {
-      "const": "summary-profile-v1"
-    },
-    "default_profile": {
-      "type": "object"
-    },
+    "profile_version": { "const": "summary-profile-v1" },
+    "default_profile": { "type": "object" },
     "discovery": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "status"
-      ],
-      "properties": {
-        "status": {
-          "enum": [
-            "DISABLED",
-            "OK",
-            "UNAVAILABLE"
-          ]
-        }
-      }
+      "required": ["status"],
+      "properties": { "status": { "enum": ["DISABLED", "OK", "UNAVAILABLE"] } }
     },
     "policy": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "status"
-      ],
-      "properties": {
-        "status": {
-          "enum": [
-            "LEGACY",
-            "CONFIGURED",
-            "INVALID"
-          ]
-        }
-      }
+      "required": ["status"],
+      "properties": { "status": { "enum": ["LEGACY", "CONFIGURED", "INVALID"] } }
     },
     "models": {
       "type": "array",
@@ -85,19 +52,9 @@
           "notices"
         ],
         "properties": {
-          "id": {
-            "$ref": "#/$defs/modelId"
-          },
-          "label": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 64
-          },
-          "provider": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 64
-          },
+          "id": { "$ref": "#/$defs/modelId" },
+          "label": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "provider": { "type": "string", "minLength": 1, "maxLength": 64 },
           "status": {
             "enum": [
               "AVAILABLE",
@@ -109,9 +66,7 @@
               "UNSUPPORTED"
             ]
           },
-          "available": {
-            "type": "boolean"
-          },
+          "available": { "type": "boolean" },
           "unavailable_reason": {
             "enum": [
               null,
@@ -132,9 +87,7 @@
               "RUNTIME_UNAVAILABLE"
             ]
           },
-          "requires_paid_authorization": {
-            "type": "boolean"
-          },
+          "requires_paid_authorization": { "type": "boolean" },
           "checks": {
             "type": "object",
             "additionalProperties": false,
@@ -147,40 +100,18 @@
               "transfer_authorized"
             ],
             "properties": {
-              "discovered": {
-                "type": [
-                  "boolean",
-                  "null"
-                ]
-              },
-              "compatible": {
-                "type": [
-                  "boolean",
-                  "null"
-                ]
-              },
-              "operator_approved": {
-                "type": "boolean"
-              },
-              "pricing_verified": {
-                "type": "boolean"
-              },
-              "paid_authorized": {
-                "type": "boolean"
-              },
-              "transfer_authorized": {
-                "type": "boolean"
-              }
+              "discovered": { "type": ["boolean", "null"] },
+              "compatible": { "type": ["boolean", "null"] },
+              "operator_approved": { "type": "boolean" },
+              "pricing_verified": { "type": "boolean" },
+              "paid_authorized": { "type": "boolean" },
+              "transfer_authorized": { "type": "boolean" }
             }
           },
           "pricing": {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "status",
-              "input_usd_per_million",
-              "output_usd_per_million"
-            ],
+            "required": ["status", "input_usd_per_million", "output_usd_per_million"],
             "properties": {
               "status": {
                 "enum": [
@@ -194,20 +125,8 @@
                   "local_unpriced"
                 ]
               },
-              "input_usd_per_million": {
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "maxLength": 32
-              },
-              "output_usd_per_million": {
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "maxLength": 32
-              }
+              "input_usd_per_million": { "type": ["string", "null"], "maxLength": 32 },
+              "output_usd_per_million": { "type": ["string", "null"], "maxLength": 32 }
             }
           },
           "limits": {
@@ -220,30 +139,10 @@
               "timeout_seconds"
             ],
             "properties": {
-              "max_input_tokens": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
-              },
-              "max_output_tokens": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
-              },
-              "requests_per_minute": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
-              },
-              "timeout_seconds": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              }
+              "max_input_tokens": { "type": ["integer", "null"] },
+              "max_output_tokens": { "type": ["integer", "null"] },
+              "requests_per_minute": { "type": ["integer", "null"] },
+              "timeout_seconds": { "type": ["number", "null"] }
             }
           },
           "notices": {
@@ -261,33 +160,17 @@
         },
         "allOf": [
           {
-            "if": {
-              "properties": {
-                "available": {
-                  "const": true
-                }
-              }
-            },
+            "if": { "properties": { "available": { "const": true } } },
             "then": {
               "properties": {
-                "status": {
-                  "const": "AVAILABLE"
-                },
-                "unavailable_reason": {
-                  "const": null
-                }
+                "status": { "const": "AVAILABLE" },
+                "unavailable_reason": { "const": null }
               }
             },
             "else": {
               "properties": {
-                "status": {
-                  "not": {
-                    "const": "AVAILABLE"
-                  }
-                },
-                "unavailable_reason": {
-                  "type": "string"
-                }
+                "status": { "not": { "const": "AVAILABLE" } },
+                "unavailable_reason": { "type": "string" }
               }
             }
           }
@@ -296,9 +179,6 @@
     }
   },
   "$defs": {
-    "modelId": {
-      "type": "string",
-      "pattern": "^(?!(?:auto|none)$)[a-z0-9][a-z0-9._-]{0,63}$"
-    }
+    "modelId": { "type": "string", "pattern": "^(?!(?:auto|none)$)[a-z0-9][a-z0-9._-]{0,63}$" }
   }
 }
