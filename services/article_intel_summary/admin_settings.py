@@ -284,14 +284,62 @@ class ManagedSettingsStore:
             # fallback if the managed record vanishes. Save the prior record for
             # an operator-controlled restoration, never in a public response.
             current = self._managed()
-            if current is not None:
-                previous = json.dumps(current, separators=(",", ":")).encode("utf-8")
-                self._write_bytes(self.root / "previous.json", previous)
-            else:
+            previous = json.dumps(state, separators=(",", ":")).encode("utf-8")
+            if len(previous) > MAX_RECORD_BYTES:
+                raise ManagedSettingsError("CONFIG_INVALID")
+            self._write_bytes(self.root / "previous.json", previous)
+            if current is None:
                 self._write_bytes(self.root / "activated", b"v1\n")
             self._write_bytes(self.root / "settings.json", raw)
             check = self._managed()
             if check is None or check["revision"] != next_state["revision"]:
+                raise ManagedSettingsError("CONFIG_UNAVAILABLE")
+            return self.status()
+        finally:
+            os.close(fd)
+
+    def operator_restore_previous(self, expected_revision: str) -> dict:
+        """Only callable by the trusted operator inside the Summary container.
+
+        The HTTP API deliberately has no endpoint for reverting to an unverified
+        old key. The previous record is kept owner-only; never return its body.
+        """
+        if not self.enabled:
+            raise ManagedSettingsError("CHANGES_DISABLED")
+        if not isinstance(expected_revision, str) or not self._check_dir():
+            raise ManagedSettingsError("CONFIG_UNSAFE")
+        fd = os.open(
+            self.root / "write.lock",
+            os.O_RDWR | os.O_CLOEXEC | os.O_NOFOLLOW,
+        )
+        try:
+            info = os.fstat(fd)
+            if (
+                not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid()
+                or stat.S_IMODE(info.st_mode) != 0o600 or info.st_nlink != 1
+            ):
+                raise ManagedSettingsError("CONFIG_UNSAFE")
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            current = self._managed()
+            if current is None or current["revision"] != expected_revision:
+                raise ManagedSettingsError("CONFIG_CONFLICT")
+            raw = self._read_private(self.root / "previous.json", limit=MAX_RECORD_BYTES)
+            if raw is None:
+                raise ManagedSettingsError("CONFIG_UNAVAILABLE")
+            try:
+                previous = json.loads(raw.decode("utf-8"))
+                if not isinstance(previous, dict) or set(previous) != {"version", "revision", "key", "policy"}:
+                    raise ValueError()
+                _parse_key(previous["key"])
+                if previous["policy"] is not None:
+                    _parse_policy(previous["policy"])
+            except (ValueError, TypeError, UnicodeError):
+                raise ManagedSettingsError("CONFIG_INVALID") from None
+            previous["revision"] = secrets.token_hex(16)
+            payload = json.dumps(previous, separators=(",", ":")).encode("utf-8")
+            self._write_bytes(self.root / "settings.json", payload)
+            restored = self._managed()
+            if restored is None or restored["revision"] != previous["revision"]:
                 raise ManagedSettingsError("CONFIG_UNAVAILABLE")
             return self.status()
         finally:
