@@ -628,8 +628,8 @@ def _is_unpriced_local_ollama(item: PolicyModel, model: GatewayModel | None, dis
         and model.provider_identity == _LOCAL_OLLAMA_IDENTITY
         and model.mode == "chat"
         and not model.price_conflict
-        and model.input_price is None
-        and model.output_price is None
+        and model.input_price in (None, Decimal("0"))
+        and model.output_price in (None, Decimal("0"))
     )
 
 
