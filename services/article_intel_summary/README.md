@@ -103,6 +103,58 @@ model identity and per-model cost accounting. Keep the gateway and other
 consumers unchanged. This change does **not** authorize a production deployment,
 credential-policy change, or live inference.
 
+## Dynamic local Ollama without declared token prices
+
+In `NEWSFLUX_AI_MODEL_POLICY_JSON`, price fields are **optional** for an
+operator-approved **local Ollama** deployment whose identity the gateway
+independently proves to be `ollama@ollama:11434`. A minimal dynamic policy
+entry can omit `input_usd_per_million` and `output_usd_per_million`:
+
+```json
+{
+  "version": 1,
+  "models": [
+    {
+      "id": "local-3b",
+      "alias": "llama3.2:3b",
+      "label": "Ollama local 3B",
+      "provider": "Ollama local",
+      "provider_identity": "ollama@ollama:11434",
+      "compatible_for_summary": true,
+      "paid_authorized": false,
+      "transfer_authorized": true
+    }
+  ]
+}
+```
+
+The exception is **not** an implicit trust in the alias or in an `ollama/`
+model prefix. Discovery must list the exact approved alias, `/model/info`
+must report `chat`, the Ollama provider and the exact pinned local service
+identity (including its endpoint), and must not publish any positive or
+conflicting per-token price. Missing identity or mismatched metadata blocks
+the model. **Verify the deployed gateway's real `api_base`, Docker DNS,
+consumer access and local egress before activation**; a local-looking alias
+alone is not enough. Any paid, external, unknown or unpinned model retains
+the original strict operator-price and gateway-price verification gates.
+
+The catalog advertises `pricing.status=local_unpriced` with **null prices**
+and `checks.pricing_verified=false`; it does not claim a gateway-verified
+zero price. The service's private usage ledger uses zero *metered provider
+API charge* for this specifically proven local path, while monthly-budget
+configuration, request/token/concurrency limits and usage token accounting
+continue to apply. This is **not** a statement that local electricity,
+hardware or operational costs are zero.
+
+This change does **not** activate inference by itself: inference,
+article-transfer, discovery and paid authorization switches remain
+independent controls. The generic
+`NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER` flag must still be explicitly
+authorized with a validated local-only route and privacy scope before
+enabling even local inference. No LiteLLM model, key, pricing row, Postgres
+database, NPM host, Reader or Miniflux configuration is changed by this
+source-level policy adjustment.
+
 ## Contract v2 — approved model catalog and summary profiles
 
 `GET /api/ai/v1/models` (same-origin, Miniflux key revalidated against `/v1/me` on every call) returns the
