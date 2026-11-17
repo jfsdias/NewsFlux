@@ -10,9 +10,9 @@ No real LiteLLM key, real article, Miniflux write or production host was used.
 | --------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------- | ------------------------------------------ |
 | Base                                                                        | —                                                    | `main`                                      | `d54eda2bdb8bc5c3d1bd58d40236f48da762e852` |
 | Backend (API, store, policy, preflight, restore)                            | [#262](https://github.com/jfsdias/NewsFlux/pull/262) | `codex/newsflux-ai-settings-backend-r1`     | `7b14929958c4401a86caa59794478c3da13dcaf3` |
-| UI (stacked on #262, merged forward, diff vs #262 is frontend/harness only) | [#263](https://github.com/jfsdias/NewsFlux/pull/263) | `codex/newsflux-ai-settings-ui-r2`          | `9cb4d6a3fc6d0daac22f6e7189a79ae59a29daee` |
+| UI (stacked on #262, merged forward, diff vs #262 is frontend/harness only) | [#263](https://github.com/jfsdias/NewsFlux/pull/263) | `codex/newsflux-ai-settings-ui-r2`          | `044153c47387d698bdefdb858511f5ba1dd80c63` |
 | Caddy route                                                                 | [#264](https://github.com/jfsdias/NewsFlux/pull/264) | `codex/newsflux-ai-settings-caddy-route-r1` | `2641010b78839150b4c227f9939d7e373462f971` |
-| Test-only combined tree (never merge)                                       | —                                                    | `claude/intelligent-edison-5053ez`          | `afad6196fb6ba505b2092bfe5bb836388b7751b9` |
+| Test-only combined tree (never merge)                                       | —                                                    | `claude/intelligent-edison-5053ez`          | `2bba634e72998a6429b064a64bf09e023ac1736f` |
 
 PR #260 (local Ollama privacy) is **not** in any of these trees and stays independent / HOLD.
 The R1 branch `integration/newsflux-ai-settings-01-r1-validated-candidate` (`f66567e`) is **stale**: it was
@@ -150,6 +150,23 @@ ignores it.
 - PR #260 not reconciled: approving a local model sets `transfer_authorized=true` in the policy; with
   #260's local-only consent the local path must be re-reviewed when #260 is merged.
 
+## 10. Open blocker — governed Caddy update from the installed Stage 1
+
+`Summary release isolated rehearsal` → `synthetic-release` fails on #264 (it **already failed on the original
+#264 head `927fb64`**, before R2): `UPGRADE_GATE` 20 pass / 5 fail with `ACTIVE_CADDY_DRIFT`.
+`deploy/release-governance/ai-functional-release.sh` and `rehearse-stage1-upgrade.sh` encode the invariant
+"an upgrade from Stage 1 never changes the pilot Caddyfile": `update-caddy` accepts only the pre-Stage-1 hash
+`6970ee…` or a file already equal to the new one. The installed Stage 1 Caddyfile is `main`'s (`56d434b…`), so
+**any** Caddyfile change, including this admin route, is rejected. `release.py` promotes images and does not
+update the bind-mounted Caddyfile.
+
+Consequence: there is currently **no governed, rehearsed path** to install the #264 route. This is a
+release-governance change (accept the Stage 1 hash as a valid prior state, back up by actual hash, restore and
+verify on rollback, and rewrite the five rehearsal assertions), outside the routing PR scope and requiring an
+owner decision. Until it is resolved: `CADDY_ROUTE_GATE=PASS` (contract test) but `INSTALL_READY=NO`.
+Without the route, the Reader returns 403 for `/api/ai/v1/admin/litellm/*` (fail-closed); the backend
+and UI can be installed dark, and the admin section stays hidden.
+
 ```ini
 FEATURE=NEWSFLUX_AI_SETTINGS_01
 INSTALL_PACKAGE=R2
@@ -158,4 +175,6 @@ DEPLOY=NO
 KEY_ROTATED=NO
 REAL_CREDENTIAL_CHANGED=NO
 PRODUCTION_MUTATIONS=0
+INSTALL_READY=NO
+BLOCKER=GOVERNED_STAGE1_CADDY_UPDATE_PATH
 ```
