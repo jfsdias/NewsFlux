@@ -120,7 +120,7 @@ class AdminSettingsTests(unittest.TestCase):
 
     def test_managed_record_deletion_never_restores_bootstrap_key(self):
         self.store.save_key(NEW_KEY, "bootstrap")
-        self.assertEqual((self.root / "activated").read_bytes(), b"v1\\n")
+        self.assertEqual((self.root / "activated").read_bytes(), b"v1\n")
         (self.root / "settings.json").unlink()
         with self.assertRaises(ManagedSettingsError) as ex:
             self.store.effective_values()
