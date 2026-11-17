@@ -377,6 +377,31 @@ class DynamicCatalogTests(unittest.TestCase):
         self.assertEqual(dispatched, [])
         self.assertGreaterEqual(gateway.calls.count("/model/info"), 2)
 
+    def test_local_only_v3_rejects_any_requested_fallback_before_content_access(self) -> None:
+        from services.article_intel_summary.inference import DisabledInferenceAdapter
+        from services.article_intel_summary.service import SummaryService
+
+        entry = policy_model("local-3b", "llama3.2:3b", provider_identity="ollama@ollama:11434")
+        del entry["input_usd_per_million"]
+        del entry["output_usd_per_million"]
+        local = model_info("llama3.2:3b", provider="ollama", input_cost=None, output_cost=None)
+        local["litellm_params"].update(model="ollama/llama3.2:3b", api_base="http://ollama:11434")
+        router = self.router(
+            FakeGateway(listed=("llama3.2:3b",), infos=[local]),
+            NEWSFLUX_AI_MODEL_POLICY_JSON=policy(entry),
+            NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER="false",
+            NEWSFLUX_AI_ALLOW_LOCAL_ARTICLE_PROCESSING="true",
+        )
+        self.assertTrue(self.models(router)[1]["local-3b"]["available"])
+        summary = SummaryService(DisabledInferenceAdapter(), router=router)
+        with self.assertRaises(ModelNotAvailable) as exc:
+            summary.summarize_v3(
+                None, request_id="synthetic", primary_model_id="local-3b",
+                fallback_model_id="remote-any", consent_paid=True,
+                consent_cross_provider=True, profile=None,
+            )
+        self.assertEqual(exc.exception.code, "MODEL_NOT_AUTHORIZED")
+
     def test_paid_model_requires_global_and_per_model_paid_authorization(self) -> None:
         gateway = FakeGateway(listed=("paid-x",), infos=[model_info("paid-x", input_cost=1.5e-7, output_cost=6e-7)])
         paid = policy_model("paid", "paid-x", input_usd_per_million="0.15", output_usd_per_million="0.6")
