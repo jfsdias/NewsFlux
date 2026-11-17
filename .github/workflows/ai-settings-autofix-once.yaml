@@ -1,0 +1,57 @@
+name: One-shot NewsFlux AI settings branch formatter
+
+on:
+  push:
+    branches: [codex/newsflux-ai-settings-ui-r2]
+
+permissions:
+  contents: write
+
+jobs:
+  format-branch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: codex/newsflux-ai-settings-ui-r2
+          persist-credentials: true
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Safe autofix of scoped UI and client test
+        run: |
+          pnpm exec eslint --fix \
+            src/apis/article-intelligence-admin.js \
+            src/apis/article-intelligence-admin.test.js \
+            src/components/Settings/LiteLLMAdminSettings.jsx \
+            src/components/Settings/ArticleIntelligence.jsx || true
+          pnpm exec prettier --write \
+            src/apis/article-intelligence-admin.js \
+            src/apis/article-intelligence-admin.test.js \
+            src/components/Settings/LiteLLMAdminSettings.jsx \
+            src/components/Settings/LiteLLMAdminSettings.css \
+            src/components/Settings/ArticleIntelligence.jsx \
+            .github/workflows/ai-settings-tests.yaml
+      - name: Commit only scoped code formatting to same feature branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = codex/newsflux-ai-settings-ui-r2
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- \
+            src/apis/article-intelligence-admin.js \
+            src/apis/article-intelligence-admin.test.js \
+            src/components/Settings/LiteLLMAdminSettings.jsx \
+            src/components/Settings/LiteLLMAdminSettings.css \
+            src/components/Settings/ArticleIntelligence.jsx \
+            .github/workflows/ai-settings-tests.yaml
+          if ! git diff --cached --quiet; then
+            git commit -m "style(ai): apply scoped ESLint and Prettier fixes"
+            git push origin HEAD:refs/heads/codex/newsflux-ai-settings-ui-r2
+          fi
