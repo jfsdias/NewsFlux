@@ -16,12 +16,24 @@ import {
   testLiteLLMKey,
 } from "@/apis/article-intelligence-admin"
 import { polyglotState } from "@/hooks/useLanguage"
+import {
+  canApproveModel,
+  connectionState,
+  errorMessageKey,
+  priceLabelKey,
+} from "@/utils/litellm-admin-state"
 
 import "./LiteLLMAdminSettings.css"
 
 const LiteLlmAdminSettings = ({ onPolicyChanged }) => {
   const { polyglot } = useStore(polyglotState)
-  const [page, setPage] = useState({ kind: "loading", status: null, models: [], policy: null })
+  const [page, setPage] = useState({
+    kind: "loading",
+    status: null,
+    models: [],
+    policy: null,
+    discovery: "idle",
+  })
   const [secret, setSecret] = useState("")
   const [verified, setVerified] = useState(false)
   const [selectedAlias, setSelectedAlias] = useState("")
@@ -39,6 +51,7 @@ const LiteLlmAdminSettings = ({ onPolicyChanged }) => {
       }
       let models = []
       let policy = null
+      let discovery = "idle"
       if (status.configured) {
         try {
           const [discovered, approved] = await Promise.all([
@@ -50,21 +63,26 @@ const LiteLlmAdminSettings = ({ onPolicyChanged }) => {
           }
           models = Array.isArray(discovered.models) ? discovered.models : []
           policy = approved.policy
+          discovery = "ok"
         } catch {
           // A broken catalog must not hide the credential status or enable approvals.
+          discovery = "failed"
         }
       }
       if (!signal?.aborted) {
-        setPage({ kind: "ready", status, models, policy })
+        setPage({ kind: "ready", status, models, policy, discovery })
       }
     } catch (error) {
       if (!signal?.aborted) {
+        // Status errors (5xx) happen only after admin authorization succeeded, so an
+        // administrator sees a failed state instead of a silently missing panel.
+        const adminFailure = error instanceof AdminLiteLLMError && error.status >= 500
         setPage({
-          kind:
-            error instanceof AdminLiteLLMError && error.status === 403 ? "hidden" : "unavailable",
-          status: null,
+          kind: adminFailure ? "ready" : error?.status === 403 ? "hidden" : "unavailable",
+          status: adminFailure ? { status_error: true, configured: false } : null,
           models: [],
           policy: null,
+          discovery: "failed",
         })
       }
     }
@@ -93,14 +111,13 @@ const LiteLlmAdminSettings = ({ onPolicyChanged }) => {
   }
 
   const { status } = page
+  const connection = connectionState(status, page.discovery)
   const candidate = page.models.find((entry) => entry.id === selectedAlias)
-  const canApprove = Boolean(
-    candidate?.mode === "chat" &&
-    candidate?.identity_verified &&
-    (candidate.local_ollama || candidate.price_known) &&
-    !candidate.approved &&
-    (candidate.local_ollama || allowExternal),
-  )
+  const canApprove = canApproveModel(candidate, { allowExternal, allowPaid })
+  const clearSecret = () => {
+    setSecret("")
+    setVerified(false)
+  }
 
   const testConnection = async () => {
     setBusy(true)
@@ -109,11 +126,14 @@ const LiteLlmAdminSettings = ({ onPolicyChanged }) => {
       if (result?.validated) {
         setVerified(true)
         Message.success(t("test_success"))
-      } else {
+      } else if (result !== null) {
+        clearSecret()
         Message.error(t("failed"))
       }
-    } catch {
-      Message.error(t("failed"))
+    } catch (error) {
+      // A rejected credential is never kept in the field for another attempt.
+      clearSecret()
+      Message.error(t(errorMessageKey(error)))
     } finally {
       setBusy(false)
     }
@@ -135,8 +155,6 @@ const LiteLlmAdminSettings = ({ onPolicyChanged }) => {
       if (!updated) {
         return
       }
-      setSecret("")
-      setVerified(false)
       setAllowExternal(false)
       setAllowPaid(false)
       await load()
@@ -144,9 +162,14 @@ const LiteLlmAdminSettings = ({ onPolicyChanged }) => {
         onPolicyChanged?.()
       }
       Message.success(successMessage)
-    } catch {
-      Message.error(t("failed"))
+    } catch (error) {
+      Message.error(t(errorMessageKey(error)))
+      if (error?.code === "CONFIG_CONFLICT") {
+        await load()
+      }
     } finally {
+      // The transient credential is cleared after every save attempt.
+      clearSecret()
       setBusy(false)
     }
   }
@@ -155,8 +178,16 @@ const LiteLlmAdminSettings = ({ onPolicyChanged }) => {
     <SettingSection title={t("section")}>
       <SettingItem description={t("status_description")} title={t("status")}>
         <div className="ai-litellm-admin__status" role="status">
-          <Typography.Text>
-            {status.configured ? t("connected") : t("not_configured")}
+          <Typography.Text
+            type={
+              connection === "connected"
+                ? "success"
+                : connection === "validation_failed"
+                  ? "error"
+                  : "secondary"
+            }
+          >
+            {t(`state_${connection}`)}
           </Typography.Text>
           {status.configured && (
             <Typography.Text type="secondary">
@@ -171,7 +202,9 @@ const LiteLlmAdminSettings = ({ onPolicyChanged }) => {
             aria-label={t("key")}
             autoComplete="off"
             disabled={!status.writes_enabled || busy}
+            name="newsflux-litellm-transient-key"
             placeholder={t("key_placeholder")}
+            spellCheck={false}
             type="password"
             value={secret}
             onChange={(value) => {
@@ -197,13 +230,7 @@ const LiteLlmAdminSettings = ({ onPolicyChanged }) => {
               {t("replace")}
             </Button>
             {secret && (
-              <Button
-                disabled={busy}
-                onClick={() => {
-                  setSecret("")
-                  setVerified(false)
-                }}
-              >
+              <Button disabled={busy} onClick={clearSecret}>
                 {t("cancel")}
               </Button>
             )}
@@ -236,7 +263,8 @@ const LiteLlmAdminSettings = ({ onPolicyChanged }) => {
           >
             {page.models.map((model) => (
               <Select.Option key={model.id} value={model.id}>
-                {model.id} · {model.provider} {model.approved ? "✓" : ""}
+                {model.id} · {model.provider} · {t(priceLabelKey(model))}{" "}
+                {model.approved ? "✓" : ""}
               </Select.Option>
             ))}
           </Select>
@@ -247,6 +275,8 @@ const LiteLlmAdminSettings = ({ onPolicyChanged }) => {
                 {" · "}
                 {candidate.mode ?? t("unverified")}
                 {" · "}
+                {t(priceLabelKey(candidate))}
+                {" · "}
                 {candidate.approved ? t("approved") : t("not_approved")}
               </Typography.Text>
               {!candidate.local_ollama && (
@@ -254,9 +284,14 @@ const LiteLlmAdminSettings = ({ onPolicyChanged }) => {
                   {t("external_consent")}
                 </Checkbox>
               )}
-              <Checkbox checked={allowPaid} disabled={busy} onChange={setAllowPaid}>
-                {t("paid_consent")}
-              </Checkbox>
+              {candidate.price_class === "paid" && (
+                <Checkbox checked={allowPaid} disabled={busy} onChange={setAllowPaid}>
+                  {t("paid_consent")}
+                </Checkbox>
+              )}
+              {!candidate.local_ollama && priceLabelKey(candidate) === "price_unknown" && (
+                <Typography.Text type="warning">{t("price_required")}</Typography.Text>
+              )}
               <div className="ai-litellm-admin__actions">
                 {candidate.approved ? (
                   <Button
