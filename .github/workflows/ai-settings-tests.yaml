@@ -1,0 +1,47 @@
+name: NewsFlux AI settings isolated gates
+
+on:
+  pull_request:
+    paths:
+      - "services/article_intel_summary/**"
+      - "services/article_intel_auth/**"
+      - "src/components/Settings/**"
+      - "src/apis/article-intelligence-admin*"
+      - "src/locales/**"
+      - ".github/workflows/ai-settings-tests.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r services/article_intel_summary/requirements.lock
+      - name: Full synthetic backend suite including admin isolation
+        run: python -B -m unittest discover -s services/article_intel_summary/tests -p 'test_*.py' -q
+
+  frontend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: ESLint
+        run: pnpm lint
+      - name: Prettier
+        run: pnpm format:check
+      - name: Frontend unit suite, including key non-persistence
+        run: pnpm test:src
+      - name: Build verified Reader
+        run: pnpm build
