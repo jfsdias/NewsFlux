@@ -139,6 +139,23 @@ class AdminSettingsTests(unittest.TestCase):
         self.assertEqual(saved["revision"], first["revision"])
         self.assertEqual(self.store.read()["key"], KEY)
 
+    def test_operator_rollback_restores_bootstrap_without_reviving_legacy_fallback(self):
+        first = self.store.save_key(NEW_KEY, "bootstrap")
+        restored = self.store.operator_restore_previous(first["revision"])
+        self.assertTrue(restored["managed"])
+        self.assertNotEqual(restored["revision"], first["revision"])
+        self.assertEqual(self.store.read()["key"], KEY)
+        self.assertTrue((self.root / "activated").exists())
+        self.assertNotIn(NEW_KEY, json.dumps(restored))
+
+    def test_operator_rollback_requires_exact_current_revision(self):
+        first = self.store.save_key(NEW_KEY, "bootstrap")
+        with self.assertRaises(ManagedSettingsError) as ex:
+            self.store.operator_restore_previous("0" * 32)
+        self.assertEqual(ex.exception.code, "CONFIG_CONFLICT")
+        self.assertEqual(self.store.status()["revision"], first["revision"])
+        self.assertEqual(self.store.read()["key"], NEW_KEY)
+
     def test_policy_sanitized_validated_and_dynamically_stored(self):
         self.store.save_key(NEW_KEY, "bootstrap")
         current = self.store.status()["revision"]
