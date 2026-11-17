@@ -30,22 +30,29 @@ const mocks = {
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
-    if (mocks[specifier]) return {
-      shortCircuit: true,
-      url: `data:text/javascript,${encodeURIComponent(mocks[specifier])}`,
+    if (mocks[specifier]) {
+      return {
+        shortCircuit: true,
+        url: `data:text/javascript,${encodeURIComponent(mocks[specifier])}`,
+      }
     }
     if (specifier.startsWith("@/")) {
       const target = path.resolve(root, specifier.slice(2))
       for (const ext of [".js", ".jsx"]) {
-        if (existsSync(target + ext)) return nextResolve(pathToFileURL(target + ext).href)
+        if (existsSync(target + ext)) {
+          return nextResolve(pathToFileURL(target + ext).href)
+        }
       }
     }
     if (
       (specifier.startsWith("./") || specifier.startsWith("../")) &&
-      context.parentURL?.startsWith("file:") && !path.extname(specifier)
+      context.parentURL?.startsWith("file:") &&
+      !path.extname(specifier)
     ) {
-      const target = path.resolve(path.dirname(fileURLToPath(context.parentURL)), specifier + ".js")
-      if (existsSync(target)) return nextResolve(pathToFileURL(target).href)
+      const target = path.resolve(path.dirname(fileURLToPath(context.parentURL)), `${specifier}.js`)
+      if (existsSync(target)) {
+        return nextResolve(pathToFileURL(target).href)
+      }
     }
     return nextResolve(specifier)
   },
@@ -85,7 +92,11 @@ test("key replacement sends the credential in one transient JSON body, never URL
     const request = JSON.parse(options.body)
     assert.deepEqual(request, { key, expected_revision: "bootstrap" })
     assert.equal(url.includes(key), false)
-    return Response.json({ configured: true, managed: true, revision: "12345678901234567890123456789012" })
+    return Response.json({
+      configured: true,
+      managed: true,
+      revision: "12345678901234567890123456789012",
+    })
   }
   const response = await replaceLiteLLMKey(key, "bootstrap")
   assert.equal(response.managed, true)
@@ -105,8 +116,10 @@ test("model approval includes explicit consent booleans", async () => {
   fetchImplementation = async (url, options) => {
     assert.equal(url, "/api/ai/v1/admin/litellm/approve-model")
     assert.deepEqual(JSON.parse(options.body), {
-      alias: "ollama-local", expected_revision: "xyz",
-      allow_paid: false, allow_external: false,
+      alias: "ollama-local",
+      expected_revision: "xyz",
+      allow_paid: false,
+      allow_external: false,
     })
     return Response.json({ policy_models: 1 })
   }
@@ -114,13 +127,17 @@ test("model approval includes explicit consent booleans", async () => {
 })
 
 test("non-admin denial has safe error code and does not expose response payload", async () => {
-  fetchImplementation = async () => Response.json(
-    { error: { code: "NOT_AUTHORIZED", internals: "private-token" } },
-    { status: 403 }
-  )
-  await assert.rejects(readLiteLLMModels(), (error) =>
-    error instanceof AdminLiteLLMError && error.code === "NOT_AUTHORIZED" &&
-    !String(error).includes("private-token")
+  fetchImplementation = async () =>
+    Response.json(
+      { error: { code: "NOT_AUTHORIZED", internals: "private-token" } },
+      { status: 403 },
+    )
+  await assert.rejects(
+    readLiteLLMModels(),
+    (error) =>
+      error instanceof AdminLiteLLMError &&
+      error.code === "NOT_AUTHORIZED" &&
+      !String(error).includes("private-token"),
   )
 })
 
@@ -135,7 +152,6 @@ test("stale Miniflux session prevents using a successful prior response", async 
 })
 
 test("oversized gateway metadata response fails closed", async () => {
-  fetchImplementation = async () =>
-    Response.json({ models: ["synthetic".repeat(20000)] })
+  fetchImplementation = async () => Response.json({ models: ["synthetic".repeat(20_000)] })
   await assert.rejects(readLiteLLMModels(), AdminLiteLLMError)
 })

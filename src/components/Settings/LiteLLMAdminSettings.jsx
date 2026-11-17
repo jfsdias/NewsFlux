@@ -35,39 +35,51 @@ const LiteLLMAdminSettings = ({ onPolicyChanged }) => {
 
   const t = (name) => polyglot.t(`article_intelligence.litellm_${name}`)
 
-  const load = useCallback(async (signal) => {
-    if (!hasProvisionedApiKey(auth)) {
-      setPage({ kind: "hidden", status: null, models: [], policy: null })
-      return
-    }
-    try {
-      const status = await readLiteLLMStatus({ signal })
-      if (!status || signal?.aborted) return
-      let models = []
-      let policy = null
-      if (status.configured) {
-        try {
-          const [discovered, approved] = await Promise.all([
-            readLiteLLMModels({ signal }),
-            readLiteLLMPolicy({ signal }),
-          ])
-          if (signal?.aborted || !discovered || !approved) return
-          models = Array.isArray(discovered.models) ? discovered.models : []
-          policy = approved.policy
-        } catch {
-          // A broken catalog must not hide the credential status or enable approvals.
+  const load = useCallback(
+    async (signal) => {
+      if (!hasProvisionedApiKey(auth)) {
+        setPage({ kind: "hidden", status: null, models: [], policy: null })
+        return
+      }
+      try {
+        const status = await readLiteLLMStatus({ signal })
+        if (!status || signal?.aborted) {
+          return
+        }
+        let models = []
+        let policy = null
+        if (status.configured) {
+          try {
+            const [discovered, approved] = await Promise.all([
+              readLiteLLMModels({ signal }),
+              readLiteLLMPolicy({ signal }),
+            ])
+            if (signal?.aborted || !discovered || !approved) {
+              return
+            }
+            models = Array.isArray(discovered.models) ? discovered.models : []
+            policy = approved.policy
+          } catch {
+            // A broken catalog must not hide the credential status or enable approvals.
+          }
+        }
+        if (!signal?.aborted) {
+          setPage({ kind: "ready", status, models, policy })
+        }
+      } catch (error) {
+        if (!signal?.aborted) {
+          setPage({
+            kind:
+              error instanceof AdminLiteLLMError && error.status === 403 ? "hidden" : "unavailable",
+            status: null,
+            models: [],
+            policy: null,
+          })
         }
       }
-      if (!signal?.aborted) setPage({ kind: "ready", status, models, policy })
-    } catch (error) {
-      if (!signal?.aborted) {
-        setPage({
-          kind: error instanceof AdminLiteLLMError && error.status === 403 ? "hidden" : "unavailable",
-          status: null, models: [], policy: null,
-        })
-      }
-    }
-  }, [sessionKey])
+    },
+    [sessionKey],
+  )
 
   useEffect(() => {
     const controller = new AbortController()
@@ -81,17 +93,24 @@ const LiteLLMAdminSettings = ({ onPolicyChanged }) => {
     return () => controller.abort()
   }, [load])
 
-  if (page.kind === "hidden") return null
-  if (page.kind === "loading") return <Typography.Text role="status">{t("loading")}</Typography.Text>
-  if (page.kind === "unavailable") return null
+  if (page.kind === "hidden") {
+    return null
+  }
+  if (page.kind === "loading") {
+    return <Typography.Text role="status">{t("loading")}</Typography.Text>
+  }
+  if (page.kind === "unavailable") {
+    return null
+  }
 
-  const status = page.status
+  const { status } = page
   const candidate = page.models.find((entry) => entry.id === selectedAlias)
   const canApprove = Boolean(
-    candidate?.mode === "chat" && candidate?.identity_verified
-    && (candidate.local_ollama || candidate.price_known)
-    && !candidate.approved
-    && (candidate.local_ollama || allowExternal),
+    candidate?.mode === "chat" &&
+    candidate?.identity_verified &&
+    (candidate.local_ollama || candidate.price_known) &&
+    !candidate.approved &&
+    (candidate.local_ollama || allowExternal),
   )
 
   const refresh = async () => {
@@ -107,13 +126,17 @@ const LiteLLMAdminSettings = ({ onPolicyChanged }) => {
     setBusy(true)
     try {
       const updated = await operation()
-      if (!updated) return
+      if (!updated) {
+        return
+      }
       setSecret("")
       setVerified(false)
       setAllowExternal(false)
       setAllowPaid(false)
       await load()
-      if (changedPolicy) onPolicyChanged?.()
+      if (changedPolicy) {
+        onPolicyChanged?.()
+      }
       Message.success(successMessage)
     } catch {
       Message.error(t("failed"))
@@ -124,25 +147,27 @@ const LiteLLMAdminSettings = ({ onPolicyChanged }) => {
 
   return (
     <SettingSection title={t("section")}>
-      <SettingItem title={t("status")} description={t("status_description")}>
+      <SettingItem description={t("status_description")} title={t("status")}>
         <div className="ai-litellm-admin__status" role="status">
           <Typography.Text>
             {status.configured ? t("connected") : t("not_configured")}
           </Typography.Text>
           {status.configured && (
-            <Typography.Text type="secondary">{status.managed ? t("managed") : t("bootstrap")}</Typography.Text>
+            <Typography.Text type="secondary">
+              {status.managed ? t("managed") : t("bootstrap")}
+            </Typography.Text>
           )}
         </div>
       </SettingItem>
-      <SettingItem title={t("key")} description={t("key_description")}>
+      <SettingItem description={t("key_description")} title={t("key")}>
         <div className="ai-litellm-admin__stack">
           <Input
             aria-label={t("key")}
-            type="password"
             autoComplete="off"
-            value={secret}
-            placeholder={t("key_placeholder")}
             disabled={!status.writes_enabled || busy}
+            placeholder={t("key_placeholder")}
+            type="password"
+            value={secret}
             onChange={(value) => {
               setSecret(value)
               setVerified(false)
@@ -154,49 +179,67 @@ const LiteLLMAdminSettings = ({ onPolicyChanged }) => {
               loading={busy}
               onClick={() => {
                 setBusy(true)
-                void testLiteLLMKey(secret).then((result) => {
-                  if (result?.validated) {
-                    setVerified(true)
-                    Message.success(t("test_success"))
-                  } else {
-                    Message.error(t("failed"))
-                  }
-                }).catch(() => Message.error(t("failed"))).finally(() => setBusy(false))
+                void testLiteLLMKey(secret)
+                  .then((result) => {
+                    if (result?.validated) {
+                      setVerified(true)
+                      Message.success(t("test_success"))
+                    } else {
+                      Message.error(t("failed"))
+                    }
+                  })
+                  .catch(() => Message.error(t("failed")))
+                  .finally(() => setBusy(false))
               }}
             >
               {t("test")}
             </Button>
             <Button
-              type="primary"
               disabled={!status.writes_enabled || busy || !verified || !secret}
-              onClick={() => void doAction(
-                () => replaceLiteLLMKey(secret, status.revision),
-                t("saved"),
-              )}
+              type="primary"
+              onClick={() =>
+                void doAction(() => replaceLiteLLMKey(secret, status.revision), t("saved"))
+              }
             >
               {t("replace")}
             </Button>
             {secret && (
-              <Button disabled={busy} onClick={() => { setSecret(""); setVerified(false) }}>
+              <Button
+                disabled={busy}
+                onClick={() => {
+                  setSecret("")
+                  setVerified(false)
+                }}
+              >
                 {t("cancel")}
               </Button>
             )}
           </div>
-          {!status.writes_enabled && <Typography.Text type="warning">{t("writes_disabled")}</Typography.Text>}
+          {!status.writes_enabled && (
+            <Typography.Text type="warning">{t("writes_disabled")}</Typography.Text>
+          )}
         </div>
       </SettingItem>
-      <SettingItem title={t("models")} description={t("models_description")}>
+      <SettingItem description={t("models_description")} title={t("models")}>
         <div className="ai-litellm-admin__stack">
-          <Button disabled={busy || !status.configured} loading={busy} onClick={() => void refresh()}>
+          <Button
+            disabled={busy || !status.configured}
+            loading={busy}
+            onClick={() => void refresh()}
+          >
             {t("refresh")}
           </Button>
           <Select
-            aria-label={t("models")}
-            placeholder={t("choose")}
             showSearch
-            value={selectedAlias || undefined}
+            aria-label={t("models")}
             disabled={busy || !status.configured || !status.writes_enabled}
-            onChange={(value) => { setSelectedAlias(value); setAllowExternal(false); setAllowPaid(false) }}
+            placeholder={t("choose")}
+            value={selectedAlias || undefined}
+            onChange={(value) => {
+              setSelectedAlias(value)
+              setAllowExternal(false)
+              setAllowPaid(false)
+            }}
           >
             {page.models.map((model) => (
               <Select.Option key={model.id} value={model.id}>
@@ -208,47 +251,51 @@ const LiteLLMAdminSettings = ({ onPolicyChanged }) => {
             <>
               <Typography.Text type="secondary">
                 {candidate.local_ollama ? t("local") : t("external")}
-                {" · "}{candidate.mode ?? t("unverified")}
-                {" · "}{candidate.approved ? t("approved") : t("not_approved")}
+                {" · "}
+                {candidate.mode ?? t("unverified")}
+                {" · "}
+                {candidate.approved ? t("approved") : t("not_approved")}
               </Typography.Text>
               {!candidate.local_ollama && (
-                <Checkbox
-                  disabled={busy}
-                  checked={allowExternal}
-                  onChange={setAllowExternal}
-                >
+                <Checkbox checked={allowExternal} disabled={busy} onChange={setAllowExternal}>
                   {t("external_consent")}
                 </Checkbox>
               )}
-              <Checkbox
-                disabled={busy}
-                checked={allowPaid}
-                onChange={setAllowPaid}
-              >
+              <Checkbox checked={allowPaid} disabled={busy} onChange={setAllowPaid}>
                 {t("paid_consent")}
               </Checkbox>
               <div className="ai-litellm-admin__actions">
                 {candidate.approved ? (
                   <Button
-                    status="danger"
                     disabled={busy || !status.writes_enabled}
-                    onClick={() => void doAction(
-                      () => removeLiteLLMModel(selectedAlias, status.revision),
-                      t("model_removed"),
-                      { changedPolicy: true },
-                    )}
+                    status="danger"
+                    onClick={() =>
+                      void doAction(
+                        () => removeLiteLLMModel(selectedAlias, status.revision),
+                        t("model_removed"),
+                        { changedPolicy: true },
+                      )
+                    }
                   >
                     {t("remove")}
                   </Button>
                 ) : (
                   <Button
-                    type="primary"
                     disabled={busy || !status.writes_enabled || !canApprove}
-                    onClick={() => void doAction(
-                      () => approveLiteLLMModel(selectedAlias, status.revision, allowPaid, allowExternal),
-                      t("model_approved"),
-                      { changedPolicy: true },
-                    )}
+                    type="primary"
+                    onClick={() =>
+                      void doAction(
+                        () =>
+                          approveLiteLLMModel(
+                            selectedAlias,
+                            status.revision,
+                            allowPaid,
+                            allowExternal,
+                          ),
+                        t("model_approved"),
+                        { changedPolicy: true },
+                      )
+                    }
                   >
                     {t("approve")}
                   </Button>

@@ -5,7 +5,13 @@ import { getAuthSessionKey, hasProvisionedApiKey } from "@/utils/auth"
 
 const ROOT = "/api/ai/v1/admin/litellm/"
 const ALLOWED_ACTIONS = new Set([
-  "status", "models", "policy", "test-key", "save-key", "approve-model", "remove-model",
+  "status",
+  "models",
+  "policy",
+  "test-key",
+  "save-key",
+  "approve-model",
+  "remove-model",
 ])
 const MAX_RESPONSE_BYTES = 96 * 1024
 
@@ -78,11 +84,15 @@ export const testLiteLLMKey = (key, options) => request("test-key", { key }, opt
 export const replaceLiteLLMKey = (key, expectedRevision, options) =>
   request("save-key", { key, expected_revision: expectedRevision }, options)
 export const approveLiteLLMModel = (alias, expectedRevision, allowPaid, allowExternal, options) =>
-  request("approve-model", {
-    alias,
-    expected_revision: expectedRevision,
-    allow_paid: allowPaid === true,
-    allow_external: allowExternal === true,
-  }, options)
+  request(
+    "approve-model",
+    {
+      alias,
+      expected_revision: expectedRevision,
+      allow_paid: allowPaid === true,
+      allow_external: allowExternal === true,
+    },
+    options,
+  )
 export const removeLiteLLMModel = (alias, expectedRevision, options) =>
   request("remove-model", { alias, expected_revision: expectedRevision }, options)
