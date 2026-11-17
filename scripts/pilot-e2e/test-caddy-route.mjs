@@ -84,15 +84,12 @@ try {
     const noProto = await fetch(`${adminBase}/${action}`, { method })
     assert.equal(noProto.status, 403)
     const noTrust = await fetch(`http://[::1]:18890/api/ai/v1/admin/litellm/${action}`, {
-      method, headers: { "X-Forwarded-Proto": "https" },
+      method,
+      headers: { "X-Forwarded-Proto": "https" },
     })
     assert.equal(noTrust.status, 403)
   }
-  for (const denied of [
-    "/api/ai/v1/admin/litellm",
-    "/api/ai/v1/admin/other",
-    "/api/ai/v1/keys",
-  ]) {
+  for (const denied of ["/api/ai/v1/admin/litellm", "/api/ai/v1/admin/other", "/api/ai/v1/keys"]) {
     const response = await fetch("http://127.0.0.1:18890" + denied, {
       method: "POST",
       headers: { "X-Forwarded-Proto": "https" },
