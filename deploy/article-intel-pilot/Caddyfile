@@ -39,6 +39,19 @@ handle @pilotModels {
         header_up X-Forwarded-Proto https
     }
 }
+# Admin-only LiteLLM credential/model-policy API. Keep exact path and
+# already trusted TLS edge; all authorization remains in Summary API.
+@pilotAiAdmin {
+    path /api/ai/v1/admin/litellm/*
+    method GET POST OPTIONS
+    remote_ip {$NEWSFLUX_PILOT_TRUSTED_PROXY_IP}
+    header X-Forwarded-Proto https
+}
+handle @pilotAiAdmin {
+    reverse_proxy summary-api:8788 {
+        header_up X-Forwarded-Proto https
+    }
+}
 handle /api/ai/* {
     respond 403
 }
