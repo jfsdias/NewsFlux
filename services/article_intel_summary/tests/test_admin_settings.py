@@ -136,7 +136,11 @@ class AdminSettingsTests(unittest.TestCase):
         }
         updated = self.store.save_policy(definition, current)
         self.assertEqual(updated["policy_models"], 1)
-        self.assertEqual(self.store.policy()["policy"], definition)
+        self.assertEqual(
+            self.store.policy()["policy"]["models"][0]["alias"],
+            "secondary-synthetic",
+        )
+        self.assertNotIn("provider_identity", self.store.policy()["policy"]["models"][0])
         self.assertIn("selected-primary", self.store.effective_values()["NEWSFLUX_AI_MODEL_POLICY_JSON"])
         self.assertNotIn(NEW_KEY, json.dumps(self.store.policy()))
 
@@ -204,6 +208,56 @@ class AdminSettingsTests(unittest.TestCase):
         self.assertTrue(response.json()["managed"])
         self.assertNotIn(NEW_KEY, response.text)
         self.assertEqual(self.store.read()["key"], NEW_KEY)
+
+    def test_admin_approves_and_removes_a_discovered_model_without_code_change(self):
+        client = self.make_client()
+        root = "/api/ai/v1/admin/litellm"
+        state = client.post(
+            root + "/save-key",
+            headers=request_headers(),
+            json={"key": NEW_KEY, "expected_revision": "bootstrap"}
+        )
+        self.assertEqual(state.status_code, 200, state.text)
+        revision = state.json()["revision"]
+
+        blocked = client.post(
+            root + "/approve-model",
+            headers=request_headers(),
+            json={
+                "alias": "secondary-synthetic",
+                "expected_revision": revision,
+                "allow_paid": False,
+                "allow_external": False,
+            },
+        )
+        self.assertEqual(blocked.status_code, 503, blocked.text)
+        self.assertEqual(self.store.status()["policy_models"], 0)
+
+        approved = client.post(
+            root + "/approve-model",
+            headers=request_headers(),
+            json={
+                "alias": "secondary-synthetic",
+                "expected_revision": revision,
+                "allow_paid": False,
+                "allow_external": True,
+            },
+        )
+        self.assertEqual(approved.status_code, 200, approved.text)
+        self.assertEqual(approved.json()["policy_models"], 1)
+        revision = approved.json()["revision"]
+        displayed = client.get(root + "/policy", headers=request_headers()).json()
+        self.assertEqual(len(displayed["policy"]["models"]), 1)
+        self.assertNotIn("provider_identity", displayed["policy"]["models"][0])
+
+        removed = client.post(
+            root + "/remove-model",
+            headers=request_headers(),
+            json={"alias": "secondary-synthetic", "expected_revision": revision},
+        )
+        self.assertEqual(removed.status_code, 200, removed.text)
+        self.assertEqual(removed.json()["policy_models"], 0)
+        self.assertEqual(self.store.read()["policy"], {"version": 1, "models": []})
 
     def test_nonadmin_forbidden_and_no_backend_write(self):
         client = self.make_client(admin=False)
