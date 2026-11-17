@@ -1,0 +1,36 @@
+name: AI admin Caddy route isolated contract
+
+on:
+  pull_request:
+    paths:
+      - "deploy/article-intel-pilot/Caddyfile"
+      - "scripts/pilot-e2e/test-caddy-route.mjs"
+      - ".github/workflows/ai-admin-caddy-gates.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  routing:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: "24"
+      - name: Extract pinned Caddy executable into disposable runner directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          image='caddy:2.11.7@sha256:685ae3d7c34d9b5f8caeddc5d14051db7bbd88ff1f5a2fa0c16bd8ca328fb7af'
+          docker pull "$image"
+          cid="$(docker create "$image")"
+          trap 'docker rm "$cid" >/dev/null 2>&1 || true' EXIT
+          docker cp "$cid:/usr/bin/caddy" "$RUNNER_TEMP/newsflux-caddy"
+          chmod 0755 "$RUNNER_TEMP/newsflux-caddy"
+      - name: Exercise trusted-edge route and deny-all regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          PILOT_CADDY_BINARY="$RUNNER_TEMP/newsflux-caddy" node scripts/pilot-e2e/test-caddy-route.mjs
