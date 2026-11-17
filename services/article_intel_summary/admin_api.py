@@ -15,7 +15,10 @@ from services.article_intel_summary.admin_settings import ManagedSettingsError, 
 
 MAX_BODY_BYTES = 18 * 1024
 BASE = "/api/ai/v1/admin/litellm"
-ACTION_NAMES = frozenset({"status", "models", "policy", "test-key", "save-key", "save-policy"})
+ACTION_NAMES = frozenset({
+    "status", "models", "policy", "test-key", "save-key", "save-policy",
+    "approve-model", "remove-model",
+})
 
 
 def _response(payload: dict, status: int = 200, *, origin: str | None = None) -> Response:
@@ -143,6 +146,17 @@ def create_admin_router(auth: MinifluxAuthService, store: ManagedSettingsStore) 
                     result = await run_in_threadpool(
                         store.save_policy, data["policy"], data["expected_revision"]
                     )
+                elif action == "approve-model" and set(data) == {
+                    "alias", "expected_revision", "allow_paid", "allow_external"
+                }:
+                    result = await run_in_threadpool(
+                        store.approve_model, data["alias"], data["expected_revision"],
+                        allow_paid=data["allow_paid"], allow_external=data["allow_external"]
+                    )
+                elif action == "remove-model" and set(data) == {"alias", "expected_revision"}:
+                    result = await run_in_threadpool(
+                        store.remove_model, data["alias"], data["expected_revision"]
+                    )
                 else:
                     raise ValueError("invalid")
             else:
@@ -193,6 +207,14 @@ def create_admin_router(auth: MinifluxAuthService, store: ManagedSettingsStore) 
     @router.post(BASE + "/save-policy")
     async def save_policy(request: Request):
         return await invoke(request, "save-policy")
+
+    @router.post(BASE + "/approve-model")
+    async def approve_model(request: Request):
+        return await invoke(request, "approve-model")
+
+    @router.post(BASE + "/remove-model")
+    async def remove_model(request: Request):
+        return await invoke(request, "remove-model")
 
     @router.options(BASE + "/{action}")
     async def preflight(action: str, request: Request):
