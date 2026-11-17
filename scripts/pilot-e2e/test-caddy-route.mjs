@@ -19,7 +19,7 @@ const upstream = http.createServer((request, res) => {
 await new Promise((resolve) => upstream.listen(18_889, "127.0.0.1", resolve))
 const config = (await readFile("deploy/article-intel-pilot/Caddyfile", "utf8"))
   .replace(":2000", ":18890")
-  .replace("summary-api:8788", "127.0.0.1:18889")
+  .replaceAll("summary-api:8788", "127.0.0.1:18889")
 await writeFile(path.join(dir, "Caddyfile"), config)
 const proc = spawn(
   binary,
