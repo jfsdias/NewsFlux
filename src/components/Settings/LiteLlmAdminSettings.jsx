@@ -31,47 +31,44 @@ const LiteLlmAdminSettings = ({ onPolicyChanged }) => {
 
   const t = (name) => polyglot.t(`article_intelligence.litellm_${name}`)
 
-  const load = useCallback(
-    async (signal) => {
-      try {
-        const status = await readLiteLLMStatus({ signal })
-        if (!status || signal?.aborted) {
-          return
-        }
-        let models = []
-        let policy = null
-        if (status.configured) {
-          try {
-            const [discovered, approved] = await Promise.all([
-              readLiteLLMModels({ signal }),
-              readLiteLLMPolicy({ signal }),
-            ])
-            if (signal?.aborted || !discovered || !approved) {
-              return
-            }
-            models = Array.isArray(discovered.models) ? discovered.models : []
-            policy = approved.policy
-          } catch {
-            // A broken catalog must not hide the credential status or enable approvals.
+  const load = useCallback(async (signal) => {
+    try {
+      const status = await readLiteLLMStatus({ signal })
+      if (!status || signal?.aborted) {
+        return
+      }
+      let models = []
+      let policy = null
+      if (status.configured) {
+        try {
+          const [discovered, approved] = await Promise.all([
+            readLiteLLMModels({ signal }),
+            readLiteLLMPolicy({ signal }),
+          ])
+          if (signal?.aborted || !discovered || !approved) {
+            return
           }
-        }
-        if (!signal?.aborted) {
-          setPage({ kind: "ready", status, models, policy })
-        }
-      } catch (error) {
-        if (!signal?.aborted) {
-          setPage({
-            kind:
-              error instanceof AdminLiteLLMError && error.status === 403 ? "hidden" : "unavailable",
-            status: null,
-            models: [],
-            policy: null,
-          })
+          models = Array.isArray(discovered.models) ? discovered.models : []
+          policy = approved.policy
+        } catch {
+          // A broken catalog must not hide the credential status or enable approvals.
         }
       }
-    },
-    [],
-  )
+      if (!signal?.aborted) {
+        setPage({ kind: "ready", status, models, policy })
+      }
+    } catch (error) {
+      if (!signal?.aborted) {
+        setPage({
+          kind:
+            error instanceof AdminLiteLLMError && error.status === 403 ? "hidden" : "unavailable",
+          status: null,
+          models: [],
+          policy: null,
+        })
+      }
+    }
+  }, [])
 
   useEffect(() => {
     const controller = new AbortController()
