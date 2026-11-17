@@ -8,6 +8,7 @@ GATEWAY_FAILURE_FAILS_CLOSED, NO_CREDENTIAL_EXPOSURE, ADD_REMOVE_WITHOUT_CODE_CH
 from __future__ import annotations
 
 import json
+from decimal import Decimal
 import tempfile
 import unittest
 from pathlib import Path
@@ -194,6 +195,92 @@ class DynamicCatalogTests(unittest.TestCase):
         self.assertFalse(models["s5-free"]["checks"]["pricing_verified"])
         self.assertEqual(models["acme"]["unavailable_reason"], "PRICE_MISMATCH")
         self.assertEqual(models["acme"]["pricing"]["status"], "mismatch")
+
+    def test_pinned_local_ollama_without_price_fields_can_use_token_only_budget(self) -> None:
+        """Local API models need no dollar prices; unmetered is not a verified zero price."""
+        entry = policy_model(
+            "local-3b", "llama3.2:3b",
+            provider_identity="ollama@ollama:11434",
+        )
+        del entry["input_usd_per_million"]
+        del entry["output_usd_per_million"]
+        gateway_info = model_info(
+            "llama3.2:3b", provider="ollama", input_cost=None, output_cost=None
+        )
+        gateway_info["litellm_params"].update(
+            model="ollama/llama3.2:3b", api_base="http://ollama:11434"
+        )
+        router = self.router(
+            FakeGateway(listed=("llama3.2:3b",), infos=[gateway_info]),
+            NEWSFLUX_AI_MODEL_POLICY_JSON=policy(entry),
+        )
+        model = self.models(router)[1]["local-3b"]
+        self.assertTrue(model["available"], model)
+        self.assertEqual(model["pricing"]["status"], "local_unpriced")
+        self.assertIsNone(model["pricing"]["input_usd_per_million"])
+        self.assertIsNone(model["pricing"]["output_usd_per_million"])
+        self.assertFalse(model["checks"]["pricing_verified"])
+        self.assertFalse(model["requires_paid_authorization"])
+        adapter = router.adapter_for("local-3b")
+        self.assertEqual(adapter.settings.input_price_usd_per_million, Decimal("0"))
+        self.assertEqual(adapter.settings.output_price_usd_per_million, Decimal("0"))
+        self.assertIsNotNone(adapter.settings.requests_per_minute)
+        self.assertIsNotNone(adapter.settings.tokens_per_minute)
+
+    def test_unpriced_remote_or_unpinned_ollama_never_gets_local_exemption(self) -> None:
+        variants = (
+            ("remote-provider", "openai", "http://external-provider:9", "openai@external-provider:9"),
+            ("remote-ollama", "ollama", "https://remote-ollama.example:11434", "ollama@remote-ollama.example:11434"),
+            ("unpinned", "ollama", "http://ollama:11434", None),
+            ("wrong-endpoint", "ollama", "http://other-host:11434", "ollama@ollama:11434"),
+        )
+        for index, (name, provider, endpoint, pinned_identity) in enumerate(variants):
+            with self.subTest(name=name):
+                entry = policy_model("unpriced", "any-model")
+                del entry["input_usd_per_million"]
+                del entry["output_usd_per_million"]
+                if pinned_identity:
+                    entry["provider_identity"] = pinned_identity
+                gateway_info = model_info(
+                    "any-model", provider=provider, input_cost=None, output_cost=None
+                )
+                gateway_info["litellm_params"].update(
+                    model=f"{provider}/any-model", api_base=endpoint
+                )
+                router = self.router(
+                    FakeGateway(listed=("any-model",), infos=[gateway_info]),
+                    NEWSFLUX_AI_MODEL_POLICY_JSON=policy(entry),
+                    NEWSFLUX_AI_USAGE_DATABASE_PATH=str(Path(self.tmp.name) / f"unpriced-{index}.sqlite3"),
+                )
+                model = self.models(router)[1]["unpriced"]
+                self.assertFalse(model["available"])
+                self.assertEqual(model["unavailable_reason"], "PRICE_NOT_VERIFIED")
+                with self.assertRaises(ModelNotAvailable):
+                    router.adapter_for("unpriced")
+
+    def test_local_ollama_mixed_or_positive_gateway_price_stays_blocked(self) -> None:
+        entry = policy_model("local-3b", "llama3.2:3b", provider_identity="ollama@ollama:11434")
+        del entry["input_usd_per_million"]
+        del entry["output_usd_per_million"]
+        for index, prices in enumerate(((0.000001,), (None, 0.0), (None, 0.000001))):
+            with self.subTest(prices=prices):
+                infos = []
+                for cost in prices:
+                    row = model_info(
+                        "llama3.2:3b", provider="ollama", input_cost=cost, output_cost=cost
+                    )
+                    row["litellm_params"].update(
+                        model="ollama/llama3.2:3b", api_base="http://ollama:11434"
+                    )
+                    infos.append(row)
+                router = self.router(
+                    FakeGateway(listed=("llama3.2:3b",), infos=infos),
+                    NEWSFLUX_AI_MODEL_POLICY_JSON=policy(entry),
+                    NEWSFLUX_AI_USAGE_DATABASE_PATH=str(Path(self.tmp.name) / f"priced-{index}.sqlite3"),
+                )
+                model = self.models(router)[1]["local-3b"]
+                self.assertFalse(model["available"])
+                self.assertIn(model["unavailable_reason"], {"PRICE_MISMATCH", "PRICE_NOT_VERIFIED"})
 
     def test_paid_model_requires_global_and_per_model_paid_authorization(self) -> None:
         gateway = FakeGateway(listed=("paid-x",), infos=[model_info("paid-x", input_cost=1.5e-7, output_cost=6e-7)])
