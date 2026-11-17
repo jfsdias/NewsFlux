@@ -121,7 +121,8 @@
                   "operator_declared_paid",
                   "gateway_published_only",
                   "mismatch",
-                  "not_verified"
+                  "not_verified",
+                  "local_unpriced"
                 ]
               },
               "input_usd_per_million": { "type": ["string", "null"], "maxLength": 32 },
