@@ -475,5 +475,71 @@ class AdminSettingsTests(unittest.TestCase):
         self.assertEqual(response.status_code, 204, response.text)
 
 
+class ManagedCatalogIntegrationTests(unittest.TestCase):
+    """Admin approval reaches the user catalog at runtime; corruption fails closed."""
+
+    def setUp(self):
+        from services.article_intel_summary.tests.test_litellm_adapter import approved_environment
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        boot = Path(self.tmp.name) / "key"
+        boot.write_text(KEY + "\n", encoding="ascii")
+        boot.chmod(0o600)
+        env = approved_environment(str(Path(self.tmp.name) / "usage.sqlite3"))
+        env.update({
+            "NEWSFLUX_AI_LITELLM_VIRTUAL_KEY_FILE": str(boot),
+            "NEWSFLUX_AI_LITELLM_MODEL_CHOICE": "s5-free",
+            "NEWSFLUX_AI_ALLOW_PAID_INFERENCE": "false",
+            "NEWSFLUX_AI_MODEL_DISCOVERY_ENABLED": "true",
+            "NEWSFLUX_AI_ADMIN_CONFIG_WRITES_ENABLED": "true",
+            "NEWSFLUX_AI_MODEL_POLICY_JSON": json.dumps({"version": 1, "models": [
+                policy_model("s5-free", "newsflux-s5-free"),
+            ]}),
+        })
+        self.env = env
+        self.gateway = FakeGateway(listed=("newsflux-s5-free", "acme-summarizer-7b"))
+        self.root = Path(self.tmp.name) / "managed"
+        self.store = ManagedSettingsStore(env, root=str(self.root), getter_factory=lambda *_: self.gateway)
+        from services.article_intel_summary.catalog import create_model_router
+        self.router, adapter = create_model_router(
+            env, discovery_getter=self.gateway, config_values_provider=self.store.effective_values,
+        )
+        owner = getattr(getattr(adapter, "primary", adapter), "_owner", None) or self.router.ledger_owner
+        if owner is not None:
+            self.addCleanup(owner.__exit__)
+
+    def available(self):
+        return {m["id"] for m in self.router.catalog_document()["models"] if m["available"]}
+
+    def test_admin_approval_and_revocation_change_user_catalog_without_restart(self):
+        self.assertIn("s5-free", self.available())
+        revision = self.store.save_key(NEW_KEY, "bootstrap")["revision"]
+        # Activation copies the operator bootstrap policy into the single managed record.
+        self.assertIn("s5-free", self.available())
+        approved = self.store.approve_model(
+            "acme-summarizer-7b", revision, allow_paid=False, allow_external=True,
+        )
+        from services.article_intel_summary.catalog import discovered_model_id
+        new_id = discovered_model_id("acme-summarizer-7b")
+        self.assertIn(new_id, self.available())
+        self.store.remove_model("acme-summarizer-7b", approved["revision"])
+        self.assertNotIn(new_id, self.available())
+        self.assertIn("s5-free", self.available())
+
+    def test_env_policy_ignored_after_activation_single_source_of_truth(self):
+        self.store.save_key(NEW_KEY, "bootstrap")
+        rev = self.store.status()["revision"]
+        self.store.remove_model("newsflux-s5-free", rev)
+        self.assertNotIn("s5-free", self.available())
+        self.assertIn("newsflux-s5-free", self.env["NEWSFLUX_AI_MODEL_POLICY_JSON"])
+
+    def test_corrupted_managed_record_disables_every_model(self):
+        self.store.save_key(NEW_KEY, "bootstrap")
+        (self.root / "settings.json").write_text("{not json", encoding="utf-8")
+        self.assertEqual(self.available(), set())
+        document = self.router.catalog_document()
+        self.assertEqual(document["policy"]["status"], "INVALID")
+
+
 if __name__ == "__main__":
     unittest.main()
