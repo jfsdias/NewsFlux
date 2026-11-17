@@ -218,6 +218,12 @@ class ManagedSettingsStore:
         results = []
         for alias in snapshot.listed:
             detail = (snapshot.info or {}).get(alias)
+            price_known = bool(detail and detail.input_price is not None and detail.output_price is not None
+                               and not detail.price_conflict)
+            # Classification only; amounts stay server-side and are never invented.
+            price_class = "unknown"
+            if price_known:
+                price_class = "paid" if (detail.input_price > 0 or detail.output_price > 0) else "free"
             results.append({
                 "id": alias,
                 "approved": alias in approved,
@@ -225,8 +231,8 @@ class ManagedSettingsStore:
                 "mode": detail.mode if detail else None,
                 "identity_verified": bool(detail and detail.provider_identity),
                 "local_ollama": bool(detail and detail.provider_identity == "ollama@ollama:11434"),
-                "price_known": bool(detail and detail.input_price is not None and detail.output_price is not None
-                                    and not detail.price_conflict),
+                "price_known": price_known,
+                "price_class": price_class,
             })
         return {"models": results[:256], "revision": state["revision"]}
 
