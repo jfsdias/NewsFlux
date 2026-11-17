@@ -36,7 +36,7 @@ class AdminMiniflux(FakeMinifluxHTTP):
             body = json.loads(answer.body)
             body["is_admin"] = True
             return HTTPResponse(
-                answer.status_code,
+                answer.status,
                 answer.headers,
                 json.dumps(body).encode(),
                 url
