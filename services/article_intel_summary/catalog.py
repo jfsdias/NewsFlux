@@ -791,39 +791,46 @@ def create_model_router(
         else:
             try:
                 active_values = dict(config_values_provider(values))
-                active_status, active_policy = load_model_policy(active_values)
-                managed_key = active_values.get("__newsflux_managed_virtual_key")
-                active_gateway = load_gateway_settings(
-                    active_values,
-                    read_key=bool(
-                        _read_bool(active_values, "NEWSFLUX_AI_INFERENCE_ENABLED")
-                        and _read_bool(active_values, "NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER")
+                if active_values == values:
+                    # No managed override: keep the original startup discovery client.
+                    # Also preserves pinned mock transports from existing S5 callers.
+                    active_status, active_policy = policy_status, policy
+                    active_discovery, active_gateway = discovery, gateway
+                    managed_key = None
+                else:
+                    active_status, active_policy = load_model_policy(active_values)
+                    managed_key = active_values.get("__newsflux_managed_virtual_key")
+                    active_gateway = load_gateway_settings(
+                        active_values,
+                        read_key=bool(
+                            _read_bool(active_values, "NEWSFLUX_AI_INFERENCE_ENABLED")
+                            and _read_bool(active_values, "NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER")
+                        )
                     )
-                )
-                if managed_key is not None:
-                    if not isinstance(managed_key, str) or not managed_key.startswith("sk-"):
-                        raise ValueError("managed key unavailable")
-                    active_gateway = replace(active_gateway, virtual_key=managed_key)
-                discovery_id = (
-                    hashlib.sha256((managed_key or "").encode("utf-8")).hexdigest(),
-                    active_values.get("NEWSFLUX_AI_LITELLM_VIRTUAL_KEY_FILE"),
-                    active_values.get("NEWSFLUX_AI_LITELLM_BASE_URL"),
-                    active_values.get("NEWSFLUX_AI_MODEL_DISCOVERY_ENABLED"),
-                    active_values.get("NEWSFLUX_AI_LITELLM_PRIVATE_DOCKER_PEER"),
-                )
-                with dynamic_lock:
-                    if discovery_id != dynamic_discovery_id:
-                        if managed_key is not None and _read_bool(active_values, "NEWSFLUX_AI_MODEL_DISCOVERY_ENABLED"):
-                            getter = discovery_getter or gateway_getter(
-                                active_values.get("NEWSFLUX_AI_LITELLM_BASE_URL"),
-                                active_values.get("NEWSFLUX_AI_LITELLM_PRIVATE_DOCKER_PEER") or None,
-                                managed_key,
-                            )
-                            dynamic_discovery = GatewayDiscovery.from_environment(active_values, getter=getter)
-                        else:
-                            dynamic_discovery = GatewayDiscovery.from_environment(active_values, getter=discovery_getter)
-                        dynamic_discovery_id = discovery_id
-                    active_discovery = dynamic_discovery
+                    if managed_key is not None:
+                        if not isinstance(managed_key, str) or not managed_key.startswith("sk-"):
+                            raise ValueError("managed key unavailable")
+                        active_gateway = replace(active_gateway, virtual_key=managed_key)
+                    discovery_id = (
+                        hashlib.sha256((managed_key or "").encode("utf-8")).hexdigest(),
+                        active_values.get("NEWSFLUX_AI_LITELLM_VIRTUAL_KEY_FILE"),
+                        active_values.get("NEWSFLUX_AI_LITELLM_BASE_URL"),
+                        active_values.get("NEWSFLUX_AI_MODEL_DISCOVERY_ENABLED"),
+                        active_values.get("NEWSFLUX_AI_LITELLM_PRIVATE_DOCKER_PEER"),
+                    )
+                    with dynamic_lock:
+                        if discovery_id != dynamic_discovery_id:
+                            if managed_key is not None and _read_bool(active_values, "NEWSFLUX_AI_MODEL_DISCOVERY_ENABLED"):
+                                getter = discovery_getter or gateway_getter(
+                                    active_values.get("NEWSFLUX_AI_LITELLM_BASE_URL"),
+                                    active_values.get("NEWSFLUX_AI_LITELLM_PRIVATE_DOCKER_PEER") or None,
+                                    managed_key,
+                                )
+                                dynamic_discovery = GatewayDiscovery.from_environment(active_values, getter=getter)
+                            else:
+                                dynamic_discovery = GatewayDiscovery.from_environment(active_values, getter=discovery_getter)
+                            dynamic_discovery_id = discovery_id
+                        active_discovery = dynamic_discovery
             except Exception:
                 # A malformed, inaccessible or raced managed record must never restore
                 # an old key, model policy, or external authorization.
