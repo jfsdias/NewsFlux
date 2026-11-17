@@ -89,7 +89,29 @@ try {
     })
     assert.equal(noTrust.status, 403)
   }
-  for (const denied of ["/api/ai/v1/admin/litellm", "/api/ai/v1/admin/other", "/api/ai/v1/keys"]) {
+  // Wrong method per action never reaches the Summary API.
+  for (const [action, method] of [
+    ["status", "POST"],
+    ["policy", "DELETE"],
+    ["save-key", "GET"],
+    ["approve-model", "PUT"],
+    ["remove-model", "DELETE"],
+  ]) {
+    const wrong = await fetch(`${adminBase}/${action}`, {
+      method,
+      headers: { "X-Forwarded-Proto": "https" },
+    })
+    assert.equal(wrong.status, 403, `${method} ${action}`)
+  }
+  for (const denied of [
+    "/api/ai/v1/admin/litellm",
+    "/api/ai/v1/admin/litellm/",
+    "/api/ai/v1/admin/litellm/delete-key",
+    "/api/ai/v1/admin/litellm/save-key/extra",
+    "/api/ai/v1/admin/litellm/key",
+    "/api/ai/v1/admin/other",
+    "/api/ai/v1/keys",
+  ]) {
     const response = await fetch("http://127.0.0.1:18890" + denied, {
       method: "POST",
       headers: { "X-Forwarded-Proto": "https" },
@@ -101,6 +123,13 @@ try {
     headers: { "X-Forwarded-Proto": "https" },
   })
   assert.equal(adminPreflight.status, 200)
+  const unknownPreflight = await fetch(`${adminBase}/delete-key`, {
+    method: "OPTIONS",
+    headers: { "X-Forwarded-Proto": "https" },
+  })
+  assert.equal(unknownPreflight.status, 403)
+  // Existing catchall preserved: non-API static paths are still served by the SPA handlers.
+  assert.notEqual((await fetch("http://127.0.0.1:18890/")).status, 403)
   console.log("CADDY_ROUTE=PASS")
 } finally {
   proc.kill("SIGTERM")
