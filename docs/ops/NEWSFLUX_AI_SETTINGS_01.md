@@ -1,6 +1,6 @@
 # NEWSFLUX-AI-SETTINGS-01 — Configure LiteLLM from the NewsFlux application
 
-**Status:** DESIGN / ARCHITECTURE GATES ONLY — NOT IMPLEMENTED, NO PRODUCTION WRITES  
+**Status:** IMPLEMENTED IN FEATURE PRs #262/#263/#264 (not merged, not deployed) — see NEWSFLUX_AI_SETTINGS_INSTALL_R2.md  
 **Source baseline:** `d54eda2bdb8bc5c3d1bd58d40236f48da762e852`  
 **Date:** 2026-11-17 (America/Bahia)  
 **Dependency:** PR #260 remains OPEN/DRAFT with PRIVACY HOLD. Keep scope separate.
