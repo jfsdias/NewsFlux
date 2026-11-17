@@ -817,6 +817,9 @@ def create_model_router(
                         active_values.get("NEWSFLUX_AI_LITELLM_BASE_URL"),
                         active_values.get("NEWSFLUX_AI_MODEL_DISCOVERY_ENABLED"),
                         active_values.get("NEWSFLUX_AI_LITELLM_PRIVATE_DOCKER_PEER"),
+                        hashlib.sha256(
+                            (active_values.get("NEWSFLUX_AI_MODEL_POLICY_JSON") or "").encode("utf-8")
+                        ).hexdigest(),
                     )
                     with dynamic_lock:
                         if discovery_id != dynamic_discovery_id:
