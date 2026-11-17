@@ -61,6 +61,49 @@ try {
     ).status,
     403,
   )
+  const adminBase = "http://127.0.0.1:18890/api/ai/v1/admin/litellm"
+  for (const [action, method] of [
+    ["status", "GET"],
+    ["models", "GET"],
+    ["policy", "GET"],
+    ["test-key", "POST"],
+    ["save-key", "POST"],
+    ["save-policy", "POST"],
+    ["approve-model", "POST"],
+    ["remove-model", "POST"],
+  ]) {
+    const allowed = await fetch(`${adminBase}/${action}`, {
+      method,
+      headers: { "X-Forwarded-Proto": "https" },
+    })
+    assert.equal(allowed.status, 200)
+    assert.deepEqual(await allowed.json(), {
+      path: `/api/ai/v1/admin/litellm/${action}`,
+      protocol: "https",
+    })
+    const noProto = await fetch(`${adminBase}/${action}`, { method })
+    assert.equal(noProto.status, 403)
+    const noTrust = await fetch(`http://[::1]:18890/api/ai/v1/admin/litellm/${action}`, {
+      method, headers: { "X-Forwarded-Proto": "https" },
+    })
+    assert.equal(noTrust.status, 403)
+  }
+  for (const denied of [
+    "/api/ai/v1/admin/litellm",
+    "/api/ai/v1/admin/other",
+    "/api/ai/v1/keys",
+  ]) {
+    const response = await fetch("http://127.0.0.1:18890" + denied, {
+      method: "POST",
+      headers: { "X-Forwarded-Proto": "https" },
+    })
+    assert.equal(response.status, 403)
+  }
+  const adminPreflight = await fetch(`${adminBase}/save-key`, {
+    method: "OPTIONS",
+    headers: { "X-Forwarded-Proto": "https" },
+  })
+  assert.equal(adminPreflight.status, 200)
   console.log("CADDY_ROUTE=PASS")
 } finally {
   proc.kill("SIGTERM")
