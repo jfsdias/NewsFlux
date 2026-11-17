@@ -360,15 +360,6 @@ class LiteLLMInferenceAdapter:
             raise InferenceUnavailable("inference ownership is unavailable") from None
         if not self.settings.is_ready() or self.ledger is None:
             raise InferenceUnavailable("inference policy is not authorized") from None
-        if self.settings.local_processing_authorized:
-            # Metadata can change after a cached catalog render. Never send article text based
-            # solely on a previous GET; gateway-side key restrictions remain a separate live gate.
-            try:
-                route_valid = self._pre_dispatch_check() if self._pre_dispatch_check is not None else False
-            except Exception:  # noqa: BLE001 - never disclose gateway metadata or article content
-                route_valid = False
-            if route_valid is not True:
-                raise InferenceUnavailable("local model route could not be verified") from None
         if (
             isinstance(timeout_seconds, bool)
             or not isinstance(timeout_seconds, (int, float))
@@ -383,6 +374,15 @@ class LiteLLMInferenceAdapter:
         try:
             if deadline is not None:
                 deadline.remaining()
+            if self.settings.local_processing_authorized:
+                # Revalidate only while holding the one-in-flight slot, and before any payload
+                # is constructed or token reservation created. No implicit gateway fallback.
+                try:
+                    route_valid = self._pre_dispatch_check() if self._pre_dispatch_check is not None else False
+                except Exception:  # noqa: BLE001 - never disclose metadata or article content
+                    route_valid = False
+                if route_valid is not True:
+                    raise InferenceUnavailable("local model route could not be verified") from None
             messages = _build_messages(request, s5=self.settings.model_choice == MODEL_CHOICE_S5_FREE)
             estimated_input_tokens = _estimate_input_tokens(messages)
             if estimated_input_tokens > self.settings.max_input_tokens:
