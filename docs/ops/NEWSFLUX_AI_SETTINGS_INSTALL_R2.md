@@ -10,9 +10,9 @@ No real LiteLLM key, real article, Miniflux write or production host was used.
 | --------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------- | ------------------------------------------ |
 | Base                                                                        | —                                                    | `main`                                      | `d54eda2bdb8bc5c3d1bd58d40236f48da762e852` |
 | Backend (API, store, policy, preflight, restore)                            | [#262](https://github.com/jfsdias/NewsFlux/pull/262) | `codex/newsflux-ai-settings-backend-r1`     | `7b14929958c4401a86caa59794478c3da13dcaf3` |
-| UI (stacked on #262, merged forward, diff vs #262 is frontend/harness only) | [#263](https://github.com/jfsdias/NewsFlux/pull/263) | `codex/newsflux-ai-settings-ui-r2`          | `d1ae23cbd0c32b958cec7b9fec179638df84a059` |
+| UI (stacked on #262, merged forward, diff vs #262 is frontend/harness only) | [#263](https://github.com/jfsdias/NewsFlux/pull/263) | `codex/newsflux-ai-settings-ui-r2`          | `9cb4d6a3fc6d0daac22f6e7189a79ae59a29daee` |
 | Caddy route                                                                 | [#264](https://github.com/jfsdias/NewsFlux/pull/264) | `codex/newsflux-ai-settings-caddy-route-r1` | `2641010b78839150b4c227f9939d7e373462f971` |
-| Test-only combined tree (never merge)                                       | —                                                    | `claude/intelligent-edison-5053ez`          | `dfb44a4a03c2fb5b166c7f4de0bff1e53bd92bf2` |
+| Test-only combined tree (never merge)                                       | —                                                    | `claude/intelligent-edison-5053ez`          | `afad6196fb6ba505b2092bfe5bb836388b7751b9` |
 
 PR #260 (local Ollama privacy) is **not** in any of these trees and stays independent / HOLD.
 The R1 branch `integration/newsflux-ai-settings-01-r1-validated-candidate` (`f66567e`) is **stale**: it was
