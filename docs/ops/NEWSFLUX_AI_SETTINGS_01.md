@@ -9,9 +9,10 @@
 
 Owner wants to enter/replace **the dedicated NewsFlux LiteLLM virtual key** in the NewsFlux UX and select the **primary** and **fallback** models in the application, without modifying source code or Docker configuration for every model choice. The owner reports the current key is specific to NewsFlux and the supplied LiteLLM screenshot shows `Models=all-proxy-models`, `TPM=Unlimited`, `RPM=Unlimited`, `Expires=Never`. Do **not** store or reproduce the key ID/token from the image.
 
-The screenshot resolves a **classification error**, not a security approval: the previous R4B-R2 audit reported `KEY_MODELS_COUNT=1`, `KEY_LOCAL_ALIAS_MEMBER=NO`. `all-proxy-models` is a model *access group/special permission*, not necessarily a literal model deployment. It is consistent with the reported count and supports broad access intent. Effective models remain subject to gateway/team/group permissions and actual authenticated discovery; not every visible model is eligible for article processing.
+The screenshot resolves a **classification error**, not a security approval: the previous R4B-R2 audit reported `KEY_MODELS_COUNT=1`, `KEY_LOCAL_ALIAS_MEMBER=NO`. `all-proxy-models` is a model _access group/special permission_, not necessarily a literal model deployment. It is consistent with the reported count and supports broad access intent. Effective models remain subject to gateway/team/group permissions and actual authenticated discovery; not every visible model is eligible for article processing.
 
 Official references:
+
 - https://docs.litellm.ai/docs/proxy/access_management/llm
 - https://docs.litellm.ai/docs/proxy/virtual_keys
 - https://docs.litellm.ai/docs/proxy/configuration/ui
@@ -30,17 +31,17 @@ Official references:
 
 **Existing location:** Settings → Reading → Article Intelligence. Admin-only **LiteLLM Integration** section placed before the existing model controls. Reuse current SettingSection/SettingItem/Arco components, editorial/OLED palette and opaque settings surface. Test phone 360/390 px, tablet 820 px, Fold 884×1104 and desktop.
 
-| Control | Behavior |
-|---|---|
-| Integration status | `CONNECTED`, `NOT_CONFIGURED`, `VALIDATION_FAILED`, `UNVERIFIED`; never show raw key or key hash |
-| Virtual-key field | Password/masked input, **only to replace/register key**; empty when opened even if configured; never preload existing key |
-| `Testar conexão` | Server-admin authenticated safe read-only call to LiteLLM model catalog, classify result without inference; preserve existing key on failure |
-| `Salvar / Substituir chave` | Explicit admin operation after valid test and confirmation; backend writes atomically to approved protected secret store; no local/session storage |
-| `Atualizar modelos` | Server-side authenticated live discovery with bounded size, no cookies/credentials in model metadata |
-| Primary model | **Reuse existing selector**, improve search/filter if model count makes radio list unwieldy, show provider/local-or-external/available/price status |
-| Fallback model | **Reuse existing switch and model selector**, different from primary; default disabled; show transient-only rule, paid and cross-provider separate opt-ins |
-| Global approved model policy | Admin-only allowlist of gateway-discovered compatible models and their transfer/cost classification, persisted on server without code change |
-| User preferences | Existing per-browser model IDs and consent toggles; no secret; unavailable saved choice remains visibly unavailable instead of silent substitution |
+| Control                      | Behavior                                                                                                                                                   |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Integration status           | `CONNECTED`, `NOT_CONFIGURED`, `VALIDATION_FAILED`, `UNVERIFIED`; never show raw key or key hash                                                           |
+| Virtual-key field            | Password/masked input, **only to replace/register key**; empty when opened even if configured; never preload existing key                                  |
+| `Testar conexão`             | Server-admin authenticated safe read-only call to LiteLLM model catalog, classify result without inference; preserve existing key on failure               |
+| `Salvar / Substituir chave`  | Explicit admin operation after valid test and confirmation; backend writes atomically to approved protected secret store; no local/session storage         |
+| `Atualizar modelos`          | Server-side authenticated live discovery with bounded size, no cookies/credentials in model metadata                                                       |
+| Primary model                | **Reuse existing selector**, improve search/filter if model count makes radio list unwieldy, show provider/local-or-external/available/price status        |
+| Fallback model               | **Reuse existing switch and model selector**, different from primary; default disabled; show transient-only rule, paid and cross-provider separate opt-ins |
+| Global approved model policy | Admin-only allowlist of gateway-discovered compatible models and their transfer/cost classification, persisted on server without code change               |
+| User preferences             | Existing per-browser model IDs and consent toggles; no secret; unavailable saved choice remains visibly unavailable instead of silent substitution         |
 
 Model choices in the UX do not automatically turn on `NEWSFLUX_AI_INFERENCE_ENABLED`, `NEWSFLUX_AI_ALLOW_LOCAL_ARTICLE_PROCESSING` or `NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER`. A key with access to all gateway models does **not** give NewsFlux blanket approval to process articles on any external model. Explicit, authenticated operator **approval** of each model and its data boundary remains required. Only provider/cost/compatibility-verified options become selectable.
 

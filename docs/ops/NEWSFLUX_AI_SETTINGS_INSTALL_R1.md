@@ -25,7 +25,7 @@
 6. **Governed deployment only after GO**: use `deploy/release-governance/release.py inspect → plan → promote`, one service at a time, exact **image ID** + approved SHA + hashed Compose override + manifest under `/dockerdata/compose/newsflux/.releases/`. Protected identities include NPM, Miniflux/DB, PR188 and whichever Reader/Summary is not being promoted. Reader may require `--ready-probe`; `release.py` rejects undefined readiness. Never use `ai-functional-release.sh all`, `latest` implicit, `docker compose up` broadly or merge upstream.
 7. **Readback after canary**: admin session can read status without plaintext, non-admin gets 403, key test GET-only LiteLLM catalog no inference, save existing NewsFlux-specific key under explicit approval, model approve/revoke readback with CAS; selected primary/fallback may change without modifying code. Confirm no browser storage secrets, no log leakage, no stealth external fallback. Recheck protected Docker metadata unchanged.
 8. **Rollback**: if Summary/Reader unhealthy or external content routing unverified, `release.py rollback --manifest` for the exact promoted service and verify previous config hash and image ID. If a managed credential/policy update must be reverted, use the service-local, revision-gated `python3 -B -m services.article_intel_summary.operator_restore_ai_settings --expected-revision <current-32-hex> --confirm RESTORE_PREVIOUS_NEWSFLUX_AI_CONFIG` **as the Summary UID10001 under supervised operator GO**, then read back status. Private previous.json/activated/status may not be printed. Key-material rollback and container rollback are separate scopes.
-9. **PR260 remains independent and HOLD**: enabling *real article inference*, even for local Ollama, still requires R4B effective LiteLLM routing/privacy proof, #260's own review/merge and explicit flags/GO. Installing the dark admin settings UX is **not** authorization for article processing.
+9. **PR260 remains independent and HOLD**: enabling _real article inference_, even for local Ollama, still requires R4B effective LiteLLM routing/privacy proof, #260's own review/merge and explicit flags/GO. Installing the dark admin settings UX is **not** authorization for article processing.
 
 ## Operator-safe release commands — illustration, not a runnable deployment authorization
 
@@ -37,7 +37,7 @@ sudo python3 deploy/release-governance/release.py inspect --project newsflux
 # --project newsflux --service summary-api|newsflux
 # --candidate-image sha256:<EXACT_IMAGE_ID>
 # --approved-sha <APPROVED_MERGED_MAIN_SHA>
-# --protected <CONFIRMED_PROTECTED_CONTAINER> ... 
+# --protected <CONFIRMED_PROTECTED_CONTAINER> ...
 # --release-dir /dockerdata/compose/newsflux/.releases/<APPROVED_RELEASE_ID>
 # --extra-override <HASHED_CONFIG_ONLY_LAYER> as justified
 # --ready-probe <READER_PROBE_JSON> when required.
