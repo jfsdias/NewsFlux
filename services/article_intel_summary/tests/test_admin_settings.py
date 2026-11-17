@@ -318,6 +318,18 @@ class AdminSettingsTests(unittest.TestCase):
         self.assertEqual(response.status_code, 413, response.text)
         self.assertFalse(self.root.exists())
 
+    def test_public_models_classify_price_without_inventing_amounts(self):
+        self.gateway.listed.append("paid-synthetic")
+        self.gateway.listed.append("unpriced-synthetic")
+        self.gateway.infos.append(model_info("paid-synthetic", input_cost=0.000001, output_cost=0.000002))
+        self.gateway.infos.append(model_info("unpriced-synthetic", input_cost=None, output_cost=None))
+        rows = {row["id"]: row for row in self.store.public_models()["models"]}
+        self.assertEqual(rows["secondary-synthetic"]["price_class"], "free")
+        self.assertEqual(rows["paid-synthetic"]["price_class"], "paid")
+        self.assertEqual(rows["unpriced-synthetic"]["price_class"], "unknown")
+        for row in rows.values():
+            self.assertFalse({"input_price", "output_price", "api_base", "api_key"} & set(row))
+
     def test_error_bodies_never_echo_candidate_key(self):
         client = self.make_client()
         self.gateway.errors["/v1/models"] = RuntimeError(NEW_KEY)
