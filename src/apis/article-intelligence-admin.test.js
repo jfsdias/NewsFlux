@@ -65,7 +65,7 @@ const {
   testLiteLLMKey,
   replaceLiteLLMKey,
   approveLiteLLMModel,
-} = await import("./article-intelligence-admin.js")
+} = await import("./article-intelligence-admin")
 
 test("admin status uses only the existing Miniflux session and same-origin GET", async () => {
   fetchImplementation = async (url, options) => {
@@ -109,7 +109,8 @@ test("key validation is read-only and only calls admin test route", async () => 
     assert.equal(options.method, "POST")
     return Response.json({ validated: true })
   }
-  assert.equal((await testLiteLLMKey("sk-synthetic"))?.validated, true)
+  const response = await testLiteLLMKey("sk-synthetic")
+  assert.equal(response?.validated, true)
 })
 
 test("model approval includes explicit consent booleans", async () => {
@@ -123,7 +124,8 @@ test("model approval includes explicit consent booleans", async () => {
     })
     return Response.json({ policy_models: 1 })
   }
-  assert.equal((await approveLiteLLMModel("ollama-local", "xyz", false, false)).policy_models, 1)
+  const result = await approveLiteLLMModel("ollama-local", "xyz", false, false)
+  assert.equal(result.policy_models, 1)
 })
 
 test("non-admin denial has safe error code and does not expose response payload", async () => {
