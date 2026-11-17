@@ -82,6 +82,8 @@ class ManagedSettingsStore:
                 return False
             try:
                 self.root.mkdir(mode=0o700)
+            except FileExistsError:
+                pass  # concurrent first writer; the lstat checks below still apply
             except (OSError, ValueError):
                 raise ManagedSettingsError("CONFIG_UNAVAILABLE") from None
         try:
@@ -138,7 +140,7 @@ class ManagedSettingsStore:
             if value["policy"] is not None:
                 _parse_policy(value["policy"])
             return value
-        except (ValueError, TypeError, UnicodeError):
+        except (ValueError, TypeError, UnicodeError, ArithmeticError):
             raise ManagedSettingsError("CONFIG_INVALID") from None
 
     def _bootstrap(self) -> dict:
@@ -149,7 +151,7 @@ class ManagedSettingsStore:
             try:
                 policy = json.loads(policy_raw)
                 _parse_policy(policy)
-            except (ValueError, TypeError):
+            except (ValueError, TypeError, ArithmeticError):
                 raise ManagedSettingsError("CONFIG_INVALID") from None
         return {"version": 1, "revision": "bootstrap", "key": key, "policy": policy}
 
@@ -209,8 +211,9 @@ class ManagedSettingsStore:
         return snapshot
 
     def public_models(self) -> dict:
+        state = self.read()
         snapshot = self.discover()
-        policy = self.read()["policy"]
+        policy = state["policy"]
         approved = {item["alias"] for item in policy["models"]} if policy else set()
         results = []
         for alias in snapshot.listed:
@@ -225,7 +228,7 @@ class ManagedSettingsStore:
                 "price_known": bool(detail and detail.input_price is not None and detail.output_price is not None
                                     and not detail.price_conflict),
             })
-        return {"models": results[:256], "revision": self.read()["revision"]}
+        return {"models": results[:256], "revision": state["revision"]}
 
     def validate_candidate(self, key: str) -> dict:
         self.discover(candidate_key=_parse_key(key))
@@ -277,6 +280,11 @@ class ManagedSettingsStore:
                 "key": _parse_key(key if change == "key" else state["key"]),
                 "policy": policy if change == "policy" else state["policy"],
             }
+            if next_state["policy"] is not None:
+                try:
+                    _parse_policy(next_state["policy"])
+                except (ValueError, TypeError, ArithmeticError):
+                    raise ManagedSettingsError("POLICY_INVALID") from None
             raw = json.dumps(next_state, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
             if len(raw) > MAX_RECORD_BYTES:
                 raise ManagedSettingsError("CONFIG_INVALID")
@@ -288,9 +296,20 @@ class ManagedSettingsStore:
             if len(previous) > MAX_RECORD_BYTES:
                 raise ManagedSettingsError("CONFIG_INVALID")
             self._write_bytes(self.root / "previous.json", previous)
-            if current is None:
+            first_activation = current is None
+            if first_activation:
                 self._write_bytes(self.root / "activated", b"v1\n")
-            self._write_bytes(self.root / "settings.json", raw)
+            try:
+                self._write_bytes(self.root / "settings.json", raw)
+            except ManagedSettingsError:
+                if first_activation:
+                    # Nothing managed was ever committed: withdraw the marker so the
+                    # unchanged bootstrap remains authoritative instead of bricking.
+                    try:
+                        os.unlink(self.root / "activated")
+                    except OSError:
+                        pass
+                raise
             check = self._managed()
             if check is None or check["revision"] != next_state["revision"]:
                 raise ManagedSettingsError("CONFIG_UNAVAILABLE")
@@ -333,7 +352,7 @@ class ManagedSettingsStore:
                 _parse_key(previous["key"])
                 if previous["policy"] is not None:
                     _parse_policy(previous["policy"])
-            except (ValueError, TypeError, UnicodeError):
+            except (ValueError, TypeError, UnicodeError, ArithmeticError):
                 raise ManagedSettingsError("CONFIG_INVALID") from None
             previous["revision"] = secrets.token_hex(16)
             payload = json.dumps(previous, separators=(",", ":")).encode("utf-8")
@@ -359,7 +378,8 @@ class ManagedSettingsStore:
             models = _parse_policy(policy)
             if not models:
                 raise ValueError("empty policy")
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, ArithmeticError):
+            # decimal.InvalidOperation is an ArithmeticError, not a ValueError.
             raise ManagedSettingsError("POLICY_INVALID") from None
         snapshot = self.discover()
         for item in models:
