@@ -20,6 +20,8 @@ from services.article_intel_summary.catalog import ModelNotAvailable, create_mod
 from services.article_intel_summary.profiles import ProfileInvalid, parse_profile
 from services.article_intel_summary.service import ModelOutputInvalid, SummaryService
 from services.article_intel_summary.supervision import OperationBusy, OperationDeadline, Supervisor
+from services.article_intel_summary.admin_api import create_admin_router
+from services.article_intel_summary.admin_settings import ManagedSettingsStore, ManagedSettingsError
 
 MAX_REQUEST_BODY_BYTES = 8 * 1024
 MAX_IN_FLIGHT_SUMMARIES = 2
@@ -44,7 +46,10 @@ def create_app(
     request_timeout_seconds: float = 60.0,
     max_in_flight: int = MAX_IN_FLIGHT_SUMMARIES,
     revalidation_reserve_seconds: float = 10.0,
+    admin_store: ManagedSettingsStore | None = None,
 ) -> FastAPI:
+    if admin_store is None:
+        admin_store = ManagedSettingsStore()
     if auth_service is None:
         trusted_settings = settings or AuthSettings.from_env()
         auth_service = MinifluxAuthService(trusted_settings)
@@ -52,7 +57,10 @@ def create_app(
         raise AuthConfigurationError("Provided app settings differ from the authentication service settings")
     if summary_service is None:
         adapter = create_configured_inference_adapter()
-        router, adapter = create_model_router(default_adapter=adapter)
+        router, adapter = create_model_router(
+            default_adapter=adapter,
+            config_values_provider=admin_store.effective_values,
+        )
         primary = adapter.primary if isinstance(adapter, S5MistralFallbackAdapter) else adapter
         if isinstance(primary, LiteLLMInferenceAdapter):
             summary_service = SummaryService(adapter, timeout_seconds=primary.settings.timeout_seconds, router=router)
@@ -78,6 +86,8 @@ def create_app(
     app.state.auth_service = auth_service
     app.state.summary_service = summary_service
     app.state.supervisor = supervisor
+    app.state.admin_store = admin_store
+    app.include_router(create_admin_router(auth_service, admin_store))
 
     @app.get("/healthz", include_in_schema=False)
     async def healthz() -> Response:
@@ -159,6 +169,14 @@ def create_app(
             request_id = document["request_id"]
             is_v2 = document["schema_version"] == "2"
             is_v3 = document["schema_version"] == "3"
+            # V1's startup-configured adapter cannot see a managed key change.
+            # Fail closed instead of continuing to dispatch using the retired key.
+            if not is_v2 and not is_v3:
+                try:
+                    if admin_store.status()["managed"]:
+                        raise _ApiError("MODEL_NOT_AUTHORIZED", 403, request_id)
+                except ManagedSettingsError:
+                    raise _ApiError("MODEL_NOT_AVAILABLE", 503, request_id) from None
             profile = parse_profile(document["profile"]) if (is_v2 or is_v3) else None
             if is_v3 and document["fallback_model_id"] == document["primary_model_id"]:
                 raise _ApiError("INVALID_REQUEST", 422, request_id)
