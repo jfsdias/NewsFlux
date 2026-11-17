@@ -1,7 +1,8 @@
-import { Button, Checkbox, Radio, Select, Switch, Typography } from "@arco-design/web-react"
+import { Button, Checkbox, Input, Radio, Select, Switch, Typography } from "@arco-design/web-react"
 import { useStore } from "@nanostores/react"
 import { useEffect, useRef, useState } from "react"
 
+import LiteLLMAdminSettings from "./LiteLLMAdminSettings"
 import SettingItem from "./SettingItem"
 import SettingSection from "./SettingSection"
 
@@ -104,6 +105,7 @@ const ArticleIntelligence = () => {
     ],
   })
   const [reloadCount, setReloadCount] = useState(0)
+  const [modelSearch, setModelSearch] = useState("")
   const languageSelectRef = useRef(null)
   const languageClosedAtRef = useRef(Number.NEGATIVE_INFINITY)
   const [loaded, setLoaded] = useState({ key: null, status: "loading", catalog: null })
@@ -154,6 +156,8 @@ const ArticleIntelligence = () => {
     !catalog.models.find((model) => model.id === aiSummaryModel)?.available
 
   return (
+    <>
+    <LiteLLMAdminSettings onPolicyChanged={() => setReloadCount((count) => count + 1)} />
     <SettingSection title={polyglot.t("article_intelligence.settings_section")}>
       <SettingItem
         description={polyglot.t("article_intelligence.model_description")}
@@ -175,6 +179,15 @@ const ArticleIntelligence = () => {
           </div>
         )}
         {catalog && (
+          <Input
+            aria-label={polyglot.t("article_intelligence.litellm_search")}
+            className="ai-model-search"
+            placeholder={polyglot.t("article_intelligence.litellm_search")}
+            value={modelSearch}
+            onChange={setModelSearch}
+          />
+        )}
+        {catalog && (
           <Radio.Group
             aria-label={polyglot.t("article_intelligence.model_label")}
             className="ai-model-catalog"
@@ -189,7 +202,10 @@ const ArticleIntelligence = () => {
                 })}
               </span>
             </Radio>
-            {catalog.models.map((model) => (
+            {catalog.models
+              .filter((model) => !modelSearch.trim() || (model.label + " " + model.provider + " " + model.id)
+                .toLowerCase().includes(modelSearch.trim().toLowerCase()))
+              .map((model) => (
               <Radio key={model.id} disabled={!model.available} value={model.id}>
                 <span className="ai-model-option__title">{model.label}</span>
                 <ModelDetails model={model} polyglot={polyglot} />
@@ -383,6 +399,7 @@ const ArticleIntelligence = () => {
         </Select>
       </SettingItem>
     </SettingSection>
+    </>
   )
 }
 
