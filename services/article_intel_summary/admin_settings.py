@@ -17,12 +17,15 @@ from typing import Mapping
 
 from services.article_intel_summary.catalog import (
     GatewayDiscovery,
+    MAX_POLICY_MODELS,
     _parse_policy,
+    discovered_model_id,
     gateway_getter,
 )
 from services.article_intel_summary.litellm_adapter import (
     _read_private_secret_file,
     _valid_gateway_base_url,
+    _valid_model_alias,
 )
 
 MAX_KEY_BYTES = 4096
@@ -170,9 +173,14 @@ class ManagedSettingsStore:
 
     def policy(self) -> dict:
         state = self.read()
+        policy = state["policy"] or {"version": 1, "models": []}
         return {
             "revision": state["revision"],
-            "policy": state["policy"] or {"version": 1, "models": []},
+            # Provider identity can include an internal upstream hostname; it stays server-only.
+            "policy": {"version": 1, "models": [
+                {k: v for k, v in item.items() if k != "provider_identity"}
+                for item in policy["models"]
+            ]},
         }
 
     def discover(self, *, candidate_key: str | None = None):
@@ -193,11 +201,14 @@ class ManagedSettingsStore:
 
     def public_models(self) -> dict:
         snapshot = self.discover()
+        policy = self.read()["policy"]
+        approved = {item["alias"] for item in policy["models"]} if policy else set()
         results = []
         for alias in snapshot.listed:
             detail = (snapshot.info or {}).get(alias)
             results.append({
                 "id": alias,
+                "approved": alias in approved,
                 "provider": detail.provider if detail and detail.provider else "Unverified",
                 "mode": detail.mode if detail else None,
                 "identity_verified": bool(detail and detail.provider_identity),
@@ -306,3 +317,67 @@ class ManagedSettingsStore:
             elif item.provider_identity != "ollama@ollama:11434":
                 raise ManagedSettingsError("MODEL_UNVERIFIED")
         return self._save(expected_revision, policy=policy, change="policy")
+
+    def approve_model(self, alias: str, expected_revision: str,
+                      *, allow_paid: bool = False, allow_external: bool = False) -> dict:
+        if not self.enabled:
+            raise ManagedSettingsError("CHANGES_DISABLED")
+        if not _valid_model_alias(alias) or not isinstance(expected_revision, str):
+            raise ManagedSettingsError("POLICY_INVALID")
+        if not isinstance(allow_paid, bool) or not isinstance(allow_external, bool):
+            raise ManagedSettingsError("POLICY_INVALID")
+        state = self.read()
+        if state["revision"] != expected_revision:
+            raise ManagedSettingsError("CONFIG_CONFLICT")
+        snapshot = self.discover()
+        if alias not in snapshot.listed:
+            raise ManagedSettingsError("MODEL_NOT_DISCOVERED")
+        detail = (snapshot.info or {}).get(alias)
+        if not detail or detail.mode != "chat" or not detail.provider_identity or detail.price_conflict:
+            raise ManagedSettingsError("MODEL_UNVERIFIED")
+        local = detail.provider_identity == "ollama@ollama:11434"
+        if not local and not allow_external:
+            raise ManagedSettingsError("MODEL_UNVERIFIED")
+        if not local and (detail.input_price is None or detail.output_price is None):
+            raise ManagedSettingsError("MODEL_UNVERIFIED")
+        paid = bool((detail.input_price or 0) > 0 or (detail.output_price or 0) > 0)
+        if paid and not allow_paid:
+            raise ManagedSettingsError("MODEL_UNVERIFIED")
+        new_item = {
+            "id": discovered_model_id(alias),
+            "alias": alias,
+            "label": alias[:64],
+            "provider": (detail.provider or "LiteLLM")[:64],
+            "provider_identity": detail.provider_identity,
+            "compatible_for_summary": True,
+            "paid_authorized": allow_paid,
+            "transfer_authorized": True,
+        }
+        if detail.input_price is not None:
+            new_item["input_usd_per_million"] = str(detail.input_price)
+        if detail.output_price is not None:
+            new_item["output_usd_per_million"] = str(detail.output_price)
+        policy = state["policy"] or {"version": 1, "models": []}
+        rows = [item for item in policy["models"] if item["alias"] != alias]
+        rows.append(new_item)
+        if len(rows) > MAX_POLICY_MODELS:
+            raise ManagedSettingsError("POLICY_INVALID")
+        return self.save_policy({"version": 1, "models": rows}, expected_revision)
+
+    def remove_model(self, alias: str, expected_revision: str) -> dict:
+        if not self.enabled:
+            raise ManagedSettingsError("CHANGES_DISABLED")
+        if not isinstance(alias, str) or not isinstance(expected_revision, str):
+            raise ManagedSettingsError("POLICY_INVALID")
+        state = self.read()
+        if state["revision"] != expected_revision:
+            raise ManagedSettingsError("CONFIG_CONFLICT")
+        policy = state["policy"]
+        if not policy or not any(item["alias"] == alias for item in policy["models"]):
+            raise ManagedSettingsError("MODEL_NOT_DISCOVERED")
+        remaining = [item for item in policy["models"] if item["alias"] != alias]
+        return self._save(
+            expected_revision,
+            policy={"version": 1, "models": remaining},
+            change="policy"
+        )
