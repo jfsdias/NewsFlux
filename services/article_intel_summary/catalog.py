@@ -13,7 +13,7 @@ Three independent inputs decide what a user may select; none of them alone grant
 
 A model is AVAILABLE only when it is approved, discovered, compatible (chat), authorized and
 either has a price matched to the gateway or is an identity-pinned local Ollama deployment
-with no per-token gateway price published. Discovered but unapproved aliases
+with no positive or conflicting gateway API price. Discovered but unapproved aliases
 are listed under an opaque ID and can never be selected. A model that disappears from the gateway
 becomes NOT_DISCOVERED; nothing is substituted. The browser receives catalog IDs, labels, states
 and prices only: never the gateway URL, key, provider parameters or deployment details.
