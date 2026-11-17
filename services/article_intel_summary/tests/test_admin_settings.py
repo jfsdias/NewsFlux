@@ -118,6 +118,44 @@ class AdminSettingsTests(unittest.TestCase):
         with self.assertRaises(ManagedSettingsError):
             self.store.effective_values()
 
+    def test_managed_record_deletion_never_restores_bootstrap_key(self):
+        self.store.save_key(NEW_KEY, "bootstrap")
+        self.assertEqual((self.root / "activated").read_bytes(), b"v1\n")
+        (self.root / "settings.json").unlink()
+        with self.assertRaises(ManagedSettingsError) as ex:
+            self.store.effective_values()
+        self.assertEqual(ex.exception.code, "CONFIG_UNAVAILABLE")
+        with self.assertRaises(ManagedSettingsError):
+            self.store.status()
+
+    def test_second_write_preserves_one_private_operator_rollback_snapshot(self):
+        first = self.store.save_key(NEW_KEY, "bootstrap")
+        rollback_key = KEY
+        self.store.save_key(rollback_key, first["revision"])
+        previous = self.root / "previous.json"
+        self.assertEqual(previous.stat().st_mode & 0o777, 0o600)
+        saved = json.loads(previous.read_text())
+        self.assertEqual(saved["key"], NEW_KEY)
+        self.assertEqual(saved["revision"], first["revision"])
+        self.assertEqual(self.store.read()["key"], KEY)
+
+    def test_operator_rollback_restores_bootstrap_without_reviving_legacy_fallback(self):
+        first = self.store.save_key(NEW_KEY, "bootstrap")
+        restored = self.store.operator_restore_previous(first["revision"])
+        self.assertTrue(restored["managed"])
+        self.assertNotEqual(restored["revision"], first["revision"])
+        self.assertEqual(self.store.read()["key"], KEY)
+        self.assertTrue((self.root / "activated").exists())
+        self.assertNotIn(NEW_KEY, json.dumps(restored))
+
+    def test_operator_rollback_requires_exact_current_revision(self):
+        first = self.store.save_key(NEW_KEY, "bootstrap")
+        with self.assertRaises(ManagedSettingsError) as ex:
+            self.store.operator_restore_previous("0" * 32)
+        self.assertEqual(ex.exception.code, "CONFIG_CONFLICT")
+        self.assertEqual(self.store.status()["revision"], first["revision"])
+        self.assertEqual(self.store.read()["key"], NEW_KEY)
+
     def test_policy_sanitized_validated_and_dynamically_stored(self):
         self.store.save_key(NEW_KEY, "bootstrap")
         current = self.store.status()["revision"]
