@@ -28,12 +28,12 @@ jobs:
           pnpm exec eslint --fix \
             src/apis/article-intelligence-admin.js \
             src/apis/article-intelligence-admin.test.js \
-            src/components/Settings/LiteLLMAdminSettings.jsx \
+            src/components/Settings/LiteLlmAdminSettings.jsx \
             src/components/Settings/ArticleIntelligence.jsx || true
           pnpm exec prettier --write \
             src/apis/article-intelligence-admin.js \
             src/apis/article-intelligence-admin.test.js \
-            src/components/Settings/LiteLLMAdminSettings.jsx \
+            src/components/Settings/LiteLlmAdminSettings.jsx \
             src/components/Settings/LiteLLMAdminSettings.css \
             src/components/Settings/ArticleIntelligence.jsx \
             .github/workflows/ai-settings-tests.yaml
@@ -47,7 +47,7 @@ jobs:
           git add -- \
             src/apis/article-intelligence-admin.js \
             src/apis/article-intelligence-admin.test.js \
-            src/components/Settings/LiteLLMAdminSettings.jsx \
+            src/components/Settings/LiteLlmAdminSettings.jsx \
             src/components/Settings/LiteLLMAdminSettings.css \
             src/components/Settings/ArticleIntelligence.jsx \
             .github/workflows/ai-settings-tests.yaml
