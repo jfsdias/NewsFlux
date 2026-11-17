@@ -199,6 +199,137 @@ class AdminSettingsTests(unittest.TestCase):
         self.assertEqual(ex.exception.code, "CHANGES_DISABLED")
         self.assertFalse(self.root.exists())
 
+    # --- R2 audit regressions -------------------------------------------------
+
+    def test_first_activation_write_failure_leaves_no_marker_and_keeps_bootstrap(self):
+        real_write = ManagedSettingsStore._write_bytes
+
+        def failing(store, path, data):
+            if path.name == "settings.json":
+                raise ManagedSettingsError("CONFIG_UNAVAILABLE")
+            return real_write(store, path, data)
+
+        with patch.object(ManagedSettingsStore, "_write_bytes", failing):
+            with self.assertRaises(ManagedSettingsError) as ex:
+                self.store.save_key(NEW_KEY, "bootstrap")
+        self.assertEqual(ex.exception.code, "CONFIG_UNAVAILABLE")
+        self.assertFalse((self.root / "activated").exists())
+        self.assertFalse((self.root / "settings.json").exists())
+        status = self.store.status()
+        self.assertFalse(status["managed"])
+        self.assertEqual(self.store.read()["key"], KEY)
+
+    def test_later_write_failure_preserves_previous_managed_record(self):
+        first = self.store.save_key(NEW_KEY, "bootstrap")
+        real_write = ManagedSettingsStore._write_bytes
+
+        def failing(store, path, data):
+            if path.name == "settings.json":
+                raise ManagedSettingsError("CONFIG_UNAVAILABLE")
+            return real_write(store, path, data)
+
+        with patch.object(ManagedSettingsStore, "_write_bytes", failing):
+            with self.assertRaises(ManagedSettingsError):
+                self.store.save_key(KEY, first["revision"])
+        self.assertEqual(self.store.status()["revision"], first["revision"])
+        self.assertEqual(self.store.read()["key"], NEW_KEY)
+
+    def test_non_numeric_policy_price_is_policy_invalid_not_unavailable(self):
+        bad = {"version": 1, "models": [{
+            "id": "synthetic-bad", "alias": "secondary-synthetic", "label": "x",
+            "provider": "openai", "compatible_for_summary": True,
+            "paid_authorized": False, "transfer_authorized": True,
+            "input_usd_per_million": "not-a-number", "output_usd_per_million": "0",
+        }]}
+        with self.assertRaises(ManagedSettingsError) as ex:
+            self.store.save_policy(bad, "bootstrap")
+        self.assertEqual(ex.exception.code, "POLICY_INVALID")
+        self.assertFalse(self.root.exists())
+
+    def test_concurrent_writers_with_same_revision_only_one_wins(self):
+        import threading
+        results = []
+        barrier = threading.Barrier(4)
+
+        def writer(key):
+            barrier.wait()
+            try:
+                self.store.save_key(key, "bootstrap")
+                results.append("ok")
+            except ManagedSettingsError as error:
+                results.append(error.code)
+
+        keys = [NEW_KEY, KEY, NEW_KEY + "x", KEY + "y"]
+        threads = [threading.Thread(target=writer, args=(k,)) for k in keys]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertEqual(results.count("ok"), 1, results)
+        self.assertEqual(results.count("CONFIG_CONFLICT"), 3, results)
+
+    def test_symlinked_settings_root_is_unsafe_and_never_written(self):
+        target = Path(self.tmp.name) / "elsewhere"
+        target.mkdir(mode=0o700)
+        self.root.symlink_to(target, target_is_directory=True)
+        with self.assertRaises(ManagedSettingsError) as ex:
+            self.store.save_key(NEW_KEY, "bootstrap")
+        self.assertEqual(ex.exception.code, "CONFIG_UNSAFE")
+        self.assertEqual(list(target.iterdir()), [])
+        with self.assertRaises(ManagedSettingsError):
+            self.store.status()
+
+    def test_symlinked_settings_file_is_unsafe_without_bootstrap_fallback(self):
+        self.store.save_key(NEW_KEY, "bootstrap")
+        decoy = Path(self.tmp.name) / "decoy.json"
+        decoy.write_bytes((self.root / "settings.json").read_bytes())
+        decoy.chmod(0o600)
+        (self.root / "settings.json").unlink()
+        (self.root / "settings.json").symlink_to(decoy)
+        with self.assertRaises(ManagedSettingsError) as ex:
+            self.store.read()
+        self.assertEqual(ex.exception.code, "CONFIG_UNSAFE")
+
+    def test_world_readable_settings_record_is_unsafe(self):
+        self.store.save_key(NEW_KEY, "bootstrap")
+        (self.root / "settings.json").chmod(0o644)
+        with self.assertRaises(ManagedSettingsError) as ex:
+            self.store.read()
+        self.assertEqual(ex.exception.code, "CONFIG_UNSAFE")
+
+    def test_plain_http_admin_request_is_rejected_without_write(self):
+        client = self.make_client()
+        headers = {**request_headers(), "Origin": WEB_ORIGIN.replace("https://", "http://")}
+        response = client.post(
+            "/api/ai/v1/admin/litellm/save-key",
+            headers=headers,
+            json={"key": NEW_KEY, "expected_revision": "bootstrap"},
+        )
+        self.assertEqual(response.status_code, 403, response.text)
+        self.assertFalse(self.root.exists())
+
+    def test_oversized_body_rejected_without_write(self):
+        client = self.make_client()
+        response = client.post(
+            "/api/ai/v1/admin/litellm/save-key",
+            headers=request_headers(),
+            json={"key": "sk-" + "a" * 20000, "expected_revision": "bootstrap"},
+        )
+        self.assertEqual(response.status_code, 413, response.text)
+        self.assertFalse(self.root.exists())
+
+    def test_error_bodies_never_echo_candidate_key(self):
+        client = self.make_client()
+        self.gateway.errors["/v1/models"] = RuntimeError(NEW_KEY)
+        response = client.post(
+            "/api/ai/v1/admin/litellm/test-key",
+            headers=request_headers(),
+            json={"key": NEW_KEY},
+        )
+        self.assertEqual(response.status_code, 503, response.text)
+        self.assertNotIn(NEW_KEY, response.text)
+        self.assertEqual(response.json(), {"error": {"code": "KEY_UNVERIFIED"}})
+
     def make_client(self, *, admin=True):
         auth_settings = AuthSettings(
             miniflux_base_url=MINIFLUX_BASE,
