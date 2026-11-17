@@ -2,7 +2,7 @@ import { Button, Checkbox, Input, Radio, Select, Switch, Typography } from "@arc
 import { useStore } from "@nanostores/react"
 import { useEffect, useRef, useState } from "react"
 
-import LiteLLMAdminSettings from "./LiteLLMAdminSettings"
+import LiteLlmAdminSettings from "./LiteLlmAdminSettings"
 import SettingItem from "./SettingItem"
 import SettingSection from "./SettingSection"
 
@@ -157,7 +157,10 @@ const ArticleIntelligence = () => {
 
   return (
     <>
-      <LiteLLMAdminSettings onPolicyChanged={() => setReloadCount((count) => count + 1)} />
+      <LiteLlmAdminSettings
+        key={authSessionKey}
+        onPolicyChanged={() => setReloadCount((count) => count + 1)}
+      />
       <SettingSection title={polyglot.t("article_intelligence.settings_section")}>
         <SettingItem
           description={polyglot.t("article_intelligence.model_description")}
