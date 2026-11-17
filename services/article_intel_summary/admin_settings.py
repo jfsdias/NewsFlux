@@ -116,9 +116,18 @@ class ManagedSettingsStore:
     def _managed(self) -> dict | None:
         if not self._check_dir():
             return None
+        marker = self._read_private(self.root / "activated", limit=32)
+        if marker is not None and marker != b"v1\n":
+            raise ManagedSettingsError("CONFIG_UNSAFE")
         raw = self._read_private(self.root / "settings.json", limit=MAX_RECORD_BYTES)
         if raw is None:
+            if marker is not None:
+                # Previously activated settings must NEVER silently fall back to
+                # an old Docker-mounted bootstrap key after deletion or corruption.
+                raise ManagedSettingsError("CONFIG_UNAVAILABLE")
             return None
+        if marker is None:
+            raise ManagedSettingsError("CONFIG_UNSAFE")
         try:
             value = json.loads(raw.decode("utf-8"))
             if (not isinstance(value, dict) or set(value) != {"version", "revision", "key", "policy"}
@@ -271,7 +280,15 @@ class ManagedSettingsStore:
             raw = json.dumps(next_state, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
             if len(raw) > MAX_RECORD_BYTES:
                 raise ManagedSettingsError("CONFIG_INVALID")
-            # One atomic record; no two-file consistency window or implicit fallback.
+            # Durable single-file authority: a marker prevents silent bootstrap
+            # fallback if the managed record vanishes. Save the prior record for
+            # an operator-controlled restoration, never in a public response.
+            current = self._managed()
+            if current is not None:
+                previous = json.dumps(current, separators=(",", ":")).encode("utf-8")
+                self._write_bytes(self.root / "previous.json", previous)
+            else:
+                self._write_bytes(self.root / "activated", b"v1\n")
             self._write_bytes(self.root / "settings.json", raw)
             check = self._managed()
             if check is None or check["revision"] != next_state["revision"]:
