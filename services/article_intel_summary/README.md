@@ -124,18 +124,3 @@ selected model; a failure returns `unavailable` and never tries another model (`
 `false`). Output sections that were not requested, paragraph references outside the snapshot and summaries longer than
 the selected length are rejected. `provenance.content_origin` is `ORIGINAL_MINIFLUX`: this service still summarizes
 only its own authorized Miniflux snapshot, never text recovered in the browser. Contract v1 is unchanged.
-
-## Local-only Ollama processing — privacy contract (PR #260, DRAFT)
-
-This unmerged functional change separates two independent operator consents:
-
-- `NEWSFLUX_AI_ALLOW_LOCAL_ARTICLE_PROCESSING` (default false) can permit a **policy-approved, currently discovered** Ollama chat alias whose exact gateway deployment identity is `ollama@ollama:11434` with absent/zero (never positive or mixed) API prices. The per-model `transfer_authorized` permission must also be true. It does not approve remote providers.
-- `NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER` remains the distinct, original opt-in for external/provider transfers. Leave it false for local-only. An external provider cannot become available from the local flag.
-- `NEWSFLUX_AI_INFERENCE_ENABLED` and `NEWSFLUX_AI_MODEL_DISCOVERY_ENABLED` remain separate, default-off gates. This PR does **not** switch any flags on.
-
-A local-only adapter acquires the normal private token-usage ledger and uses the existing HTTPS LiteLLM gateway/low-privilege virtual key. It refreshes the actual `/v1/models` and `/model/info` **without catalog TTL** immediately before constructing/sending each inference payload; missing/changed/mixed provider metadata blocks dispatch. It sends `disable_fallbacks=true` and `num_retries=0`, and v3 rejects any requested fallback when local-only consent is in effect. The public catalog can label this path `ARTICLE_SENT_TO_LOCAL_MODEL`, but never sends provider parameters or credentials.
-
-**Privacy limitation:** refreshing the model metadata does not create an atomic binding between LiteLLM discovery and dispatch. The LiteLLM gateway is shared; a deployment may change in the GET/POST interval. A **separate, fresh, read-only operator audit** must prove the effective virtual key scope is exactly one approved local alias, no wildcard models, routes restricted to `llm_api_routes`, bounded positive RPM/TPM and expiry, effective callback/logging privacy and no fallback/external routing for that alias. Gateway-side or network policy changes (if needed) require their own approval and repository/ledger tracking. Never treat GET /model/info alone or an echoed response alias as proof of these restrictions.
-
-**Not ready for activation until that gate passes.** This draft is **not** permission to merge, redeploy, enable local inference, toggle external transfer, or call any model. Legacy external S5/Mistral behavior, model approvals and existing ledger/budgets must remain unchanged. Local API fee accounting at USD 0 is not electricity/infrastructure costing and cannot exhaust a configured USD budget, so the token, rate and concurrency caps are required.
-
