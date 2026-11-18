@@ -32,6 +32,9 @@ MAX_KEY_BYTES = 4096
 MAX_RECORD_BYTES = 24 * 1024
 MAX_POLICY_BYTES = 16 * 1024
 DEFAULT_ROOT = "/data/newsflux-ai-settings"
+# After activation the managed record is the only policy authority. Absence of an
+# operator policy becomes an explicit empty allowlist, never the legacy S5/Mistral set.
+EMPTY_POLICY = {"version": 1, "models": []}
 
 
 class ManagedSettingsError(Exception):
@@ -166,10 +169,10 @@ class ManagedSettingsStore:
         # In-memory, private backend-only override: one atomic canonical JSON file.
         # Never expose this key in API responses, settings documents or logs.
         result["__newsflux_managed_virtual_key"] = managed["key"]
-        if managed["policy"] is not None:
-            result["NEWSFLUX_AI_MODEL_POLICY_JSON"] = json.dumps(managed["policy"], separators=(",", ":"))
-        else:
-            result.pop("NEWSFLUX_AI_MODEL_POLICY_JSON", None)
+        # A null policy in a managed record (older builds) is an empty allowlist: removing the
+        # key would make catalog.load_model_policy() fall back to the legacy env models.
+        policy = managed["policy"] if managed["policy"] is not None else EMPTY_POLICY
+        result["NEWSFLUX_AI_MODEL_POLICY_JSON"] = json.dumps(policy, separators=(",", ":"))
         return result
 
     def status(self) -> dict:
@@ -286,6 +289,8 @@ class ManagedSettingsStore:
                 "key": _parse_key(key if change == "key" else state["key"]),
                 "policy": policy if change == "policy" else state["policy"],
             }
+            if next_state["policy"] is None:
+                next_state["policy"] = {"version": 1, "models": []}
             if next_state["policy"] is not None:
                 try:
                     _parse_policy(next_state["policy"])
@@ -361,6 +366,8 @@ class ManagedSettingsStore:
             except (ValueError, TypeError, UnicodeError, ArithmeticError):
                 raise ManagedSettingsError("CONFIG_INVALID") from None
             previous["revision"] = secrets.token_hex(16)
+            if previous["policy"] is None:
+                previous["policy"] = {"version": 1, "models": []}
             payload = json.dumps(previous, separators=(",", ":")).encode("utf-8")
             self._write_bytes(self.root / "settings.json", payload)
             restored = self._managed()
