@@ -75,9 +75,17 @@ FAKE_DOCKER = textwrap.dedent(r'''
         if cmd[0] == "python" and "-c" in cmd:
             if c.get("backend_exec_fails"):
                 sys.exit(1)
+            # Faithful to `docker exec <summary> python -I -c CODE` in the Summary image: the exact
+            # flags are kept (-I: no PYTHONPATH, no user site, no cwd on sys.path), the process
+            # sees ONLY the container env, and runs from an empty working directory. The image's
+            # code root /app is simulated by the repository root (same `services/` layout).
+            assert cmd[:3] == ["python", "-I", "-c"], cmd
             env = {e.split("=", 1)[0]: e.split("=", 1)[1] for e in c["doc"]["Config"]["Env"]}
-            env["PYTHONPATH"] = os.environ["FAKE_REPO"]
-            run = subprocess.run([sys.executable, "-c", cmd[cmd.index("-c") + 1]], env=env, capture_output=True, text=True)
+            code = cmd[3].replace("'/app'", repr(os.environ["FAKE_APP_ROOT"]))
+            import tempfile
+            with tempfile.TemporaryDirectory() as empty:
+                run = subprocess.run([sys.executable, "-I", "-c", code], env=env, cwd=empty,
+                                     capture_output=True, text=True)
             sys.stdout.write(run.stdout); sys.exit(run.returncode)
         sys.exit(1)
     sys.exit(1)
@@ -154,7 +162,7 @@ class ReadonlyPreflightTests(unittest.TestCase):
         }
         self.summary_over = {}
         self.env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}",
-                    "FAKE_STATE": str(self.state_file), "FAKE_LOG": str(self.log), "FAKE_REPO": str(REPO),
+                    "FAKE_STATE": str(self.state_file), "FAKE_LOG": str(self.log), "FAKE_APP_ROOT": str(REPO),
                     "NEWSFLUX_RELEASE_LOCK": str(root / "no.lock")}
 
     def run_preflight(self, extra_env=None):
@@ -460,6 +468,51 @@ class ReadonlyPreflightTests(unittest.TestCase):
     def test_malformed_expected_wallhop_digest_is_hold(self):
         self.assert_hold("WALLHOP_INTEGRITY", "EXPECTED_DIGEST_MALFORMED",
                          extra_env={"NEWSFLUX_WALLHOP_EXPECTED_SHA256": "not-a-digest"})
+
+    # --- backend origin check runs exactly as in the Summary image (R4.1) ---------------------
+
+    @staticmethod
+    def backend_check_code():
+        import ast
+        text = SCRIPT.read_text()
+        match = re.search(r"^BACKEND_ORIGIN_CHECK = (\(.*?\n\))", text, flags=re.M | re.S)
+        assert match, "BACKEND_ORIGIN_CHECK not found"
+        return ast.literal_eval(match.group(1))
+
+    def run_backend_check(self, app_root, origins):
+        code = self.backend_check_code()
+        self.assertIn("'/app'", code, "the check must name the image's fixed code root")
+        with tempfile.TemporaryDirectory() as empty:
+            return subprocess.run(
+                [os.environ.get("PYTHON_FOR_IMAGE", "python3"), "-I", "-c", code.replace("'/app'", repr(str(app_root)))],
+                env={"NEWSFLUX_AI_ALLOWED_WEB_ORIGINS": origins, "PYTHONPATH": "/should/be/ignored"},
+                cwd=empty, capture_output=True, text=True, timeout=60)
+
+    def test_backend_check_imports_under_isolated_mode_from_fixed_root(self):
+        done = self.run_backend_check(REPO, ORIGIN)
+        self.assertEqual((done.returncode, done.stdout.strip()), (0, "VALID"), done.stderr)
+        done = self.run_backend_check(REPO, f"{ORIGIN},http://bad.example")
+        self.assertEqual(done.stdout.strip(), "INVALID", done.stderr)
+
+    def test_backend_check_without_code_root_is_unverified_not_crash(self):
+        with tempfile.TemporaryDirectory() as empty_root:
+            done = self.run_backend_check(empty_root, ORIGIN)
+        self.assertEqual(done.stdout.strip(), "IMPORT_FAILED", done.stderr)
+        self.assertNotIn(ORIGIN, done.stdout + done.stderr)
+
+    def test_backend_check_rejects_a_shadowing_module_outside_the_code_root(self):
+        with tempfile.TemporaryDirectory() as fake_root:
+            pkg = Path(fake_root) / "services" / "article_intel_auth"
+            pkg.mkdir(parents=True)
+            (Path(fake_root) / "services" / "__init__.py").write_text("")
+            (pkg / "__init__.py").write_text("")
+            (pkg / "config.py").write_text("def canonicalize_web_origin(v):\n    return v\n")
+            code = self.backend_check_code().replace("'/app'", repr("/nonexistent-root"))
+            with tempfile.TemporaryDirectory() as empty:
+                done = subprocess.run(["python3", "-I", "-c", code], cwd=fake_root,
+                                      env={"NEWSFLUX_AI_ALLOWED_WEB_ORIGINS": "http://x"},
+                                      capture_output=True, text=True)
+        self.assertEqual(done.stdout.strip(), "IMPORT_FAILED", done.stderr)
 
     # --- read-only guarantees --------------------------------------------------------------
 
