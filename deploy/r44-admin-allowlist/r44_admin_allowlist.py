@@ -735,7 +735,7 @@ def audit(trust: Trust) -> dict:
             state["source"] = target if proven and private else None
 
     caddy = file_in_container(READER, "/etc/caddy/Caddyfile") if inspect(READER) else None
-    out("READER_CADDYFILE_SHA256", caddy or "UNVERIFIED")
+    (out if caddy else hold)("READER_CADDYFILE_SHA256", caddy or "UNVERIFIED")
     state["caddy"] = caddy
     for name in PROTECTED:
         pdoc = inspect(name)
