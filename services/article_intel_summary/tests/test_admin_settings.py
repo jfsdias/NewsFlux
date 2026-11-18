@@ -330,6 +330,53 @@ class AdminSettingsTests(unittest.TestCase):
         for row in rows.values():
             self.assertFalse({"input_price", "output_price", "api_base", "api_key"} & set(row))
 
+    def test_red_team_request_matrix_never_writes(self):
+        client = self.make_client()
+        route = "/api/ai/v1/admin/litellm/save-key"
+        body = {"key": NEW_KEY, "expected_revision": "bootstrap"}
+        cases = [
+            ("invalid json", dict(headers={**request_headers(), "Content-Type": "application/json"},
+                                  content="{not-json"), 422),
+            ("wrong content type", dict(headers={**request_headers(), "Content-Type": "text/plain"},
+                                        content=json.dumps(body)), 422),
+            ("extra field", dict(headers=request_headers(), json={**body, "admin": True}), 422),
+            ("non-string revision", dict(headers=request_headers(), json={"key": NEW_KEY, "expected_revision": 1}), 422),
+            ("host mismatch", dict(headers={**request_headers(), "Host": "attacker.example"}, json=body), 403),
+            ("query string", dict(headers=request_headers(), json=body, params={"x": "1"}), 403),
+            ("expired session", dict(headers=request_headers(api_key="expired-or-revoked-key"), json=body), 401),
+        ]
+        for name, kwargs, status in cases:
+            with self.subTest(name):
+                if name == "expired session":
+                    client.app.state.auth_service.http.identity_status = 401
+                response = client.post(route, **kwargs)
+                client.app.state.auth_service.http.identity_status = 200
+                self.assertEqual(response.status_code, status, (name, response.text))
+                self.assertNotIn(NEW_KEY, response.text)
+                self.assertFalse(self.root.exists(), name)
+        for method in ("get", "put", "delete"):
+            with self.subTest(method):
+                response = client.request(method.upper(), route, headers=request_headers())
+                self.assertIn(response.status_code, (404, 405), method)
+                self.assertFalse(self.root.exists())
+
+    def test_stale_revision_via_api_is_409_and_key_never_in_any_get(self):
+        client = self.make_client()
+        root = "/api/ai/v1/admin/litellm"
+        saved = client.post(root + "/save-key", headers=request_headers(),
+                            json={"key": NEW_KEY, "expected_revision": "bootstrap"})
+        self.assertEqual(saved.status_code, 200, saved.text)
+        stale = client.post(root + "/save-key", headers=request_headers(),
+                            json={"key": KEY, "expected_revision": "bootstrap"})
+        self.assertEqual(stale.status_code, 409, stale.text)
+        self.assertEqual(self.store.read()["key"], NEW_KEY)
+        for action in ("status", "models", "policy"):
+            response = client.get(f"{root}/{action}", headers=request_headers())
+            self.assertEqual(response.status_code, 200, (action, response.text))
+            self.assertNotIn(NEW_KEY, response.text)
+            self.assertNotIn(KEY, response.text)
+            self.assertNotIn("sk-", response.text)
+
     def test_error_bodies_never_echo_candidate_key(self):
         client = self.make_client()
         self.gateway.errors["/v1/models"] = RuntimeError(NEW_KEY)
