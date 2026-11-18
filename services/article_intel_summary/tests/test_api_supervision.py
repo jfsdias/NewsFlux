@@ -22,6 +22,10 @@ from services.article_intel_summary.tests.support import (
 )
 
 
+# Slow-storage pre-send latency (above the 50 ms inference window used below), as seen on CI runners.
+PRE_SEND_LATENCY_SECONDS = 0.06
+
+
 class SupervisedAPITests(unittest.IsolatedAsyncioTestCase):
     async def test_late_inference_is_settled_and_never_revalidated(self):
         started, release = threading.Event(), threading.Event()
@@ -35,6 +39,13 @@ class SupervisedAPITests(unittest.IsolatedAsyncioTestCase):
                                      input_price_usd_per_million=Decimal("0"), output_price_usd_per_million=Decimal("0"),
                                      max_output_tokens=2048, timeout_seconds=0.05)
             adapter = LiteLLMInferenceAdapter(settings, client=httpx.Client(transport=httpx.MockTransport(handler)))
+            # R4.1: the durable SQLite reservation runs inside the 50 ms inference window before the
+            # gateway call; CI measured 36-61 ms for it. The scenario must not depend on that latency.
+            reserve = adapter.ledger.reserve
+            def slow_reserve(*args, **kwargs):
+                time.sleep(PRE_SEND_LATENCY_SECONDS)
+                return reserve(*args, **kwargs)
+            adapter.ledger.reserve = slow_reserve
             client, miniflux, _, _ = make_test_client(adapter=adapter)
             app = create_app(auth_service=client.app.state.auth_service,
                              summary_service=SummaryService(adapter, timeout_seconds=0.05),
