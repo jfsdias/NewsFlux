@@ -1,0 +1,15 @@
+# NEWSFLUX-AI-SETTINGS-01 — R4.4B red-team remediation (pointer)
+
+Date: 2026-11-18 · Status: **NO-GO, pending the real read-only OMV receipt** · Merges: none · Deploy: none · Production mutations: 0
+
+This PR (#261) is documentation only again. The operator executor that R4.4 added under `docs/ops/r44/` was removed here. The corrected tool, its read-only A/B command, the Gate D receipt wrapper and the disposable test matrix now live in the dedicated operator PR [jfsdias/NewsFlux#268](https://github.com/jfsdias/NewsFlux/pull/268), under `deploy/r44-admin-allowlist/`. Do not merge or run any R4.4 executor from this PR's history (`946b899`).
+
+| PM finding (R4.4 tool `946b899`)                       | R4.4B fix (#268)                                                                                                          | Evidence                                                                                                                                |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| P0: `write_atomic` outside the rollback boundary       | First write and every later step inside the boundary; `replaced` marker; durable-restore check; unproven restore → exit 6 | RED: fault after `os.replace` left `ADMIN_USER_IDS=7` on disk, exit 3, no rollback. GREEN: `ROLLBACK=PASS`, exact bytes, mode and owner |
+| P1: A/B command `exit 0` after a failed identity check | Audit first, key only after it passes, aggregate result and exit code re-raised                                           | RED: `R44_IDENTITY_EXIT=3` with overall exit 0. GREEN: 13/13 wrapper cases                                                              |
+| P1: raw paths in output                                | Explicit key schema, value contract, path fingerprints, `BACKUP_ID`                                                       | Canary checks on every test output                                                                                                      |
+| P1: inventory skipped uninspectable containers         | `HOST_INVENTORY=INSPECT_FAILED` HOLD before key and write                                                                 | `audit_inventory_fail_closed`, `apply_inventory_fail_closed`, `ab_audit_inventory_fail`                                                 |
+| Key requested before runtime trust                     | Pinned image, revision label, `docker diff`, code manifest identical to the approved revision; consent for `/v1/users`    | `trust_*` cases: `TEST_SECRET_ASKS=0` on every mismatch                                                                                 |
+
+The read-only command for Gates A/B is `deploy/r44-admin-allowlist/r44b-readonly-ab.sh` in #268. It is pinned to the commit and SHA-256 recorded in the R4.4B ledger entry. Disposable tests prove nothing about the OMV state.

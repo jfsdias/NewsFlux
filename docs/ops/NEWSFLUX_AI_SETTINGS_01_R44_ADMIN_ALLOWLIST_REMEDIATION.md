@@ -2,6 +2,8 @@
 
 Date: 2026-11-18 · Status: **NO-GO, pending operator receipts (Gates A/B, then C on a specific GO, then D)** · Merges: none · Deploy: none · Production mutations so far: 0
 
+> **Superseded by R4.4B — do not run any command in this document.** The PM red-team review (2026-11-18) found a P0 rollback gap after `os.replace`, a read-only command that could exit 0 after a failed identity check, raw paths in the output, an inventory that skipped uninspectable containers, and a key requested before the runtime was proven. The tool referenced below (`946b899`) was removed from this PR. The corrected tooling lives in its own operator PR, [jfsdias/NewsFlux#268](https://github.com/jfsdias/NewsFlux/pull/268), documented in `NEWSFLUX_AI_SETTINGS_01_R44B_REDTEAM_REMEDIATION.md`. This document is kept as history.
+
 Single HOLD to resolve: `ADMIN_ALLOWLIST=EMPTY` (R4.3A real receipt). No change to #265, the application, the preflight or the security policy.
 
 ## What was established in code (deployed `main` = `d54eda2b`)
