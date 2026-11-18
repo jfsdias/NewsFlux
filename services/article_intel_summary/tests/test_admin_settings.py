@@ -553,5 +553,123 @@ class ManagedCatalogIntegrationTests(unittest.TestCase):
         self.assertEqual(document["policy"]["status"], "INVALID")
 
 
+class ManagedPolicyNullLegacyTests(unittest.TestCase):
+    """P1 (R3): first activation without an operator policy must not revive legacy S5/Mistral."""
+
+    def setUp(self):
+        from services.article_intel_summary.tests.test_litellm_adapter import (
+            MISTRAL_ALIAS, S5_ALIAS, approved_environment,
+        )
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        boot = Path(self.tmp.name) / "key"
+        boot.write_text(KEY + "\n", encoding="ascii")
+        boot.chmod(0o600)
+        env = approved_environment(str(Path(self.tmp.name) / "usage.sqlite3"))
+        env.update({
+            "NEWSFLUX_AI_LITELLM_VIRTUAL_KEY_FILE": str(boot),
+            "NEWSFLUX_AI_LITELLM_MODEL_CHOICE": "s5-free",
+            "NEWSFLUX_AI_MODEL_DISCOVERY_ENABLED": "true",
+            "NEWSFLUX_AI_ADMIN_CONFIG_WRITES_ENABLED": "true",
+        })
+        env.pop("NEWSFLUX_AI_MODEL_POLICY_JSON", None)  # legacy deployment: no explicit policy
+        self.env = env
+        self.gateway = FakeGateway(listed=(S5_ALIAS, MISTRAL_ALIAS))
+        self.root = Path(self.tmp.name) / "managed"
+
+    def store(self):
+        return ManagedSettingsStore(self.env, root=str(self.root), getter_factory=lambda *_: self.gateway)
+
+    def router(self, store):
+        from services.article_intel_summary.catalog import create_model_router
+        router, adapter = create_model_router(
+            self.env, discovery_getter=self.gateway, config_values_provider=store.effective_values,
+        )
+        owner = getattr(getattr(adapter, "primary", adapter), "_owner", None) or router.ledger_owner
+        if owner is not None:
+            self.addCleanup(owner.__exit__)
+        return router
+
+    @staticmethod
+    def available(router):
+        return {m["id"] for m in router.catalog_document()["models"] if m["available"]}
+
+    def test_legacy_models_before_activation_remain_compatible(self):
+        router = self.router(self.store())
+        self.assertEqual(router.catalog_document()["policy"]["status"], "LEGACY")
+        self.assertIn("s5-free", self.available(router))
+
+    def test_key_only_first_activation_does_not_revive_legacy_models_after_restart(self):
+        self.store().save_key(NEW_KEY, "bootstrap")
+        router = self.router(self.store())  # simulated restart: fresh store and router
+        document = router.catalog_document()
+        self.assertNotEqual(document["policy"]["status"], "LEGACY")
+        self.assertEqual(self.available(router), set())
+        self.assertEqual(self.store().read()["policy"], {"version": 1, "models": []})
+
+    def test_explicit_empty_allowlist_then_approval_and_last_revocation(self):
+        store = self.store()
+        rev = store.save_key(NEW_KEY, "bootstrap")["revision"]
+        self.assertEqual(store.status()["policy_models"], 0)
+        from services.article_intel_summary.tests.test_litellm_adapter import S5_ALIAS
+        self.gateway.infos = [model_info(S5_ALIAS, provider="ollama")]
+        self.gateway.infos[0]["litellm_params"]["api_base"] = "http://ollama:11434"
+        rev = store.approve_model(S5_ALIAS, rev)["revision"]
+        router = self.router(self.store())
+        from services.article_intel_summary.catalog import discovered_model_id
+        self.assertIn(discovered_model_id(S5_ALIAS), self.available(router))
+        self.store().remove_model(S5_ALIAS, rev)
+        router = self.router(self.store())
+        self.assertEqual(self.available(router), set())
+        self.assertNotEqual(router.catalog_document()["policy"]["status"], "LEGACY")
+
+    def test_previously_written_null_policy_record_fails_closed(self):
+        # A record written by an earlier build with policy=null must not mean "legacy".
+        store = self.store()
+        store.save_key(NEW_KEY, "bootstrap")
+        raw = json.loads((self.root / "settings.json").read_text())
+        raw["policy"] = None
+        (self.root / "settings.json").write_text(json.dumps(raw))
+        router = self.router(self.store())
+        self.assertNotEqual(router.catalog_document()["policy"]["status"], "LEGACY")
+        self.assertEqual(self.available(router), set())
+
+    def test_restore_of_bootstrap_snapshot_keeps_managed_authority(self):
+        store = self.store()
+        rev = store.save_key(NEW_KEY, "bootstrap")["revision"]
+        store.operator_restore_previous(rev)
+        router = self.router(self.store())
+        self.assertNotEqual(router.catalog_document()["policy"]["status"], "LEGACY")
+        self.assertEqual(self.available(router), set())
+        self.assertEqual(self.store().read()["key"], KEY)
+
+    def test_concurrent_key_and_policy_change_one_conflicts(self):
+        import threading
+        store = self.store()
+        rev = store.save_key(NEW_KEY, "bootstrap")["revision"]
+        from services.article_intel_summary.tests.test_litellm_adapter import S5_ALIAS
+        self.gateway.infos = [model_info(S5_ALIAS, provider="ollama")]
+        self.gateway.infos[0]["litellm_params"]["api_base"] = "http://ollama:11434"
+        barrier, results = threading.Barrier(2), []
+
+        def run(action):
+            barrier.wait()
+            try:
+                action()
+                results.append("ok")
+            except ManagedSettingsError as error:
+                results.append(error.code)
+
+        threads = [
+            threading.Thread(target=run, args=(lambda: self.store().save_key(KEY, rev),)),
+            threading.Thread(target=run, args=(lambda: self.store().approve_model(S5_ALIAS, rev),)),
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertEqual(sorted(results), ["CONFIG_CONFLICT", "ok"], results)
+
+
 if __name__ == "__main__":
     unittest.main()
