@@ -83,7 +83,7 @@ CONFIG_HASH_IS_RENDERED IMAGE_IDENTITY_PRESERVED OTHER_ENV_UNCHANGED SUMMARY_USE
 SUMMARY_NETWORKS_PRESERVED SUMMARY_NO_PUBLISHED_PORTS EFFECTIVE_ALLOWLIST_CONFIGURED_COUNT_1 ADMIN_AUTHZ_PROBE
 PROTECTED_SERVICES_UNCHANGED READER_CADDYFILE_UNCHANGED POSTCHECK CONFIG_CHANGE_RESULT ROLLBACK_READY
 FAULT_INJECTED BACKUP_ID_ARGUMENT BACKUP_INTEGRITY ROLLBACK_AUTHORIZED ROLLBACK ROLLBACK_ENV_FILE_RESTORED
-ROLLBACK_ENV_FILE_DURABLE ROLLBACK_SOURCE_HASH ROLLBACK_CONFIG_HASH ROLLBACK_IMAGE ROLLBACK_ENV ROLLBACK_HEALTH
+ROLLBACK_ENV_FILE_DURABLE ROLLBACK_SOURCE_HASH ROLLBACK_CONFIG_EQUIVALENT ROLLBACK_IMAGE ROLLBACK_ENV ROLLBACK_HEALTH
 ROLLBACK_OTHER_CONTAINERS ROLLBACK_CADDYFILE ROLLBACK_RECREATE SUMMARY_RECREATE_RESULT
 """.split())
 SCHEMA_KEY_RES = (re.compile(r"COMPOSE_CONFIG_FILE_[0-9]{1,3}"), re.compile(r"PROTECTED_[A-Z0-9_]{1,40}_STATUS"),
@@ -968,6 +968,18 @@ def compare_rendered(before: dict, after: dict, admin_id: int) -> list[str]:
     return sorted(set(problems))
 
 
+def rollback_equivalent(project: Project, doc: dict, original_label: str) -> bool:
+    """The restored Summary carries the original `up` label, or (container created by another Compose
+    version) is field-by-field equivalent to the restored source."""
+    if (doc.get("Config") or {}).get("Labels", {}).get("com.docker.compose.config-hash") == original_label:
+        return True
+    try:
+        image_doc = inspect(doc.get("Image") or "") or {}
+        return not semantic_mismatches(project.render()["services"][SERVICE], project.render(), doc, image_doc)
+    except Stop:
+        return False
+
+
 def rollback(project: Project, meta: dict, original: dict, others_before: dict, caddy: str | None) -> bool:
     """Restore the exact env file and the original Summary config; verify everything. Never raises."""
     ok = True
@@ -980,12 +992,14 @@ def rollback(project: Project, meta: dict, original: dict, others_before: dict, 
         out("ROLLBACK_SOURCE_HASH", "PASS" if source_ok else "FAIL")
         ok &= source_ok
         current = summary_container()
-        if current["Config"]["Labels"].get("com.docker.compose.config-hash") != original["hash"] and source_ok:
+        # Labels are compared with labels (both written by `up`); `config --hash` is not comparable with them on
+        # every Compose version.
+        if current["Config"]["Labels"].get("com.docker.compose.config-hash") != original["label"] and source_ok:
             out("ROLLBACK_RECREATE", "YES")
             recreate(project)
             current = wait_healthy(current["Id"])
         checks = {
-            "ROLLBACK_CONFIG_HASH": current["Config"]["Labels"].get("com.docker.compose.config-hash") == original["hash"],
+            "ROLLBACK_CONFIG_EQUIVALENT": rollback_equivalent(project, current, original["label"]),
             "ROLLBACK_IMAGE": current.get("Image") == original["image"],
             "ROLLBACK_ENV": env_map(current) == original["env"],
             "ROLLBACK_HEALTH": health(current) == "HEALTHY",
@@ -1086,9 +1100,11 @@ def apply(admin_id_arg: str, trust: Trust) -> int:
             handle.flush()
             os.fsync(handle.fileno())
         salt = secrets.token_bytes(32)
-        original = {"hash": state["hash"], "image": state["image"], "env": state["env"], "cid": state["cid"]}
+        original = {"hash": state["hash"], "label": state["project"].running_hash, "image": state["image"],
+                    "env": state["env"], "cid": state["cid"]}
         record = {k: meta[k] for k in ("path", "sha256", "mode", "uid", "gid")}
-        record.update({"project": PROJECT, "service": SERVICE, "config_hash": state["hash"], "image": state["image"],
+        record.update({"project": PROJECT, "service": SERVICE, "config_hash": state["hash"],
+                       "running_label": state["project"].running_hash, "image": state["image"],
                        "container": state["cid"], "env_salt": salt.hex(), "env_digest": env_digest(state["env"], salt),
                        "caddyfile_sha256": state["caddy"], "admin_id": admin_id})
         fd = os.open(os.path.join(backup_dir, "prestate.json"), os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
@@ -1194,12 +1210,13 @@ def manual_rollback(backup_id: str) -> int:
         source_ok = project.config_hash() == record["config_hash"]
         out("ROLLBACK_SOURCE_HASH", "PASS" if source_ok else "FAIL")
         ok &= source_ok
-        if source_ok and doc["Config"]["Labels"].get("com.docker.compose.config-hash") != record["config_hash"]:
+        label = record.get("running_label") or ""
+        if source_ok and doc["Config"]["Labels"].get("com.docker.compose.config-hash") != label:
             out("ROLLBACK_RECREATE", "YES")
             recreate(project)
             doc = wait_healthy(doc["Id"])
         checks = {
-            "ROLLBACK_CONFIG_HASH": doc["Config"]["Labels"].get("com.docker.compose.config-hash") == record["config_hash"],
+            "ROLLBACK_CONFIG_EQUIVALENT": rollback_equivalent(project, doc, label),
             "ROLLBACK_IMAGE": doc.get("Image") == record["image"],
             "ROLLBACK_ENV": env_digest(env_map(doc), bytes.fromhex(record["env_salt"])) == record["env_digest"],
             "ROLLBACK_HEALTH": health(doc) == "HEALTHY",

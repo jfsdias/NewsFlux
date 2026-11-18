@@ -125,7 +125,7 @@ if want apply_trust_mismatch_no_secret; then
 # ---------------------------------------------------------------- P0: failure after os.replace must roll back
 if want apply_fsync_after_replace; then run apply_fsync_after_replace 5 fsync_after_replace "$OWNER\nLIST-ADMIN-IDS\nAPPLY-R44-ADMIN-7\n" apply 7
   has CONFIG_CHANGE_RESULT=FAILED_ROLLING_BACK; has ROLLBACK_ENV_FILE_RESTORED=YES; has ROLLBACK_ENV_FILE_DURABLE=YES
-  has ROLLBACK_CONFIG_HASH=PASS; has ROLLBACK_ENV=PASS; has ROLLBACK_OTHER_CONTAINERS=PASS; has ROLLBACK=PASS
+  has ROLLBACK_CONFIG_EQUIVALENT=PASS; has ROLLBACK_ENV=PASS; has ROLLBACK_OTHER_CONTAINERS=PASS; has ROLLBACK=PASS
   hasnt CONFIG_CHANGE_RESULT=APPLIED_VERIFIED; check unchanged; done_; fi
 if want apply_fsync_always_incomplete; then run apply_fsync_always_incomplete 6 fsync_after_replace_always "$OWNER\nLIST-ADMIN-IDS\nAPPLY-R44-ADMIN-7\n" apply 7
   has ROLLBACK_ENV_FILE_RESTORED=YES; has ROLLBACK_ENV_FILE_DURABLE=NO; has ROLLBACK=FAIL; has R44_RESULT=ROLLBACK_INCOMPLETE
@@ -174,6 +174,17 @@ if want apply_success_semantic_path; then reset; snap
   run apply_success_semantic_path 0 hash_divergent "$OWNER\nLIST-ADMIN-IDS\nAPPLY-R44-ADMIN-7\n" apply 7
   has RENDER_EQUIVALENCE=SEMANTIC_ALL_FIELDS; has RENDERED_EQUIVALENT_AFTER=PASS; has CONFIG_CHANGE_RESULT=APPLIED_VERIFIED
   check test "$(others)" = "$O0"; done_; fi
+if want rollback_semantic_path; then reset; snap  # Compose versions where config --hash differs from the up label
+  run apply_fsync_after_replace_semantic 5 hash_divergent+fsync_after_replace "$OWNER\nLIST-ADMIN-IDS\nAPPLY-R44-ADMIN-7\n" apply 7
+  has ROLLBACK=PASS; has ROLLBACK_CONFIG_EQUIVALENT=PASS; hasnt ROLLBACK_RECREATE; check unchanged; done_
+  run apply_drift_rollback_semantic 5 hash_divergent+drift_env "$OWNER\nLIST-ADMIN-IDS\nAPPLY-R44-ADMIN-7\n" apply 7
+  has ROLLBACK=PASS; has ROLLBACK_CONFIG_EQUIVALENT=PASS; has ROLLBACK_ENV=PASS; check test "$(envsha)" = "$E0"; done_
+  run apply_success_semantic_for_rollback 0 hash_divergent "$OWNER\nLIST-ADMIN-IDS\nAPPLY-R44-ADMIN-7\n" apply 7
+  has CONFIG_CHANGE_RESULT=APPLIED_VERIFIED; done_
+  BID=$(basename "$(ls -d "$R44T_HOME/state"/r44-* | tail -1)")
+  run rollback_manual_semantic 0 hash_divergent "ROLLBACK-R44\n" rollback "$BID"
+  has ROLLBACK=PASS; has ROLLBACK_CONFIG_EQUIVALENT=PASS; has ROLLBACK_ENV=PASS; check test "$(envsha)" = "$E0"; done_
+fi
 if want apply_append_form; then reset 1
   run apply_append_form 0 none "$OWNER\nLIST-ADMIN-IDS\nAPPLY-R44-ADMIN-7\n" apply 7; has CONFIG_CHANGE_RESULT=APPLIED_VERIFIED
   check test "$(tail -n1 "$T/private/summary.env")" = NEWSFLUX_AI_MINIFLUX_ADMIN_USER_IDS=7; done_; fi
