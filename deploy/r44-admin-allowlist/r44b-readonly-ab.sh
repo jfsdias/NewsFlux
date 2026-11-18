@@ -3,8 +3,8 @@ sudo -v && bash <<'NF_R44B_AB'
 # Runs audit first (runtime trust + host inventory + config source); the owner's Miniflux key is requested
 # only if the audit passes. Aggregate result and exit code: PASS=0, OWNER_DECISION_REQUIRED=4, NO_GO=nonzero.
 set -u
-SRC=0c3738ade72439fd62c21cac2ac6905ab44f5082
-EXP_TOOL=54156297181d2c6deb660d873d99f91384adbee3c727d43fe7ef1a0e89e20ae7
+SRC=9a5f86bd8b7e22560fde8898fdef08f4dcfc00f5
+EXP_TOOL=0a71e35b055a29f08f52aa53a6c093f41bab8a8babd4d851a14d8deccdf53010
 EXP_SUMMARY_IMAGE=sha256:db40e22a12ce3776c2f00666bc7523c7cfbf2127f7e265182d0941dc3b711049
 EXP_SUMMARY_REVISION=d54eda2bdb8bc5c3d1bd58d40236f48da762e852
 T=deploy/r44-admin-allowlist/r44_admin_allowlist.py
