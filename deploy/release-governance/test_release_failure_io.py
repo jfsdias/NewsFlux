@@ -144,3 +144,64 @@ class FailureIOTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CrashLoopForensicsTests(unittest.TestCase):
+    """A restart-policy crash loop can be inspected while briefly `running` (ExitCode reset to 0).
+    Forensics must wait (bounded) for the real exited/restarting state instead of recording exit 0."""
+
+    def identity(self):
+        return release.ContainerIdentity(
+            container_id="cand", name="newsflux-summary-api-1", project="newsflux", service="summary-api",
+            image_id=CANDIDATE, config_hash="x", config_files=("/c/1.yaml",), working_dir="/c",
+            env_files=(), networks=("n",), mounts=(), published_ports=0, health="starting", running=True,
+        )
+
+    def capture(self, states):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        answers = iter(states)
+        last = {"value": states[-1]}
+
+        class Docker:
+            def run(self, args):
+                if args[:1] == ["inspect"]:
+                    try:
+                        last["value"] = next(answers)
+                    except StopIteration:
+                        pass
+                    return last["value"]
+                return ""
+
+        with mock.patch.object(release, "_settle_sleep", lambda _s: None):
+            return release._capture_failure(Docker(), {"release_dir": tmp.name}, self.identity(), "READINESS_FAILED")
+
+    def test_running_crash_loop_waits_for_real_exit_code(self):
+        running = '[{"State": {"Status": "running", "ExitCode": 0}, "RestartCount": 2}]'
+        exited = '[{"State": {"Status": "restarting", "ExitCode": 1}, "RestartCount": 3}]'
+        diagnostic = self.capture([running, running, exited])
+        self.assertEqual(diagnostic["status"], "restarting")
+        self.assertEqual(diagnostic["exit_code"], 1)
+        self.assertTrue(diagnostic["crash_loop_observed"])
+
+    def test_bounded_when_state_never_settles(self):
+        running = '[{"State": {"Status": "running", "ExitCode": 0}, "RestartCount": 2}]'
+        diagnostic = self.capture([running] * 200)
+        self.assertEqual(diagnostic["status"], "running")
+        self.assertTrue(diagnostic["crash_loop_observed"])
+        self.assertEqual(diagnostic["forensic_capture"], "CAPTURED")
+
+    def test_healthy_running_without_restarts_is_not_delayed(self):
+        calls = []
+        running = '[{"State": {"Status": "running", "ExitCode": 0}, "RestartCount": 0}]'
+        with mock.patch.object(release, "_settle_sleep", lambda s: calls.append(s)):
+            tmp = tempfile.TemporaryDirectory()
+            self.addCleanup(tmp.cleanup)
+
+            class Docker:
+                def run(self, args):
+                    return running if args[:1] == ["inspect"] else ""
+
+            diagnostic = release._capture_failure(Docker(), {"release_dir": tmp.name}, self.identity(), "READINESS_FAILED")
+        self.assertEqual(calls, [])
+        self.assertNotIn("crash_loop_observed", diagnostic)
