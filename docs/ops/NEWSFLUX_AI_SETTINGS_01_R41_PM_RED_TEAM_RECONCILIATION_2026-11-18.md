@@ -17,6 +17,7 @@
 **`P1_PREFERRED=#267`; `#266=SUPERSEDED_CANDIDATE` apenas por preferência técnica, sem fechamento automático. `MERGE_READY_CHAIN=HOLD`; `DEPLOY=HOLD`; `OMV_READONLY_PREFLIGHT=NOT_EXECUTED`.** Não há P0 novo confirmado no hardening #265. Mas **nenhuma árvore existente prova a combinação final**. Não importar os números de stress 0/150 como prova estatística de ausência total de race. A autorização condicional de merge atribuída ao proprietário em [comentário #267](https://github.com/jfsdias/NewsFlux/pull/267#issuecomment-6986801829) é **REPORTED_OWNER_CONDITIONAL_INTENT**, não satisfaz a condição técnica enquanto o gate falha.
 
 **Próximo sprint restrito e único (sem GO de merge ou OMV):**
+
 1. Preparar uma tree descartável **a partir de main exata**, com #267 @ `f9926a2`, #265 @ `4c3e075`, #262 @ `683d60c`, #263 delta contra #262 @ `8b7960d`, #264 @ `2641010`, #261 @ `cdb56e9`. **Excluir #266 e #260**. Sem force push, merge main, deploy, token ou alteração de PR.
 2. Registrar SHA exato da tree e executar os workflows release rehearsal, pilot, E2E e fallback no **novo** SHA; Quality/lint (e testes negativos de timeout) no próprio SHA, por GitHub Actions quando configurado ou local com evidência de comando/ambiente. Não reutilizar evidências de `011c01c` como se fossem da tree nova.
 3. Demonstrar que #267 não alterou o comportamento do produto (test-only) nem relaxou deadlines; checar estabilidade de ambos os testes em stress CPU+I/O sem substituir por simples 1× PASS.
