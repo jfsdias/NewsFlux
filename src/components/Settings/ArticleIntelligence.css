@@ -4,6 +4,15 @@
   max-width: 360px;
 }
 
+/* Model search shares the catalog column; it must not widen the control column. */
+.ai-model-search.arco-input-inner-wrapper,
+.ai-model-search.arco-input {
+  display: block;
+  margin-bottom: 8px;
+  max-width: 360px;
+  width: 360px;
+}
+
 /* Fallback: switch, then the list, then the consents, stacked in one column. */
 .ai-fallback-control {
   align-items: flex-start;
@@ -79,8 +88,15 @@
 @media screen and (max-width: 768px) {
   .ai-model-catalog,
   .ai-checkbox-list,
-  .ai-fallback-consent.arco-checkbox {
+  .ai-fallback-consent.arco-checkbox,
+  .ai-model-search.arco-input-inner-wrapper,
+  .ai-model-search.arco-input {
     max-width: none;
+  }
+
+  .ai-model-search.arco-input-inner-wrapper,
+  .ai-model-search.arco-input {
+    width: 100%;
   }
 
   .setting-control .ai-language-select {

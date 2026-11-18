@@ -720,6 +720,7 @@ def create_model_router(
     *,
     default_adapter=None,
     discovery_getter: Getter | None = None,
+    config_values_provider: Callable[[Mapping[str, str]], Mapping[str, str]] | None = None,
 ) -> tuple[ModelRouter, object]:
     """Return the router and the legacy v1 adapter, sharing one budget ledger owner."""
     # Snapshot: the catalog is rebuilt lazily and must keep the configuration it was started with.
@@ -777,13 +778,78 @@ def create_model_router(
         cache[model_id] = adapter
         return adapter
 
+    dynamic_discovery = None
+    dynamic_discovery_id = None
+    dynamic_lock = threading.RLock()
+
     def build() -> _State:
-        snapshot = discovery.snapshot() if discovery is not None else DISABLED_SNAPSHOT
+        nonlocal dynamic_discovery, dynamic_discovery_id
+        if config_values_provider is None:
+            active_values = values
+            active_status, active_policy = policy_status, policy
+            active_discovery, active_gateway = discovery, gateway
+        else:
+            try:
+                active_values = dict(config_values_provider(values))
+                if active_values == values:
+                    # No managed override: keep the original startup discovery client.
+                    # Also preserves pinned mock transports from existing S5 callers.
+                    active_status, active_policy = policy_status, policy
+                    active_discovery, active_gateway = discovery, gateway
+                    managed_key = None
+                else:
+                    active_status, active_policy = load_model_policy(active_values)
+                    managed_key = active_values.get("__newsflux_managed_virtual_key")
+                    active_gateway = load_gateway_settings(
+                        active_values,
+                        read_key=bool(
+                            _read_bool(active_values, "NEWSFLUX_AI_INFERENCE_ENABLED")
+                            and _read_bool(active_values, "NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER")
+                        )
+                    )
+                    if managed_key is not None:
+                        if not isinstance(managed_key, str) or not managed_key.startswith("sk-"):
+                            raise ValueError("managed key unavailable")
+                        active_gateway = replace(active_gateway, virtual_key=managed_key)
+                    discovery_id = (
+                        hashlib.sha256((managed_key or "").encode("utf-8")).hexdigest(),
+                        active_values.get("NEWSFLUX_AI_LITELLM_VIRTUAL_KEY_FILE"),
+                        active_values.get("NEWSFLUX_AI_LITELLM_BASE_URL"),
+                        active_values.get("NEWSFLUX_AI_MODEL_DISCOVERY_ENABLED"),
+                        active_values.get("NEWSFLUX_AI_LITELLM_PRIVATE_DOCKER_PEER"),
+                        hashlib.sha256(
+                            (active_values.get("NEWSFLUX_AI_MODEL_POLICY_JSON") or "").encode("utf-8")
+                        ).hexdigest(),
+                    )
+                    with dynamic_lock:
+                        if discovery_id != dynamic_discovery_id:
+                            if managed_key is not None and _read_bool(active_values, "NEWSFLUX_AI_MODEL_DISCOVERY_ENABLED"):
+                                getter = discovery_getter or gateway_getter(
+                                    active_values.get("NEWSFLUX_AI_LITELLM_BASE_URL"),
+                                    active_values.get("NEWSFLUX_AI_LITELLM_PRIVATE_DOCKER_PEER") or None,
+                                    managed_key,
+                                )
+                                dynamic_discovery = GatewayDiscovery.from_environment(active_values, getter=getter)
+                            else:
+                                dynamic_discovery = GatewayDiscovery.from_environment(active_values, getter=discovery_getter)
+                            dynamic_discovery_id = discovery_id
+                        active_discovery = dynamic_discovery
+            except Exception:
+                # A malformed, inaccessible or raced managed record must never restore
+                # an old key, model policy, or external authorization.
+                active_values = dict(values)
+                active_values["NEWSFLUX_AI_INFERENCE_ENABLED"] = "false"
+                active_values["NEWSFLUX_AI_MODEL_POLICY_JSON"] = "{}"
+                active_values["NEWSFLUX_AI_MODEL_DISCOVERY_ENABLED"] = "false"
+                active_status, active_policy = "INVALID", ()
+                active_discovery = None
+                active_gateway = replace(gateway, enabled=False, virtual_key=None)
+        snapshot = active_discovery.snapshot() if active_discovery is not None else DISABLED_SNAPSHOT
         entries: dict[str, CatalogEntry] = {}
         adapters: dict[str, object] = {}
         approved_aliases = set()
-        for item in policy:
-            entry, adapter = _evaluate(item, policy_status, snapshot, gateway, values, adapter_for_settings)
+        for item in active_policy:
+            entry, adapter = _evaluate(item, active_status, snapshot, active_gateway, active_values, adapter_for_settings)
             entries[item.model_id] = entry
             if item.alias:
                 approved_aliases.add(item.alias)
@@ -796,9 +862,14 @@ def create_model_router(
                 if alias in approved_aliases:
                     continue
                 model_id = discovered_model_id(alias)
-                entries[model_id] = _discovered_entry(model_id, alias, snapshot, gateway)
-        default = requested_default if requested_default in adapters else None
-        return _State(entries, adapters, default, snapshot.status, policy_status)
+                entries[model_id] = _discovered_entry(model_id, alias, snapshot, active_gateway)
+        live_default = (
+            active_values.get("NEWSFLUX_AI_DEFAULT_MODEL_ID")
+            or active_values.get("NEWSFLUX_AI_LITELLM_MODEL_CHOICE")
+            or requested_default
+        )
+        default = live_default if live_default in adapters else None
+        return _State(entries, adapters, default, snapshot.status, active_status)
 
     router = ModelRouter({}, {}, None, refresh=build, ledger_owner=own_owner)
     return router, default_adapter
