@@ -174,15 +174,41 @@ not OFF; a receipt without both revisions on `APPROVED_SHA`.
   local path must be re-reviewed when #260 is merged.
 - Pre-existing, out of scope: `%{rpm}` literal in the user catalog when a model has no RPM limit.
 
-## 12. CI notes
+## 12. CI evidence (GitHub Actions, exact SHAs)
 
-CI on the final heads and on the combined tree `1ccc7a2` is **in progress** at this revision of the
-document; the final results (run links per workflow) are recorded in the #261 PR comment for R3 and in
-the central ledger R3 record. Known structural item: #263's "Exact-source Docker Compose pilot gate"
-requires `base == live main` and stays pending until #263 is retargeted to `main` after an authorized
-#262 merge (validated on the combined tree meanwhile).
+| Head                    | Result                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Combined tree `1ccc7a2` | **all green**: `Summary release isolated rehearsal` [run 44215688823](https://github.com/jfsdias/NewsFlux/actions/runs/44215688823) (operator 21/21, R12F09 18/18, S5 key gate 17/17, **Stage 1 upgrade 44/44 with the real #264 admin-route Caddyfile**), pilot image + exact-source Compose gate [44215693245](https://github.com/jfsdias/NewsFlux/actions/runs/44215693245), E2E [44215697525](https://github.com/jfsdias/NewsFlux/actions/runs/44215697525), fallback [44215702359](https://github.com/jfsdias/NewsFlux/actions/runs/44215702359) |
+| #265 `e54df53`          | all green incl. `synthetic-release` [44215667055](https://github.com/jfsdias/NewsFlux/actions/runs/44215667055) (synthetic comment-only transition on main)                                                                                                                                                                                                                                                                                                                                                                                           |
+| #262 `683d60c`          | all green (Python, quality, linter, pilot image, exact-source Compose gate, E2E, fallback)                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| #263 `8b7960d`          | AI settings gates green (backend, frontend, admin-harness [44212058290](https://github.com/jfsdias/NewsFlux/actions/runs/44212058290)); **exact-source Compose gate fails by design while stacked** (`base == live main`); passes on the combined tree; re-run after retarget                                                                                                                                                                                                                                                                         |
+| #264 `2641010`          | route contract, quality, pilot, E2E green; `synthetic-release` stays red **until #265 is on main** (old script), then green as shown on the combined tree                                                                                                                                                                                                                                                                                                                                                                                             |
 
-## 13. Operations requiring a separate GO
+Gates of the Stage 1 upgrade rehearsal on the combined tree include: `CADDY_PREFLIGHT_ACCEPTS_STAGE1`,
+`CADDY_PREFLIGHT_BLOCKS_DRIFT`, `CADDY_FAULT_BEFORE_WRITE_SAFE`, `CADDY_FAULT_DURING_WRITE_RESTORED`,
+`CADDY_FAULT_RELOAD_RESTORED`, `CADDY_UPDATE_FROM_STAGE1`, `CADDY_TARGET_HASH_SAME_INODE`,
+`CADDY_READBACK_IN_CONTAINER`, `READER_NOT_RECREATED_BY_CADDY_UPDATE`, `CADDY_BACKUP_EXACT_AND_PRIVATE`,
+`CADDY_UPDATE_IDEMPOTENT`, `ADMIN_ROUTES_METHODS_AND_CATCHALL_403`, `CADDY_ROLLBACK_TO_STAGE1`,
+`ROLLBACK_IDEMPOTENT`, `CADDY_DRIFT_DETECTED`, `INFERENCE_FLAG_PRESERVED_AFTER_ROLLBACK`,
+`MINIFLUX_NPM_LITELLM_FALLBACK_UNCHANGED`, `NO_WALLHOP_RESOURCES` — all PASS. The five gates that failed in R2
+(`UPGRADE_PREFLIGHT_ON_STAGE1`, `UPGRADE_CADDY_ALREADY_APPLIED`, `ROLLBACK_CADDY_NOOP_VERIFIED`,
+`ROLLBACK_IDEMPOTENT`, `CADDY_DRIFT_DETECTED`) are covered by `CADDY_PREFLIGHT_ACCEPTS_STAGE1`,
+`UNCHANGED_CADDY_RELEASE_IS_NOOP`, `UNCHANGED_CADDY_ROLLBACK_NOOP_VERIFIED`, `ROLLBACK_IDEMPOTENT` and
+`CADDY_DRIFT_DETECTED`, all PASS.
+
+Real vs simulated: Docker rehearsals use real Docker, Caddy, Compose and the real operator/release scripts with
+stand-in Summary/Reader images; the Summary image start-up uses real images (R12F09). The Playwright admin
+harness uses the real Summary app/store/getter with synthetic Miniflux and LiteLLM transports. No real
+Miniflux, LiteLLM, key, article or Home Server.
+
+## 13. Verdict
+
+`INSTALL_READY=CONDITIONAL`: no open implementation or release-tooling blocker. Remaining before production:
+(1) authorized merges in the order of section 2 with the two post-merge CI re-runs (#263 exact-source gate after
+retarget; #264 rehearsal after #265 on main); (2) `PENDING_OPERATOR_GATE` read-only OMV preflight with every
+check PASS; (3) separate production GO. Real-device checks follow promotion.
+
+## 14. Operations requiring a separate GO
 
 Each merge (#265, #262, #263, #264, #261); OMV read-only preflight execution; build and promotion; enabling
 admin writes; saving the existing key through the UI; any model approval in production; any inference flag;
@@ -196,4 +222,5 @@ DEPLOY=NO
 KEY_ROTATED=NO
 REAL_CREDENTIAL_CHANGED=NO
 PRODUCTION_MUTATIONS=0
+INSTALL_READY=CONDITIONAL
 ```
