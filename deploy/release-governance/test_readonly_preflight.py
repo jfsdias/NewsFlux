@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 import textwrap
@@ -81,7 +82,10 @@ FAKE_DOCKER = textwrap.dedent(r'''
             # code root /app is simulated by the repository root (same `services/` layout).
             assert cmd[:3] == ["python", "-I", "-c"], cmd
             env = {e.split("=", 1)[0]: e.split("=", 1)[1] for e in c["doc"]["Config"]["Env"]}
+            # Only the container namespaces are emulated: the image's code root and the uid that owns
+            # it there (root, as Dockerfile COPY creates it) map onto a copy of the image layout.
             code = cmd[3].replace("'/app'", repr(os.environ["FAKE_APP_ROOT"]))
+            code = code.replace("TRUSTED_UID=0\n", f"TRUSTED_UID={state.get('trusted_uid', os.getuid())}\n")
             import tempfile
             with tempfile.TemporaryDirectory() as empty:
                 run = subprocess.run([sys.executable, "-I", "-c", code], env=env, cwd=empty,
@@ -129,6 +133,15 @@ class ReadonlyPreflightTests(unittest.TestCase):
         bindir.mkdir()
         (bindir / "docker").write_text(FAKE_DOCKER)
         (bindir / "docker").chmod(0o755)
+        # Copy of the Summary image layout under WORKDIR /app: exactly the paths its Dockerfile COPYs.
+        self.app_root = root / "ctr" / "app"
+        (self.app_root / "services").mkdir(parents=True)
+        shutil.copy2(REPO / "services" / "__init__.py", self.app_root / "services" / "__init__.py")
+        for package in ("article_intel_auth", "content_fallback", "article_intel_summary"):
+            shutil.copytree(REPO / "services" / package, self.app_root / "services" / package,
+                            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        for path in [self.app_root, *self.app_root.rglob("*")]:
+            path.chmod(0o755 if path.is_dir() else 0o644)
         self.state_file = root / "state.json"
         self.log = root / "docker.log"
         self.env_vars = {
@@ -162,7 +175,7 @@ class ReadonlyPreflightTests(unittest.TestCase):
         }
         self.summary_over = {}
         self.env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}",
-                    "FAKE_STATE": str(self.state_file), "FAKE_LOG": str(self.log), "FAKE_APP_ROOT": str(REPO),
+                    "FAKE_STATE": str(self.state_file), "FAKE_LOG": str(self.log), "FAKE_APP_ROOT": str(self.app_root),
                     "NEWSFLUX_RELEASE_LOCK": str(root / "no.lock")}
 
     def run_preflight(self, extra_env=None):
@@ -482,6 +495,7 @@ class ReadonlyPreflightTests(unittest.TestCase):
     def run_backend_check(self, app_root, origins):
         code = self.backend_check_code()
         self.assertIn("'/app'", code, "the check must name the image's fixed code root")
+        code = code.replace("TRUSTED_UID=0\n", f"TRUSTED_UID={os.getuid()}\n")
         with tempfile.TemporaryDirectory() as empty:
             return subprocess.run(
                 [os.environ.get("PYTHON_FOR_IMAGE", "python3"), "-I", "-c", code.replace("'/app'", repr(str(app_root)))],
@@ -489,9 +503,9 @@ class ReadonlyPreflightTests(unittest.TestCase):
                 cwd=empty, capture_output=True, text=True, timeout=60)
 
     def test_backend_check_imports_under_isolated_mode_from_fixed_root(self):
-        done = self.run_backend_check(REPO, ORIGIN)
+        done = self.run_backend_check(self.app_root, ORIGIN)
         self.assertEqual((done.returncode, done.stdout.strip()), (0, "VALID"), done.stderr)
-        done = self.run_backend_check(REPO, f"{ORIGIN},http://bad.example")
+        done = self.run_backend_check(self.app_root, f"{ORIGIN},http://bad.example")
         self.assertEqual(done.stdout.strip(), "INVALID", done.stderr)
 
     def test_backend_check_without_code_root_is_unverified_not_crash(self):
@@ -513,6 +527,54 @@ class ReadonlyPreflightTests(unittest.TestCase):
                                       env={"NEWSFLUX_AI_ALLOWED_WEB_ORIGINS": "http://x"},
                                       capture_output=True, text=True)
         self.assertEqual(done.stdout.strip(), "IMPORT_FAILED", done.stderr)
+
+    # --- R4.1 hardening: the trusted code root must be proven safe before it is imported -------
+
+    def test_backend_check_through_preflight_is_valid_and_writes_no_bytecode(self):
+        code, out = self.run_preflight()
+        self.assertEqual((code, out.get("ALLOWED_ORIGINS_BACKEND")), (0, "VALID"), out)
+        self.assertEqual(list(self.app_root.rglob("__pycache__")), [], "the check wrote bytecode")
+
+    def test_backend_code_tree_writable_by_group_or_others_is_hold(self):
+        # services.article_intel_auth imports services.content_fallback, so the whole tree counts.
+        for rel in ("", "services", "services/__init__.py", "services/article_intel_auth",
+                    "services/article_intel_auth/config.py", "services/article_intel_auth/__init__.py",
+                    "services/content_fallback", "services/content_fallback/http_client.py"):
+            target = self.app_root / rel if rel else self.app_root
+            for bits in (0o020, 0o002):
+                with self.subTest(path=rel or ".", bits=oct(bits)):
+                    original = target.stat().st_mode & 0o7777
+                    target.chmod(original | bits)
+                    try:
+                        self.assert_hold("ALLOWED_ORIGINS_BACKEND", "UNSAFE_IMPORT_PATH")
+                    finally:
+                        target.chmod(original)
+
+    def test_backend_code_tree_not_owned_by_image_root_is_hold(self):
+        self.state["trusted_uid"] = os.getuid() + 1
+        self.assert_hold("ALLOWED_ORIGINS_BACKEND", "UNSAFE_IMPORT_PATH")
+
+    def test_backend_symlinked_module_is_hold(self):
+        config = self.app_root / "services" / "content_fallback" / "http_client.py"
+        real = self.app_root.parent / "http_client_real.py"
+        shutil.move(config, real)
+        config.symlink_to(real)
+        self.assert_hold("ALLOWED_ORIGINS_BACKEND", "UNSAFE_IMPORT_PATH")
+
+    def test_backend_symlinked_package_dir_is_hold(self):
+        package = self.app_root / "services" / "article_intel_auth"
+        moved = self.app_root.parent / "auth_real"
+        shutil.move(package, moved)
+        package.symlink_to(moved, target_is_directory=True)
+        self.assert_hold("ALLOWED_ORIGINS_BACKEND", "UNSAFE_IMPORT_PATH")
+
+    def test_backend_unsafe_cached_bytecode_is_hold(self):
+        # Cached bytecode is read even when writing is disabled.
+        cache = self.app_root / "services" / "content_fallback" / "__pycache__"
+        cache.mkdir()
+        (cache / "http_client.cpython-312.pyc").write_bytes(b"")
+        (cache / "http_client.cpython-312.pyc").chmod(0o666)
+        self.assert_hold("ALLOWED_ORIGINS_BACKEND", "UNSAFE_IMPORT_PATH")
 
     # --- read-only guarantees --------------------------------------------------------------
 
