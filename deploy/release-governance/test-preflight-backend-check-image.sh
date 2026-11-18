@@ -79,5 +79,13 @@ out_all="$(docker exec "$cid" python -I -c "$current_check" 2>&1)"
 grep -q "rehearsal.test" <<<"$out_all" && ko CHECK_NEVER_PRINTS_ORIGIN || ok CHECK_NEVER_PRINTS_ORIGIN
 [[ "$(docker exec "$cid" id -u)" == 10001 ]] && ok EXEC_RUNS_AS_UID_10001 || ko EXEC_RUNS_AS_UID_10001
 
+# R4.1 hardening: the FULL read-only preflight end to end against this exact image, and an unsafe
+# (group/other-writable, transitively imported) code root must be UNSAFE_IMPORT_PATH, never VALID.
+if (cd "$here" && RELEASE_DOCKER_TESTS=1 NEWSFLUX_SUMMARY_TEST_IMAGE="$image" python3 -m unittest -v test_preflight_origin_image); then
+  ok FULL_PREFLIGHT_AND_CODE_ROOT_SAFETY
+else
+  ko FULL_PREFLIGHT_AND_CODE_ROOT_SAFETY
+fi
+
 echo "PREFLIGHT_IMAGE_PASSED=$pass PREFLIGHT_IMAGE_FAILED=$fail"
 [[ "$fail" -eq 0 ]]

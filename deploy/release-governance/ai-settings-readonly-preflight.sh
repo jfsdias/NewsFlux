@@ -127,18 +127,41 @@ def origin_ok(origin):
 
 # Runs as `docker exec <summary> python -I -c ...`. -I keeps the check isolated (no PYTHONPATH, no user
 # site, no current directory on sys.path), so the image's fixed code root (/app, Dockerfile WORKDIR,
-# code at /app/services) is added explicitly and the imported module must come from it. Prints only
-# VALID, INVALID or IMPORT_FAILED; never an origin value.
+# code at /app/services) is added explicitly. Before it is put on sys.path, /app and the whole
+# /app/services tree (the auth package imports services.content_fallback transitively; cached
+# bytecode included) must be real paths (no symlink), owned by root as Dockerfile COPY creates them,
+# and not writable by group/others; otherwise UNSAFE_IMPORT_PATH. Every loaded services.* module must
+# then come from that tree. Bytecode writing is disabled, so the check creates no file.
+# Prints only VALID, INVALID, IMPORT_FAILED or UNSAFE_IMPORT_PATH; never an origin value.
 BACKEND_ORIGIN_CHECK = (
-    "import os,sys\n"
+    "import os,stat,sys\n"
+    "sys.dont_write_bytecode=True\n"
     "root='/app'\n"
+    "TRUSTED_UID=0\n"
+    "tree=os.path.join(root,'services')\n"
+    "def unsafe(p):\n"
+    "    try:\n"
+    "        st=os.lstat(p)\n"
+    "    except OSError:\n"
+    "        return True\n"
+    "    return stat.S_ISLNK(st.st_mode) or st.st_uid!=TRUSTED_UID or bool(st.st_mode&0o022)\n"
+    "if not os.path.lexists(tree):\n"
+    "    print('IMPORT_FAILED');sys.exit(0)\n"
+    "paths=[root,tree]\n"
+    "if not any(unsafe(p) for p in paths):\n"
+    "    for d,dirs,files in os.walk(tree):\n"
+    "        paths.extend(os.path.join(d,n) for n in dirs+files)\n"
+    "if any(unsafe(p) for p in paths) or os.path.realpath(tree)!=tree:\n"
+    "    print('UNSAFE_IMPORT_PATH');sys.exit(0)\n"
     "sys.path.insert(0,root)\n"
     "try:\n"
     "    import services.article_intel_auth.config as c\n"
-    "    assert os.path.realpath(c.__file__).startswith(os.path.realpath(root)+os.sep)\n"
     "    f=c.canonicalize_web_origin\n"
     "except Exception:\n"
     "    print('IMPORT_FAILED');sys.exit(0)\n"
+    "mods=[m for n,m in list(sys.modules.items()) if n=='services' or n.startswith('services.')]\n"
+    "if any(not os.path.realpath(getattr(m,'__file__',None) or '/').startswith(tree+os.sep) for m in mods):\n"
+    "    print('UNSAFE_IMPORT_PATH');sys.exit(0)\n"
     "items=[v.strip() for v in os.environ.get('NEWSFLUX_AI_ALLOWED_WEB_ORIGINS','').split(',')]\n"
     "try:\n"
     "    ok=bool(items) and all(items) and all(f(v) for v in items)\n"
@@ -284,8 +307,8 @@ def check_env(name, env):
     verdict = backend.strip() if backend is not None else None
     if verdict == "VALID":
         out("ALLOWED_ORIGINS_BACKEND", "VALID")
-    elif verdict == "INVALID":
-        hold("ALLOWED_ORIGINS_BACKEND", "INVALID")
+    elif verdict in ("INVALID", "UNSAFE_IMPORT_PATH"):
+        hold("ALLOWED_ORIGINS_BACKEND", verdict)
     else:  # exec failed, import failed (IMPORT_FAILED) or unexpected output
         hold("ALLOWED_ORIGINS_BACKEND", "UNVERIFIED")
 
