@@ -241,11 +241,44 @@ Also a HOLD:
 
 ## 12. CI evidence (GitHub Actions, exact SHAs)
 
-CI on #265 `805e6d1` and on the combined tree `3df26f1` is **in progress** at this revision; final results are recorded in the next revision of this document and the #265 R4 comment.
+| Head                                                       | Result                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Combined tree `3df26f1` (main + #263 ⊃ #262 + #264 + #265) | **all green**: `Summary release isolated rehearsal` [run 44305867740](https://github.com/jfsdias/NewsFlux/actions/runs/44305867740): governance unit tests 95, Docker release tests 15, operator 21/21, R12F09 18/18, S5 key gate 17/17, **Stage 1 upgrade 44/44 with the real #264 admin-route Caddyfile** (`KIND=b-changes-caddy`). Pilot image + exact-source Compose gate [44305874170](https://github.com/jfsdias/NewsFlux/actions/runs/44305874170), E2E [44305880823](https://github.com/jfsdias/NewsFlux/actions/runs/44305880823), fallback [44305886169](https://github.com/jfsdias/NewsFlux/actions/runs/44305886169) |
+| #265 `805e6d1`                                             | **all green** (15 checks), including `synthetic-release` [run 44305846833](https://github.com/jfsdias/NewsFlux/actions/runs/44305846833): governance 95, Stage 1 upgrade 44/44 (synthetic comment-only transition)                                                                                                                                                                                                                                                                                                                                                                                                               |
+| #262 `683d60c`                                             | all green (unchanged since R3)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| #263 `8b7960d`                                             | AI settings gates green; exact-source Compose gate **structural** while stacked (`base == live main`), green on the combined tree; re-run after retarget                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| #264 `2641010`                                             | route contract, quality, pilot, E2E green; `synthetic-release` red until #265 is on `main` (old script), green on the combined tree                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+
+The five gates that failed in R2 remain covered and PASS in both rehearsals: `CADDY_PREFLIGHT_ACCEPTS_STAGE1`,
+`UNCHANGED_CADDY_RELEASE_IS_NOOP`, `UNCHANGED_CADDY_ROLLBACK_NOOP_VERIFIED`, `ROLLBACK_IDEMPOTENT`,
+`CADDY_DRIFT_DETECTED`. Rollback gates (`CADDY_ROLLBACK_TO_STAGE1`, `ROLLBACK_IDEMPOTENT`,
+`INFERENCE_FLAG_PRESERVED_AFTER_ROLLBACK`) and on the combined tree `ADMIN_ROUTES_METHODS_AND_CATCHALL_403`
+also PASS. R4 did not change any Caddy route or functional code.
+
+Preflight TDD evidence (local, Python 3.12 and 3.13):
+
+- RED: the unchanged R3 script under its own R3 test fake returned `PREFLIGHT=PASS`, exit 0, with
+  `INFERENCE_ENABLED=ON`, `ADMIN_CONFIG_WRITES_ENABLED=ON`, `ALLOW_EXTERNAL_ARTICLE_TRANSFER=ON`,
+  `ALLOW_PAID_INFERENCE=ON` and an HTTPS+HTTP origin list. The new 37-test matrix fails 67 assertions on the R3
+  script.
+- GREEN: 37/37 on `805e6d1`. Every case also asserts:
+  - no file is created or modified and the Caddyfile is untouched;
+  - only read-only Docker calls were made;
+  - no secret, URL, IP or host path appears in the output;
+  - exit code 3 whenever the result is HOLD.
 
 ## 13. Verdict
 
-Pending the CI results above.
+`INSTALL_READY=CONDITIONAL`; `MERGE_READY=YES_PENDING_OWNER_GO` in the order of section 2.
+
+- No open code, release-tooling or preflight blocker.
+- The read-only preflight now fails closed on every gate in section 5.
+- Remaining before production:
+  1. authorized merges in the order of section 2, with the two post-merge CI re-runs (#263 exact-source gate
+     after retarget; #264 rehearsal after #265 is on main);
+  2. `PENDING_OPERATOR_GATE`: the read-only OMV preflight with `PREFLIGHT=PASS`;
+  3. a separate production GO.
+- Real-device checks follow promotion. `DEPLOY_READY` is **not** declared.
 
 ## 14. Operations requiring a separate GO
 
