@@ -8,6 +8,8 @@ on:
       - "services/article_intel_summary/tests/test_s5_preflight.py"
       - "services/article_intel_summary/Dockerfile"
       - ".github/workflows/summary-release-rehearsal.yaml"
+  # Manual run on an exact test-only integration tree (e.g. route PR + this tooling together).
+  workflow_dispatch:
 permissions:
   contents: read
 env:
