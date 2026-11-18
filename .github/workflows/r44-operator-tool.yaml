@@ -1,0 +1,51 @@
+name: R4.4B allowlist operator tool
+
+on:
+  pull_request:
+    paths:
+      - "deploy/r44-admin-allowlist/**"
+      - ".github/workflows/r44-operator-tool.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r44-operator-tool-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  disposable-matrix:
+    name: Disposable operator matrix (never a real host)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+      - name: Static checks (Python >= 3.9 syntax, shell syntax)
+        run: |
+          set -euo pipefail
+          d=deploy/r44-admin-allowlist
+          python -I -c "import ast,sys; [ast.parse(open(p).read(), p, feature_version=(3, 9)) for p in sys.argv[1:]]" \
+            "$d/r44_admin_allowlist.py" "$d/tests/fault_runner.py" "$d/tests/fake_miniflux.py"
+          for f in "$d"/*.sh "$d"/tests/*.sh; do bash -n "$f"; done
+          # The production tool carries no test hooks or environment overrides.
+          if grep -nE 'R44_(INPUT_FILE|FAULT|STATE_DIR|RELEASE_LOCK|PROJECT)|os\.environ\.get\(' "$d/r44_admin_allowlist.py"; then exit 1; fi
+      - name: Build the disposable Summary image from this source
+        run: bash deploy/r44-admin-allowlist/tests/build-test-image.sh "$GITHUB_WORKSPACE"
+      - name: Tool matrix (RED/GREEN regression set)
+        env:
+          R44_TOOL: deploy/r44-admin-allowlist/r44_admin_allowlist.py
+          R44_PY: python
+        run: bash deploy/r44-admin-allowlist/tests/matrix.sh
+      - name: Read-only A/B wrapper (exit propagation, sanitization)
+        env:
+          R44_PY: python
+        run: bash deploy/r44-admin-allowlist/tests/wrapper-test.sh
+      - name: Gate D receipt wrapper
+        run: bash deploy/r44-admin-allowlist/tests/r44d-wrapper-test.sh

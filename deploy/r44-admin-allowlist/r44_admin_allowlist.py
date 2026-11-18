@@ -63,7 +63,7 @@ READ_ONLY = True
 # ---------------------------------------------------------------- output schema
 VALUE_RE = re.compile(r"[A-Za-z0-9_.:,+-]{0,96}")
 SCHEMA_KEYS = frozenset("""
-R44_MODE R44_RESULT R44_INTERNAL R44_SCHEMA_VIOLATION SECRET_PRINTED HOLD_COUNT WRITES_PERFORMED AUDIT_GATE
+R44_MODE R44_PYTHON R44_RESULT R44_INTERNAL R44_SCHEMA_VIOLATION SECRET_PRINTED HOLD_COUNT WRITES_PERFORMED AUDIT_GATE
 IDENTITY_GATE_FINAL RUNTIME_EXPECTATIONS RUNTIME_SOURCE_REPO RUNTIME_IMAGE_PINNED RUNTIME_REVISION RUNTIME_USER
 RUNTIME_FS_DRIFT RUNTIME_CODE_MANIFEST RUNTIME_TRUST_GATE SUMMARY_CONTAINER SUMMARY_IMAGE SUMMARY_REVISION
 SUMMARY_HEALTH SUMMARY_USER SUMMARY_PUBLISHED_PORTS SUMMARY_RESTART_COUNT SUMMARY_MOUNTS_COUNT SUMMARY_DATA_MOUNT
@@ -1119,6 +1119,10 @@ def parse_args(argv: list[str]) -> tuple[str, list[str], dict]:
 def main(argv: list[str]) -> int:
     mode, positional, opts = parse_args(argv)
     out("R44_MODE", mode.upper() if mode in ("identity", "audit", "apply", "rollback") else "UNKNOWN")
+    out("R44_PYTHON", "%d.%d" % sys.version_info[:2])
+    if sys.version_info < (3, 9):
+        hold("R44_PYTHON", "UNSUPPORTED")
+        return 3
     trust = Trust.parse(opts)
     rc = 0
     try:

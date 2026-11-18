@@ -3,8 +3,8 @@ sudo -v && bash <<'NF_R44B_AB'
 # Runs audit first (runtime trust + host inventory + config source); the owner's Miniflux key is requested
 # only if the audit passes. Aggregate result and exit code: PASS=0, OWNER_DECISION_REQUIRED=4, NO_GO=nonzero.
 set -u
-SRC=ddf5d6c539f1eb1123f307c79f3009ba1c33f807
-EXP_TOOL=4a4694539476428d81bbbc33c7074c8e8ac37431199cbebc9f964dcc6f869787
+SRC=0c3738ade72439fd62c21cac2ac6905ab44f5082
+EXP_TOOL=54156297181d2c6deb660d873d99f91384adbee3c727d43fe7ef1a0e89e20ae7
 EXP_SUMMARY_IMAGE=sha256:db40e22a12ce3776c2f00666bc7523c7cfbf2127f7e265182d0941dc3b711049
 EXP_SUMMARY_REVISION=d54eda2bdb8bc5c3d1bd58d40236f48da762e852
 T=deploy/r44-admin-allowlist/r44_admin_allowlist.py
@@ -26,6 +26,8 @@ if [ "$(git -C "$D/src" rev-parse HEAD 2>/dev/null)" != "$SRC" ] \
 fi
 echo "TOOL_INTEGRITY=PASS"
 echo "TOOL_SOURCE_SHA=$SRC"
+OMV_PY="$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null || echo NONE)"
+echo "OMV_PYTHON=$OMV_PY"
 cd "$D" || { echo "R44B_AB_RESULT=NO_GO"; exit 94; }
 TRUST=(--expect-image "$EXP_SUMMARY_IMAGE" --expect-revision "$EXP_SUMMARY_REVISION" --source-repo "$D/src")
 run() { # mode — prompts go to the terminal only; stdout is shown only if it matches the KEY=VALUE contract

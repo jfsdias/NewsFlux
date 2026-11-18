@@ -11,4 +11,5 @@ if [ -n "${R44_EXTRA_CA:-}" ]; then
 else
   cp "$repo/services/article_intel_summary/Dockerfile" "$df"
 fi
-DOCKER_BUILDKIT=0 docker build -q -f "$df" --build-arg SOURCE_COMMIT="$(git -C "$repo" rev-parse HEAD)" -t r44-summary:test "$repo"
+if [ -n "${R44_EXTRA_CA:-}" ]; then export DOCKER_BUILDKIT=0; fi
+docker build -q -f "$df" --build-arg SOURCE_COMMIT="$(git -C "$repo" rev-parse HEAD)" -t r44-summary:test "$repo"

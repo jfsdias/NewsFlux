@@ -10,6 +10,7 @@ PY="${R44_PY:-python3}"
 export R44T_HOME="${R44T_HOME:-$(mktemp -d /tmp/r44w.XXXXXX)}"
 T="$R44T_HOME/topo-privatecanary"
 EXP_IMAGE="$(docker image inspect -f '{{.Id}}' r44-summary:test)"
+EXP_REV="$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' r44-summary:test)"
 OWNER=tok-owner-CANARYKEY7
 pass=0; fail=0
 
@@ -19,6 +20,7 @@ variant() { # out_file wrapper fault answers [expect_image]
   sed -e 's|^sudo -v && ||' \
       -e "s|https://github.com/jfsdias/NewsFlux.git|file://$repo|" \
       -e "s|^EXP_SUMMARY_IMAGE=.*|EXP_SUMMARY_IMAGE=$img|" \
+      -e "s|^EXP_SUMMARY_REVISION=.*|EXP_SUMMARY_REVISION=$EXP_REV|" \
       -e "s|sudo python3 -I \"\$D/src/\$T\"|$PY -I \"$here/fault_runner.py\" \"\$D/src/\$T\" $fault \"$R44T_HOME/ans.$(basename "$f")\"|" \
       "$w" > "$f"
 }
