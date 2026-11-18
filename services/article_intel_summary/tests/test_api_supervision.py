@@ -10,8 +10,11 @@ import unittest
 from decimal import Decimal
 from pathlib import Path
 
+from unittest import mock
+
 import httpx
 
+from services.article_intel_summary import budget, supervision
 from services.article_intel_summary.app import create_app
 from services.article_intel_summary.service import SummaryService
 from services.article_intel_summary.litellm_adapter import LiteLLMInferenceAdapter
@@ -22,13 +25,49 @@ from services.article_intel_summary.tests.support import (
 )
 
 
+class ControlledClock:
+    """Monotonic clock for the supervisor's deadlines that only moves when a test advances it.
+
+    The inference deadline then expires at a point the test chooses (e.g. only after the gateway
+    request has started), independent of runner speed, SQLite I/O or thread scheduling.
+    """
+
+    def __init__(self):
+        self.now = time.monotonic()
+        self._lock = threading.Lock()
+
+    def monotonic(self):
+        with self._lock:
+            return self.now
+
+    def advance(self, seconds):
+        with self._lock:
+            self.now += seconds
+
+
+def slow_reservation(delay):
+    """Pre-dispatch latency stand-in (slow disk/scheduler): delays the worker after its SQLite reservation."""
+    real = budget.BudgetLedger.reserve
+
+    def reserve(self, *args, **kwargs):
+        result = real(self, *args, **kwargs)
+        time.sleep(delay)
+        return result
+
+    return mock.patch.object(budget.BudgetLedger, "reserve", reserve)
+
+
 class SupervisedAPITests(unittest.IsolatedAsyncioTestCase):
-    async def test_late_inference_is_settled_and_never_revalidated(self):
+    async def late_inference_scenario(self, *, pre_dispatch_delay):
         started, release = threading.Event(), threading.Event()
-        with tempfile.TemporaryDirectory() as directory:
+        clock = ControlledClock()
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(supervision, "time", clock), slow_reservation(pre_dispatch_delay):
             database = str(Path(directory) / "usage.sqlite3")
             def handler(_request):
                 started.set()
+                # The gateway is now in flight; only now does the inference deadline (0.05 s) pass.
+                clock.advance(0.5)
                 release.wait(2)
                 return completion_response(model=S5_ALIAS, completion_tokens=805)
             settings = make_settings(database, model_choice="s5-free", model_id=S5_ALIAS,
@@ -51,6 +90,52 @@ class SupervisedAPITests(unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(db.execute("SELECT state FROM inference_usage").fetchall(), [("settled",)])
             finally:
                 release.set()
+                await app.state.supervisor.drain()
+                adapter.client.close()
+
+    async def test_late_inference_is_settled_and_never_revalidated(self):
+        await self.late_inference_scenario(pre_dispatch_delay=0)
+
+    async def test_late_inference_contract_holds_with_slow_pre_dispatch_work(self):
+        # Regression for Quality run 44308842491: a slow runner delayed the worker between
+        # begin_inference and the gateway request beyond the 0.05 s budget, so the test's own
+        # precondition (dispatch started) was not met. The contract must not depend on that timing.
+        await self.late_inference_scenario(pre_dispatch_delay=0.1)
+
+    async def test_deadline_before_dispatch_never_calls_gateway_and_keeps_conservative_cost(self):
+        calls = []
+        clock = ControlledClock()
+        real = budget.BudgetLedger.reserve
+
+        def reserve_then_expire(self, *args, **kwargs):
+            result = real(self, *args, **kwargs)
+            clock.advance(0.5)  # inference budget exhausted after admission, before the gateway request
+            return result
+
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(supervision, "time", clock), \
+                mock.patch.object(budget.BudgetLedger, "reserve", reserve_then_expire):
+            database = str(Path(directory) / "usage.sqlite3")
+            def handler(_request):
+                calls.append(1)
+                return completion_response(model=S5_ALIAS, completion_tokens=5)
+            settings = make_settings(database, model_choice="s5-free", model_id=S5_ALIAS,
+                                     input_price_usd_per_million=Decimal("0"), output_price_usd_per_million=Decimal("0"),
+                                     max_output_tokens=2048, timeout_seconds=0.05)
+            adapter = LiteLLMInferenceAdapter(settings, client=httpx.Client(transport=httpx.MockTransport(handler)))
+            client, miniflux, _, _ = make_test_client(adapter=adapter)
+            app = create_app(auth_service=client.app.state.auth_service,
+                             summary_service=SummaryService(adapter, timeout_seconds=0.05),
+                             request_timeout_seconds=1, max_in_flight=1, revalidation_reserve_seconds=0)
+            try:
+                async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=WEB_ORIGIN) as http:
+                    response = await http.post(f"/api/ai/v1/entries/{ENTRY_ID}/summary", headers=request_headers(), json=valid_request())
+                    await app.state.supervisor.drain()
+                self.assertEqual(response.status_code, 504)
+                self.assertEqual(calls, [])  # nothing is sent after the deadline
+                self.assertEqual(len(miniflux.calls), 2)  # no revalidation
+                with closing(sqlite3.connect(database)) as db:
+                    self.assertEqual(db.execute("SELECT state FROM inference_usage").fetchall(), [("uncertain",)])
+            finally:
                 await app.state.supervisor.drain()
                 adapter.client.close()
 
@@ -112,27 +197,47 @@ class SupervisedAPITests(unittest.IsolatedAsyncioTestCase):
             release.set()
             await app.state.supervisor.drain()
 
-    async def test_timeout_keeps_capacity_until_worker_finishes(self):
+    async def request_deadline_capacity_scenario(self, *, pre_adapter_delay):
         started, release = threading.Event(), threading.Event()
+        clock = ControlledClock()
 
         class BlockingAdapter(SyntheticFixtureAdapter):
             def summarize(self, request, *, timeout_seconds):
                 started.set()
+                # The worker holds its slot; only now does the request deadline (0.05 s) pass.
+                clock.advance(1.0)
                 release.wait(2)
                 return super().summarize(request, timeout_seconds=timeout_seconds)
 
         adapter = BlockingAdapter(make_snapshot())
-        client, _, _, _ = make_test_client(adapter=adapter)
-        app = create_app(auth_service=client.app.state.auth_service,
-                         summary_service=SummaryService(adapter, timeout_seconds=0.03), request_timeout_seconds=0.05,
-                         max_in_flight=1, revalidation_reserve_seconds=0)
-        try:
-            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=WEB_ORIGIN) as http:
-                response = await http.post(f"/api/ai/v1/entries/{ENTRY_ID}/summary", headers=request_headers(), json=valid_request())
-                self.assertTrue(started.is_set())
-                self.assertEqual(response.status_code, 504)
-                busy = await http.post(f"/api/ai/v1/entries/{ENTRY_ID}/summary", headers=request_headers(), json=valid_request())
-                self.assertEqual(busy.status_code, 429)
-        finally:
-            release.set()
-            await app.state.supervisor.drain()
+        client, miniflux, _, _ = make_test_client(adapter=adapter)
+        if pre_adapter_delay:
+            real_get = miniflux.get
+
+            def slow_get(url, **options):
+                time.sleep(pre_adapter_delay)  # slow Miniflux/scheduler before the adapter is reached
+                return real_get(url, **options)
+
+            miniflux.get = slow_get
+        with mock.patch.object(supervision, "time", clock):
+            app = create_app(auth_service=client.app.state.auth_service,
+                             summary_service=SummaryService(adapter, timeout_seconds=0.03), request_timeout_seconds=0.05,
+                             max_in_flight=1, revalidation_reserve_seconds=0)
+            try:
+                async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=WEB_ORIGIN) as http:
+                    response = await http.post(f"/api/ai/v1/entries/{ENTRY_ID}/summary", headers=request_headers(), json=valid_request())
+                    self.assertTrue(started.is_set())
+                    self.assertEqual(response.status_code, 504)
+                    busy = await http.post(f"/api/ai/v1/entries/{ENTRY_ID}/summary", headers=request_headers(), json=valid_request())
+                    self.assertEqual(busy.status_code, 429)
+            finally:
+                release.set()
+                await app.state.supervisor.drain()
+
+    async def test_timeout_keeps_capacity_until_worker_finishes(self):
+        await self.request_deadline_capacity_scenario(pre_adapter_delay=0)
+
+    async def test_timeout_capacity_contract_holds_with_slow_pre_adapter_work(self):
+        # Same race family as the Quality failure: the 0.05 s request deadline must not be able to
+        # expire before the adapter is reached merely because the runner is slow.
+        await self.request_deadline_capacity_scenario(pre_adapter_delay=0.1)
