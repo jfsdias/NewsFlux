@@ -173,7 +173,7 @@ class CrashLoopForensicsTests(unittest.TestCase):
                     return last["value"]
                 return ""
 
-        with mock.patch.object(release.time, "sleep", lambda _s: None):
+        with mock.patch.object(release, "_settle_sleep", lambda _s: None):
             return release._capture_failure(Docker(), {"release_dir": tmp.name}, self.identity(), "READINESS_FAILED")
 
     def test_running_crash_loop_waits_for_real_exit_code(self):
@@ -194,7 +194,7 @@ class CrashLoopForensicsTests(unittest.TestCase):
     def test_healthy_running_without_restarts_is_not_delayed(self):
         calls = []
         running = '[{"State": {"Status": "running", "ExitCode": 0}, "RestartCount": 0}]'
-        with mock.patch.object(release.time, "sleep", lambda s: calls.append(s)):
+        with mock.patch.object(release, "_settle_sleep", lambda s: calls.append(s)):
             tmp = tempfile.TemporaryDirectory()
             self.addCleanup(tmp.cleanup)
 
