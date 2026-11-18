@@ -12,4 +12,15 @@ This PR (#261) is documentation only again. The operator executor that R4.4 adde
 | P1: inventory skipped uninspectable containers         | `HOST_INVENTORY=INSPECT_FAILED` HOLD before key and write                                                                 | `audit_inventory_fail_closed`, `apply_inventory_fail_closed`, `ab_audit_inventory_fail`                                                 |
 | Key requested before runtime trust                     | Pinned image, revision label, `docker diff`, code manifest identical to the approved revision; consent for `/v1/users`    | `trust_*` cases: `TEST_SECRET_ASKS=0` on every mismatch                                                                                 |
 
-The read-only command for Gates A/B is `deploy/r44-admin-allowlist/r44b-readonly-ab.sh` in #268. It is pinned to the commit and SHA-256 recorded in the R4.4B ledger entry. Disposable tests prove nothing about the OMV state.
+Found and fixed during R4.4B, each with RED reproduced first:
+
+- **Clone ownership under `sudo`.** Git refused the operator's clone when the tool ran as root, so the code manifest was always `UNVERIFIED`; this would have blocked the real OMV run. Fixed with `safe.directory` for that one repository.
+- **`config --hash` vs the `up` label.** On Compose 5.1.3 (CI) they differ. Equivalence is now proved by hash, or else field by field, and anything the comparison doesn't cover HOLDs.
+- **Rollback.** It now compares label with label, with the same field-by-field fallback.
+
+Final state of #268 (`891a148`):
+
+- Tests: 43/43 locally (Compose 5.7.1). On CI (Compose 5.1.3): 42/42 with the root-only case skipped, 13/13 wrapper and 10/10 Gate D. All repository checks green.
+- Read-only command: `deploy/r44-admin-allowlist/r44b-readonly-ab.sh`, pinned to tool commit `c75bac4cf2116ea6037f5c99c1076ed3fab18d8d`, SHA-256 `c962b5190598b2fae8501bf53c860ad0dc6682342c5710e8bf654c17a79daff0`, expected Summary image `sha256:db40e22a12ce3776c2f00666bc7523c7cfbf2127f7e265182d0941dc3b711049` at `d54eda2b`.
+
+Disposable tests prove nothing about the OMV state.
