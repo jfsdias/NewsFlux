@@ -4,7 +4,7 @@ answers terminal prompts from a file and injects faults by monkeypatching. The p
 has no fault hooks and no environment overrides; nothing here is used on a real host.
 
 usage: fault_runner.py TOOL FAULT ANSWERS_FILE MODE [ARGS...]
-faults: none | fsync_after_replace | fsync_after_replace_always | drift_env | restart_protected |
+faults: none | hash_divergent | fsync_after_replace | fsync_after_replace_always | drift_env | restart_protected |
         inspect_fail:<container-name>
 """
 import importlib.util
@@ -73,6 +73,10 @@ elif fault in ("drift_env", "restart_protected"):
         return doc
 
     tool.wait_healthy = wait_healthy
+elif fault == "hash_divergent":
+    # Reproduces Compose versions whose `config --hash` differs from the label `up` writes (seen on 5.1.3):
+    # forces the field-by-field equivalence path.
+    tool.Project.config_hash = lambda self: "f" * 64
 elif fault.startswith("inspect_fail:"):
     target = "/" + fault.split(":", 1)[1]
     real_inspect = tool.inspect

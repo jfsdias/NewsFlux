@@ -70,7 +70,7 @@ SUMMARY_HEALTH SUMMARY_USER SUMMARY_PUBLISHED_PORTS SUMMARY_RESTART_COUNT SUMMAR
 SUMMARY_MOUNTS_FP SUMMARY_NETWORKS ADMIN_CONFIG_WRITES_ENABLED INFERENCE_ENABLED ALLOW_EXTERNAL_ARTICLE_TRANSFER
 ALLOW_PAID_INFERENCE ALLOW_LOCAL_ARTICLE_PROCESSING ADMIN_ALLOWLIST_RUNTIME DEPLOYED_ADMIN_ROUTE_CALLERS
 COMPOSE_LABELS COMPOSE_PROJECT_DIR_FP COMPOSE_CONFIG_FILES COMPOSE_ENV_FILES COMPOSE_RENDER COMPOSE_HASH
-COMPOSE_ENV_FILE RENDERED_CONFIG_HASH_MATCHES_RUNNING RENDERED_IMAGE_MATCHES_RUNNING SUMMARY_HAS_BUILD_SECTION
+COMPOSE_ENV_FILE RENDERED_CONFIG_HASH_MATCHES_RUNNING RENDER_EQUIVALENCE RENDER_EQUIVALENCE_FIELDS COMPOSE_VERSION RENDERED_EQUIVALENT_AFTER RENDERED_IMAGE_MATCHES_RUNNING SUMMARY_HAS_BUILD_SECTION
 RENDERED_ENV_MATCHES_RUNNING RENDERED_ENV_DIFF_COUNT SUMMARY_DEPENDENTS_COUNT DEPENDENTS_RESTART_ON_RECREATE
 SUMMARY_FIXED_IP SUMMARY_ENV_FILES ADMIN_KEY_SOURCE ENV_SOURCE ENV_SOURCE_FILE ENV_SOURCE_PATH_FP ENV_SOURCE_SHA256
 ENV_SOURCE_MODE ENV_SOURCE_OWNER_UID ENV_SOURCE_KEY_LINES ENV_SOURCE_PROVEN_AGAINST_RUNTIME ENV_SOURCE_PERMISSIONS
@@ -129,7 +129,7 @@ def docker(*args: str, stdin: str | None = None, timeout: float = 120) -> tuple[
     if READ_ONLY:
         if not (args[:1] in READ_ONLY_DOCKER or args[:2] in READ_ONLY_DOCKER):
             raise SystemExit("R44_INTERNAL=NON_READ_ONLY_DOCKER_CALL")
-        if args[0] == "compose" and "config" not in args:
+        if args[0] == "compose" and "config" not in args and args[1:] != ("version", "--short"):
             raise SystemExit("R44_INTERNAL=NON_READ_ONLY_COMPOSE_CALL")
     try:
         done = subprocess.run(["docker", *args], input=stdin, capture_output=True, text=True, timeout=timeout)
@@ -629,6 +629,110 @@ def file_meta(path: str) -> dict:
             "gid": info.st_gid, "bytes": data}
 
 
+def _ns(duration: object) -> int | None:
+    """Compose duration ("1m30s", "2s", "500ms") -> nanoseconds."""
+    if duration is None:
+        return None
+    total, text = 0, str(duration)
+    units = {"h": 3600e9, "m": 60e9, "s": 1e9, "ms": 1e6, "us": 1e3, "ns": 1}
+    pos = 0
+    for match in re.finditer(r"([0-9]+(?:\.[0-9]+)?)(ms|us|ns|h|m|s)", text):
+        if match.start() != pos:
+            return -1
+        total += float(match.group(1)) * units[match.group(2)]
+        pos = match.end()
+    return int(total) if pos == len(text) and pos else -1
+
+
+# Rendered service fields the semantic comparison proves; any other field makes it fail closed.
+SEMANTIC_FIELDS = frozenset("""image environment volumes networks healthcheck user command entrypoint working_dir labels
+restart stop_grace_period read_only cap_add cap_drop security_opt privileged init container_name ports expose""".split())
+NON_CONTAINER_FIELDS = frozenset({"depends_on", "pull_policy", "profiles"})
+
+
+def semantic_mismatches(svc: dict, top: dict, doc: dict, image_doc: dict) -> list[str]:
+    """Field-by-field proof that recreating from the rendered service reproduces the running container.
+    Used when `config --hash` is not comparable with the label written by `up` (Compose-version dependent)."""
+    problems = sorted(k.upper() for k in svc if k not in SEMANTIC_FIELDS | NON_CONTAINER_FIELDS)
+    cfg, host, icfg = doc.get("Config") or {}, doc.get("HostConfig") or {}, image_doc.get("Config") or {}
+
+    def cmp(name: str, expected: object, actual: object) -> None:
+        if expected != actual:
+            problems.append(name)
+
+    expected_env = env_map(image_doc)
+    expected_env.update({k: ("" if v is None else str(v)) for k, v in (svc.get("environment") or {}).items()})
+    cmp("ENVIRONMENT", expected_env, env_map(doc))
+    cmp("USER", svc.get("user") or icfg.get("User") or "", cfg.get("User") or "")
+    cmp("COMMAND", svc.get("command") if svc.get("command") is not None else icfg.get("Cmd"), cfg.get("Cmd"))
+    cmp("ENTRYPOINT", svc.get("entrypoint") if svc.get("entrypoint") is not None else icfg.get("Entrypoint"),
+        cfg.get("Entrypoint"))
+    cmp("WORKING_DIR", svc.get("working_dir") or icfg.get("WorkingDir") or "", cfg.get("WorkingDir") or "")
+    hc = svc.get("healthcheck")
+    if hc:
+        if hc.get("disable"):
+            expected_hc = {"Test": ["NONE"]}
+        else:
+            expected_hc = dict(icfg.get("Healthcheck") or {})
+            if hc.get("test") is not None:
+                expected_hc["Test"] = hc["test"] if isinstance(hc["test"], list) else ["CMD-SHELL", hc["test"]]
+            for key, field in (("interval", "Interval"), ("timeout", "Timeout"), ("start_period", "StartPeriod"),
+                               ("start_interval", "StartInterval")):
+                if hc.get(key) is not None:
+                    expected_hc[field] = _ns(hc[key])
+            if hc.get("retries") is not None:
+                expected_hc["Retries"] = hc["retries"]
+        running_hc = cfg.get("Healthcheck") or {}
+        cmp("HEALTHCHECK", {k: v for k, v in expected_hc.items() if v not in (None, 0)},
+            {k: v for k, v in running_hc.items() if k in expected_hc and v not in (None, 0)})
+    elif cfg.get("Healthcheck") not in (None, icfg.get("Healthcheck")):
+        problems.append("HEALTHCHECK")
+    grace = svc.get("stop_grace_period")
+    cmp("STOP_GRACE_PERIOD", (_ns(grace) // 1_000_000_000) if grace is not None else None, cfg.get("StopTimeout"))
+    labels = svc.get("labels") or {}
+    if any((cfg.get("Labels") or {}).get(k) != v for k, v in labels.items()):
+        problems.append("LABELS")
+    cmp("RESTART", svc.get("restart") or "no", (host.get("RestartPolicy") or {}).get("Name") or "no")
+    cmp("READ_ONLY", bool(svc.get("read_only")), bool(host.get("ReadonlyRootfs")))
+    cmp("CAP_ADD", sorted(svc.get("cap_add") or []), sorted(host.get("CapAdd") or []))
+    cmp("CAP_DROP", sorted(svc.get("cap_drop") or []), sorted(host.get("CapDrop") or []))
+    cmp("SECURITY_OPT", sorted(svc.get("security_opt") or []), sorted(host.get("SecurityOpt") or []))
+    cmp("PRIVILEGED", bool(svc.get("privileged")), bool(host.get("Privileged")))
+    cmp("INIT", bool(svc.get("init")), bool(host.get("Init")))
+    if svc.get("container_name"):
+        cmp("CONTAINER_NAME", "/" + svc["container_name"], doc.get("Name"))
+    if svc.get("ports") or published_ports(doc):
+        problems.append("PORTS")
+    exposed = cfg.get("ExposedPorts") or {}
+    if any(f"{p}/tcp" not in exposed and str(p) not in exposed for p in svc.get("expose") or []):
+        problems.append("EXPOSE")
+    top_volumes, top_networks = top.get("volumes") or {}, top.get("networks") or {}
+    expected_mounts = set()
+    for vol in svc.get("volumes") or []:
+        kind, src = vol.get("type"), vol.get("source")
+        if kind == "bind":
+            expected_mounts.add(("bind", src, vol.get("target"), not vol.get("read_only", False)))
+        elif kind == "volume":
+            name = (top_volumes.get(src) or {}).get("name") or f"{PROJECT}_{src}"
+            expected_mounts.add(("volume", name, vol.get("target"), not vol.get("read_only", False)))
+        else:
+            problems.append("VOLUME_TYPE")
+    running_mounts = {(m.get("Type"), m.get("Source") if m.get("Type") == "bind" else m.get("Name"),
+                       m.get("Destination"), bool(m.get("RW"))) for m in doc.get("Mounts") or []}
+    cmp("VOLUMES", expected_mounts, running_mounts)
+    expected_nets = {(top_networks.get(k) or {}).get("name") or f"{PROJECT}_{k}" for k in (svc.get("networks") or {})}
+    cmp("NETWORKS", expected_nets, set(networks(doc)))
+    return sorted(set(problems))
+
+
+def render_equivalent(project: "Project", rendered: dict, doc: dict, image_doc: dict, label_hash: str) -> tuple[str, list[str]]:
+    """('CONFIG_HASH' | 'SEMANTIC_ALL_FIELDS' | 'MISMATCH', problems)."""
+    if project.config_hash() == label_hash:
+        return "CONFIG_HASH", []
+    problems = semantic_mismatches(rendered["services"][SERVICE], rendered, doc, image_doc)
+    return ("SEMANTIC_ALL_FIELDS" if not problems else "MISMATCH"), problems
+
+
 KEY_LINE = re.compile(rb"^[ \t]*(export[ \t]+)?" + KEY.encode() + rb"[ \t]*=")
 
 
@@ -679,10 +783,16 @@ def audit(trust: Trust) -> dict:
     state["rendered"] = rendered
     out("COMPOSE_RENDER", "OK")
     svc = rendered["services"][SERVICE]
+    rc, raw = docker("compose", "version", "--short")
+    out("COMPOSE_VERSION", raw.strip() if rc == 0 and re.fullmatch(r"v?[0-9][0-9A-Za-z.+-]{0,40}", raw.strip()) else "UNKNOWN")
     new_hash = project.config_hash()
     state["hash"] = new_hash
     same = new_hash == project.running_hash
-    (out if same else hold)("RENDERED_CONFIG_HASH_MATCHES_RUNNING", "YES" if same else "NO")
+    out("RENDERED_CONFIG_HASH_MATCHES_RUNNING", "YES" if same else "NO")
+    how, problems = render_equivalent(project, rendered, doc, image_doc, project.running_hash)
+    (out if how != "MISMATCH" else hold)("RENDER_EQUIVALENCE", how)
+    if problems:
+        out("RENDER_EQUIVALENCE_FIELDS", ",".join(problems)[:96])
     ref = svc.get("image") or ""
     ref_id = image_id(ref) if ref else None
     (out if ref_id == img else hold)("RENDERED_IMAGE_MATCHES_RUNNING", "YES" if ref_id == img else "NO")
@@ -1005,7 +1115,6 @@ def apply(admin_id_arg: str, trust: Trust) -> int:
                 out("RENDER_DIFF_PROBLEMS", ",".join(problems)[:96])
                 raise Stop("RENDER_DIFF_GATE", "FAIL")
             out("RENDER_DIFF_GATE", "PASS_ONLY_ADMIN_KEY")
-            new_hash = project.config_hash()
             recreate(project)
             doc = wait_healthy(original["cid"])
             new_env = env_map(doc)
@@ -1016,7 +1125,8 @@ def apply(admin_id_arg: str, trust: Trust) -> int:
             identity_after = verify_identity(doc["Id"], key, False, report=False)
             checks = {
                 "IMAGE_IDENTITY_PRESERVED": doc.get("Image") == original["image"],
-                "CONFIG_HASH_IS_RENDERED": doc["Config"]["Labels"].get("com.docker.compose.config-hash") == new_hash,
+                "RENDERED_EQUIVALENT_AFTER": render_equivalent(project, project.render(), doc, inspect(doc.get("Image") or "") or {},
+                                                           doc["Config"]["Labels"].get("com.docker.compose.config-hash") or "")[0] != "MISMATCH",
                 "OTHER_ENV_UNCHANGED": new_env == expected_env,
                 "SUMMARY_USER_PRESERVED": doc["Config"].get("User") == state["doc"]["Config"].get("User"),
                 "SUMMARY_MOUNTS_PRESERVED": mounts(doc) == mounts(state["doc"]),

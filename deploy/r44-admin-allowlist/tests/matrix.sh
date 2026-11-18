@@ -61,6 +61,8 @@ if want trust_source_clone_other_owner; then  # OMV: clone made by the operator,
     TRUST=(--expect-image "$EXP_IMAGE" --expect-revision "$EXP_REV" --source-repo "$SRC_REPO"); done_
   else echo "R44B_TEST trust_source_clone_other_owner=SKIPPED_NOT_ROOT"; fi
 fi
+if want audit_semantic_path; then run audit_semantic_path 0 hash_divergent "" audit
+  has RENDERED_CONFIG_HASH_MATCHES_RUNNING=NO; has RENDER_EQUIVALENCE=SEMANTIC_ALL_FIELDS; has AUDIT_GATE=PASS; done_; fi
 if want audit_inventory_fail_closed; then run audit_inventory_fail_closed 3 inspect_fail:other-svc "" audit
   has HOST_INVENTORY=INSPECT_FAILED; has AUDIT_GATE=HOLD; done_; fi
 # ---------------------------------------------------------------- identity
@@ -132,7 +134,7 @@ if want apply_fsync_always_incomplete; then run apply_fsync_always_incomplete 6 
 if want apply_drift_rollback; then run apply_drift_rollback 5 drift_env "$OWNER\nLIST-ADMIN-IDS\nAPPLY-R44-ADMIN-7\n" apply 7
   has FAULT_INJECTED=DRIFT_ENV; has ROLLBACK=PASS; has ROLLBACK_ENV=PASS
   check test "$(envsha)" = "$E0"; done_
-  run audit_after_drift_rollback 0 none "" audit; has ADMIN_ALLOWLIST_RUNTIME=EMPTY; has RENDERED_CONFIG_HASH_MATCHES_RUNNING=YES; done_; fi
+  run audit_after_drift_rollback 0 none "" audit; has ADMIN_ALLOWLIST_RUNTIME=EMPTY; has 'RENDER_EQUIVALENCE=(CONFIG_HASH|SEMANTIC_ALL_FIELDS)'; done_; fi
 # ---------------------------------------------------------------- success, re-apply refusal, manual rollback
 if want apply_success; then reset; snap
   run apply_success 0 none "$OWNER\nLIST-ADMIN-IDS\nAPPLY-R44-ADMIN-7\n" apply 7
@@ -150,7 +152,7 @@ if want apply_success; then reset; snap
   check test "$(stat -c %a "$BK/env-source.orig")" = 600
   done_
   BID=$(basename "$BK")
-  run audit_after_apply 0 none "" audit; has ADMIN_ALLOWLIST_RUNTIME=CONFIGURED_COUNT_1; has RENDERED_CONFIG_HASH_MATCHES_RUNNING=YES; done_
+  run audit_after_apply 0 none "" audit; has ADMIN_ALLOWLIST_RUNTIME=CONFIGURED_COUNT_1; has 'RENDER_EQUIVALENCE=(CONFIG_HASH|SEMANTIC_ALL_FIELDS)'; done_
   run apply_again_refused 3 none "$OWNER\nLIST-ADMIN-IDS\nAPPLY-R44-ADMIN-7\n" apply 7; has PRESTATE_GATE=ALLOWLIST_ALREADY_SET; asks 0; done_
   run rollback_bad_id 3 none "ROLLBACK-R44\n" rollback ../etc; has BACKUP_ID_ARGUMENT=INVALID; done_
   run rollback_wrong_phrase 3 none "no\n" rollback "$BID"; has ROLLBACK_AUTHORIZED=NO; done_
@@ -160,13 +162,18 @@ if want apply_success; then reset; snap
   run audit_after_manual_rollback 0 none "" audit; has ADMIN_ALLOWLIST_RUNTIME=EMPTY; has AUDIT_GATE=PASS; done_; fi
 # ---------------------------------------------------------------- drift and the append form
 if want apply_refused_on_source_drift; then printf 'NEWSFLUX_AI_EXTRA_DRIFT=1\n' >> "$T/private/summary.env"; snap
-  run audit_source_drift 3 none "" audit; has RENDERED_CONFIG_HASH_MATCHES_RUNNING=NO; has AUDIT_GATE=HOLD; done_
+  run audit_source_drift 3 none "" audit; has RENDER_EQUIVALENCE=MISMATCH; has AUDIT_GATE=HOLD; done_
+  run audit_semantic_detects_drift 3 hash_divergent "" audit; has RENDER_EQUIVALENCE=MISMATCH; has RENDER_EQUIVALENCE_FIELDS=ENVIRONMENT; done_
   run apply_refused_on_source_drift 3 none "$OWNER\nLIST-ADMIN-IDS\nAPPLY-R44-ADMIN-7\n" apply 7
   has PRESTATE_GATE=HOLD; hasnt CONFIG_CHANGE_EXECUTED; asks 0; check unchanged; done_; fi
 if want apply_restart_protected; then reset; snap
   run apply_restart_protected 6 restart_protected "$OWNER\nLIST-ADMIN-IDS\nAPPLY-R44-ADMIN-7\n" apply 7
   has PROTECTED_SERVICES_UNCHANGED=FAIL; has ROLLBACK_ENV=PASS; has ROLLBACK_OTHER_CONTAINERS=FAIL; has R44_RESULT=ROLLBACK_INCOMPLETE
   check test "$(envsha)" = "$E0"; done_; fi
+if want apply_success_semantic_path; then reset; snap
+  run apply_success_semantic_path 0 hash_divergent "$OWNER\nLIST-ADMIN-IDS\nAPPLY-R44-ADMIN-7\n" apply 7
+  has RENDER_EQUIVALENCE=SEMANTIC_ALL_FIELDS; has RENDERED_EQUIVALENT_AFTER=PASS; has CONFIG_CHANGE_RESULT=APPLIED_VERIFIED
+  check test "$(others)" = "$O0"; done_; fi
 if want apply_append_form; then reset 1
   run apply_append_form 0 none "$OWNER\nLIST-ADMIN-IDS\nAPPLY-R44-ADMIN-7\n" apply 7; has CONFIG_CHANGE_RESULT=APPLIED_VERIFIED
   check test "$(tail -n1 "$T/private/summary.env")" = NEWSFLUX_AI_MINIFLUX_ADMIN_USER_IDS=7; done_; fi
