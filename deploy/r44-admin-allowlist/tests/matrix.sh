@@ -34,7 +34,9 @@ asks() { grep -qx "TEST_SECRET_ASKS=$1" <<<"$ERR" || CHK+=("secret_asks!=$1"); }
 check() { "$@" || CHK+=("check:$*"); }
 done_() {
   if [ ${#CHK[@]} -eq 0 ]; then echo "R44B_TEST $N=PASS"; pass=$((pass+1))
-  else echo "R44B_TEST $N=FAIL ${CHK[*]}"; fail=$((fail+1)); FAILS+=("$N"); fi
+  else echo "R44B_TEST $N=FAIL ${CHK[*]}"; fail=$((fail+1)); FAILS+=("$N")
+    # The tool's stdout is sanitized by contract (and checked above), so it is safe to show for diagnosis.
+    grep -vE 'CANARY|tok-' <<<"$OUT" | sed 's/^/    | /'; fi
 }
 want() { [ -z "${R44T_ONLY:-}" ] || grep -qE "$R44T_ONLY" <<<"$1"; }
 envsha() { sha256sum "$T/private/summary.env" | cut -c1-64; }
