@@ -125,12 +125,25 @@ def origin_ok(origin):
     return len(host) <= 253 and all(HOST_LABEL.fullmatch(label) for label in labels)
 
 
+# Runs as `docker exec <summary> python -I -c ...`. -I keeps the check isolated (no PYTHONPATH, no user
+# site, no current directory on sys.path), so the image's fixed code root (/app, Dockerfile WORKDIR,
+# code at /app/services) is added explicitly and the imported module must come from it. Prints only
+# VALID, INVALID or IMPORT_FAILED; never an origin value.
 BACKEND_ORIGIN_CHECK = (
     "import os,sys\n"
-    "from services.article_intel_auth.config import canonicalize_web_origin\n"
-    "raw=os.environ.get('NEWSFLUX_AI_ALLOWED_WEB_ORIGINS','')\n"
-    "items=[v.strip() for v in raw.split(',')]\n"
-    "ok=bool(items) and all(items) and all(canonicalize_web_origin(v) for v in items)\n"
+    "root='/app'\n"
+    "sys.path.insert(0,root)\n"
+    "try:\n"
+    "    import services.article_intel_auth.config as c\n"
+    "    assert os.path.realpath(c.__file__).startswith(os.path.realpath(root)+os.sep)\n"
+    "    f=c.canonicalize_web_origin\n"
+    "except Exception:\n"
+    "    print('IMPORT_FAILED');sys.exit(0)\n"
+    "items=[v.strip() for v in os.environ.get('NEWSFLUX_AI_ALLOWED_WEB_ORIGINS','').split(',')]\n"
+    "try:\n"
+    "    ok=bool(items) and all(items) and all(f(v) for v in items)\n"
+    "except Exception:\n"
+    "    ok=False\n"
     "print('VALID' if ok else 'INVALID')\n"
 )
 
@@ -268,11 +281,13 @@ def check_env(name, env):
         valid = all(items) and all(origin_ok(v) for v in items)
         (out("ALLOWED_ORIGINS", f"VALID_COUNT_{len(items)}") if valid else hold("ALLOWED_ORIGINS", "INVALID"))
     backend = docker("exec", name, "python", "-I", "-c", BACKEND_ORIGIN_CHECK)
-    if backend is None:
+    verdict = backend.strip() if backend is not None else None
+    if verdict == "VALID":
+        out("ALLOWED_ORIGINS_BACKEND", "VALID")
+    elif verdict == "INVALID":
+        hold("ALLOWED_ORIGINS_BACKEND", "INVALID")
+    else:  # exec failed, import failed (IMPORT_FAILED) or unexpected output
         hold("ALLOWED_ORIGINS_BACKEND", "UNVERIFIED")
-    else:
-        (out if backend.strip() == "VALID" else hold)("ALLOWED_ORIGINS_BACKEND",
-                                                      "VALID" if backend.strip() == "VALID" else "INVALID")
 
     key_file = env.get("NEWSFLUX_AI_LITELLM_VIRTUAL_KEY_FILE", "")
     (out("BOOTSTRAP_KEY_FILE_CONFIGURED", "YES") if key_file.strip() else hold("BOOTSTRAP_KEY_FILE_CONFIGURED", "NO"))
