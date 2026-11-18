@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import sqlite3
 from contextlib import closing
 import threading
@@ -14,7 +15,7 @@ from unittest import mock
 
 import httpx
 
-from services.article_intel_summary import budget, supervision
+from services.article_intel_summary import app as summary_app, budget, supervision
 from services.article_intel_summary.app import create_app
 from services.article_intel_summary.service import SummaryService
 from services.article_intel_summary.litellm_adapter import LiteLLMInferenceAdapter
@@ -26,7 +27,7 @@ from services.article_intel_summary.tests.support import (
 
 
 class ControlledClock:
-    """Monotonic clock for the supervisor's deadlines that only moves when a test advances it.
+    """Monotonic clock for the request (app) and supervisor deadlines that only moves when a test advances it.
 
     The inference deadline then expires at a point the test chooses (e.g. only after the gateway
     request has started), independent of runner speed, SQLite I/O or thread scheduling.
@@ -62,7 +63,7 @@ class SupervisedAPITests(unittest.IsolatedAsyncioTestCase):
         started, release = threading.Event(), threading.Event()
         clock = ControlledClock()
         with tempfile.TemporaryDirectory() as directory, \
-                mock.patch.object(supervision, "time", clock), slow_reservation(pre_dispatch_delay):
+                mock.patch.object(supervision, "time", clock), mock.patch.object(summary_app, "time", clock), slow_reservation(pre_dispatch_delay):
             database = str(Path(directory) / "usage.sqlite3")
             def handler(_request):
                 started.set()
@@ -112,7 +113,7 @@ class SupervisedAPITests(unittest.IsolatedAsyncioTestCase):
             clock.advance(0.5)  # inference budget exhausted after admission, before the gateway request
             return result
 
-        with tempfile.TemporaryDirectory() as directory, mock.patch.object(supervision, "time", clock), \
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(supervision, "time", clock), mock.patch.object(summary_app, "time", clock), \
                 mock.patch.object(budget.BudgetLedger, "reserve", reserve_then_expire):
             database = str(Path(directory) / "usage.sqlite3")
             def handler(_request):
@@ -197,7 +198,7 @@ class SupervisedAPITests(unittest.IsolatedAsyncioTestCase):
             release.set()
             await app.state.supervisor.drain()
 
-    async def request_deadline_capacity_scenario(self, *, pre_adapter_delay):
+    async def request_deadline_capacity_scenario(self, *, pre_adapter_delay, pre_supervisor_stall=0):
         started, release = threading.Event(), threading.Event()
         clock = ControlledClock()
 
@@ -219,7 +220,17 @@ class SupervisedAPITests(unittest.IsolatedAsyncioTestCase):
                 return real_get(url, **options)
 
             miniflux.get = slow_get
-        with mock.patch.object(supervision, "time", clock):
+        stall = contextlib.nullcontext()
+        if pre_supervisor_stall:
+            real_read = summary_app._read_request_json
+
+            async def stalled_read(request):
+                document = await real_read(request)
+                time.sleep(pre_supervisor_stall)  # event loop starved before the supervisor starts
+                return document
+
+            stall = mock.patch.object(summary_app, "_read_request_json", stalled_read)
+        with mock.patch.object(supervision, "time", clock), mock.patch.object(summary_app, "time", clock), stall:
             app = create_app(auth_service=client.app.state.auth_service,
                              summary_service=SummaryService(adapter, timeout_seconds=0.03), request_timeout_seconds=0.05,
                              max_in_flight=1, revalidation_reserve_seconds=0)
@@ -236,6 +247,12 @@ class SupervisedAPITests(unittest.IsolatedAsyncioTestCase):
 
     async def test_timeout_keeps_capacity_until_worker_finishes(self):
         await self.request_deadline_capacity_scenario(pre_adapter_delay=0)
+
+    async def test_timeout_capacity_contract_holds_with_stalled_event_loop_before_supervision(self):
+        # R4.2 regression (1/1164 under 8xCPU + dsync I/O): the app enforces the request deadline with
+        # its own monotonic clock before the supervisor runs; a stalled event loop there must not
+        # decide the test's precondition either.
+        await self.request_deadline_capacity_scenario(pre_adapter_delay=0, pre_supervisor_stall=0.1)
 
     async def test_timeout_capacity_contract_holds_with_slow_pre_adapter_work(self):
         # Same race family as the Quality failure: the 0.05 s request deadline must not be able to
