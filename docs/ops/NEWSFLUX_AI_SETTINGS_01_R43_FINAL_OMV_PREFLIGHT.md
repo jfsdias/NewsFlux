@@ -2,6 +2,8 @@
 
 Date: 2026-11-18 · Status: **NO-GO (pending operator receipt)** · Merges: none · Deploy: none · Production mutations: 0
 
+> **Superseded by R4.3A** (`NEWSFLUX_AI_SETTINGS_01_R43A_OPERATOR_RECEIPT_HARDENING.md`): this wrapper can report a false `PROD_REPO_HEAD_UNCHANGED=YES` when the production HEAD cannot be read. Do not run the command below.
+
 ## Gate A — pinned operator command
 
 - Source pinned to `4c3e07529d706ffc37115aa8de808f36cccdc244` (#265 HEAD).
