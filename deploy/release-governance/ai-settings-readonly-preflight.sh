@@ -1,110 +1,420 @@
 #!/usr/bin/env bash
-# NEWSFLUX-AI-SETTINGS-01 — single read-only OMV preflight (operator-run, idempotent, sanitized).
+# NEWSFLUX-AI-SETTINGS-01 — single read-only OMV preflight (operator-run, idempotent, sanitized, FAIL-CLOSED).
 #
 #   sudo bash deploy/release-governance/ai-settings-readonly-preflight.sh
+#   # post-promotion WallHop no-touch comparison with the digest printed by the pre-install run:
+#   sudo NEWSFLUX_WALLHOP_EXPECTED_SHA256=<digest> bash deploy/release-governance/ai-settings-readonly-preflight.sh
 #
-# Writes nothing, creates nothing, restarts nothing, calls no network service. Prints only
-# classifications, counts, image/revision identifiers and SHA-256 of non-secret files. Never prints
-# environment values, keys, paths of secret files, URLs, user IDs or file contents.
-# Exit 0 = every check PASS, 3 = at least one HOLD (operator decision needed before any release).
+# Run from a checkout of the approved SHA: the reviewed flag baseline
+# (ai-settings-flag-baseline.json) and the target Caddyfile are read from that checkout, never from the
+# environment. Docker is used read-only (ps, inspect, image inspect, network ls, exec of stat /
+# sha256sum / one python origin check). No file, container, network or setting is created or changed.
+# Prints only classifications, counts, identifiers and SHA-256 of non-secret files: never environment
+# values, keys, URLs, IPs, user IDs, host paths or file contents.
+# Exit 0 = every gate PASS; 3 = at least one HOLD (operator decision needed before any release).
+# Gates for the INITIAL canary: admin writes, inference, external transfer and paid inference OFF;
+# local article processing equal to the reviewed baseline; Summary healthy, UID 10001, no published
+# port, not host network; /data RW bind/volume owned by 10001 with owner rwx and not world-writable;
+# HTTPS origins valid one by one (host rules and the backend's own validator); admin allowlist valid;
+# Caddyfile a regular file in an accepted state; protected services running.
 set -Euo pipefail
 umask 077
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec python3 -I - "$HERE" <<'PY'
+import hashlib
+import ipaddress
+import json
+import os
+import re
+import stat
+import subprocess
+import sys
 
-PROJECT="${NEWSFLUX_PROJECT:-newsflux}"
-SUMMARY_SERVICE="${NEWSFLUX_SUMMARY_SERVICE:-summary-api}"
-READER_CONTAINER="${NEWSFLUX_READER_CONTAINER:-newsflux}"
-read -r -a PROTECTED_NAMES <<<"${NEWSFLUX_PROTECTED_CONTAINERS:-miniflux miniflux-db}"
-PRE_STAGE1=6970ee2b48b3c2e904a3a7fb5460afcb2fcad6e3647b55b812b68a1c1fdc9108
-STAGE1=56d434b9c81e66d9e03a827be3bd42f48dd68636c83a0ea9baa70322f30f95d6
-# Caddyfile carrying the NEWSFLUX-AI-SETTINGS-01 admin routes (PR #264); already-applied state.
-ADMIN_ROUTES="${NEWSFLUX_TARGET_CADDY_SHA:-}"
-hold=0
+HERE = sys.argv[1]
+PROJECT = os.environ.get("NEWSFLUX_PROJECT", "newsflux")
+SUMMARY_SERVICE = os.environ.get("NEWSFLUX_SUMMARY_SERVICE", "summary-api")
+READER = os.environ.get("NEWSFLUX_READER_CONTAINER", "newsflux")
+PROTECTED = os.environ.get("NEWSFLUX_PROTECTED_CONTAINERS", "miniflux miniflux-db").split()
+LOCK = os.environ.get("NEWSFLUX_RELEASE_LOCK", "/run/lock/newsflux-release.lock")
+WALLHOP_EXPECTED = os.environ.get("NEWSFLUX_WALLHOP_EXPECTED_SHA256")
+PRE_STAGE1 = "6970ee2b48b3c2e904a3a7fb5460afcb2fcad6e3647b55b812b68a1c1fdc9108"
+STAGE1 = "56d434b9c81e66d9e03a827be3bd42f48dd68636c83a0ea9baa70322f30f95d6"
+CANARY_OFF = (
+    "NEWSFLUX_AI_ADMIN_CONFIG_WRITES_ENABLED",
+    "NEWSFLUX_AI_INFERENCE_ENABLED",
+    "NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER",
+    "NEWSFLUX_AI_ALLOW_PAID_INFERENCE",
+)
+LOCAL_FLAG = "NEWSFLUX_AI_ALLOW_LOCAL_ARTICLE_PROCESSING"
+READ_ONLY_DOCKER = {
+    ("ps",), ("inspect",), ("image", "inspect"), ("network", "ls"), ("exec",),
+}
+READ_ONLY_EXEC = {"stat", "sha256sum", "python"}
+HOLD = []
 
-out() { printf '%s=%s\n' "$1" "$2"; }
-holdout() { out "$1" "$2"; hold=1; }
-env_of() { docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$1" 2>/dev/null | sed -n "s/^$2=//p" | head -1; }
-flag() { [[ "$(env_of "$1" "$2" | tr '[:upper:]' '[:lower:]')" == true ]] && echo ON || echo OFF; }
 
-command -v docker >/dev/null || { holdout DOCKER UNAVAILABLE; out PREFLIGHT HOLD; exit 3; }
+def out(key, value):
+    print(f"{key}={value}", flush=True)
 
-# ---- Summary API --------------------------------------------------------------------------------
-summary="$(docker ps -q --filter "label=com.docker.compose.project=$PROJECT" --filter "label=com.docker.compose.service=$SUMMARY_SERVICE")"
-if [[ -z "$summary" || "$(wc -l <<<"$summary")" -ne 1 ]]; then
-  holdout SUMMARY_CONTAINER NOT_UNIQUE
-else
-  out SUMMARY_IMAGE "$(docker inspect -f '{{.Image}}' "$summary")"
-  out SUMMARY_REVISION "$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$(docker inspect -f '{{.Image}}' "$summary")")"
-  out SUMMARY_HEALTH "$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$summary")"
-  user="$(docker inspect -f '{{.Config.User}}' "$summary")"
-  [[ "$user" == 10001:10001 || "$user" == 10001 ]] && out SUMMARY_USER UID10001 || holdout SUMMARY_USER NOT_10001
-  out SUMMARY_PUBLISHED_PORTS "$(docker inspect -f '{{len .HostConfig.PortBindings}}' "$summary")"
-  out SUMMARY_COMPOSE_FILES "$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project.config_files"}}' "$summary" | tr ',' '\n' | grep -c .)"
-  # /data must be a mount writable by UID 10001 for the managed settings store.
-  data_type="$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Type}}{{end}}{{end}}' "$summary")"
-  [[ -n "$data_type" ]] && out DATA_MOUNT "$data_type" || holdout DATA_MOUNT ABSENT
-  data_stat="$(docker exec "$summary" stat -c '%u %a' /data 2>/dev/null || true)"
-  [[ "${data_stat%% *}" == 10001 ]] && out DATA_OWNER UID10001 || holdout DATA_OWNER "NOT_10001"
-  out DATA_MODE "${data_stat##* }"
-  managed="$(docker exec "$summary" sh -c 'test -e /data/newsflux-ai-settings && echo PRESENT || echo ABSENT' 2>/dev/null || echo UNKNOWN)"
-  out MANAGED_SETTINGS_DIR "$managed"
-  [[ -n "$(env_of "$summary" NEWSFLUX_AI_MINIFLUX_ADMIN_USER_IDS)" ]] && out ADMIN_ALLOWLIST CONFIGURED || holdout ADMIN_ALLOWLIST EMPTY
-  origins="$(env_of "$summary" NEWSFLUX_AI_ALLOWED_WEB_ORIGINS)"
-  [[ "$origins" == https://* ]] && out ALLOWED_ORIGINS "HTTPS_COUNT_$(tr ',' '\n' <<<"$origins" | grep -c .)" || holdout ALLOWED_ORIGINS NOT_HTTPS_OR_EMPTY
-  [[ -n "$(env_of "$summary" NEWSFLUX_AI_LITELLM_VIRTUAL_KEY_FILE)" ]] && out BOOTSTRAP_KEY_FILE_CONFIGURED YES || out BOOTSTRAP_KEY_FILE_CONFIGURED NO
-  [[ -n "$(env_of "$summary" NEWSFLUX_AI_MODEL_POLICY_JSON)" ]] && out ENV_MODEL_POLICY PRESENT || out ENV_MODEL_POLICY ABSENT_LEGACY
-  for name in NEWSFLUX_AI_ADMIN_CONFIG_WRITES_ENABLED NEWSFLUX_AI_INFERENCE_ENABLED NEWSFLUX_AI_ALLOW_LOCAL_ARTICLE_PROCESSING \
-    NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER NEWSFLUX_AI_ALLOW_PAID_INFERENCE; do
-    out "${name#NEWSFLUX_AI_}" "$(flag "$summary" "$name")"
-  done
-fi
 
-# ---- Reader / Caddy -----------------------------------------------------------------------------
-if ! docker inspect "$READER_CONTAINER" >/dev/null 2>&1; then
-  holdout READER_CONTAINER ABSENT
-else
-  out READER_IMAGE "$(docker inspect -f '{{.Image}}' "$READER_CONTAINER")"
-  out READER_REVISION "$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$(docker inspect -f '{{.Image}}' "$READER_CONTAINER")")"
-  out READER_SERVICE "$(docker inspect -f '{{index .Config.Labels "com.docker.compose.service"}}' "$READER_CONTAINER")"
-  [[ -n "$(env_of "$READER_CONTAINER" NEWSFLUX_PILOT_TRUSTED_PROXY_IP)" ]] && out TRUSTED_PROXY_IP CONFIGURED || holdout TRUSTED_PROXY_IP ABSENT
-  caddy="$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/etc/caddy/Caddyfile"}}{{.Source}}{{end}}{{end}}' "$READER_CONTAINER")"
-  if [[ -z "$caddy" ]]; then
-    holdout CADDYFILE_MOUNT ABSENT
-  elif [[ -L "$caddy" ]]; then
-    holdout CADDYFILE_MOUNT SYMLINK
-  elif [[ ! -f "$caddy" ]]; then
-    holdout CADDYFILE_MOUNT NOT_REGULAR_FILE
-  else
-    out CADDYFILE_MOUNT REGULAR_FILE
-    host_sha="$(sha256sum "$caddy" | cut -d' ' -f1)"
-    ctr_sha="$(docker exec "$READER_CONTAINER" sha256sum /etc/caddy/Caddyfile 2>/dev/null | cut -d' ' -f1)"
-    out ACTIVE_CADDY_SHA256 "$host_sha"
-    [[ "$host_sha" == "$ctr_sha" ]] && out CADDY_CONTAINER_READBACK MATCH || holdout CADDY_CONTAINER_READBACK MISMATCH
-    case "$host_sha" in
-      "$STAGE1") out CADDY_STATE STAGE1_ACCEPTED_PRIOR ;;
-      "$PRE_STAGE1") out CADDY_STATE PRE_STAGE1_ACCEPTED_PRIOR ;;
-      *)
-        if [[ -n "$ADMIN_ROUTES" && "$host_sha" == "$ADMIN_ROUTES" ]]; then out CADDY_STATE TARGET_ALREADY_APPLIED
-        else holdout CADDY_STATE UNKNOWN_DRIFT; fi ;;
-    esac
-    out CADDYFILE_MODE "$(stat -c '%a' "$caddy")"
-    out CADDYFILE_INODE "$(stat -c '%i' "$caddy")"
-  fi
-fi
+def hold(key, value):
+    out(key, value)
+    HOLD.append(key)
 
-# ---- Protected services (identity only) ---------------------------------------------------------
-for name in "${PROTECTED_NAMES[@]}"; do
-  if [[ "$(docker inspect -f '{{.State.Running}}' "$name" 2>/dev/null)" == true ]]; then
-    out "PROTECTED_${name}" "RUNNING $(docker inspect -f '{{.Image}}' "$name")"
-  else
-    holdout "PROTECTED_${name}" NOT_RUNNING
-  fi
-done
-out WALLHOP_RESOURCES "$(( $(docker ps -aq --filter name=wallhop | grep -c . || true) + $(docker network ls -q --filter name=wallhop | grep -c . || true) ))"
-lock="${NEWSFLUX_RELEASE_LOCK:-/run/lock/newsflux-release.lock}"
-[[ -e "$lock" ]] && out RELEASE_LOCK_FILE PRESENT || out RELEASE_LOCK_FILE ABSENT
 
-out SECRET_PRINTED NO
-out WRITES_PERFORMED NO
-if [[ "$hold" -eq 0 ]]; then out PREFLIGHT PASS; exit 0; fi
-out PREFLIGHT HOLD
-exit 3
+def docker(*args):
+    """Read-only Docker access only; anything else is a programming error, never executed."""
+    if not (args[:1] in READ_ONLY_DOCKER or args[:2] in READ_ONLY_DOCKER):
+        raise SystemExit("PREFLIGHT_INTERNAL=NON_READ_ONLY_DOCKER_CALL")
+    if args[0] == "exec" and args[2] not in READ_ONLY_EXEC:
+        raise SystemExit("PREFLIGHT_INTERNAL=NON_READ_ONLY_EXEC")
+    try:
+        done = subprocess.run(["docker", *args], capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return done.stdout if done.returncode == 0 else None
+
+
+def inspect(name):
+    raw = docker("inspect", name)
+    try:
+        document = json.loads(raw)[0] if raw else None
+    except (ValueError, IndexError, TypeError):
+        return None
+    return document if isinstance(document, dict) else None
+
+
+def env_of(document):
+    result = {}
+    env = (document.get("Config") or {}).get("Env") if isinstance(document.get("Config"), dict) else None
+    for item in env or []:
+        if isinstance(item, str) and "=" in item:
+            key, value = item.split("=", 1)
+            result[key] = value
+    return result
+
+
+def flag_state(env, name):
+    """ON/OFF exactly as the backend reads it (only 'true' is ON); anything else is MALFORMED."""
+    if name not in env:
+        return "OFF"
+    value = env[name].strip().casefold()
+    if value == "true":
+        return "ON"
+    if value in ("false", ""):
+        return "OFF"
+    return "MALFORMED"
+
+
+HOST_LABEL = re.compile(r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)$")
+
+
+def origin_ok(origin):
+    match = re.fullmatch(r"https://([^/:?#@*\s]+)(?::(\d{1,5}))?/?", origin)
+    if not match:
+        return False
+    host, port = match.group(1), match.group(2)
+    if port is not None and not 1 <= int(port) <= 65535:
+        return False
+    try:
+        ipaddress.ip_address(host)
+        return True
+    except ValueError:
+        pass
+    labels = host.rstrip(".").split(".")
+    return len(host) <= 253 and all(HOST_LABEL.fullmatch(label) for label in labels)
+
+
+BACKEND_ORIGIN_CHECK = (
+    "import os,sys\n"
+    "from services.article_intel_auth.config import canonicalize_web_origin\n"
+    "raw=os.environ.get('NEWSFLUX_AI_ALLOWED_WEB_ORIGINS','')\n"
+    "items=[v.strip() for v in raw.split(',')]\n"
+    "ok=bool(items) and all(items) and all(canonicalize_web_origin(v) for v in items)\n"
+    "print('VALID' if ok else 'INVALID')\n"
+)
+
+
+def check_summary():
+    raw = docker("ps", "-q", "--filter", f"label=com.docker.compose.project={PROJECT}",
+                 "--filter", f"label=com.docker.compose.service={SUMMARY_SERVICE}")
+    if raw is None:
+        hold("DOCKER", "UNAVAILABLE")
+        return
+    names = [line for line in raw.splitlines() if line.strip()]
+    if len(names) != 1:
+        hold("SUMMARY_CONTAINER", "NOT_UNIQUE")
+        return
+    name = names[0]
+    doc = inspect(name)
+    if doc is None:
+        hold("SUMMARY_CONTAINER", "INSPECT_FAILED")
+        return
+    out("SUMMARY_CONTAINER", "UNIQUE")
+    image = doc.get("Image") if isinstance(doc.get("Image"), str) else ""
+    out("SUMMARY_IMAGE", image or "UNKNOWN")
+    image_doc = docker("image", "inspect", image) if image else None
+    try:
+        revision = json.loads(image_doc)[0]["Config"]["Labels"]["org.opencontainers.image.revision"]
+    except (TypeError, ValueError, KeyError, IndexError):
+        revision = None
+    out("SUMMARY_REVISION", revision if isinstance(revision, str) and re.fullmatch(r"[0-9a-f]{40}", revision) else "UNKNOWN")
+
+    state = doc.get("State")
+    health = "UNKNOWN"
+    if isinstance(state, dict):
+        health_doc = state.get("Health")
+        health = health_doc.get("Status", "UNKNOWN") if isinstance(health_doc, dict) else "none"
+        if health not in ("healthy", "unhealthy", "starting", "none"):
+            health = "UNKNOWN"
+    (out if health == "healthy" else hold)("SUMMARY_HEALTH", health)
+
+    config = doc.get("Config") if isinstance(doc.get("Config"), dict) else {}
+    user = config.get("User")
+    (out("SUMMARY_USER", "UID10001") if user in ("10001:10001", "10001") else hold("SUMMARY_USER", "NOT_10001"))
+
+    host = doc.get("HostConfig") if isinstance(doc.get("HostConfig"), dict) else {}
+    published = 0
+    for source in (host.get("PortBindings"), (doc.get("NetworkSettings") or {}).get("Ports")
+                   if isinstance(doc.get("NetworkSettings"), dict) else None):
+        if source is None:
+            continue
+        if not isinstance(source, dict):
+            published += 1
+            continue
+        for bindings in source.values():
+            if bindings:
+                published += len(bindings) if isinstance(bindings, list) else 1
+    out("SUMMARY_PUBLISHED_PORTS", str(published))
+    (out if published == 0 else hold)("SUMMARY_PUBLISHED_PORTS_GATE", "PASS" if published == 0 else "HOLD")
+    mode = host.get("NetworkMode")
+    if mode == "host":
+        hold("SUMMARY_NETWORK_MODE", "HOST")
+    elif isinstance(mode, str) and mode:
+        out("SUMMARY_NETWORK_MODE", "NOT_HOST")
+    else:
+        hold("SUMMARY_NETWORK_MODE", "UNKNOWN")
+    labels = config.get("Labels") if isinstance(config.get("Labels"), dict) else {}
+    files = [f for f in str(labels.get("com.docker.compose.project.config_files", "")).split(",") if f]
+    out("SUMMARY_COMPOSE_FILES", str(len(files)))
+
+    check_data(name, doc)
+    check_env(name, env_of(doc))
+
+
+def check_data(name, doc):
+    mounts = doc.get("Mounts") if isinstance(doc.get("Mounts"), list) else []
+    data = [m for m in mounts if isinstance(m, dict) and m.get("Destination") == "/data"]
+    if not data:
+        hold("DATA_MOUNT", "ABSENT")
+        return
+    mount = data[0]
+    if mount.get("Type") not in ("bind", "volume"):
+        hold("DATA_MOUNT", "TYPE_NOT_ALLOWED")
+        return
+    out("DATA_MOUNT", mount["Type"])
+    rw = mount.get("RW") is True
+    (out if rw else hold)("DATA_MOUNT_RW", "RW" if rw else "RO")
+    raw = docker("exec", name, "stat", "-c", "%u %g %a %F", "/data")
+    if raw is None:
+        hold("DATA_STAT", "UNVERIFIED")
+        hold("DATA_WRITABLE_BY_UID10001", "UNVERIFIED")
+        return
+    parts = raw.strip().split(" ", 3)
+    if len(parts) != 4 or not parts[0].isdecimal() or not parts[1].isdecimal() or not re.fullmatch(r"[0-7]{3,4}", parts[2]):
+        hold("DATA_STAT", "MALFORMED")
+        hold("DATA_WRITABLE_BY_UID10001", "UNVERIFIED")
+        return
+    uid, mode_bits, kind = int(parts[0]), int(parts[2], 8), parts[3]
+    out("DATA_STAT", "READ")
+    owner_ok = uid == 10001
+    (out("DATA_OWNER", "UID10001") if owner_ok else hold("DATA_OWNER", "NOT_10001"))
+    is_dir = kind == "directory"
+    (out("DATA_TYPE", "DIRECTORY") if is_dir else hold("DATA_TYPE", "NOT_DIRECTORY"))
+    out("DATA_MODE", f"{mode_bits:o}")
+    world_writable = bool(mode_bits & stat.S_IWOTH)
+    (hold("DATA_WORLD_WRITABLE", "YES") if world_writable else out("DATA_WORLD_WRITABLE", "NO"))
+    owner_rwx = (mode_bits & stat.S_IRWXU) == stat.S_IRWXU
+    if owner_ok and is_dir and owner_rwx and rw:
+        out("DATA_WRITABLE_BY_UID10001", "PROVEN_BY_METADATA")
+    else:
+        hold("DATA_WRITABLE_BY_UID10001", "UNVERIFIED")
+    managed = docker("exec", name, "stat", "-c", "%u %g %a %F", "/data/newsflux-ai-settings")
+    if managed is None:
+        out("MANAGED_SETTINGS_DIR", "ABSENT")
+    else:
+        m = managed.strip().split(" ", 3)
+        if len(m) == 4 and m[0] == "10001" and m[2] == "700" and m[3] == "directory":
+            out("MANAGED_SETTINGS_DIR", "PRESENT_PRIVATE")
+        else:
+            hold("MANAGED_SETTINGS_DIR", "PRESENT_UNSAFE")
+
+
+def check_env(name, env):
+    ids = env.get("NEWSFLUX_AI_MINIFLUX_ADMIN_USER_IDS")
+    if ids is None or not ids.strip():
+        hold("ADMIN_ALLOWLIST", "EMPTY")
+    else:
+        items = [v.strip() for v in ids.split(",")]
+        valid = all(v.isascii() and v.isdecimal() and 1 <= int(v) <= 9_223_372_036_854_775_807 for v in items if v) \
+            and all(items)
+        (out("ADMIN_ALLOWLIST", f"CONFIGURED_COUNT_{len(set(items))}") if valid else hold("ADMIN_ALLOWLIST", "INVALID"))
+
+    raw = env.get("NEWSFLUX_AI_ALLOWED_WEB_ORIGINS", "")
+    if not raw.strip():
+        hold("ALLOWED_ORIGINS", "EMPTY")
+    else:
+        items = [v.strip() for v in raw.split(",")]
+        valid = all(items) and all(origin_ok(v) for v in items)
+        (out("ALLOWED_ORIGINS", f"VALID_COUNT_{len(items)}") if valid else hold("ALLOWED_ORIGINS", "INVALID"))
+    backend = docker("exec", name, "python", "-I", "-c", BACKEND_ORIGIN_CHECK)
+    if backend is None:
+        hold("ALLOWED_ORIGINS_BACKEND", "UNVERIFIED")
+    else:
+        (out if backend.strip() == "VALID" else hold)("ALLOWED_ORIGINS_BACKEND",
+                                                      "VALID" if backend.strip() == "VALID" else "INVALID")
+
+    key_file = env.get("NEWSFLUX_AI_LITELLM_VIRTUAL_KEY_FILE", "")
+    (out("BOOTSTRAP_KEY_FILE_CONFIGURED", "YES") if key_file.strip() else hold("BOOTSTRAP_KEY_FILE_CONFIGURED", "NO"))
+    out("ENV_MODEL_POLICY", "PRESENT" if env.get("NEWSFLUX_AI_MODEL_POLICY_JSON", "").strip() else "ABSENT_LEGACY")
+
+    for flag in CANARY_OFF:
+        value = flag_state(env, flag)
+        (out if value == "OFF" else hold)(flag.removeprefix("NEWSFLUX_AI_"), value)
+
+    baseline = None
+    try:
+        with open(os.path.join(HERE, "ai-settings-flag-baseline.json"), encoding="utf-8") as handle:
+            document = json.load(handle)
+        candidate = document["flags"][LOCAL_FLAG] if document.get("version") == 1 else None
+        baseline = candidate if candidate in ("ON", "OFF") else None
+    except (OSError, ValueError, KeyError, TypeError):
+        baseline = None
+    actual = flag_state(env, LOCAL_FLAG)
+    (out if actual in ("ON", "OFF") else hold)(LOCAL_FLAG.removeprefix("NEWSFLUX_AI_"), actual)
+    if baseline is None:
+        hold("LOCAL_PROCESSING_BASELINE", "UNAVAILABLE")
+        hold("LOCAL_PROCESSING_BASELINE_GATE", "UNVERIFIED")
+    else:
+        out("LOCAL_PROCESSING_BASELINE", baseline)
+        (out("LOCAL_PROCESSING_BASELINE_GATE", "MATCH") if actual == baseline
+         else hold("LOCAL_PROCESSING_BASELINE_GATE", "DRIFT"))
+
+
+def check_reader():
+    doc = inspect(READER)
+    if doc is None:
+        hold("READER_CONTAINER", "INSPECT_FAILED")
+        return
+    out("READER_CONTAINER", "PRESENT")
+    image = doc.get("Image") if isinstance(doc.get("Image"), str) else ""
+    out("READER_IMAGE", image or "UNKNOWN")
+    config = doc.get("Config") if isinstance(doc.get("Config"), dict) else {}
+    labels = config.get("Labels") if isinstance(config.get("Labels"), dict) else {}
+    out("READER_SERVICE", "PRESENT" if labels.get("com.docker.compose.service") else "UNKNOWN")
+    proxy = env_of(doc).get("NEWSFLUX_PILOT_TRUSTED_PROXY_IP")
+    if proxy is None or not proxy.strip():
+        hold("TRUSTED_PROXY_IP", "ABSENT")
+    else:
+        try:
+            address = ipaddress.ip_address(proxy.strip())
+            ok = not (address.is_unspecified or address.is_multicast)
+        except ValueError:
+            ok = False
+        (out("TRUSTED_PROXY_IP", "CONFIGURED") if ok else hold("TRUSTED_PROXY_IP", "INVALID"))
+
+    mounts = doc.get("Mounts") if isinstance(doc.get("Mounts"), list) else []
+    sources = [m.get("Source") for m in mounts if isinstance(m, dict) and m.get("Destination") == "/etc/caddy/Caddyfile"]
+    if not sources or not sources[0]:
+        hold("CADDYFILE_MOUNT", "ABSENT")
+        return
+    source = sources[0]
+    if os.path.islink(source):
+        hold("CADDYFILE_MOUNT", "SYMLINK")
+        return
+    if not os.path.isfile(source):
+        hold("CADDYFILE_MOUNT", "NOT_REGULAR_FILE")
+        return
+    out("CADDYFILE_MOUNT", "REGULAR_FILE")
+    with open(source, "rb") as handle:
+        host_sha = hashlib.sha256(handle.read()).hexdigest()
+    container = docker("exec", READER, "sha256sum", "/etc/caddy/Caddyfile")
+    out("ACTIVE_CADDY_SHA256", host_sha)
+    (out if container and container.split()[0] == host_sha else hold)(
+        "CADDY_CONTAINER_READBACK", "MATCH" if container and container.split()[0] == host_sha else "MISMATCH")
+    target = None
+    try:
+        with open(os.path.join(HERE, "..", "article-intel-pilot", "Caddyfile"), "rb") as handle:
+            target = hashlib.sha256(handle.read()).hexdigest()
+    except OSError:
+        target = None
+    if host_sha == STAGE1:
+        out("CADDY_STATE", "STAGE1_ACCEPTED_PRIOR")
+    elif host_sha == PRE_STAGE1:
+        out("CADDY_STATE", "PRE_STAGE1_ACCEPTED_PRIOR")
+    elif target is not None and host_sha == target:
+        out("CADDY_STATE", "TARGET_ALREADY_APPLIED")
+    else:
+        hold("CADDY_STATE", "UNKNOWN_DRIFT")
+    info = os.stat(source)
+    out("CADDYFILE_MODE", f"{stat.S_IMODE(info.st_mode):o}")
+    out("CADDYFILE_INODE", str(info.st_ino))
+
+
+def check_protected():
+    for name in PROTECTED:
+        doc = inspect(name)
+        if doc is None:
+            hold(f"PROTECTED_{name}", "ABSENT")
+            continue
+        state = doc.get("State") if isinstance(doc.get("State"), dict) else {}
+        if state.get("Running") is True:
+            out(f"PROTECTED_{name}", f"RUNNING {doc.get('Image', 'UNKNOWN')}")
+        else:
+            hold(f"PROTECTED_{name}", "NOT_RUNNING")
+
+
+def check_wallhop():
+    containers = docker("ps", "-a", "--no-trunc", "--filter", "name=wallhop",
+                        "--format", "{{.ID}} {{.Image}} {{.Names}} {{.State}}")
+    networks = docker("network", "ls", "--no-trunc", "--filter", "name=wallhop", "--format", "{{.ID}} {{.Name}}")
+    if containers is None or networks is None:
+        hold("WALLHOP_INVENTORY", "UNAVAILABLE")
+        return
+    lines = sorted(l for l in containers.splitlines() if l.strip()) + sorted("net " + l for l in networks.splitlines() if l.strip())
+    digest = hashlib.sha256("\n".join(lines).encode()).hexdigest()
+    out("WALLHOP_RESOURCES", str(len(lines)))
+    out("WALLHOP_INVENTORY_SHA256", digest)
+    if WALLHOP_EXPECTED is None:
+        out("WALLHOP_INTEGRITY", "UNVERIFIED_NO_BASELINE")
+    elif not re.fullmatch(r"[0-9a-f]{64}", WALLHOP_EXPECTED):
+        hold("WALLHOP_INTEGRITY", "EXPECTED_DIGEST_MALFORMED")
+    elif WALLHOP_EXPECTED == digest:
+        out("WALLHOP_INTEGRITY", "MATCHES_PRIOR_INVENTORY")
+        out("WALLHOP_UNAUTHORIZED_MUTATIONS", "0")
+    else:
+        hold("WALLHOP_INTEGRITY", "CHANGED_SINCE_PRIOR_INVENTORY")
+        out("WALLHOP_UNAUTHORIZED_MUTATIONS", "DETECTED")
+
+
+def main():
+    if docker("ps", "-q") is None:
+        hold("DOCKER", "UNAVAILABLE")
+    else:
+        check_summary()
+        check_reader()
+        check_protected()
+        check_wallhop()
+        out("RELEASE_LOCK_FILE", "PRESENT" if os.path.exists(LOCK) else "ABSENT")
+    out("SECRET_PRINTED", "NO")
+    out("WRITES_PERFORMED", "NO")
+    out("HOLD_COUNT", str(len(HOLD)))
+    if HOLD:
+        out("PREFLIGHT", "HOLD")
+        return 3
+    out("PREFLIGHT", "PASS")
+    return 0
+
+
+sys.exit(main())
+PY
