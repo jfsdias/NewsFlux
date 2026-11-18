@@ -40,6 +40,8 @@ jobs:
         run: docker version --format 'docker={{.Server.Version}}' && docker compose version --short && id -u
       - name: Build the disposable Summary image from this source
         run: bash deploy/r44-admin-allowlist/tests/build-test-image.sh "$GITHUB_WORKSPACE"
+      - name: Compose hash probe (diagnostic)
+        run: bash deploy/r44-admin-allowlist/tests/compose-hash-probe.sh
       - name: Tool matrix (RED/GREEN regression set)
         env:
           R44_TOOL: deploy/r44-admin-allowlist/r44_admin_allowlist.py

@@ -53,6 +53,14 @@ if want audit_clean; then run audit_clean 0 none "" audit
   has 'HOST_INVENTORY=COMPLETE_COUNT_[0-9]+'; has ADMIN_ALLOWLIST_RUNTIME=EMPTY; has DEPLOYED_ADMIN_ROUTE_CALLERS=0
   has 'COMPOSE_PROJECT_DIR_FP=[0-9a-f]{12}'; has 'ENV_SOURCE_PATH_FP=[0-9a-f]{12}'; has PROTECTED_NPM_STATUS=RUNNING
   check unchanged; done_; fi
+if want trust_source_clone_other_owner; then  # OMV: clone made by the operator, tool run as root
+  if [ "$(id -u)" = 0 ]; then
+    rm -rf "$R44T_HOME/othersrc"; git clone -q --no-checkout "$SRC_REPO" "$R44T_HOME/othersrc"; chown -R nobody "$R44T_HOME/othersrc"
+    TRUST=(--expect-image "$EXP_IMAGE" --expect-revision "$EXP_REV" --source-repo "$R44T_HOME/othersrc")
+    run trust_source_clone_other_owner 0 none "" audit; has 'RUNTIME_CODE_MANIFEST=MATCH_COUNT_[0-9]+'; has AUDIT_GATE=PASS
+    TRUST=(--expect-image "$EXP_IMAGE" --expect-revision "$EXP_REV" --source-repo "$SRC_REPO"); done_
+  else echo "R44B_TEST trust_source_clone_other_owner=SKIPPED_NOT_ROOT"; fi
+fi
 if want audit_inventory_fail_closed; then run audit_inventory_fail_closed 3 inspect_fail:other-svc "" audit
   has HOST_INVENTORY=INSPECT_FAILED; has AUDIT_GATE=HOLD; done_; fi
 # ---------------------------------------------------------------- identity

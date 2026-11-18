@@ -275,7 +275,10 @@ class Trust:
 def code_manifest(trust: Trust) -> dict[str, str] | None:
     def git(*args: str) -> tuple[int, bytes]:
         try:
-            done = subprocess.run(["git", "-C", trust.repo, *args], capture_output=True, timeout=60)
+            # The verified clone is owned by the operator user while the tool runs as root: trust exactly
+            # that one directory instead of failing git's ownership check.
+            done = subprocess.run(["git", "-c", f"safe.directory={trust.repo}", "-C", trust.repo, *args],
+                                  capture_output=True, timeout=60)
         except (OSError, subprocess.TimeoutExpired):
             return 125, b""
         return done.returncode, done.stdout
