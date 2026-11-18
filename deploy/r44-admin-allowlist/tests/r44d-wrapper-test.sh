@@ -2,11 +2,16 @@
 set -u
 S="$(cd "$(dirname "$0")" && pwd)"; W="$(mktemp -d "$S/r44d-t.XXXX")"
 awk '/bash <<.NF_R44D.$/{f=1;next} /^NF_R44D$/{f=0} f' "$S/../r44d-preflight-receipt.sh" > "$W/inner.sh"
+# The wrapper clones the pinned preflight commit: publish exactly that commit as a branch of a disposable bare
+# repository (a file:// clone copies only branches; in CI the commit is a remote-tracking ref).
+PIN="$(sed -n 's/^SHA=//p' "$W/inner.sh")"
+git init -q --bare "$W/src.git"
+git -C "$W/src.git" fetch -q --depth=1 "file://$(git -C "$S" rev-parse --show-toplevel)" "$PIN:refs/heads/r44d-pinned"
 pass=0; fail=0
 mk() { local n=$1 prod=$2 body=$3 pin=${4:-}
   printf '%s\n' "$body" > "$W/$n.fake"
   { echo 'sudo() { "$@"; }'
-    sed -e "s|^PROD=.*|PROD=$prod|" -e "s|https://github.com/jfsdias/NewsFlux.git|file://$(git -C "$S" rev-parse --show-toplevel)|" \
+    sed -e "s|^PROD=.*|PROD=$prod|" -e "s|https://github.com/jfsdias/NewsFlux.git|file://$W/src.git|" \
         -e "s|bash \"\$D/src/\$P/ai-settings-readonly-preflight.sh\"|bash \"$W/$n.fake\"|" ${pin:+-e "$pin"} "$W/inner.sh"; } > "$W/$n.sh"; }
 run() { local n=$1 ex=$2; shift 2; local out rc ok=1
   out="$(bash "$W/$n.sh" 2>&1)"; rc=$?
