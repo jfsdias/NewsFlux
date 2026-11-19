@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "purpose": "Approved pre-install state of AI flags that NEWSFLUX-AI-SETTINGS-01 must preserve, not change. Read by ai-settings-readonly-preflight.sh from the reviewed checkout of APPROVED_SHA; never from the environment.",
+  "flags": {
+    "NEWSFLUX_AI_ALLOW_LOCAL_ARTICLE_PROCESSING": "OFF"
+  },
+  "provenance": "PR #260 (local Ollama processing, which introduces this flag) is OPEN/DRAFT with R4B privacy HOLD; last operator receipt reports AI inference flags OFF (homeserver ledger, NewsFlux PR260 R4B). OFF also covers an unset variable (backend treats only 'true' as ON).",
+  "change_control": "Changing this baseline requires a reviewed commit that cites the separate PR #260 production GO. The AI settings release never changes the flag itself."
+}

@@ -8,6 +8,8 @@ on:
       - "services/article_intel_summary/tests/test_s5_preflight.py"
       - "services/article_intel_summary/Dockerfile"
       - ".github/workflows/summary-release-rehearsal.yaml"
+  # Manual run on an exact test-only integration tree (e.g. route PR + this tooling together).
+  workflow_dispatch:
 permissions:
   contents: read
 env:
@@ -32,6 +34,8 @@ jobs:
           docker pull -q caddy:2.10.2-alpine
           docker pull -q busybox:1.36.1
           bash deploy/release-governance/rehearse-operator-script.sh
+      - name: R4.1 — preflight backend origin check in the real Summary image (python -I via docker exec)
+        run: bash deploy/release-governance/test-preflight-backend-check-image.sh
       - name: R12F-09 regression — Summary image from a umask-077 checkout must start
         run: bash deploy/release-governance/test-r12f09-image-umask.sh
       - name: R12F-09 end-to-end — real images, seven Compose files, failure forensics, exact rollback

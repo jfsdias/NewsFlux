@@ -6,7 +6,7 @@
 #   sudo -E bash ai-functional-release.sh preflight        # strictly read-only: writes nothing, changes nothing
 #   sudo -E bash ai-functional-release.sh build            # exact-SHA images, revision labels verified
 #   sudo -E bash ai-functional-release.sh promote-summary  # new Summary image, inference still disabled
-#   sudo -E bash ai-functional-release.sh update-caddy     # adds the GET-only catalog route (in-place, validated)
+#   sudo -E bash ai-functional-release.sh update-caddy     # Caddyfile -> this SHA (closed prior-state list, backup, in-place, validated, rollback)
 #   sudo -E bash ai-functional-release.sh promote-reader   # new Reader image, readiness proven by HTTP probe
 #   sudo -E bash ai-functional-release.sh smoke            # fail-closed production checks + receipt
 #   sudo -E bash ai-functional-release.sh s5-attestation-path   # prints $RELEASE_DIR/s5-key-attestation.json
@@ -33,7 +33,18 @@ RELEASE_ROOT="${NEWSFLUX_RELEASE_ROOT:-/dockerdata/compose/newsflux/.releases}"
 RELEASE_DIR="$RELEASE_ROOT/ai-functional-${APPROVED_SHA:0:12}"
 SRC="$RELEASE_DIR/source"
 LOCK="${NEWSFLUX_RELEASE_LOCK:-/run/lock/newsflux-release.lock}"
-EXPECTED_ACTIVE_CADDY_SHA="${EXPECTED_ACTIVE_CADDY_SHA:-6970ee2b48b3c2e904a3a7fb5460afcb2fcad6e3647b55b812b68a1c1fdc9108}"
+# Closed list of Reader Caddyfile states a release may migrate FROM (sha256 of the exact bytes). Not
+# configurable from the environment: an unknown live state is drift and blocks. Extend only by review.
+#   6970ee… pilot Caddyfile before Stage 1 (R12F-09 validated rollback state)
+#   56d434b… Stage 1 Caddyfile (main 57f1c6a…d54eda2: summary + GET-only catalog route)
+ACCEPTED_PRIOR_CADDY_SHAS=(
+  6970ee2b48b3c2e904a3a7fb5460afcb2fcad6e3647b55b812b68a1c1fdc9108
+  56d434b9c81e66d9e03a827be3bd42f48dd68636c83a0ea9baa70322f30f95d6
+)
+CADDY_STATE_DIR="$RELEASE_DIR/caddy"
+# Test-only fault injection for the disposable rehearsals; ignored for the production release root.
+REHEARSAL_FAULT="${NEWSFLUX_REHEARSAL_FAULT:-}"
+[[ "$RELEASE_ROOT" == /dockerdata/compose/newsflux/.releases ]] && REHEARSAL_FAULT=""
 READER_PORT="${NEWSFLUX_READER_PORT:-2000}"
 # Reader build flags. WallHop recovery stays hidden until its sidecar route passes its own gates.
 READER_BASE_PATH="${READER_BASE_PATH:-/}"
@@ -98,8 +109,10 @@ PY
   docker exec "$READER_CONTAINER" sh -c "wget -qO- http://127.0.0.1:$READER_PORT/ | grep -q 'id=.root.'" || die PREFLIGHT READER_PROBE_FAILS_ON_CURRENT
   caddy="$(caddy_source)"
   [[ -n "$caddy" && -f "$caddy" ]] || die PREFLIGHT CADDYFILE_NOT_BIND_MOUNTED
+  [[ ! -L "$caddy" ]] || die PREFLIGHT CADDYFILE_IS_SYMLINK
   active="$(sha256sum "$caddy" | cut -d' ' -f1)"
-  [[ "$active" == "$EXPECTED_ACTIVE_CADDY_SHA" || "$active" == "$(sha256sum "$SRC/deploy/article-intel-pilot/Caddyfile" | cut -d' ' -f1)" ]] || die PREFLIGHT ACTIVE_CADDY_DRIFT
+  accepted_prior_caddy "$active" || [[ "$active" == "$(sha256sum "$SRC/deploy/article-intel-pilot/Caddyfile" | cut -d' ' -f1)" ]] \
+    || die PREFLIGHT ACTIVE_CADDY_DRIFT
   local name
   for name in "${PROTECTED_NAMES[@]}"; do
     docker inspect -f '{{.State.Running}}' "$name" | grep -qx true || die PREFLIGHT "PROTECTED_${name}_NOT_RUNNING"
@@ -175,49 +188,141 @@ promote() { # service kind [extra plan args...]
   release_tool promote --manifest "$dir/manifest.json" --timeout 180
 }
 
-update_caddy() {
-  require_source
-  local caddy new backup
-  caddy="$(caddy_source)"
+sha_of() { sha256sum "$1" | cut -d' ' -f1; }
+accepted_prior_caddy() { local h; for h in "${ACCEPTED_PRIOR_CADDY_SHAS[@]}"; do [[ "$1" == "$h" ]] && return 0; done; return 1; }
+in_container_caddy_sha() { docker exec "$READER_CONTAINER" sha256sum /etc/caddy/Caddyfile | cut -d' ' -f1; }
+caddy_reload() { docker exec "$READER_CONTAINER" caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1; }
+fault() { [[ -n "$REHEARSAL_FAULT" && "$REHEARSAL_FAULT" == "$1" ]]; }
+
+# Caddy state transitions share the host release lock with release.py (same flock file), in a
+# subshell so the lock is released before any later release.py call in the same process.
+with_release_lock() { # gate function
+  local gate_name=$1; shift
+  (
+    mkdir -p "$(dirname "$LOCK")"
+    exec 9>>"$LOCK"
+    flock -n 9 || die "$gate_name" RELEASE_LOCKED
+    "$@"
+  )
+}
+
+live_caddy() { # sets LIVE_CADDY to the bind-mounted host path of the Reader Caddyfile, or blocks
+  LIVE_CADDY="$(caddy_source)"
+  [[ -n "$LIVE_CADDY" ]] || die "$1" CADDYFILE_NOT_BIND_MOUNTED
+  [[ ! -L "$LIVE_CADDY" ]] || die "$1" CADDYFILE_IS_SYMLINK
+  [[ -f "$LIVE_CADDY" ]] || die "$1" CADDYFILE_NOT_REGULAR_FILE
+}
+
+restore_from_backup() { # caddy expected_sha -> restore bytes in place (same inode), reload, verify
+  cat "$CADDY_STATE_DIR/before.Caddyfile" >"$1"
+  [[ "$(sha_of "$1")" == "$2" ]] || return 1
+  caddy_reload || return 1
+  [[ "$(in_container_caddy_sha)" == "$2" ]]
+}
+
+# Stage 1 (or pre-Stage 1) -> this release's Caddyfile. Evidence lives in $RELEASE_DIR/caddy (0700):
+#   before.Caddyfile (exact prior bytes, 0600), before.sha256, target.sha256, before.stat, transition.log
+update_caddy_locked() {
+  local caddy new active target inode
+  live_caddy CADDY_UPDATE
+  caddy="$LIVE_CADDY"
   new="$SRC/deploy/article-intel-pilot/Caddyfile"
-  backup="$RELEASE_DIR/Caddyfile.before-$EXPECTED_ACTIVE_CADDY_SHA"
-  if [[ "$(sha256sum "$caddy" | cut -d' ' -f1)" == "$(sha256sum "$new" | cut -d' ' -f1)" ]]; then
-    # Upgrade from an installed Stage 1: this release does not touch Caddy. Record the hash so that
-    # rollback-caddy for this release is an explicit, verified no-op instead of BACKUP_MISSING.
-    sha256sum "$caddy" | cut -d' ' -f1 >"$RELEASE_DIR/caddy-unchanged.sha256"
-    gate CADDY_UPDATE ALREADY_APPLIED
+  active="$(sha_of "$caddy")"
+  target="$(sha_of "$new")"
+  if [[ "$active" == "$target" ]]; then
+    if [[ -f "$CADDY_STATE_DIR/target.sha256" && "$(cat "$CADDY_STATE_DIR/target.sha256")" == "$target" ]]; then
+      gate CADDY_UPDATE ALREADY_APPLIED_BY_THIS_RELEASE   # idempotent re-run
+    else
+      # This release does not change Caddy. Record the hash so rollback-caddy is a verified no-op.
+      sha_of "$caddy" >"$RELEASE_DIR/caddy-unchanged.sha256"
+      gate CADDY_UPDATE ALREADY_APPLIED
+    fi
+    [[ "$(in_container_caddy_sha)" == "$target" ]] || die CADDY_UPDATE READBACK_MISMATCH
     return
   fi
-  [[ "$(sha256sum "$caddy" | cut -d' ' -f1)" == "$EXPECTED_ACTIVE_CADDY_SHA" ]] || die CADDY_UPDATE ACTIVE_CADDY_DRIFT
+  accepted_prior_caddy "$active" || die CADDY_UPDATE ACTIVE_CADDY_DRIFT
+  [[ "$(in_container_caddy_sha)" == "$active" ]] || die CADDY_UPDATE MOUNT_READBACK_MISMATCH
+  # Validate the new file with the running Reader image, isolated, before anything is written.
   docker run --rm --network none -e NEWSFLUX_PILOT_TRUSTED_PROXY_IP=127.0.0.1 -v "$new:/etc/caddy/Caddyfile:ro" \
     "$(docker inspect -f '{{.Image}}' "$READER_CONTAINER")" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1 \
     || die CADDY_UPDATE NEW_CADDYFILE_INVALID
-  cp -p "$caddy" "$backup"
-  cat "$new" >"$caddy" # single-file bind mount: keep the inode
-  if ! docker exec "$READER_CONTAINER" caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1; then
-    cat "$backup" >"$caddy"
-    docker exec "$READER_CONTAINER" caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1 || true
+  mkdir -p -m 0700 "$CADDY_STATE_DIR"
+  chmod 0700 "$CADDY_STATE_DIR"
+  if [[ -f "$CADDY_STATE_DIR/before.sha256" ]]; then
+    # A previous attempt of this release kept a backup: it must be of the state we see now.
+    [[ "$(cat "$CADDY_STATE_DIR/before.sha256")" == "$active" ]] || die CADDY_UPDATE BACKUP_OF_OTHER_STATE
+    [[ "$(sha_of "$CADDY_STATE_DIR/before.Caddyfile")" == "$active" ]] || die CADDY_UPDATE BACKUP_CORRUPT
+  else
+    ( umask 077; cat "$caddy" >"$CADDY_STATE_DIR/before.Caddyfile" )
+    [[ "$(sha_of "$CADDY_STATE_DIR/before.Caddyfile")" == "$active" ]] || die CADDY_UPDATE BACKUP_VERIFY_FAILED
+    ( umask 077
+      printf '%s\n' "$active" >"$CADDY_STATE_DIR/before.sha256"
+      stat -c 'mode=%a uid=%u gid=%g inode=%i' "$caddy" >"$CADDY_STATE_DIR/before.stat" )
+  fi
+  ( umask 077; printf '%s\n' "$target" >"$CADDY_STATE_DIR/target.sha256" )
+  inode="$(stat -c %i "$caddy")"
+  fault caddy-before-write && die CADDY_UPDATE REHEARSAL_FAULT_BEFORE_WRITE
+  # Single-file bind mount: rewrite in place so the container keeps seeing the same inode.
+  if fault caddy-during-write; then
+    head -c 64 "$new" >"$caddy"
+    restore_from_backup "$caddy" "$active" || die CADDY_UPDATE WRITE_FAILED_RESTORE_UNVERIFIED
+    die CADDY_UPDATE WRITE_FAILED_RESTORED
+  fi
+  if ! cat "$new" >"$caddy" || [[ "$(sha_of "$caddy")" != "$target" ]]; then
+    restore_from_backup "$caddy" "$active" || die CADDY_UPDATE WRITE_FAILED_RESTORE_UNVERIFIED
+    die CADDY_UPDATE WRITE_FAILED_RESTORED
+  fi
+  if fault caddy-reload || ! caddy_reload; then
+    restore_from_backup "$caddy" "$active" || die CADDY_UPDATE RELOAD_FAILED_RESTORE_UNVERIFIED
     die CADDY_UPDATE RELOAD_FAILED_RESTORED
   fi
-  gate ACTIVE_CADDY_SHA256 "$(docker exec "$READER_CONTAINER" sha256sum /etc/caddy/Caddyfile | cut -d' ' -f1)"
+  [[ "$(stat -c %i "$caddy")" == "$inode" ]] || die CADDY_UPDATE INODE_CHANGED
+  [[ "$(in_container_caddy_sha)" == "$target" ]] || die CADDY_UPDATE READBACK_MISMATCH
+  ( umask 077; printf 'UPDATED from=%s to=%s\n' "$active" "$target" >>"$CADDY_STATE_DIR/transition.log" )
+  gate CADDY_FROM_SHA256 "$active"
+  gate ACTIVE_CADDY_SHA256 "$target"
   gate CADDY_UPDATE PASS
 }
 
-rollback_caddy() {
-  local caddy backup="$RELEASE_DIR/Caddyfile.before-$EXPECTED_ACTIVE_CADDY_SHA" unchanged="$RELEASE_DIR/caddy-unchanged.sha256"
-  caddy="$(caddy_source)"
-  if [[ ! -f "$backup" && -f "$unchanged" ]]; then
+update_caddy() {
+  require_source
+  with_release_lock CADDY_UPDATE update_caddy_locked
+}
+
+rollback_caddy_locked() {
+  local caddy unchanged="$RELEASE_DIR/caddy-unchanged.sha256" before target active inode
+  live_caddy CADDY_ROLLBACK
+  caddy="$LIVE_CADDY"
+  active="$(sha_of "$caddy")"
+  if [[ ! -f "$CADDY_STATE_DIR/before.sha256" ]]; then
+    [[ -f "$unchanged" ]] || die CADDY_ROLLBACK BACKUP_MISSING
     # This release found the route already installed and changed nothing: nothing to restore, but
     # the active file must still be exactly what it found.
-    [[ "$(sha256sum "$caddy" | cut -d' ' -f1)" == "$(cat "$unchanged")" ]] || die CADDY_ROLLBACK DRIFT_SINCE_RELEASE
+    [[ "$active" == "$(cat "$unchanged")" ]] || die CADDY_ROLLBACK DRIFT_SINCE_RELEASE
     gate CADDY_ROLLBACK NOT_APPLICABLE_UNCHANGED_BY_THIS_RELEASE
     return
   fi
-  [[ -f "$backup" ]] || die CADDY_ROLLBACK BACKUP_MISSING
-  cat "$backup" >"$caddy"
-  docker exec "$READER_CONTAINER" caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1 || die CADDY_ROLLBACK RELOAD_FAILED
-  [[ "$(sha256sum "$caddy" | cut -d' ' -f1)" == "$EXPECTED_ACTIVE_CADDY_SHA" ]] || die CADDY_ROLLBACK HASH_MISMATCH
+  before="$(cat "$CADDY_STATE_DIR/before.sha256")"
+  target="$(cat "$CADDY_STATE_DIR/target.sha256")"
+  accepted_prior_caddy "$before" || die CADDY_ROLLBACK BACKUP_STATE_NOT_ACCEPTED
+  [[ "$(sha_of "$CADDY_STATE_DIR/before.Caddyfile")" == "$before" ]] || die CADDY_ROLLBACK BACKUP_CORRUPT
+  if [[ "$active" == "$before" ]]; then
+    [[ "$(in_container_caddy_sha)" == "$before" ]] || die CADDY_ROLLBACK READBACK_MISMATCH
+    gate CADDY_ROLLBACK ALREADY_RESTORED   # idempotent re-run
+    return
+  fi
+  # Only the exact state this release installed may be replaced; anything else is a concurrent change.
+  [[ "$active" == "$target" ]] || die CADDY_ROLLBACK DRIFT_SINCE_RELEASE
+  inode="$(stat -c %i "$caddy")"
+  restore_from_backup "$caddy" "$before" || die CADDY_ROLLBACK RESTORE_UNVERIFIED
+  [[ "$(stat -c %i "$caddy")" == "$inode" ]] || die CADDY_ROLLBACK INODE_CHANGED
+  ( umask 077; printf 'ROLLED_BACK from=%s to=%s\n' "$target" "$before" >>"$CADDY_STATE_DIR/transition.log" )
+  gate ACTIVE_CADDY_SHA256 "$before"
   gate CADDY_ROLLBACK PASS
+}
+
+rollback_caddy() {
+  with_release_lock CADDY_ROLLBACK rollback_caddy_locked
 }
 
 # Fail-closed public catalog check: the request must traverse NPM -> Caddy -> Summary API and be
