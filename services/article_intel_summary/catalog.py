@@ -344,6 +344,11 @@ class GatewayDiscovery:
                 return None
         return cls(getter, ttl_seconds=ttl)
 
+    def fresh_snapshot(self) -> DiscoverySnapshot:
+        """Bypass the TTL before a local-only dispatch; never trust prior catalog metadata."""
+        with self._lock:
+            return self._fetch()
+
     def snapshot(self) -> DiscoverySnapshot:
         with self._lock:
             now = self._clock()
@@ -526,7 +531,10 @@ class CatalogEntry:
         paid = self.paid
         if paid is None:
             paid = self.model_id == MODEL_CHOICE_MISTRAL_SMALL or pricing["status"].endswith("_paid")
-        notices = ["ARTICLE_SENT_TO_MODEL_PROVIDER"]
+        notices = [
+            "ARTICLE_SENT_TO_LOCAL_MODEL" if settings and settings.local_processing_authorized
+            else "ARTICLE_SENT_TO_MODEL_PROVIDER"
+        ]
         if pricing["status"].startswith("operator_declared"):
             notices.append("PRICE_DECLARED_BY_OPERATOR")
         if pricing["status"].startswith("verified"):
@@ -738,13 +746,29 @@ def create_model_router(
     discovery = GatewayDiscovery.from_environment(values, getter=discovery_getter)
     gateway = load_gateway_settings(
         values,
-        read_key=_read_bool(values, "NEWSFLUX_AI_INFERENCE_ENABLED") and _read_bool(values, "NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER"),
+        read_key=_read_bool(values, "NEWSFLUX_AI_INFERENCE_ENABLED") and (
+            _read_bool(values, "NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER")
+            or _read_bool(values, "NEWSFLUX_AI_ALLOW_LOCAL_ARTICLE_PROCESSING")
+        ),
     )
 
     ledger = base_adapter.ledger if base_adapter is not None else None
     owner = base_adapter._owner if base_adapter is not None else None
     own_owner = None
-    if ledger is None and gateway.enabled and gateway.external_transfer_authorized and gateway.usage_database_path:
+    # Do not take ledger ownership or reserve any local-only capacity unless a currently
+    # discovered, explicitly approved Ollama endpoint passes the complete no-price gate.
+    local_candidate = False
+    if gateway.enabled and gateway.local_processing_authorized and discovery is not None:
+        candidate_snapshot = discovery.snapshot()
+        if candidate_snapshot.status == "OK":
+            local_candidate = any(
+                _is_unpriced_local_ollama(
+                    item, (candidate_snapshot.info or {}).get(item.alias), item.alias in candidate_snapshot.listed
+                ) for item in policy if item.alias is not None and item.transfer_authorized
+            )
+    if ledger is None and gateway.enabled and (
+        gateway.external_transfer_authorized or local_candidate
+    ) and gateway.usage_database_path:
         try:
             ledger = BudgetLedger(gateway.usage_database_path)
             own_owner = LedgerOwner(gateway.usage_database_path)
@@ -765,13 +789,26 @@ def create_model_router(
     cache: dict[str, LiteLLMInferenceAdapter] = {}
     requested_default = values.get("NEWSFLUX_AI_DEFAULT_MODEL_ID") or values.get("NEWSFLUX_AI_LITELLM_MODEL_CHOICE")
 
-    def adapter_for_settings(model_id: str, settings: LiteLLMSettings):
+    def adapter_for_settings(model_id: str, settings: LiteLLMSettings, item: PolicyModel):
         existing = configured.get(model_id) or cache.get(model_id)
         if existing is not None and existing.settings == settings:
             return existing
         if ledger is None or owner is None:
             return None
-        adapter = LiteLLMInferenceAdapter(settings, ledger=ledger)
+        pre_dispatch_check = None
+        if settings.local_processing_authorized:
+            if discovery is None:
+                return None
+
+            def pre_dispatch_check() -> bool:
+                fresh = discovery.fresh_snapshot()
+                return bool(
+                    fresh.status == "OK"
+                    and item.alias in fresh.listed
+                    and _is_unpriced_local_ollama(item, (fresh.info or {}).get(item.alias), True)
+                )
+
+        adapter = LiteLLMInferenceAdapter(settings, ledger=ledger, pre_dispatch_check=pre_dispatch_check)
         adapter._owner = owner
         adapter._requires_owner = True
         cache[model_id] = adapter
@@ -809,6 +846,9 @@ def _evaluate(item: PolicyModel, policy_status: str, snapshot: DiscoverySnapshot
     discovered = None if snapshot.status != "OK" else (item.alias in snapshot.listed)
     local_unpriced = _is_unpriced_local_ollama(item, gateway_model, discovered)
     settings = _settings_for(item, gateway, values, local_unpriced=local_unpriced)
+    transfer_authorized = item.transfer_authorized and (
+        gateway.external_transfer_authorized or (gateway.local_processing_authorized and local_unpriced)
+    )
     if snapshot.status == "OK" and discovered and snapshot.info is not None and gateway_model is not None and gateway_model.mode is not None:
         compatible: bool | None = item.compatible_for_summary and gateway_model.mode == "chat"
     elif not item.compatible_for_summary:
@@ -833,14 +873,14 @@ def _evaluate(item: PolicyModel, policy_status: str, snapshot: DiscoverySnapshot
         "operator_approved": policy_status != "INVALID",
         "pricing_verified": pricing_verified,
         "paid_authorized": bool(settings.paid_inference_authorized),
-        "transfer_authorized": bool(gateway.external_transfer_authorized and item.transfer_authorized),
+        "transfer_authorized": bool(transfer_authorized),
     }
 
     if policy_status == "INVALID":
         reason = "POLICY_INVALID"
     elif not gateway.enabled:
         reason = "INFERENCE_DISABLED"
-    elif not gateway.external_transfer_authorized:
+    elif not (gateway.external_transfer_authorized or (gateway.local_processing_authorized and local_unpriced)):
         reason = "EXTERNAL_TRANSFER_NOT_AUTHORIZED"
     elif not item.transfer_authorized:
         reason = "TRANSFER_NOT_AUTHORIZED"
@@ -869,7 +909,7 @@ def _evaluate(item: PolicyModel, policy_status: str, snapshot: DiscoverySnapshot
     identity = gateway_model.provider_identity if (discovered and gateway_model is not None) else None
     if item.provider_identity is not None and identity != item.provider_identity:
         identity = None  # policy and gateway disagree: unverified, fail closed for fallback
-    adapter = adapter_for_settings(item.model_id, settings) if reason is None else None
+    adapter = adapter_for_settings(item.model_id, settings, item) if reason is None else None
     if reason is None and adapter is None:
         reason = "RUNTIME_UNAVAILABLE"
     status = "AVAILABLE" if reason is None else ("DISABLED" if reason == "POLICY_INVALID" else _REASON_STATUS[reason])
@@ -914,6 +954,7 @@ def _settings_for(
         output_price_usd_per_million=Decimal("0") if local_unpriced else item.output_price,
         paid_inference_authorized=gateway.paid_inference_authorized and item.paid_authorized,
         external_transfer_authorized=gateway.external_transfer_authorized and item.transfer_authorized,
+        local_processing_authorized=gateway.local_processing_authorized and local_unpriced and item.transfer_authorized,
         max_output_tokens=max_output,
         operator_approved=True,
     )

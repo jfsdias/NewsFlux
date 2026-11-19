@@ -23,6 +23,7 @@ from services.article_intel_summary.catalog import (
     gateway_getter,
 )
 from services.article_intel_summary.contracts import validate_catalog
+from services.article_intel_summary.inference import InferenceUnavailable
 from services.article_intel_summary.litellm_adapter import LiteLLMInferenceAdapter
 from services.article_intel_summary.tests.test_litellm_adapter import (
     approved_environment,
@@ -296,6 +297,110 @@ class DynamicCatalogTests(unittest.TestCase):
                 model = self.models(router)[1]["local-3b"]
                 self.assertFalse(model["available"])
                 self.assertIn(model["unavailable_reason"], {"PRICE_MISMATCH", "PRICE_NOT_VERIFIED"})
+
+    def test_local_only_opt_in_allows_verified_ollama_without_external_transfer(self) -> None:
+        entry = policy_model("local-3b", "llama3.2:3b", provider_identity="ollama@ollama:11434")
+        del entry["input_usd_per_million"]
+        del entry["output_usd_per_million"]
+        info = model_info("llama3.2:3b", provider="ollama", input_cost=None, output_cost=None)
+        info["litellm_params"].update(model="ollama/llama3.2:3b", api_base="http://ollama:11434")
+        router = self.router(
+            FakeGateway(listed=("llama3.2:3b",), infos=[info]),
+            NEWSFLUX_AI_MODEL_POLICY_JSON=policy(entry),
+            NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER="false",
+            NEWSFLUX_AI_ALLOW_LOCAL_ARTICLE_PROCESSING="true",
+        )
+        model = self.models(router)[1]["local-3b"]
+        self.assertTrue(model["available"], model)
+        self.assertEqual(model["pricing"]["status"], "local_unpriced")
+        self.assertTrue(model["checks"]["transfer_authorized"])
+        self.assertIn("ARTICLE_SENT_TO_LOCAL_MODEL", model["notices"])
+        adapter = router.adapter_for("local-3b")
+        self.assertFalse(adapter.settings.external_transfer_authorized)
+        self.assertTrue(adapter.settings.local_processing_authorized)
+        self.assertTrue(adapter.settings.is_ready())
+
+    def test_local_only_flag_defaults_off_and_never_approves_remote_alias(self) -> None:
+        local_entry = policy_model("local-3b", "llama3.2:3b", provider_identity="ollama@ollama:11434")
+        del local_entry["input_usd_per_million"]
+        del local_entry["output_usd_per_million"]
+        local_info = model_info("llama3.2:3b", provider="ollama", input_cost=None, output_cost=None)
+        local_info["litellm_params"].update(model="ollama/llama3.2:3b", api_base="http://ollama:11434")
+        disabled = self.router(
+            FakeGateway(listed=("llama3.2:3b",), infos=[local_info]),
+            NEWSFLUX_AI_MODEL_POLICY_JSON=policy(local_entry),
+            NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER="false",
+            NEWSFLUX_AI_USAGE_DATABASE_PATH=str(Path(self.tmp.name) / "disabled-local.sqlite3"),
+        )
+        self.assertFalse(self.models(disabled)[1]["local-3b"]["available"])
+
+        remote_entry = policy_model("remote", "remote-chat")
+        remote_info = model_info("remote-chat", provider="openai", input_cost=0.0, output_cost=0.0)
+        remote = self.router(
+            FakeGateway(listed=("remote-chat",), infos=[remote_info]),
+            NEWSFLUX_AI_MODEL_POLICY_JSON=policy(remote_entry),
+            NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER="false",
+            NEWSFLUX_AI_ALLOW_LOCAL_ARTICLE_PROCESSING="true",
+            NEWSFLUX_AI_USAGE_DATABASE_PATH=str(Path(self.tmp.name) / "remote-only.sqlite3"),
+        )
+        self.assertFalse(self.models(remote)[1]["remote"]["available"])
+        with self.assertRaises(ModelNotAvailable):
+            remote.adapter_for("remote")
+
+    def test_local_only_refuses_dispatch_when_gateway_route_changed_after_catalog(self) -> None:
+        from services.article_intel_summary.tests.test_litellm_adapter import input_fixture
+
+        entry = policy_model("local-3b", "llama3.2:3b", provider_identity="ollama@ollama:11434")
+        del entry["input_usd_per_million"]
+        del entry["output_usd_per_million"]
+        row = model_info("llama3.2:3b", provider="ollama", input_cost=None, output_cost=None)
+        row["litellm_params"].update(model="ollama/llama3.2:3b", api_base="http://ollama:11434")
+        gateway = FakeGateway(listed=("llama3.2:3b",), infos=[row])
+        router = self.router(
+            gateway,
+            NEWSFLUX_AI_MODEL_POLICY_JSON=policy(entry),
+            NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER="false",
+            NEWSFLUX_AI_ALLOW_LOCAL_ARTICLE_PROCESSING="true",
+        )
+        self.assertTrue(self.models(router)[1]["local-3b"]["available"])
+        adapter = router.adapter_for("local-3b")
+        dispatched = []
+        adapter.client = httpx.Client(transport=httpx.MockTransport(
+            lambda request: dispatched.append(request) or httpx.Response(503)
+        ))
+        gateway.infos = [model_info("llama3.2:3b", provider="ollama", input_cost=None, output_cost=None)]
+        gateway.infos[0]["litellm_params"].update(
+            model="ollama/llama3.2:3b", api_base="https://remote.example:11434"
+        )
+        with self.assertRaises(InferenceUnavailable):
+            adapter.summarize(input_fixture(), timeout_seconds=10)
+        self.assertEqual(dispatched, [])
+        self.assertGreaterEqual(gateway.calls.count("/model/info"), 2)
+
+    def test_local_only_v3_rejects_any_requested_fallback_before_content_access(self) -> None:
+        from services.article_intel_summary.inference import DisabledInferenceAdapter
+        from services.article_intel_summary.service import SummaryService
+
+        entry = policy_model("local-3b", "llama3.2:3b", provider_identity="ollama@ollama:11434")
+        del entry["input_usd_per_million"]
+        del entry["output_usd_per_million"]
+        local = model_info("llama3.2:3b", provider="ollama", input_cost=None, output_cost=None)
+        local["litellm_params"].update(model="ollama/llama3.2:3b", api_base="http://ollama:11434")
+        router = self.router(
+            FakeGateway(listed=("llama3.2:3b",), infos=[local]),
+            NEWSFLUX_AI_MODEL_POLICY_JSON=policy(entry),
+            NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER="false",
+            NEWSFLUX_AI_ALLOW_LOCAL_ARTICLE_PROCESSING="true",
+        )
+        self.assertTrue(self.models(router)[1]["local-3b"]["available"])
+        summary = SummaryService(DisabledInferenceAdapter(), router=router)
+        with self.assertRaises(ModelNotAvailable) as exc:
+            summary.summarize_v3(
+                None, request_id="synthetic", primary_model_id="local-3b",
+                fallback_model_id="remote-any", consent_paid=True,
+                consent_cross_provider=True, profile=None,
+            )
+        self.assertEqual(exc.exception.code, "MODEL_NOT_AUTHORIZED")
 
     def test_paid_model_requires_global_and_per_model_paid_authorization(self) -> None:
         gateway = FakeGateway(listed=("paid-x",), infos=[model_info("paid-x", input_cost=1.5e-7, output_cost=6e-7)])
