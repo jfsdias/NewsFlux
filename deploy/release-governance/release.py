@@ -417,6 +417,14 @@ _SECRET_PATTERNS = (
 MAX_DIAGNOSTIC_LOG_LINES = 40
 
 
+CRASH_LOOP_SETTLE_POLLS = 20
+CRASH_LOOP_SETTLE_SECONDS = 0.25
+
+
+def _settle_sleep(seconds: float) -> None:
+    time.sleep(seconds)
+
+
 def _sanitize(line: str) -> str:
     for pattern in _SECRET_PATTERNS:
         line = pattern.sub("[REDACTED]", line)
@@ -435,6 +443,16 @@ def _capture_failure(docker: Docker, manifest: dict, identity: ContainerIdentity
     try:
         document = json.loads(docker.run(["inspect", identity.container_id]))[0]
         state = document.get("State", {})
+        if state.get("Status") == "running" and (document.get("RestartCount") or 0) > 0:
+            # Crash loop under a restart policy: a `running` snapshot has ExitCode reset to 0.
+            # Wait (bounded) for the real exited/restarting state so the exit code is not lost.
+            diagnostic["crash_loop_observed"] = True
+            for _ in range(CRASH_LOOP_SETTLE_POLLS):
+                _settle_sleep(CRASH_LOOP_SETTLE_SECONDS)
+                document = json.loads(docker.run(["inspect", identity.container_id]))[0]
+                state = document.get("State", {})
+                if state.get("Status") in {"exited", "restarting", "dead"}:
+                    break
         health = state.get("Health") or {}
         diagnostic.update(
             {
