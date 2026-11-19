@@ -1,43 +1,68 @@
-# R4.4B — Summary admin allowlist remediation (operator tooling)
+# R4.4 — Summary admin allowlist via the existing release tool
 
-Operator-only tooling for NEWSFLUX-AI-SETTINGS-01. It sets `NEWSFLUX_AI_MINIFLUX_ADMIN_USER_IDS` for the
-running Summary on the OMV, after the owner's identity is proven and the owner gives a specific GO. It is
-not application code and not a release.
+Operator procedure for NEWSFLUX-AI-SETTINGS-01: set `NEWSFLUX_AI_MINIFLUX_ADMIN_USER_IDS` for the running
+Summary on the OMV after the owner's identity is verified. It is not application code and not a release of new
+code.
 
-| File                        | Purpose                                                                                                                                                        |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `r44_admin_allowlist.py`    | `audit` and `identity` (read-only), `apply` and `rollback` (mutating, owner-confirmed). Contract in the module docstring.                                      |
-| `r44b-readonly-ab.sh`       | The single read-only command for Gates A/B: pinned commit and SHA-256, audit first, the key is requested only after runtime trust passes, aggregate exit code. |
-| `r44d-preflight-receipt.sh` | Gate D: the pinned #265 preflight (`4c3e075`) with protected statuses read from real lines and WallHop digest comparison.                                      |
-| `tests/`                    | Disposable topology (real Summary image, fake Miniflux over HTTPS, protected stand-ins, canaries) and the RED/GREEN matrices. Never a real host.               |
+## Design (proportionality decision, R4.4C)
 
-Safety properties tested:
+The change reuses `deploy/release-governance/release.py` from `main` (`d54eda2b`), which is already governed,
+rehearsed in CI and used for production releases. That tool's configuration-only mode (`--extra-override`, the
+same mode used for the S5 policy override) does the work:
 
-- **Rollback boundary.** Every step from the first write of the env file to the last post-check runs inside
-  the rollback guard. A failure after `os.replace` (for example the directory `fsync`) restores the exact
-  bytes, mode and owner and verifies the original config hash. If the restore cannot be proven durable, the
-  result is `ROLLBACK_INCOMPLETE`, exit 6, never success.
-- **Fail-closed inventory.** Any container that cannot be inspected makes the host snapshot incomplete. This
-  holds before any key is requested and before any write.
-- **Runtime trust before the secret.** The Summary must be the pinned image ID with the approved revision
-  label. `docker diff` must show no drift outside mounts, `/data` and `/tmp`. Every loaded `.py` file in
-  `services/article_intel_auth`, `services/content_fallback` and `services/__init__.py` must hash identical
-  to the approved revision. Only then is the key read, at a hidden prompt, and passed on stdin.
-- **Explicit consent and minimal data.** `/v1/users` is read only after the owner types `LIST-ADMIN-IDS`, and
-  only admin IDs are returned. Multiple admins or a declined enumeration yield `OWNER_DECISION_REQUIRED`
-  (exit 4), never an inferred choice.
-- **Output schema.** Keys come from an explicit list, and values match `[A-Za-z0-9_.:,+-]{0,96}`. Paths
-  appear only as 12-hex fingerprints; anything else is suppressed and HOLDs. The outer command filters with
-  the same value contract and fails on any non-conforming line or stderr output.
+- **No production file is edited.** The allowlist is a one-key Compose override in a new release directory.
+  The env file and the Compose files are untouched, so no interruption can leave a persistent change behind.
+- **What `release.py` already provides:** an exclusive lock, a hashed manifest, drift checks on the Compose and
+  env files, a closed policy, and fingerprints of protected containers. It recreates only the Summary with the
+  pinned running image ID (`--no-deps --no-build --pull never`) and rolls back automatically on failure.
+- **Rollback** is `release.py rollback`: an idempotent recreate from the untouched base files.
 
-Run the tests (Docker required):
+This replaces the earlier ~1,300-line executor (R4.4/R4.4B). That executor edited the live env file, which made
+interrupt-safe rollback a P0 problem. RED was reproduced: a Ctrl+C after `os.replace` left the change on disk.
+
+## Procedure (`r44-allowlist.sh`, run as root from a verified checkout)
+
+| Mode                 | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `readonly` (default) | Checks the SHA-256 pins of `release.py`, `policy.json` and the #265 preflight. Checks runtime trust before any secret: the Summary must be the expected image ID and revision, healthy, with no filesystem drift under `/app`, `/usr` or `/etc/ssl`. Then the owner enters their own Miniflux key at a hidden prompt; it goes to the Summary on stdin, and `/v1/me` runs through the Summary's own client. The admin ID list is read only if the owner types `LIST-ADMIN-IDS`. |
+| `apply`              | Runs the read-only steps, requires `R44_ADMIN_ID` to equal the verified ID and the allowlist to be empty, then asks for the phrase `APPLY-R44-ADMIN-<id>`. Then `release.py plan` and `promote`, a check that the effective allowlist is `CONFIGURED_COUNT_1`, and Gate D (the pinned #265 preflight, reported for the PM).                                                                                                                                                    |
+| `rollback`           | Owner phrase `ROLLBACK-R44`, then `release.py rollback` (idempotent). Verifies the allowlist is back to empty.                                                                                                                                                                                                                                                                                                                                                                 |
+
+Output is `KEY=VALUE` only, with no paths, URLs, usernames or keys.
+
+Exit codes:
+
+| Exit | Meaning                                                                                                       |
+| ---- | ------------------------------------------------------------------------------------------------------------- |
+| 0    | PASS / applied                                                                                                |
+| 3    | HOLD, nothing changed (a failure is classed as "no change" only if the live Summary is provably the original) |
+| 4    | Owner decision required (more than one admin, or admin listing declined)                                      |
+| 5    | Failed and rolled back by `release.py`                                                                        |
+| 6    | Supervised recovery required: run `rollback`                                                                  |
+
+## Interrupts and crash recovery
+
+- **Before the plan** (read-only): an interrupt stops the procedure and nothing has changed.
+- **During promote and verification:** the procedure ignores SIGINT, SIGTERM and SIGHUP, and `release.py` runs in
+  its own session (`setsid -w`). A terminal Ctrl+C or an ssh hangup therefore never reaches `release.py` or its
+  `docker compose` children. The section is bounded by `release.py`'s readiness timeout.
+- **SIGKILL, power loss or OOM** (not interceptable): base files are never modified, so the worst case is a
+  Summary running with the override, or a Summary mid-recreate. Recovery is `R44_MODE=rollback
+R44_RELEASE_ID=<id>`, which is idempotent; the release ID is printed before promote. On the deployed version
+  nothing calls the admin check, so the override has no functional effect until the AI settings release ships.
+
+## Tests
+
+`tests/procedure-test.sh` (root; CI uses `sudo -E`) runs on a disposable topology: the real Summary image, a
+fake Miniflux over HTTPS, protected stand-ins and canaries. It covers identity, runtime trust, apply, refusal,
+rollback and idempotence, a Ctrl+C/SIGTERM/SIGHUP to the whole process group during promote, an interrupt
+before any change, SIGKILL of `release.py` mid-promote followed by supervised rollback, an operator-owned clone
+run as root, and a tampered pin. `release.py` itself keeps its own tests on `main` (`test_release_docker.py`
+covers the configuration-only override promote and rollback).
 
 ```bash
 bash deploy/r44-admin-allowlist/tests/build-test-image.sh "$PWD"
-R44_TOOL=deploy/r44-admin-allowlist/r44_admin_allowlist.py bash deploy/r44-admin-allowlist/tests/matrix.sh
-bash deploy/r44-admin-allowlist/tests/wrapper-test.sh
-bash deploy/r44-admin-allowlist/tests/r44d-wrapper-test.sh
+sudo -E env "PATH=$PATH" bash deploy/r44-admin-allowlist/tests/procedure-test.sh
 ```
 
-Passing tests on a disposable topology do not prove anything about the production state. That comes only
-from the real read-only receipt on the OMV.
+Passing tests on a disposable topology prove nothing about the production state.
