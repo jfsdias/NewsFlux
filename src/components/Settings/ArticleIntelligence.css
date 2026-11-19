@@ -27,6 +27,12 @@
   max-width: 360px;
 }
 
+/* Saved-preference states and the "a preference approves nothing" note wrap in the same column. */
+.ai-preference-status.arco-typography {
+  display: block;
+  max-width: 360px;
+}
+
 .ai-model-catalog .arco-radio,
 .ai-checkbox-list .arco-checkbox,
 .ai-fallback-consent.arco-checkbox {
@@ -89,6 +95,7 @@
   .ai-model-catalog,
   .ai-checkbox-list,
   .ai-fallback-consent.arco-checkbox,
+  .ai-preference-status.arco-typography,
   .ai-model-search.arco-input-inner-wrapper,
   .ai-model-search.arco-input {
     max-width: none;

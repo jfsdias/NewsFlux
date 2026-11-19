@@ -134,10 +134,11 @@ test("model approval gates: local, external free, paid, unpriced and non-chat", 
   // The user-facing primary selector now lists it, still subject to inference flags.
   const primary = page.getByRole("radiogroup", { name: "AI model" })
   const llama = primary.getByRole("radio", { name: /^llama3\.2:3b/ })
-  // Approved by policy, but inference flags remain OFF: visible yet not selectable.
+  // Approved by policy, but inference flags remain OFF: it can be saved as an inert
+  // preference, is reported as not running, and nothing else is used instead.
   await expect(llama).toHaveAccessibleName(/Disabled/)
   await expect(llama).not.toHaveAccessibleName(/Not approved by the operator/)
-  await expect(llama).toBeDisabled()
+  await expect(llama).toBeEnabled()
 })
 
 test("revocation returns the model to not-approved in the user catalog without code change", async ({

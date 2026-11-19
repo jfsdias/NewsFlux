@@ -146,6 +146,37 @@ async def state():
     })
 
 
+_LEGACY_ENV = {
+    "NEWSFLUX_AI_LITELLM_S5_FREE_ALIAS": "llama3.2:3b",
+    "NEWSFLUX_AI_LITELLM_S5_FREE_INPUT_USD_PER_MILLION": "0",
+    "NEWSFLUX_AI_LITELLM_S5_FREE_OUTPUT_USD_PER_MILLION": "0",
+    "NEWSFLUX_AI_LITELLM_MISTRAL_SMALL_ALIAS": "mistral-small-synthetic",
+    "NEWSFLUX_AI_LITELLM_MISTRAL_SMALL_INPUT_USD_PER_MILLION": "0.2",
+    "NEWSFLUX_AI_LITELLM_MISTRAL_SMALL_OUTPUT_USD_PER_MILLION": "0.6",
+}
+_archives = {"count": 0}
+
+
+@app.post("/__admin/legacy/{mode}")
+async def legacy(mode: str):
+    """Harness only: a fresh LEGACY bootstrap (aliases, no policy JSON, no managed record)."""
+    if mode not in {"on", "readonly", "off"}:
+        return JSONResponse({"error": "invalid"}, status_code=400)
+    if mode in {"on", "readonly"}:
+        if _managed.exists():
+            # Keep earlier tests' records (temporary dir only) instead of deleting them.
+            _archives["count"] += 1
+            _managed.rename(_root / f"archived-{_archives['count']}")
+        store.env.update(_LEGACY_ENV)
+        store.enabled = mode == "on"
+    else:
+        for name in _LEGACY_ENV:
+            store.env.pop(name, None)
+        store.enabled = True
+    _gateway_mode["value"] = "ok"
+    return JSONResponse({"legacy": mode})
+
+
 @app.post("/__admin/gateway/{mode}")
 async def gateway(mode: str):
     if mode not in {"ok", "down"}:

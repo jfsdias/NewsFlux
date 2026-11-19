@@ -7,6 +7,8 @@ const ERROR_KEYS = {
   KEY_UNVERIFIED: "error_key_unverified",
   MODEL_UNVERIFIED: "error_model_unverified",
   MODEL_NOT_DISCOVERED: "error_model_unverified",
+  MIGRATION_REQUIRED: "error_migration_required",
+  MIGRATION_NOT_CONFIRMED: "migration_confirm_required",
 }
 
 /**

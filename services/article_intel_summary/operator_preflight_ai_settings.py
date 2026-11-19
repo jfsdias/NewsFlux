@@ -61,6 +61,9 @@ def run(environ=None, *, check_gateway: bool = False, store_factory=ManagedSetti
         lines.append(f"KEY_SOURCE={'MANAGED' if status['managed'] else 'BOOTSTRAP'}")
         lines.append(f"KEY_CONFIGURED={'YES' if status['configured'] else 'NO'}")
         lines.append(f"POLICY_MODELS={min(int(status['policy_models']), 999)}")
+        lines.append(f"POLICY_SOURCE={str(status.get('policy_source', 'unknown')).upper()}")
+        # Informational: the first managed write is refused until an admin migrates explicitly.
+        lines.append(f"LEGACY_MIGRATION_REQUIRED={'YES' if status.get('migration_required') else 'NO'}")
         if not status["configured"]:
             hold = True
         if check_gateway:

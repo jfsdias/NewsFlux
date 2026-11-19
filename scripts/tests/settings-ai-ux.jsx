@@ -103,22 +103,42 @@ const catalog = {
     }),
   ],
 }
-// ?fallback=<id> starts with primary S5 and that fallback enabled; default: fallback off.
+// ?catalog=inert: every model listed but none runnable (LEGACY with inference OFF).
+if (params.get("catalog") === "inert") {
+  // As served by the API: no runnable default and the legacy policy.
+  catalog.default_model_id = null
+  catalog.policy = { status: "LEGACY" }
+  catalog.models = catalog.models.map((entry) => ({
+    ...entry,
+    status: "DISABLED",
+    available: false,
+    unavailable_reason: "INFERENCE_DISABLED",
+  }))
+}
+// ?fallback=<id> starts with that fallback enabled; default: fallback off.
+// ?primary=<id> sets the saved primary (default S5); it may name a model not in the catalog.
 const fallback = params.get("fallback")
+const primary = params.get("primary") ?? "s5-free"
 updateSettings(
   fallback
     ? {
-        aiSummaryModel: "s5-free",
+        aiSummaryModel: primary,
         aiSummaryFallbackEnabled: true,
         aiSummaryFallbackModel: fallback,
       }
-    : { aiSummaryModel: "s5-free", aiSummaryFallbackEnabled: false },
+    : { aiSummaryModel: primary, aiSummaryFallbackEnabled: false },
 )
+// Every request the settings page makes, for "no summary / no admin request" assertions.
+globalThis.__aiRequests = []
 const nativeFetch = globalThis.fetch
-globalThis.fetch = (url, options) =>
-  String(url) === "/api/ai/v1/models"
+globalThis.fetch = (url, options) => {
+  if (String(url).startsWith("/api/ai/")) {
+    globalThis.__aiRequests.push(String(url))
+  }
+  return String(url) === "/api/ai/v1/models"
     ? Promise.resolve(Response.json(catalog))
     : nativeFetch(url, options)
+}
 
 const Harness = () => {
   const [tab, setTab] = useState("reading")
