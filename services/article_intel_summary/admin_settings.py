@@ -11,6 +11,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import stat
 import tempfile
@@ -43,6 +44,14 @@ LOCAL_IDENTITY = "ollama@ollama:11434"
 MIGRATION_CONFIRMATION = "MIGRATE-LEGACY-POLICY"
 KEY_RECOVERY_CONFIRMATION = "RECOVER-LEGACY-KEY-AND-MIGRATE"
 INTERRUPTED_ACTIVATION_CONFIRMATION = "RECOVER-INTERRUPTED-ACTIVATION"
+JOURNAL_KEYS = frozenset({
+    "version", "kind", "revision", "record_sha256", "previous_sha256", "audit_sha256",
+})
+MANIFEST_KEYS = frozenset({"version", "kind", "revision", "journal_sha256", "created_at", "files"})
+# Only these basenames can ever be named by a recovery manifest: no separator, no traversal.
+_RECOVERABLE_NAME = re.compile(r"^(?:activated|activation\.pending|previous\.json|migration\.json|\.new-[a-z0-9_]{1,64})$")
+_BACKUP_DIR = re.compile(r"^(?:legacy-revert|interrupted-activation)-[0-9a-f]{32}$")
+_ROOT_KNOWN = frozenset({"write.lock", "activation.pending", "activated", "previous.json", "migration.json"})
 AUDIT_KEYS = frozenset({
     "version", "kind", "from", "revision", "previous_revision", "migrated_at",
     "record_sha256", "previous_sha256", "legacy_models",
@@ -74,7 +83,8 @@ class ManagedSettingsError(Exception):
             "CONFIG_CONFLICT", "KEY_INVALID", "KEY_UNVERIFIED",
             "POLICY_INVALID", "MODEL_NOT_DISCOVERED", "MODEL_UNVERIFIED",
             "CHANGES_DISABLED", "MIGRATION_REQUIRED", "MIGRATION_NOT_CONFIRMED",
-            "ROLLBACK_STATE_CHANGED", "INFERENCE_ENABLED",
+            "ROLLBACK_STATE_CHANGED", "INFERENCE_ENABLED", "RECOVERY_INTEGRITY_FAILED",
+            "KEY_STATE_INCONCLUSIVE",
         }:
             code = "CONFIG_UNAVAILABLE"
         self.code = code
@@ -147,9 +157,14 @@ class ManagedSettingsStore:
         finally:
             os.close(fd)
 
-    def _managed(self) -> dict | None:
+    def _managed(self, *, allow_pending: bool = False) -> dict | None:
         if not self._check_dir():
             return None
+        journal = self.root / "activation.pending"
+        if not allow_pending and (journal.exists() or journal.is_symlink()):
+            # A first activation that has not finished (crash, fsync/readback/cleanup error):
+            # neither the record nor the bootstrap is authoritative until the operator recovers.
+            raise ManagedSettingsError("CONFIG_UNAVAILABLE")
         marker = self._read_private(self.root / "activated", limit=32)
         if marker is not None and marker != b"v1\n":
             raise ManagedSettingsError("CONFIG_UNSAFE")
@@ -372,21 +387,22 @@ class ManagedSettingsStore:
             os.close(dirfd)
 
     def _write_bytes(self, path: Path, data: bytes) -> None:
+        self._write_atomic(self.root, path.name, data, prefix=".new-")
+
+    def _write_atomic(self, directory: Path, name: str, data: bytes, *, prefix: str) -> None:
+        """Temp file + fsync + rename + directory fsync. An error after the rename still raises:
+        callers must treat "raised" as "maybe renamed" and inspect the target."""
         temp_path = None
         try:
-            fd, temp_path = tempfile.mkstemp(dir=str(self.root), prefix=".new-", text=False)
+            fd, temp_path = tempfile.mkstemp(dir=str(directory), prefix=prefix, text=False)
             os.fchmod(fd, 0o600)
             with os.fdopen(fd, "wb") as handle:
                 handle.write(data)
                 handle.flush()
                 os.fsync(handle.fileno())
-            os.replace(temp_path, path)
+            os.replace(temp_path, directory / name)
             temp_path = None
-            dirfd = os.open(self.root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-            try:
-                os.fsync(dirfd)
-            finally:
-                os.close(dirfd)
+            self._fsync_dir(directory)
         except OSError:
             raise ManagedSettingsError("CONFIG_UNAVAILABLE") from None
         finally:
@@ -396,12 +412,36 @@ class ManagedSettingsStore:
                 except OSError:
                     pass
 
-    def _current_key_verified(self, state: dict) -> bool:
+    def _bootstrap_key_state(self, state: dict) -> str:
+        """verified | rejected | absent | inconclusive.
+
+        Only an explicit authentication refusal from the gateway (HTTP 401/403) or a missing /
+        malformed key proves the current key unusable. Outages, timeouts, 5xx, 429 or malformed
+        answers are inconclusive and never unlock the supervised key recovery."""
         try:
-            self.discover(candidate_key=state["key"] or "")
-            return True
+            key = _parse_key(state["key"])
         except ManagedSettingsError:
-            return False
+            return "absent"
+        base = self.env.get("NEWSFLUX_AI_LITELLM_BASE_URL")
+        peer = self.env.get("NEWSFLUX_AI_LITELLM_PRIVATE_DOCKER_PEER") or None
+        if not _valid_gateway_base_url(base) or peer not in (None, "npm"):
+            return "inconclusive"
+        try:
+            getter = self.getter_factory(base, peer, key)
+            getter("/v1/models")
+            return "verified"
+        except RuntimeError as error:
+            return "rejected" if str(error) in ("HTTP_401", "HTTP_403") else "inconclusive"
+        except Exception:  # noqa: BLE001 - classified, detail-free
+            return "inconclusive"
+
+    def _require_unusable_bootstrap_key(self, state: dict) -> str:
+        key_state = self._bootstrap_key_state(state)
+        if key_state == "verified":
+            raise ManagedSettingsError("CONFIG_CONFLICT")  # not a rotation path
+        if key_state == "inconclusive":
+            raise ManagedSettingsError("KEY_STATE_INCONCLUSIVE")
+        return key_state
 
     def _save(self, expected_revision: str, *, key: str | None = None, policy: dict | None = None,
               change: str, preview_token: str | None = None) -> dict:
@@ -427,9 +467,8 @@ class ManagedSettingsStore:
                 if not legacy:
                     raise ManagedSettingsError("CONFIG_CONFLICT")
                 if change == "key_recovery":
-                    # Only when the bootstrap key really fails; never a general rotation path.
-                    if self._current_key_verified(state):
-                        raise ManagedSettingsError("CONFIG_CONFLICT")
+                    # Only when the bootstrap key is proven unusable; never a rotation path.
+                    self._require_unusable_bootstrap_key(state)
                     preview = self._preview(state, key=key, secret=key.encode())
                 else:
                     preview = self._preview(state)
@@ -479,39 +518,74 @@ class ManagedSettingsStore:
                         {"id": item.model_id, "alias": item.alias, "label": item.label} for item in legacy
                     ],
                 }, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+            # A snapshot only: if this write fails, nothing points at it and the current
+            # authority (bootstrap or managed record) is unchanged.
             self._write_bytes(self.root / "previous.json", previous)
             first_activation = current is None
-            if first_activation:
-                # Intent journal before the marker: a crash between the marker and the record
-                # is recognizable (operator_recover_interrupted_activation), unlike a deletion.
-                journal = json.dumps({
-                    "version": 1, "revision": next_state["revision"], "record_sha256": _sha256(raw),
-                }, separators=(",", ":")).encode("utf-8")
+            if not first_activation:
+                self._write_bytes(self.root / "settings.json", raw)  # atomic rename of a complete record
+                self._commit_readback(next_state["revision"], raw)
+                return self.status()
+            # First activation state machine (R2). Terminal states only:
+            #   CLEAN       no marker, no journal, no record: bootstrap stays authoritative;
+            #   FAIL_CLOSED journal present (with or without marker/record): CONFIG_UNAVAILABLE
+            #               until operator_recover_interrupted_activation rolls it forward (record
+            #               committed and intact) or back (record absent, inference OFF);
+            #   COMMITTED   marker + record, journal removed: success is returned only here.
+            journal = json.dumps({
+                "version": 1, "kind": change, "revision": next_state["revision"],
+                "record_sha256": _sha256(raw), "previous_sha256": _sha256(previous),
+                "audit_sha256": _sha256(audit) if audit is not None else None,
+            }, separators=(",", ":")).encode("utf-8")
+            try:
                 self._write_bytes(self.root / "activation.pending", journal)
                 self._write_bytes(self.root / "activated", b"v1\n")
-            try:
                 if audit is not None:
                     self._write_bytes(self.root / "migration.json", audit)
                 self._write_bytes(self.root / "settings.json", raw)
+                self._commit_readback(next_state["revision"], raw)
             except ManagedSettingsError:
-                if first_activation:
-                    # Nothing managed was ever committed: withdraw the marker so the
-                    # unchanged bootstrap remains authoritative instead of bricking.
-                    for name in ("migration.json", "activated", "activation.pending"):
-                        try:
-                            os.unlink(self.root / name)
-                        except OSError:
-                            pass
+                record = self.root / "settings.json"
+                if record.exists() or record.is_symlink():
+                    # The record may be renamed in place (e.g. directory fsync failed after
+                    # os.replace): keep every file and the journal as evidence; fail closed.
+                    raise ManagedSettingsError("CONFIG_UNAVAILABLE") from None
+                self._withdraw_uncommitted_activation()
                 raise
-            check = self._managed()
-            if check is None or check["revision"] != next_state["revision"]:
-                raise ManagedSettingsError("CONFIG_UNAVAILABLE")
-            if first_activation:
+            try:
                 os.unlink(self.root / "activation.pending")
-                self._fsync_dir(self.root)
+            except OSError:
+                # Record committed, journal still present: fail closed until roll-forward.
+                raise ManagedSettingsError("CONFIG_UNAVAILABLE") from None
+            self._fsync_dir_checked(self.root)
             return self.status()
         finally:
             os.close(fd)
+
+    def _fsync_dir_checked(self, directory: Path) -> None:
+        try:
+            self._fsync_dir(directory)
+        except OSError:
+            raise ManagedSettingsError("CONFIG_UNAVAILABLE") from None
+
+    def _commit_readback(self, revision: str, raw: bytes) -> None:
+        check = self._managed(allow_pending=True)
+        record = self._read_private(self.root / "settings.json", limit=MAX_RECORD_BYTES)
+        if (check is None or check["revision"] != revision or record is None
+                or not hmac.compare_digest(_sha256(record), _sha256(raw))):
+            raise ManagedSettingsError("CONFIG_UNAVAILABLE")
+
+    def _withdraw_uncommitted_activation(self) -> None:
+        """No record was renamed: remove the marker, then the audit, then the journal (last), so
+        an interruption here still leaves the journal and stays fail-closed."""
+        for name in ("activated", "migration.json", "activation.pending"):
+            try:
+                os.unlink(self.root / name)
+            except FileNotFoundError:
+                continue
+            except OSError:
+                raise ManagedSettingsError("CONFIG_UNAVAILABLE") from None
+        self._fsync_dir_checked(self.root)
 
     def operator_restore_previous(self, expected_revision: str) -> dict:
         """Only callable by the trusted operator inside the Summary container.
@@ -856,14 +930,13 @@ class ManagedSettingsStore:
             raise ManagedSettingsError("CONFIG_CONFLICT")
         if isinstance(state["key"], str) and hmac.compare_digest(candidate.encode(), state["key"].encode()):
             raise ManagedSettingsError("CONFIG_CONFLICT")
-        if self._current_key_verified(state):
-            raise ManagedSettingsError("CONFIG_CONFLICT")
+        key_state = self._require_unusable_bootstrap_key(state)
         self.discover(candidate_key=candidate)  # KEY_UNVERIFIED when the gateway refuses it
         plan = self._preview(state, key=candidate, secret=candidate.encode())
         if plan["gateway"] != "ok":
             raise ManagedSettingsError("KEY_UNVERIFIED")
         return {
-            "revision": state["revision"], "current_key": "unverified", "candidate_key": "verified",
+            "revision": state["revision"], "current_key": key_state, "candidate_key": "verified",
             "gateway": plan["gateway"], "models": plan["models"], "result_policy_models": 0,
             "plan_digest": plan["preview_token"],
         }
@@ -885,8 +958,7 @@ class ManagedSettingsStore:
             raise ManagedSettingsError("CONFIG_CONFLICT")
         if isinstance(state["key"], str) and hmac.compare_digest(candidate.encode(), state["key"].encode()):
             raise ManagedSettingsError("CONFIG_CONFLICT")
-        if self._current_key_verified(state):
-            raise ManagedSettingsError("CONFIG_CONFLICT")
+        self._require_unusable_bootstrap_key(state)
         self.discover(candidate_key=candidate)
         plan = self._preview(state, key=candidate, secret=candidate.encode())
         if plan["gateway"] != "ok":
@@ -895,20 +967,23 @@ class ManagedSettingsStore:
             raise ManagedSettingsError("CONFIG_CONFLICT")
         return self._save(expected_revision, key=candidate, change="key_recovery", preview_token=plan_digest)
 
-    # -- P2: explicit recovery of a first activation interrupted before its record ---------------
+    # -- P2/R2: supervised recovery of an unfinished first activation ---------------------------
     def operator_recover_interrupted_activation(self, confirm: object) -> dict:
         """Operator-only (no HTTP route), works with writes OFF.
 
-        A first activation writes previous.json, then the activation.pending journal, then the
-        activated marker, (migration.json), settings.json, and finally removes the journal.
-        - Journal present, record absent: the activation never committed. Every file it left
-          (marker, journal, previous.json, migration.json, .new-* partial writes) is moved into
-          interrupted-activation-<revision>/ with a recovery.json listing each file's SHA-256,
-          and the readback must show the unchanged bootstrap. Nothing is deleted or restored.
-        - Journal present, record committed with the journaled revision and digest: roll
-          forward by removing the stale journal.
-        - No journal: a missing record after a completed activation is NOT an interruption
-          (deletion or corruption) and stays fail-closed; refused without changes.
+        Journal (activation.pending) present:
+        - record (settings.json) present: roll FORWARD when marker, record, previous.json and
+          audit match the journal digests. The state stays MANAGED, so inference may be ON.
+          Only the journal is removed (journal_removed=True, data_files_deleted=0).
+        - record absent: roll BACK to the bootstrap, refused while inference is ON. Every file
+          is validated against the journal, a strict manifest (name, SHA-256, size) is staged
+          atomically in interrupted-activation-<revision>/ before any move, each move is
+          verified before and after, the readback must show the bootstrap, all backup files are
+          re-verified, and only then is recovery.done written. Nothing is deleted; the journal is
+          preserved in the backup. An interrupted roll-back resumes from its manifest after the
+          same validation.
+        No journal: refused unless an interrupted roll-back of exactly one backup is pending. A
+        record missing after a completed activation is a deletion, not an interruption.
         """
         if not _confirmed(confirm, INTERRUPTED_ACTIVATION_CONFIRMATION):
             raise ManagedSettingsError("MIGRATION_NOT_CONFIRMED")
@@ -916,100 +991,232 @@ class ManagedSettingsStore:
             raise ManagedSettingsError("CONFIG_CONFLICT")
         fd = self._open_lock()
         try:
-            journal_path = self.root / "activation.pending"
-            raw = self._read_private(journal_path, limit=1024)
-            record_path = self.root / "settings.json"
-            if raw is None:
-                return self._resume_interrupted_activation()
-            try:
-                journal = json.loads(raw.decode("utf-8"))
-                if (not isinstance(journal, dict) or set(journal) != {"version", "revision", "record_sha256"}
-                        or journal["version"] != 1 or not _is_hex(journal["revision"], 32)
-                        or not _is_hex(journal["record_sha256"], 64)):
-                    raise ValueError()
-            except (ValueError, UnicodeError):
-                raise ManagedSettingsError("CONFIG_INVALID") from None
-            if record_path.exists() or record_path.is_symlink():
-                record = self._read_private(record_path, limit=MAX_RECORD_BYTES)
-                current = self._managed()
-                if (current is None or current["revision"] != journal["revision"]
-                        or not hmac.compare_digest(_sha256(record), journal["record_sha256"])):
-                    raise ManagedSettingsError("CONFIG_INVALID")
-                os.unlink(journal_path)
-                self._fsync_dir(self.root)
-                return {"outcome": "completed_committed_activation", "moved": [], "status": self.status()}
+            journal_raw = self._read_private(self.root / "activation.pending", limit=4096)
+            if journal_raw is None:
+                return self._resume_without_journal()
+            journal = self._parse_journal(journal_raw)
+            record = self.root / "settings.json"
+            if record.exists() or record.is_symlink():
+                return self._roll_forward(journal)
+            self._require_inference_off()
             backup = self.root / f"interrupted-activation-{journal['revision']}"
             if backup.exists() or backup.is_symlink():
-                # A recovery of this same revision was interrupted after its audit was written.
-                return self._resume_from_backup(backup, journal["revision"])
-            names = self._interrupted_names()
-            moved = []
-            for name in names:
-                data = self._read_private(self.root / name, limit=MAX_RECORD_BYTES)
-                if data is not None:
-                    moved.append({"name": name, "sha256": _sha256(data), "bytes": len(data)})
+                return self._resume_rollback(backup, journal_raw)
+            files = self._plan_rollback(journal)
             self._make_private_dir(backup)
-            audit = json.dumps({
-                "version": 1, "kind": "interrupted_activation", "revision": journal["revision"],
-                "recovered_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "moved": moved,
-            }, separators=(",", ":")).encode("utf-8")
-            self._write_new(backup / "recovery.json", audit)
-            return self._finish_interrupted_activation(backup, moved)
+            manifest = self._manifest_bytes(journal["revision"], journal_raw, files)
+            self._write_atomic(backup, "recovery.json", manifest, prefix=".recovery-")
+            return self._execute_rollback(backup, self._parse_manifest(manifest, journal["revision"]))
         finally:
             os.close(fd)
 
-    def _interrupted_names(self) -> list[str]:
-        partial = sorted(p.name for p in self.root.iterdir() if p.name.startswith(".new-") and p.is_file())
-        # The marker moves last: until then the store stays fail-closed, never bootstrap.
-        return [*partial, "migration.json", "previous.json", "activation.pending", "activated"]
+    def _require_inference_off(self) -> None:
+        if self.env.get("NEWSFLUX_AI_INFERENCE_ENABLED", "").lower() == "true":
+            # Returning to the bootstrap re-enables the legacy policy: never while inference is ON.
+            raise ManagedSettingsError("INFERENCE_ENABLED")
 
-    def _resume_interrupted_activation(self) -> dict:
-        """Journal already moved by an interrupted recovery: finish exactly that recovery."""
-        record_path = self.root / "settings.json"
-        if record_path.exists() or not (self.root / "activated").exists():
-            raise ManagedSettingsError("CONFIG_CONFLICT")
-        candidates = [p for p in self.root.iterdir()
-                      if p.is_dir() and p.name.startswith("interrupted-activation-")
-                      and (p / "activation.pending").exists() and not (p / "recovery.done").exists()]
-        if len(candidates) != 1:
-            raise ManagedSettingsError("CONFIG_CONFLICT")  # deletion, not an interruption
-        return self._resume_from_backup(candidates[0], None)
+    @staticmethod
+    def _parse_journal(raw: bytes) -> dict:
+        try:
+            journal = json.loads(raw.decode("utf-8"))
+            if (not isinstance(journal, dict) or set(journal) != JOURNAL_KEYS or journal["version"] != 1
+                    or journal["kind"] not in ("key", "policy", "migration", "key_recovery")
+                    or not _is_hex(journal["revision"], 32) or not _is_hex(journal["record_sha256"], 64)
+                    or not _is_hex(journal["previous_sha256"], 64)
+                    or not (journal["audit_sha256"] is None or _is_hex(journal["audit_sha256"], 64))):
+                raise ValueError()
+        except (ValueError, UnicodeError):
+            raise ManagedSettingsError("CONFIG_INVALID") from None
+        return journal
 
-    def _resume_from_backup(self, backup: Path, revision: str | None) -> dict:
+    def _digest_of(self, path: Path) -> tuple[str, int] | None:
+        data = self._read_private(path, limit=MAX_RECORD_BYTES)
+        return None if data is None else (_sha256(data), len(data))
+
+    def _roll_forward(self, journal: dict) -> dict:
+        integrity = ManagedSettingsError("RECOVERY_INTEGRITY_FAILED")
+        if self._read_private(self.root / "activated", limit=32) != b"v1\n":
+            raise integrity
+        for name, expected in (("settings.json", journal["record_sha256"]),
+                               ("previous.json", journal["previous_sha256"]),
+                               ("migration.json", journal["audit_sha256"])):
+            found = self._digest_of(self.root / name)
+            if expected is None:
+                if found is not None:
+                    raise integrity
+            elif found is None or not hmac.compare_digest(found[0], expected):
+                raise integrity
+        current = self._managed(allow_pending=True)
+        if current is None or current["revision"] != journal["revision"]:
+            raise integrity
+        self._fsync_dir_checked(self.root)  # make the committed record durable first
+        try:
+            os.unlink(self.root / "activation.pending")
+        except OSError:
+            raise ManagedSettingsError("CONFIG_UNAVAILABLE") from None
+        self._fsync_dir_checked(self.root)
+        status = self.status()
+        if not status["managed"] or status["revision"] != journal["revision"]:
+            raise ManagedSettingsError("CONFIG_UNAVAILABLE")
+        return {"outcome": "completed_committed_activation", "journal_removed": True,
+                "journal_preserved": False, "data_files_deleted": 0, "moved": [], "status": status}
+
+    def _plan_rollback(self, journal: dict) -> list[dict]:
+        """Validate the whole store against the journal before anything moves."""
+        integrity = ManagedSettingsError("RECOVERY_INTEGRITY_FAILED")
+        partial = []
+        for entry in sorted(os.listdir(self.root)):
+            path = self.root / entry
+            if entry in _ROOT_KNOWN:
+                continue
+            if _BACKUP_DIR.match(entry) and path.is_dir() and not path.is_symlink():
+                continue
+            if _RECOVERABLE_NAME.match(entry) and entry.startswith(".new-") and path.is_file():
+                partial.append(entry)
+                continue
+            raise ManagedSettingsError("CONFIG_INVALID")  # unexpected content: stop, change nothing
+        marker = self._read_private(self.root / "activated", limit=32)
+        if marker is not None and marker != b"v1\n":
+            raise integrity
+        previous = self._digest_of(self.root / "previous.json")
+        if previous is None or not hmac.compare_digest(previous[0], journal["previous_sha256"]):
+            raise integrity
+        audit = self._digest_of(self.root / "migration.json")
+        if audit is not None and (journal["audit_sha256"] is None
+                                  or not hmac.compare_digest(audit[0], journal["audit_sha256"])):
+            raise integrity
+        files = []
+        # The journal and then the marker move last: until then the store stays fail-closed.
+        for name in (*partial, "migration.json", "previous.json", "activation.pending", "activated"):
+            found = self._digest_of(self.root / name)
+            if found is not None:
+                files.append({"name": name, "sha256": found[0], "bytes": found[1]})
+        return files
+
+    @staticmethod
+    def _manifest_bytes(revision: str, journal_raw: bytes, files: list[dict]) -> bytes:
+        return json.dumps({
+            "version": 1, "kind": "interrupted_activation", "revision": revision,
+            "journal_sha256": _sha256(journal_raw),
+            "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "files": files,
+        }, separators=(",", ":")).encode("utf-8")
+
+    @staticmethod
+    def _parse_manifest(raw: bytes, revision: str) -> dict:
+        try:
+            manifest = json.loads(raw.decode("utf-8"))
+            files = manifest["files"]
+            names = [item["name"] for item in files]
+            if (not isinstance(manifest, dict) or set(manifest) != MANIFEST_KEYS or manifest["version"] != 1
+                    or manifest["kind"] != "interrupted_activation" or manifest["revision"] != revision
+                    or not _is_hex(manifest["journal_sha256"], 64) or not isinstance(manifest["created_at"], str)
+                    or not isinstance(files, list) or not files or len(set(names)) != len(names)
+                    or "activation.pending" not in names):
+                raise ValueError()
+            for item in files:
+                if (not isinstance(item, dict) or set(item) != {"name", "sha256", "bytes"}
+                        or not isinstance(item["name"], str) or not _RECOVERABLE_NAME.match(item["name"])
+                        or not _is_hex(item["sha256"], 64) or type(item["bytes"]) is not int
+                        or not 0 <= item["bytes"] <= MAX_RECORD_BYTES):
+                    raise ValueError()
+        except (KeyError, TypeError, ValueError, UnicodeError):
+            raise ManagedSettingsError("CONFIG_INVALID") from None
+        manifest["_sha256"] = _sha256(raw)
+        return manifest
+
+    def _verify_rollback_locations(self, backup: Path, manifest: dict) -> None:
+        """Before any move: each listed file is in exactly one place with its recorded digest and
+        size, and the backup holds nothing else (apart from our own manifest temp files)."""
+        integrity = ManagedSettingsError("RECOVERY_INTEGRITY_FAILED")
+        listed = {item["name"] for item in manifest["files"]}
+        for entry in os.listdir(backup):
+            if entry in listed or entry == "recovery.json" or entry.startswith(".recovery-"):
+                continue
+            raise integrity
+        for item in manifest["files"]:
+            in_root = (self.root / item["name"]).exists() or (self.root / item["name"]).is_symlink()
+            in_backup = (backup / item["name"]).exists() or (backup / item["name"]).is_symlink()
+            if in_root == in_backup:
+                raise integrity  # missing everywhere, or present twice
+            found = self._digest_of((self.root if in_root else backup) / item["name"])
+            if found is None or found != (item["sha256"], item["bytes"]):
+                raise integrity
+
+    def _execute_rollback(self, backup: Path, manifest: dict) -> dict:
+        integrity = ManagedSettingsError("RECOVERY_INTEGRITY_FAILED")
+        self._verify_rollback_locations(backup, manifest)
+        for item in manifest["files"]:
+            source, target = self.root / item["name"], backup / item["name"]
+            if not (source.exists() or source.is_symlink()):
+                continue  # already moved and verified above
+            if self._digest_of(source) != (item["sha256"], item["bytes"]):
+                raise integrity
+            try:
+                os.replace(source, target)
+            except OSError:
+                raise ManagedSettingsError("CONFIG_UNAVAILABLE") from None
+            if self._digest_of(target) != (item["sha256"], item["bytes"]):
+                raise integrity
+        self._fsync_dir_checked(backup)
+        self._fsync_dir_checked(self.root)
+        status = self._recovery_readback(manifest)
+        for item in manifest["files"]:  # final integrity proof of everything preserved
+            if self._digest_of(backup / item["name"]) != (item["sha256"], item["bytes"]):
+                raise integrity
+        receipt = json.dumps({
+            "version": 1, "revision": manifest["revision"], "manifest_sha256": manifest["_sha256"],
+            "files_verified": len(manifest["files"]),
+            "completed_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }, separators=(",", ":")).encode("utf-8")
+        self._write_atomic(backup, "recovery.done", receipt, prefix=".recovery-")
+        return {"outcome": "rolled_back_to_bootstrap", "journal_removed": False, "journal_preserved": True,
+                "data_files_deleted": 0,
+                "moved": [{"name": i["name"], "sha256": i["sha256"], "bytes": i["bytes"]} for i in manifest["files"]],
+                "status": status}
+
+    def _recovery_readback(self, manifest: dict) -> dict:
+        for item in manifest["files"]:
+            if (self.root / item["name"]).exists():
+                raise ManagedSettingsError("RECOVERY_INTEGRITY_FAILED")
+        status = self.status()
+        if status["managed"]:
+            raise ManagedSettingsError("CONFIG_UNAVAILABLE")  # readback must be the bootstrap
+        return status
+
+    def _resume_rollback(self, backup: Path, journal_raw: bytes | None) -> dict:
         self._check_private_dir(backup)
         if (backup / "recovery.done").exists():
             raise ManagedSettingsError("CONFIG_CONFLICT")
+        revision = backup.name.removeprefix("interrupted-activation-")
         raw = self._read_private(backup / "recovery.json", limit=MAX_RECORD_BYTES)
-        try:
-            audit = json.loads(raw.decode("utf-8"))
-            moved = audit["moved"]
-            if (audit["kind"] != "interrupted_activation" or not isinstance(moved, list)
-                    or (revision is not None and audit["revision"] != revision)
-                    or not all(isinstance(m, dict) and isinstance(m.get("name"), str) for m in moved)
-                    or any(m["name"] not in self._interrupted_names() and not m["name"].startswith(".new-")
-                           for m in moved)):
-                raise ValueError()
-        except (AttributeError, KeyError, TypeError, ValueError, UnicodeError):
-            raise ManagedSettingsError("CONFIG_INVALID") from None
-        return self._finish_interrupted_activation(backup, moved)
+        if raw is None:
+            # Interrupted while staging the manifest: nothing was moved yet. Restart only if the
+            # backup holds nothing but our manifest temp files and the journal is still in place.
+            if journal_raw is None or any(not e.startswith(".recovery-") for e in os.listdir(backup)):
+                raise ManagedSettingsError("RECOVERY_INTEGRITY_FAILED")
+            journal = self._parse_journal(journal_raw)
+            if journal["revision"] != revision:
+                raise ManagedSettingsError("CONFIG_INVALID")
+            raw = self._manifest_bytes(revision, journal_raw, self._plan_rollback(journal))
+            self._write_atomic(backup, "recovery.json", raw, prefix=".recovery-")
+        manifest = self._parse_manifest(raw, revision)
+        if journal_raw is not None and not hmac.compare_digest(manifest["journal_sha256"], _sha256(journal_raw)):
+            raise ManagedSettingsError("RECOVERY_INTEGRITY_FAILED")
+        journal_item = next(i for i in manifest["files"] if i["name"] == "activation.pending")
+        if journal_item["sha256"] != manifest["journal_sha256"]:
+            raise ManagedSettingsError("RECOVERY_INTEGRITY_FAILED")
+        return self._execute_rollback(backup, manifest)
 
-    def _finish_interrupted_activation(self, backup: Path, moved: list) -> dict:
-        self._move([item["name"] for item in moved], backup)
-        self._write_new(backup / "recovery.done", b"v1\n")
-        status = self.status()
-        if status["managed"]:
-            raise ManagedSettingsError("CONFIG_UNAVAILABLE")  # readback must be bootstrap
-        return {"outcome": "rolled_back_to_bootstrap",
-                "moved": [{"name": m["name"], "sha256": m["sha256"]} for m in moved], "status": status}
-
-    def _write_new(self, path: Path, data: bytes) -> None:
-        try:
-            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
-        except OSError:
-            raise ManagedSettingsError("CONFIG_UNAVAILABLE") from None
-        with os.fdopen(fd, "wb") as handle:
-            handle.write(data)
-            handle.flush()
-            os.fsync(handle.fileno())
-        self._fsync_dir(path.parent)
+    def _resume_without_journal(self) -> dict:
+        """The journal was already moved by an interrupted roll-back: finish exactly that one."""
+        record = self.root / "settings.json"
+        if record.exists() or record.is_symlink():
+            raise ManagedSettingsError("CONFIG_CONFLICT")
+        pending = [p for p in sorted(self.root.iterdir())
+                   if p.is_dir() and not p.is_symlink() and p.name.startswith("interrupted-activation-")
+                   and _BACKUP_DIR.match(p.name) and not (p / "recovery.done").exists()]
+        if len(pending) != 1:
+            raise ManagedSettingsError("CONFIG_CONFLICT")  # nothing to recover, or a deletion
+        self._require_inference_off()
+        return self._resume_rollback(pending[0], None)

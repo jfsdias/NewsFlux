@@ -54,8 +54,7 @@ def run(environ=None, *, check_gateway: bool = False, store_factory=ManagedSetti
     lines.append(f"MANAGED_DIR={root_state}")
     # A first activation interrupted between its marker and its record (journal left behind):
     # recover with operator_recover_interrupted_activation_ai_settings, never by hand.
-    interrupted = (root_state == "PRESENT_PRIVATE" and (root / "activation.pending").is_file()
-                   and not (root / "settings.json").exists())
+    interrupted = root_state == "PRESENT_PRIVATE" and (root / "activation.pending").is_file()
     lines.append(f"INTERRUPTED_ACTIVATION={'YES' if interrupted else 'NO'}")
     if interrupted:
         hold = True

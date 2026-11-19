@@ -2,14 +2,14 @@
 
 No HTTP route. Run inside the existing Summary container as the service UID; works with
 admin writes disabled. Symptom: the store reports CONFIG_UNAVAILABLE and the read-only
-preflight prints INTERRUPTED_ACTIVATION=YES (marker and activation.pending journal present,
-settings.json absent).
+preflight prints INTERRUPTED_ACTIVATION=YES (activation.pending journal present).
 
-- Journal present, record absent: nothing was committed. The marker, journal, previous.json,
-  migration.json and any .new-* partial write are moved (never deleted) into
-  interrupted-activation-<revision>/ with recovery.json listing each file's SHA-256; the
-  readback must show the unchanged bootstrap.
-- Journal present, record committed: the stale journal is removed (roll forward).
+- Journal present, record committed and matching the journal digests: roll forward (stays
+  MANAGED; allowed with inference ON); only the journal is removed.
+- Journal present, record absent: roll back to the bootstrap, refused while
+  NEWSFLUX_AI_INFERENCE_ENABLED=true. A strict manifest (name, SHA-256, size) is staged
+  before any move; every move is verified before and after; the readback must be the
+  bootstrap; recovery.done is written last. Nothing is deleted; the journal is preserved.
 - No journal: refused. A record missing after a completed activation is a deletion or
   corruption, not an interruption, and stays fail-closed for forensic review.
 """
@@ -42,11 +42,16 @@ def main(argv: list[str] | None = None, *, store_factory=ManagedSettingsStore) -
     if result["outcome"] == "rolled_back_to_bootstrap":
         print("RECOVERY=PASS_ROLLED_BACK_TO_BOOTSTRAP")
         print(f"FILES_MOVED_TO_PRIVATE_BACKUP={len(result['moved'])}")
+        print("FILES_VERIFIED_SHA256_AND_SIZE=YES")
+        print("COMPLETION_RECEIPT=WRITTEN_AFTER_READBACK")
     else:
         print("RECOVERY=PASS_COMMITTED_ACTIVATION_COMPLETED")
+    # The journal is transaction metadata, not data: report its fate separately and truthfully.
+    print(f"JOURNAL_REMOVED={'YES' if result['journal_removed'] else 'NO'}")
+    print(f"JOURNAL_PRESERVED_IN_BACKUP={'YES' if result['journal_preserved'] else 'NO'}")
+    print(f"DATA_FILES_DELETED={int(result['data_files_deleted'])}")
     print(f"KEY_SOURCE={'MANAGED' if status['managed'] else 'BOOTSTRAP'}")
     print(f"POLICY_SOURCE={status['policy_source'].upper()}")
-    print("FILES_DELETED=0")
     print("RAW_CREDENTIAL_EXPORTED=NO")
     return 0
 

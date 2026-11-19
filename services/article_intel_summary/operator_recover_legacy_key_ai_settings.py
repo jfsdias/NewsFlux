@@ -50,7 +50,7 @@ def main(argv: list[str] | None = None, *, store_factory=ManagedSettingsStore) -
         if args.plan:
             plan = store.operator_plan_legacy_key_recovery(candidate)
             print("RECOVERY_PLAN=READY")
-            print("CURRENT_KEY=UNVERIFIED")
+            print(f"CURRENT_KEY={plan['current_key'].upper()}")  # REJECTED (HTTP 401/403) or ABSENT
             print("CANDIDATE_KEY=VERIFIED")
             print(f"LEGACY_MODELS={len(plan['models'])}")
             print(f"LEGACY_MODELS_FOUND={sum(1 for m in plan['models'] if m['discovered'])}")

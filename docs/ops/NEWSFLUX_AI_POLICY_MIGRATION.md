@@ -22,7 +22,7 @@ allowlist. The legacy models stopped running without any preview or confirmation
 | Migrate              | `POST /api/ai/v1/admin/litellm/migrate-policy` with exactly `{expected_revision, preview_token, confirm: "MIGRATE-LEGACY-POLICY"}`. Requires writes enabled, the current revision, a verified gateway and a fresh token. A wrong confirmation gives 422 `MIGRATION_NOT_CONFIRMED`; a stale or forged token or revision gives 409 `CONFIG_CONFLICT`; a gateway failure gives 503 `KEY_UNVERIFIED`. The unlocked pre-check means a failed attempt does not create the store directory. |
 | Result               | The key is unchanged. The policy is `{"version":1,"models":[]}`: no model is approved. Each legacy model must be approved through the existing per-model flow, with external and paid consent. The record schema is unchanged (`version, revision, key, policy`), so earlier builds can still read it.                                                                                                                                                                               |
 | Audit                | `migration.json` (0600) is the migration manifest. It records the kind (`migration` or `key_recovery`), the new and previous revision, the UTC time, the legacy model ids, aliases and labels, and the SHA-256 of the exact `settings.json` bytes committed (`record_sha256`) and of the `previous.json` bytes replaced (`previous_sha256`). No credential.                                                                                                                          |
-| Atomicity            | First activation order: `previous.json`, `activation.pending` (intent journal: target revision and record digest), `activated`, `migration.json`, `settings.json`, then the journal is removed. If the record write fails, the marker, audit and journal are withdrawn and legacy stays authoritative. If the process dies after the marker, the store fails closed (`CONFIG_UNAVAILABLE`), never back to legacy; recovery is the explicit operator procedure below.                 |
+| Atomicity            | See [First activation state machine](#first-activation-state-machine-r2). Success is returned only after the record is renamed, read back and digest-checked, and the journal is removed.                                                                                                                                                                                                                                                                                            |
 | Concurrency          | The file lock plus the revision compare-and-swap: of two concurrent migrations exactly one commits; the other gets `CONFIG_CONFLICT`.                                                                                                                                                                                                                                                                                                                                                |
 
 ## Operator revert (rollback) — only the untouched migration (red-team P0-RT-01)
@@ -64,10 +64,24 @@ intentionally out of scope.
 
 ## Operator recovery when the legacy bootstrap key is revoked (red-team P1-RT-02)
 
-Symptom: LEGACY with legacy aliases, and the bootstrap key fails discovery. `save-key` is
-refused with `MIGRATION_REQUIRED`, and the migration preview reports the gateway as
+Symptom: LEGACY with legacy aliases, and the gateway refuses the bootstrap key. `save-key`
+is refused with `MIGRATION_REQUIRED`, and the migration preview reports the gateway as
 unavailable (`KEY_UNVERIFIED`). Neither admin path can proceed. This recovery has no HTTP
 route and works with writes OFF.
+
+**Key classification (R2).** A failed discovery alone does not prove a key revoked. The
+current key is probed once against `/v1/models`, and the result is classified:
+
+- `rejected`: the gateway answered **HTTP 401 or 403**.
+- `absent`: there is no valid key file or value.
+- `verified`: the key works. The recovery is refused (`CONFIG_CONFLICT`); it is not a
+  rotation tool.
+- `inconclusive`: an outage, connection error, timeout, HTTP 5xx or 429, or a malformed
+  answer. The recovery is refused (`RECOVERY=HOLD_KEY_STATE_INCONCLUSIVE`) without any
+  write.
+
+Only `rejected` and `absent` unlock the plan. `CURRENT_KEY=` in the plan output prints the
+class. The same check is repeated at `--apply` and under the write lock.
 
 ```bash
 python -m services.article_intel_summary.operator_recover_legacy_key_ai_settings --key-file /run/newsflux/replacement-key --plan
@@ -81,7 +95,7 @@ python -m services.article_intel_summary.operator_recover_legacy_key_ai_settings
   the service user. It is never taken from argv or the environment, and never printed.
   Delete the file after the run.
 - `--plan` is read-only. It is refused unless the source is LEGACY with aliases **and** the
-  current bootstrap key fails discovery, so it is not a general rotation tool. The candidate
+  current bootstrap key is `rejected` or `absent`, so it is not a general rotation tool. The candidate
   must pass the same authenticated discovery, and each legacy model is verified with it. It
   prints counts and `PLAN_DIGEST`, an HMAC keyed by the candidate key that goes stale if the
   key, revision or gateway facts change.
@@ -93,29 +107,101 @@ python -m services.article_intel_summary.operator_recover_legacy_key_ai_settings
   reinstated: `operator_restore_previous` is refused while the current state is the
   recovery state, and a legacy revert is refused.
 
-## Operator recovery of an interrupted first activation (P2)
+## First activation state machine (R2)
 
-Symptom: the store reports `CONFIG_UNAVAILABLE`. The read-only preflight prints
-`INTERRUPTED_ACTIVATION=YES` (marker and `activation.pending` present, `settings.json`
-absent) and `PREFLIGHT=HOLD`.
+The first managed write (migration, key recovery, or a first key or policy save on a server
+without legacy aliases) writes, in order:
+
+1. `previous.json`: a snapshot only. If it fails, nothing points at it and the bootstrap
+   stays authoritative.
+2. `activation.pending`: the intent journal. It holds the kind, target revision, and the
+   SHA-256 of the record, of `previous.json` and of the audit.
+3. `activated`: the marker.
+4. `migration.json`: the manifest, when it applies.
+5. `settings.json`: the record.
+6. Readback of the record (revision and digest).
+7. Removal of the journal, then a directory `fsync`.
+
+Every atomic write is a temp file, `fsync`, rename, then a directory `fsync`. An error
+after the rename still counts as "maybe renamed". The resulting terminal states are:
+
+| Failure point                                                                 | Terminal state                                                                                                                                                                              |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Before the record was renamed (any write of 1–4, or step 5 before the rename) | **CLEAN**: marker, audit and journal are withdrawn (journal last), and the bootstrap stays authoritative. If the withdrawal itself fails, the journal remains and the state is FAIL_CLOSED. |
+| After the record was renamed (directory `fsync` error, readback error, crash) | **FAIL_CLOSED**: every file and the journal are kept as evidence. Nothing is deleted.                                                                                                       |
+| Journal removal fails                                                         | **FAIL_CLOSED**: record and journal both remain.                                                                                                                                            |
+| Journal removed, but the final directory `fsync` fails                        | The call reports an error; the record is complete and authoritative.                                                                                                                        |
+
+While `activation.pending` exists, every read (status, effective values, admin API,
+preflight) fails closed with `CONFIG_UNAVAILABLE`. The preflight prints
+`INTERRUPTED_ACTIVATION=YES` and `PREFLIGHT=HOLD`. A record never exists without its marker
+and journal, the store never falls back to LEGACY silently, and an incomplete transaction is
+never reported as success.
+
+## Operator recovery of an interrupted first activation (P2/R2)
 
 ```bash
 python -m services.article_intel_summary.operator_recover_interrupted_activation_ai_settings --confirm RECOVER-INTERRUPTED-ACTIVATION
 ```
 
-- Journal present, record absent: nothing was committed. The marker, journal,
-  `previous.json`, `migration.json` and any `.new-*` partial write are moved (never
-  deleted) into `interrupted-activation-<revision>/` (0700). `recovery.json` lists each
-  file's SHA-256 and size and is written before any move. The marker moves last, and
-  `recovery.done` closes the backup. The readback must show the unchanged bootstrap
-  (`KEY_SOURCE=BOOTSTRAP`); otherwise the result is `HOLD`. A recovery interrupted midway
-  resumes from its `recovery.json`.
-- Journal present, record committed with the journaled revision and digest: roll forward.
-  The stale journal is removed, and the committed managed record stays authoritative.
-- No journal: refused (`CONFIG_CONFLICT`). A record missing after a completed activation is
-  a deletion or corruption, not an interruption. It stays fail-closed for forensic review
-  and is never silently restored to bootstrap.
-- A tampered journal is `CONFIG_INVALID`, and nothing is moved.
+**Roll forward: journal present and record present.** Everything is checked against the
+journal: marker `v1`, digests of the record, `previous.json` and audit (or no audit), and
+the record revision. On a match, the directory is `fsync`ed, the journal is removed and the
+directory is `fsync`ed again. The readback must show MANAGED at the journaled revision.
+
+- The state stays MANAGED, so this is allowed with inference ON.
+- No model approval is created: the policy is what the record already holds.
+- Receipt: `RECOVERY=PASS_COMMITTED_ACTIVATION_COMPLETED`, `JOURNAL_REMOVED=YES`,
+  `DATA_FILES_DELETED=0`.
+- Any mismatch gives `RECOVERY=HOLD_RECOVERY_INTEGRITY_FAILED` and changes nothing.
+
+**Roll back to bootstrap: journal present, record absent.** This is **refused while
+`NEWSFLUX_AI_INFERENCE_ENABLED=true`** (`INFERENCE_ENABLED`), because returning to the
+bootstrap re-enables the LEGACY policy. The steps, in order:
+
+1. **Validate** the whole store before anything moves.
+   - Only known names, `.new-*` temp files and private backup directories may exist.
+     Anything else gives `CONFIG_INVALID`.
+   - The marker must be `v1`.
+   - `previous.json` and the audit must match the journal. A mismatch gives
+     `RECOVERY_INTEGRITY_FAILED`.
+2. **Stage** `interrupted-activation-<revision>/recovery.json` (0700 directory, 0600 file) by
+   atomic rename.
+   - It holds exactly: `version`, `kind`, `revision`, `journal_sha256`, `created_at`, and
+     `files[]` of `{name, sha256, bytes}`.
+   - Names are restricted to the basenames `activated`, `activation.pending`,
+     `previous.json`, `migration.json` and `.new-[a-z0-9_]+`. There are no separators and
+     no traversal.
+   - A crash while staging leaves no manifest and nothing moved, and the next run restarts.
+3. **Move under control.** Before any move, each file must exist in exactly one place (root
+   or backup) with its recorded SHA-256 and size, and the backup must hold nothing else.
+   Each file is re-hashed before and after its rename. The journal and then the marker move
+   last.
+4. **Readback.** No listed file may remain in the root, and the status must be the bootstrap
+   (not MANAGED).
+5. **Integrity re-check.** Every backup file must match its manifest digest and size.
+6. **Completion receipt.** `recovery.done` (manifest SHA-256, files verified, time) is
+   written by atomic rename **only now**.
+
+The receipt reads `RECOVERY=PASS_ROLLED_BACK_TO_BOOTSTRAP`,
+`FILES_VERIFIED_SHA256_AND_SIZE=YES`, `COMPLETION_RECEIPT=WRITTEN_AFTER_READBACK`,
+`JOURNAL_REMOVED=NO`, `JOURNAL_PRESERVED_IN_BACKUP=YES` and `DATA_FILES_DELETED=0`.
+
+**Resuming an interrupted roll-back.** Running the command again resumes from the
+manifest. It first re-runs the location and digest checks, and also checks the journal
+digest against the manifest. These cases give `RECOVERY_INTEGRITY_FAILED` or
+`CONFIG_INVALID` with no file changed and no receipt:
+
+- a tampered or missing moved file;
+- an extra file in the backup;
+- a wrong size or digest in the manifest;
+- a malicious name or a schema violation in the manifest.
+
+A completed recovery (with `recovery.done`) cannot be repeated (`CONFIG_CONFLICT`). With
+no journal and no unfinished backup, the command is refused (`CONFIG_CONFLICT`). A record
+missing after a completed activation is a deletion, not an interruption, and stays
+fail-closed for forensic review. Concurrent runs are serialized by the write lock, and
+exactly one completes.
 
 ## Preview tokens and multiple workers
 
@@ -145,7 +231,9 @@ runs one Summary process. Do not add a shared secret without a separate design r
 
 - Backend: `services/article_intel_summary/tests/test_admin_settings.py`: `LegacyMigrationTests`
   (30), `MigrationRollbackRedTeamTests` (11), `LegacyKeyRecoveryTests` (9) and
-  `InterruptedActivationRecoveryTests` (9). `test_operator_preflight.py` covers the revert,
+  `InterruptedActivationRecoveryTests` (9), and for R2 `FirstActivationCommitIntegrityTests`
+  (7, including every write point before and after the rename), `InterruptedRecoveryManifestTests`
+  (15) and `BootstrapKeyClassificationTests` (3). `test_operator_preflight.py` covers the revert,
   key-recovery and interrupted-activation CLIs and the preflight signals.
 - Node: `src/utils/litellm-migration-state.test.js`, `src/utils/summary-model-preference.test.js`.
 - Browser, against the real Summary admin API: `scripts/pilot-e2e/ai-settings-migration.spec.js`.

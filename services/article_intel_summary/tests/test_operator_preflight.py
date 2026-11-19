@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from services.article_intel_summary.admin_settings import ManagedSettingsStore
+from services.article_intel_summary.admin_settings import ManagedSettingsError, ManagedSettingsStore
 from services.article_intel_summary.operator_preflight_ai_settings import run
 from services.article_intel_summary.tests.test_dynamic_catalog import FakeGateway, model_info
 
@@ -166,7 +166,7 @@ class OperatorRecoveryCliTests(unittest.TestCase):
 
         class Revoked:
             def __call__(self, path):
-                raise RuntimeError("401")
+                raise RuntimeError("HTTP_401")
 
         self.factory = lambda: ManagedSettingsStore(
             self.env, getter_factory=lambda base, peer, key: Revoked() if key == KEY else self.gateway,
@@ -190,7 +190,7 @@ class OperatorRecoveryCliTests(unittest.TestCase):
         code, lines = self.run_cli(cli, "--key-file", str(self.new_key), "--plan")
         self.assertEqual(code, 0, lines)
         self.assertIn("RECOVERY_PLAN=READY", lines)
-        self.assertIn("CURRENT_KEY=UNVERIFIED", lines)
+        self.assertIn("CURRENT_KEY=REJECTED", lines)
         self.assertIn("LEGACY_MODELS=1", lines)
         self.assertFalse(self.root.exists())
         digest = next(line.split("=", 1)[1] for line in lines if line.startswith("PLAN_DIGEST="))
@@ -238,8 +238,53 @@ class OperatorRecoveryCliTests(unittest.TestCase):
         self.assertEqual(code, 0, lines)
         self.assertIn("RECOVERY=PASS_ROLLED_BACK_TO_BOOTSTRAP", lines)
         self.assertIn("KEY_SOURCE=BOOTSTRAP", lines)
+        # Truthful receipt: the journal is preserved in the backup, nothing is deleted.
+        self.assertIn("JOURNAL_REMOVED=NO", lines)
+        self.assertIn("JOURNAL_PRESERVED_IN_BACKUP=YES", lines)
+        self.assertIn("DATA_FILES_DELETED=0", lines)
+        self.assertIn("COMPLETION_RECEIPT=WRITTEN_AFTER_READBACK", lines)
+        self.assertNotIn("FILES_DELETED=0", lines)
         code, lines = run(self.env, store_factory=lambda env: self.factory())
         self.assertIn("INTERRUPTED_ACTIVATION=NO", lines)
+
+
+    def test_roll_forward_receipt_reports_the_journal_cleanup(self):
+        from unittest.mock import patch
+        env = {**self.env, "NEWSFLUX_AI_LITELLM_S5_FREE_ALIAS": "", "NEWSFLUX_AI_ADMIN_CONFIG_WRITES_ENABLED": "true",
+               "NEWSFLUX_AI_INFERENCE_ENABLED": "true"}
+        self.env = env
+        store = ManagedSettingsStore(env, getter_factory=lambda *_: self.gateway)
+        original = ManagedSettingsStore._write_bytes
+
+        def faulty(instance, path, data):
+            original(instance, path, data)
+            if path.name == "settings.json":
+                raise ManagedSettingsError("CONFIG_UNAVAILABLE")  # fsync error after rename
+
+        with patch.object(ManagedSettingsStore, "_write_bytes", faulty):
+            with self.assertRaises(ManagedSettingsError):
+                store.save_key(self.NEW, "bootstrap")
+        self.factory = lambda: ManagedSettingsStore(env, getter_factory=lambda *_: self.gateway)
+        code, lines = self.run_cli("operator_recover_interrupted_activation_ai_settings",
+                                   "--confirm", "RECOVER-INTERRUPTED-ACTIVATION")
+        self.assertEqual(code, 0, lines)
+        self.assertIn("RECOVERY=PASS_COMMITTED_ACTIVATION_COMPLETED", lines)
+        self.assertIn("JOURNAL_REMOVED=YES", lines)
+        self.assertIn("DATA_FILES_DELETED=0", lines)
+        self.assertIn("KEY_SOURCE=MANAGED", lines)
+
+    def test_key_recovery_cli_reports_inconclusive_key_state(self):
+        class Down:
+            def __call__(self, path):
+                raise RuntimeError("HTTP_503")
+
+        self.factory = lambda: ManagedSettingsStore(
+            self.env, getter_factory=lambda base, peer, key: Down() if key == KEY else self.gateway,
+        )
+        code, lines = self.run_cli("operator_recover_legacy_key_ai_settings",
+                                   "--key-file", str(self.new_key), "--plan")
+        self.assertEqual((code, lines), (2, ["RECOVERY=HOLD_KEY_STATE_INCONCLUSIVE"]))
+        self.assertFalse(self.root.exists())
 
 
 if __name__ == "__main__":

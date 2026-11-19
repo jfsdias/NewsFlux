@@ -1328,7 +1328,7 @@ class LegacyKeyRecoveryTests(LegacyFixture, unittest.TestCase):
 
         class Revoked:
             def __call__(self, path):
-                raise RuntimeError("401 revoked")
+                raise RuntimeError("HTTP_401")  # what gateway_getter raises on a refused key
 
         self.revoked_getter = Revoked()
 
@@ -1360,7 +1360,7 @@ class LegacyKeyRecoveryTests(LegacyFixture, unittest.TestCase):
     def test_plan_is_read_only_works_with_writes_off_and_verifies_with_the_new_key(self):
         plan = self.store(NEWSFLUX_AI_ADMIN_CONFIG_WRITES_ENABLED="false").operator_plan_legacy_key_recovery(NEW_KEY)
         self.assertEqual(self.files(), [])
-        self.assertEqual(plan["current_key"], "unverified")
+        self.assertEqual(plan["current_key"], "rejected")  # gateway answered HTTP 401
         self.assertEqual(plan["candidate_key"], "verified")
         self.assertEqual(plan["gateway"], "ok")
         self.assertEqual({row["id"] for row in plan["models"]}, {"s5-free", "mistral-small"})
@@ -1488,7 +1488,7 @@ class InterruptedActivationRecoveryTests(LegacyFixture, unittest.TestCase):
     def test_operator_recovery_returns_to_bootstrap_with_an_auditable_backup(self):
         self.crash_migration()
         before = self.snapshot()
-        result = self.store().operator_recover_interrupted_activation(self.CONFIRM)
+        result = self.revert_store().operator_recover_interrupted_activation(self.CONFIRM)
         self.assertEqual(result["outcome"], "rolled_back_to_bootstrap")
         self.assertFalse(result["status"]["managed"])
         self.assertEqual(result["status"]["policy_source"], "legacy")
@@ -1499,7 +1499,7 @@ class InterruptedActivationRecoveryTests(LegacyFixture, unittest.TestCase):
         self.assertEqual(backups[0].stat().st_mode & 0o777, 0o700)
         audit = json.loads((backups[0] / "recovery.json").read_text())
         import hashlib
-        moved = {item["name"]: item["sha256"] for item in audit["moved"]}
+        moved = {item["name"]: item["sha256"] for item in audit["files"]}
         self.assertIn("activated", moved)
         self.assertIn("activation.pending", moved)
         for name, digest in moved.items():
@@ -1510,7 +1510,9 @@ class InterruptedActivationRecoveryTests(LegacyFixture, unittest.TestCase):
         self.assertTrue(self.migrate()["managed"])
 
     def test_recovery_of_an_interrupted_key_activation_never_keeps_the_new_key(self):
-        store = self.store(NEWSFLUX_AI_LITELLM_S5_FREE_ALIAS="", NEWSFLUX_AI_LITELLM_MISTRAL_SMALL_ALIAS="")
+        store = self.revert_store(
+            NEWSFLUX_AI_LITELLM_S5_FREE_ALIAS="", NEWSFLUX_AI_LITELLM_MISTRAL_SMALL_ALIAS="",
+        )
         self.crash_during(lambda: store.save_key(NEW_KEY, "bootstrap"))
         result = store.operator_recover_interrupted_activation(self.CONFIRM)
         self.assertFalse(result["status"]["managed"])
@@ -1521,7 +1523,7 @@ class InterruptedActivationRecoveryTests(LegacyFixture, unittest.TestCase):
         partial = self.root / ".new-partial"
         partial.write_bytes(b'{"version":1')
         partial.chmod(0o600)
-        result = self.store().operator_recover_interrupted_activation(self.CONFIRM)
+        result = self.revert_store().operator_recover_interrupted_activation(self.CONFIRM)
         backup = next(p for p in self.root.iterdir() if p.is_dir())
         self.assertTrue((backup / ".new-partial").exists())
         self.assertIn(".new-partial", [item["name"] for item in result["moved"]])
@@ -1531,7 +1533,7 @@ class InterruptedActivationRecoveryTests(LegacyFixture, unittest.TestCase):
         (self.root / "settings.json").unlink()
         before = self.snapshot()
         with self.assertRaises(ManagedSettingsError) as caught:
-            self.store().operator_recover_interrupted_activation(self.CONFIRM)
+            self.revert_store().operator_recover_interrupted_activation(self.CONFIRM)
         self.assertEqual(caught.exception.code, "CONFIG_CONFLICT")
         self.assertEqual(self.snapshot(), before)
 
@@ -1552,8 +1554,11 @@ class InterruptedActivationRecoveryTests(LegacyFixture, unittest.TestCase):
         with patch.object(module.os, "unlink", crashing):
             with self.assertRaises(Crash):
                 store.migrate_legacy_policy("bootstrap", token, "MIGRATE-LEGACY-POLICY")
-        # The record was committed: it is authoritative, the journal is only stale.
-        self.assertTrue(self.store().status()["managed"])
+        # The record was committed but the transaction did not finish: fail closed (R2) until the
+        # operator rolls it forward; roll-forward stays MANAGED and is allowed with inference ON.
+        with self.assertRaises(ManagedSettingsError) as caught:
+            self.store().status()
+        self.assertEqual(caught.exception.code, "CONFIG_UNAVAILABLE")
         result = self.store().operator_recover_interrupted_activation(self.CONFIRM)
         self.assertEqual(result["outcome"], "completed_committed_activation")
         self.assertNotIn("activation.pending", self.files())
@@ -1563,12 +1568,12 @@ class InterruptedActivationRecoveryTests(LegacyFixture, unittest.TestCase):
         self.crash_migration()
         before = self.snapshot()
         with self.assertRaises(ManagedSettingsError) as caught:
-            self.store().operator_recover_interrupted_activation("yes")
+            self.revert_store().operator_recover_interrupted_activation("yes")
         self.assertEqual(caught.exception.code, "MIGRATION_NOT_CONFIRMED")
         self.assertEqual(self.snapshot(), before)
-        self.store().operator_recover_interrupted_activation(self.CONFIRM)
+        self.revert_store().operator_recover_interrupted_activation(self.CONFIRM)
         with self.assertRaises(ManagedSettingsError) as caught:
-            self.store().operator_recover_interrupted_activation(self.CONFIRM)
+            self.revert_store().operator_recover_interrupted_activation(self.CONFIRM)
         self.assertEqual(caught.exception.code, "CONFIG_CONFLICT")
 
     def test_tampered_intent_journal_is_invalid(self):
@@ -1576,7 +1581,7 @@ class InterruptedActivationRecoveryTests(LegacyFixture, unittest.TestCase):
         (self.root / "activation.pending").write_text("{}")
         before = self.snapshot()
         with self.assertRaises(ManagedSettingsError) as caught:
-            self.store().operator_recover_interrupted_activation(self.CONFIRM)
+            self.revert_store().operator_recover_interrupted_activation(self.CONFIRM)
         self.assertEqual(caught.exception.code, "CONFIG_INVALID")
         self.assertEqual(self.snapshot(), before)
 
@@ -1597,9 +1602,414 @@ class InterruptedActivationRecoveryTests(LegacyFixture, unittest.TestCase):
         import services.article_intel_summary.admin_settings as module
         with patch.object(module.os, "replace", crashing):
             with self.assertRaises(Crash):
-                self.store().operator_recover_interrupted_activation(self.CONFIRM)
+                self.revert_store().operator_recover_interrupted_activation(self.CONFIRM)
         with self.assertRaises(ManagedSettingsError):
             self.store().status()  # marker still present: fail closed, no silent bootstrap
-        result = self.store().operator_recover_interrupted_activation(self.CONFIRM)
+        result = self.revert_store().operator_recover_interrupted_activation(self.CONFIRM)
         self.assertEqual(result["outcome"], "rolled_back_to_bootstrap")
         self.assertFalse(self.store().status()["managed"])
+
+
+class FirstActivationCommitIntegrityTests(LegacyFixture, unittest.TestCase):
+    """R2 P0: every failure point of a first activation ends clean or fail-closed recoverable."""
+
+    CONFIRM = "RECOVER-INTERRUPTED-ACTIVATION"
+    FILES = ("previous.json", "activation.pending", "activated", "migration.json", "settings.json")
+
+    def fail_at(self, call, name, phase, *, error=None):
+        """phase before_replace: nothing written; after_replace: the file is in place and then the
+        call fails (directory fsync error after os.replace)."""
+        original = ManagedSettingsStore._write_bytes
+        failure = error or ManagedSettingsError("CONFIG_UNAVAILABLE")
+
+        def faulty(instance, path, data):
+            if path.name == name and phase == "before_replace":
+                raise failure
+            original(instance, path, data)
+            if path.name == name and phase == "after_replace":
+                raise failure
+
+        with patch.object(ManagedSettingsStore, "_write_bytes", faulty):
+            with self.assertRaises(BaseException):
+                call()
+
+    def migration_call(self):
+        store = self.store()
+        token = store.migration_preview()["preview_token"]
+        return lambda: store.migrate_legacy_policy("bootstrap", token, "MIGRATE-LEGACY-POLICY")
+
+    def assert_terminal(self):
+        """Clean (bootstrap, no marker/journal/record) or fail-closed with a journal; never a
+        record without its marker, never a silent legacy fallback with a committed record."""
+        names = set(self.files())
+        if "settings.json" in names:
+            self.assertIn("activated", names)
+            self.assertIn("activation.pending", names)
+        if "activated" in names:
+            self.assertIn("activation.pending", names)
+        if "activation.pending" in names:
+            with self.assertRaises(ManagedSettingsError) as caught:
+                self.store().status()
+            self.assertEqual(caught.exception.code, "CONFIG_UNAVAILABLE")
+            return "fail_closed"
+        self.assertFalse(names & {"activated", "migration.json", "settings.json"})
+        status = self.store().status()
+        self.assertFalse(status["managed"])
+        self.assertTrue(status["migration_required"])
+        return "clean"
+
+    def test_every_write_failure_point_is_terminal_and_recoverable(self):
+        for name in self.FILES:
+            for phase in ("before_replace", "after_replace"):
+                with self.subTest(name=name, phase=phase):
+                    if self.root.exists():
+                        import shutil
+                        shutil.rmtree(self.root)
+                    self.fail_at(self.migration_call(), name, phase)
+                    outcome = self.assert_terminal()
+                    if outcome == "fail_closed":
+                        committed = (self.root / "settings.json").exists()
+                        store = self.store() if committed else self.revert_store()
+                        result = store.operator_recover_interrupted_activation(self.CONFIRM)
+                        expected = "completed_committed_activation" if committed else "rolled_back_to_bootstrap"
+                        self.assertEqual(result["outcome"], expected)
+                        self.assertEqual(result["status"]["managed"], committed)
+                        if committed:
+                            self.assertEqual(self.store().read()["policy"], {"version": 1, "models": []})
+
+    def test_record_renamed_then_fsync_error_is_never_record_without_marker(self):
+        self.fail_at(self.migration_call(), "settings.json", "after_replace")
+        names = set(self.files())
+        self.assertTrue({"settings.json", "activated", "activation.pending", "migration.json",
+                         "previous.json"} <= names)
+        self.assertEqual(self.assert_terminal(), "fail_closed")
+        result = self.store().operator_recover_interrupted_activation(self.CONFIRM)
+        self.assertEqual(result["outcome"], "completed_committed_activation")
+        self.assertTrue(result["journal_removed"])
+        self.assertEqual(result["data_files_deleted"], 0)
+        self.assertTrue(self.store().status()["managed"])
+
+    def test_crash_after_record_rename_rolls_forward_not_back(self):
+        class Crash(BaseException):
+            pass
+
+        self.fail_at(self.migration_call(), "settings.json", "after_replace", error=Crash())
+        self.assertEqual(self.assert_terminal(), "fail_closed")
+        before = self.snapshot()
+        with self.assertRaises(ManagedSettingsError) as caught:
+            self.revert_store().operator_revert_legacy_migration(
+                json.loads((self.root / "activation.pending").read_text())["revision"])
+        self.assertEqual(caught.exception.code, "CONFIG_UNAVAILABLE")  # open journal: fail closed
+        self.assertEqual(self.snapshot(), before)
+        result = self.store().operator_recover_interrupted_activation(self.CONFIRM)
+        self.assertEqual(result["outcome"], "completed_committed_activation")
+
+    def test_readback_failure_does_not_declare_success(self):
+        with patch.object(ManagedSettingsStore, "_commit_readback",
+                          side_effect=ManagedSettingsError("CONFIG_UNAVAILABLE")):
+            with self.assertRaises(ManagedSettingsError):
+                self.migration_call()()
+        self.assertEqual(self.assert_terminal(), "fail_closed")
+        self.assertEqual(self.store().operator_recover_interrupted_activation(self.CONFIRM)["outcome"],
+                         "completed_committed_activation")
+
+    def test_journal_cleanup_failure_does_not_declare_success(self):
+        import services.article_intel_summary.admin_settings as module
+        original = os.unlink
+
+        def failing(path, *args, **kwargs):
+            if Path(path).name == "activation.pending":
+                raise OSError("EIO")
+            return original(path, *args, **kwargs)
+
+        with patch.object(module.os, "unlink", failing):
+            with self.assertRaises(ManagedSettingsError):
+                self.migration_call()()
+        self.assertEqual(self.assert_terminal(), "fail_closed")
+        self.assertEqual(self.store().operator_recover_interrupted_activation(self.CONFIRM)["outcome"],
+                         "completed_committed_activation")
+
+    def test_cleanup_fsync_failure_after_journal_unlink_fails_the_call(self):
+        original = ManagedSettingsStore._fsync_dir
+        state = {"unlinked": False}
+        import services.article_intel_summary.admin_settings as module
+        real_unlink = os.unlink
+
+        def tracking_unlink(path, *args, **kwargs):
+            if Path(path).name == "activation.pending":
+                state["unlinked"] = True
+            return real_unlink(path, *args, **kwargs)
+
+        def fsync(directory):
+            if state["unlinked"]:
+                raise ManagedSettingsError("CONFIG_UNAVAILABLE")
+            return original(directory)
+
+        with patch.object(module.os, "unlink", tracking_unlink), \
+                patch.object(ManagedSettingsStore, "_fsync_dir", staticmethod(fsync)):
+            with self.assertRaises(ManagedSettingsError):
+                self.migration_call()()
+        # The journal unlink happened; durability unproven but the state is a complete record.
+        self.assertEqual(set(self.files()) & {"activation.pending"}, set())
+        self.assertTrue(self.store().status()["managed"])
+
+    def test_key_only_first_activation_post_rename_failure_is_recoverable(self):
+        store = self.store(NEWSFLUX_AI_LITELLM_S5_FREE_ALIAS="", NEWSFLUX_AI_LITELLM_MISTRAL_SMALL_ALIAS="")
+        self.fail_at(lambda: store.save_key(NEW_KEY, "bootstrap"), "settings.json", "after_replace")
+        self.assertIn("activation.pending", self.files())
+        with self.assertRaises(ManagedSettingsError):
+            store.status()
+        result = store.operator_recover_interrupted_activation(self.CONFIRM)
+        self.assertEqual(result["outcome"], "completed_committed_activation")
+        self.assertEqual(store.read()["key"], NEW_KEY)
+
+
+class InterruptedRecoveryManifestTests(LegacyFixture, unittest.TestCase):
+    """R2 P1: recovery manifest, per-file digests and sizes, resume and receipt integrity."""
+
+    CONFIRM = "RECOVER-INTERRUPTED-ACTIVATION"
+
+    def setUp(self):
+        super().setUp()
+        store = self.store()
+        token = store.migration_preview()["preview_token"]
+        original = ManagedSettingsStore._write_bytes
+
+        class Crash(BaseException):
+            pass
+
+        def crashing(instance, path, data):
+            if path.name == "settings.json":
+                raise Crash()
+            return original(instance, path, data)
+
+        with patch.object(ManagedSettingsStore, "_write_bytes", crashing):
+            with self.assertRaises(Crash):
+                store.migrate_legacy_policy("bootstrap", token, "MIGRATE-LEGACY-POLICY")
+        self.revision = json.loads((self.root / "activation.pending").read_text())["revision"]
+        self.backup = self.root / f"interrupted-activation-{self.revision}"
+
+    def recover(self, **overrides):
+        return self.revert_store(**overrides).operator_recover_interrupted_activation(self.CONFIRM)
+
+    def crash_on_move(self, nth):
+        import services.article_intel_summary.admin_settings as module
+        original = os.replace
+        calls = {"n": 0}
+
+        class Crash(BaseException):
+            pass
+
+        def crashing(src, dst, *args, **kwargs):
+            if Path(dst).parent == self.backup and not Path(src).name.startswith(".recovery-"):
+                calls["n"] += 1
+                if calls["n"] == nth:
+                    raise Crash()
+            return original(src, dst, *args, **kwargs)
+
+        with patch.object(module.os, "replace", crashing):
+            with self.assertRaises(Crash):
+                self.recover()
+
+    def refused(self, code, **overrides):
+        before = self.snapshot()
+        with self.assertRaises(ManagedSettingsError) as caught:
+            self.recover(**overrides)
+        self.assertEqual(caught.exception.code, code)
+        self.assertEqual(self.snapshot(), before)
+        self.assertFalse((self.backup / "recovery.done").exists())
+
+    def test_inference_on_refuses_the_rollback_to_legacy_without_mutation(self):
+        before = self.snapshot()
+        with self.assertRaises(ManagedSettingsError) as caught:
+            self.store().operator_recover_interrupted_activation(self.CONFIRM)  # fixture: inference ON
+        self.assertEqual(caught.exception.code, "INFERENCE_ENABLED")
+        self.assertEqual(self.snapshot(), before)
+
+    def test_rollback_receipt_is_written_last_and_proves_every_file(self):
+        before = self.snapshot()
+        result = self.recover()
+        self.assertEqual(result["outcome"], "rolled_back_to_bootstrap")
+        self.assertFalse(result["journal_removed"])  # journal preserved in the backup
+        self.assertEqual(result["data_files_deleted"], 0)
+        manifest = json.loads((self.backup / "recovery.json").read_text())
+        done = json.loads((self.backup / "recovery.done").read_text())
+        import hashlib
+        self.assertEqual(done["manifest_sha256"],
+                         hashlib.sha256((self.backup / "recovery.json").read_bytes()).hexdigest())
+        self.assertEqual(done["files_verified"], len(manifest["files"]))
+        for item in manifest["files"]:
+            data = (self.backup / item["name"]).read_bytes()
+            self.assertEqual((hashlib.sha256(data).hexdigest(), len(data)), (item["sha256"], item["bytes"]))
+            self.assertEqual(before[item["name"]], data)
+        self.assertFalse(self.store().status()["managed"])
+        self.assertEqual(self.store().read()["policy"], None)  # no model authorization created
+
+    def test_root_file_changed_after_the_crash_is_refused(self):
+        (self.root / "previous.json").write_text(json.dumps({"version": 1, "revision": "bootstrap",
+                                                              "key": NEW_KEY, "policy": None}))
+        self.refused("RECOVERY_INTEGRITY_FAILED")
+
+    def test_unexpected_content_in_the_store_is_refused(self):
+        stray = self.root / "settings.json.bak"
+        stray.write_bytes(b"x")
+        stray.chmod(0o600)
+        self.refused("CONFIG_INVALID")
+
+    def test_backup_altered_after_a_crash_never_completes(self):
+        self.crash_on_move(3)
+        extra = self.backup / "extra.json"
+        extra.write_bytes(b"{}")
+        extra.chmod(0o600)
+        self.refused("RECOVERY_INTEGRITY_FAILED")
+
+    def test_already_moved_file_with_a_different_digest_never_completes(self):
+        self.crash_on_move(2)
+        manifest = json.loads((self.backup / "recovery.json").read_text())
+        moved = next(item["name"] for item in manifest["files"] if (self.backup / item["name"]).exists())
+        (self.backup / moved).write_bytes(b"tampered")
+        self.refused("RECOVERY_INTEGRITY_FAILED")
+
+    def test_file_missing_during_resume_never_completes(self):
+        self.crash_on_move(2)
+        manifest = json.loads((self.backup / "recovery.json").read_text())
+        moved = next(item["name"] for item in manifest["files"] if (self.backup / item["name"]).exists())
+        (self.backup / moved).unlink()
+        self.refused("RECOVERY_INTEGRITY_FAILED")
+
+    def test_manifest_with_a_wrong_size_never_completes(self):
+        self.crash_on_move(2)
+        path = self.backup / "recovery.json"
+        manifest = json.loads(path.read_text())
+        manifest["files"][0]["bytes"] += 1
+        path.write_text(json.dumps(manifest))
+        self.refused("RECOVERY_INTEGRITY_FAILED")
+
+    def test_manifest_with_a_malicious_path_is_rejected(self):
+        self.crash_on_move(2)
+        path = self.backup / "recovery.json"
+        manifest = json.loads(path.read_text())
+        for name in ("../settings.json", "a/b", "/etc/passwd", "..", ".", "", "x\x00y"):
+            manifest["files"][-1]["name"] = name
+            path.write_text(json.dumps(manifest))
+            self.refused("CONFIG_INVALID")
+        self.assertFalse((self.root.parent / "settings.json").exists())
+
+    def test_manifest_schema_version_and_revision_are_strict(self):
+        self.crash_on_move(2)
+        path = self.backup / "recovery.json"
+        good = json.loads(path.read_text())
+        for mutate in (
+            lambda m: m.update(version=2),
+            lambda m: m.update(revision="0" * 32),
+            lambda m: m.update(extra=True),
+            lambda m: m["files"].append(dict(m["files"][0])),
+            lambda m: m["files"][0].update(sha256="xyz"),
+            lambda m: m["files"][0].update(bytes=-1),
+            lambda m: m.pop("journal_sha256"),
+        ):
+            manifest = json.loads(json.dumps(good))
+            mutate(manifest)
+            path.write_text(json.dumps(manifest))
+            self.refused("CONFIG_INVALID")
+
+    def test_crash_while_writing_the_manifest_restarts_cleanly(self):
+        original = ManagedSettingsStore._write_atomic
+
+        class Crash(BaseException):
+            pass
+
+        def crashing(instance, directory, name, data, *, prefix):
+            if name == "recovery.json":
+                raise Crash()
+            return original(instance, directory, name, data, prefix=prefix)
+
+        before = self.snapshot()
+        with patch.object(ManagedSettingsStore, "_write_atomic", crashing):
+            with self.assertRaises(Crash):
+                self.recover()
+        # Nothing was moved before the manifest existed.
+        for name in ("activated", "activation.pending", "previous.json", "migration.json"):
+            self.assertEqual((self.root / name).read_bytes(), before[name])
+        self.assertEqual(self.recover()["outcome"], "rolled_back_to_bootstrap")
+
+    def test_second_interruption_during_resume_then_completion(self):
+        self.crash_on_move(2)
+        self.crash_on_move(1)
+        result = self.recover()
+        self.assertEqual(result["outcome"], "rolled_back_to_bootstrap")
+        self.assertTrue((self.backup / "recovery.done").exists())
+
+    def test_completed_recovery_cannot_be_repeated(self):
+        self.recover()
+        before = self.snapshot()
+        with self.assertRaises(ManagedSettingsError) as caught:
+            self.recover()
+        self.assertEqual(caught.exception.code, "CONFIG_CONFLICT")
+        self.assertEqual(self.snapshot(), before)
+
+    def test_readback_failure_writes_no_completion_receipt(self):
+        with patch.object(ManagedSettingsStore, "_recovery_readback",
+                          side_effect=ManagedSettingsError("CONFIG_UNAVAILABLE")):
+            with self.assertRaises(ManagedSettingsError):
+                self.recover()
+        self.assertFalse((self.backup / "recovery.done").exists())
+
+    def test_concurrent_recoveries_only_one_completes(self):
+        import threading
+        barrier, results = threading.Barrier(2), []
+
+        def run():
+            barrier.wait()
+            try:
+                results.append(self.recover()["outcome"])
+            except ManagedSettingsError as error:
+                results.append(error.code)
+
+        threads = [threading.Thread(target=run) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertEqual(sorted(results), ["CONFIG_CONFLICT", "rolled_back_to_bootstrap"])
+        self.assertTrue((self.backup / "recovery.done").exists())
+        self.assertFalse(self.store().status()["managed"])
+
+
+class BootstrapKeyClassificationTests(LegacyFixture, unittest.TestCase):
+    """R2 P2: only an authentication refusal (or a missing key) proves the bootstrap key unusable."""
+
+    def store_with(self, error):
+        def factory(base, peer, key):
+            if key == KEY:
+                def broken(path):
+                    raise error
+                return broken
+            return self.gateway
+
+        return ManagedSettingsStore(self.env, root=str(self.root), getter_factory=factory)
+
+    def test_inconclusive_failures_do_not_unlock_key_recovery(self):
+        import httpx
+        for error in (RuntimeError("HTTP_503"), RuntimeError("HTTP_500"), RuntimeError("HTTP_429"),
+                      httpx.ConnectError("down"), TimeoutError("slow"), ValueError("bad json")):
+            with self.subTest(error=repr(error)):
+                with self.assertRaises(ManagedSettingsError) as caught:
+                    self.store_with(error).operator_plan_legacy_key_recovery(NEW_KEY)
+                self.assertEqual(caught.exception.code, "KEY_STATE_INCONCLUSIVE")
+                with self.assertRaises(ManagedSettingsError) as caught:
+                    self.store_with(error).operator_recover_legacy_key(
+                        "bootstrap", NEW_KEY, "0" * 64, "RECOVER-LEGACY-KEY-AND-MIGRATE")
+                self.assertEqual(caught.exception.code, "KEY_STATE_INCONCLUSIVE")
+        self.assertEqual(self.files(), [])
+
+    def test_authentication_refusal_unlocks_the_supervised_plan(self):
+        for status in ("HTTP_401", "HTTP_403"):
+            with self.subTest(status=status):
+                plan = self.store_with(RuntimeError(status)).operator_plan_legacy_key_recovery(NEW_KEY)
+                self.assertEqual(plan["current_key"], "rejected")
+
+    def test_missing_bootstrap_key_is_classified_absent(self):
+        self.boot.unlink()
+        plan = self.store_with(RuntimeError("HTTP_503")).operator_plan_legacy_key_recovery(NEW_KEY)
+        self.assertEqual(plan["current_key"], "absent")
