@@ -5,7 +5,7 @@
 set -u
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/../../.." && pwd)"
-PROC="$here/../r44-allowlist.sh"
+PROC="${R44_PROC:-$here/../r44-allowlist.sh}"
 export R44T_HOME="${R44T_HOME:-$(mktemp -d /tmp/r44p.XXXXXX)}"
 T="$R44T_HOME/topo-privatecanary"
 IMG="$(docker image inspect -f '{{.Id}}' r44-summary:test)"
@@ -91,6 +91,47 @@ finish_bg; check test "$RC" = 6; has R44_RESULT=SUPERVISED_RECOVERY_REQUIRED; do
 sleep 8; REL=$(ls "$R44T_HOME/rel" | tail -1)
 run supervised_rollback_after_sigkill 0 "ROLLBACK-R44\n" R44_MODE=rollback R44_RELEASE_ID="$REL"; has ADMIN_ALLOWLIST_AFTER=EMPTY
   check test "$(envsha)" = "$E0"; check test "$(label)" = "$L0"; check test "$(others)" = "$O0"; done_
+# ---------------------------------------------------------------- R4.4D: rollback reachability and refusals
+applied() { reset; snap; run "$1" 0 "$APPLY" R44_MODE=apply R44_ADMIN_ID=7; REL=$(ls "$R44T_HOME/rel" | tail -1); }
+rb_ok() { has ROLLBACK=APPLIED; has SUMMARY_HEALTH_AFTER=HEALTHY; has CONFIG_RESTORED=YES; has ADMIN_ALLOWLIST_AFTER=EMPTY
+  has R44_RESULT=ROLLED_BACK_VERIFIED; check test "$(label)" = "$L0"; check test "$(envsha)" = "$E0"; check test "$(others)" = "$O0"; }
+applied apply_before_stop; done_
+docker stop -t 2 "$(docker ps -q --filter label=com.docker.compose.service=summary-api)" >/dev/null
+run rollback_stopped_summary 0 "ROLLBACK-R44\n" R44_MODE=rollback R44_RELEASE_ID="$REL"; rb_ok; done_
+run rollback_idempotent_after_recovery 0 "ROLLBACK-R44\n" R44_MODE=rollback R44_RELEASE_ID="$REL"; has ROLLBACK=ALREADY_APPLIED
+  has SUMMARY_HEALTH_AFTER=HEALTHY; has R44_RESULT=ROLLED_BACK_VERIFIED; done_
+applied apply_before_unhealthy; done_
+c="$(sid)"; docker exec -u 0 "$c" sh -c 'mv /usr/local/bin/python /usr/local/bin/python.r44broken'   # healthcheck can no longer run
+for i in $(seq 1 60); do [ "$(docker inspect -f '{{.State.Health.Status}}' "$c")" = unhealthy ] && break; sleep 1; done
+N=summary_became_unhealthy; OUT="HEALTH=$(docker inspect -f '{{.State.Health.Status}}' "$c" | tr a-z A-Z)"; CHK=(); has HEALTH=UNHEALTHY; done_
+run rollback_unhealthy_summary 0 "ROLLBACK-R44\n" R44_MODE=rollback R44_RELEASE_ID="$REL"; rb_ok; done_
+applied apply_before_refusals; done_
+SNAPA="$(label)"
+chmod o+w "$R44T_HOME/rel/$REL/manifest.json"
+run rollback_manifest_not_root_private 3 "ROLLBACK-R44\n" R44_MODE=rollback R44_RELEASE_ID="$REL"; has RELEASE_MANIFEST=NOT_ROOT_PRIVATE; done_
+chmod o-w "$R44T_HOME/rel/$REL/manifest.json"
+cp -p "$R44T_HOME/rel/$REL/manifest.json" "$R44T_HOME/manifest.keep"
+python3 - "$R44T_HOME/rel/$REL/manifest.json" <<'EOF2'
+import json, os, sys
+p = sys.argv[1]; m = json.load(open(p)); m["previous_image"] = "sha256:" + "0" * 64
+os.chmod(p, 0o600); open(p, "w").write(json.dumps(m)); os.chmod(p, 0o444)
+EOF2
+run rollback_manifest_tampered 3 "ROLLBACK-R44\n" R44_MODE=rollback R44_RELEASE_ID="$REL"; has ROLLBACK=BLOCKED_MANIFEST_TAMPERED
+  has R44_RESULT=ROLLBACK_REFUSED_NO_CHANGE; check test "$(label)" = "$SNAPA"; done_
+chmod 600 "$R44T_HOME/rel/$REL/manifest.json"; printf '{not json' > "$R44T_HOME/rel/$REL/manifest.json"; chmod 444 "$R44T_HOME/rel/$REL/manifest.json"
+run rollback_manifest_invalid 3 "ROLLBACK-R44\n" R44_MODE=rollback R44_RELEASE_ID="$REL"; has ROLLBACK=BLOCKED_INVALID_INPUT
+  check test "$(label)" = "$SNAPA"; done_
+chmod 600 "$R44T_HOME/rel/$REL/manifest.json"; cp -p "$R44T_HOME/manifest.keep" "$R44T_HOME/rel/$REL/manifest.json"
+printf 'services:\n  summary-api:\n    labels:\n      r44.test.foreign: "1"\n' > "$T/foreign.yaml"
+docker compose -p newsflux --project-directory "$T" -f "$T/compose.yaml" -f "$T/override.yaml" -f "$T/foreign.yaml" \
+  up -d --no-deps --no-build --pull never summary-api >/dev/null 2>&1
+SNAPF="$(label)"
+run rollback_foreign_state_refused 3 "ROLLBACK-R44\n" R44_MODE=rollback R44_RELEASE_ID="$REL"; has ROLLBACK=BLOCKED_LIVE_STATE_DOES_NOT_MATCH_RELEASE
+  has R44_RESULT=ROLLBACK_REFUSED_NO_CHANGE; check test "$(label)" = "$SNAPF"; check test "$(others)" = "$O0"; done_
+docker rm -f "$(docker ps -aq --filter label=com.docker.compose.service=summary-api)" >/dev/null
+run rollback_absent_container_supervised 6 "ROLLBACK-R44\n" R44_MODE=rollback R44_RELEASE_ID="$REL"
+  has ROLLBACK=BLOCKED_SERVICE_CONTAINER_NOT_UNIQUE; has R44_RESULT=SUPERVISED_RECOVERY_REQUIRED; done_
+reset; snap
 # The operator's clone is owned by the operator, the procedure runs as root (git safe.directory).
 rm -rf "$R44T_HOME/clone"; git clone -q "$repo" "$R44T_HOME/clone" 2>/dev/null || cp -a "$repo" "$R44T_HOME/clone"
 cp "$PROC" "$R44T_HOME/clone/deploy/r44-admin-allowlist/r44-allowlist.sh"; chown -R nobody "$R44T_HOME/clone"

@@ -63,8 +63,51 @@ release() { # release.py in its own session: a terminal Ctrl+C or ssh hangup nev
   setsid -w python3 -I "$D/release.py" --policy "$D/policy.json" --lock "$LOCK" "$@" </dev/null 2>"$D/release.err"
 }
 
-# ---------------------------------------------------------------- runtime trust before any secret
 summary_id() { docker ps -q --no-trunc --filter "label=com.docker.compose.project=$PROJECT" --filter "label=com.docker.compose.service=$SERVICE"; }
+allowlist_state() { # effective allowlist as the Summary's own settings parse it (state:count:ids)
+  docker exec "$1" python -I -c 'import sys; sys.path.insert(0, "/app")
+from services.article_intel_auth.config import AuthSettings
+s = AuthSettings.from_env(); print("%s:%d:%s" % (s.admin_allowlist_state, len(s.admin_user_ids), ",".join(map(str, sorted(s.admin_user_ids)))))' 2>/dev/null
+}
+
+# ---------------------------------------------------------------- rollback (idempotent, existing tool)
+# Routed BEFORE the running/healthy trust gate: a stopped or unhealthy Summary after an interrupted promote is
+# exactly when rollback is needed. release.py validates the manifest digest, policy, configuration drift,
+# protected services and live state (foreign state is refused) and finds stopped containers itself.
+if [ "$MODE" = rollback ]; then
+  [[ "${R44_RELEASE_ID:-}" =~ ^r44-allowlist-[0-9]{8}T[0-9]{6}Z$ ]] || hold R44_RELEASE_ID INVALID
+  RD="$RELEASE_ROOT/$R44_RELEASE_ID"; M="$RD/manifest.json"
+  [ -f "$M" ] && [ ! -L "$M" ] && [ ! -L "$RD" ] || hold RELEASE_MANIFEST ABSENT
+  for p in "$RELEASE_ROOT" "$RD" "$M"; do   # root-owned and not writable by group or others
+    read -r u m < <(stat -c '%u %a' "$p"); { [ "$u" = 0 ] && [ $(( 8#$m & 8#022 )) = 0 ]; } || hold RELEASE_MANIFEST NOT_ROOT_PRIVATE
+  done
+  [ "$(ask "Type ROLLBACK-R44 to restore the pre-change Summary: ")" = ROLLBACK-R44 ] || hold ROLLBACK_AUTHORIZED NO
+  trap '' INT TERM HUP
+  r="$(release rollback --manifest "$M" --timeout 180)"; rc=$?
+  if [ "$rc" != 0 ]; then
+    code="$(sed -n 's/.*CODE=\([A-Z0-9_:]*\).*/\1/p' <<<"$r")"; out ROLLBACK "BLOCKED_${code:-UNKNOWN}"
+    case "$code" in   # refused by release.py before any change
+      MANIFEST_INVALID|MANIFEST_TAMPERED|SERVICE_NOT_AUTHORIZED|LIVE_STATE_DOES_NOT_MATCH_RELEASE|CONFIGURATION_DRIFT|\
+      PROTECTED_SERVICE_DRIFT|CONCURRENT_RELEASE_BLOCKED|INVALID_INPUT) finish ROLLBACK_REFUSED_NO_CHANGE 3 ;;
+    esac
+    finish SUPERVISED_RECOVERY_REQUIRED 6
+  fi
+  out ROLLBACK "$(sed -n 's/^ROLLBACK=\([A-Z_]*\).*/\1/p' <<<"$r")"
+  # Success only when the restored Summary is running, healthy, back to the pre-change config, allowlist empty.
+  C="$(summary_id)"; [ "$(wc -w <<<"$C")" = 1 ] || { out SUMMARY_AFTER NOT_RUNNING; finish SUPERVISED_RECOVERY_REQUIRED 6; }
+  H="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$C")"
+  out SUMMARY_HEALTH_AFTER "$(printf %s "${H:-none}" | tr a-z A-Z)"
+  EXPECT_HASH="$(python3 -I -c 'import json, sys; m = json.load(open(sys.argv[1]))
+print(m["previous_config_hash"] if m.get("base_resolves_to_previous") else "-")' "$M" 2>/dev/null)"
+  HASH="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.config-hash"}}' "$C")"
+  [ "$EXPECT_HASH" = - ] || [ "$HASH" = "$EXPECT_HASH" ]; CFG=$?
+  out CONFIG_RESTORED "$([ "$CFG" = 0 ] && echo YES || echo NO)"
+  st="$(cut -d: -f1 <<<"$(allowlist_state "$C")")"; out ADMIN_ALLOWLIST_AFTER "$(printf %s "${st:-unknown}" | tr a-z A-Z)"
+  if [ "$H" = healthy ] && [ "$CFG" = 0 ] && { [ "$st" = empty ] || [ "$st" = missing ]; }; then finish ROLLED_BACK_VERIFIED 0; fi
+  finish SUPERVISED_RECOVERY_REQUIRED 6
+fi
+
+# ---------------------------------------------------------------- runtime trust before any secret
 CID="$(summary_id)"; [ "$(wc -w <<<"$CID")" = 1 ] || hold SUMMARY_CONTAINER NOT_UNIQUE_OR_NOT_RUNNING
 IMG="$(docker inspect -f '{{.Image}}' "$CID")"
 REV="$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$IMG" 2>/dev/null)"
@@ -75,25 +118,6 @@ CODE_DRIFT="$(docker diff "$CID" 2>/dev/null | grep -cE '^[ACD] /(app|usr|etc/ss
 [ "$HEALTH" = healthy ] || hold SUMMARY_HEALTH "$(printf %s "${HEALTH:-none}" | tr a-z A-Z)"
 [ "$CODE_DRIFT" = 0 ] || hold RUNTIME_CODE_DRIFT DETECTED
 out RUNTIME_TRUST PASS
-allowlist_state() { # effective allowlist as the Summary's own settings parse it (state:count:ids)
-  docker exec "$1" python -I -c 'import sys; sys.path.insert(0, "/app")
-from services.article_intel_auth.config import AuthSettings
-s = AuthSettings.from_env(); print("%s:%d:%s" % (s.admin_allowlist_state, len(s.admin_user_ids), ",".join(map(str, sorted(s.admin_user_ids)))))' 2>/dev/null
-}
-
-# ---------------------------------------------------------------- rollback (idempotent, existing tool)
-if [ "$MODE" = rollback ]; then
-  [[ "${R44_RELEASE_ID:-}" =~ ^r44-allowlist-[0-9]{8}T[0-9]{6}Z$ ]] || hold R44_RELEASE_ID INVALID
-  M="$RELEASE_ROOT/$R44_RELEASE_ID/manifest.json"; [ -f "$M" ] || hold RELEASE_MANIFEST ABSENT
-  [ "$(ask "Type ROLLBACK-R44 to restore the pre-change Summary: ")" = ROLLBACK-R44 ] || hold ROLLBACK_AUTHORIZED NO
-  trap '' INT TERM HUP
-  r="$(release rollback --manifest "$M" --timeout 180)"; rc=$?
-  if [ "$rc" = 0 ]; then out ROLLBACK "$(sed -n 's/^ROLLBACK=\([A-Z_]*\).*/\1/p' <<<"$r")"
-  else out ROLLBACK "BLOCKED_$(sed -n 's/.*CODE=\([A-Z0-9_:]*\).*/\1/p' <<<"$r")"; fi
-  st="$(allowlist_state "$(summary_id)")"; out ADMIN_ALLOWLIST_AFTER "$(cut -d: -f1 <<<"$st" | tr a-z A-Z)"
-  [ "$rc" = 0 ] && finish ROLLED_BACK_VERIFIED 0
-  finish ROLLBACK_INCOMPLETE 6
-fi
 
 # ---------------------------------------------------------------- read-only state and owner identity
 ST="$(allowlist_state "$CID")"; out ADMIN_ALLOWLIST_STATE "$(cut -d: -f1 <<<"$ST" | tr a-z A-Z)"
