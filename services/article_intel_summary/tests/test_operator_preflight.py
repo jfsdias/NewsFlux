@@ -287,5 +287,51 @@ class OperatorRecoveryCliTests(unittest.TestCase):
         self.assertFalse(self.root.exists())
 
 
+    def test_roll_forward_finalization_faults_never_print_pass(self):
+        import services.article_intel_summary.admin_settings as module
+        from unittest.mock import patch
+        env = {**self.env, "NEWSFLUX_AI_LITELLM_S5_FREE_ALIAS": "", "NEWSFLUX_AI_ADMIN_CONFIG_WRITES_ENABLED": "true"}
+        store = ManagedSettingsStore(env, getter_factory=lambda *_: self.gateway)
+        original = ManagedSettingsStore._write_bytes
+
+        def faulty(instance, path, data):
+            original(instance, path, data)
+            if path.name == "settings.json":
+                raise ManagedSettingsError("CONFIG_UNAVAILABLE")
+
+        with patch.object(ManagedSettingsStore, "_write_bytes", faulty):
+            with self.assertRaises(ManagedSettingsError):
+                store.save_key(self.NEW, "bootstrap")
+        self.factory = lambda: ManagedSettingsStore(env, getter_factory=lambda *_: self.gateway)
+        for restore_fails, code in ((False, "CONFIG_UNAVAILABLE"), (True, "COMMIT_INDETERMINATE")):
+            state = {"unlinked": False}
+            real_unlink, real_fsync = os.unlink, ManagedSettingsStore._fsync_dir
+            real_atomic = ManagedSettingsStore._write_atomic
+
+            def unlink(path, *args, **kwargs):
+                if Path(path).name == "activation.pending":
+                    state["unlinked"] = True
+                return real_unlink(path, *args, **kwargs)
+
+            def fsync(directory):
+                if state["unlinked"]:
+                    raise OSError("EIO")
+                return real_fsync(directory)
+
+            def atomic(instance, directory, name, data, *, prefix):
+                if restore_fails and state["unlinked"] and name == "activation.pending":
+                    raise ManagedSettingsError("CONFIG_UNAVAILABLE")
+                return real_atomic(instance, directory, name, data, prefix=prefix)
+
+            with patch.object(module.os, "unlink", unlink), \
+                    patch.object(ManagedSettingsStore, "_fsync_dir", staticmethod(fsync)), \
+                    patch.object(ManagedSettingsStore, "_write_atomic", atomic):
+                code_, lines = self.run_cli("operator_recover_interrupted_activation_ai_settings",
+                                            "--confirm", "RECOVER-INTERRUPTED-ACTIVATION")
+            self.assertEqual((code_, lines), (2, [f"RECOVERY=HOLD_{code}"]))
+            if not restore_fails:
+                self.assertTrue((self.root / "activation.pending").exists())
+
+
 if __name__ == "__main__":
     unittest.main()

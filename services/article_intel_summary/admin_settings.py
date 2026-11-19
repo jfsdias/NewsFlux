@@ -84,7 +84,7 @@ class ManagedSettingsError(Exception):
             "POLICY_INVALID", "MODEL_NOT_DISCOVERED", "MODEL_UNVERIFIED",
             "CHANGES_DISABLED", "MIGRATION_REQUIRED", "MIGRATION_NOT_CONFIRMED",
             "ROLLBACK_STATE_CHANGED", "INFERENCE_ENABLED", "RECOVERY_INTEGRITY_FAILED",
-            "KEY_STATE_INCONCLUSIVE",
+            "KEY_STATE_INCONCLUSIVE", "COMMIT_INDETERMINATE",
         }:
             code = "CONFIG_UNAVAILABLE"
         self.code = code
@@ -552,12 +552,7 @@ class ManagedSettingsStore:
                     raise ManagedSettingsError("CONFIG_UNAVAILABLE") from None
                 self._withdraw_uncommitted_activation()
                 raise
-            try:
-                os.unlink(self.root / "activation.pending")
-            except OSError:
-                # Record committed, journal still present: fail closed until roll-forward.
-                raise ManagedSettingsError("CONFIG_UNAVAILABLE") from None
-            self._fsync_dir_checked(self.root)
+            self._finalize_journal(journal)
             return self.status()
         finally:
             os.close(fd)
@@ -567,6 +562,39 @@ class ManagedSettingsStore:
             self._fsync_dir(directory)
         except OSError:
             raise ManagedSettingsError("CONFIG_UNAVAILABLE") from None
+
+    def _finalize_journal(self, journal: bytes) -> None:
+        """Commit point of a first activation (and of an operator roll-forward).
+
+        1. Sync the directory so the renamed record is durable before the commit point.
+        2. Unlink activation.pending (the commit point). If it fails, the journal is still
+           there: FAIL_CLOSED (CONFIG_UNAVAILABLE).
+        3. Sync the directory. If this fails, whether the unlink survives a crash is unknown,
+           so the journal is restored with the same bytes, making the state explicitly
+           FAIL_CLOSED again (CONFIG_UNAVAILABLE, roll-forward recovers). If even the
+           restoration cannot be made visible, COMMIT_INDETERMINATE is raised: the caller
+           is never told the transaction completed or cleanly failed.
+        These are guarantees about the order of OS-visible operations and their reported
+        results, not an absolute guarantee about a failing disk.
+        """
+        journal_path = self.root / "activation.pending"
+        self._fsync_dir_checked(self.root)
+        try:
+            os.unlink(journal_path)
+        except OSError:
+            raise ManagedSettingsError("CONFIG_UNAVAILABLE") from None
+        try:
+            self._fsync_dir(self.root)
+            return
+        except (OSError, ManagedSettingsError):
+            pass
+        try:
+            self._write_atomic(self.root, "activation.pending", journal, prefix=".new-")
+        except ManagedSettingsError:
+            pass  # the rename may still have happened; judged by visibility below
+        if journal_path.exists():
+            raise ManagedSettingsError("CONFIG_UNAVAILABLE")
+        raise ManagedSettingsError("COMMIT_INDETERMINATE")
 
     def _commit_readback(self, revision: str, raw: bytes) -> None:
         check = self._managed(allow_pending=True)
@@ -997,7 +1025,7 @@ class ManagedSettingsStore:
             journal = self._parse_journal(journal_raw)
             record = self.root / "settings.json"
             if record.exists() or record.is_symlink():
-                return self._roll_forward(journal)
+                return self._roll_forward(journal, journal_raw)
             self._require_inference_off()
             backup = self.root / f"interrupted-activation-{journal['revision']}"
             if backup.exists() or backup.is_symlink():
@@ -1033,7 +1061,7 @@ class ManagedSettingsStore:
         data = self._read_private(path, limit=MAX_RECORD_BYTES)
         return None if data is None else (_sha256(data), len(data))
 
-    def _roll_forward(self, journal: dict) -> dict:
+    def _roll_forward(self, journal: dict, journal_raw: bytes) -> dict:
         integrity = ManagedSettingsError("RECOVERY_INTEGRITY_FAILED")
         if self._read_private(self.root / "activated", limit=32) != b"v1\n":
             raise integrity
@@ -1049,12 +1077,7 @@ class ManagedSettingsStore:
         current = self._managed(allow_pending=True)
         if current is None or current["revision"] != journal["revision"]:
             raise integrity
-        self._fsync_dir_checked(self.root)  # make the committed record durable first
-        try:
-            os.unlink(self.root / "activation.pending")
-        except OSError:
-            raise ManagedSettingsError("CONFIG_UNAVAILABLE") from None
-        self._fsync_dir_checked(self.root)
+        self._finalize_journal(journal_raw)
         status = self.status()
         if not status["managed"] or status["revision"] != journal["revision"]:
             raise ManagedSettingsError("CONFIG_UNAVAILABLE")
@@ -1145,6 +1168,7 @@ class ManagedSettingsStore:
 
     def _execute_rollback(self, backup: Path, manifest: dict) -> dict:
         integrity = ManagedSettingsError("RECOVERY_INTEGRITY_FAILED")
+        self._reconcile_root(manifest, moved=False)
         self._verify_rollback_locations(backup, manifest)
         for item in manifest["files"]:
             source, target = self.root / item["name"], backup / item["name"]
@@ -1175,10 +1199,24 @@ class ManagedSettingsStore:
                 "moved": [{"name": i["name"], "sha256": i["sha256"], "bytes": i["bytes"]} for i in manifest["files"]],
                 "status": status}
 
+    def _reconcile_root(self, manifest: dict, *, moved: bool) -> None:
+        """Full inventory of the store root against the manifest. Allowed: the write lock,
+        private backup directories, and (before the moves complete) the listed files. Anything
+        else, such as a file or directory added after staging or before completion, stops the
+        replay before any further movement."""
+        listed = {item["name"] for item in manifest["files"]}
+        for entry in os.listdir(self.root):
+            path = self.root / entry
+            if entry == "write.lock":
+                continue
+            if _BACKUP_DIR.match(entry) and path.is_dir() and not path.is_symlink():
+                continue
+            if not moved and entry in listed:
+                continue
+            raise ManagedSettingsError("RECOVERY_INTEGRITY_FAILED")
+
     def _recovery_readback(self, manifest: dict) -> dict:
-        for item in manifest["files"]:
-            if (self.root / item["name"]).exists():
-                raise ManagedSettingsError("RECOVERY_INTEGRITY_FAILED")
+        self._reconcile_root(manifest, moved=True)
         status = self.status()
         if status["managed"]:
             raise ManagedSettingsError("CONFIG_UNAVAILABLE")  # readback must be the bootstrap

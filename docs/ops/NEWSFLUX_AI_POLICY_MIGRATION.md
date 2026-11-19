@@ -120,17 +120,17 @@ without legacy aliases) writes, in order:
 4. `migration.json`: the manifest, when it applies.
 5. `settings.json`: the record.
 6. Readback of the record (revision and digest).
-7. Removal of the journal, then a directory `fsync`.
+7. Finalization (the commit point): directory `fsync`, unlink the journal, directory `fsync` (see below).
 
 Every atomic write is a temp file, `fsync`, rename, then a directory `fsync`. An error
 after the rename still counts as "maybe renamed". The resulting terminal states are:
 
-| Failure point                                                                 | Terminal state                                                                                                                                                                              |
-| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Before the record was renamed (any write of 1–4, or step 5 before the rename) | **CLEAN**: marker, audit and journal are withdrawn (journal last), and the bootstrap stays authoritative. If the withdrawal itself fails, the journal remains and the state is FAIL_CLOSED. |
-| After the record was renamed (directory `fsync` error, readback error, crash) | **FAIL_CLOSED**: every file and the journal are kept as evidence. Nothing is deleted.                                                                                                       |
-| Journal removal fails                                                         | **FAIL_CLOSED**: record and journal both remain.                                                                                                                                            |
-| Journal removed, but the final directory `fsync` fails                        | The call reports an error; the record is complete and authoritative.                                                                                                                        |
+| Failure point                                                                 | Terminal state                                                                                                                                                                                                                                                                                                        |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Before the record was renamed (any write of 1–4, or step 5 before the rename) | **CLEAN**: marker, audit and journal are withdrawn (journal last), and the bootstrap stays authoritative. If the withdrawal itself fails, the journal remains and the state is FAIL_CLOSED.                                                                                                                           |
+| After the record was renamed (directory `fsync` error, readback error, crash) | **FAIL_CLOSED**: every file and the journal are kept as evidence. Nothing is deleted.                                                                                                                                                                                                                                 |
+| Journal removal fails                                                         | **FAIL_CLOSED**: record and journal both remain.                                                                                                                                                                                                                                                                      |
+| Journal unlinked, but the following directory `fsync` fails                   | Whether the unlink survives a crash is unknown, so the journal is **restored** with the same bytes. The state is FAIL_CLOSED again (`CONFIG_UNAVAILABLE`) and roll-forward recovers. If the restored journal cannot be made visible, the call raises `COMMIT_INDETERMINATE`, never success and never a clean failure. |
 
 While `activation.pending` exists, every read (status, effective values, admin API,
 preflight) fails closed with `CONFIG_UNAVAILABLE`. The preflight prints
@@ -146,8 +146,11 @@ python -m services.article_intel_summary.operator_recover_interrupted_activation
 
 **Roll forward: journal present and record present.** Everything is checked against the
 journal: marker `v1`, digests of the record, `previous.json` and audit (or no audit), and
-the record revision. On a match, the directory is `fsync`ed, the journal is removed and the
-directory is `fsync`ed again. The readback must show MANAGED at the journaled revision.
+the record revision. On a match, the same finalization as the first activation runs:
+directory `fsync`, journal unlink, directory `fsync`, with the journal restored if that
+last sync fails. The readback must then show MANAGED at the journaled revision. A
+finalization fault prints `RECOVERY=HOLD_CONFIG_UNAVAILABLE` (journal restored; run the
+command again) or `RECOVERY=HOLD_COMMIT_INDETERMINATE`, never `PASS`.
 
 - The state stays MANAGED, so this is allowed with inference ON.
 - No model approval is created: the policy is what the record already holds.
@@ -173,12 +176,17 @@ bootstrap re-enables the LEGACY policy. The steps, in order:
      `previous.json`, `migration.json` and `.new-[a-z0-9_]+`. There are no separators and
      no traversal.
    - A crash while staging leaves no manifest and nothing moved, and the next run restarts.
-3. **Move under control.** Before any move, each file must exist in exactly one place (root
-   or backup) with its recorded SHA-256 and size, and the backup must hold nothing else.
+3. **Move under control.** Before any move, the whole root is inventoried. Only the write
+   lock, private backup directories and still-unmoved listed files may be present. Any other
+   file or directory, including one added after staging, gives `RECOVERY_INTEGRITY_FAILED`
+   and nothing moves. Each file must exist in exactly one place (root or backup) with its
+   recorded SHA-256 and size, and the backup must hold nothing else.
    Each file is re-hashed before and after its rename. The journal and then the marker move
    last.
-4. **Readback.** No listed file may remain in the root, and the status must be the bootstrap
-   (not MANAGED).
+4. **Readback.** The root is inventoried again: only the write lock and private backup
+   directories may remain. Anything else, such as content added before completion, gives
+   `RECOVERY_INTEGRITY_FAILED` and no receipt. The status must be the bootstrap (not
+   MANAGED).
 5. **Integrity re-check.** Every backup file must match its manifest digest and size.
 6. **Completion receipt.** `recovery.done` (manifest SHA-256, files verified, time) is
    written by atomic rename **only now**.
@@ -233,7 +241,8 @@ runs one Summary process. Do not add a shared secret without a separate design r
   (30), `MigrationRollbackRedTeamTests` (11), `LegacyKeyRecoveryTests` (9) and
   `InterruptedActivationRecoveryTests` (9), and for R2 `FirstActivationCommitIntegrityTests`
   (7, including every write point before and after the rename), `InterruptedRecoveryManifestTests`
-  (15) and `BootstrapKeyClassificationTests` (3). `test_operator_preflight.py` covers the revert,
+  (18) and `BootstrapKeyClassificationTests` (3), then for R3 the finalization tests in
+  `FirstActivationCommitIntegrityTests` (now 9) and `RollForwardFinalizationTests` (3). `test_operator_preflight.py` covers the revert,
   key-recovery and interrupted-activation CLIs and the preflight signals.
 - Node: `src/utils/litellm-migration-state.test.js`, `src/utils/summary-model-preference.test.js`.
 - Browser, against the real Summary admin API: `scripts/pilot-e2e/ai-settings-migration.spec.js`.

@@ -1729,11 +1729,14 @@ class FirstActivationCommitIntegrityTests(LegacyFixture, unittest.TestCase):
         self.assertEqual(self.store().operator_recover_interrupted_activation(self.CONFIRM)["outcome"],
                          "completed_committed_activation")
 
-    def test_cleanup_fsync_failure_after_journal_unlink_fails_the_call(self):
-        original = ManagedSettingsStore._fsync_dir
-        state = {"unlinked": False}
+    def post_unlink_fsync_failure(self, *, restore_fails=False):
+        """Directory fsync fails once the journal has been unlinked (finalization window).
+        restore_fails: the journal restoration write also fails before its rename."""
         import services.article_intel_summary.admin_settings as module
+        original_fsync = ManagedSettingsStore._fsync_dir
+        original_atomic = ManagedSettingsStore._write_atomic
         real_unlink = os.unlink
+        state = {"unlinked": False}
 
         def tracking_unlink(path, *args, **kwargs):
             if Path(path).name == "activation.pending":
@@ -1742,16 +1745,63 @@ class FirstActivationCommitIntegrityTests(LegacyFixture, unittest.TestCase):
 
         def fsync(directory):
             if state["unlinked"]:
-                raise ManagedSettingsError("CONFIG_UNAVAILABLE")
-            return original(directory)
+                raise OSError("EIO")
+            return original_fsync(directory)
 
-        with patch.object(module.os, "unlink", tracking_unlink), \
-                patch.object(ManagedSettingsStore, "_fsync_dir", staticmethod(fsync)):
-            with self.assertRaises(ManagedSettingsError):
-                self.migration_call()()
-        # The journal unlink happened; durability unproven but the state is a complete record.
-        self.assertEqual(set(self.files()) & {"activation.pending"}, set())
+        def atomic(instance, directory, name, data, *, prefix):
+            if restore_fails and state["unlinked"] and name == "activation.pending":
+                raise ManagedSettingsError("CONFIG_UNAVAILABLE")
+            return original_atomic(instance, directory, name, data, prefix=prefix)
+
+        return (patch.object(module.os, "unlink", tracking_unlink),
+                patch.object(ManagedSettingsStore, "_fsync_dir", staticmethod(fsync)),
+                patch.object(ManagedSettingsStore, "_write_atomic", atomic))
+
+    def test_post_unlink_fsync_failure_restores_the_journal_and_fails_closed(self):
+        unlink, fsync, atomic = self.post_unlink_fsync_failure()
+        call = self.migration_call()
+        with unlink, fsync, atomic:
+            with self.assertRaises(ManagedSettingsError) as caught:
+                call()
+        self.assertEqual(caught.exception.code, "CONFIG_UNAVAILABLE")
+        # Never "complete": the journal is back, every read fails closed, roll-forward recovers.
+        self.assertIn("activation.pending", self.files())
+        self.assertEqual(self.assert_terminal(), "fail_closed")
+        result = self.store().operator_recover_interrupted_activation(self.CONFIRM)
+        self.assertEqual(result["outcome"], "completed_committed_activation")
         self.assertTrue(self.store().status()["managed"])
+
+    def test_double_fault_in_finalization_is_reported_as_indeterminate(self):
+        unlink, fsync, atomic = self.post_unlink_fsync_failure(restore_fails=True)
+        call = self.migration_call()
+        with unlink, fsync, atomic:
+            with self.assertRaises(ManagedSettingsError) as caught:
+                call()
+        # The journal could not be restored: the caller is told the commit is indeterminate, never
+        # that it failed cleanly or succeeded. The record itself was durably synced before unlink.
+        self.assertEqual(caught.exception.code, "COMMIT_INDETERMINATE")
+
+    def test_record_is_synced_before_the_journal_is_removed(self):
+        import services.article_intel_summary.admin_settings as module
+        events = []
+        original_fsync = ManagedSettingsStore._fsync_dir
+        real_unlink = os.unlink
+
+        def fsync(directory):
+            events.append("fsync")
+            return original_fsync(directory)
+
+        def unlink(path, *args, **kwargs):
+            if Path(path).name == "activation.pending":
+                events.append("unlink_journal")
+            return real_unlink(path, *args, **kwargs)
+
+        with patch.object(ManagedSettingsStore, "_fsync_dir", staticmethod(fsync)), \
+                patch.object(module.os, "unlink", unlink):
+            self.migration_call()()
+        index = events.index("unlink_journal")
+        self.assertEqual(events[index - 1], "fsync")  # explicit sync right before the commit point
+        self.assertEqual(events[index + 1], "fsync")
 
     def test_key_only_first_activation_post_rename_failure_is_recoverable(self):
         store = self.store(NEWSFLUX_AI_LITELLM_S5_FREE_ALIAS="", NEWSFLUX_AI_LITELLM_MISTRAL_SMALL_ALIAS="")
@@ -1976,6 +2026,38 @@ class InterruptedRecoveryManifestTests(LegacyFixture, unittest.TestCase):
         self.assertFalse(self.store().status()["managed"])
 
 
+    def test_unexpected_root_entry_after_staging_stops_the_resume(self):
+        self.crash_on_move(2)
+        for name in ("unexpected.txt", ".new-injected", "settings.json.bak"):
+            with self.subTest(name=name):
+                stray = self.root / name
+                stray.write_bytes(b"x")
+                stray.chmod(0o600)
+                self.refused("RECOVERY_INTEGRITY_FAILED")
+                stray.unlink()
+        self.assertEqual(self.recover()["outcome"], "rolled_back_to_bootstrap")
+
+    def test_unexpected_root_entry_before_completion_writes_no_receipt(self):
+        original = ManagedSettingsStore._recovery_readback
+
+        def inject_then_readback(instance, manifest):
+            stray = self.root / "unexpected.txt"
+            stray.write_bytes(b"x")
+            stray.chmod(0o600)
+            return original(instance, manifest)
+
+        with patch.object(ManagedSettingsStore, "_recovery_readback", inject_then_readback):
+            with self.assertRaises(ManagedSettingsError) as caught:
+                self.recover()
+        self.assertEqual(caught.exception.code, "RECOVERY_INTEGRITY_FAILED")
+        self.assertFalse((self.backup / "recovery.done").exists())
+
+    def test_unexpected_directory_in_root_after_staging_is_refused(self):
+        self.crash_on_move(2)
+        (self.root / "not-a-backup").mkdir(mode=0o700)
+        self.refused("RECOVERY_INTEGRITY_FAILED")
+
+
 class BootstrapKeyClassificationTests(LegacyFixture, unittest.TestCase):
     """R2 P2: only an authentication refusal (or a missing key) proves the bootstrap key unusable."""
 
@@ -2013,3 +2095,64 @@ class BootstrapKeyClassificationTests(LegacyFixture, unittest.TestCase):
         self.boot.unlink()
         plan = self.store_with(RuntimeError("HTTP_503")).operator_plan_legacy_key_recovery(NEW_KEY)
         self.assertEqual(plan["current_key"], "absent")
+
+
+class RollForwardFinalizationTests(LegacyFixture, unittest.TestCase):
+    """R3: the roll-forward commit point has the same crash-consistent finalization."""
+
+    CONFIRM = "RECOVER-INTERRUPTED-ACTIVATION"
+
+    def setUp(self):
+        super().setUp()
+        store = self.store()
+        token = store.migration_preview()["preview_token"]
+        original = ManagedSettingsStore._write_bytes
+
+        def faulty(instance, path, data):
+            original(instance, path, data)
+            if path.name == "settings.json":
+                raise ManagedSettingsError("CONFIG_UNAVAILABLE")
+
+        with patch.object(ManagedSettingsStore, "_write_bytes", faulty):
+            with self.assertRaises(ManagedSettingsError):
+                store.migrate_legacy_policy("bootstrap", token, "MIGRATE-LEGACY-POLICY")
+        self.assertIn("activation.pending", self.files())
+
+    def test_post_unlink_fsync_failure_in_roll_forward_restores_the_journal(self):
+        unlink, fsync, atomic = FirstActivationCommitIntegrityTests.post_unlink_fsync_failure(self)
+        with unlink, fsync, atomic:
+            with self.assertRaises(ManagedSettingsError) as caught:
+                self.store().operator_recover_interrupted_activation(self.CONFIRM)
+        self.assertEqual(caught.exception.code, "CONFIG_UNAVAILABLE")
+        self.assertIn("activation.pending", self.files())
+        with self.assertRaises(ManagedSettingsError):
+            self.store().status()
+        result = self.store().operator_recover_interrupted_activation(self.CONFIRM)
+        self.assertEqual(result["outcome"], "completed_committed_activation")
+
+    def test_double_fault_in_roll_forward_is_indeterminate(self):
+        unlink, fsync, atomic = FirstActivationCommitIntegrityTests.post_unlink_fsync_failure(
+            self, restore_fails=True)
+        with unlink, fsync, atomic:
+            with self.assertRaises(ManagedSettingsError) as caught:
+                self.store().operator_recover_interrupted_activation(self.CONFIRM)
+        self.assertEqual(caught.exception.code, "COMMIT_INDETERMINATE")
+
+    def test_concurrent_roll_forwards_only_one_completes(self):
+        import threading
+        barrier, results = threading.Barrier(2), []
+
+        def run():
+            barrier.wait()
+            try:
+                results.append(self.store().operator_recover_interrupted_activation(self.CONFIRM)["outcome"])
+            except ManagedSettingsError as error:
+                results.append(error.code)
+
+        threads = [threading.Thread(target=run) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertEqual(sorted(results), ["CONFIG_CONFLICT", "completed_committed_activation"])
+        self.assertTrue(self.store().status()["managed"])
