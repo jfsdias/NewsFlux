@@ -46,3 +46,7 @@ src/version-info.json
 # Playwright
 /test-results
 /playwright-report
+
+# Python bytecode from the release-governance and service test suites (never versioned)
+deploy/**/__pycache__/
+services/**/__pycache__/

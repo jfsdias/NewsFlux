@@ -1,0 +1,12 @@
+# Configuration-only overlay for the Reader (`newsflux` project), applied by release.py as an
+# --extra-override: it only ADDS the internal wallhop_reader network with a static address that
+# the sidecar's Reader bridge trusts. Existing networks (npm-proxyyml_default, summary) are kept.
+services:
+  newsflux:
+    networks:
+      wallhop_reader:
+        ipv4_address: "${WALLHOP_READER_IP:?}"
+networks:
+  wallhop_reader:
+    external: true
+    name: newsflux_wallhop_reader
