@@ -138,5 +138,109 @@ class OperatorRevertLegacyMigrationCliTests(unittest.TestCase):
         self.assertEqual((code, lines), (2, ["REVERT=HOLD_CONFIG_CONFLICT"]))
 
 
+class OperatorRecoveryCliTests(unittest.TestCase):
+    """P1/P2 operator CLIs: key file input only, classification output, no secrets."""
+
+    NEW = "sk-synthetic-replacement-recovery-key-01"
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.key = Path(self.tmp.name) / "key"
+        self.key.write_text(KEY, encoding="ascii")
+        self.key.chmod(0o600)
+        self.new_key = Path(self.tmp.name) / "replacement"
+        self.new_key.write_text(self.NEW + "\n", encoding="ascii")
+        self.new_key.chmod(0o600)
+        self.root = Path(self.tmp.name) / "managed"
+        local = model_info("m1", provider="ollama")
+        local["litellm_params"]["api_base"] = "http://ollama:11434"
+        self.gateway = FakeGateway(listed=("m1",), infos=[local])
+        self.env = {
+            "NEWSFLUX_AI_LITELLM_VIRTUAL_KEY_FILE": str(self.key),
+            "NEWSFLUX_AI_LITELLM_BASE_URL": "https://gateway.example",
+            "NEWSFLUX_AI_ADMIN_SETTINGS_DIR": str(self.root),
+            "NEWSFLUX_AI_ADMIN_CONFIG_WRITES_ENABLED": "false",
+            "NEWSFLUX_AI_LITELLM_S5_FREE_ALIAS": "m1",
+        }
+
+        class Revoked:
+            def __call__(self, path):
+                raise RuntimeError("401")
+
+        self.factory = lambda: ManagedSettingsStore(
+            self.env, getter_factory=lambda base, peer, key: Revoked() if key == KEY else self.gateway,
+        )
+
+    def run_cli(self, module_name, *argv):
+        import contextlib
+        import importlib
+        import io
+        cli = importlib.import_module(f"services.article_intel_summary.{module_name}")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = cli.main(list(argv), store_factory=self.factory)
+        text = out.getvalue()
+        self.assertNotIn(KEY, text)
+        self.assertNotIn(self.NEW, text)
+        return code, text.splitlines()
+
+    def test_key_recovery_plan_then_apply(self):
+        cli = "operator_recover_legacy_key_ai_settings"
+        code, lines = self.run_cli(cli, "--key-file", str(self.new_key), "--plan")
+        self.assertEqual(code, 0, lines)
+        self.assertIn("RECOVERY_PLAN=READY", lines)
+        self.assertIn("CURRENT_KEY=UNVERIFIED", lines)
+        self.assertIn("LEGACY_MODELS=1", lines)
+        self.assertFalse(self.root.exists())
+        digest = next(line.split("=", 1)[1] for line in lines if line.startswith("PLAN_DIGEST="))
+        code, lines = self.run_cli(cli, "--key-file", str(self.new_key), "--apply",
+                                   "--plan-digest", digest, "--confirm", "nope")
+        self.assertEqual((code, lines), (2, ["RECOVERY=HOLD_NOT_CONFIRMED"]))
+        code, lines = self.run_cli(cli, "--key-file", str(self.new_key), "--apply",
+                                   "--plan-digest", digest, "--confirm", "RECOVER-LEGACY-KEY-AND-MIGRATE")
+        self.assertEqual(code, 0, lines)
+        self.assertIn("RECOVERY=PASS_KEY_REPLACED_POLICY_MIGRATED", lines)
+        self.assertIn("MODELS_APPROVED=0", lines)
+        self.assertEqual(self.factory().read()["key"], self.NEW)
+
+    def test_key_recovery_rejects_an_unsafe_key_file(self):
+        self.new_key.chmod(0o644)
+        code, lines = self.run_cli("operator_recover_legacy_key_ai_settings",
+                                   "--key-file", str(self.new_key), "--plan")
+        self.assertEqual((code, lines), (2, ["RECOVERY=HOLD_KEY_FILE_UNSAFE"]))
+
+    def test_interrupted_activation_cli_and_preflight_signal(self):
+        from unittest.mock import patch
+        store = self.factory()
+        original = ManagedSettingsStore._write_bytes
+
+        class Crash(BaseException):
+            pass
+
+        def crashing(instance, path, data):
+            if path.name == "settings.json":
+                raise Crash()
+            return original(instance, path, data)
+
+        plan = store.operator_plan_legacy_key_recovery(self.NEW)
+        with patch.object(ManagedSettingsStore, "_write_bytes", crashing):
+            with self.assertRaises(Crash):
+                store.operator_recover_legacy_key("bootstrap", self.NEW, plan["plan_digest"],
+                                                  "RECOVER-LEGACY-KEY-AND-MIGRATE")
+        code, lines = run(self.env, store_factory=lambda env: self.factory())
+        self.assertEqual(code, 3)
+        self.assertIn("INTERRUPTED_ACTIVATION=YES", lines)
+        cli = "operator_recover_interrupted_activation_ai_settings"
+        code, lines = self.run_cli(cli, "--confirm", "no")
+        self.assertEqual((code, lines), (2, ["RECOVERY=HOLD_NOT_CONFIRMED"]))
+        code, lines = self.run_cli(cli, "--confirm", "RECOVER-INTERRUPTED-ACTIVATION")
+        self.assertEqual(code, 0, lines)
+        self.assertIn("RECOVERY=PASS_ROLLED_BACK_TO_BOOTSTRAP", lines)
+        self.assertIn("KEY_SOURCE=BOOTSTRAP", lines)
+        code, lines = run(self.env, store_factory=lambda env: self.factory())
+        self.assertIn("INTERRUPTED_ACTIVATION=NO", lines)
+
+
 if __name__ == "__main__":
     unittest.main()

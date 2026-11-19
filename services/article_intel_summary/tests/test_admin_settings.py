@@ -732,8 +732,8 @@ if __name__ == "__main__":
     unittest.main()
 
 
-class LegacyMigrationTests(unittest.TestCase):
-    """P0: LEGACY -> MANAGED only through an explicit, previewed, confirmed migration."""
+class LegacyFixture:
+    """LEGACY server: S5 (local) and Mistral Small (external, paid) aliases, no policy JSON."""
 
     def setUp(self):
         from services.article_intel_summary.tests.test_litellm_adapter import (
@@ -774,6 +774,23 @@ class LegacyMigrationTests(unittest.TestCase):
         return store.migrate_legacy_policy(
             preview["revision"], preview["preview_token"], "MIGRATE-LEGACY-POLICY",
         )
+
+    def revert_store(self, **overrides):
+        # Reverting to legacy is only allowed with inference OFF (red-team P0-RT-01).
+        return self.store(NEWSFLUX_AI_INFERENCE_ENABLED="false", **overrides)
+
+    def snapshot(self):
+        """Every byte under the store, for "refused and nothing changed" assertions."""
+        if not self.root.exists():
+            return {}
+        return {
+            str(p.relative_to(self.root)): (p.read_bytes() if p.is_file() else "dir")
+            for p in sorted(self.root.rglob("*"))
+        }
+
+
+class LegacyMigrationTests(LegacyFixture, unittest.TestCase):
+    """P0: LEGACY -> MANAGED only through an explicit, previewed, confirmed migration."""
 
     # -- implicit null -> empty is no longer reachable from a first write ------------------
     def test_status_reports_legacy_migration_required_without_writing(self):
@@ -1049,14 +1066,14 @@ class LegacyMigrationTests(unittest.TestCase):
         self.migrate()
         (self.root / "migration.json").write_text("{not json")
         with self.assertRaises(ManagedSettingsError) as caught:
-            self.store().operator_revert_legacy_migration(self.store().read()["revision"])
+            self.revert_store().operator_revert_legacy_migration(self.store().read()["revision"])
         self.assertEqual(caught.exception.code, "CONFIG_INVALID")
         self.assertTrue(self.store().status()["managed"])
 
     # -- operator rollback to the untouched legacy bootstrap ---------------------------------
     def test_operator_revert_restores_legacy_bootstrap_and_keeps_a_private_backup(self):
         status = self.migrate()
-        result = self.store().operator_revert_legacy_migration(status["revision"])
+        result = self.revert_store().operator_revert_legacy_migration(status["revision"])
         self.assertFalse(result["managed"])
         self.assertEqual(result["policy_source"], "legacy")
         self.assertTrue(result["migration_required"])
@@ -1072,16 +1089,19 @@ class LegacyMigrationTests(unittest.TestCase):
     def test_operator_revert_requires_exact_revision_and_unchanged_key(self):
         status = self.migrate()
         with self.assertRaises(ManagedSettingsError) as caught:
-            self.store().operator_revert_legacy_migration("0" * 32)
+            self.revert_store().operator_revert_legacy_migration("0" * 32)
         self.assertEqual(caught.exception.code, "CONFIG_CONFLICT")
         changed = self.store().save_key(NEW_KEY, status["revision"])
         with self.assertRaises(ManagedSettingsError) as caught:
-            self.store().operator_revert_legacy_migration(changed["revision"])
-        self.assertEqual(caught.exception.code, "CONFIG_CONFLICT")
+            self.revert_store().operator_revert_legacy_migration(changed["revision"])
+        # The state is no longer the one the migration created (red-team P0-RT-01).
+        self.assertEqual(caught.exception.code, "ROLLBACK_STATE_CHANGED")
         self.assertTrue(self.store().status()["managed"])
 
     def test_operator_revert_refuses_when_not_a_migration(self):
-        store = self.store(NEWSFLUX_AI_LITELLM_S5_FREE_ALIAS="", NEWSFLUX_AI_LITELLM_MISTRAL_SMALL_ALIAS="")
+        store = self.revert_store(
+            NEWSFLUX_AI_LITELLM_S5_FREE_ALIAS="", NEWSFLUX_AI_LITELLM_MISTRAL_SMALL_ALIAS="",
+        )
         status = store.save_key(NEW_KEY, "bootstrap")
         with self.assertRaises(ManagedSettingsError) as caught:
             store.operator_revert_legacy_migration(status["revision"])
@@ -1104,20 +1124,20 @@ class LegacyMigrationTests(unittest.TestCase):
         import services.article_intel_summary.admin_settings as module
         with patch.object(module.os, "replace", crashing):
             with self.assertRaises(Crash):
-                self.store().operator_revert_legacy_migration(status["revision"])
+                self.revert_store().operator_revert_legacy_migration(status["revision"])
         # Interrupted: the record is gone but the marker remains -> fail closed, never legacy.
         with self.assertRaises(ManagedSettingsError):
             self.store().status()
-        result = self.store().operator_revert_legacy_migration(status["revision"])
+        result = self.revert_store().operator_revert_legacy_migration(status["revision"])
         self.assertFalse(result["managed"])
         self.assertEqual(result["policy_source"], "legacy")
         # And a repeated completed revert is a conflict, not a second move.
         with self.assertRaises(ManagedSettingsError):
-            self.store().operator_revert_legacy_migration(status["revision"])
+            self.revert_store().operator_revert_legacy_migration(status["revision"])
 
     def test_operator_revert_then_migrate_again(self):
         status = self.migrate()
-        self.store().operator_revert_legacy_migration(status["revision"])
+        self.revert_store().operator_revert_legacy_migration(status["revision"])
         again = self.migrate()
         self.assertTrue(again["managed"])
 
@@ -1180,3 +1200,406 @@ class LegacyMigrationTests(unittest.TestCase):
         })
         self.assertEqual(extra.status_code, 422)
         self.assertEqual(self.files(), [])
+
+
+class MigrationRollbackRedTeamTests(LegacyFixture, unittest.TestCase):
+    """P0-RT-01: rollback only for the untouched state the original migration created."""
+
+    def refused(self, revision, code, store=None):
+        before = self.snapshot()
+        with self.assertRaises(ManagedSettingsError) as caught:
+            (store or self.revert_store()).operator_revert_legacy_migration(revision)
+        self.assertEqual(caught.exception.code, code)
+        self.assertEqual(self.snapshot(), before)  # no file, marker or policy change
+        self.assertTrue(self.store().status()["managed"])
+        self.assertFalse(self.store().status()["migration_required"])
+
+    def test_revert_refused_after_a_later_model_approval(self):
+        migrated = self.migrate()
+        approved = self.store().approve_model(self.s5, migrated["revision"])
+        self.refused(approved["revision"], "ROLLBACK_STATE_CHANGED")
+        self.refused(migrated["revision"], "CONFIG_CONFLICT")
+        self.assertEqual([m["alias"] for m in self.store().read()["policy"]["models"]], [self.s5])
+
+    def test_revert_refused_after_approval_then_revocation(self):
+        migrated = self.migrate()
+        approved = self.store().approve_model(self.s5, migrated["revision"])
+        revoked = self.store().remove_model(self.s5, approved["revision"])
+        self.assertEqual(self.store().read()["policy"], {"version": 1, "models": []})
+        self.refused(revoked["revision"], "ROLLBACK_STATE_CHANGED")
+
+    def test_revert_refused_after_a_policy_save(self):
+        migrated = self.migrate()
+        saved = self.store().save_policy({"version": 1, "models": [
+            policy_model("s5", self.s5, provider_identity="ollama@ollama:11434"),
+        ]}, migrated["revision"])
+        self.refused(saved["revision"], "ROLLBACK_STATE_CHANGED")
+
+    def test_revert_refused_after_key_replaced_and_changed_back(self):
+        migrated = self.migrate()
+        replaced = self.store().save_key(NEW_KEY, migrated["revision"])
+        back = self.store().save_key(KEY, replaced["revision"])
+        record = self.store().read()
+        self.assertEqual((record["key"], record["policy"]), (KEY, {"version": 1, "models": []}))
+        # Same key and same empty policy as the migration, but not the migration's state.
+        self.refused(back["revision"], "ROLLBACK_STATE_CHANGED")
+
+    def test_revert_refused_after_operator_restore_of_the_migration_snapshot(self):
+        migrated = self.migrate()
+        approved = self.store().approve_model(self.s5, migrated["revision"])
+        restored = self.store().operator_restore_previous(approved["revision"])
+        self.refused(restored["revision"], "ROLLBACK_STATE_CHANGED")
+
+    def test_revert_refused_with_inference_enabled(self):
+        migrated = self.migrate()
+        self.refused(migrated["revision"], "INFERENCE_ENABLED",
+                     store=self.store(NEWSFLUX_AI_INFERENCE_ENABLED="true"))
+
+    def test_revert_refused_when_legacy_aliases_changed_since_migration(self):
+        migrated = self.migrate()
+        self.refused(migrated["revision"], "ROLLBACK_STATE_CHANGED",
+                     store=self.revert_store(NEWSFLUX_AI_LITELLM_S5_FREE_ALIAS="other-local-model"))
+
+    def test_forged_audit_aligned_to_a_later_state_is_refused(self):
+        import hashlib
+        migrated = self.migrate()
+        approved = self.store().approve_model(self.s5, migrated["revision"])
+        audit_path = self.root / "migration.json"
+        audit = json.loads(audit_path.read_text())
+        audit["revision"] = approved["revision"]
+        audit["record_sha256"] = hashlib.sha256((self.root / "settings.json").read_bytes()).hexdigest()
+        audit_path.write_text(json.dumps(audit))
+        self.refused(approved["revision"], "ROLLBACK_STATE_CHANGED")
+
+    def test_audit_missing_digests_is_invalid(self):
+        migrated = self.migrate()
+        audit_path = self.root / "migration.json"
+        audit = json.loads(audit_path.read_text())
+        audit.pop("record_sha256")
+        audit_path.write_text(json.dumps(audit))
+        self.refused(migrated["revision"], "CONFIG_INVALID")
+
+    def test_untouched_migration_still_reverts_and_resume_checks_the_manifest(self):
+        migrated = self.migrate()
+        audit = json.loads((self.root / "migration.json").read_text())
+        self.assertEqual(audit["revision"], migrated["revision"])
+        self.assertRegex(audit["record_sha256"], r"^[0-9a-f]{64}$")
+        self.assertRegex(audit["previous_sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(audit["kind"], "migration")
+        result = self.revert_store().operator_revert_legacy_migration(migrated["revision"])
+        self.assertEqual(result["policy_source"], "legacy")
+
+    def test_interrupted_revert_resume_refuses_a_tampered_backup_record(self):
+        migrated = self.migrate()
+        original = os.replace
+        calls = []
+
+        class Crash(BaseException):
+            pass
+
+        def crashing(src, dst, *args, **kwargs):
+            calls.append(Path(src).name)
+            if len(calls) == 2:
+                raise Crash()
+            return original(src, dst, *args, **kwargs)
+
+        import services.article_intel_summary.admin_settings as module
+        with patch.object(module.os, "replace", crashing):
+            with self.assertRaises(Crash):
+                self.revert_store().operator_revert_legacy_migration(migrated["revision"])
+        moved = self.root / f"legacy-revert-{migrated['revision']}" / "settings.json"
+        raw = json.loads(moved.read_text())
+        raw["policy"] = {"version": 1, "models": [policy_model("x", self.s5)]}
+        moved.write_text(json.dumps(raw))
+        with self.assertRaises(ManagedSettingsError) as caught:
+            self.revert_store().operator_revert_legacy_migration(migrated["revision"])
+        self.assertEqual(caught.exception.code, "ROLLBACK_STATE_CHANGED")
+        self.assertTrue((self.root / "activated").exists())  # still fail-closed, not legacy
+
+
+class LegacyKeyRecoveryTests(LegacyFixture, unittest.TestCase):
+    """P1-RT-02: LEGACY with a revoked bootstrap key and a valid replacement key."""
+
+    CONFIRM = "RECOVER-LEGACY-KEY-AND-MIGRATE"
+
+    def setUp(self):
+        super().setUp()
+        self.revoked = {KEY}
+
+        class Revoked:
+            def __call__(self, path):
+                raise RuntimeError("401 revoked")
+
+        self.revoked_getter = Revoked()
+
+    def store(self, **overrides):
+        env = dict(self.env, **overrides)
+
+        def factory(base, peer, key):
+            return self.revoked_getter if key in self.revoked else self.gateway
+
+        return ManagedSettingsStore(env, root=str(self.root), getter_factory=factory)
+
+    def recover(self, store=None, key=NEW_KEY):
+        store = store or self.store()
+        plan = store.operator_plan_legacy_key_recovery(key)
+        return store.operator_recover_legacy_key("bootstrap", key, plan["plan_digest"], self.CONFIRM)
+
+    def test_reproduces_the_deadlock_without_the_recovery_path(self):
+        store = self.store()
+        with self.assertRaises(ManagedSettingsError) as caught:
+            store.save_key(NEW_KEY, "bootstrap")
+        self.assertEqual(caught.exception.code, "MIGRATION_REQUIRED")
+        preview = store.migration_preview()
+        self.assertEqual(preview["gateway"], "unavailable")
+        with self.assertRaises(ManagedSettingsError) as caught:
+            store.migrate_legacy_policy("bootstrap", preview["preview_token"], "MIGRATE-LEGACY-POLICY")
+        self.assertEqual(caught.exception.code, "KEY_UNVERIFIED")
+        self.assertEqual(self.files(), [])
+
+    def test_plan_is_read_only_works_with_writes_off_and_verifies_with_the_new_key(self):
+        plan = self.store(NEWSFLUX_AI_ADMIN_CONFIG_WRITES_ENABLED="false").operator_plan_legacy_key_recovery(NEW_KEY)
+        self.assertEqual(self.files(), [])
+        self.assertEqual(plan["current_key"], "unverified")
+        self.assertEqual(plan["candidate_key"], "verified")
+        self.assertEqual(plan["gateway"], "ok")
+        self.assertEqual({row["id"] for row in plan["models"]}, {"s5-free", "mistral-small"})
+        self.assertRegex(plan["plan_digest"], r"^[0-9a-f]{64}$")
+        rendered = json.dumps(plan)
+        for forbidden in (KEY, NEW_KEY, "provider-secret", "internal-provider", "api_base"):
+            self.assertNotIn(forbidden, rendered)
+
+    def test_recovery_replaces_the_key_migrates_and_approves_nothing(self):
+        before = self.boot.read_bytes()
+        status = self.recover()
+        self.assertTrue(status["managed"])
+        self.assertEqual(status["policy_models"], 0)
+        record = self.store().read()
+        self.assertEqual((record["key"], record["policy"]), (NEW_KEY, {"version": 1, "models": []}))
+        self.assertEqual(self.boot.read_bytes(), before)
+        audit = json.loads((self.root / "migration.json").read_text())
+        self.assertEqual(audit["kind"], "key_recovery")
+        self.assertNotIn(NEW_KEY, (self.root / "migration.json").read_text())
+        self.assertNotIn(KEY, (self.root / "migration.json").read_text())
+        # External and paid legacy models still need explicit per-model consent.
+        with self.assertRaises(ManagedSettingsError):
+            self.store().approve_model(self.mistral, status["revision"])
+
+    def test_recovery_works_writes_off_and_with_the_bootstrap_key_file_missing(self):
+        self.boot.unlink()
+        status = self.recover(self.store(NEWSFLUX_AI_ADMIN_CONFIG_WRITES_ENABLED="false"))
+        self.assertTrue(status["managed"])
+
+    def test_recovery_is_not_a_rotation_tool_when_the_bootstrap_key_works(self):
+        self.revoked = set()
+        with self.assertRaises(ManagedSettingsError) as caught:
+            self.store().operator_plan_legacy_key_recovery(NEW_KEY)
+        self.assertEqual(caught.exception.code, "CONFIG_CONFLICT")
+        with self.assertRaises(ManagedSettingsError) as caught:
+            self.store().operator_recover_legacy_key("bootstrap", NEW_KEY, "0" * 64, self.CONFIRM)
+        self.assertEqual(caught.exception.code, "CONFIG_CONFLICT")
+        self.assertEqual(self.files(), [])
+
+    def test_recovery_refuses_bad_candidates_confirmation_and_stale_plans(self):
+        store = self.store()
+        plan = store.operator_plan_legacy_key_recovery(NEW_KEY)["plan_digest"]
+        cases = [
+            (("bootstrap", "sk-synthetic-also-revoked-0000", plan, self.CONFIRM), "KEY_UNVERIFIED"),
+            (("bootstrap", KEY, plan, self.CONFIRM), "CONFIG_CONFLICT"),
+            (("bootstrap", "not-a-key", plan, self.CONFIRM), "KEY_INVALID"),
+            (("bootstrap", NEW_KEY, plan, "yes"), "MIGRATION_NOT_CONFIRMED"),
+            (("bootstrap", NEW_KEY, "0" * 64, self.CONFIRM), "CONFIG_CONFLICT"),
+            (("0" * 32, NEW_KEY, plan, self.CONFIRM), "CONFIG_CONFLICT"),
+        ]
+        self.revoked.add("sk-synthetic-also-revoked-0000")
+        for args, code in cases:
+            with self.assertRaises(ManagedSettingsError) as caught:
+                store.operator_recover_legacy_key(*args)
+            self.assertEqual(caught.exception.code, code, args[1:])
+        # Gateway changed after the plan: stale.
+        self.gateway.infos[1]["model_info"]["input_cost_per_token"] = 9e-6
+        with self.assertRaises(ManagedSettingsError) as caught:
+            store.operator_recover_legacy_key("bootstrap", NEW_KEY, plan, self.CONFIRM)
+        self.assertEqual(caught.exception.code, "CONFIG_CONFLICT")
+        self.assertEqual(self.files(), [])
+
+    def test_recovery_only_from_an_unactivated_legacy_source(self):
+        env_policy = json.dumps({"version": 1, "models": [
+            policy_model("s5", self.s5, provider_identity="ollama@ollama:11434"),
+        ]})
+        with self.assertRaises(ManagedSettingsError) as caught:
+            self.store(NEWSFLUX_AI_MODEL_POLICY_JSON=env_policy).operator_plan_legacy_key_recovery(NEW_KEY)
+        self.assertEqual(caught.exception.code, "CONFIG_CONFLICT")
+        self.recover()
+        with self.assertRaises(ManagedSettingsError) as caught:
+            self.store().operator_plan_legacy_key_recovery("sk-synthetic-third-key-000000")
+        self.assertEqual(caught.exception.code, "CONFIG_CONFLICT")
+
+    def test_revoked_key_is_never_reinstated_by_restore_or_revert(self):
+        status = self.recover()
+        before = self.snapshot()
+        with self.assertRaises(ManagedSettingsError) as caught:
+            self.store().operator_restore_previous(status["revision"])
+        self.assertEqual(caught.exception.code, "CONFIG_CONFLICT")
+        with self.assertRaises(ManagedSettingsError) as caught:
+            self.revert_store().operator_revert_legacy_migration(status["revision"])
+        self.assertEqual(caught.exception.code, "ROLLBACK_STATE_CHANGED")
+        self.assertEqual(self.snapshot(), before)
+
+    def test_recovery_has_no_http_route(self):
+        from services.article_intel_summary.admin_api import ACTION_NAMES
+        self.assertFalse({name for name in ACTION_NAMES if "recover" in name})
+
+
+class InterruptedActivationRecoveryTests(LegacyFixture, unittest.TestCase):
+    """P2: crash after the activated marker and before settings.json is committed."""
+
+    CONFIRM = "RECOVER-INTERRUPTED-ACTIVATION"
+
+    def crash_during(self, call, *, at="settings.json"):
+        original = ManagedSettingsStore._write_bytes
+
+        class Crash(BaseException):
+            pass
+
+        def crashing(instance, path, data):
+            if path.name == at:
+                raise Crash()
+            return original(instance, path, data)
+
+        with patch.object(ManagedSettingsStore, "_write_bytes", crashing):
+            with self.assertRaises(Crash):
+                call()
+
+    def crash_migration(self):
+        store = self.store()
+        token = store.migration_preview()["preview_token"]
+        self.crash_during(lambda: store.migrate_legacy_policy("bootstrap", token, "MIGRATE-LEGACY-POLICY"))
+
+    def test_interrupted_first_activation_fails_closed_and_leaves_an_intent_journal(self):
+        self.crash_migration()
+        self.assertIn("activation.pending", self.files())
+        self.assertNotIn("settings.json", self.files())
+        for call in (self.store().status, self.store().read, lambda: self.store().effective_values()):
+            with self.assertRaises(ManagedSettingsError) as caught:
+                call()
+            self.assertEqual(caught.exception.code, "CONFIG_UNAVAILABLE")
+
+    def test_operator_recovery_returns_to_bootstrap_with_an_auditable_backup(self):
+        self.crash_migration()
+        before = self.snapshot()
+        result = self.store().operator_recover_interrupted_activation(self.CONFIRM)
+        self.assertEqual(result["outcome"], "rolled_back_to_bootstrap")
+        self.assertFalse(result["status"]["managed"])
+        self.assertEqual(result["status"]["policy_source"], "legacy")
+        self.assertTrue(result["status"]["migration_required"])
+        backups = [p for p in self.root.iterdir() if p.is_dir()]
+        self.assertEqual(len(backups), 1)
+        self.assertTrue(backups[0].name.startswith("interrupted-activation-"))
+        self.assertEqual(backups[0].stat().st_mode & 0o777, 0o700)
+        audit = json.loads((backups[0] / "recovery.json").read_text())
+        import hashlib
+        moved = {item["name"]: item["sha256"] for item in audit["moved"]}
+        self.assertIn("activated", moved)
+        self.assertIn("activation.pending", moved)
+        for name, digest in moved.items():
+            self.assertEqual(hashlib.sha256(before[name]).hexdigest(), digest)
+            self.assertEqual((backups[0] / name).read_bytes(), before[name])
+        self.assertNotIn(KEY, (backups[0] / "recovery.json").read_text())
+        # Readback: plain legacy bootstrap, and a fresh migration works again.
+        self.assertTrue(self.migrate()["managed"])
+
+    def test_recovery_of_an_interrupted_key_activation_never_keeps_the_new_key(self):
+        store = self.store(NEWSFLUX_AI_LITELLM_S5_FREE_ALIAS="", NEWSFLUX_AI_LITELLM_MISTRAL_SMALL_ALIAS="")
+        self.crash_during(lambda: store.save_key(NEW_KEY, "bootstrap"))
+        result = store.operator_recover_interrupted_activation(self.CONFIRM)
+        self.assertFalse(result["status"]["managed"])
+        self.assertEqual(store.read()["key"], KEY)
+
+    def test_temporary_partial_writes_are_moved_not_trusted(self):
+        self.crash_migration()
+        partial = self.root / ".new-partial"
+        partial.write_bytes(b'{"version":1')
+        partial.chmod(0o600)
+        result = self.store().operator_recover_interrupted_activation(self.CONFIRM)
+        backup = next(p for p in self.root.iterdir() if p.is_dir())
+        self.assertTrue((backup / ".new-partial").exists())
+        self.assertIn(".new-partial", [item["name"] for item in result["moved"]])
+
+    def test_deleted_record_after_completed_activation_is_not_an_interruption(self):
+        self.migrate()
+        (self.root / "settings.json").unlink()
+        before = self.snapshot()
+        with self.assertRaises(ManagedSettingsError) as caught:
+            self.store().operator_recover_interrupted_activation(self.CONFIRM)
+        self.assertEqual(caught.exception.code, "CONFIG_CONFLICT")
+        self.assertEqual(self.snapshot(), before)
+
+    def test_crash_after_commit_before_journal_removal_rolls_forward_explicitly(self):
+        store = self.store()
+        token = store.migration_preview()["preview_token"]
+        original = os.unlink
+
+        class Crash(BaseException):
+            pass
+
+        def crashing(path, *args, **kwargs):
+            if Path(path).name == "activation.pending":
+                raise Crash()
+            return original(path, *args, **kwargs)
+
+        import services.article_intel_summary.admin_settings as module
+        with patch.object(module.os, "unlink", crashing):
+            with self.assertRaises(Crash):
+                store.migrate_legacy_policy("bootstrap", token, "MIGRATE-LEGACY-POLICY")
+        # The record was committed: it is authoritative, the journal is only stale.
+        self.assertTrue(self.store().status()["managed"])
+        result = self.store().operator_recover_interrupted_activation(self.CONFIRM)
+        self.assertEqual(result["outcome"], "completed_committed_activation")
+        self.assertNotIn("activation.pending", self.files())
+        self.assertTrue(result["status"]["managed"])
+
+    def test_recovery_requires_confirmation_and_is_not_repeatable(self):
+        self.crash_migration()
+        before = self.snapshot()
+        with self.assertRaises(ManagedSettingsError) as caught:
+            self.store().operator_recover_interrupted_activation("yes")
+        self.assertEqual(caught.exception.code, "MIGRATION_NOT_CONFIRMED")
+        self.assertEqual(self.snapshot(), before)
+        self.store().operator_recover_interrupted_activation(self.CONFIRM)
+        with self.assertRaises(ManagedSettingsError) as caught:
+            self.store().operator_recover_interrupted_activation(self.CONFIRM)
+        self.assertEqual(caught.exception.code, "CONFIG_CONFLICT")
+
+    def test_tampered_intent_journal_is_invalid(self):
+        self.crash_migration()
+        (self.root / "activation.pending").write_text("{}")
+        before = self.snapshot()
+        with self.assertRaises(ManagedSettingsError) as caught:
+            self.store().operator_recover_interrupted_activation(self.CONFIRM)
+        self.assertEqual(caught.exception.code, "CONFIG_INVALID")
+        self.assertEqual(self.snapshot(), before)
+
+    def test_interrupted_recovery_resumes_and_stays_fail_closed_meanwhile(self):
+        self.crash_migration()
+        original = os.replace
+        calls = []
+
+        class Crash(BaseException):
+            pass
+
+        def crashing(src, dst, *args, **kwargs):
+            calls.append(Path(src).name)
+            if Path(src).name == "activation.pending":
+                raise Crash()
+            return original(src, dst, *args, **kwargs)
+
+        import services.article_intel_summary.admin_settings as module
+        with patch.object(module.os, "replace", crashing):
+            with self.assertRaises(Crash):
+                self.store().operator_recover_interrupted_activation(self.CONFIRM)
+        with self.assertRaises(ManagedSettingsError):
+            self.store().status()  # marker still present: fail closed, no silent bootstrap
+        result = self.store().operator_recover_interrupted_activation(self.CONFIRM)
+        self.assertEqual(result["outcome"], "rolled_back_to_bootstrap")
+        self.assertFalse(self.store().status()["managed"])

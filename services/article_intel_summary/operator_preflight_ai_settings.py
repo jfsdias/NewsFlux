@@ -52,6 +52,13 @@ def run(environ=None, *, check_gateway: bool = False, store_factory=ManagedSetti
     root = Path(env.get("NEWSFLUX_AI_ADMIN_SETTINGS_DIR") or DEFAULT_ROOT)
     root_state = _classify_root(root) if root.is_absolute() else "UNSAFE_RELATIVE"
     lines.append(f"MANAGED_DIR={root_state}")
+    # A first activation interrupted between its marker and its record (journal left behind):
+    # recover with operator_recover_interrupted_activation_ai_settings, never by hand.
+    interrupted = (root_state == "PRESENT_PRIVATE" and (root / "activation.pending").is_file()
+                   and not (root / "settings.json").exists())
+    lines.append(f"INTERRUPTED_ACTIVATION={'YES' if interrupted else 'NO'}")
+    if interrupted:
+        hold = True
     if root_state.startswith("UNSAFE") or (writes and root_state == "ABSENT_PARENT_NOT_WRITABLE"):
         hold = True
     try:
