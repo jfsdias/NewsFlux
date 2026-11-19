@@ -8,6 +8,7 @@
     "scripts/pilot-e2e/vite-admin.config.js",
     "scripts/pilot-e2e/playwright-admin.config.js",
     "scripts/pilot-e2e/ai-settings-admin.spec.js",
+    "scripts/pilot-e2e/ai-settings-migration.spec.js",
     "scripts/pilot-e2e/playwright-compose.config.js",
     "scripts/pilot-e2e/compose.spec.js",
     "scripts/pilot-e2e/check-compose-tls.mjs",

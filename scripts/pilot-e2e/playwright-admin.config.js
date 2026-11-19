@@ -2,7 +2,8 @@ import { defineConfig } from "@playwright/test"
 
 export default defineConfig({
   testDir: ".",
-  testMatch: "ai-settings-admin.spec.js",
+  // Files run in name order with one worker: the migration suite starts from its own fresh store.
+  testMatch: /ai-settings-(admin|migration)\.spec\.js$/u,
   workers: 1,
   retries: 0,
   outputDir: "../../test-results/ai-settings-admin",

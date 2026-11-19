@@ -3,6 +3,7 @@ import { useStore } from "@nanostores/react"
 import { useEffect, useRef, useState } from "react"
 
 import LiteLlmAdminSettings from "./LiteLlmAdminSettings"
+import LiteLlmPolicyMigration from "./LiteLlmPolicyMigration"
 import SettingItem from "./SettingItem"
 import SettingSection from "./SettingSection"
 
@@ -22,6 +23,10 @@ import {
   SUMMARY_SECTIONS,
 } from "@/utils/article-intelligence-profile"
 import { getAuthSessionKey, hasProvisionedApiKey } from "@/utils/auth"
+import {
+  describeFallbackPreference,
+  describePrimaryPreference,
+} from "@/utils/summary-model-preference"
 
 import "./ArticleIntelligence.css"
 
@@ -105,6 +110,8 @@ const ArticleIntelligence = () => {
     ],
   })
   const [reloadCount, setReloadCount] = useState(0)
+  // Bumped after a policy migration so the admin panels re-read the new revision.
+  const [adminGeneration, setAdminGeneration] = useState(0)
   const [modelSearch, setModelSearch] = useState("")
   const languageSelectRef = useRef(null)
   const languageClosedAtRef = useRef(Number.NEGATIVE_INFINITY)
@@ -145,20 +152,28 @@ const ArticleIntelligence = () => {
     aiSummaryModel === SUMMARY_MODEL_AUTO ? catalog?.default_model_id : aiSummaryModel
   const primaryEntry = catalog?.models.find((model) => model.id === primaryId)
   const fallbackEntry = catalog?.models.find((model) => model.id === aiSummaryFallbackModel)
-  const fallbackIsUnavailable =
-    catalog &&
-    aiSummaryFallbackEnabled &&
-    aiSummaryFallbackModel !== SUMMARY_FALLBACK_NONE &&
-    !fallbackEntry?.available
-  const selectedIsUnavailable =
-    catalog &&
-    aiSummaryModel !== SUMMARY_MODEL_AUTO &&
-    !catalog.models.find((model) => model.id === aiSummaryModel)?.available
+  // Saved preferences are kept as they are and described; only the server decides what runs.
+  const primaryPreference = describePrimaryPreference(aiSummaryModel, catalog)
+  const fallbackPreference = describeFallbackPreference(
+    { aiSummaryModel, aiSummaryFallbackEnabled, aiSummaryFallbackModel },
+    catalog,
+  )
+  const savedPrimaryMissing =
+    primaryPreference.state === "saved_missing" && aiSummaryModel !== SUMMARY_MODEL_AUTO
+  const savedFallbackMissing = fallbackPreference.state === "saved_missing"
+  const adminKey = `${authSessionKey}:${adminGeneration}`
 
   return (
     <>
+      <LiteLlmPolicyMigration
+        key={`migration:${adminKey}`}
+        onMigrated={() => {
+          setAdminGeneration((count) => count + 1)
+          setReloadCount((count) => count + 1)
+        }}
+      />
       <LiteLlmAdminSettings
-        key={authSessionKey}
+        key={adminKey}
         onPolicyChanged={() => setReloadCount((count) => count + 1)}
       />
       <SettingSection title={polyglot.t("article_intelligence.settings_section")}>
@@ -214,16 +229,29 @@ const ArticleIntelligence = () => {
                       .includes(modelSearch.trim().toLowerCase()),
                 )
                 .map((model) => (
-                  <Radio key={model.id} disabled={!model.available} value={model.id}>
+                  // Unavailable models can be saved as an inert preference; they never run
+                  // until the server reports them available (see summary-model-preference).
+                  <Radio key={model.id} value={model.id}>
                     <span className="ai-model-option__title">{model.label}</span>
                     <ModelDetails model={model} polyglot={polyglot} />
                   </Radio>
                 ))}
+              {savedPrimaryMissing && (
+                <Radio disabled value={aiSummaryModel}>
+                  <span className="ai-model-option__title">
+                    {polyglot.t("article_intelligence.preference_saved_missing", {
+                      model: aiSummaryModel,
+                    })}
+                  </span>
+                </Radio>
+              )}
             </Radio.Group>
           )}
-          {selectedIsUnavailable && (
-            <Typography.Text role="status" type="warning">
-              {polyglot.t("article_intelligence.model_selection_unavailable")}
+          {(primaryPreference.state === "saved_unavailable" ||
+            primaryPreference.state === "saved_missing") && (
+            <Typography.Text className="ai-preference-status" role="status" type="warning">
+              {polyglot.t("article_intelligence.model_selection_unavailable")}{" "}
+              {polyglot.t("article_intelligence.preference_inert")}
             </Typography.Text>
           )}
         </SettingItem>
@@ -255,11 +283,20 @@ const ArticleIntelligence = () => {
                     {catalog.models
                       .filter((model) => model.id !== primaryId)
                       .map((model) => (
-                        <Radio key={model.id} disabled={!model.available} value={model.id}>
+                        <Radio key={model.id} value={model.id}>
                           <span className="ai-model-option__title">{model.label}</span>
                           <ModelDetails model={model} polyglot={polyglot} />
                         </Radio>
                       ))}
+                    {savedFallbackMissing && (
+                      <Radio disabled value={aiSummaryFallbackModel}>
+                        <span className="ai-model-option__title">
+                          {polyglot.t("article_intelligence.preference_saved_missing", {
+                            model: aiSummaryFallbackModel,
+                          })}
+                        </span>
+                      </Radio>
+                    )}
                   </Radio.Group>
                   {fallbackEntry?.requiresPaidAuthorization && (
                     <Checkbox
@@ -286,11 +323,30 @@ const ArticleIntelligence = () => {
                         })}
                       </Checkbox>
                     )}
-                  {fallbackIsUnavailable && (
-                    <Typography.Text role="status" type="warning">
-                      {polyglot.t("article_intelligence.fallback_selection_unavailable")}
+                  {(fallbackPreference.state === "saved_unavailable" ||
+                    fallbackPreference.state === "saved_missing") && (
+                    <Typography.Text className="ai-preference-status" role="status" type="warning">
+                      {polyglot.t("article_intelligence.fallback_selection_unavailable")}{" "}
+                      {polyglot.t("article_intelligence.preference_inert")}
                     </Typography.Text>
                   )}
+                  {fallbackPreference.state === "same_as_primary" && (
+                    <Typography.Text className="ai-preference-status" role="status" type="warning">
+                      {polyglot.t("article_intelligence.fallback_same_as_primary")}
+                    </Typography.Text>
+                  )}
+                  {fallbackPreference.state === "saved_waiting_for_primary" && (
+                    <Typography.Text
+                      className="ai-preference-status"
+                      role="status"
+                      type="secondary"
+                    >
+                      {polyglot.t("article_intelligence.fallback_waiting_for_primary")}
+                    </Typography.Text>
+                  )}
+                  <Typography.Text className="ai-preference-status" type="secondary">
+                    {polyglot.t("article_intelligence.preference_note")}
+                  </Typography.Text>
                 </>
               )}
             </div>

@@ -17,8 +17,9 @@ MAX_BODY_BYTES = 18 * 1024
 BASE = "/api/ai/v1/admin/litellm"
 ACTION_NAMES = frozenset({
     "status", "models", "policy", "test-key", "save-key", "save-policy",
-    "approve-model", "remove-model",
+    "approve-model", "remove-model", "migration-preview", "migrate-policy",
 })
+READ_ACTIONS = frozenset({"status", "models", "policy", "migration-preview"})
 
 
 def _response(payload: dict, status: int = 200, *, origin: str | None = None) -> Response:
@@ -45,7 +46,7 @@ def _safe_error(code: str, status: int, origin: str | None) -> Response:
         "REQUEST_TOO_LARGE", "CONFIG_UNAVAILABLE", "CONFIG_UNSAFE",
         "CONFIG_INVALID", "CONFIG_CONFLICT", "KEY_INVALID", "KEY_UNVERIFIED",
         "POLICY_INVALID", "MODEL_NOT_DISCOVERED", "MODEL_UNVERIFIED",
-        "CHANGES_DISABLED",
+        "CHANGES_DISABLED", "MIGRATION_REQUIRED", "MIGRATION_NOT_CONFIRMED",
     }:
         code = "CONFIG_UNAVAILABLE"
     return _response({"error": {"code": code}}, status, origin=origin)
@@ -128,6 +129,8 @@ def create_admin_router(auth: MinifluxAuthService, store: ManagedSettingsStore) 
                     result = await run_in_threadpool(store.public_models)
                 elif action == "policy":
                     result = await run_in_threadpool(store.policy)
+                elif action == "migration-preview":
+                    result = await run_in_threadpool(store.migration_preview)
                 else:
                     return _safe_error("INVALID_REQUEST", 405, origin)
             elif request.method == "POST":
@@ -157,6 +160,15 @@ def create_admin_router(auth: MinifluxAuthService, store: ManagedSettingsStore) 
                     result = await run_in_threadpool(
                         store.remove_model, data["alias"], data["expected_revision"]
                     )
+                elif action == "migrate-policy" and set(data) == {
+                    "expected_revision", "preview_token", "confirm"
+                }:
+                    if not isinstance(data["expected_revision"], str):
+                        raise ValueError("invalid")
+                    result = await run_in_threadpool(
+                        store.migrate_legacy_policy, data["expected_revision"],
+                        data["preview_token"], data["confirm"]
+                    )
                 else:
                     raise ValueError("invalid")
             else:
@@ -176,8 +188,10 @@ def create_admin_router(auth: MinifluxAuthService, store: ManagedSettingsStore) 
         except ManagedSettingsError as err:
             status = (
                 403 if err.code == "CHANGES_DISABLED" else
-                409 if err.code == "CONFIG_CONFLICT" else
-                422 if err.code in {"KEY_INVALID", "POLICY_INVALID", "MODEL_NOT_DISCOVERED"} else
+                409 if err.code in {"CONFIG_CONFLICT", "MIGRATION_REQUIRED"} else
+                422 if err.code in {
+                    "KEY_INVALID", "POLICY_INVALID", "MODEL_NOT_DISCOVERED", "MIGRATION_NOT_CONFIRMED"
+                } else
                 503
             )
             return _safe_error(err.code, status, origin)
@@ -195,6 +209,14 @@ def create_admin_router(auth: MinifluxAuthService, store: ManagedSettingsStore) 
     @router.get(BASE + "/policy")
     async def policy(request: Request):
         return await invoke(request, "policy")
+
+    @router.get(BASE + "/migration-preview")
+    async def migration_preview(request: Request):
+        return await invoke(request, "migration-preview")
+
+    @router.post(BASE + "/migrate-policy")
+    async def migrate_policy(request: Request):
+        return await invoke(request, "migrate-policy")
 
     @router.post(BASE + "/test-key")
     async def test_key(request: Request):
@@ -223,7 +245,7 @@ def create_admin_router(auth: MinifluxAuthService, store: ManagedSettingsStore) 
         try:
             origin = _check_origin_host(request, auth)
             method = request.headers.get("access-control-request-method", "").upper()
-            expected = "GET" if action in ("status", "models", "policy") else "POST"
+            expected = "GET" if action in READ_ACTIONS else "POST"
             if method != expected:
                 raise AuthError("request_origin_not_allowed", 403)
             headers = auth.origin_policy.preflight_headers(

@@ -41,9 +41,10 @@ const expectPrimaryControls = async (page) => {
   await expect(primary.getByRole("radio", { name: /^S5/ })).toBeChecked()
   await expect(primary.getByRole("radio", { name: /^S5/ })).toBeEnabled()
   await expect(primary.getByRole("radio", { name: /^Mistral Small/ })).toBeEnabled()
+  // Not approved: it can be saved as an inert preference, but never runs.
   await expect(
     primary.getByRole("radio", { name: /^synthetic-long-model-name-from-gateway/ }),
-  ).toBeDisabled()
+  ).toHaveAccessibleName(/Not approved by the operator/)
   await expect(page.getByRole("switch", { name: "Fallback model" })).toBeVisible()
 }
 

@@ -12,7 +12,11 @@ const ALLOWED_ACTIONS = new Set([
   "save-key",
   "approve-model",
   "remove-model",
+  "migration-preview",
+  "migrate-policy",
 ])
+// Exact phrase the server requires; sent only after the administrator ticks the confirmation.
+const MIGRATION_CONFIRMATION = "MIGRATE-LEGACY-POLICY"
 const MAX_RESPONSE_BYTES = 96 * 1024
 
 export class AdminLiteLLMError extends Error {
@@ -96,3 +100,15 @@ export const approveLiteLLMModel = (alias, expectedRevision, allowPaid, allowExt
   )
 export const removeLiteLLMModel = (alias, expectedRevision, options) =>
   request("remove-model", { alias, expected_revision: expectedRevision }, options)
+export const readLiteLLMMigrationPreview = (options) =>
+  request("migration-preview", undefined, options)
+export const migrateLiteLLMPolicy = (expectedRevision, previewToken, options) =>
+  request(
+    "migrate-policy",
+    {
+      expected_revision: expectedRevision,
+      preview_token: previewToken,
+      confirm: MIGRATION_CONFIRMATION,
+    },
+    options,
+  )
