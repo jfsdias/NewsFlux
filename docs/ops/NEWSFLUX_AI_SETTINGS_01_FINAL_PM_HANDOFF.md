@@ -39,6 +39,17 @@ Result: [jfsdias/NewsFlux#268](https://github.com/jfsdias/NewsFlux/pull/268) now
 
 ## Operator command
 
-`deploy/r44-admin-allowlist/r44-omv-command.sh` in #268 at `89ae3d3`, pinned to procedure commit `1958395c595f8bb1b73b727240f2523a8bd2c0c3` (SHA-256 `a32d69aa470815d5e7d2ed12bbcabf01d98f75711231b75f59bc1771291df252`). It expects Summary image `sha256:db40e22a…1049` at `d54eda2b`.
+`deploy/r44-admin-allowlist/r44-omv-command.sh` in #268 at `119836684c4a2d81172bd3716e02e16e0e6f5294` (SHA-256 `f1a4e3c2c90672d73637716cb623a5b66f36f985bbc3dfcc26b954c7d0d61477`). It is pinned to procedure commit `019a11e7a138094adac8ba77112f811b629e123e` (SHA-256 `797708f18e24c7001188dab110fc3dcf53d9b54d6aa38619a7adacd43d3e0f6e`) and expects Summary image `sha256:db40e22a…1049` at `d54eda2b`.
+
+## R4.4D — rollback reachability (final recovery gate)
+
+- **Defect** (PM, source-proven; RED on `89ae3d3`): `R44_MODE=rollback` was evaluated after the running/healthy trust gate. A stopped Summary gave `SUMMARY_CONTAINER=NOT_UNIQUE_OR_NOT_RUNNING` and an unhealthy one gave `SUMMARY_HEALTH=UNHEALTHY`, so rollback was refused exactly when it was needed.
+- **Fix:**
+  - Rollback is now routed right after the pin checks and uses only `release.py rollback`.
+  - The manifest must be root-owned and not group- or world-writable.
+  - A `release.py` refusal (tampered or invalid manifest, foreign state, drift, protected drift, lock) is exit 3, with nothing changed.
+  - Success requires a healthy Summary, the pre-change config label and an empty allowlist; anything else is exit 6, supervised recovery.
+  - An absent container stays a supervised-recovery case (exit 6), as `release.py` refuses it.
+- **Tests:** rehearsal 31/31 locally (Compose 5.7.1) and in CI run 44444465746 (Compose 5.1.3). It covers rollback from a stopped and from an unhealthy Summary, idempotence, refusal of a non-private, tampered or invalid manifest, refusal of foreign state, an absent container (exit 6), and protected containers unchanged. The `readonly` and `apply` gates are unchanged. All checks on #268 are green.
 
 Earlier operator documents (R4.4 runbook, R4.4B pointer) are superseded by this handoff.
