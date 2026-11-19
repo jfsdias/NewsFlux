@@ -1,0 +1,98 @@
+name: WallHop P0 isolated live canary
+
+on:
+  push:
+    branches: [codex/wallhop-p0-live-canary]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wallhop-p0-live-canary-once
+  cancel-in-progress: false
+
+jobs:
+  canary:
+    if: >-
+      github.run_attempt == 1 &&
+      github.ref == 'refs/heads/codex/wallhop-p0-live-canary' &&
+      github.event.head_commit.message == 'NEWSFLUX_WALLHOP_P0_CANARY_ONCE'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout canary harness
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout exact approved packaging candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: jfsdias/NewsFlux
+          ref: 058aa9cf11264771ca660f00fcd8a0d16f949677
+          path: source
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify source and build immutable candidate image
+        id: image
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_sha="$(git -C source rev-parse HEAD)"
+          test "$source_sha" = "058aa9cf11264771ca660f00fcd8a0d16f949677"
+          image_tag="newsflux-content-fallback-wallhop-p0:${source_sha}"
+          docker build --pull --file source/services/content_fallback/Dockerfile --tag "$image_tag" source
+          image_id="$(docker image inspect --format '{{.Id}}' "$image_tag")"
+          [[ "$image_id" =~ ^sha256:[0-9a-f]{64}$ ]]
+          echo "image_tag=$image_tag" >> "$GITHUB_OUTPUT"
+          echo "image_id=$image_id" >> "$GITHUB_OUTPUT"
+          echo "SOURCE_SHA=$source_sha"
+          echo "IMAGE_ID_DIGEST=$image_id"
+          echo "RUNNER_ENVIRONMENT=GitHub-hosted ubuntu-latest"
+
+      - name: Run exactly one synthetic-entry recovery through WallHop
+        shell: bash
+        env:
+          IMAGE_TAG: ${{ steps.image.outputs.image_tag }}
+          IMAGE_ID: ${{ steps.image.outputs.image_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          set +e
+          docker run --rm \
+            --network bridge \
+            --read-only \
+            --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+            --cap-drop ALL \
+            --security-opt no-new-privileges \
+            --pids-limit 64 \
+            --memory 512m \
+            --cpus 1 \
+            --mount "type=bind,src=$GITHUB_WORKSPACE/scripts/wallhop-p0-live-canary.py,dst=/tmp/wallhop-p0-live-canary.py,readonly" \
+            -e NEWSFLUX_SOURCE_SHA=058aa9cf11264771ca660f00fcd8a0d16f949677 \
+            -e "NEWSFLUX_IMAGE_ID=$IMAGE_ID" \
+            -e NEWSFLUX_WALLHOP_P0_ARMED=YES \
+            -e "NEWSFLUX_RUN_ATTEMPT=$RUN_ATTEMPT" \
+            -e PYTHONPATH=/app \
+            "$IMAGE_TAG" python /tmp/wallhop-p0-live-canary.py
+          canary_status=$?
+          set -e
+          echo "CANARY_CONTAINER_EXIT=$canary_status"
+          exit "$canary_status"
+
+      - name: Remove local image and verify no canary container remains
+        if: always()
+        env:
+          IMAGE_TAG: ${{ steps.image.outputs.image_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "$IMAGE_TAG" ]]; then
+            docker ps -aq --filter "ancestor=$IMAGE_TAG" | xargs -r docker rm -f
+            docker image rm "$IMAGE_TAG" >/dev/null 2>&1 || true
+            remaining="$(docker ps -aq --filter "ancestor=$IMAGE_TAG")"
+            test -z "$remaining"
+          fi
+          echo "CLEANUP_GATE=PASS"
