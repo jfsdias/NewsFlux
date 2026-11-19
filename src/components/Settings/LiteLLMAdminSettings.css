@@ -31,6 +31,42 @@
   min-height: 40px;
 }
 
+.ai-litellm-admin__inspect {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 420px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-2);
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+
+.ai-litellm-admin__facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 0;
+}
+
+.ai-litellm-admin__facts dt {
+  color: var(--color-text-3);
+}
+
+.ai-litellm-admin__facts dd {
+  margin: 0;
+  color: var(--color-text-1);
+}
+
+.ai-litellm-admin__blockers {
+  margin: 0;
+  padding-inline-start: 20px;
+  color: var(--color-text-2);
+}
+
 @media (max-width: 768px) {
   .ai-litellm-admin__stack {
     width: 100%;
@@ -38,6 +74,12 @@
   }
   .ai-litellm-admin__actions {
     width: 100%;
+  }
+  .ai-litellm-admin__facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ai-litellm-admin__facts dd {
+    margin-bottom: 4px;
   }
   .ai-litellm-admin__actions .arco-btn {
     min-height: 44px;
