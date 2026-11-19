@@ -39,6 +39,43 @@ handle @pilotModels {
         header_up X-Forwarded-Proto https
     }
 }
+# Admin-only LiteLLM credential/model-policy API (NEWSFLUX-AI-SETTINGS-01).
+# Exact action allowlist and method per action, from the already trusted TLS
+# edge only; authorization (Miniflux admin allowlist, Origin, CSRF) stays in
+# the Summary API. Unknown actions and wrong methods fall through to 403.
+@pilotAiAdminRead {
+    path /api/ai/v1/admin/litellm/status /api/ai/v1/admin/litellm/models /api/ai/v1/admin/litellm/policy
+    method GET
+    remote_ip {$NEWSFLUX_PILOT_TRUSTED_PROXY_IP}
+    header X-Forwarded-Proto https
+}
+@pilotAiAdminWrite {
+    path /api/ai/v1/admin/litellm/test-key /api/ai/v1/admin/litellm/save-key /api/ai/v1/admin/litellm/save-policy /api/ai/v1/admin/litellm/approve-model /api/ai/v1/admin/litellm/remove-model
+    method POST
+    remote_ip {$NEWSFLUX_PILOT_TRUSTED_PROXY_IP}
+    header X-Forwarded-Proto https
+}
+@pilotAiAdminPreflight {
+    path /api/ai/v1/admin/litellm/status /api/ai/v1/admin/litellm/models /api/ai/v1/admin/litellm/policy /api/ai/v1/admin/litellm/test-key /api/ai/v1/admin/litellm/save-key /api/ai/v1/admin/litellm/save-policy /api/ai/v1/admin/litellm/approve-model /api/ai/v1/admin/litellm/remove-model
+    method OPTIONS
+    remote_ip {$NEWSFLUX_PILOT_TRUSTED_PROXY_IP}
+    header X-Forwarded-Proto https
+}
+handle @pilotAiAdminRead {
+    reverse_proxy summary-api:8788 {
+        header_up X-Forwarded-Proto https
+    }
+}
+handle @pilotAiAdminWrite {
+    reverse_proxy summary-api:8788 {
+        header_up X-Forwarded-Proto https
+    }
+}
+handle @pilotAiAdminPreflight {
+    reverse_proxy summary-api:8788 {
+        header_up X-Forwarded-Proto https
+    }
+}
 handle /api/ai/* {
     respond 403
 }

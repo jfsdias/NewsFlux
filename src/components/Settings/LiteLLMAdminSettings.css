@@ -1,0 +1,45 @@
+.ai-litellm-admin__stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  width: min(100%, 420px);
+}
+
+.ai-litellm-admin__stack .arco-input-wrapper,
+.ai-litellm-admin__stack .arco-select {
+  width: 100%;
+  max-width: 420px;
+}
+
+.ai-litellm-admin__stack .arco-checkbox {
+  white-space: normal;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.ai-litellm-admin__actions,
+.ai-litellm-admin__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-litellm-admin__actions .arco-btn {
+  min-height: 40px;
+}
+
+@media (max-width: 768px) {
+  .ai-litellm-admin__stack {
+    width: 100%;
+    max-width: none;
+  }
+  .ai-litellm-admin__actions {
+    width: 100%;
+  }
+  .ai-litellm-admin__actions .arco-btn {
+    min-height: 44px;
+  }
+}
