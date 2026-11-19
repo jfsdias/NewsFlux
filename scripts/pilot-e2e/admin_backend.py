@@ -146,6 +146,15 @@ async def state():
     })
 
 
+@app.post("/__admin/gateway/{mode}")
+async def gateway(mode: str):
+    if mode not in {"ok", "down"}:
+        return JSONResponse({"error": "invalid"}, status_code=400)
+    _gateway_mode["value"] = mode
+    _gateway_calls.clear()
+    return JSONResponse({"status": mode})
+
+
 _LEGACY_ENV = {
     "NEWSFLUX_AI_LITELLM_S5_FREE_ALIAS": "llama3.2:3b",
     "NEWSFLUX_AI_LITELLM_S5_FREE_INPUT_USD_PER_MILLION": "0",
@@ -175,12 +184,3 @@ async def legacy(mode: str):
         store.enabled = True
     _gateway_mode["value"] = "ok"
     return JSONResponse({"legacy": mode})
-
-
-@app.post("/__admin/gateway/{mode}")
-async def gateway(mode: str):
-    if mode not in {"ok", "down"}:
-        return JSONResponse({"error": "invalid"}, status_code=400)
-    _gateway_mode["value"] = mode
-    _gateway_calls.clear()
-    return JSONResponse({"status": mode})
