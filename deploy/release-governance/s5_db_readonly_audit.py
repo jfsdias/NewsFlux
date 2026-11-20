@@ -58,7 +58,9 @@ FALLBACK_LISTS = {
     "content_policy_fallbacks": "FALLBACK_CONTENT_POLICY",
 }
 MAX_DEPLOYMENT_ROWS = 200  # read bound; a count above it is reported as truncated, never as complete
-LOCAL_HOSTS = frozenset({"ollama", "localhost", "127.0.0.1", "host.docker.internal"})
+# Approved local identities only: the compose service name and loopback. A port (e.g. 11434) never
+# proves locality; any other host, IP or name is CUSTOM_ENDPOINT.
+LOCAL_HOSTS = frozenset({"ollama", "localhost", "127.0.0.1", "::1"})
 SAFE_NAME = re.compile(r"^[A-Z0-9_]+$")
 SAFE_VALUE = re.compile(r"^(?:[A-Z0-9_]+(?:,[A-Z0-9_]+)*|\d+)$")
 FLAGS_THAT_MUST_BE_OFF = ("NEWSFLUX_AI_INFERENCE_ENABLED", "NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER")
@@ -207,10 +209,13 @@ def classify_key(row: Mapping[str, Any], alias: str, caps: Mapping[str, Any], no
         facts["KEY_BUDGET"] = "PASS"
 
     indirection = []
-    if isinstance(_json_value(row.get("aliases")), dict) and _json_value(row.get("aliases")):
-        indirection.append("ALIASES")
-    if isinstance(_json_value(row.get("router_settings")), dict) and _json_value(row.get("router_settings")):
-        indirection.append("ROUTER_SETTINGS")
+    for column, label in (("aliases", "ALIASES"), ("router_settings", "ROUTER_SETTINGS")):
+        value = _json_value(row.get(column))
+        if value is None or value == {} or value == "":
+            continue
+        # A non-empty mapping is a real remap/router override; any other non-empty shape cannot be
+        # interpreted and is never read as "no indirection".
+        indirection.append(label if isinstance(value, dict) else f"{label}_UNRECOGNIZED")
     if row.get("team_id"):
         indirection.append("TEAM")
     if row.get("access_group_ids"):
@@ -222,7 +227,7 @@ def classify_key(row: Mapping[str, Any], alias: str, caps: Mapping[str, Any], no
     facts["KEY_INDIRECTION"] = ",".join(indirection) or "NONE"
 
     core = [facts[name] for name in ("KEY_VALIDITY", "KEY_SCOPE", "KEY_ROUTES", "KEY_RATE_LIMITS", "KEY_BUDGET")]
-    if "FAIL" in core or "ALIASES" in indirection or "ROUTER_SETTINGS" in indirection:
+    if "FAIL" in core or "ALIASES" in indirection or "ROUTER_SETTINGS" in indirection:  # exact labels
         facts["KEY_POLICY_GATE"] = "FAIL"
     elif indirection or "NOT_VERIFIED" in core:
         facts["KEY_POLICY_GATE"] = "NOT_VERIFIED"  # team/access-group/policy inheritance not evaluated
@@ -249,7 +254,7 @@ def _endpoint_class(params: Mapping[str, Any], family: str) -> str:
             host, port = (parts.hostname or "").lower(), parts.port
         except ValueError:
             return "CUSTOM_ENDPOINT"
-        if family == "OLLAMA" and (host in LOCAL_HOSTS or port == 11434):
+        if family == "OLLAMA" and host in LOCAL_HOSTS and port in (None, 11434):
             return "LOCAL_OLLAMA"
     return "CUSTOM_ENDPOINT"
 
@@ -295,11 +300,12 @@ def classify_route(deployments: list[dict[str, Any]], key_facts: Mapping[str, st
     facts["ENDPOINT_CLASS"] = _one_or_mixed(endpoints, "NONE")
     facts["DEPLOYMENT_BLOCKED"] = "NONE" if not blocked else ("ALL" if blocked == len(deployments) else "SOME")
 
+    indirection = key_facts.get("KEY_INDIRECTION", "").split(",")
     if (not deployments or facts["DEPLOYMENT_BLOCKED"] == "ALL" or facts["PROVIDER_FAMILY"] == "MIXED"
-            or "ALIASES" in key_facts.get("KEY_INDIRECTION", "")):
+            or "ALIASES" in indirection):
         facts["MODEL_ROUTE_GATE"] = "FAIL"
     elif (facts["PROVIDER_FAMILY"] == "OTHER" or facts["ENDPOINT_CLASS"] in ("CUSTOM_ENDPOINT", "MIXED")
-          or facts["DEPLOYMENT_BLOCKED"] == "SOME"):
+          or facts["DEPLOYMENT_BLOCKED"] == "SOME" or "ALIASES_UNRECOGNIZED" in indirection):
         facts["MODEL_ROUTE_GATE"] = "NOT_VERIFIED"
     else:
         facts["MODEL_ROUTE_GATE"] = "PASS"
@@ -322,6 +328,28 @@ def classify_route(deployments: list[dict[str, Any]], key_facts: Mapping[str, st
     else:
         facts["PRICING_GATE"] = "NOT_VERIFIED"
     return facts
+
+
+def classify_general_settings_fallbacks(blocks: Iterable[Any]) -> dict[str, str]:
+    """general_settings is a persisted LiteLLM config section, but the tested proxy version consumes
+    fallbacks only from router_settings / litellm_settings. A fallback key found here is reported,
+    never claimed to be effective, and never allows PASS; an unknown shape is NOT_VERIFIED."""
+    present = unparseable = False
+    for block in blocks:
+        block = _json_value(block)
+        if block is None or block == {}:
+            continue
+        if not isinstance(block, dict):
+            unparseable = True
+            continue
+        for key in (*FALLBACK_LISTS, "default_fallbacks"):
+            value = block.get(key)
+            if value is None or value == [] or value == "":
+                continue
+            present = True
+    if present:
+        return {"FALLBACK_GENERAL_SETTINGS": "PRESENT_UNVERIFIED_SEMANTICS"}
+    return {"FALLBACK_GENERAL_SETTINGS": "UNRECOGNIZED" if unparseable else "NONE"}
 
 
 def classify_fallbacks(settings: Iterable[Any], alias: str) -> dict[str, str]:
@@ -416,7 +444,7 @@ def collect(query: Query, *, fingerprint: str, alias: str, caps: Mapping[str, An
     elif (not isinstance(yaml_config.get("model_list", []), (list, type(None)))
           or not all(isinstance(entry, dict) for entry in yaml_config.get("model_list") or [])
           or any(not isinstance(yaml_config.get(name, {}), (dict, type(None)))
-                 for name in ("router_settings", "litellm_settings"))):
+                 for name in ("router_settings", "litellm_settings", "general_settings"))):
         yaml_class = "INVALID_STRUCTURE"
     else:
         yaml_class = "LOADED"
@@ -479,13 +507,17 @@ def collect(query: Query, *, fingerprint: str, alias: str, caps: Mapping[str, An
     if key_row is not None:
         router_blocks.append(key_row.get("router_settings"))
     facts.update(classify_fallbacks(router_blocks, alias))
+    facts.update(classify_general_settings_fallbacks([db_config.get("general_settings"),
+                                                       yaml_config.get("general_settings")]))
+    if facts["FALLBACK_GENERAL_SETTINGS"] != "NONE" and facts["FALLBACK_GATE"] == "PASS":
+        facts["FALLBACK_GATE"] = "NOT_VERIFIED"
     facts.update(classify_callbacks([db_config.get("litellm_settings"), yaml_config.get("litellm_settings")],
                                     allowed_callbacks))
     if yaml_class != "LOADED":
         for gate in ("MODEL_ROUTE_GATE", "FALLBACK_GATE", "CALLBACK_GATE"):
             if facts[gate] == "PASS":
                 facts[gate] = "NOT_VERIFIED"  # one of the required sources could not be inspected
-        if facts["DEPLOYMENT_SOURCE"] == "NONE" and "ALIASES" not in facts.get("KEY_INDIRECTION", ""):
+        if facts["DEPLOYMENT_SOURCE"] == "NONE" and "ALIASES" not in facts.get("KEY_INDIRECTION", "").split(","):
             # "No deployment" is only proven when every source was read; the S5 deployment may live
             # in the YAML that could not be inspected.
             facts["MODEL_ROUTE_GATE"] = "NOT_VERIFIED"
@@ -498,14 +530,19 @@ def collect(query: Query, *, fingerprint: str, alias: str, caps: Mapping[str, An
     return facts
 
 
-def render(facts: Mapping[str, Any], *, mutations: str) -> list[str]:
+def render(facts: Mapping[str, Any], *, container_identity: str) -> list[str]:
     lines = []
     for name in sorted(facts):
         value = facts[name]
         if not isinstance(name, str) or not SAFE_NAME.match(name) or not isinstance(value, str) or not SAFE_VALUE.match(value):
             raise ProbeError("PROBE_OUTPUT_UNSAFE")
         lines.append(f"S5R1_{name}={value}")
-    lines.append(f"S5R1_PRODUCTION_MUTATIONS={mutations}")
+    # What the tool can honestly state: it issued no write (read-only transaction, SELECT only, -B), and
+    # the containers' identity (ID, image, start time, restarts, state) is unchanged. That is not a
+    # complete filesystem-integrity proof of the containers or the host.
+    lines.append("S5R1_DELIBERATE_DB_CONFIG_WRITES=NONE")
+    lines.append(f"S5R1_CONTAINER_IDENTITY={container_identity}")
+    lines.append("S5R1_FILESYSTEM_INTEGRITY=NOT_PROVEN")
     return lines
 
 
@@ -605,7 +642,7 @@ def probe_main(payload: Mapping[str, Any], *, query_factory: Callable[[], Any] =
         facts = collect(query, fingerprint=fingerprint, alias=alias, caps=payload.get("caps") or {},
                         allowed_callbacks=payload.get("allowed_callbacks") or [], now=now or datetime.now(timezone.utc),
                         yaml_config=config, cost_map=cost_map_loader() or {}, yaml_status=status)
-        render(facts, mutations="0")  # refuse to emit anything that is not an enum or a count
+        render(facts, container_identity="UNCHANGED")  # refuse to emit anything that is not an enum or a count
     except ProbeError as error:
         emit({"PROBE": str(error)})
         return 2
@@ -687,13 +724,14 @@ def main(argv: list[str] | None = None, *, run: Callable[..., str] = _docker, eu
         if any(values.get(name, "").strip().lower() == "true" for name in FLAGS_THAT_MUST_BE_OFF):
             raise ProbeError("AI_FLAGS_NOT_OFF")
         before = run(["docker", "inspect", "-f", SNAPSHOT_FORMAT, summary_id, litellm_id])
-        summary_info = json.loads(run(["docker", "exec", "-u", "10001", summary_id, "python", "-c", SUMMARY_SNIPPET]))
+        # -B: no bytecode is written inside the containers.
+        summary_info = json.loads(run(["docker", "exec", "-u", "10001", summary_id, "python", "-B", "-c", SUMMARY_SNIPPET]))
         if not isinstance(summary_info, dict) or not isinstance(summary_info.get("fingerprint"), str):
             raise ProbeError("SUMMARY_KEY_UNAVAILABLE")
         with open(os.path.abspath(__file__), encoding="utf-8") as handle:
             source = handle.read()
         stdin = json.dumps(summary_info) + "\n" + source  # alias + fingerprint on stdin only, never argv
-        raw = run(["docker", "exec", "-i", litellm_id, "python3", "-c", PROBE_BOOTSTRAP], stdin=stdin)
+        raw = run(["docker", "exec", "-i", litellm_id, "python3", "-B", "-c", PROBE_BOOTSTRAP], stdin=stdin)
         after = run(["docker", "inspect", "-f", SNAPSHOT_FORMAT, summary_id, litellm_id])
         facts = json.loads(raw.strip().splitlines()[-1]) if raw.strip() else {}
         if not isinstance(facts, dict):
@@ -701,7 +739,7 @@ def main(argv: list[str] | None = None, *, run: Callable[..., str] = _docker, eu
         if "PROBE" in facts:
             code = facts["PROBE"] if isinstance(facts["PROBE"], str) and SAFE_NAME.match(facts["PROBE"]) else "UNSAFE"
             raise ProbeError("PROBE_" + code)
-        lines = render(facts, mutations="0" if before == after else "UNVERIFIED")
+        lines = render(facts, container_identity="UNCHANGED" if before == after else "CHANGED")
     except ProbeError as error:
         print(f"S5R1_AUDIT=HOLD_{error}")
         return 2

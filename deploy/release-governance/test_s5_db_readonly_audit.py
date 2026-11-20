@@ -322,7 +322,7 @@ class SafetyTests(unittest.TestCase):
         db = FakeDb(models=[dict(deployment(api_base="https://proxy.internal:9/v1"), model_name=ALIAS)],
                     config={"litellm_settings": {"success_callback": ["langfuse"]}})
         facts = collect(db)
-        lines = audit.render(facts, mutations="0")
+        lines = audit.render(facts, container_identity="UNCHANGED")
         text = "\n".join(lines)
         for forbidden in (ALIAS, KEY, token_hash(KEY), "proxy.internal", "openrouter/vendor", "newsflux-prod",
                           "PROVIDER_KEY", audit.fingerprint_token_hash(token_hash(KEY))):
@@ -334,7 +334,7 @@ class SafetyTests(unittest.TestCase):
 
     def test_render_rejects_unsafe_values(self):
         with self.assertRaises(audit.ProbeError):
-            audit.render({"KEY_MATCH": "newsflux-s5-free"}, mutations="0")
+            audit.render({"KEY_MATCH": "newsflux-s5-free"}, container_identity="UNCHANGED")
 
 
 class ProbeTransportTests(unittest.TestCase):
@@ -400,12 +400,12 @@ class HostOrchestrationTests(unittest.TestCase):
             code = audit.main(["--litellm-container", "litellm"], run=run, euid=kwargs.get("euid", 0))
         return code, out.getvalue().splitlines()
 
-    def test_happy_path_prints_classifications_and_zero_mutations(self):
+    def test_happy_path_prints_classifications_and_unchanged_container_identity(self):
         run, calls = self.fake_docker()
         code, lines = self.host(run)
         self.assertEqual(code, 0, lines)
         self.assertIn("S5R1_KEY_POLICY_GATE=FAIL", lines)
-        self.assertIn("S5R1_PRODUCTION_MUTATIONS=0", lines)
+        self.assertIn("S5R1_CONTAINER_IDENTITY=UNCHANGED", lines)
         self.assertIn("S5R1_AUDIT=COMPLETE_DIAGNOSTIC_ONLY", lines)
         text = "\n".join(lines)
         self.assertNotIn(ALIAS, text)
@@ -700,3 +700,107 @@ class UnreadYamlRouteTests(unittest.TestCase):
     def test_proven_route_failures_stay_fail_without_yaml(self):
         db = FakeDb(tokens=[key_row(aliases={ALIAS: "other"})])
         self.assertEqual(collect_with_yaml("UNREADABLE", {}, db)["MODEL_ROUTE_GATE"], "FAIL")
+
+
+# ----------------------------------------------------------------------------------------------
+# PM final corrective R2A (review 7026347085).
+# ----------------------------------------------------------------------------------------------
+class GeneralSettingsFallbackTests(unittest.TestCase):
+    """P1: general_settings is a source; a fallback there is never omitted, never claimed effective."""
+
+    def test_alias_and_global_fallbacks_in_db_and_yaml_general_settings_never_pass(self):
+        cases = [
+            ({"general_settings": {"fallbacks": [{ALIAS: ["paid"]}]}}, {}),
+            ({"general_settings": {"default_fallbacks": ["paid"]}}, {}),
+            ({}, {"general_settings": {"fallbacks": [{"*": ["paid"]}]}}),
+            ({}, {"general_settings": {"context_window_fallbacks": [{ALIAS: ["big"]}]}}),
+            ({}, {"general_settings": {"content_policy_fallbacks": [{ALIAS: ["x"]}]}}),
+        ]
+        for db_config, yaml_config in cases:
+            facts = collect_with_yaml("LOADED", yaml_config, FakeDb(config=db_config))
+            self.assertEqual(facts["FALLBACK_GENERAL_SETTINGS"], "PRESENT_UNVERIFIED_SEMANTICS", (db_config, yaml_config))
+            self.assertEqual(facts["FALLBACK_GATE"], "NOT_VERIFIED", (db_config, yaml_config))
+
+    def test_general_settings_without_fallbacks_still_passes(self):
+        facts = collect_with_yaml("LOADED", {"general_settings": {"master_key": "os.environ/X"}},
+                                  FakeDb(config={"general_settings": {"alerting": ["slack"]}}))
+        self.assertEqual((facts["FALLBACK_GENERAL_SETTINGS"], facts["FALLBACK_GATE"]), ("NONE", "PASS"))
+
+    def test_unrecognized_general_settings_shapes_are_not_verified(self):
+        facts = collect_with_yaml("LOADED", {}, FakeDb(config={"general_settings": ["fallbacks"]}))
+        self.assertEqual(facts["FALLBACK_GATE"], "NOT_VERIFIED")
+        facts = collect_with_yaml("LOADED", {"general_settings": {"fallbacks": "paid"}})
+        self.assertEqual(facts["FALLBACK_GATE"], "NOT_VERIFIED")
+        facts = collect_with_yaml("LOADED", {"general_settings": "fallbacks"})
+        self.assertEqual(facts["YAML_CONFIG"], "INVALID_STRUCTURE")
+        self.assertEqual(facts["FALLBACK_GATE"], "NOT_VERIFIED")
+
+    def test_a_proven_router_fallback_still_fails(self):
+        db = FakeDb(config={"router_settings": {"fallbacks": [{ALIAS: ["paid"]}]},
+                            "general_settings": {"default_fallbacks": ["paid"]}})
+        self.assertEqual(collect_with_yaml("LOADED", {}, db)["FALLBACK_GATE"], "FAIL")
+
+
+class KeyIndirectionShapeTests(unittest.TestCase):
+    """P1: non-dict aliases/router_settings are never ignored as "no indirection"."""
+
+    def test_unexpected_shapes_never_yield_none_or_pass(self):
+        for field in ("aliases", "router_settings"):
+            for value in ([ALIAS, "other"], "remap", 7, True, ["x"], "not json {"):
+                facts = collect(FakeDb(tokens=[key_row(**{field: value})]))
+                self.assertNotEqual(facts["KEY_INDIRECTION"], "NONE", (field, value))
+                self.assertIn(f"{field.upper()}_UNRECOGNIZED", facts["KEY_INDIRECTION"].split(","), (field, value))
+                self.assertNotEqual(facts["KEY_POLICY_GATE"], "PASS", (field, value))
+
+    def test_unrecognized_aliases_make_the_route_not_verified(self):
+        facts = collect(FakeDb(tokens=[key_row(aliases=["x"])]))
+        self.assertEqual(facts["MODEL_ROUTE_GATE"], "NOT_VERIFIED")
+
+    def test_json_text_dicts_are_parsed_and_empty_values_are_none(self):
+        facts = collect(FakeDb(tokens=[key_row(aliases=json.dumps({ALIAS: "other"}))]))
+        self.assertIn("ALIASES", facts["KEY_INDIRECTION"].split(","))
+        self.assertEqual(facts["KEY_POLICY_GATE"], "FAIL")
+        for empty in (None, {}, "{}", ""):
+            facts = collect(FakeDb(tokens=[key_row(aliases=empty, router_settings=empty)]))
+            self.assertEqual((facts["KEY_INDIRECTION"], facts["KEY_POLICY_GATE"]), ("NONE", "PASS"), empty)
+
+
+class EndpointLocalityTests(unittest.TestCase):
+    """P2: port 11434 alone never proves a local endpoint."""
+
+    def endpoint(self, api_base, model="ollama_chat/llama3.2:3b"):
+        db = FakeDb(models=[dict(deployment(model=model, api_base=api_base), model_name=ALIAS)])
+        return collect(db)["ENDPOINT_CLASS"]
+
+    def test_external_hosts_on_the_ollama_port_are_custom(self):
+        for base in ("http://api.example.com:11434", "https://ollama.example.org:11434/v1", "http://10.0.0.5:11434",
+                     "http://ollama.evil:11434"):
+            self.assertEqual(self.endpoint(base), "CUSTOM_ENDPOINT", base)
+
+    def test_approved_local_identities(self):
+        for base in ("http://ollama:11434", "http://localhost:11434", "http://127.0.0.1:11434"):
+            self.assertEqual(self.endpoint(base), "LOCAL_OLLAMA", base)
+        self.assertEqual(self.endpoint("http://ollama:11434", model="openai/x"), "CUSTOM_ENDPOINT")
+
+
+class NoBytecodeAndHonestMutationClaimTests(HostOrchestrationTests):
+    """P2: container Python runs with -B; the receipt claims no deliberate DB/config write and an
+    unchanged container identity, never a complete filesystem-integrity proof."""
+
+    def test_every_container_python_runs_with_dash_b(self):
+        run, calls = self.fake_docker()
+        self.host(run)
+        execs = [argv for argv, _ in calls if argv[:2] == ["docker", "exec"]]
+        self.assertEqual(len(execs), 2)
+        for argv in execs:
+            interpreter = next(i for i, part in enumerate(argv) if part in ("python", "python3"))
+            self.assertEqual(argv[interpreter + 1], "-B", argv)
+
+    def test_receipt_wording_is_qualified(self):
+        run, _ = self.fake_docker()
+        code, lines = self.host(run)
+        self.assertEqual(code, 0)
+        self.assertIn("S5R1_DELIBERATE_DB_CONFIG_WRITES=NONE", lines)
+        self.assertIn("S5R1_CONTAINER_IDENTITY=UNCHANGED", lines)
+        self.assertIn("S5R1_FILESYSTEM_INTEGRITY=NOT_PROVEN", lines)
+        self.assertFalse([line for line in lines if line.startswith("S5R1_PRODUCTION_MUTATIONS")])

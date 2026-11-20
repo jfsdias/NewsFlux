@@ -57,9 +57,22 @@ uses only access that already exists on the OMV host, as the R4B-R2 approach did
 
 The host refuses to run in four cases: not root; `NEWSFLUX_AI_INFERENCE_ENABLED` or
 `NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER` is `true`; the Summary or LiteLLM container is not
-unique; the probe's output is not a safe enum. It compares both containers' ID, image, start time,
-restart count and state before and after the run, and reports `PRODUCTION_MUTATIONS=0` only when
-they are identical.
+unique; the probe's output is not a safe enum. Every Python it starts inside a container runs with
+`-B`, so no bytecode is written. The receipt states only what the tool can show:
+
+- `DELIBERATE_DB_CONFIG_WRITES=NONE`: read-only transaction, `SELECT` only, no write issued.
+- `CONTAINER_IDENTITY=UNCHANGED|CHANGED`: ID, image, start time, restart count and state, before and
+  after the run.
+- `FILESYSTEM_INTEGRITY=NOT_PROVEN`: an unchanged container identity is not proof that no file
+  changed. The tool does not claim that.
+
+**`general_settings` (corrective R2A).** It is read from the DB and the YAML. In the tested LiteLLM
+version the proxy consumes fallbacks only from `router_settings` and `litellm_settings`. A fallback
+key found in `general_settings` is therefore reported as `FALLBACK_GENERAL_SETTINGS=PRESENT_UNVERIFIED_SEMANTICS`
+and keeps `FALLBACK_GATE` from `PASS` (`NOT_VERIFIED`). It is never claimed to be effective. A key
+`aliases` or `router_settings` value that is not a mapping is reported as `*_UNRECOGNIZED` and never
+read as "no indirection". Port 11434 alone never makes an endpoint local: only the `ollama` service
+name and loopback addresses do.
 
 **The YAML is a required source (corrective R2).** The route, fallback and callback gates can only
 pass when LiteLLM's YAML was read and is a mapping whose `model_list`, `router_settings` and
@@ -78,8 +91,8 @@ gives `KEY_ROUTES=NOT_VERIFIED`.
 
 | Kind                                                            | Where                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unit tests (61)                                                 | `deploy/release-governance/test_s5_db_readonly_audit.py`                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| Real LiteLLM + Postgres + Summary image, disposable (18 checks) | `deploy/release-governance/rehearse-s5-db-audit.sh`, pinned to the same LiteLLM image as `rehearse-s5-key-gate.sh`, CI `synthetic-release`. It uses real `/key/generate` keys, the real Prisma schema and token storage, and the exact operator bootstrap. It shows that the probe's transaction refuses an `UPDATE`, that a missing, list-rooted or unparseable YAML never yields `PASS`, and runs the host entry point (the operator command) end to end against a real Summary image labelled like production. |
+| Unit tests (78)                                                 | `deploy/release-governance/test_s5_db_readonly_audit.py`                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Real LiteLLM + Postgres + Summary image, disposable (19 checks) | `deploy/release-governance/rehearse-s5-db-audit.sh`, pinned to the same LiteLLM image as `rehearse-s5-key-gate.sh`, CI `synthetic-release`. It uses real `/key/generate` keys, the real Prisma schema and token storage, and the exact operator bootstrap. It shows that the probe's transaction refuses an `UPDATE`, that a missing, list-rooted or unparseable YAML never yields `PASS`, and runs the host entry point (the operator command) end to end against a real Summary image labelled like production. |
 
 ## 3. Official attestation: `HOLD_NO_ACCEPTABLE_ATTESTATION_SOURCE`
 

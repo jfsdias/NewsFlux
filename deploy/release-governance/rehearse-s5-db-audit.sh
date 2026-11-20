@@ -80,10 +80,11 @@ probe() { # $1 virtual key, $2 alias, [$3 container] -> classification JSON (sam
   local bootstrap
   bootstrap="$(python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import s5_db_readonly_audit as a; print(a.PROBE_BOOTSTRAP)' "$here")"
   { printf '{"fingerprint":"%s","alias":"%s","caps":{"rpm":5,"tpm":20000,"budget":1.0},"allowed_callbacks":[]}\n' "$fp" "$2"
-    cat "$here/s5_db_readonly_audit.py"; } | docker exec -i "${3:-$run-litellm}" python3 -c "$bootstrap" || true
+    cat "$here/s5_db_readonly_audit.py"; } | docker exec -i "${3:-$run-litellm}" python3 -B -c "$bootstrap" || true
 }
 field() { python3 -c 'import json,sys; print(json.loads(sys.stdin.read().strip().splitlines()[-1]).get(sys.argv[1], ""))' "$1"; }
 
+L touch /tmp/s5db-probe-marker # disposable container only: reference time for the bytecode check below
 out="$(probe "$LP" newsflux-s5-free)"
 [[ "$(field KEY_MATCH <<<"$out")" == ONE && "$(field KEY_POLICY_GATE <<<"$out")" == PASS && "$(field DB_READ_ONLY <<<"$out")" == VERIFIED ]] \
   && ok LEAST_PRIVILEGE_KEY_PASSES_KEY_POLICY || { ko LEAST_PRIVILEGE_KEY_PASSES_KEY_POLICY; echo "$out"; }
@@ -133,6 +134,11 @@ for case in "noyaml NOT_FOUND" "rootlist INVALID_ROOT" "badyaml UNREADABLE"; do
   fi
 done
 docker rm -f "$run-noyaml" "$run-rootlist" "$run-badyaml" >/dev/null 2>&1 || true
+
+# -B: the probes above wrote no bytecode inside the real LiteLLM container (the source is exec'd from
+# stdin, and -B blocks caching of anything it imports).
+[[ -z "$(L sh -c 'find / -xdev -name "*.pyc" -newer /tmp/s5db-probe-marker 2>/dev/null | head -1')" ]] \
+  && ok PROBE_WROTE_NO_BYTECODE || ko PROBE_WROTE_NO_BYTECODE
 
 # The probe's connection mode really refuses writes on the real database.
 ro="$(L python3 - <<'PY'
@@ -205,7 +211,8 @@ host() { sudo -n python3 -I "$here/s5_db_readonly_audit.py" --project "$run-proj
 summary "$LP" false
 out="$(host)"
 has() { grep -qx "$2" <<<"$1"; }
-has "$out" S5R1_KEY_POLICY_GATE=PASS && has "$out" S5R1_DB_READ_ONLY=VERIFIED && has "$out" S5R1_PRODUCTION_MUTATIONS=0 \
+has "$out" S5R1_KEY_POLICY_GATE=PASS && has "$out" S5R1_DB_READ_ONLY=VERIFIED && has "$out" S5R1_CONTAINER_IDENTITY=UNCHANGED \
+  && has "$out" S5R1_DELIBERATE_DB_CONFIG_WRITES=NONE && has "$out" S5R1_FILESYSTEM_INTEGRITY=NOT_PROVEN \
   && has "$out" S5R1_AUDIT=COMPLETE_DIAGNOSTIC_ONLY && has "$out" S5R1_OFFICIAL_ATTESTATION=HOLD_NO_ACCEPTABLE_ATTESTATION_SOURCE \
   && ok HOST_END_TO_END_LEAST_PRIVILEGE || { ko HOST_END_TO_END_LEAST_PRIVILEGE; echo "$out"; }
 leak=0
