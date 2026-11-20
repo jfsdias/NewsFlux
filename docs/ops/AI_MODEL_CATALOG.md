@@ -269,6 +269,12 @@ Release: `ai-functional-release.sh d1-preflight` (also re-run inside `enable-s5`
 print `D1_COST_AUTHORITY=...` and HOLD in key mode without fresh bound evidence. Mode off prints
 `D1_PREFLIGHT=NOT_APPLICABLE_LEGACY_CONTRACT` and changes nothing.
 
+Local-only consent (`NEWSFLUX_AI_ALLOW_LOCAL_ARTICLE_PROCESSING`, PR #260) admits nothing in key mode: what the
+virtual key can see (`/model/info`) names a deployment, not its fallbacks, callbacks or indirect routes, and neither
+the alias, the provider string nor a zero or absent price is identity. Key mode therefore requires the external
+transfer consent for every model until a key-mode local proof exists (receipt-bound deployment identity for the
+alias, no fallbacks or payload-exporting callbacks on it, and a fresh pre-dispatch check as in #260).
+
 Stated limits: root on the host is the trust anchor (no signing infrastructure). The virtual key cannot read its own
 policy, so a budget removed, a policy changed on the same key, or a revoked key is not visible to NewsFlux until the
 next capture; the evidence windows bound that, and any LiteLLM key edit requires a new capture (a revoked key also

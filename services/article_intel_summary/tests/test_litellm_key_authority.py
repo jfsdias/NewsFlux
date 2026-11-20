@@ -158,6 +158,23 @@ class KeyAuthorityCatalogTests(unittest.TestCase):
         self.assertTrue(models["acme-7b"]["available"])
         self.assertEqual(router.adapter_for(discovered_model_id("acme-7b")).settings.cost_authority, "explicit_unlimited")
 
+    def test_local_only_consent_never_admits_a_model_in_key_mode(self) -> None:
+        """PR260 reconciliation (R6): in key mode local-only consent cannot be proven from what the virtual key
+        sees (model_info names a deployment, not its fallbacks, callbacks or indirect routes), and neither the
+        alias, the provider string nor a zero/absent price is identity. Until a key-mode local proof exists,
+        local-only consent admits nothing: privacy is never weakened."""
+        local = model_info("ollama-local", provider="ollama", input_cost=None, output_cost=None)
+        local["litellm_params"] = {"api_base": "http://ollama:11434", "model": "ollama/llama3"}
+        gateway = FakeGateway(listed=("ollama-local", "acme-7b"), infos=[local, model_info("acme-7b")])
+        router = self.router(gateway, NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER="false",
+                             NEWSFLUX_AI_ALLOW_LOCAL_ARTICLE_PROCESSING="true")
+        _, models = self.models(router)
+        for alias in ("ollama-local", "acme-7b"):
+            self.assertFalse(models[alias]["available"], alias)
+            self.assertEqual(models[alias]["unavailable_reason"], "EXTERNAL_TRANSFER_NOT_AUTHORIZED", alias)
+            with self.assertRaises(ModelNotAvailable):
+                router.adapter_for(discovered_model_id(alias))
+
     # --- non-financial gates are unchanged --------------------------------------------------------
 
     def test_inference_transfer_and_discovery_gates_still_hold(self) -> None:
