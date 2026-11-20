@@ -6,6 +6,8 @@ import hashlib
 import json
 import os
 import re
+import shlex
+import shutil
 import stat
 import subprocess
 import tempfile
@@ -98,24 +100,37 @@ sys.exit(97)  # exec, run, pull, rm, restart... are forbidden for the wrapper it
 '''
 
 FAKE_CURL = r'''#!/usr/bin/env python3
-import json, os, sys
+import json, os, re, sys
 with open(os.environ["FAKE_STATE"]) as handle:
     state = json.load(handle)
 with open(os.environ["FAKE_LOG"], "a") as log:
     log.write(json.dumps(["curl"] + sys.argv[1:]) + "\n")
 url = sys.argv[-1]
-key = "jobs" if "/jobs" in url else "run"
-if state["ci"].get(key) is None:
+if "/jobs" in url:
+    pages = state["ci"].get("jobs")
+    if isinstance(pages, dict) or pages is None:
+        pages = [pages]
+    number = int(re.search(r"[?&]page=([0-9]+)", url).group(1)) if "page=" in url else 1
+    body = pages[number - 1] if number <= len(pages) else {"total_count": state["ci"].get("total_override", 0), "jobs": []}
+else:
+    body = state["ci"].get("run")
+if body is None:
     sys.exit(22)
-print(json.dumps(state["ci"][key]))
+print(json.dumps(body))
 '''
 
 
+def job(head, name="synthetic-release", conclusion="success", job_id=1, attempt=1, run_id=None, status="completed"):
+    return {"id": job_id, "name": name, "head_sha": head, "status": status, "conclusion": conclusion,
+            "run_id": int(run_id or CI_RUN), "run_attempt": attempt}
+
+
 def ci_state(head, **run_overrides):
-    run = {"id": int(CI_RUN), "head_sha": head, "path": ".github/workflows/summary-release-rehearsal.yaml",
-           "status": "completed", "conclusion": "success", "event": "workflow_dispatch"}
+    run = {"id": int(CI_RUN), "run_attempt": 1, "head_sha": head, "path": ".github/workflows/summary-release-rehearsal.yaml",
+           "status": "completed", "conclusion": "success", "event": "workflow_dispatch",
+           "repository": {"full_name": "jfsdias/NewsFlux"}, "head_repository": {"full_name": "jfsdias/NewsFlux"}}
     run.update(run_overrides)
-    jobs = {"total_count": 1, "jobs": [{"name": "synthetic-release", "head_sha": head, "status": "completed", "conclusion": "success"}]}
+    jobs = {"total_count": 1, "jobs": [job(head)]}
     return {"run": run, "jobs": jobs}
 
 
@@ -159,13 +174,16 @@ class WrapperBase(unittest.TestCase):
 
     def args(self, **overrides):
         values = {"--source": self.src, "--expect-head": self.head, "--expect-auditor-sha256": self.sha,
-                  "--expect-ci-run-id": CI_RUN, "--litellm-container-id": LITELLM_ID, "--expect-image-id": IMAGE_ID,
+                  "--expect-ci-run-id": CI_RUN, "--expect-ci-run-attempt": "1", "--litellm-container-id": LITELLM_ID, "--expect-image-id": IMAGE_ID,
                   "--expect-repo-digest": DIGEST, "--expect-litellm-version": "1.110.0", "--summary-project": "newsflux",
                   "--summary-service": "summary-api", "--expect-summary-revision": SUMMARY_REV}
         values.update(overrides)
         return [part for key, value in values.items() if value is not None for part in (key, value)]
 
     def run_wrapper(self, argv=None):
+        for stale in (self.log, self.log + ".snapshots", self.stub_log):   # each run is observed on its own
+            if os.path.exists(stale):
+                os.remove(stale)
         with open(self.state_path, "w") as handle:
             json.dump(self.state, handle)
         with open(self.receipt_path, "w") as handle:
@@ -198,7 +216,8 @@ class WrapperGateTests(WrapperBase):
         self.assertEqual(code, 0, lines)
         for expected in ("S5R3_RUN_PRIVATE_PRESTATE=OFF", "S5R3_RUN_SOURCE_GATE=PASS_EXACT_HEAD",
                          f"S5R3_RUN_CI_RUN_ID={CI_RUN}", f"S5R3_RUN_CI_HEAD_SHA={self.head}", "S5R3_RUN_CI_JOB=SYNTHETIC_RELEASE",
-                         "S5R3_RUN_CI_GATE=PASS_EXACT_RUN_JOB_SHA", "S5R3_RUN_IMAGE_VERSION_BINDING=PASS_1_110_0",
+                         "S5R3_RUN_CI_GATE=PASS_EXACT_RUN_ATTEMPT_JOB_SHA", "S5R3_RUN_CI_RUN_ATTEMPT=1",
+                         "S5R3_RUN_CI_JOBS_LISTING=COMPLETE", "S5R3_RUN_G2_MODE=REMOTE_CI", "S5R3_RUN_IMAGE_VERSION_BINDING=PASS_1_110_0",
                          "S5R3_RUN_SUMMARY_DEPLOY_AUTHORIZED=PASS_TABLE", f"S5R3_RUN_LIVE_SUMMARY_REVISION={SUMMARY_REV}",
                          "S5R1_LITELLM_VERSION=1_110_0", "S5R1_FILESYSTEM_INTEGRITY=NOT_PROVEN",
                          "S5R1_AUDIT=COMPLETE_DIAGNOSTIC_ONLY", "S5R3_RUN_POST_GATES=PASS",
@@ -249,20 +268,80 @@ class WrapperGateTests(WrapperBase):
             self.state["ci"] = ci_state(self.head, **overrides)
             self.assert_hold(reason)
         self.state["ci"] = ci_state(self.head)
-        self.state["ci"]["jobs"]["jobs"].append({"name": "synthetic-release", "head_sha": self.head, "status": "completed", "conclusion": "success"})
+        self.state["ci"]["jobs"] = {"total_count": 2, "jobs": [job(self.head), job(self.head, job_id=2)]}
         self.assert_hold("CI_JOB_MISSING_OR_AMBIGUOUS")
         self.state["ci"] = ci_state(self.head)
-        self.state["ci"]["jobs"]["jobs"].append({"name": "other", "head_sha": self.head, "status": "completed", "conclusion": "failure"})
+        self.state["ci"]["jobs"] = {"total_count": 2, "jobs": [job(self.head), job(self.head, "other", "failure", 2)]}
         self.assert_hold("CI_JOB_NOT_SUCCESS")
         self.state["ci"] = ci_state(self.head)
         self.state["ci"]["jobs"]["jobs"][0]["head_sha"] = "1" * 40
-        self.assert_hold("CI_JOB_MISSING_OR_AMBIGUOUS")
+        self.assert_hold("CI_JOB_OTHER_RUN")
         self.state["ci"] = ci_state(self.head)
         self.state["ci"]["jobs"] = None
         self.assert_hold("CI_UNVERIFIED")
         self.state["ci"] = ci_state(self.head)
         self.state["ci"]["jobs"] = {"jobs": "not-a-list"}
         self.assert_hold("CI_UNVERIFIED")
+
+    def test_ci_run_attempt_repository_and_complete_listing(self):
+        # R3B A1.3: the run attempt, both repositories, every job's run/attempt/SHA and a complete paginated listing.
+        cases = (
+            (dict(run_attempt=2), "CI_ATTEMPT_MISMATCH"),
+            (dict(run_attempt="1"), "CI_UNVERIFIED"),
+            (dict(head_repository={"full_name": "fork/NewsFlux"}), "CI_OTHER_REPOSITORY"),
+            (dict(repository={"full_name": "other/NewsFlux"}), "CI_OTHER_REPOSITORY"),
+            (dict(repository=None), "CI_OTHER_REPOSITORY"),
+        )
+        for overrides, reason in cases:
+            self.state["ci"] = ci_state(self.head, **overrides)
+            self.assert_hold(reason)
+        jobs_cases = (
+            ({"total_count": 3, "jobs": [job(self.head)]}, "CI_JOBS_INCOMPLETE"),          # listing shorter than total
+            ({"total_count": 0, "jobs": []}, "CI_JOBS_INCOMPLETE"),
+            ({"total_count": "1", "jobs": [job(self.head)]}, "CI_UNVERIFIED"),
+            ({"total_count": 2, "jobs": [job(self.head), job(self.head, "lint", job_id=1)]}, "CI_JOBS_INCOMPLETE"),  # dup id
+            ({"total_count": 1, "jobs": [job(self.head, attempt=2)]}, "CI_JOB_OTHER_RUN"),
+            ({"total_count": 1, "jobs": [job(self.head, run_id=7)]}, "CI_JOB_OTHER_RUN"),
+            ({"total_count": 1, "jobs": [job(self.head, status="in_progress", conclusion=None)]}, "CI_JOB_NOT_SUCCESS"),
+            ({"total_count": 1, "jobs": [job(self.head, conclusion="skipped")]}, "CI_JOB_NOT_SUCCESS"),
+            ({"total_count": 1, "jobs": [job(self.head, "other")]}, "CI_JOB_MISSING_OR_AMBIGUOUS"),
+        )
+        for jobs, reason in jobs_cases:
+            self.state["ci"] = ci_state(self.head)
+            self.state["ci"]["jobs"] = jobs
+            self.assert_hold(reason)
+
+    def test_ci_pagination_reads_every_page_and_the_attempt_endpoint(self):
+        full = [job(self.head, "lint-%d" % i, job_id=i + 10) for i in range(100)]
+        self.state["ci"] = ci_state(self.head)
+        self.state["ci"]["jobs"] = [{"total_count": 101, "jobs": full}, {"total_count": 101, "jobs": [job(self.head)]}]
+        code, lines, calls, _ = self.run_wrapper()
+        self.assertEqual(code, 0, lines)
+        urls = [c[-1] for c in calls if c[0] == "curl" and "/jobs" in c[-1]]
+        self.assertEqual(len(urls), 2)
+        self.assertTrue(all(f"/actions/runs/{CI_RUN}/attempts/1/jobs?per_page=100&page=" in u for u in urls), urls)
+        # a failing job hidden on page 2 is found
+        self.state["ci"]["jobs"] = [{"total_count": 101, "jobs": full},
+                                    {"total_count": 101, "jobs": [job(self.head), ]}]
+        self.state["ci"]["jobs"][1]["jobs"][0]["conclusion"] = "failure"
+        self.assert_hold("CI_JOB_NOT_SUCCESS")
+        # the total changing between pages, or a missing page, is incomplete
+        self.state["ci"]["jobs"] = [{"total_count": 101, "jobs": full}, {"total_count": 102, "jobs": [job(self.head)]}]
+        self.assert_hold("CI_JOBS_INCOMPLETE")
+        self.state["ci"]["jobs"] = [{"total_count": 101, "jobs": full}]
+        self.state["ci"]["total_override"] = 101
+        self.assert_hold("CI_JOBS_INCOMPLETE")
+
+    def test_g2_mode_is_exactly_one_source(self):
+        self.assert_hold("USAGE", self.args(**{"--expect-ci-run-attempt": None}))
+        self.assert_hold("USAGE", self.args(**{"--expect-ci-run-attempt": "0"}))
+        self.assert_hold("USAGE", self.args() + ["--local-evidence", "/x"])
+        self.assert_hold("USAGE", self.args(**{"--expect-ci-run-id": None, "--expect-ci-run-attempt": None}))
+        local = self.args(**{"--expect-ci-run-id": None, "--expect-ci-run-attempt": None})
+        self.assert_hold("USAGE", local + ["--local-evidence", "/a", "--local-replay", "/b"])
+        self.assert_hold("USAGE", local + ["--local-evidence", "a", "--local-replay", "/b", "--local-approval", "/c"])
+        for forbidden in ("--skip-ci", "--force", "--ignore-gates"):
+            self.assert_hold("USAGE", self.args() + [forbidden, "1"])
 
     def test_litellm_identity_and_binding(self):
         self.state["containers"][LITELLM_ID] = [snap(LITELLM_ID, "sha256:" + "1" * 64, project="litellm", service="litellm")]
@@ -306,6 +385,71 @@ class WrapperGateTests(WrapperBase):
         same = snap(SUMMARY_ID, SUMMARY_IMAGE)
         self.state["containers"][SUMMARY_ID] = [same, same, snap(SUMMARY_ID, SUMMARY_IMAGE, restarts=1)]
         self.assert_hold("IDENTITY_CHANGED_AFTER_RUN", audited=True)
+
+
+class WrapperLocalIndependentTests(WrapperBase):
+    """G2_LOCAL_INDEPENDENT through the wrapper: verified offline evidence replaces the Actions run, but the mode
+    stays inadmissible while the wrapper's PM-admitted signer table is empty."""
+
+    def setUp(self):
+        super().setUp()
+        if not shutil.which("ssh-keygen"):
+            self.skipTest("ssh-keygen is required")
+        import test_g2_local_evidence as G
+        self.keys_root = os.path.join(self.tmp.name, "keys")
+        os.mkdir(self.keys_root)
+        self.f = G.Fixture(self.keys_root, src=self.src, keep=("auditor",))   # the stub auditor stays bound
+        self.head = self.f.head
+        self.evidence = self.f.bundle()
+        self.replay = self.f.bundle("REPLAY", "replayer")
+        self.approval = self.f.approval(self.evidence, self.replay)
+
+    def local_args(self, **overrides):
+        values = {"--expect-ci-run-id": None, "--expect-ci-run-attempt": None, "--local-evidence": self.evidence,
+                  "--local-replay": self.replay, "--local-approval": self.approval}
+        values.update(overrides)
+        return self.args(**values)
+
+    def admitted_wrapper(self, signers):
+        with open(WRAPPER) as handle:
+            text = handle.read()
+        assert text.count('LOCAL_ADMITTED_SIGNERS=""') == 1
+        path = os.path.join(self.tmp.name, "wrapper-admitted.sh")
+        with open(path, "w") as handle:
+            handle.write(text.replace('LOCAL_ADMITTED_SIGNERS=""', "LOCAL_ADMITTED_SIGNERS=" + shlex.quote(signers)))
+        return path
+
+    def test_empty_admission_table_holds_before_any_docker_call(self):
+        lines, calls, _ = self.assert_hold("G2L_SIGNERS_NOT_ADMITTED", self.local_args())
+        self.assertEqual(calls, [])                       # no curl, no docker
+        self.assertNotIn("S5R3_RUN_CI_GATE=PASS_LOCAL_INDEPENDENT_REPLAYED_APPROVED", lines)
+
+    def test_admitted_signers_complete_the_run_with_local_evidence(self):
+        global WRAPPER
+        original, WRAPPER = WRAPPER, self.admitted_wrapper(self.f.allowed)
+        try:
+            code, lines, calls, audits = self.run_wrapper(self.local_args())
+            self.assertEqual(code, 0, lines)
+            self.assertIn("S5R3_RUN_G2_MODE=LOCAL_INDEPENDENT", lines)
+            self.assertIn("S5R3_RUN_CI_GATE=PASS_LOCAL_INDEPENDENT_REPLAYED_APPROVED", lines)
+            self.assertEqual(lines[-1], "S5R3_RUN_RESULT=COMPLETE_DIAGNOSTIC_ONLY_READONLY")
+            self.assertFalse([c for c in calls if c[0] == "curl"])     # offline: GitHub is never asked
+            # tampered evidence, a self-approval or a stale approval still hold through the wrapper
+            with open(os.path.join(self.evidence, "SANITIZED_RECEIPT.txt"), "a") as handle:
+                handle.write("x\n")
+            self.assert_hold("G2L_BUNDLE_TAMPERED", self.local_args())
+            other = self.f.bundle()
+            self.assert_hold("G2L_SELF_APPROVAL", self.local_args(**{
+                "--local-evidence": other, "--local-approval": self.f.approval(other, self.replay, reviewer="producer",
+                                                                               key=self.f.keys["producer"])}))
+            self.assert_hold("G2L_APPROVAL_OTHER_EVIDENCE", self.local_args(**{"--local-evidence": other}))
+            self.assert_hold("G2L_APPROVAL_MISSING", self.local_args(**{"--local-evidence": other,
+                                                                         "--local-approval": "/nonexistent/approval.json"}))
+        finally:
+            WRAPPER = original
+
+    def test_local_evidence_never_outranks_the_source_gate(self):
+        self.assert_hold("SOURCE_HEAD_MISMATCH", self.local_args(**{"--expect-head": "0" * 40}))
 
 
 class WrapperReceiptTests(WrapperBase):

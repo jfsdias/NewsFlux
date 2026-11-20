@@ -4,9 +4,16 @@
 #
 # Gates, in order; the first failure prints S5R3_RUN_RESULT=HOLD_<reason> (exit 2) and stops:
 #   G1 SOURCE   exact clean checkout at --expect-head; the auditor file tracked, unmodified, SHA-256 pinned
-#   G2 CI       the GitHub Actions run --expect-ci-run-id: workflow summary-release-rehearsal.yaml, head SHA ==
-#               --expect-head, run completed/success, job "synthetic-release" completed/success, no other job
-#               failed or pending (incomplete, ambiguous or other-SHA answers hold)
+#   G2 EVIDENCE exactly one source:
+#     REMOTE_CI          --expect-ci-run-id + --expect-ci-run-attempt: run of workflow summary-release-rehearsal.yaml
+#                        in jfsdias/NewsFlux (repository and head repository), head SHA == --expect-head, that exact
+#                        attempt, completed/success; the attempt's job listing read page by page until complete
+#                        (stable total_count, unique job IDs), every job on the same run/attempt/SHA, exactly one
+#                        "synthetic-release", none failed, pending or skipped in its place
+#     LOCAL_INDEPENDENT  --local-evidence + --local-replay + --local-approval: g2_local_evidence.py (tracked at this
+#                        HEAD) verifies two complete offline runs of every manifest step at this commit and tree by
+#                        two distinct producers and a detached approval by a third signer; signers must be in
+#                        LOCAL_ADMITTED_SIGNERS, which is EMPTY (the mode HOLDs until the PM admits signers)
 #   G3 LITELLM  container by full ID: running, the expected immutable image ID, whose RepoDigests contain the
 #               expected registry digest; lifecycle snapshot recorded (ID|image|StartedAt|RestartCount|state|labels)
 #   G4 BINDING  that image ID is in this wrapper's table of lab-proven images for the expected LiteLLM version
@@ -17,13 +24,14 @@
 #   PRE-RUN     both snapshots re-read and unchanged since the gates
 #   RUN         env -i ... python3 -B -I <auditor> with the exact Summary and LiteLLM IDs, images, project/service
 #               and both snapshots (strict mode: no discovery; the auditor re-checks identity right before its
-#               first exec and after its last, refuses unless the inference/external-transfer flags are
-#               effectively OFF, and confirms them with the Summary's own runtime parser)
+#               first exec, again after the Summary parser and right before the LiteLLM exec, and after its last;
+#               it refuses unless the inference/external-transfer flags are effectively OFF, and confirms them
+#               with the Summary's own runtime parser)
 #   CONTRACT    the whole receipt is held in memory and validated against an explicit field/value contract
 #               (known fields, enums, bounded counts, no duplicates, required fields, no prestate, exit-code
 #               coherence); nothing from it is printed unless every check passes
 #   POST        both snapshots re-read and unchanged; only then is the validated receipt printed
-# Atomicity is not absolute: a change between the auditor's last identity check and an exec targets a full ID
+# Atomicity is not absolute (bounded): a change between the auditor's last identity check and an exec targets a full ID
 # (a replacement fails the exec) and a restart is caught by the post-run comparison.
 set -Euo pipefail
 umask 077
@@ -31,6 +39,11 @@ REPO_SLUG="jfsdias/NewsFlux"
 AUDITOR_PATH="deploy/release-governance/s5_db_readonly_audit.py"
 CI_WORKFLOW_PATH=".github/workflows/summary-release-rehearsal.yaml"
 CI_JOB_NAME="synthetic-release"
+G2L_VERIFIER_PATH="deploy/release-governance/g2_local_evidence.py"
+# G2_LOCAL_INDEPENDENT signers admitted by the PM (OpenSSH allowed_signers lines: "<principal> <keytype> <key>").
+# EMPTY ON PURPOSE: the local mode stays ineligible for a privileged run until the PM admits named reviewers
+# in a reviewed change to this file (which also changes this file's pinned SHA-256).
+LOCAL_ADMITTED_SIGNERS=""
 IDENTITY_FORMAT='{{.Id}}|{{.Image}}|{{.State.StartedAt}}|{{.RestartCount}}|{{.State.Status}}|{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "com.docker.compose.service"}}'
 # Lab-proven LiteLLM images: immutable image ID (config digest) -> LiteLLM package version.
 declare -A PROVEN_IMAGES=(
@@ -47,6 +60,7 @@ say() { echo "S5R3_RUN_$1=$2"; }
 hold() { say RESULT "HOLD_$1"; exit 2; }
 
 src="" head="" auditor_sha="" litellm_id="" image_id="" repo_digest="" version="" project="" service="" summary_rev="" ci_run=""
+ci_attempt="" local_evidence="" local_replay="" local_approval=""
 gates_only=0
 for arg in "$@"; do
   if [[ "${arg,,}" == *prestate* ]]; then say PRIVATE_PRESTATE FORBIDDEN; hold PRIVATE_PRESTATE_FORBIDDEN; fi
@@ -59,6 +73,10 @@ while [[ $# -gt 0 ]]; do
     --expect-head) head="$2" ;;
     --expect-auditor-sha256) auditor_sha="$2" ;;
     --expect-ci-run-id) ci_run="$2" ;;
+    --expect-ci-run-attempt) ci_attempt="$2" ;;
+    --local-evidence) local_evidence="$2" ;;
+    --local-replay) local_replay="$2" ;;
+    --local-approval) local_approval="$2" ;;
     --litellm-container-id) litellm_id="$2" ;;
     --expect-image-id) image_id="$2" ;;
     --expect-repo-digest) repo_digest="$2" ;;
@@ -70,8 +88,16 @@ while [[ $# -gt 0 ]]; do
   esac
   shift 2
 done
+# G2 evidence source: exactly one of remote CI (run id + attempt) or local independent (three paths).
+g2_mode=""
+if [[ -n "$ci_run$ci_attempt" && -z "$local_evidence$local_replay$local_approval" ]]; then
+  [[ "$ci_run" =~ ^[0-9]{1,20}$ && "$ci_attempt" =~ ^[1-9][0-9]{0,3}$ ]] && g2_mode=remote
+elif [[ -z "$ci_run$ci_attempt" ]]; then
+  [[ "$local_evidence" == /* && "$local_replay" == /* && "$local_approval" == /* ]] && g2_mode=local
+fi
+[[ -n "$g2_mode" ]] || hold USAGE
 [[ -n "$src" && "$src" == /* && -d "$src" && "$head" =~ ^[0-9a-f]{40}$ && "$auditor_sha" =~ ^[0-9a-f]{64}$ \
-   && "$ci_run" =~ ^[0-9]{1,20}$ && "$litellm_id" =~ ^[0-9a-f]{64}$ && "$image_id" =~ ^sha256:[0-9a-f]{64}$ \
+   && "$litellm_id" =~ ^[0-9a-f]{64}$ && "$image_id" =~ ^sha256:[0-9a-f]{64}$ \
    && "$repo_digest" =~ ^[a-z0-9][a-z0-9./_-]{0,254}@sha256:[0-9a-f]{64}$ && "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ \
    && "$project" =~ ^[A-Za-z0-9_.-]{1,64}$ && "$service" =~ ^[A-Za-z0-9_.-]{1,64}$ && "$summary_rev" =~ ^[0-9a-f]{40}$ ]] || hold USAGE
 say PRIVATE_PRESTATE OFF
@@ -85,42 +111,102 @@ git -C "$src" diff --quiet HEAD -- "$AUDITOR_PATH" 2>/dev/null || hold SOURCE_AU
 [[ "$(sha256sum "$src/$AUDITOR_PATH" | cut -d' ' -f1)" == "$auditor_sha" ]] || hold SOURCE_AUDITOR_SHA256
 say SOURCE_GATE PASS_EXACT_HEAD
 
-# G2 CI: exact workflow / run / job / SHA ---------------------------------------------------------------
+# G2 CI: exact repository / workflow / run / attempt / job / SHA, complete job listing -------------------
 api() { curl -fsS --max-time 30 -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$REPO_SLUG/$1" 2>/dev/null; }
-run_json="$(api "actions/runs/$ci_run")" || hold CI_UNVERIFIED
-jobs_json="$(api "actions/runs/$ci_run/jobs?per_page=100")" || hold CI_UNVERIFIED
-ci="$(python3 -I -B -c '
+CI_PY=$(cat <<'PY'
 import json, sys
-run_id, head, path, job_name = sys.argv[1:5]
+repo, run_id, attempt, head, path, job_name, run_text = sys.argv[1:8]
+page_texts = sys.argv[8:]
+def out(word):
+    print(word); sys.exit()
 try:
-    run, jobs = json.loads(sys.argv[5]), json.loads(sys.argv[6])
-    jobs = jobs["jobs"] if isinstance(jobs, dict) else None
-except (ValueError, KeyError, TypeError):
-    print("UNVERIFIED"); sys.exit()
-if not isinstance(run, dict) or not isinstance(jobs, list) or str(run.get("id")) != run_id:
-    print("UNVERIFIED"); sys.exit()
+    run = json.loads(run_text)
+    pages = [json.loads(t) for t in page_texts]
+except ValueError:
+    out("UNVERIFIED")
+if not isinstance(run, dict) or str(run.get("id")) != run_id or type(run.get("run_attempt")) is not int:
+    out("UNVERIFIED")
+if str(run["run_attempt"]) != attempt:
+    out("ATTEMPT_MISMATCH")   # a re-run is a different attempt: it is never adopted silently
+for side in ("repository", "head_repository"):
+    owner = run.get(side)
+    if not isinstance(owner, dict) or owner.get("full_name") != repo:
+        out("OTHER_REPOSITORY")
 if run.get("head_sha") != head:
-    print("OTHER_SHA"); sys.exit()
+    out("OTHER_SHA")
 if run.get("path") != path:
-    print("OTHER_WORKFLOW"); sys.exit()
+    out("OTHER_WORKFLOW")
 if run.get("status") != "completed" or run.get("conclusion") != "success":
-    print("RUN_NOT_SUCCESS"); sys.exit()
-named = [j for j in jobs if isinstance(j, dict) and j.get("name") == job_name]
-if len(named) != 1 or named[0].get("head_sha") != head:
-    print("JOB_MISSING_OR_AMBIGUOUS"); sys.exit()
-if any(not isinstance(j, dict) or j.get("status") != "completed" or j.get("conclusion") not in ("success", "skipped") for j in jobs):
-    print("JOB_NOT_SUCCESS"); sys.exit()
+    out("RUN_NOT_SUCCESS")
+jobs, totals = [], set()
+for page in pages:
+    if not isinstance(page, dict) or not isinstance(page.get("jobs"), list) or type(page.get("total_count")) is not int:
+        out("UNVERIFIED")
+    totals.add(page["total_count"])
+    jobs.extend(page["jobs"])
+if len(totals) != 1:
+    out("JOBS_INCOMPLETE")   # the listing changed while it was being read
+total = totals.pop()
+if len(jobs) < total and pages[-1]["jobs"] and len(pages[-1]["jobs"]) == 100:
+    out("NEED_MORE")
+if len(jobs) != total or total < 1:
+    out("JOBS_INCOMPLETE")
+ids = [j.get("id") if isinstance(j, dict) else None for j in jobs]
+if None in ids or len(set(ids)) != len(ids):
+    out("JOBS_INCOMPLETE")
+for job in jobs:
+    if str(job.get("run_id")) != run_id or str(job.get("run_attempt")) != attempt or job.get("head_sha") != head:
+        out("JOB_OTHER_RUN")
+named = [j for j in jobs if j.get("name") == job_name]
+if len(named) != 1:
+    out("JOB_MISSING_OR_AMBIGUOUS")
+if any(j.get("status") != "completed" or j.get("conclusion") not in ("success", "skipped") for j in jobs):
+    out("JOB_NOT_SUCCESS")
 if named[0].get("conclusion") != "success":
-    print("JOB_NOT_SUCCESS"); sys.exit()
-print("PASS")' "$ci_run" "$head" "$CI_WORKFLOW_PATH" "$CI_JOB_NAME" "$run_json" "$jobs_json")" || hold CI_UNVERIFIED
-[[ "$ci" == PASS ]] || hold "CI_$ci"
-say CI_WORKFLOW SUMMARY_RELEASE_REHEARSAL
-say CI_RUN_ID "$ci_run"
-say CI_HEAD_SHA "$head"
-say CI_JOB SYNTHETIC_RELEASE
-say CI_RUN_CONCLUSION SUCCESS
-say CI_JOB_CONCLUSION SUCCESS
-say CI_GATE PASS_EXACT_RUN_JOB_SHA
+    out("JOB_NOT_SUCCESS")
+out("PASS")
+PY
+)
+g2_remote() {
+  local run_json page_json ci="" page
+  local -a pages=()
+  run_json="$(api "actions/runs/$ci_run")" || hold CI_UNVERIFIED
+  for page in 1 2 3 4 5 6 7 8 9 10; do
+    page_json="$(api "actions/runs/$ci_run/attempts/$ci_attempt/jobs?per_page=100&page=$page")" || hold CI_UNVERIFIED
+    pages+=("$page_json")
+    ci="$(python3 -I -B -c "$CI_PY" "$REPO_SLUG" "$ci_run" "$ci_attempt" "$head" "$CI_WORKFLOW_PATH" "$CI_JOB_NAME" \
+          "$run_json" "${pages[@]}")" || hold CI_UNVERIFIED
+    [[ "$ci" == NEED_MORE ]] || break
+  done
+  [[ "$ci" == NEED_MORE ]] && ci="JOBS_INCOMPLETE"
+  [[ "$ci" == PASS ]] || hold "CI_$ci"
+  say G2_MODE REMOTE_CI
+  say CI_WORKFLOW SUMMARY_RELEASE_REHEARSAL
+  say CI_RUN_ID "$ci_run"
+  say CI_RUN_ATTEMPT "$ci_attempt"
+  say CI_HEAD_SHA "$head"
+  say CI_JOB SYNTHETIC_RELEASE
+  say CI_JOBS_LISTING COMPLETE
+  say CI_RUN_CONCLUSION SUCCESS
+  say CI_JOB_CONCLUSION SUCCESS
+  say CI_GATE PASS_EXACT_RUN_ATTEMPT_JOB_SHA
+}
+g2_local() {
+  # G2_LOCAL_INDEPENDENT: offline evidence produced at this exact HEAD/tree, replayed by a second, distinct
+  # producer and approved by a detached SSH-signed review naming both bundles. The verifier is tracked at
+  # this HEAD (G1 proved the tree clean). Signers are admitted only through LOCAL_ADMITTED_SIGNERS below;
+  # while it is empty this mode verifies everything and then HOLDs (not admitted by the PM).
+  local verdict
+  verdict="$(env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin python3 -B -I "$src/$G2L_VERIFIER_PATH" \
+      --source "$src" --expect-head "$head" --evidence "$local_evidence" --replay "$local_replay" \
+      --approval "$local_approval" --allowed-signers-text "$LOCAL_ADMITTED_SIGNERS" 2>/dev/null | tail -n 1)" || true
+  [[ "$verdict" =~ ^G2L_RESULT=(PASS|HOLD_G2L_[A-Z0-9_]{1,72})$ ]] || hold G2L_VERIFIER_UNAVAILABLE
+  [[ "${BASH_REMATCH[1]}" == PASS ]] || hold "${BASH_REMATCH[1]#HOLD_}"
+  say G2_MODE LOCAL_INDEPENDENT
+  say CI_HEAD_SHA "$head"
+  say CI_GATE PASS_LOCAL_INDEPENDENT_REPLAYED_APPROVED
+}
+if [[ "$g2_mode" == remote ]]; then g2_remote; else g2_local; fi
 
 # G3 LITELLM identity -----------------------------------------------------------------------------------
 snapshot() { docker inspect --format "$IDENTITY_FORMAT" "$1" 2>/dev/null; }
@@ -196,6 +282,7 @@ OBJPERM_COUNTED = ("MCP_SERVERS", "VECTOR_STORES", "MCP_ACCESS_GROUPS", "AGENTS"
                    "MCP_TOOLSETS", "SEARCH_TOOLS", "SKILLS", "BLOCKED_TOOLS", "MCP_TOOL_PERMISSIONS")
 AUDITOR_HOLDS = {"NOT_ROOT", "STRICT_BINDING_INCOMPLETE", "ENV_DIVERGENT", "UNVERIFIED", "CONTAINER_STATE_CHANGED",
                  "IDENTITY_MISMATCH_SUMMARY", "IDENTITY_MISMATCH_LITELLM", "IDENTITY_CHANGED_BEFORE_EXEC",
+                 "IDENTITY_CHANGED_BETWEEN_EXECS",
                  "AI_FLAGS_NOT_OFF", "AI_FLAGS_AMBIGUOUS", "AI_FLAGS_DUPLICATE", "AI_FLAGS_UNREADABLE",
                  "FLAGS_RUNTIME_NOT_OFF", "FLAGS_RUNTIME_UNAVAILABLE", "SUMMARY_KEY_UNAVAILABLE", "PROBE_OUTPUT_UNSAFE",
                  "SUMMARY_CONTAINER_NOT_UNIQUE", "LITELLM_CONTAINER_NOT_UNIQUE", "DOCKER_INSPECT_FAILED",

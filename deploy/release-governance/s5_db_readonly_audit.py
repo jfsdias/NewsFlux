@@ -1286,6 +1286,10 @@ def main(argv: list[str] | None = None, *, run: Callable[..., str] = _docker, eu
         if any(flags.values()):
             raise ProbeError("FLAGS_RUNTIME_NOT_OFF")
         host_facts["FLAGS_RUNTIME_PARSER"] = "CONFIRMED_OFF"
+        if strict and bound(identities()) != (True, True):
+            # R3B: re-prove both containers after the Summary parser and immediately before the LiteLLM exec.
+            # Atomicity stays bounded: a later swap makes the exec by full ID fail, a restart shows up post-run.
+            raise ProbeError("IDENTITY_CHANGED_BETWEEN_EXECS")
         with open(os.path.abspath(__file__), encoding="utf-8") as handle:
             source = handle.read()
         request = dict(summary_info, private_prestate=prestate_path is not None)

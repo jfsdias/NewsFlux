@@ -1486,12 +1486,49 @@ class R3AExactBindingTests(unittest.TestCase):
     def test_restart_during_the_audit_is_changed_and_exit_3(self):
         world = World()
         argv = strict_argv(world)
-        world.hooks[7] = lambda w: w.containers[LITELLM_ID].update(restarts=1)   # after both execs
+        # calls: 0-1 gate, 2 env, 3-4 pre-exec, 5 Summary exec, 6-7 inter-exec, 8 LiteLLM exec, 9-10 post
+        world.hooks[9] = lambda w: w.containers[LITELLM_ID].update(restarts=1)   # after both execs
         code, lines = run_strict(world, argv)
         self.assertEqual(code, 3, lines)
         self.assertIn("S5R1_CONTAINER_IDENTITY=CHANGED", lines)
         self.assertEqual(lines[-1], "S5R1_AUDIT=HOLD_CONTAINER_STATE_CHANGED")
         self.assertNotIn("S5R1_AUDIT=COMPLETE_DIAGNOSTIC_ONLY", lines)
+
+    def test_change_between_summary_parser_and_litellm_exec_never_reaches_litellm(self):
+        # R3B A1.1: the LiteLLM exec runs only on the containers re-proven right after the Summary parser.
+        cases = (
+            (5, lambda w: w.containers[LITELLM_ID].update(restarts=1), "LiteLLM restarted while Summary ran"),
+            (5, lambda w: w.containers[SUMMARY_ID].update(restarts=1, started="2026-11-20T00:00:00Z"),
+             "Summary restarted during its own parser"),
+            (6, lambda w: w.containers[LITELLM_ID].update(image="sha256:" + "4" * 64), "LiteLLM image swapped"),
+            (7, lambda w: w.containers[LITELLM_ID].update(status="paused"), "LiteLLM lifecycle changed"),
+            (6, lambda w: w.containers[SUMMARY_ID].update(project="other"), "Summary relabelled"),
+        )
+        for index, mutate, label in cases:
+            world = World()
+            argv = strict_argv(world)
+            world.hooks[index] = mutate
+            code, lines = run_strict(world, argv)
+            self.assertEqual((code, lines), (2, ["S5R1_AUDIT=HOLD_IDENTITY_CHANGED_BETWEEN_EXECS"]), label)
+            self.assertEqual([a[2] for a in execs(world)], ["-u"], label)   # the Summary exec only
+
+    def test_inter_exec_check_runs_after_the_flags_are_confirmed_off(self):
+        world = World()
+        world.runtime_flags = {"inference": True, "external_transfer": False}
+        world.hooks[6] = lambda w: w.containers[LITELLM_ID].update(restarts=1)
+        code, lines = run_strict(world, strict_argv(world))
+        self.assertEqual(lines, ["S5R1_AUDIT=HOLD_FLAGS_RUNTIME_NOT_OFF"])   # flags fail first, LiteLLM never touched
+        world = World()
+        run_strict(world)
+        kinds = [("exec-" + a[2]) if a[1] == "exec" else a[a.index("--format") + 1][:6] for a, _ in world.calls]
+        self.assertEqual(kinds[5:9], ["exec--u", "{{.Id}", "{{.Id}", "exec--i"])
+
+    def test_replacement_after_inter_exec_check_fails_the_exec_by_full_id(self):
+        world = World()
+        argv = strict_argv(world)
+        world.hooks[8] = lambda w: w.containers.pop(LITELLM_ID)   # bounded atomicity: the exec targets the full ID
+        code, lines = run_strict(world, argv)
+        self.assertEqual((code, lines), (2, ["S5R1_AUDIT=HOLD_DOCKER_EXEC_FAILED"]))
 
     def test_legacy_mode_is_reported_as_discovered(self):
         run, _ = self.fake_legacy()

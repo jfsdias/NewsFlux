@@ -533,3 +533,87 @@ Docker or sudo, per `core/ACCESS.md`). So `OMV_METADATA_ACCESS=BLOCKED_ACCESS` a
 - **Lab only:** the real-lab evidence is developer-run, not CI.
 - **Unchanged from earlier:** route breadth, JWT detected but not evaluated, `policies`
   Enterprise-gated, and runtime parity.
+
+## 10. S5-R3B — residual hardening and the offline G2 route (PM comment 7044250905)
+
+PM decision: `R3A_STATIC=CONDITIONAL_ACCEPT`, `CI_EXACT_NEW_HEAD=ABSENT`. Three residuals, plus an
+offline alternative for the G2 gate that never fabricates a CI status.
+
+### 10.1 A1.1: identity re-proven between the two execs
+
+The auditor now re-reads both identities after the Summary parser confirmed the flags OFF and
+immediately before the LiteLLM exec. Any change holds with `HOLD_IDENTITY_CHANGED_BETWEEN_EXECS`, and
+LiteLLM is never touched. Order of checks in strict mode:
+
+1. gate identity (both containers);
+2. Summary environment and flag classification;
+3. identity again, immediately before the first exec;
+4. Summary exec (runtime parser: flags must be `False`);
+5. **identity again, immediately before the LiteLLM exec (new)**;
+6. LiteLLM exec;
+7. identity again (`CONTAINER_IDENTITY=CHANGED`, exit 3).
+
+Atomicity stays **bounded**: a replacement after step 5 makes the exec by full ID fail
+(`HOLD_DOCKER_EXEC_FAILED`, tested), and a restart is caught at step 7. Tests: changes landing during
+the Summary parser, right after it, and right before the second exec; flags failing before the
+inter-exec check; replacement after it. RED on `fdc640b`: 4 failures.
+
+### 10.2 A1.2: exit status of the whole operator command
+
+Superseded: the R3A command ended in `; echo "S5R3_RUN_WRAPPER_EXIT=$?"`, which makes the whole line
+exit 0 even when the wrapper holds (demonstrated: wrapper exit 2, command status 0).
+
+Now there is one self-contained executor, `s5-r3-omv-executor.sh`, and a one-line command kept in
+`s5-r3-operator-command.template` (the tests render and run exactly that file):
+
+- the command downloads the executor at the exact commit, checks its SHA-256 and `exec`s it, under
+  `set -Eeuo pipefail`: a download, hash or preparation failure is non-zero;
+- the executor creates a new 0700 workdir (never reuses one), clones, checks out the exact HEAD,
+  checks the wrapper SHA-256, runs the wrapper with `tee` into a 0600 receipt, and exits with the
+  wrapper's own status (`4` if the wrapper passed but the receipt was not saved; `130/143` if
+  interrupted); its final status line never replaces the status.
+
+Tests (`test_s5_r3_omv_executor.py`, 8): success is the only 0; wrapper 1/2/3 survive `tee`; failing
+`tee`; workdir exists, preparation, clone, checkout and hash failures hold before the wrapper; source
+binding; SIGTERM; the template is a single line whose last statement is the `exec`.
+
+### 10.3 A1.3: remote CI completeness (mode kept, nothing dispatched)
+
+`--expect-ci-run-id` now also requires `--expect-ci-run-attempt`. Checked:
+
+- the run's `id` and `run_attempt` (a re-run is another attempt and is never adopted);
+- `repository` and `head_repository` are both `jfsdias/NewsFlux` (no fork run);
+- head SHA, workflow path, completed/success;
+- the jobs of that **attempt** (`/attempts/N/jobs`), read page by page until the listing is
+  complete: `total_count` stable across pages and equal to the jobs read, unique job IDs;
+- every job on the same run, attempt and SHA; exactly one `synthetic-release`; no job failed,
+  pending, or `skipped` in place of the required one.
+
+New holds: `CI_ATTEMPT_MISMATCH`, `CI_OTHER_REPOSITORY`, `CI_JOBS_INCOMPLETE`, `CI_JOB_OTHER_RUN`.
+Negative fixtures cover each, plus a failing job hidden on page 2.
+
+### 10.4 A2: `G2_LOCAL_INDEPENDENT`
+
+See `docs/ops/S5_R3B_G2_LOCAL_INDEPENDENT.md`. In short: the same workflow steps plus the R3/R3A
+rehearsals, run twice at the exact commit and tree by two distinct signed producers, and a detached
+approval signed by a third party that names both bundles. The wrapper accepts exactly one G2 source;
+the local mode holds `G2L_SIGNERS_NOT_ADMITTED` until the PM admits signers in a reviewed change.
+
+### 10.5 Residual risks
+
+- The signature proves which key signed. Whether two keys belong to independent people or machines
+  is a PM admission decision; the verifier only proves the keys differ.
+- `ssh-keygen` (OpenSSH ≥ 8) must exist where the wrapper runs (INFERRED present on OMV/Debian).
+- Bounded atomicity, as above; filesystem integrity remains `NOT_PROVEN`.
+
+### 10.6 OMV diagnostic preparation (A7, not executed)
+
+- Summary revision bound: `12929fbabe603ec24dcc700c8393f1f6bc7bbf60`, image
+  `sha256:6cee8366be056e84893b32dd6708248d983f1d3a939261af6cfe27db8572adc3` from the PR270 promotion
+  receipt (REPORTED_OPERATOR). The live revision is **not** assumed: the wrapper reads it and holds on
+  any difference (`LIVE_SUMMARY_REVISION=UNVERIFIED` until a run).
+- The single supervised command is rendered from `s5-r3-operator-command.template` with the tested
+  HEAD, the executor and wrapper SHA-256 and the G2 arguments; the rendered line lives in the handoff
+  and the PM ledger (not here, to avoid a hash cycle). `PRIVATE_PRESTATE=OFF` and cannot be enabled.
+- Preconditions: legitimate OMV access, G2 evidence admitted by the PM, an explicit GO for that run.
+  This session has no OMV access (`OMV_METADATA_ACCESS=BLOCKED_ACCESS`).
