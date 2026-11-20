@@ -58,15 +58,19 @@ class KeyAuthorityCatalogTests(unittest.TestCase):
         self.env = env
 
     def write_evidence(self, name, declaration="gateway_budget_enforced", facts=None, key=KEY):
-        """Evidence as built from a real diagnostic receipt (see test_cost_authority_evidence)."""
+        """v2 evidence as the root-run builder writes it from an executor receipt (see test_cost_authority_evidence)."""
         from datetime import datetime, timedelta, timezone
 
-        from services.article_intel_summary.tests.test_cost_authority_evidence import BUDGET_FACTS, evidence
+        from services.article_intel_summary.tests.test_cost_authority_evidence import (
+            evidence,
+            trust_current_user,
+            write_trusted,
+        )
+        trust_current_user(self)
+        directory = Path(self.tmp.name) / "evidence"      # trusted-file contract: root-owned, not group/other-writable
+        directory.mkdir(mode=0o755, exist_ok=True)
         captured = datetime.now(timezone.utc) - timedelta(hours=1)
-        path = Path(self.tmp.name) / name
-        path.write_text(json.dumps(evidence(declaration, facts or BUDGET_FACTS, key=key, captured=captured)))
-        path.chmod(0o640)
-        return str(path)
+        return write_trusted(directory, name, evidence(declaration, facts, key=key, captured=captured))
 
     def router(self, gateway, **overrides):
         values = {**self.env, **overrides}

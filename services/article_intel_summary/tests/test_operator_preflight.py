@@ -44,6 +44,43 @@ class OperatorPreflightTests(unittest.TestCase):
         self.assertNotIn(str(self.root), text)
         self.assertFalse(self.root.exists())
 
+    def test_d1_mode_off_is_reported_and_does_not_change_the_verdict(self):
+        code, lines = run(self.env, check_gateway=True, store_factory=self.factory)
+        self.assertEqual(code, 0)
+        self.assertIn("D1_MODEL_AUTHORITY=OFF", lines)
+        self.assertIn("D1_PREFLIGHT=NOT_APPLICABLE_LEGACY_CONTRACT", lines)
+
+    def test_d1_key_mode_holds_without_bound_cost_authority_evidence(self):
+        from services.article_intel_summary.tests.test_cost_authority_evidence import (
+            evidence, trust_current_user, write_trusted,
+        )
+        from datetime import datetime, timedelta, timezone
+        trust_current_user(self)
+        env = {**self.env, "NEWSFLUX_AI_MODEL_AUTHORITY": "litellm_key",
+               "NEWSFLUX_AI_LITELLM_COST_AUTHORITY": "gateway_budget_enforced"}
+        code, lines = run(env, store_factory=self.factory)
+        self.assertEqual(code, 3)
+        self.assertIn("D1_COST_AUTHORITY=UNPROVEN_EVIDENCE_MISSING", lines)
+        self.assertEqual(lines[-1], "PREFLIGHT=HOLD")
+        directory = Path(self.tmp.name) / "evidence"
+        directory.mkdir(mode=0o755)
+        fresh = evidence(key=KEY, captured=datetime.now(timezone.utc) - timedelta(hours=1))
+        env["NEWSFLUX_AI_LITELLM_COST_AUTHORITY_EVIDENCE_FILE"] = write_trusted(directory, "e.json", fresh)
+        code, lines = run(env, store_factory=self.factory)
+        self.assertIn("D1_COST_AUTHORITY=PROVEN_GATEWAY_ENFORCEMENT_EVIDENCE", lines, lines)
+        self.assertEqual(code, 0, lines)
+        self.assertEqual(lines.count("SECRET_PRINTED=NO"), 1)
+        self.assertNotIn(KEY, "\n".join(lines))
+
+    def test_d1_key_is_the_catalog_key_and_unreadable_managed_state_gives_none(self):
+        from services.article_intel_summary.cost_authority import effective_virtual_key
+        self.assertEqual(effective_virtual_key(self.env), KEY)                    # bootstrap, no managed record
+        self.root.mkdir(mode=0o700)
+        marker = self.root / "activated"
+        marker.write_bytes(b"v1\n")
+        marker.chmod(0o600)
+        self.assertIsNone(effective_virtual_key(self.env))                        # never falls back to bootstrap
+
     def test_unsafe_dir_mode_is_hold(self):
         self.root.mkdir(mode=0o755)
         os.chmod(self.root, 0o755)

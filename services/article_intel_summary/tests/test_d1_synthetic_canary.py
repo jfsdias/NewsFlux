@@ -33,7 +33,7 @@ class D1SyntheticCanaryTests(unittest.TestCase):
     def setUp(self) -> None:
         base = key_authority.KeyAuthorityCatalogTests("test_default_contract_is_unchanged_without_the_mode")
         base.setUp()
-        self.addCleanup(base.tmp.cleanup)
+        self.addCleanup(base.doCleanups)
         self.env = base.env
         self.gateway = FakeGateway(listed=(ALIAS, OTHER), infos=[model_info(ALIAS), model_info(OTHER)])
         self.requests: list[dict] = []

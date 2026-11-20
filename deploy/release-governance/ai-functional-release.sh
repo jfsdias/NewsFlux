@@ -12,7 +12,8 @@
 #   sudo -E bash ai-functional-release.sh s5-attestation-path   # prints $RELEASE_DIR/s5-key-attestation.json
 #   sudo python3 s5_key_audit.py ... --out "$(sudo -E bash ai-functional-release.sh s5-attestation-path)"
 #   sudo -E bash ai-functional-release.sh s5-preflight     # read-only LiteLLM key/model/price/budget/logging gates
-#   sudo -E bash ai-functional-release.sh enable-s5        # only after s5-preflight PASS (re-run internally)
+#   sudo -E bash ai-functional-release.sh d1-preflight     # D1 key-authority mode: cost-authority evidence gate (mode off: N/A)
+#   sudo -E bash ai-functional-release.sh enable-s5        # only after s5-preflight and d1-preflight PASS (re-run internally)
 #   sudo -E bash ai-functional-release.sh all              # prepare..smoke, stops at the first failed gate
 #   rollbacks: disable-s5 | rollback-reader | rollback-caddy | rollback-summary
 #
@@ -393,9 +394,17 @@ s5_preflight() {
   fi
 }
 
+d1_preflight() {
+  # D1-R6-01: with NEWSFLUX_AI_MODEL_AUTHORITY=litellm_key the cost authority needs fresh (<=24h) evidence built
+  # from the authorized executor's receipt and bound to the key the Summary holds. Mode off: prints
+  # D1_PREFLIGHT=NOT_APPLICABLE_LEGACY_CONTRACT and passes, so the legacy contract is unchanged.
+  docker exec "$(summary_container)" python -B -m services.article_intel_summary.cost_authority preflight
+}
+
 enable_s5() {
   require_source
   s5_preflight || die ENABLE_S5 S5_PREFLIGHT_NOT_PASS
+  d1_preflight || die ENABLE_S5 D1_PREFLIGHT_NOT_PASS
   local summary policy dir="$RELEASE_DIR/s5-enable"
   summary="$(summary_container)"
   [[ "$(image_revision "$(docker inspect -f '{{.Image}}' "$summary")")" == "$APPROVED_SHA" ]] || die ENABLE_S5 SUMMARY_NOT_ON_APPROVED_SHA
@@ -426,6 +435,7 @@ case "${1:-}" in
   smoke) smoke ;;
   s5-attestation-path) require_source; echo "$S5_KEY_ATTESTATION" ;;
   s5-preflight) s5_preflight ;;
+  d1-preflight) d1_preflight ;;
   enable-s5) enable_s5 ;;
   disable-s5) require_source; release_tool rollback --manifest "$RELEASE_DIR/s5-enable/manifest.json" ;;
   rollback-summary) require_source; release_tool rollback --manifest "$RELEASE_DIR/$SUMMARY_SERVICE/manifest.json" ;;

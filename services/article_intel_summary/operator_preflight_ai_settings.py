@@ -16,6 +16,7 @@ from pathlib import Path
 from services.article_intel_summary.admin_settings import (
     DEFAULT_ROOT, ManagedSettingsError, ManagedSettingsStore,
 )
+from services.article_intel_summary.cost_authority import preflight as cost_authority_preflight
 from services.article_intel_summary.litellm_adapter import _read_private_secret_file
 
 
@@ -84,6 +85,11 @@ def run(environ=None, *, check_gateway: bool = False, store_factory=ManagedSetti
         hold = True
     except Exception:
         lines.append("STORE=HOLD_UNVERIFIED")
+        hold = True
+    # D1-R6-01: key-authority mode needs bound, fresh cost-authority evidence; mode off is N/A (legacy contract).
+    d1_code, d1_lines = cost_authority_preflight(env)
+    lines.extend(line for line in d1_lines if line != "SECRET_PRINTED=NO")
+    if d1_code != 0:
         hold = True
     lines.append("SECRET_PRINTED=NO")
     lines.append("WRITES_PERFORMED=NO")

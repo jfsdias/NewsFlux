@@ -241,12 +241,37 @@ endpoint only) is unchanged and stays off by default.
 
 Contract: `docs/ops/NEWSFLUX_D1_LITELLM_AUTHORITY_CONTRACT.md` (#273). Not enabled anywhere.
 
-| Variable                                           | Meaning                                                                                                                                                                                                           |
-| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NEWSFLUX_AI_MODEL_AUTHORITY=litellm_key`          | the virtual key's own model listing is the catalog; no NewsFlux allowlist, no admin approval or policy writes (`MODEL_AUTHORITY_IS_LITELLM_KEY`), no prices anywhere                                              |
-| `NEWSFLUX_AI_LITELLM_COST_AUTHORITY`               | `gateway_budget_enforced` or `explicit_unlimited`; anything else is unknown                                                                                                                                       |
-| `NEWSFLUX_AI_LITELLM_COST_AUTHORITY_EVIDENCE_FILE` | evidence built by `python -m services.article_intel_summary.cost_authority build` from a complete read-only diagnostic receipt; bound to the key fingerprint, at most 7 days old, regular non-world-writable file |
+| Variable                                           | Meaning                                                                                                                                                                                                            |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `NEWSFLUX_AI_MODEL_AUTHORITY=litellm_key`          | the virtual key's own model listing is the catalog; no NewsFlux allowlist, no admin approval or policy writes (`MODEL_AUTHORITY_IS_LITELLM_KEY`), no prices anywhere                                               |
+| `NEWSFLUX_AI_LITELLM_COST_AUTHORITY`               | `gateway_budget_enforced` or `explicit_unlimited`; anything else is unknown                                                                                                                                        |
+| `NEWSFLUX_AI_LITELLM_COST_AUTHORITY_EVIDENCE_FILE` | evidence (schema v2) built as root on the host by `python -m services.article_intel_summary.cost_authority build` from the authorized executor's private receipt; root-owned, not group/other-writable, no symlink |
 
-Without matching, fresh evidence for the key the Summary holds, every model is `COST_AUTHORITY_UNPROVEN`. Key rotation
-or revocation invalidates the evidence. Rollback: remove `NEWSFLUX_AI_MODEL_AUTHORITY` (back to the operator-policy
-contract) or turn inference/external transfer off; both are configuration-only.
+### Cost-authority evidence (D1-R6-01)
+
+The declaration alone proves nothing. The evidence is re-validated on every catalog build and at release preflight:
+
+| Binding         | How                                                                                                                                                                                             |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Real capture    | built only from `/root/s5r3-exec.XXXXXXXX/run/receipt.txt` (0600, root) of the authorized read-only executor, at most 24 h after it was written; nothing about the capture comes from arguments |
+| Receipt         | whole receipt embedded; its SHA-256 recomputed; full contract re-validated: single success footer last, no HOLD/FAIL gate, no duplicate field, only known line shapes, admitted diagnostic HEAD |
+| Capture time    | `captured_at` = receipt mtime; runtime accepts 7 days, release preflight 24 hours; future dates refused                                                                                         |
+| Gateway / image | Summary container ID, image ID, live revision and LiteLLM version as printed by the receipt; the builder re-inspects the container (same ID, image, running) before reading the fingerprint     |
+| Key identity    | fingerprint (one-way) of the key the receipt's audit refers to, read inside that container; the runtime compares it with the key the catalog actually uses (managed key if present)             |
+| Owner decision  | `explicit_unlimited` only: owner decision text embedded with digest, pinned homeserver ledger URL (`blob/<40-hex>/ledger/decisions/…`), one marker line bound to the key prefix with an expiry  |
+
+Classifications: `GATEWAY_ENFORCEMENT_EVIDENCE` (key-level positive `max_budget`, recognized window, spend below, on a
+LiteLLM version whose enforcement was proven in the lab by `deploy/release-governance/rehearse-d1-budget-enforcement.sh`:
+1.109.1 and 1.110.0) and `EXPLICIT_UNLIMITED_AUTHORIZED`. A budget observed from a budget table or on an unproven version
+is `GATEWAY_POLICY_OBSERVED_ONLY` and does not admit. Everything else is `COST_AUTHORITY_UNPROVEN`.
+
+Release: `ai-functional-release.sh d1-preflight` (also re-run inside `enable-s5`) and `operator_preflight_ai_settings`
+print `D1_COST_AUTHORITY=...` and HOLD in key mode without fresh bound evidence. Mode off prints
+`D1_PREFLIGHT=NOT_APPLICABLE_LEGACY_CONTRACT` and changes nothing.
+
+Stated limits: root on the host is the trust anchor (no signing infrastructure). The virtual key cannot read its own
+policy, so a budget removed, a policy changed on the same key, or a revoked key is not visible to NewsFlux until the
+next capture; the evidence windows bound that, and any LiteLLM key edit requires a new capture (a revoked key also
+makes discovery fail, so nothing is offered). Key rotation, a managed key different from the audited one, or a
+replaced Summary container invalidates the evidence. Rollback: remove `NEWSFLUX_AI_MODEL_AUTHORITY` (back to the
+operator-policy contract) or turn inference/external transfer off; both are configuration-only.
