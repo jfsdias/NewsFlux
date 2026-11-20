@@ -46,6 +46,7 @@ from services.article_intel_summary.litellm_adapter import (
     MODEL_CHOICE_MISTRAL_SMALL,
     MODEL_CHOICE_S5_FREE,
     LiteLLMInferenceAdapter,
+    GATEWAY_COST_AUTHORITIES,
     LiteLLMSettings,
     S5MistralFallbackAdapter,
     _nonnegative_decimal,
@@ -102,6 +103,7 @@ _REASON_STATUS = {
     "NOT_COMPATIBLE": "UNSUPPORTED",
     "OPERATOR_APPROVAL_REQUIRED": "OPERATOR_APPROVAL_REQUIRED",
     "PAID_NOT_AUTHORIZED": "PAID_AUTHORIZATION_REQUIRED",
+    "COST_AUTHORITY_UNPROVEN": "DISABLED",
 }
 _NOT_AUTHORIZED_REASONS = frozenset({"PAID_NOT_AUTHORIZED", "OPERATOR_APPROVAL_REQUIRED"})
 
@@ -847,6 +849,17 @@ def create_model_router(
         snapshot = active_discovery.snapshot() if active_discovery is not None else DISABLED_SNAPSHOT
         entries: dict[str, CatalogEntry] = {}
         adapters: dict[str, object] = {}
+        if (active_values.get("NEWSFLUX_AI_MODEL_AUTHORITY") or "").strip() == KEY_AUTHORITY:
+            # D1 successor: the virtual key's own listing is the catalog; no NewsFlux allowlist is consulted.
+            if snapshot.status == "OK":
+                for alias in snapshot.listed[:MAX_CATALOG_MODELS]:
+                    entry, adapter = _evaluate_key_model(alias, snapshot, active_gateway, active_values, adapter_for_settings)
+                    entries[entry.model_id] = entry
+                    if adapter is not None:
+                        adapters[entry.model_id] = adapter
+            live_default = active_values.get("NEWSFLUX_AI_DEFAULT_MODEL_ID") or requested_default
+            default = live_default if live_default in adapters else None
+            return _State(entries, adapters, default, snapshot.status, "KEY_AUTHORITY")
         approved_aliases = set()
         for item in active_policy:
             entry, adapter = _evaluate(item, active_status, snapshot, active_gateway, active_values, adapter_for_settings)
@@ -958,6 +971,79 @@ def _evaluate(item: PolicyModel, policy_status: str, snapshot: DiscoverySnapshot
         gateway_max_input_tokens=gateway_model.max_input_tokens if gateway_model and discovered else None,
         gateway_max_output_tokens=gateway_model.max_output_tokens if gateway_model and discovered else None,
         provider_identity=identity,
+    )
+    return entry, adapter
+
+
+KEY_AUTHORITY = "litellm_key"
+GATEWAY_GOVERNED_PRICING = {"status": "gateway_governed", "input_usd_per_million": None, "output_usd_per_million": None}
+
+
+def _evaluate_key_model(alias: str, snapshot: DiscoverySnapshot, gateway: LiteLLMSettings, values, adapter_for_settings):
+    """One alias the virtual key lists, under the D1 successor contract.
+
+    Model authority = the key (no second allowlist). Cost authority = LiteLLM, but only when the operator
+    declares how (NEWSFLUX_AI_LITELLM_COST_AUTHORITY = gateway_budget_enforced | explicit_unlimited); a missing
+    or unknown declaration is not "unlimited" and fails closed. Capability, inference, external-transfer,
+    gateway and identity gates are unchanged; no price is read, stored or shown."""
+    model_id = discovered_model_id(alias)
+    gateway_model = (snapshot.info or {}).get(alias)
+    mode = gateway_model.mode if gateway_model is not None else None
+    compatible: bool | None = None if mode is None else mode == "chat"
+    declared = (values.get("NEWSFLUX_AI_LITELLM_COST_AUTHORITY") or "").strip()
+    cost_authority = declared if declared in GATEWAY_COST_AUTHORITIES else None
+    settings = replace(
+        gateway,
+        model_choice=model_id,
+        model_id=alias,
+        s5_free_model_alias=None,
+        mistral_small_model_alias=None,
+        input_price_usd_per_million=None,
+        output_price_usd_per_million=None,
+        monthly_budget_usd=None,
+        paid_inference_authorized=False,
+        max_output_tokens=_min_known(gateway.max_output_tokens, gateway_model.max_output_tokens if gateway_model else None),
+        operator_approved=True,   # approved by the key's own model scope
+        cost_authority=cost_authority or "unproven",
+    )
+    if not gateway.enabled:
+        reason = "INFERENCE_DISABLED"
+    elif not gateway.external_transfer_authorized:
+        reason = "EXTERNAL_TRANSFER_NOT_AUTHORIZED"
+    elif compatible is False:
+        reason = "NOT_COMPATIBLE"
+    elif compatible is None:
+        reason = "COMPATIBILITY_UNVERIFIED"
+    elif cost_authority is None:
+        reason = "COST_AUTHORITY_UNPROVEN"
+    elif not settings.is_ready():
+        reason = "NOT_CONFIGURED"
+    else:
+        reason = None
+    adapter = adapter_for_settings(model_id, settings) if reason is None else None
+    if reason is None and adapter is None:
+        reason = "RUNTIME_UNAVAILABLE"
+    entry = CatalogEntry(
+        model_id=model_id,
+        available=reason is None,
+        unavailable_reason=reason,
+        settings=settings,
+        label=alias[:_LABEL_MAX],
+        provider=(gateway_model.provider if gateway_model and gateway_model.provider else "LiteLLM"),
+        status="AVAILABLE" if reason is None else _REASON_STATUS[reason],
+        checks={
+            "discovered": True,
+            "compatible": compatible,
+            "operator_approved": True,
+            "pricing_verified": False,
+            "paid_authorized": False,
+            "transfer_authorized": bool(gateway.external_transfer_authorized),
+        },
+        pricing=dict(GATEWAY_GOVERNED_PRICING),
+        paid=False,
+        gateway_max_input_tokens=gateway_model.max_input_tokens if gateway_model else None,
+        gateway_max_output_tokens=gateway_model.max_output_tokens if gateway_model else None,
+        provider_identity=gateway_model.provider_identity if gateway_model else None,
     )
     return entry, adapter
 

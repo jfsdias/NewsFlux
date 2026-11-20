@@ -350,6 +350,7 @@
     "reason_PAID_NOT_AUTHORIZED": "有料推論が許可されていません",
     "reason_PRICE_NOT_VERIFIED": "価格未確認",
     "reason_RUNTIME_UNAVAILABLE": "一時的に利用不可",
+    "reason_COST_AUTHORITY_UNPROVEN": "LiteLLM のコスト管理が未確認",
     "reason_POLICY_INVALID": "モデルポリシーが無効です",
     "reason_TRANSFER_NOT_AUTHORIZED": "このモデルへの記事送信は許可されていません",
     "reason_DISCOVERY_DISABLED": "ゲートウェイで未確認",

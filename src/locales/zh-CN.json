@@ -350,6 +350,7 @@
     "reason_PAID_NOT_AUTHORIZED": "未授权付费推理",
     "reason_PRICE_NOT_VERIFIED": "价格未核实",
     "reason_RUNTIME_UNAVAILABLE": "暂时不可用",
+    "reason_COST_AUTHORITY_UNPROVEN": "LiteLLM 成本管控未确认",
     "reason_POLICY_INVALID": "模型策略无效",
     "reason_TRANSFER_NOT_AUTHORIZED": "未授权向此模型发送文章",
     "reason_DISCOVERY_DISABLED": "未经网关核实",

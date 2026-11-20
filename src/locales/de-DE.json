@@ -350,6 +350,7 @@
     "reason_PAID_NOT_AUTHORIZED": "Kostenpflichtige Inferenz nicht autorisiert",
     "reason_PRICE_NOT_VERIFIED": "Preis nicht verifiziert",
     "reason_RUNTIME_UNAVAILABLE": "Vorübergehend nicht verfügbar",
+    "reason_COST_AUTHORITY_UNPROVEN": "Kostenhoheit von LiteLLM nicht bestätigt",
     "reason_POLICY_INVALID": "Modellrichtlinie ungültig",
     "reason_TRANSFER_NOT_AUTHORIZED": "Artikelübertragung für dieses Modell nicht erlaubt",
     "reason_DISCOVERY_DISABLED": "Nicht mit dem Gateway geprüft",

@@ -350,6 +350,7 @@
     "reason_PAID_NOT_AUTHORIZED": "Inférence payante non autorisée",
     "reason_PRICE_NOT_VERIFIED": "Prix non vérifié",
     "reason_RUNTIME_UNAVAILABLE": "Temporairement indisponible",
+    "reason_COST_AUTHORITY_UNPROVEN": "Autorité des coûts LiteLLM non confirmée",
     "reason_POLICY_INVALID": "Politique de modèles invalide",
     "reason_TRANSFER_NOT_AUTHORIZED": "Transfert de l’article non autorisé pour ce modèle",
     "reason_DISCOVERY_DISABLED": "Non vérifié auprès de la passerelle",

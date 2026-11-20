@@ -184,7 +184,7 @@ class BudgetLedger:
         estimated_cost_usd: Decimal,
         input_tokens: int,
         output_tokens: int,
-        monthly_budget_usd: Decimal,
+        monthly_budget_usd: Decimal | None,
         requests_per_minute: int,
         tokens_per_minute: int,
         max_concurrent: int = 1,
@@ -195,9 +195,13 @@ class BudgetLedger:
             not isinstance(estimated_cost_usd, Decimal)
             or not estimated_cost_usd.is_finite()
             or estimated_cost_usd < 0
-            or not isinstance(monthly_budget_usd, Decimal)
-            or not monthly_budget_usd.is_finite()
-            or monthly_budget_usd <= 0
+            # None = LiteLLM is the cost authority (D1 successor): no local USD budget, and then the local
+            # estimate must be exactly zero. Request, token and concurrency limits below always apply.
+            or (monthly_budget_usd is None and estimated_cost_usd != 0)
+            or (monthly_budget_usd is not None and (
+                not isinstance(monthly_budget_usd, Decimal)
+                or not monthly_budget_usd.is_finite()
+                or monthly_budget_usd <= 0))
             or not _positive_int(input_tokens)
             or not _positive_int(output_tokens)
             or not _positive_int(requests_per_minute)
@@ -223,7 +227,7 @@ class BudgetLedger:
             for state, estimate, actual in monthly_rows:
                 amount = Decimal(actual) if state == "settled" and actual is not None else Decimal(estimate)
                 month_total += amount
-            if month_total + estimated_cost_usd > monthly_budget_usd:
+            if monthly_budget_usd is not None and month_total + estimated_cost_usd > monthly_budget_usd:
                 raise BudgetBlocked("monthly budget limit reached") from None
 
             minute_rows = connection.execute(

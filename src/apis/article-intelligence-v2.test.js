@@ -350,6 +350,53 @@ test("v2 catalog accepts gateway-discovered models without fixed identifiers", a
   }
 })
 
+test("D1 key-authority catalog: gateway-governed cost, no price shown, unproven cost authority blocked", async () => {
+  installFetchDispatcher()
+  const governed = {
+    status: "gateway_governed",
+    input_usd_per_million: null,
+    output_usd_per_million: null,
+  }
+  try {
+    fetchImplementation = async () =>
+      Response.json(
+        catalogV2({
+          default_model_id: "gw-aaaaaaaaaaaa",
+          policy: { status: "KEY_AUTHORITY" },
+          models: [
+            dynamicModel({
+              id: "gw-aaaaaaaaaaaa",
+              label: "acme-7b",
+              requires_paid_authorization: false,
+              checks: { ...dynamicModel().checks, pricing_verified: false, paid_authorized: false },
+              pricing: governed,
+              notices: ["ARTICLE_SENT_TO_MODEL_PROVIDER"],
+            }),
+            dynamicModel({
+              id: "gw-bbbbbbbbbbbb",
+              label: "other-13b",
+              status: "DISABLED",
+              available: false,
+              unavailable_reason: "COST_AUTHORITY_UNPROVEN",
+              requires_paid_authorization: false,
+              checks: { ...dynamicModel().checks, pricing_verified: false, paid_authorized: false },
+              pricing: governed,
+              notices: ["ARTICLE_SENT_TO_MODEL_PROVIDER"],
+            }),
+          ],
+        }),
+      )
+    const catalog = await fetchModelCatalog()
+    assert.ok(catalog, "the key-authority catalog must be accepted")
+    assert.equal(catalog.models[0].pricing.status, "gateway_governed")
+    assert.equal(resolveSummaryModel("gw-aaaaaaaaaaaa", catalog).modelId, "gw-aaaaaaaaaaaa")
+    assert.equal(catalog.models[1].unavailableReason, "COST_AUTHORITY_UNPROVEN")
+    assert.equal(resolveSummaryModel("gw-bbbbbbbbbbbb", catalog).reason, "model_unavailable")
+  } finally {
+    fetchImplementation = null
+  }
+})
+
 test("v2 catalog is rejected when malformed, inconsistent or oversized", async () => {
   installFetchDispatcher()
   const broken = [
