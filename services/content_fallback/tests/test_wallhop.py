@@ -278,6 +278,15 @@ class WallHopProviderTests(unittest.TestCase):
             provider.recover(entry(), assess_content("Research Update", "<p>Short feed teaser.</p>"))
         self.assertEqual(len(transport.calls), 2)
 
+    def test_network_unreachable_or_dns_failure_fails_closed_and_preserves_the_original(self) -> None:
+        # R4 C5 synthetic gaps: provider host unresolvable or network down, never a partial or substituted result.
+        for failure in ("dns_error", "connection_refused", "network_unreachable"):
+            transport = FakeTransport(FetchError(failure))
+            provider = WallHopProvider(http=transport.client(), sleep=lambda _seconds: None)
+            with self.assertRaises(RecoveryError, msg=failure):
+                provider.recover(entry(), assess_content("Research Update", "<p>Short feed teaser.</p>"))
+            self.assertLessEqual(len(transport.calls), 2, failure)
+
     def test_wallhop_unavailable_fails_closed_after_bounded_attempts(self) -> None:
         transport = FakeTransport(HTTPResponse(503, {"content-type": "text/plain"}, b"unavailable", ""))
         provider = WallHopProvider(http=transport.client(), sleep=lambda _seconds: None)
