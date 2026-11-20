@@ -1,0 +1,14 @@
+{
+ "commit": "d6dfa2c4eeb858cfba2f7af500ef8d2a37e32884",
+ "evidence_sums_sha256": "808915f9edca1033a83d09cf1f2e67977b8843aa8191e995877067ecc2be278c",
+ "producer_principal": "claude-producer",
+ "replay_principal": "claude-replayer",
+ "replay_sums_sha256": "b232b25d277aeaa5ce34e9db9f4ddfcff5c27a7976c35313db825b361e068edd",
+ "repository": "jfsdias/NewsFlux",
+ "reviewed_at": "2026-11-20T17:40:11Z",
+ "reviewer_principal": "claude-reviewer",
+ "schema": "newsflux.g2-local-approval/v1",
+ "scope": "S5_R3_OMV_READONLY_DIAGNOSTIC",
+ "tree": "65f58e65c5a8f97765482c39c42ad7f1e4d4a89b",
+ "verdict": "APPROVE_G2_LOCAL_DIAGNOSTIC_ONLY"
+}

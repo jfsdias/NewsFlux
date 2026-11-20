@@ -1,0 +1,57 @@
+{
+ "arch": "x86_64",
+ "compose": "5.7.1",
+ "docker": "client=29.10.0 server=29.10.0",
+ "docker_daemon_exclusive_before_run": true,
+ "git": "git version 2.43.0",
+ "images": {
+  "busybox:1.36.1": {
+   "id": "sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662",
+   "repo_digests": [
+    "busybox@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662"
+   ]
+  },
+  "caddy:2.10.2-alpine": {
+   "id": "sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d",
+   "repo_digests": [
+    "caddy@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d"
+   ]
+  },
+  "ghcr.io/berriai/litellm-database@sha256:eb7a0adff81ce89de44a8985d411b89d628f96d2dfb69e3d55eaf61dd4db143a": {
+   "id": "sha256:eb7a0adff81ce89de44a8985d411b89d628f96d2dfb69e3d55eaf61dd4db143a",
+   "repo_digests": [
+    "ghcr.io/berriai/litellm-database@sha256:eb7a0adff81ce89de44a8985d411b89d628f96d2dfb69e3d55eaf61dd4db143a"
+   ]
+  },
+  "litellm/litellm@sha256:11175975a3093e05e92faee2fe2fe3412a3ae2fcaa849eb0fe25d5f0d8bcb2e9": {
+   "id": "sha256:11175975a3093e05e92faee2fe2fe3412a3ae2fcaa849eb0fe25d5f0d8bcb2e9",
+   "repo_digests": [
+    "litellm/litellm@sha256:11175975a3093e05e92faee2fe2fe3412a3ae2fcaa849eb0fe25d5f0d8bcb2e9"
+   ]
+  },
+  "postgres@sha256:f377d590e5474681d4d7838635031a2b50647923b7abfa803ce9b5ff35d5c663": {
+   "id": "sha256:f377d590e5474681d4d7838635031a2b50647923b7abfa803ce9b5ff35d5c663",
+   "repo_digests": [
+    "postgres@sha256:f377d590e5474681d4d7838635031a2b50647923b7abfa803ce9b5ff35d5c663"
+   ]
+  },
+  "python:3.12-slim@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704": {
+   "id": "sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704",
+   "repo_digests": [
+    "python@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704",
+    "mirror.gcr.io/library/python@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704"
+   ]
+  }
+ },
+ "isolation": "disposable lab; synthetic data only; rehearsal networks are Docker --internal where the script uses them; no production host, no OMV, no real key",
+ "kernel": "6.18.44-fc-v726",
+ "os": "Linux-6.18.44-fc-v726-x86_64-with-glibc2.39",
+ "python": "Python 3.12.3",
+ "python_modules": "fastapi,httpx,yaml",
+ "run_id": "909eda2c20cb471bb68a900055371cbf",
+ "sandbox_adaptations": {
+  "HTTPS_PROXY": true,
+  "NEWSFLUX_TEST_PIP_CA": true
+ },
+ "schema": "newsflux.g2-local-evidence/v1"
+}
