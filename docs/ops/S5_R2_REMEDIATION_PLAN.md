@@ -470,3 +470,25 @@ caller. A collision with an existing name could therefore remove resources the r
 
 The read-only auditor increment, the image inventory and the lab equivalence procedure are on branch
 `claude/newsflux-s5-r3-readonly-increment` (`docs/ops/S5_R3_READONLY_INCREMENT.md`).
+
+## 13. Exact production image (S5-R3, disposable lab)
+
+This section updates 1.1. The operator's metadata-only inventory shows the production container runs
+image ID `sha256:95017a67…f5ab`, available as
+`ghcr.io/berriai/litellm-database@sha256:eb7a0adf…143a`.
+
+- **Same image:** the `linux/amd64` manifest's config digest equals that image ID, so the lab image
+  pulled by digest is the production image.
+- **Version:** the package is **LiteLLM 1.110.0**, not 1.109.1.
+- **Harness result:** against that exact image, this plan's key-policy harness passes **52/52**.
+  - The schema is identical (48 key and 13 permission columns).
+  - The 404 and 422 refusal contracts are unchanged.
+  - The reset falls on exactly the next month (2026-12-01T00:00Z), and the rollback equals the
+    prestate.
+  - With an object permission linked, the R1 gate stays `NOT_VERIFIED`.
+  - Every fault injection exits 1.
+- **Source:** `duration_parser.py` and the S5-relevant tables and permission functions are identical
+  to 1.109.1.
+- **What is still open:** image parity is proven, but runtime parity is not (caches, environment
+  overrides, egress, the real gateway's YAML and DB contents). Details are in
+  `docs/ops/S5_R3_READONLY_INCREMENT.md` §7 on branch `claude/newsflux-s5-r3-readonly-increment`.
