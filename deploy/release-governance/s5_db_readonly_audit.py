@@ -27,6 +27,7 @@ import hashlib
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 from collections.abc import Callable, Iterable, Mapping
@@ -75,6 +76,51 @@ REQUIRED_KEY_COLUMNS = ("token", "models", "blocked", "expires", "rpm_limit", "t
 # Absent in older versions: when the column does not exist, that mechanism cannot widen the key.
 OPTIONAL_INDIRECTION_COLUMNS = ("aliases", "router_settings", "team_id", "budget_id", "access_group_ids",
                                 "policies", "object_permission_id")
+
+# ---- S5-R3 read-only increment ------------------------------------------------------------------
+# Versions whose schema and semantics were rehearsed in the disposable lab. Anything else is reported
+# and keeps KEY_POLICY_GATE_R3 from PASS until it has been rehearsed.
+LAB_REHEARSED_VERSIONS = frozenset({"1.109.1"})
+# Every column of LiteLLM_VerificationToken in the rehearsed version (1.109.1). An extra column is an
+# unknown mechanism; a missing one is a different schema. Neither is ever presumed safe.
+R3_KNOWN_KEY_COLUMNS = (
+    "token", "key_name", "key_alias", "soft_budget_cooldown", "spend", "expires", "models", "aliases", "config",
+    "user_id", "team_id", "permissions", "max_parallel_requests", "metadata", "blocked", "tpm_limit", "rpm_limit",
+    "max_budget", "budget_duration", "budget_reset_at", "allowed_cache_controls", "model_spend", "model_max_budget",
+    "budget_id", "organization_id", "created_at", "created_by", "updated_at", "updated_by", "allowed_routes",
+    "object_permission_id", "auto_rotate", "key_rotation_at", "last_rotation_at", "rotation_count",
+    "rotation_interval", "project_id", "router_settings", "policies", "access_group_ids", "last_active", "agent_id",
+    "budget_limits", "budget_fallbacks", "key_type", "settings_updated_at", "tpd_limit", "total_spend",
+)
+# Extra columns read by R3, from a fixed allowlist. `key_name` (a key fragment) and `metadata` (free
+# form) are never selected; an unknown column is counted from information_schema, never read.
+R3_EXTRA_KEY_COLUMNS = ("key_alias", "budget_reset_at", "user_id", "organization_id", "project_id", "agent_id",
+                        "permissions", "config", "budget_fallbacks", "model_max_budget", "budget_limits", "tpd_limit",
+                        "max_parallel_requests", "key_type")
+# Mechanisms that can widen or redirect what the key may do (not evaluated: reported, R3 gate NOT_VERIFIED).
+R3_EXTRA_INDIRECTION = (("user_id", "USER"), ("organization_id", "ORGANIZATION"), ("project_id", "PROJECT"),
+                        ("agent_id", "AGENT"), ("permissions", "PERMISSIONS"), ("config", "CONFIG"),
+                        ("budget_fallbacks", "BUDGET_FALLBACKS"))
+# Mechanisms that only restrict further (reported for the record).
+R3_EXTRA_LIMITS = (("model_max_budget", "MODEL_MAX_BUDGET"), ("budget_limits", "BUDGET_LIMITS"),
+                   ("tpd_limit", "TPD_LIMIT"), ("max_parallel_requests", "MAX_PARALLEL_REQUESTS"))
+R3_KEY_TYPES = {"default": "DEFAULT", "llm_api": "LLM_API", "management": "MANAGEMENT", "read_only": "READ_ONLY"}
+OBJPERM_KNOWN_COLUMNS = ("object_permission_id", "mcp_servers", "vector_stores", "mcp_access_groups",
+                         "mcp_tool_permissions", "agents", "agent_access_groups", "blocked_tools", "models",
+                         "mcp_toolsets", "search_tools", "mcp_tool_search_enabled", "skills")
+OBJPERM_LIST_GRANTS = ("mcp_servers", "vector_stores", "mcp_access_groups", "agents", "agent_access_groups", "models",
+                       "mcp_toolsets", "search_tools", "skills")
+DURATION_PATTERN = re.compile(r"^(\d+)(s|m|h|d|w|mo)$")
+# Private prestate: an allowlist of policy fields only. Never token, key_name, metadata, config or
+# permissions; secret-looking values are redacted even inside allowed fields.
+PRESTATE_KEY_FIELDS = (
+    "key_alias", "models", "allowed_routes", "blocked", "expires", "rpm_limit", "tpm_limit", "max_budget",
+    "budget_duration", "budget_reset_at", "spend", "aliases", "router_settings", "team_id", "budget_id",
+    "access_group_ids", "policies", "object_permission_id", "agent_id", "user_id", "organization_id", "project_id",
+    "budget_fallbacks", "model_max_budget", "budget_limits", "tpd_limit", "max_parallel_requests", "key_type",
+)
+PRESTATE_FORMAT = "newsflux-s5-r3-private-prestate-v1"
+SECRET_LIKE = re.compile(r"^(?:sk-|os\.environ/)|://|^[0-9a-f]{64}$", re.IGNORECASE)
 
 Query = Callable[[str, tuple], list]
 
@@ -150,6 +196,17 @@ def classify_scope(models: Any, alias: str) -> str:
     return "EXTRA_MODELS" if alias in models else "OTHER_MODEL"
 
 
+def _effective_limits(row: Mapping[str, Any], budget_row: Mapping[str, Any] | None) -> tuple[dict[str, Any], str]:
+    limits = {name: row.get(name) for name in ("rpm_limit", "tpm_limit", "max_budget", "budget_duration")}
+    source = "KEY"
+    if row.get("budget_id") and budget_row:
+        for name in limits:
+            if limits[name] in (None, "") and budget_row.get(name) not in (None, ""):
+                limits[name] = budget_row.get(name)
+                source = "BUDGET_TABLE"
+    return limits, source
+
+
 def classify_key(row: Mapping[str, Any], alias: str, caps: Mapping[str, Any], now: datetime,
                  budget_row: Mapping[str, Any] | None) -> dict[str, str]:
     facts: dict[str, str] = {}
@@ -171,13 +228,7 @@ def classify_key(row: Mapping[str, Any], alias: str, caps: Mapping[str, Any], no
         routes = row.get("allowed_routes")
         facts["KEY_ROUTES"] = "PASS" if routes == sorted(APPROVED_ROUTES) else "FAIL"  # exactly, no duplicates
 
-    limits = {name: row.get(name) for name in ("rpm_limit", "tpm_limit", "max_budget", "budget_duration")}
-    source = "KEY"
-    if row.get("budget_id") and budget_row:
-        for name in limits:
-            if limits[name] in (None, "") and budget_row.get(name) not in (None, ""):
-                limits[name] = budget_row.get(name)
-                source = "BUDGET_TABLE"
+    limits, source = _effective_limits(row, budget_row)
     facts["KEY_LIMIT_SOURCE"] = source
 
     rpm, tpm = _positive_int(limits["rpm_limit"]), _positive_int(limits["tpm_limit"])
@@ -234,6 +285,263 @@ def classify_key(row: Mapping[str, Any], alias: str, caps: Mapping[str, Any], no
     else:
         facts["KEY_POLICY_GATE"] = "PASS"
     return facts
+
+
+# ---- S5-R3 classifiers (pure; enums and counts only) ----------------------------------------------
+def _finite(value: Any) -> float | None:
+    number = _number(value)
+    return number if number is not None and number == number and number not in (float("inf"), float("-inf")) else None
+
+
+def _rate_detail(value: Any, cap: Any) -> str:
+    if value is None or value == "":
+        return "MISSING"
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or (isinstance(value, float) and not value.is_integer()):
+        return "NON_INTEGER"  # same acceptance as the R1 _positive_int: integers (or integral floats) only
+    if value <= 0:
+        return "NONPOSITIVE"
+    cap = _positive_int(cap)
+    if cap is None:
+        return "APP_CAP_MISSING"
+    return "ABOVE_APP_CAP" if value > cap else "OK"
+
+
+def _duration_detail(value: Any) -> tuple[str, str | None]:
+    """(detail, cause). Mirrors LiteLLM's parser classes; a string it cannot parse falls back to a daily
+    reset in LiteLLM, so it is reported, never treated as the monthly window."""
+    if value is None:
+        return "MISSING", "BUDGET_DURATION_MISSING"
+    if not isinstance(value, str):
+        return "UNRECOGNIZED", "BUDGET_DURATION_INVALID_TYPE"
+    text = value.strip().lower()
+    if not text:
+        return "BLANK", "BUDGET_DURATION_BLANK"
+    match = DURATION_PATTERN.match(text)
+    if not match or int(match.group(1)) == 0:
+        return "UNRECOGNIZED", "BUDGET_DURATION_UNRECOGNIZED"
+    if text in ("30d", "1mo"):
+        return "CALENDAR_MONTH", None
+    if text == "1d":
+        return "DAILY", None
+    if text in ("7d", "1w"):
+        return "WEEKLY", None
+    return "OTHER_WINDOW", None
+
+
+def classify_budget_detail(limits: Mapping[str, Any], spend_value: Any, caps: Mapping[str, Any]) -> dict[str, str]:
+    """The exact cause(s) behind KEY_BUDGET; consistent with classify_key by construction."""
+    causes: list[str] = []
+    raw = limits.get("max_budget")
+    app = _finite(caps.get("budget"))
+    if app is None:
+        app_class = "MISSING" if caps.get("budget") in (None, "") else "INVALID"
+    else:
+        app_class = "PRESENT" if app > 0 else "INVALID"
+    if app_class != "PRESENT":
+        causes.append(f"APP_BUDGET_CAP_{app_class}")
+    max_budget = _finite(raw)
+    if raw is None or raw == "":
+        detail = "MISSING"
+    elif max_budget is None:
+        detail = "INVALID"
+    elif max_budget <= 0:
+        detail = "NONPOSITIVE"
+    elif app_class != "PRESENT":
+        detail = "APP_CAP_MISSING"
+    elif max_budget > app:
+        detail = "ABOVE_APP_CAP"
+    else:
+        detail = "OK"
+    if detail in ("MISSING", "INVALID", "NONPOSITIVE", "ABOVE_APP_CAP"):
+        causes.append(f"MAX_BUDGET_{detail}")
+    duration, duration_cause = _duration_detail(limits.get("budget_duration"))
+    if duration_cause:
+        causes.append(duration_cause)
+    spend = _number(spend_value)
+    if spend is not None and (spend != spend or spend < 0):
+        spend = None
+    if spend is None:
+        versus = "NOT_APPLICABLE"
+        causes.append("SPEND_UNKNOWN")
+    elif max_budget is None or max_budget <= 0:
+        versus = "NOT_APPLICABLE"
+        if max_budget is not None and spend >= max_budget:
+            causes.append("SPEND_AT_OR_ABOVE_MAX")
+    else:
+        versus = "AT_OR_ABOVE" if spend >= max_budget else "BELOW"
+        if versus == "AT_OR_ABOVE":
+            causes.append("SPEND_AT_OR_ABOVE_MAX")
+    return {"KEY_MAX_BUDGET": detail, "KEY_BUDGET_DURATION": duration, "KEY_SPEND_VS_MAX": versus,
+            "APP_BUDGET_CAP": app_class, "KEY_BUDGET_CAUSE": ",".join(sorted(set(causes))) or "NONE"}
+
+
+def classify_scope_token(models: Any) -> str:
+    if not isinstance(models, list):
+        return "NONE"
+    tokens = set()
+    for item in models:
+        if not isinstance(item, str):
+            continue
+        if item == "all-proxy-models":
+            tokens.add("ALL_PROXY_MODELS")
+        elif item == "all-team-models":
+            tokens.add("ALL_TEAM_MODELS")
+        elif item == "*":
+            tokens.add("STAR")
+        elif "*" in item:
+            tokens.add("CONTAINS_STAR")
+    return ",".join(sorted(tokens)) or "NONE"
+
+
+def _nonempty(value: Any) -> str | None:
+    """None when empty, "OK" for a recognized non-empty shape, "UNRECOGNIZED" otherwise."""
+    value = _json_value(value)
+    if value is None or value == "" or value == {} or value == [] or value is False:
+        return None
+    if isinstance(value, (dict, list)) or (isinstance(value, str) and value.strip()) or \
+            (isinstance(value, (int, float)) and not isinstance(value, bool)):
+        return "OK"
+    return "UNRECOGNIZED"
+
+
+def classify_extra_mechanisms(row: Mapping[str, Any], existing: Iterable[str]) -> dict[str, str]:
+    existing = set(existing)
+    widening, limiting = [], []
+    for column, label in R3_EXTRA_INDIRECTION:
+        state = _nonempty(row.get(column))
+        if column == "config" and state == "OK" and not isinstance(_json_value(row.get(column)), dict):
+            state = "UNRECOGNIZED"
+        if state:
+            widening.append(label if state == "OK" else f"{label}_UNRECOGNIZED")
+    for column, label in R3_EXTRA_LIMITS:
+        state = _nonempty(row.get(column))
+        if state:
+            limiting.append(label if state == "OK" else f"{label}_UNRECOGNIZED")
+    if "agent_id" not in existing:
+        agent = "COLUMN_ABSENT"
+    else:
+        agent = "PRESENT" if _nonempty(row.get("agent_id")) else "NONE"
+    key_type = row.get("key_type")
+    return {"KEY_EXTRA_INDIRECTION": ",".join(sorted(widening)) or "NONE",
+            "KEY_EXTRA_LIMITS": ",".join(sorted(limiting)) or "NONE",
+            "KEY_AGENT_ID": agent,
+            "KEY_TYPE": "NONE" if key_type in (None, "") else R3_KEY_TYPES.get(str(key_type).lower(), "OTHER")}
+
+
+def classify_schema(existing: Iterable[str], known: Iterable[str], prefix: str) -> dict[str, str]:
+    existing, known = set(existing), set(known)
+    unknown, missing = len(existing - known), len(known - existing)
+    compat = ("LAB_EXACT" if not unknown and not missing else "UNKNOWN_COLUMNS" if not missing
+              else "MISSING_COLUMNS" if not unknown else "UNKNOWN_AND_MISSING_COLUMNS")
+    return {f"{prefix}_SCHEMA_COLUMNS": str(len(existing)), f"{prefix}_SCHEMA_UNKNOWN_COLUMNS": str(unknown),
+            f"{prefix}_SCHEMA_MISSING_KNOWN": str(missing), f"{prefix}_SCHEMA_COMPAT": compat}
+
+
+def classify_version(version: Any) -> dict[str, str]:
+    if not isinstance(version, str) or not version:
+        return {"LITELLM_VERSION": "UNKNOWN", "LITELLM_VERSION_CLASS": "UNKNOWN"}
+    if not re.fullmatch(r"\d+\.\d+\.\d+", version):
+        return {"LITELLM_VERSION": "UNRECOGNIZED", "LITELLM_VERSION_CLASS": "UNKNOWN"}
+    return {"LITELLM_VERSION": version.replace(".", "_"),
+            "LITELLM_VERSION_CLASS": "LAB_REHEARSED" if version in LAB_REHEARSED_VERSIONS else "NOT_REHEARSED"}
+
+
+def classify_object_permission(linked: bool, rows: list | None, existing: Iterable[str]) -> dict[str, str]:
+    if not linked:
+        return {"OBJPERM_ROW": "NONE", "OBJPERM_EFFECTIVE": "NONE"}
+    existing = set(existing)
+    facts = {"OBJPERM_UNKNOWN_COLUMNS": str(len(existing - set(OBJPERM_KNOWN_COLUMNS))),
+             "OBJPERM_MISSING_COLUMNS": str(len(set(OBJPERM_KNOWN_COLUMNS) - existing))}
+    rows = rows or []
+    facts["OBJPERM_ROW"] = "PRESENT" if len(rows) == 1 else ("MISSING" if not rows else "MULTIPLE")
+    if facts["OBJPERM_ROW"] != "PRESENT":
+        facts["OBJPERM_EFFECTIVE"] = "UNKNOWN"
+        return facts
+    row = rows[0]
+    unrecognized = grants = 0
+    for column in (*OBJPERM_LIST_GRANTS, "blocked_tools"):
+        name = f"OBJPERM_{column.upper()}_COUNT"
+        if column not in existing:
+            facts[name] = "COLUMN_ABSENT"
+            continue
+        value = _json_value(row.get(column))
+        if value is None:
+            facts[name] = "0"
+        elif isinstance(value, list):
+            facts[name] = str(len(value))
+            grants += len(value) if column != "blocked_tools" else 0  # a deny list never grants
+        else:
+            facts[name] = "UNRECOGNIZED"
+            unrecognized += 1
+    if "mcp_tool_permissions" in existing:
+        value = _json_value(row.get("mcp_tool_permissions"))
+        if value is None:
+            facts["OBJPERM_MCP_TOOL_PERMISSIONS_COUNT"] = "0"
+        elif isinstance(value, dict):
+            facts["OBJPERM_MCP_TOOL_PERMISSIONS_COUNT"] = str(len(value))
+            grants += len(value)
+        else:
+            facts["OBJPERM_MCP_TOOL_PERMISSIONS_COUNT"] = "UNRECOGNIZED"
+            unrecognized += 1
+    if "mcp_tool_search_enabled" in existing:
+        value = row.get("mcp_tool_search_enabled")
+        facts["OBJPERM_MCP_TOOL_SEARCH_ENABLED"] = {True: "TRUE", False: "FALSE", None: "UNSET"}.get(value, "UNRECOGNIZED") \
+            if isinstance(value, (bool, type(None))) else "UNRECOGNIZED"
+        unrecognized += facts["OBJPERM_MCP_TOOL_SEARCH_ENABLED"] == "UNRECOGNIZED"
+        grants += facts["OBJPERM_MCP_TOOL_SEARCH_ENABLED"] == "TRUE"
+    facts["OBJPERM_UNRECOGNIZED_VALUES"] = str(unrecognized)
+    if unrecognized or facts["OBJPERM_UNKNOWN_COLUMNS"] != "0" or facts["OBJPERM_MISSING_COLUMNS"] != "0":
+        facts["OBJPERM_EFFECTIVE"] = "UNKNOWN"
+    else:
+        facts["OBJPERM_EFFECTIVE"] = "GRANTS_PRESENT" if grants else "EMPTY"
+    return facts
+
+
+def classify_r3_gate(facts: Mapping[str, str], linked_permission: bool) -> dict[str, str]:
+    """Stricter diagnostic gate. Never promotes: when the R1 gate is not PASS, R3 equals it."""
+    reasons = []
+    if facts.get("KEY_SCHEMA_COMPAT") != "LAB_EXACT":
+        reasons.append("SCHEMA_NOT_LAB_EXACT")
+    if facts.get("LITELLM_VERSION_CLASS") != "LAB_REHEARSED":
+        reasons.append("VERSION_NOT_REHEARSED")
+    if facts.get("KEY_EXTRA_INDIRECTION", "NONE") != "NONE":
+        reasons.append("EXTRA_INDIRECTION")
+    if facts.get("KEY_BUDGET_DURATION") == "UNRECOGNIZED":
+        reasons.append("DURATION_UNRECOGNIZED")
+    if linked_permission:
+        reasons.append("OBJECT_PERMISSION_LINKED")  # contract: never PASS while linked, even if EMPTY
+    r1 = facts.get("KEY_POLICY_GATE", "FAIL")
+    gate = r1 if r1 != "PASS" else ("NOT_VERIFIED" if reasons else "PASS")
+    return {"KEY_POLICY_GATE_R3": gate, "KEY_POLICY_GATE_R3_REASONS": ",".join(reasons) or "NONE"}
+
+
+def _redact(value: Any) -> Any:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, (bytes, bytearray)):
+        return "REDACTED"
+    if isinstance(value, str):
+        return "REDACTED" if SECRET_LIKE.search(value) else value
+    if isinstance(value, dict):
+        return {str(k): _redact(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_redact(v) for v in value]
+    if isinstance(value, (int, float, bool)) or value is None:
+        return value
+    return "REDACTED"
+
+
+def build_private_prestate(key_row: Mapping[str, Any], objperm_row: Mapping[str, Any] | None,
+                           budget_row: Mapping[str, Any] | None, *, fingerprint: str, version: Any,
+                           facts: Mapping[str, str], now: datetime) -> dict[str, Any]:
+    return {
+        "format": PRESTATE_FORMAT,
+        "binding": {"fingerprint": fingerprint, "key_match": "ONE", "litellm_version": version if isinstance(version, str) else None,
+                    "key_schema_compat": facts.get("KEY_SCHEMA_COMPAT"), "captured_at": now.isoformat()},
+        "key": {name: _redact(key_row.get(name)) for name in PRESTATE_KEY_FIELDS if name in key_row},
+        "object_permission": None if objperm_row is None else {k: _redact(objperm_row.get(k)) for k in OBJPERM_KNOWN_COLUMNS if k in objperm_row},
+        "budget": None if budget_row is None else {k: _redact(v) for k, v in budget_row.items()},
+    }
 
 
 def _provider_family(params: Mapping[str, Any]) -> str:
@@ -428,7 +736,8 @@ def classify_callbacks(settings: Iterable[Any], allowed: Iterable[str]) -> dict[
 
 
 def collect(query: Query, *, fingerprint: str, alias: str, caps: Mapping[str, Any], allowed_callbacks: Iterable[str],
-            now: datetime, yaml_config: Any, cost_map: Mapping[str, Any], yaml_status: str = "LOADED") -> dict[str, str]:
+            now: datetime, yaml_config: Any, cost_map: Mapping[str, Any], yaml_status: str = "LOADED",
+            version: Any = None, prestate_sink: dict | None = None) -> dict[str, str]:
     rows = query("SHOW transaction_read_only", ())
     first = rows[0] if rows else None
     value = next(iter(first.values())) if isinstance(first, dict) else (first[0] if first else None)
@@ -457,7 +766,10 @@ def collect(query: Query, *, fingerprint: str, alias: str, caps: Mapping[str, An
         raise ProbeError("DB_SCHEMA_UNSUPPORTED")
     present = [name for name in KEY_COLUMNS if name in existing]  # identifiers from a fixed allowlist only
     facts["KEY_SCHEMA"] = "FULL" if len(present) == len(KEY_COLUMNS) else "PARTIAL_OPTIONAL"
-    columns = ", ".join(f'"{name}"' for name in present)
+    facts.update(classify_schema(existing, R3_KNOWN_KEY_COLUMNS, "KEY"))   # S5-R3
+    facts.update(classify_version(version))                                # S5-R3
+    extra = [name for name in R3_EXTRA_KEY_COLUMNS if name in existing and name not in present]
+    columns = ", ".join(f'"{name}"' for name in (*present, *extra))
     # Exact, complete lookup inside Postgres: sha256(domain || token) = fingerprint over every row,
     # with no scan limit. LIMIT 2 only distinguishes one match from several.
     matches = query(
@@ -470,7 +782,8 @@ def collect(query: Query, *, fingerprint: str, alias: str, caps: Mapping[str, An
     facts["KEY_MATCH"] = "ONE" if len(matches) == 1 else ("NONE" if not matches else "MULTIPLE")
     key_row = matches[0] if len(matches) == 1 else None
     if key_row is None:
-        facts.update({"KEY_POLICY_GATE": "FAIL", "KEY_INDIRECTION": "NOT_EVALUATED"})
+        facts.update({"KEY_POLICY_GATE": "FAIL", "KEY_INDIRECTION": "NOT_EVALUATED",
+                      "KEY_POLICY_GATE_R3": "FAIL", "KEY_POLICY_GATE_R3_REASONS": "KEY_NOT_MATCHED"})
         key_facts: dict[str, str] = {}
     else:
         budget_row = None
@@ -480,6 +793,32 @@ def collect(query: Query, *, fingerprint: str, alias: str, caps: Mapping[str, An
             budget_row = budgets[0] if budgets else None
         key_facts = classify_key(key_row, alias, caps, now, budget_row)
         facts.update(key_facts)
+        # ---- S5-R3: causes, effective permissions, extra mechanisms, strict gate (read-only) ----
+        limits, _ = _effective_limits(key_row, budget_row)
+        facts.update(classify_budget_detail(limits, key_row.get("spend"), caps))
+        facts["KEY_RPM"] = _rate_detail(limits["rpm_limit"], caps.get("rpm"))
+        facts["KEY_TPM"] = _rate_detail(limits["tpm_limit"], caps.get("tpm"))
+        facts["KEY_SCOPE_TOKEN"] = classify_scope_token(key_row.get("models"))
+        facts.update(classify_extra_mechanisms(key_row, existing))
+        linked = bool(key_row.get("object_permission_id"))
+        perm_rows = None
+        if linked:
+            perm_existing = {row.get("column_name") for row in query(
+                "SELECT column_name FROM information_schema.columns WHERE table_name = %s", ("LiteLLM_ObjectPermissionTable",))}
+            perm_columns = [name for name in OBJPERM_KNOWN_COLUMNS if name in perm_existing]  # never an unknown column
+            perm_rows = []
+            if "object_permission_id" in perm_existing:
+                perm_rows = query(f'SELECT {", ".join(chr(34) + c + chr(34) for c in perm_columns)} '
+                                  'FROM "LiteLLM_ObjectPermissionTable" WHERE "object_permission_id" = %s LIMIT 2',
+                                  (key_row["object_permission_id"],))
+            facts.update(classify_object_permission(True, perm_rows, perm_existing))
+        else:
+            facts.update(classify_object_permission(False, None, ()))
+        facts.update(classify_r3_gate(facts, linked))
+        if prestate_sink is not None:
+            prestate_sink["PRIVATE_PRESTATE"] = build_private_prestate(
+                key_row, perm_rows[0] if perm_rows and len(perm_rows) == 1 else None, budget_row,
+                fingerprint=fingerprint, version=version, facts=facts, now=now)
 
     total = query('SELECT count(*) AS "count" FROM "LiteLLM_ProxyModelTable" WHERE "model_name" = %s', (alias,))
     total = int((total[0] or {}).get("count", -1)) if total and isinstance(total[0], dict) else -1
@@ -620,9 +959,19 @@ def _container_cost_map() -> dict:
     return {}
 
 
+def _container_version() -> Any:
+    """Installed package metadata only; litellm itself is never imported."""
+    try:
+        import importlib.metadata as metadata
+
+        return metadata.version("litellm")
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def probe_main(payload: Mapping[str, Any], *, query_factory: Callable[[], Any] = _psycopg_query_factory,
                yaml_loader: Callable[[], Any] = _container_yaml, cost_map_loader: Callable[[], Any] = _container_cost_map,
-               now: datetime | None = None) -> int:
+               now: datetime | None = None, version_loader: Callable[[], Any] = _container_version) -> int:
     def emit(document: Mapping[str, str]) -> None:
         print(json.dumps(dict(document), sort_keys=True))
 
@@ -639,9 +988,11 @@ def probe_main(payload: Mapping[str, Any], *, query_factory: Callable[[], Any] =
     try:
         loaded = yaml_loader()
         status, config = loaded if isinstance(loaded, tuple) else ("LOADED", loaded)
+        sink: dict | None = {} if payload.get("private_prestate") is True else None
         facts = collect(query, fingerprint=fingerprint, alias=alias, caps=payload.get("caps") or {},
                         allowed_callbacks=payload.get("allowed_callbacks") or [], now=now or datetime.now(timezone.utc),
-                        yaml_config=config, cost_map=cost_map_loader() or {}, yaml_status=status)
+                        yaml_config=config, cost_map=cost_map_loader() or {}, yaml_status=status,
+                        version=version_loader(), prestate_sink=sink)
         render(facts, container_identity="UNCHANGED")  # refuse to emit anything that is not an enum or a count
     except ProbeError as error:
         emit({"PROBE": str(error)})
@@ -656,6 +1007,8 @@ def probe_main(payload: Mapping[str, Any], *, query_factory: Callable[[], Any] =
                 close()
             except Exception:  # noqa: BLE001
                 pass
+    if sink and "PRIVATE_PRESTATE" in sink:  # opt-in only; the host writes it 0600 and prints its hash
+        emit({"PRIVATE_PRESTATE": sink["PRIVATE_PRESTATE"]})
     emit(facts)
     return 0
 
@@ -684,6 +1037,46 @@ PROBE_BOOTSTRAP = (
 SNAPSHOT_FORMAT = "{{.Id}} {{.Image}} {{.State.StartedAt}} {{.RestartCount}} {{.State.Status}}"
 
 
+def validate_prestate_path(path: str, *, euid: int) -> str | None:
+    """None when the path may receive the private prestate; otherwise a detail-free reason."""
+    if not isinstance(path, str) or not os.path.isabs(path):
+        return "NOT_ABSOLUTE"
+    parent = os.path.dirname(path)
+    try:
+        info = os.lstat(parent)
+    except OSError:
+        return "PARENT_INVALID"
+    if not stat.S_ISDIR(info.st_mode) or os.path.realpath(parent) != parent:
+        return "PARENT_INVALID"   # a symlink anywhere on the way could redirect the write
+    if info.st_uid != euid:
+        return "PARENT_NOT_OWNED"
+    if info.st_mode & 0o077:
+        return "PARENT_NOT_PRIVATE"
+    if os.path.lexists(path):
+        return "EXISTS"
+    return None
+
+
+def write_private_prestate(path: str, document: Mapping[str, Any]) -> str:
+    """Exclusive create, never follows a symlink, mode 0600, fsync. Returns the SHA-256 of the bytes."""
+    data = (json.dumps(document, sort_keys=True, indent=2) + "\n").encode("utf-8")
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    except OSError as error:
+        raise ProbeError("PRESTATE_WRITE_REFUSED") from error
+    try:
+        os.fchmod(fd, 0o600)
+        view = memoryview(data)
+        while view:
+            view = view[os.write(fd, view):]
+        os.fsync(fd)
+        if stat.S_IMODE(os.fstat(fd).st_mode) != 0o600:
+            raise ProbeError("PRESTATE_MODE_UNEXPECTED")
+    finally:
+        os.close(fd)
+    return hashlib.sha256(data).hexdigest()
+
+
 def _docker(argv: list[str], stdin: str | None = None) -> str:
     result = subprocess.run(argv, input=stdin, capture_output=True, text=True, timeout=60, check=False)
     if result.returncode != 0:
@@ -691,15 +1084,25 @@ def _docker(argv: list[str], stdin: str | None = None) -> str:
     return result.stdout
 
 
-def main(argv: list[str] | None = None, *, run: Callable[..., str] = _docker, euid: int | None = None) -> int:
+def main(argv: list[str] | None = None, *, run: Callable[..., str] = _docker, euid: int | None = None,
+         prestate_owner: int | None = None) -> int:
     parser = argparse.ArgumentParser(description="S5-R1 read-only LiteLLM DB/config diagnostic (operator only).")
     parser.add_argument("--litellm-container")
     parser.add_argument("--project", default=os.environ.get("NEWSFLUX_PROJECT", "newsflux"))
     parser.add_argument("--summary-service", default=os.environ.get("NEWSFLUX_SUMMARY_SERVICE", "summary-api"))
+    parser.add_argument("--private-prestate", metavar="ABSOLUTE_PATH",
+                        help="S5-R3, opt-in: write a redacted policy prestate (0600, root-only 0700 parent); prints its SHA-256 only")
     args = parser.parse_args(argv)
     if (os.geteuid() if euid is None else euid) != 0:
         print("S5R1_AUDIT=HOLD_NOT_ROOT")
         return 2
+    prestate_path = args.private_prestate
+    if prestate_path is not None:  # refused before any docker call
+        owner = prestate_owner if prestate_owner is not None else (os.geteuid() if euid is None else euid)
+        problem = validate_prestate_path(prestate_path, euid=owner)
+        if problem:
+            print(f"S5R3_PRIVATE_PRESTATE=HOLD_{problem}")
+            return 2
     try:
         summary = run(["docker", "ps", "-q", "--filter", f"label=com.docker.compose.project={args.project}",
                        "--filter", f"label=com.docker.compose.service={args.summary_service}"]).split()
@@ -730,12 +1133,24 @@ def main(argv: list[str] | None = None, *, run: Callable[..., str] = _docker, eu
             raise ProbeError("SUMMARY_KEY_UNAVAILABLE")
         with open(os.path.abspath(__file__), encoding="utf-8") as handle:
             source = handle.read()
-        stdin = json.dumps(summary_info) + "\n" + source  # alias + fingerprint on stdin only, never argv
+        request = dict(summary_info, private_prestate=prestate_path is not None)
+        stdin = json.dumps(request) + "\n" + source  # alias + fingerprint on stdin only, never argv
         raw = run(["docker", "exec", "-i", litellm_id, "python3", "-B", "-c", PROBE_BOOTSTRAP], stdin=stdin)
         after = run(["docker", "inspect", "-f", SNAPSHOT_FORMAT, summary_id, litellm_id])
-        facts = json.loads(raw.strip().splitlines()[-1]) if raw.strip() else {}
+        output = raw.strip().splitlines()
+        facts = json.loads(output[-1]) if output else {}
         if not isinstance(facts, dict):
             raise ProbeError("PROBE_OUTPUT_UNSAFE")
+        prestate = None
+        for extra in output[:-1]:
+            try:
+                document = json.loads(extra)
+            except ValueError:
+                continue
+            if isinstance(document, dict) and "PRIVATE_PRESTATE" in document:
+                if prestate_path is None or prestate is not None:
+                    raise ProbeError("PROBE_OUTPUT_UNSAFE")  # never accept raw policy values unrequested
+                prestate = document["PRIVATE_PRESTATE"]
         if "PROBE" in facts:
             code = facts["PROBE"] if isinstance(facts["PROBE"], str) and SAFE_NAME.match(facts["PROBE"]) else "UNSAFE"
             raise ProbeError("PROBE_" + code)
@@ -751,6 +1166,22 @@ def main(argv: list[str] | None = None, *, run: Callable[..., str] = _docker, eu
     if before != after:
         print("S5R1_AUDIT=HOLD_CONTAINER_STATE_CHANGED")
         return 3
+    if prestate_path is not None:
+        binding = prestate.get("binding") if isinstance(prestate, dict) else None
+        if (facts.get("KEY_MATCH") != "ONE" or not isinstance(binding, dict)
+                or binding.get("fingerprint") != summary_info.get("fingerprint")):
+            print("S5R3_PRIVATE_PRESTATE=NOT_WRITTEN")
+            print("S5R1_AUDIT=HOLD_PRIVATE_PRESTATE_NOT_WRITTEN")
+            return 2
+        binding.update(litellm_container=litellm_id, container_snapshot_sha256=hashlib.sha256(before.encode()).hexdigest())
+        try:
+            digest = write_private_prestate(prestate_path, prestate)
+        except ProbeError as error:
+            print("S5R3_PRIVATE_PRESTATE=NOT_WRITTEN")
+            print(f"S5R1_AUDIT=HOLD_{error}")
+            return 2
+        print("S5R3_PRIVATE_PRESTATE=WRITTEN")
+        print(f"S5R3_PRIVATE_PRESTATE_SHA256={digest}")
     print("S5R1_AUDIT=COMPLETE_DIAGNOSTIC_ONLY")
     print("NEXT=evidence for PM review only; S5_PREFLIGHT is unchanged (no official attestation produced)")
     return 0
