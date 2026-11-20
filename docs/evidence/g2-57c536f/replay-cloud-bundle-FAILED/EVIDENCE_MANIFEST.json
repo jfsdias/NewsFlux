@@ -1,0 +1,29 @@
+{
+ "bound_files": {
+  "auditor": "6e5bef4ed383e43b16264ce4a94bd82ad5f4b0523b1bbf2b57e7576490f14d11",
+  "executor": "159c5aacf18d3dc9ca9b231bb1254b3148ba81ee5c11e5f88a9c5446fe37652e",
+  "test_manifest": "81665feb6aa785418658c7f2f79b4798d429087d5937b8c31b5efb553df38b89",
+  "verifier": "348ecb578e88655f2a22b8301642767a8e0bbe1872c090117b974c66d6799f83",
+  "workflow": "8d6714043cd53ca432a93d6f68e8414a4be81ba5ff459a002c8e0382f366f049",
+  "wrapper": "baceed699d2148799815d8dd253030c64aafda6e8a63c121cd79a122cffb2831"
+ },
+ "bundle_files": {
+  "ENVIRONMENT_PROVENANCE.json": "7861295b14fa909136b1087a4a98e4baf65c52ddaf19520ad72eb4a640c50be2",
+  "REPLAY_INSTRUCTIONS.md": "ed93b142b8ccd7b40bfacf35a6015ec503b84b5411237ab295330117efd40dc6",
+  "SANITIZED_RECEIPT.txt": "6fa48c22084a9fde8a915155eb697f0375e48af8c9c1c475fbad9a1f2fd3bccf",
+  "TEST_RESULTS.json": "ef5c764d26f014a473f912dec5469412d95acd32eb71837e1005466fe294135e"
+ },
+ "clean_checkout": true,
+ "commit": "57c536fb583a52bb42a88d9a1b051869abc64b1f",
+ "completed": true,
+ "finished_at": "2026-11-20T19:24:08Z",
+ "interrupted": false,
+ "logs": "private; kept outside the bundle by the producer; per-step SHA-256 in TEST_RESULTS.json",
+ "principal": "newsflux-g2-replayer-cloud",
+ "repository": "jfsdias/NewsFlux",
+ "role": "REPLAY",
+ "run_id": "489b0afdac9741b38f438a24d1216f58",
+ "schema": "newsflux.g2-local-evidence/v1",
+ "started_at": "2026-11-20T18:58:08Z",
+ "tree": "884e7b84a66d386bd79782c0fb335a94f107dd04"
+}
