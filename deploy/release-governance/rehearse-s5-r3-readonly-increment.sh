@@ -102,7 +102,7 @@ cleanup() {
         [[ -n "$id" ]] || continue
         owner="$(owner_of "$kind" "$id")" || owner=""
         if [[ "$owner" != "$nonce" ]]; then echo "S5R3 CLEANUP_OWNERSHIP=FAIL ($kind ${id:0:12} not removed)"; status=1; continue; fi
-        if [[ "$kind" == container ]]; then docker rm -f "$id" >/dev/null 2>&1 || status=1; else docker network rm "$id" >/dev/null 2>&1 || status=1; fi
+        if [[ "$kind" == container ]]; then docker rm -f -v "$id" >/dev/null 2>&1 || status=1; else docker network rm "$id" >/dev/null 2>&1 || status=1; fi
         if [[ "$kind" == container ]]; then remaining="$(docker ps -a -q --no-trunc --filter "id=$id")" || remaining="?"
         else remaining="$(docker network ls -q --no-trunc --filter "id=$id")" || remaining="?"; fi
         if [[ -z "$remaining" ]]; then echo "S5R3 CLEANUP_${kind^^}_ABSENT=PASS (${id:0:12})"; else echo "S5R3 CLEANUP_${kind^^}_ABSENT=FAIL (${id:0:12})"; status=1; fi
@@ -143,7 +143,7 @@ ownership_test() {
   if [[ "$code" != 0 ]] && grep -q 'OWNED_CONTAINER=' <<<"$out" && grep -q 'S5R3 CLEANUP=PASS' <<<"$out" && [[ -n "$(docker ps -a -q --filter "id=$bystander")" ]] \
      && [[ "$( { docker ps -a -q --filter "label=$RUN_LABEL=s5r3-owntest-b"; docker network ls -q --filter "label=$RUN_LABEL=s5r3-owntest-b"; } | wc -l)" == 1 ]]; then
     echo "S5R3 OWN_PARTIAL_CREATION_OWNED_ONLY=PASS"; else echo "S5R3 OWN_PARTIAL_CREATION_OWNED_ONLY=FAIL"; printf '%s\n' "$out"; failed=1; fi
-  docker rm -f "$decoy" "$bystander" >/dev/null 2>&1 || failed=1
+  docker rm -f -v "$decoy" "$bystander" >/dev/null 2>&1 || failed=1
   docker network rm "$decoy_net" >/dev/null 2>&1 || failed=1
   rm -rf -- "$sandbox"
   if [[ "$failed" == 0 ]]; then echo "S5R3_OWNERSHIP_TEST=PASS"; else echo "S5R3_OWNERSHIP_TEST=FAIL"; fi

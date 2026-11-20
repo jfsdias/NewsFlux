@@ -35,7 +35,7 @@ cleanup() {
   local status=0 id ids
   if [[ "$docker_used" == 1 ]]; then
     ids="$(docker ps -a -q --no-trunc --filter "label=$OWNER=$nonce")" || status=1
-    for id in $ids; do docker rm -f "$id" >/dev/null 2>&1 || status=1; done
+    for id in $ids; do docker rm -f -v "$id" >/dev/null 2>&1 || status=1; done
     ids="$(docker network ls -q --no-trunc --filter "label=$OWNER=$nonce")" || status=1
     for id in $ids; do docker network rm "$id" >/dev/null 2>&1 || status=1; done
     ids="$(docker image ls -q --no-trunc --filter "label=$OWNER=$nonce")" || status=1
@@ -120,7 +120,7 @@ chown -R 10001:10001 "$secrets"
 
 summary_id=""
 start_summary() { # $@ extra docker run args (flag environment)
-  if [[ -n "$summary_id" ]]; then docker rm -f "$summary_id" >/dev/null; fi
+  if [[ -n "$summary_id" ]]; then docker rm -f -v "$summary_id" >/dev/null; fi
   summary_id="$(docker run -d --name "$run-summary" --label "$OWNER=$nonce" --label "com.docker.compose.project=$run-proj" \
     --label com.docker.compose.service=summary-api --network "$net" --read-only --cap-drop ALL --tmpfs /tmp \
     -v "$secrets:/run/secrets/litellm:ro" -e NEWSFLUX_AI_LITELLM_BASE_URL=https://litellm.invalid \

@@ -28,7 +28,7 @@ fail=0
 ok() { echo "S5_DB_AUDIT $1=PASS"; pass=$((pass + 1)); }
 ko() { echo "S5_DB_AUDIT $1=FAIL"; fail=$((fail + 1)); }
 cleanup() {
-  docker rm -f "$run-litellm" "$run-pg" "$run-summary" "$run-noyaml" "$run-rootlist" "$run-badyaml" >/dev/null 2>&1 || true
+  docker rm -f -v "$run-litellm" "$run-pg" "$run-summary" "$run-noyaml" "$run-rootlist" "$run-badyaml" >/dev/null 2>&1 || true
   docker network rm "$net" >/dev/null 2>&1 || true
   sudo -n rm -rf "$work" 2>/dev/null || rm -rf "$work" 2>/dev/null || true
 }
@@ -133,7 +133,7 @@ for case in "noyaml NOT_FOUND" "rootlist INVALID_ROOT" "badyaml UNREADABLE"; do
     ko "YAML_${2}_NEVER_PASSES"; echo "$out"
   fi
 done
-docker rm -f "$run-noyaml" "$run-rootlist" "$run-badyaml" >/dev/null 2>&1 || true
+docker rm -f -v "$run-noyaml" "$run-rootlist" "$run-badyaml" >/dev/null 2>&1 || true
 
 # -B: the probes above wrote no bytecode inside the real LiteLLM container (the source is exec'd from
 # stdin, and -B blocks caching of anything it imports).
@@ -193,7 +193,7 @@ summary() { # $1 key value, $2 inference flag; starts a Summary container labell
   chmod 0400 "$secrets/key"
   # Owned by the Summary uid (10001); a non-root CI runner needs sudo (same as rehearse-s5-key-gate.sh).
   sudo -n chown -R 10001:10001 "$secrets" 2>/dev/null || chown -R 10001:10001 "$secrets"
-  docker rm -f "$run-summary" >/dev/null 2>&1 || true
+  docker rm -f -v "$run-summary" >/dev/null 2>&1 || true
   docker run -d --name "$run-summary" --label "com.docker.compose.project=$run-proj" \
     --label com.docker.compose.service=summary-api --network "$net" --read-only --cap-drop ALL \
     -v "$secrets:/run/secrets/litellm:ro" -e NEWSFLUX_AI_LITELLM_BASE_URL=https://litellm.invalid \
@@ -229,7 +229,7 @@ has "$out" S5R1_KEY_POLICY_GATE=FAIL && has "$out" S5R1_KEY_SCOPE_DETAIL=UNRESTR
 summary "$LP" true
 out="$(host)"
 [[ "$out" == "S5R1_AUDIT=HOLD_AI_FLAGS_NOT_OFF" ]] && ok HOST_REFUSES_WITH_INFERENCE_ON || { ko HOST_REFUSES_WITH_INFERENCE_ON; echo "$out"; }
-docker rm -f "$run-summary" >/dev/null 2>&1 || true
+docker rm -f -v "$run-summary" >/dev/null 2>&1 || true
 docker image rm "$run-summary:synthetic" >/dev/null 2>&1 || true
 
 echo "S5_DB_AUDIT_PASSED=$pass S5_DB_AUDIT_FAILED=$fail"

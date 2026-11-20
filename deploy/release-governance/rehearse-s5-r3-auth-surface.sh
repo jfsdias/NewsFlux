@@ -31,7 +31,7 @@ cleanup() {
   local status=0 id ids
   if [[ "$docker_used" == 1 ]]; then
     ids="$(docker ps -a -q --no-trunc --filter "label=$OWNER_LABEL=$nonce")" || status=1
-    for id in $ids; do docker rm -f "$id" >/dev/null 2>&1 || status=1; done
+    for id in $ids; do docker rm -f -v "$id" >/dev/null 2>&1 || status=1; done
     ids="$(docker network ls -q --no-trunc --filter "label=$OWNER_LABEL=$nonce")" || status=1
     for id in $ids; do docker network rm "$id" >/dev/null 2>&1 || status=1; done
     [[ "$( { docker ps -a -q --filter "label=$OWNER_LABEL=$nonce"; docker network ls -q --filter "label=$OWNER_LABEL=$nonce"; } | wc -l)" == 0 ]] || status=1
