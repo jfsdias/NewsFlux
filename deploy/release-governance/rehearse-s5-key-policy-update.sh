@@ -17,7 +17,16 @@
 #       wrong_target     the update sends rpm 6 while the target asserts 5
 #       neg_401          the negative calls use a wrong master key (auth error, not the refusal)
 #       skip_rollback    the final rollback is not performed
-#       cleanup          cleanup also tries to remove a network that does not exist
+#       cleanup          cleanup also tries to remove an owned-looking network ID that does not exist
+#       partial_create   network + Postgres created, then the run fails before LiteLLM exists
+#       partial_start    the LiteLLM container is created but cannot start (bad entrypoint)
+#   bash rehearse-s5-key-policy-update.sh --ownership-test   # S5-R3 Docker ownership tests (Docker only)
+#
+# Ownership (S5-R3): every run has a unique run ID and a random nonce that never appears in a name.
+# Names must not exist before the run (else FAIL, nothing created, nothing removed). Every created
+# resource carries the labels org.newsflux.s5r2c.run=<run> and org.newsflux.s5r2c.owner=<nonce>, and its
+# full ID is recorded. Cleanup removes only resources whose owner label equals this run's nonce, by ID,
+# never by name; a run that fails before creating anything issues no Docker removal at all.
 #
 # Coverage (R2C-01): every column of LiteLLM_VerificationToken is classified (secret identity, target,
 # derived, bookkeeping, invariant); an unknown or missing column fails. Every column of the linked
@@ -37,15 +46,22 @@ PG_IMAGE="postgres@sha256:f377d590e5474681d4d7838635031a2b50647923b7abfa803ce9b5
 AUDITOR_REV="${S5R1_AUDITOR_REV:-3822e09850b3984dd8143b0782e2451aac2530b9}"
 AUDITOR_SHA256="f200fbc743f79994171770ecf282ccc1708da2b07030d907aafd3caea52d8c80"
 FAULT="${S5R2C_FAULT:-}"
-run="${S5R2C_RUN_ID:-s5r2c-$$}"
+nonce="$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"   # ownership proof; never part of a name
+run="${S5R2C_RUN_ID:-s5r2c-$(date -u +%Y%m%d%H%M%S)-${nonce:0:6}}"
 net="$run-net"
+RUN_LABEL="org.newsflux.s5r2c.run"
+OWNER_LABEL="org.newsflux.s5r2c.owner"
+owned_containers=()
+owned_networks=()
+pg_id=""
+litellm_id=""
 work=""
 work_ok=0
 docker_used=0
 rc=0
 
-if [[ ! "$run" =~ ^s5r2c-[a-z0-9-]+$ ]]; then
-  echo "S5R2C RUN_ID=FAIL (unexpected run id)"
+if [[ ! "$run" =~ ^s5r2c-[a-z0-9-]+$ || ! "$nonce" =~ ^[0-9a-f]{16}$ ]]; then
+  echo "S5R2C RUN_ID=FAIL (unexpected run id or nonce)"
   exit 1
 fi
 
@@ -551,20 +567,84 @@ absent() {
   return 1
 }
 
+preflight_names() {
+  # S5-R3: refuse to start when any name this run would use already exists (never adopt it).
+  local ok=0 name kind state
+  for name in "container:$run-pg" "container:$run-litellm" "network:$net"; do
+    kind="${name%%:*}"
+    absent "$kind" "${name#*:}" && state=0 || state=$?
+    if [[ "$state" == 0 ]]; then
+      echo "S5R2C OWNERSHIP_NAME_FREE=PASS ($kind ${name#*:})"
+    else
+      echo "S5R2C OWNERSHIP_PREEXISTING=FAIL ($kind ${name#*:} already exists or cannot be verified; nothing created or removed)"
+      ok=1
+    fi
+  done
+  return "$ok"
+}
+
+record_owned() {
+  # $1 = container|network, $2 = full ID returned by docker. Only a 64-hex ID is ever recorded.
+  if [[ ! "$2" =~ ^[0-9a-f]{64}$ ]]; then echo "S5R2C OWNERSHIP_RECORD=FAIL ($1)"; return 1; fi
+  if [[ "$1" == container ]]; then owned_containers+=("$2"); else owned_networks+=("$2"); fi
+  echo "S5R2C INFO OWNED_${1^^}=${2:0:12} ($RUN_LABEL=$run, $OWNER_LABEL=<nonce>)"
+}
+
+owner_of() {
+  # $1 = container|network, $2 = ID -> prints the owner label value, or fails when it cannot be read.
+  if [[ "$1" == container ]]; then
+    docker inspect --format "{{index .Config.Labels \"$OWNER_LABEL\"}}" "$2" 2>/dev/null
+  else
+    docker network inspect --format "{{index .Labels \"$OWNER_LABEL\"}}" "$2" 2>/dev/null
+  fi
+}
+
+run_owned() {
+  # $1 = role (pg|litellm), rest = docker run arguments after the name. Records the ID, including a
+  # container that docker created but could not start (partial creation), found by name AND nonce.
+  local role="$1" id
+  shift
+  if id="$(docker run -d --name "$run-$role" --label "$RUN_LABEL=$run" --label "$OWNER_LABEL=$nonce" "$@")"; then
+    record_owned container "$id"
+    printf -v "${role}_id" '%s' "$id"
+    return 0
+  fi
+  id="$(docker ps -a -q --no-trunc --filter "label=$OWNER_LABEL=$nonce" --filter "name=^/$run-$role\$")" || id=""
+  if [[ -n "$id" ]]; then record_owned container "$id" || true; fi
+  return 1
+}
+
 cleanup() {
-  local status=0 resource state
-  if [[ "$docker_used" == 1 ]] || docker info >/dev/null 2>&1; then
-    for resource in "$run-litellm" "$run-pg"; do
-      docker rm -f "$resource" >/dev/null 2>&1 || true   # exit 0 even when missing: absence is verified below
-      absent container "$resource"; state=$?
-      if [[ "$state" == 0 ]]; then echo "S5R2C CLEANUP_CONTAINER_ABSENT=PASS ($resource)"; else echo "S5R2C CLEANUP_CONTAINER_ABSENT=FAIL ($resource, state $state)"; status=1; fi
-    done
-    if absent network "$net"; then :; else docker network rm "$net" >/dev/null 2>&1 || status=1; fi
-    if [[ "$FAULT" == cleanup ]]; then docker network rm "$run-does-not-exist" >/dev/null 2>&1 || status=1; fi
-    absent network "$net"; state=$?
-    if [[ "$state" == 0 ]]; then echo "S5R2C CLEANUP_NETWORK_ABSENT=PASS ($net)"; else echo "S5R2C CLEANUP_NETWORK_ABSENT=FAIL ($net, state $state)"; status=1; fi
-  elif [[ "$docker_used" == 1 ]]; then
+  local status=0 id owner kind ids remaining
+  if [[ "$docker_used" != 1 ]]; then
+    echo "S5R2C INFO CLEANUP_DOCKER=NOT_NEEDED (no Docker resource was created; no removal issued)"
+  elif ! docker info >/dev/null 2>&1; then
     echo "S5R2C CLEANUP_DOCKER_VERIFY=FAIL (docker unavailable after resources were created)"; status=1
+  else
+    for kind in container network; do
+      # Recorded IDs plus anything carrying this run's nonce (a creation that failed half-way).
+      if [[ "$kind" == container ]]; then
+        ids="$(docker ps -a -q --no-trunc --filter "label=$OWNER_LABEL=$nonce")" || { status=1; ids=""; }
+        ids="$(printf '%s\n' $ids "${owned_containers[@]}" | sort -u)"
+      else
+        ids="$(docker network ls -q --no-trunc --filter "label=$OWNER_LABEL=$nonce")" || { status=1; ids=""; }
+        ids="$(printf '%s\n' $ids "${owned_networks[@]}" | sort -u)"
+        if [[ "$FAULT" == cleanup ]]; then ids="$(printf '%s\n' $ids 0000000000000000000000000000000000000000000000000000000000000000)"; fi
+      fi
+      for id in $ids; do
+        [[ -n "$id" ]] || continue
+        owner="$(owner_of "$kind" "$id")" || owner=""
+        if [[ "$owner" != "$nonce" ]]; then
+          echo "S5R2C CLEANUP_OWNERSHIP=FAIL ($kind ${id:0:12}: owner label not this run's nonce; not removed)"; status=1; continue
+        fi
+        if [[ "$kind" == container ]]; then docker rm -f "$id" >/dev/null 2>&1 || status=1; else docker network rm "$id" >/dev/null 2>&1 || status=1; fi
+        if [[ "$kind" == container ]]; then remaining="$(docker ps -a -q --no-trunc --filter "id=$id")" || remaining="unverifiable"
+        else remaining="$(docker network ls -q --no-trunc --filter "id=$id")" || remaining="unverifiable"; fi
+        if [[ -z "$remaining" ]]; then echo "S5R2C CLEANUP_${kind^^}_ABSENT=PASS (${id:0:12})"; else echo "S5R2C CLEANUP_${kind^^}_ABSENT=FAIL (${id:0:12})"; status=1; fi
+      done
+    done
+    remaining="$( { docker ps -a -q --filter "label=$OWNER_LABEL=$nonce"; docker network ls -q --filter "label=$OWNER_LABEL=$nonce"; } 2>/dev/null | wc -l)" || remaining=1
+    if [[ "$remaining" == 0 ]]; then echo "S5R2C CLEANUP_OWNED_REMAINING=PASS (0)"; else echo "S5R2C CLEANUP_OWNED_REMAINING=FAIL ($remaining)"; status=1; fi
   fi
   if [[ "$work_ok" == 1 ]]; then
     rm -rf -- "$work" || status=1
@@ -630,8 +710,80 @@ self_test() {
   return "$failed"
 }
 
+ownership_test() {
+  # S5-R3: real Docker tests of the ownership guard. Decoys are created by this test, identified by
+  # their IDs, and removed by ID at the end; the harness under test must never touch them.
+  local sandbox failed=0 out code id decoys=() decoy_nets=() case_run
+  docker info >/dev/null 2>&1 || { echo "S5R2C OWNERSHIP_TEST=FAIL (docker unavailable)"; return 1; }
+  sandbox="$(mktemp -d "${TMPDIR:-/tmp}/s5r2c-owntest.XXXXXXXX")"
+  [[ -n "$sandbox" && -d "$sandbox" && ! -L "$sandbox" ]] || { echo "S5R2C OWNERSHIP_TEST=FAIL (sandbox)"; return 1; }
+  child() { # $1 run id, $2 fault -> sets out, code
+    out="$(TMPDIR="$sandbox" S5R2C_RUN_ID="$1" S5R2C_FAULT="$2" bash "$self" 2>&1)" && code=0 || code=$?
+  }
+  exists_id() { # $1 container|network, $2 id -> 0 when the resource still exists
+    if [[ "$1" == container ]]; then [[ -n "$(docker ps -a -q --no-trunc --filter "id=$2")" ]]; else [[ -n "$(docker network ls -q --no-trunc --filter "id=$2")" ]]; fi
+  }
+  verdict() { # $1 name, $2 0|1
+    if [[ "$2" == 0 ]]; then echo "S5R2C $1=PASS"; else echo "S5R2C $1=FAIL"; printf '%s\n' "$out" | sed 's/^/    /'; failed=1; fi
+  }
+  label_count() { # $1 run id -> containers + networks carrying that run label
+    { docker ps -a -q --filter "label=$RUN_LABEL=$1"; docker network ls -q --filter "label=$RUN_LABEL=$1"; } | wc -l
+  }
+
+  # 1) R3 RED reproduced: a setup failure before any creation, with decoys holding this run's names.
+  case_run="s5r2c-owntest-early"
+  decoys+=("$(docker create --name "$case_run-pg" "$PG_IMAGE")"); decoy_nets+=("$(docker network create "$case_run-net")")
+  child "$case_run" setup_mktemp
+  [[ "$code" != 0 ]] && grep -q 'CLEANUP_DOCKER=NOT_NEEDED' <<<"$out" && ! grep -q 'OWNED_' <<<"$out" \
+    && exists_id container "${decoys[-1]}" && exists_id network "${decoy_nets[-1]}"
+  verdict R3_EARLY_FAILURE_NEVER_REMOVES_DECOYS $?
+
+  # 2) Container name collision: refuse, create nothing, remove nothing.
+  case_run="s5r2c-owntest-ccol"
+  decoys+=("$(docker create --name "$case_run-litellm" "$PG_IMAGE")")
+  child "$case_run" ""
+  [[ "$code" != 0 ]] && grep -q 'OWNERSHIP_PREEXISTING=FAIL (container' <<<"$out" && grep -q 'CLEANUP_DOCKER=NOT_NEEDED' <<<"$out" \
+    && ! grep -q 'OWNED_' <<<"$out" && exists_id container "${decoys[-1]}" && [[ "$(label_count "$case_run")" == 0 ]]
+  verdict R3_CONTAINER_COLLISION_REFUSED $?
+
+  # 3) Network name collision: same, the decoy network survives.
+  case_run="s5r2c-owntest-ncol"
+  decoy_nets+=("$(docker network create "$case_run-net")")
+  child "$case_run" ""
+  [[ "$code" != 0 ]] && grep -q 'OWNERSHIP_PREEXISTING=FAIL (network' <<<"$out" && grep -q 'CLEANUP_DOCKER=NOT_NEEDED' <<<"$out" \
+    && exists_id network "${decoy_nets[-1]}" && [[ "$(label_count "$case_run")" == 0 ]]
+  verdict R3_NETWORK_COLLISION_REFUSED $?
+
+  # 4) Partial creation: network + Postgres owned and removed by ID; a bystander carrying the same RUN
+  #    label but another owner nonce (and another name) survives.
+  case_run="s5r2c-owntest-part"
+  decoys+=("$(docker create --name "$case_run-bystander" --label "$RUN_LABEL=$case_run" --label "$OWNER_LABEL=00000000deadbeef" "$PG_IMAGE")")
+  child "$case_run" partial_create
+  [[ "$code" != 0 ]] && grep -q 'OWNED_NETWORK=' <<<"$out" && grep -q 'OWNED_CONTAINER=' <<<"$out" \
+    && grep -q 'S5R2C CLEANUP_OWNED_REMAINING=PASS' <<<"$out" && grep -q 'S5R2C CLEANUP=PASS' <<<"$out" \
+    && exists_id container "${decoys[-1]}" && [[ "$(label_count "$case_run")" == 1 ]]
+  verdict R3_PARTIAL_CREATION_OWNED_ONLY $?
+
+  # 5) Created-but-not-started container: adopted by name AND nonce, then removed.
+  case_run="s5r2c-owntest-start"
+  child "$case_run" partial_start
+  [[ "$code" != 0 ]] && [[ "$(grep -c 'OWNED_CONTAINER=' <<<"$out")" == 2 ]] && grep -q 'S5R2C CLEANUP=PASS' <<<"$out" \
+    && [[ "$(label_count "$case_run")" == 0 ]]
+  verdict R3_CREATED_NOT_STARTED_ADOPTED_AND_REMOVED $?
+
+  for id in "${decoys[@]}"; do docker rm -f "$id" >/dev/null 2>&1 || failed=1; done
+  for id in "${decoy_nets[@]}"; do docker network rm "$id" >/dev/null 2>&1 || failed=1; done
+  rm -rf -- "$sandbox"
+  if [[ "$failed" == 0 ]]; then echo "S5R2C_OWNERSHIP_TEST=PASS"; else echo "S5R2C_OWNERSHIP_TEST=FAIL"; fi
+  return "$failed"
+}
+
 if [[ "${1:-}" == "--self-test" ]]; then
   self_test
+  exit $?
+fi
+if [[ "${1:-}" == "--ownership-test" ]]; then
+  ownership_test
   exit $?
 fi
 
@@ -686,29 +838,35 @@ if [[ "$LITELLM_IMAGE" != *@sha256:* || ! "$manifest_digest" =~ ^sha256:[0-9a-f]
 fi
 echo "S5R2C LAB_IMAGE_PINNED=PASS"
 
+# ---- S5-R3: ownership guard; nothing is created or removed unless every name is free ---------------
+preflight_names
 docker_used=1
-docker network create "$net" >/dev/null
-docker run -d --name "$run-pg" --network "$net" -e POSTGRES_PASSWORD=synthetic -e POSTGRES_DB=litellm "$PG_IMAGE" >/dev/null
+net_id="$(docker network create --label "$RUN_LABEL=$run" --label "$OWNER_LABEL=$nonce" "$net")"
+record_owned network "$net_id"
+run_owned pg --network "$net" -e POSTGRES_PASSWORD=synthetic -e POSTGRES_DB=litellm "$PG_IMAGE"
 ready=0
 for _ in $(seq 1 30); do
-  if docker exec "$run-pg" pg_isready -q -U postgres >/dev/null 2>&1; then ready=1; break; fi
+  if docker exec "$pg_id" pg_isready -q -U postgres >/dev/null 2>&1; then ready=1; break; fi
   sleep 1
 done
 if [[ "$ready" != 1 ]]; then echo "S5R2C SETUP_STEP=FAIL (postgres not ready)"; exit 1; fi
-docker run -d --name "$run-litellm" --network "$net" -e LITELLM_MASTER_KEY="$MASTER" -e LITELLM_LOCAL_MODEL_COST_MAP=True \
+if [[ "$FAULT" == partial_create ]]; then echo "S5R2C SETUP_STEP=FAIL (injected partial creation)"; exit 1; fi
+entry=()
+if [[ "$FAULT" == partial_start ]]; then entry=(--entrypoint /s5r2c-nonexistent-entrypoint); fi
+run_owned litellm --network "$net" "${entry[@]}" -e LITELLM_MASTER_KEY="$MASTER" -e LITELLM_LOCAL_MODEL_COST_MAP=True \
   -e DATABASE_URL="postgresql://postgres:synthetic@$run-pg:5432/litellm" -v "$work/config.yaml:/app/config.yaml:ro" \
-  "$LITELLM_IMAGE" --config /app/config.yaml --port 4000 >/dev/null
+  "$LITELLM_IMAGE" --config /app/config.yaml --port 4000
 ready=0
 for _ in $(seq 1 120); do
-  if docker exec "$run-litellm" python3 -B -c 'import urllib.request;urllib.request.urlopen("http://127.0.0.1:4000/health/liveliness",timeout=2)' >/dev/null 2>&1; then ready=1; break; fi
+  if docker exec "$litellm_id" python3 -B -c 'import urllib.request;urllib.request.urlopen("http://127.0.0.1:4000/health/liveliness",timeout=2)' >/dev/null 2>&1; then ready=1; break; fi
   sleep 2
 done
 if [[ "$ready" != 1 ]]; then echo "S5R2C SETUP_STEP=FAIL (litellm not ready)"; exit 1; fi
 
 local_image_id="$(docker image inspect --format '{{.Id}}' "$LITELLM_IMAGE")"
 repo_digests="$(docker image inspect --format '{{join .RepoDigests " "}}' "$LITELLM_IMAGE")"
-container_image_id="$(docker inspect --format '{{.Image}}' "$run-litellm")"
-version="$(docker exec "$run-litellm" python3 -B -c 'import importlib.metadata as m; print(m.version("litellm"))' 2>/dev/null)" || version=""
+container_image_id="$(docker inspect --format '{{.Image}}' "$litellm_id")"
+version="$(docker exec "$litellm_id" python3 -B -c 'import importlib.metadata as m; print(m.version("litellm"))' 2>/dev/null)" || version=""
 echo "S5R2C INFO LAB_MANIFEST_DIGEST=$manifest_digest (registry manifest digest from the pinned reference)"
 echo "S5R2C INFO LAB_LOCAL_IMAGE_ID=$local_image_id (local Docker image ID; a different identifier type)"
 echo "S5R2C INFO LAB_LITELLM_PACKAGE_VERSION=${version:-UNAVAILABLE} (expected $expected_version)"
@@ -719,6 +877,6 @@ if [[ -n "$local_image_id" && "$container_image_id" == "$local_image_id" ]]; the
 if python3 -B "$work/probe.py" --version-gate "$version" "$expected_version"; then echo "S5R2C LAB_LITELLM_VERSION_APPROVED=PASS"; else echo "S5R2C LAB_LITELLM_VERSION_APPROVED=FAIL"; prov_ok=0; fi
 if [[ "$prov_ok" != 1 ]]; then exit 1; fi
 
-docker cp "$work/probe.py" "$run-litellm:/tmp/probe.py" >/dev/null
-docker cp "$auditor" "$run-litellm:/tmp/s5_audit.py" >/dev/null
-docker exec -i "$run-litellm" python3 -B /tmp/probe.py "$MASTER" "$FAULT" || rc=1
+docker cp "$work/probe.py" "$litellm_id:/tmp/probe.py" >/dev/null
+docker cp "$auditor" "$litellm_id:/tmp/s5_audit.py" >/dev/null
+docker exec -i "$litellm_id" python3 -B /tmp/probe.py "$MASTER" "$FAULT" || rc=1

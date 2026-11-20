@@ -58,8 +58,11 @@ on 2026-11-17 that this dedicated key is meant to reach the models of the admin-
   never `all-proxy-models`). This requires a **revised `S5_KEY_GATE` contract and preflight change**,
   with its own PR, TDD and PM review. It is out of scope here.
 
-**Status: `D1=OPEN` (owner + PM).** This plan makes no recommendation and does not choose
-automatically. The trade-off is only recorded: D1-A needs no contract change but removes every other
+**Status: `D1=OWNER_OPEN`.** This plan does not choose automatically. PM recommendation (comment
+7038526448): **D1-B**, an explicit admin allowlist with no wildcard. It must keep model discovery
+separate from approval for inference, cost, consent and fallback, and must allow no auto-approval and
+no automatic fallback that bypasses S5. The owner has not decided. No S5 contract or `s5_preflight.py`
+change happens before that decision, and it would come in its own PR. The trade-off is only recorded: D1-A needs no contract change but removes every other
 model from this key; D1-B keeps the admin-approved catalog but needs a new contract and a separate
 functional PR. **Neither option authorizes a key update.** Section 3.1 describes the D1-A target only
 because it is the policy the current contract can verify; it is used if, and only if, `GO_D1_SCOPE`
@@ -421,3 +424,49 @@ future intervention only as a pre-check run against the production image's diges
 the owner supplies privately (`PRODUCTION_SEMANTICS=UNVERIFIED` until then). It authorizes no write.
 `D1=OPEN`. `KEY_POLICY_GATE` stays `NOT_VERIFIED` while the object permission is linked.
 `S5_PREFLIGHT=BLOCKED` and `S5_ACTIVATION=NO_GO` are unchanged.
+
+## 12. S5-R3 pre-replay ownership guard (PM comment 7038526448)
+
+The PM found that cleanup addressed resources **by name** and that `S5R2C_RUN_ID` can be set by the
+caller. A collision with an existing name could therefore remove resources the run did not create.
+
+- **RED:** reproduced against `988b072`. A decoy container and a decoy network were created under
+  this run's names, with no labels. A run that failed before creating anything (`setup_mktemp`) still
+  removed both, and reported `CLEANUP=PASS`.
+- **Fix, in `rehearse-s5-key-policy-update.sh` only:**
+  - **Unique run:** each run has a unique ID (UTC timestamp plus nonce) and a random 16-hex nonce
+    that never appears in a name.
+  - **Names checked first:** the run refuses to start if any name it would use already exists
+    (`OWNERSHIP_PREEXISTING=FAIL`). In that case nothing is created and nothing is removed.
+  - **Labels and IDs:** every created resource carries `org.newsflux.s5r2c.run=<run>` and
+    `org.newsflux.s5r2c.owner=<nonce>`. Its full ID is recorded (`OWNED_*`), and later
+    `exec`/`cp`/`inspect` calls use that ID, not the name.
+  - **Owned-only cleanup:** cleanup removes only resources whose owner label equals this run's nonce,
+    by ID. It also finds a container that was created but never started, by name **and** nonce. It
+    verifies each one is absent, then that nothing with the nonce remains.
+  - **Unowned resources:** any resource that is not owned is reported (`CLEANUP_OWNERSHIP=FAIL`) and
+    never removed.
+  - **No early removal:** a run that fails before creating anything issues **no** Docker removal
+    (`CLEANUP_DOCKER=NOT_NEEDED`).
+- **Tests (`--ownership-test`, real Docker), 5/5 PASS:**
+  - decoys survive an early failure;
+  - a container name collision is refused;
+  - a network name collision is refused;
+  - with a partial creation, only owned resources are removed, and a bystander with the same run
+    label but another nonce survives;
+  - a container that was created but could not start is adopted and removed.
+- **Regression:** `--self-test` PASS, full rehearsal 52/52 PASS with owned IDs recorded and verified
+  absent, and the `cleanup` fault exits 1 without touching an unowned ID.
+
+**Scope of the guarantees (PM note):**
+
+- **Bounded comparisons:** the harness compares a bounded set of fields, columns and rows in the lab
+  image's schema. It does not guarantee arbitrary runtime behaviour, caches, environment overrides or
+  egress.
+- **`policies`:** in this image the field is gated to LiteLLM Enterprise. It is compared, but only
+  its null value is exercised through the API.
+- **Not an attestation:** none of this is a production attestation, and `PRODUCTION_PARITY` stays
+  `UNVERIFIED`.
+
+The read-only auditor increment, the image inventory and the lab equivalence procedure are on branch
+`claude/newsflux-s5-r3-readonly-increment` (`docs/ops/S5_R3_READONLY_INCREMENT.md`).
