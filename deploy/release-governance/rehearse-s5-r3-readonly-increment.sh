@@ -18,8 +18,13 @@ set -Eeuo pipefail
 umask 022
 here="$(cd "$(dirname "$0")" && pwd)"
 self="$here/$(basename "$0")"
-LITELLM_IMAGE="litellm/litellm@sha256:11175975a3093e05e92faee2fe2fe3412a3ae2fcaa849eb0fe25d5f0d8bcb2e9"
-LITELLM_VERSION="1.109.1"
+DEFAULT_LITELLM_IMAGE="litellm/litellm@sha256:11175975a3093e05e92faee2fe2fe3412a3ae2fcaa849eb0fe25d5f0d8bcb2e9"
+# Another image (e.g. the exact production digest) only by @sha256 and with its expected version.
+LITELLM_IMAGE="${S5R3_LITELLM_IMAGE:-$DEFAULT_LITELLM_IMAGE}"
+if [[ "$LITELLM_IMAGE" == "$DEFAULT_LITELLM_IMAGE" ]]; then LITELLM_VERSION="1.109.1"; else LITELLM_VERSION="${S5R3_EXPECTED_LITELLM_VERSION:-}"; fi
+if [[ ! "$LITELLM_IMAGE" =~ @sha256:[0-9a-f]{64}$ || ! "$LITELLM_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "S5R3 LAB_IMAGE_PINNED=FAIL (digest-pinned image and S5R3_EXPECTED_LITELLM_VERSION required)"; exit 1
+fi
 PG_IMAGE="postgres@sha256:f377d590e5474681d4d7838635031a2b50647923b7abfa803ce9b5ff35d5c663"
 FAULT="${S5R3_FAULT:-}"
 nonce="$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
@@ -264,10 +269,15 @@ check("ABOVE_CAPS_EXACT", (f.get("KEY_MAX_BUDGET"), f.get("KEY_RPM"), f.get("KEY
       ("ABOVE_APP_CAP", "ABOVE_APP_CAP", "OK", "MAX_BUDGET_ABOVE_APP_CAP"), json.dumps({k: f.get(k) for k in ("KEY_MAX_BUDGET", "KEY_RPM", "KEY_BUDGET_CAUSE")}))
 f, _ = probe(keys["clean"])
 check("CLEAN_SCHEMA_LAB_EXACT", (f.get("KEY_SCHEMA_COMPAT"), f.get("KEY_SCHEMA_COLUMNS")) == ("LAB_EXACT", "48"), f.get("KEY_SCHEMA_COMPAT"))
-check("CLEAN_VERSION_REHEARSED", (f.get("LITELLM_VERSION"), f.get("LITELLM_VERSION_CLASS")) == (version.replace(".", "_"), "LAB_REHEARSED"))
+rehearsed = version in audit.LAB_REHEARSED_VERSIONS
+check("CLEAN_VERSION_CLASS", (f.get("LITELLM_VERSION"), f.get("LITELLM_VERSION_CLASS")) ==
+      (version.replace(".", "_"), "LAB_REHEARSED" if rehearsed else "NOT_REHEARSED"), f.get("LITELLM_VERSION_CLASS"))
 check("CLEAN_EXTRA_NONE", (f.get("KEY_EXTRA_INDIRECTION"), f.get("KEY_EXTRA_LIMITS"), f.get("KEY_AGENT_ID")) == ("NONE", "NONE", "NONE"),
       json.dumps({k: f.get(k) for k in ("KEY_EXTRA_INDIRECTION", "KEY_EXTRA_LIMITS", "KEY_TYPE")}))
-check("CLEAN_R1_AND_R3_PASS", (f.get("KEY_POLICY_GATE"), f.get("KEY_POLICY_GATE_R3"), f.get("KEY_BUDGET_CAUSE")) == ("PASS", "PASS", "NONE"),
+# A version not yet in LAB_REHEARSED_VERSIONS must keep R3 at NOT_VERIFIED for that reason alone.
+expected_r3 = ("PASS", "NONE") if rehearsed else ("NOT_VERIFIED", "VERSION_NOT_REHEARSED")
+check("CLEAN_R1_PASS_AND_R3_AS_EXPECTED", (f.get("KEY_POLICY_GATE"), f.get("KEY_POLICY_GATE_R3"), f.get("KEY_POLICY_GATE_R3_REASONS"),
+      f.get("KEY_BUDGET_CAUSE")) == ("PASS", *expected_r3, "NONE"),
       json.dumps({k: f.get(k) for k in ("KEY_POLICY_GATE", "KEY_POLICY_GATE_R3", "KEY_POLICY_GATE_R3_REASONS")}))
 f, _ = probe(keys["budgetrow"])
 check("BUDGET_TABLE_SOURCE", (f.get("KEY_LIMIT_SOURCE"), f.get("KEY_MAX_BUDGET"), f.get("KEY_BUDGET_DURATION"), f.get("KEY_BUDGET_CAUSE")) ==
@@ -320,7 +330,7 @@ subprocess.run(["docker", "exec", pg_id, "psql", "-q", "-U", "postgres", "-d", "
                 'ALTER TABLE "LiteLLM_VerificationToken" ADD COLUMN "s5r3_unknown_mechanism" text'], check=True, capture_output=True)
 f, _ = probe(keys["clean"])
 check("SCHEMA_DRIFT_BLOCKS_R3", (f.get("KEY_SCHEMA_COMPAT"), f.get("KEY_SCHEMA_UNKNOWN_COLUMNS"), f.get("KEY_POLICY_GATE"), f.get("KEY_POLICY_GATE_R3")) ==
-      ("UNKNOWN_COLUMNS", "1", "PASS", "NOT_VERIFIED"))
+      ("UNKNOWN_COLUMNS", "1", "PASS", "NOT_VERIFIED") and "SCHEMA_NOT_LAB_EXACT" in f.get("KEY_POLICY_GATE_R3_REASONS", ""))
 
 # Every probe output is render-safe and contains no key, hash, fingerprint, alias, URL or DSN.
 secrets = [master, ALIAS, "s5.invalid", "postgresql://", "synthetic-"] + [k for k in keys.values()]

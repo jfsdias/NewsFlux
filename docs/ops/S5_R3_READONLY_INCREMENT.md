@@ -198,3 +198,60 @@ or `s5_preflight.py` change happens before the owner decides. Neither option aut
 5. **Owner decision on D1.**
 
 `S5_PREFLIGHT=BLOCKED` and `S5_ACTIVATION=NO_GO` are unchanged.
+
+## 7. Exact production image in the disposable lab (GO-NEWSFLUX-S5-R3-EXACT-IMAGE-LAB)
+
+Authorized for the disposable lab only, with synthetic keys and database. Nothing ran on OMV beyond
+the owner's metadata-only inventory.
+
+**Inventory (operator, metadata only):**
+
+- container `09650c4573154471943d576a4a2429ac3c7a3f5fecb2e132a5444be51789e50b`, unchanged during the read;
+- reference `ghcr.io/berriai/litellm-database:main-latest` (a moving tag);
+- image ID `sha256:95017a6781a986878745e4577172c9f5e74a060d5311491ce452bd9015d2f5ab`;
+- `RepoDigests` `ghcr.io/berriai/litellm-database@sha256:eb7a0adff81ce89de44a8985d411b89d628f96d2dfb69e3d55eaf61dd4db143a`;
+- `linux/amd64`, created 2026-11-12T01:45:36Z;
+- no OCI version label.
+
+**Equivalence, proven twice (before and after the pull):**
+
+- the index digest above resolves to the `linux/amd64` manifest `sha256:afaa1463…f538`;
+- that manifest's **config digest is `sha256:95017a67…f5ab`, exactly the production image ID**;
+- the lab pulled it **by digest** (never by tag).
+
+**Package version:** read in a `--network none` container with `python3 -B -I`
+(`importlib.metadata`). It is **`1.110.0`**, not 1.109.1.
+
+**Revalidation for 1.110.0.** Behaviour, through both lab harnesses against the exact image:
+
+| Run                                                                                                                  | Result                                                                                                                                                                                                                                                                                                                                                     | Exit |
+| -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| Key-policy harness (plan branch `7811f80`), `LITELLM_IMAGE=<exact digest>`, `S5R2C_EXPECTED_LITELLM_VERSION=1.110.0` | **52/52 PASS**. Schema 48 key / 13 permission columns, none unknown or missing; all 18 auditor columns compared; 404 `not_found_error` / 422 `int_parsing` refusals with state unchanged; partial rollback detected; reset exactly 2026-12-01T00:00Z; rollback equal to the prestate; R1 gate `NOT_VERIFIED` with the permission linked and `PASS` without | 0    |
+| Increment rehearsal, `S5R3_LITELLM_IMAGE=<exact digest>`, `S5R3_EXPECTED_LITELLM_VERSION=1.110.0`                    | **29/29 PASS**. Budget causes, RPM/TPM, permission counts as stored, extra mechanisms, private prestate, schema drift. A clean key gives R1 `PASS` and **R3 `NOT_VERIFIED` with the single reason `VERSION_NOT_REHEARSED`** (fail closed)                                                                                                                  | 0    |
+| Increment rehearsal, default lab image (regression)                                                                  | 29/29 PASS, R3 `PASS`                                                                                                                                                                                                                                                                                                                                      | 0    |
+| Negatives                                                                                                            | tag reference, missing expected version and wrong expected version (1.109.1 against 1.110.0) each refuse; key-policy faults are listed in the PR follow-up                                                                                                                                                                                                 | 1    |
+
+**Source comparison** of the two images (files read in `--network none` containers):
+
+- **`duration_parser.py`: identical.** The `30d` budget semantics are unchanged.
+- **`schema.prisma`:** changes only outside the tables S5 uses. `LiteLLM_VerificationToken`,
+  `LiteLLM_ObjectPermissionTable`, `LiteLLM_BudgetTable`, `LiteLLM_ProxyModelTable` and
+  `LiteLLM_Config` are identical; the changes are new plugin and skill tables.
+- **`auth_checks.py`:** `can_agent_call_model`, `can_key_call_model`, `_can_object_call_model` and
+  `can_team_access_model` are identical. The object-permission helpers are identical, so F11 holds
+  for 1.110.0.
+- **`key_management_endpoints.py`:** `prepare_key_update_data` is identical. `update_key_fn` changed
+  only in the branch that runs when a request sets `spend` (the spend-counter cache). The S5 update
+  never sets `spend`.
+- **`user_api_key_auth.py`:** changed (about 178 lines). This was **not** source-reviewed in full; it
+  is covered only by behaviour (the same key still authenticates, and the catalog is exactly the
+  alias).
+
+**Decision left to the PM:**
+
+- The auditor keeps `LAB_REHEARSED_VERSIONS={"1.109.1"}`, so on OMV today `KEY_POLICY_GATE_R3`
+  would be `NOT_VERIFIED` (`VERSION_NOT_REHEARSED`) even after a correct key fix.
+- Adding `1.110.0` is a one-line, deliberate change. It is now supported by the two passing
+  rehearsals above, but this branch does **not** make it without PM review.
+- Production parity of the _image_ is proven. Runtime parity is still not covered: caches,
+  environment overrides, egress, and the YAML and DB contents of the real gateway.
