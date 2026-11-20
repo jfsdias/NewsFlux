@@ -57,6 +57,7 @@ FALLBACK_LISTS = {
     "context_window_fallbacks": "FALLBACK_CONTEXT_WINDOW",
     "content_policy_fallbacks": "FALLBACK_CONTENT_POLICY",
 }
+MAX_DEPLOYMENT_ROWS = 200  # read bound; a count above it is reported as truncated, never as complete
 LOCAL_HOSTS = frozenset({"ollama", "localhost", "127.0.0.1", "host.docker.internal"})
 SAFE_NAME = re.compile(r"^[A-Z0-9_]+$")
 SAFE_VALUE = re.compile(r"^(?:[A-Z0-9_]+(?:,[A-Z0-9_]+)*|\d+)$")
@@ -131,14 +132,20 @@ def _time(value: Any) -> datetime | None:
 
 
 def classify_scope(models: Any, alias: str) -> str:
-    if not isinstance(models, list) or not models:
+    """The contract is exactly ["<S5 alias>"]: one entry, that exact string. No coercion."""
+    if models is None or (isinstance(models, list) and not models):
         return "UNRESTRICTED_ALL_MODELS"  # LiteLLM: empty/absent model list = every model
-    names = [str(item) for item in models]
-    if any(name in WILDCARD_MODELS or "*" in name for name in names):
+    if not isinstance(models, list):
+        return "INVALID_TYPE"
+    if any(not isinstance(item, str) for item in models):
+        return "INVALID_ENTRY"
+    if any(item in WILDCARD_MODELS or "*" in item for item in models):
         return "WILDCARD"
-    if set(names) == {alias}:
+    if models == [alias]:
         return "EXACT_ALIAS"
-    return "EXTRA_MODELS" if alias in names else "OTHER_MODEL"
+    if len(set(models)) != len(models):
+        return "DUPLICATE_ENTRIES"
+    return "EXTRA_MODELS" if alias in models else "OTHER_MODEL"
 
 
 def classify_key(row: Mapping[str, Any], alias: str, caps: Mapping[str, Any], now: datetime,
@@ -160,8 +167,7 @@ def classify_key(row: Mapping[str, Any], alias: str, caps: Mapping[str, Any], no
         facts["KEY_ROUTES"] = "NOT_VERIFIED"
     else:
         routes = row.get("allowed_routes")
-        ok = isinstance(routes, list) and bool(routes) and all(isinstance(r, str) for r in routes)
-        facts["KEY_ROUTES"] = "PASS" if ok and set(routes) == APPROVED_ROUTES else "FAIL"
+        facts["KEY_ROUTES"] = "PASS" if routes == sorted(APPROVED_ROUTES) else "FAIL"  # exactly, no duplicates
 
     limits = {name: row.get(name) for name in ("rpm_limit", "tpm_limit", "max_budget", "budget_duration")}
     source = "KEY"
@@ -173,15 +179,32 @@ def classify_key(row: Mapping[str, Any], alias: str, caps: Mapping[str, Any], no
     facts["KEY_LIMIT_SOURCE"] = source
 
     rpm, tpm = _positive_int(limits["rpm_limit"]), _positive_int(limits["tpm_limit"])
-    facts["KEY_RATE_LIMITS"] = "PASS" if rpm and tpm else "FAIL"
-    for name, value, cap in (("KEY_RPM_WITHIN_APP", rpm, caps.get("rpm")), ("KEY_TPM_WITHIN_APP", tpm, caps.get("tpm"))):
-        facts[name] = "NOT_APPLICABLE" if value is None or not cap else ("YES" if value <= cap else "NO")
+    for name, value, cap in (("KEY_RPM_WITHIN_APP", rpm, _positive_int(caps.get("rpm"))),
+                             ("KEY_TPM_WITHIN_APP", tpm, _positive_int(caps.get("tpm")))):
+        if cap is None:
+            facts[name] = "APP_CAP_MISSING"
+        elif value is None:
+            facts[name] = "NOT_APPLICABLE"
+        else:
+            facts[name] = "YES" if value <= cap else "NO"
+    # Positive key limits that are also within the NewsFlux caps; a missing app cap never passes.
+    within = facts["KEY_RPM_WITHIN_APP"] == "YES" and facts["KEY_TPM_WITHIN_APP"] == "YES"
+    facts["KEY_RATE_LIMITS"] = "PASS" if rpm and tpm and within else "FAIL"
 
-    max_budget, spend, app_budget = _number(limits["max_budget"]), _number(row.get("spend")) or 0.0, _number(caps.get("budget"))
+    max_budget, app_budget = _number(limits["max_budget"]), _number(caps.get("budget"))
+    spend = _number(row.get("spend"))
+    if spend is not None and (spend != spend or spend < 0):  # NaN or negative: not a usable spend
+        spend = None
+    facts["KEY_SPEND"] = "KNOWN" if spend is not None else "UNKNOWN"
     duration = limits["budget_duration"]
     budget_ok = (max_budget is not None and max_budget > 0 and app_budget is not None and max_budget <= app_budget
-                 and isinstance(duration, str) and bool(duration.strip()) and spend < max_budget)
-    facts["KEY_BUDGET"] = "PASS" if budget_ok else "FAIL"
+                 and isinstance(duration, str) and bool(duration.strip()))
+    if not budget_ok or (spend is not None and spend >= max_budget):
+        facts["KEY_BUDGET"] = "FAIL"
+    elif spend is None:
+        facts["KEY_BUDGET"] = "NOT_VERIFIED"  # unknown spend is never read as zero
+    else:
+        facts["KEY_BUDGET"] = "PASS"
 
     indirection = []
     if isinstance(_json_value(row.get("aliases")), dict) and _json_value(row.get("aliases")):
@@ -338,23 +361,42 @@ def classify_fallbacks(settings: Iterable[Any], alias: str) -> dict[str, str]:
 
 
 def classify_callbacks(settings: Iterable[Any], allowed: Iterable[str]) -> dict[str, str]:
+    """Only empty values mean "no callback". Any shape that is not a callback name (or list of names)
+    is UNRECOGNIZED: never read as absence. Known names outside the allowlist FAIL."""
     names: set[str] = set()
+    unrecognized = False
     for block in settings:
         block = _json_value(block)
+        if block is None or block == {}:
+            continue
         if not isinstance(block, dict):
+            unrecognized = True
             continue
         for key in CALLBACK_KEYS:
-            value = _json_value(block.get(key))
-            if isinstance(value, str) and value:
+            value = block.get(key)
+            if value is None or value == "" or value == []:
+                continue
+            if isinstance(value, str):
                 value = [value]
-            if isinstance(value, list):
-                names.update(str(item).strip().lower() for item in value if str(item).strip())
+            if not isinstance(value, list):
+                unrecognized = True
+                continue
+            for item in value:
+                if isinstance(item, str) and item.strip():
+                    names.add(item.strip().lower())
+                else:
+                    unrecognized = True
     allowed_set = {item.strip().lower() for item in allowed if item.strip()}
-    labels = sorted({name.upper() if name in CALLBACK_FAMILIES else "OTHER" for name in names})
-    return {
-        "CALLBACKS_CONFIGURED": ",".join(labels) or "NONE",
-        "CALLBACK_GATE": "PASS" if names <= allowed_set else "FAIL",
-    }
+    labels = {name.upper() if name in CALLBACK_FAMILIES else "OTHER" for name in names}
+    if unrecognized:
+        labels.add("UNRECOGNIZED")
+    if names - allowed_set:
+        gate = "FAIL"
+    elif unrecognized:
+        gate = "NOT_VERIFIED"
+    else:
+        gate = "PASS"
+    return {"CALLBACKS_CONFIGURED": ",".join(sorted(labels)) or "NONE", "CALLBACK_GATE": gate}
 
 
 def collect(query: Query, *, fingerprint: str, alias: str, caps: Mapping[str, Any], allowed_callbacks: Iterable[str],
@@ -364,7 +406,22 @@ def collect(query: Query, *, fingerprint: str, alias: str, caps: Mapping[str, An
     value = next(iter(first.values())) if isinstance(first, dict) else (first[0] if first else None)
     if str(value).lower() != "on":
         raise ProbeError("DB_NOT_READ_ONLY")
-    facts: dict[str, str] = {"DB_READ_ONLY": "VERIFIED", "YAML_CONFIG": yaml_status}
+    facts: dict[str, str] = {"DB_READ_ONLY": "VERIFIED"}
+    # The YAML is a required evidence source for routes, fallbacks and callbacks. Anything other than a
+    # readable mapping with the expected section shapes keeps those gates from PASS.
+    if yaml_status != "LOADED":
+        yaml_class = yaml_status if yaml_status in ("NOT_FOUND", "UNREADABLE") else "UNREADABLE"
+    elif not isinstance(yaml_config, dict):
+        yaml_class = "INVALID_ROOT"
+    elif (not isinstance(yaml_config.get("model_list", []), (list, type(None)))
+          or not all(isinstance(entry, dict) for entry in yaml_config.get("model_list") or [])
+          or any(not isinstance(yaml_config.get(name, {}), (dict, type(None)))
+                 for name in ("router_settings", "litellm_settings"))):
+        yaml_class = "INVALID_STRUCTURE"
+    else:
+        yaml_class = "LOADED"
+    facts["YAML_CONFIG"] = yaml_class
+    yaml_config = yaml_config if yaml_class == "LOADED" else {}
 
     existing = {row.get("column_name") for row in query(
         "SELECT column_name FROM information_schema.columns WHERE table_name = %s", ("LiteLLM_VerificationToken",))}
@@ -373,9 +430,15 @@ def collect(query: Query, *, fingerprint: str, alias: str, caps: Mapping[str, An
     present = [name for name in KEY_COLUMNS if name in existing]  # identifiers from a fixed allowlist only
     facts["KEY_SCHEMA"] = "FULL" if len(present) == len(KEY_COLUMNS) else "PARTIAL_OPTIONAL"
     columns = ", ".join(f'"{name}"' for name in present)
-    tokens = query(f'SELECT {columns} FROM "LiteLLM_VerificationToken" LIMIT 5000', ())
-    matches = [row for row in tokens if isinstance(row.get("token"), str)
-               and fingerprint_token_hash(row["token"]) == fingerprint]
+    # Exact, complete lookup inside Postgres: sha256(domain || token) = fingerprint over every row,
+    # with no scan limit. LIMIT 2 only distinguishes one match from several.
+    matches = query(
+        f'SELECT {columns} FROM "LiteLLM_VerificationToken" '
+        "WHERE encode(sha256(decode(%s, 'hex') || convert_to(\"token\", 'UTF8')), 'hex') = %s LIMIT 2",
+        (FINGERPRINT_DOMAIN.hex(), fingerprint))
+    matches = [row for row in matches if isinstance(row.get("token"), str)
+               and fingerprint_token_hash(row["token"]) == fingerprint]  # re-check in process
+    facts["KEY_LOOKUP"] = "EXACT_FINGERPRINT"
     facts["KEY_MATCH"] = "ONE" if len(matches) == 1 else ("NONE" if not matches else "MULTIPLE")
     key_row = matches[0] if len(matches) == 1 else None
     if key_row is None:
@@ -390,15 +453,23 @@ def collect(query: Query, *, fingerprint: str, alias: str, caps: Mapping[str, An
         key_facts = classify_key(key_row, alias, caps, now, budget_row)
         facts.update(key_facts)
 
+    total = query('SELECT count(*) AS "count" FROM "LiteLLM_ProxyModelTable" WHERE "model_name" = %s', (alias,))
+    total = int((total[0] or {}).get("count", -1)) if total and isinstance(total[0], dict) else -1
     db_models = query('SELECT "model_name", "litellm_params", "model_info", "blocked" FROM "LiteLLM_ProxyModelTable" '
-                      'WHERE "model_name" = %s LIMIT 51', (alias,))
-    yaml_config = yaml_config if isinstance(yaml_config, dict) else {}
+                      f'WHERE "model_name" = %s LIMIT {MAX_DEPLOYMENT_ROWS}', (alias,))
+    truncated = total < 0 or total > len(db_models)
     deployments = [dict(row, source="DB") for row in db_models]
     for entry in yaml_config.get("model_list") or []:
         if isinstance(entry, dict) and entry.get("model_name") == alias:
             deployments.append({"litellm_params": entry.get("litellm_params"), "model_info": entry.get("model_info"),
                                 "blocked": False, "source": "YAML"})
     facts.update(classify_route(deployments, key_facts, cost_map))
+    if truncated:
+        # Not every deployment was read: neither the route nor the price can be called complete.
+        facts["DEPLOYMENTS_DB"] = "NOT_VERIFIED_TRUNCATED"
+        for gate in ("MODEL_ROUTE_GATE", "PRICING_GATE"):
+            if facts[gate] != "FAIL":
+                facts[gate] = "NOT_VERIFIED"
 
     config_rows = query('SELECT "param_name", "param_value" FROM "LiteLLM_Config" '
                         "WHERE \"param_name\" IN ('router_settings', 'litellm_settings', 'general_settings')", ())
@@ -410,6 +481,14 @@ def collect(query: Query, *, fingerprint: str, alias: str, caps: Mapping[str, An
     facts.update(classify_fallbacks(router_blocks, alias))
     facts.update(classify_callbacks([db_config.get("litellm_settings"), yaml_config.get("litellm_settings")],
                                     allowed_callbacks))
+    if yaml_class != "LOADED":
+        for gate in ("MODEL_ROUTE_GATE", "FALLBACK_GATE", "CALLBACK_GATE"):
+            if facts[gate] == "PASS":
+                facts[gate] = "NOT_VERIFIED"  # one of the required sources could not be inspected
+        if facts["DEPLOYMENT_SOURCE"] == "NONE" and "ALIASES" not in facts.get("KEY_INDIRECTION", ""):
+            # "No deployment" is only proven when every source was read; the S5 deployment may live
+            # in the YAML that could not be inspected.
+            facts["MODEL_ROUTE_GATE"] = "NOT_VERIFIED"
     facts.update({
         "PROVIDER_PRIVACY_GATE": "NOT_VERIFIED_OPERATOR_TERMS_REQUIRED",
         "OFFICIAL_ATTESTATION": "HOLD_NO_ACCEPTABLE_ATTESTATION_SOURCE",
@@ -461,9 +540,11 @@ def _psycopg_query_factory() -> Any:
     return Runner()
 
 
-def _container_yaml() -> tuple[str, dict]:
+def _container_yaml(cmdline_path: str = "/proc/1/cmdline", environ: Mapping[str, str] | None = None) -> tuple[str, Any]:
+    """(status, document). LOADED means "parsed"; the root and section shapes are judged by collect()."""
+    environ = os.environ if environ is None else environ
     try:
-        with open("/proc/1/cmdline", "rb") as handle:
+        with open(cmdline_path, "rb") as handle:
             argv = [part.decode("utf-8", "replace") for part in handle.read().split(b"\0") if part]
     except OSError:
         argv = []
@@ -473,17 +554,16 @@ def _container_yaml() -> tuple[str, dict]:
             path = argv[index + 1]
         elif part.startswith("--config="):
             path = part.split("=", 1)[1]
-    path = path or os.environ.get("CONFIG_FILE_PATH") or os.environ.get("WORKER_CONFIG")
+    path = path or environ.get("CONFIG_FILE_PATH") or environ.get("WORKER_CONFIG")
     if not path:
         return "NOT_FOUND", {}
     try:
         import yaml  # installed in the LiteLLM image
 
         with open(path, encoding="utf-8") as handle:
-            document = yaml.safe_load(handle)
-    except Exception:  # noqa: BLE001 - classified, detail-free
+            return "LOADED", yaml.safe_load(handle)
+    except Exception:  # noqa: BLE001 - missing, unreadable or unparseable: classified, detail-free
         return "UNREADABLE", {}
-    return ("LOADED", document) if isinstance(document, dict) else ("UNREADABLE", {})
 
 
 def _container_cost_map() -> dict:

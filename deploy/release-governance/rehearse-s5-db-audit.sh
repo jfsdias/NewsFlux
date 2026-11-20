@@ -8,7 +8,8 @@
 #   - the probe (same bootstrap as the operator command) finds the key by fingerprint only;
 #   - a least-privilege key passes the key gates; an unrestricted key and a key with missing
 #     limits fail; YAML fallbacks and callbacks are detected; a configured zero price never
-#     passes PRICING_GATE;
+#     passes PRICING_GATE; a missing, list-rooted or unparseable YAML never yields PASS for the
+#     route, fallback or callback gates (corrective R2);
 #   - the probe's transaction is really READ ONLY (a write inside it is refused by Postgres);
 #   - the output never contains a key, token hash, fingerprint, alias, URL or DSN;
 #   - the host entry point (the operator command) end to end against a real Summary image labelled
@@ -27,7 +28,7 @@ fail=0
 ok() { echo "S5_DB_AUDIT $1=PASS"; pass=$((pass + 1)); }
 ko() { echo "S5_DB_AUDIT $1=FAIL"; fail=$((fail + 1)); }
 cleanup() {
-  docker rm -f "$run-litellm" "$run-pg" "$run-summary" >/dev/null 2>&1 || true
+  docker rm -f "$run-litellm" "$run-pg" "$run-summary" "$run-noyaml" "$run-rootlist" "$run-badyaml" >/dev/null 2>&1 || true
   docker network rm "$net" >/dev/null 2>&1 || true
   sudo -n rm -rf "$work" 2>/dev/null || rm -rf "$work" 2>/dev/null || true
 }
@@ -73,13 +74,13 @@ NOLIMITS="$(api /key/generate '{"models":["newsflux-s5-fallback"],"allowed_route
 REMAP="$(api /key/generate '{"models":["newsflux-s5-free"],"allowed_routes":["llm_api_routes"],"max_budget":0.5,"budget_duration":"30d","tpm_limit":20000,"rpm_limit":5,"aliases":{"newsflux-s5-free":"newsflux-s5-fallback"}}')"
 [[ "$LP" == sk-* && "$OPEN" == sk-* && "$NOLIMITS" == sk-* && "$REMAP" == sk-* ]] && ok SYNTHETIC_KEYS_CREATED || ko SYNTHETIC_KEYS_CREATED
 
-probe() { # $1 virtual key, $2 alias -> classification JSON (same bootstrap as the operator command)
+probe() { # $1 virtual key, $2 alias, [$3 container] -> classification JSON (same bootstrap as the operator command)
   local fp
   fp="$(python3 -c 'import hashlib,sys; t=hashlib.sha256(sys.argv[1].encode()).hexdigest(); print(hashlib.sha256(b"newsflux-s5-key-attestation-v1\0"+t.encode()).hexdigest())' "$1")"
   local bootstrap
   bootstrap="$(python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import s5_db_readonly_audit as a; print(a.PROBE_BOOTSTRAP)' "$here")"
   { printf '{"fingerprint":"%s","alias":"%s","caps":{"rpm":5,"tpm":20000,"budget":1.0},"allowed_callbacks":[]}\n' "$fp" "$2"
-    cat "$here/s5_db_readonly_audit.py"; } | L python3 -c "$bootstrap" || true
+    cat "$here/s5_db_readonly_audit.py"; } | docker exec -i "${3:-$run-litellm}" python3 -c "$bootstrap" || true
 }
 field() { python3 -c 'import json,sys; print(json.loads(sys.stdin.read().strip().splitlines()[-1]).get(sys.argv[1], ""))' "$1"; }
 
@@ -107,6 +108,31 @@ out="$(probe "$REMAP" newsflux-s5-free)"
 
 out="$(probe "sk-synthetic-not-a-real-key-000000" newsflux-s5-free)"
 [[ "$(field KEY_MATCH <<<"$out")" == NONE ]] && ok UNKNOWN_KEY_NOT_FOUND || ko UNKNOWN_KEY_NOT_FOUND
+
+# Corrective R2: the YAML is a required source. Same image, same real DB, probe-only containers whose
+# PID 1 command line names no config, a list-rooted config, or an unparseable config.
+printf -- '- just\n- a list\n' >"$work/root-list.yaml"
+printf 'model_list: [unclosed\n  : :\n' >"$work/unparseable.yaml"
+chmod 0644 "$work/root-list.yaml" "$work/unparseable.yaml"
+yaml_probe_container() { # $1 suffix, $2.. extra args after the sleep command
+  docker run -d --name "$run-$1" --network "$net" -e DATABASE_URL="postgresql://postgres:synthetic@$run-pg:5432/litellm" \
+    -v "$work:/rehearsal:ro" --entrypoint python3 "$LITELLM_IMAGE" -c "import time; time.sleep(600)" "${@:2}" >/dev/null
+}
+yaml_probe_container noyaml
+yaml_probe_container rootlist --config /rehearsal/root-list.yaml
+yaml_probe_container badyaml --config /rehearsal/unparseable.yaml
+for case in "noyaml NOT_FOUND" "rootlist INVALID_ROOT" "badyaml UNREADABLE"; do
+  set -- $case
+  out="$(probe "$LP" newsflux-s5-free "$run-$1")"
+  if [[ "$(field YAML_CONFIG <<<"$out")" == "$2" && "$(field KEY_POLICY_GATE <<<"$out")" == PASS \
+        && "$(field MODEL_ROUTE_GATE <<<"$out")" == NOT_VERIFIED && "$(field FALLBACK_GATE <<<"$out")" == NOT_VERIFIED \
+        && "$(field CALLBACK_GATE <<<"$out")" == NOT_VERIFIED ]]; then
+    ok "YAML_${2}_NEVER_PASSES"
+  else
+    ko "YAML_${2}_NEVER_PASSES"; echo "$out"
+  fi
+done
+docker rm -f "$run-noyaml" "$run-rootlist" "$run-badyaml" >/dev/null 2>&1 || true
 
 # The probe's connection mode really refuses writes on the real database.
 ro="$(L python3 - <<'PY'
@@ -159,7 +185,8 @@ summary() { # $1 key value, $2 inference flag; starts a Summary container labell
   chmod 0755 "$secrets"
   printf '%s\n' "$1" >"$secrets/key"
   chmod 0400 "$secrets/key"
-  chown -R 10001:10001 "$secrets"
+  # Owned by the Summary uid (10001); a non-root CI runner needs sudo (same as rehearse-s5-key-gate.sh).
+  sudo -n chown -R 10001:10001 "$secrets" 2>/dev/null || chown -R 10001:10001 "$secrets"
   docker rm -f "$run-summary" >/dev/null 2>&1 || true
   docker run -d --name "$run-summary" --label "com.docker.compose.project=$run-proj" \
     --label com.docker.compose.service=summary-api --network "$net" --read-only --cap-drop ALL \

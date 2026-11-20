@@ -64,11 +64,22 @@ class FakeDb:
             return [(self.read_only,)]
         if "information_schema.columns" in lowered:
             return [{"column_name": name} for name in self.columns]
+        limit = re.search(r"\blimit (\d+)", lowered)
+        limit = int(limit.group(1)) if limit else None
         if '"litellm_verificationtoken"' in lowered:
+            # The probe matches by fingerprint inside Postgres (sha256 of domain || token), exactly.
+            domain_hex, fingerprint = params
+            self.token_lookup = (bytes.fromhex(domain_hex), fingerprint)
             selected = re.findall(r'"([a-z_]+)"', sql.split("FROM")[0])
-            return [{k: v for k, v in row.items() if k in selected} for row in self.tokens]
+            rows = [{k: v for k, v in row.items() if k in selected} for row in self.tokens
+                    if isinstance(row.get("token"), str)
+                    and hashlib.sha256(bytes.fromhex(domain_hex) + row["token"].encode()).hexdigest() == fingerprint]
+            return rows[:limit] if limit else rows
         if '"litellm_proxymodeltable"' in lowered:
-            return [row for row in self.models if row.get("model_name") == params[0]]
+            rows = [row for row in self.models if row.get("model_name") == params[0]]
+            if "count(*)" in lowered:
+                return [{"count": len(rows)}]
+            return rows[:limit] if limit else rows
         if '"litellm_config"' in lowered:
             return [{"param_name": k, "param_value": v} for k, v in self.config.items()]
         if '"litellm_budgettable"' in lowered:
@@ -455,3 +466,237 @@ class HostOrchestrationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ----------------------------------------------------------------------------------------------
+# PM corrective R2 (review 7025985878): every finding RED first.
+# ----------------------------------------------------------------------------------------------
+def collect_with_yaml(status, config, db=None, **kwargs):
+    return audit.collect(
+        db or FakeDb(), fingerprint=audit.fingerprint_token_hash(token_hash(KEY)), alias=ALIAS, caps=CAPS,
+        allowed_callbacks=kwargs.get("allowed_callbacks", frozenset()), now=NOW, yaml_config=config,
+        cost_map={"openrouter/vendor/model:free": {"input_cost_per_token": 0, "output_cost_per_token": 0}},
+        yaml_status=status,
+    )
+
+
+class YamlCompletenessTests(unittest.TestCase):
+    """Finding 1: a YAML source that is missing, unreadable or malformed never yields PASS."""
+
+    GATES = ("FALLBACK_GATE", "CALLBACK_GATE", "MODEL_ROUTE_GATE")
+
+    def assert_not_pass(self, facts, yaml_class):
+        self.assertEqual(facts["YAML_CONFIG"], yaml_class)
+        for gate in self.GATES:
+            self.assertNotEqual(facts[gate], "PASS", (yaml_class, gate))
+
+    def test_safe_db_rows_alone_pass_only_with_a_loaded_yaml(self):
+        facts = collect_with_yaml("LOADED", {})
+        for gate in self.GATES:
+            self.assertEqual(facts[gate], "PASS", gate)
+
+    def test_not_found_unreadable_and_invalid_root_are_not_verified(self):
+        for status, config, expected in (
+            ("NOT_FOUND", {}, "NOT_FOUND"),
+            ("UNREADABLE", {}, "UNREADABLE"),
+            ("LOADED", None, "INVALID_ROOT"),          # empty file
+            ("LOADED", ["model_list"], "INVALID_ROOT"),
+            ("LOADED", "text", "INVALID_ROOT"),
+        ):
+            facts = collect_with_yaml(status, config)
+            self.assert_not_pass(facts, expected)
+            for gate in self.GATES:
+                self.assertEqual(facts[gate], "NOT_VERIFIED", (status, gate))
+
+    def test_incompatible_section_shapes_are_not_verified(self):
+        for config in (
+            {"model_list": {"model_name": ALIAS}},
+            {"model_list": ["not-a-mapping"]},
+            {"router_settings": ["fallbacks"]},
+            {"litellm_settings": "callbacks"},
+        ):
+            self.assert_not_pass(collect_with_yaml("LOADED", config), "INVALID_STRUCTURE")
+
+    def test_fail_findings_are_kept_even_without_yaml(self):
+        db = FakeDb(config={"router_settings": {"fallbacks": [{ALIAS: ["paid"]}]}})
+        self.assertEqual(collect_with_yaml("UNREADABLE", {}, db)["FALLBACK_GATE"], "FAIL")
+
+    def test_probe_rejects_a_non_mapping_root_even_when_the_loader_says_loaded(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            audit.probe_main({"fingerprint": audit.fingerprint_token_hash(token_hash(KEY)), "alias": ALIAS,
+                              "caps": CAPS, "allowed_callbacks": []},
+                             query_factory=lambda: FakeDb(), yaml_loader=lambda: ("LOADED", ["x"]),
+                             cost_map_loader=lambda: {}, now=NOW)
+        document = json.loads(out.getvalue())
+        self.assertEqual(document["YAML_CONFIG"], "INVALID_ROOT")
+        self.assertEqual(document["FALLBACK_GATE"], "NOT_VERIFIED")
+
+
+class CallbackShapeTests(unittest.TestCase):
+    """Finding 2: unrecognized callback shapes are never read as "no callbacks"."""
+
+    def callbacks(self, db_settings=None, yaml_settings=None, allowed=frozenset()):
+        db = FakeDb(config={"litellm_settings": db_settings} if db_settings is not None else {})
+        yaml_config = {"litellm_settings": yaml_settings} if yaml_settings is not None else {}
+        return collect_with_yaml("LOADED", yaml_config, db, allowed_callbacks=allowed)
+
+    def test_dict_nested_and_non_string_values_are_not_verified(self):
+        for value in ({"handler": "custom"}, [{"handler": "custom"}], [["langfuse"]], [1], 7, True):
+            facts = self.callbacks(db_settings={"success_callback": value})
+            self.assertEqual(facts["CALLBACK_GATE"], "NOT_VERIFIED", value)
+            self.assertIn("UNRECOGNIZED", facts["CALLBACKS_CONFIGURED"].split(","), value)
+
+    def test_non_mapping_db_settings_block_is_not_verified(self):
+        facts = self.callbacks(db_settings=["success_callback", "langfuse"])
+        self.assertEqual(facts["CALLBACK_GATE"], "NOT_VERIFIED")
+
+    def test_strings_and_lists_across_db_and_yaml(self):
+        facts = self.callbacks(db_settings={"success_callback": "langfuse"},
+                               yaml_settings={"failure_callback": ["sentry"], "callbacks": []},
+                               allowed=frozenset({"langfuse", "sentry"}))
+        self.assertEqual((facts["CALLBACKS_CONFIGURED"], facts["CALLBACK_GATE"]), ("LANGFUSE,SENTRY", "PASS"))
+        facts = self.callbacks(yaml_settings={"service_callback": ["datadog"]}, allowed=frozenset({"langfuse"}))
+        self.assertEqual(facts["CALLBACK_GATE"], "FAIL")
+
+    def test_known_disallowed_callback_fails_even_next_to_an_unrecognized_one(self):
+        facts = self.callbacks(db_settings={"success_callback": ["langfuse", {"x": 1}]})
+        self.assertEqual(facts["CALLBACK_GATE"], "FAIL")
+
+    def test_empty_values_are_absence(self):
+        for value in (None, "", []):
+            self.assertEqual(self.callbacks(db_settings={"success_callback": value})["CALLBACK_GATE"], "PASS", value)
+
+
+class SpendAndRateCapTests(unittest.TestCase):
+    """Finding 3: unknown spend is never zero; key limits above the app caps never pass."""
+
+    def test_null_or_invalid_spend_is_not_verified(self):
+        for spend in (None, "abc", True, float("nan")):
+            facts = collect(FakeDb(tokens=[key_row(spend=spend)]))
+            self.assertEqual(facts["KEY_BUDGET"], "NOT_VERIFIED", spend)
+            self.assertEqual(facts["KEY_SPEND"], "UNKNOWN", spend)
+            self.assertNotEqual(facts["KEY_POLICY_GATE"], "PASS", spend)
+
+    def test_known_spend_is_reported(self):
+        self.assertEqual(collect()["KEY_SPEND"], "KNOWN")
+
+    def test_key_limits_above_the_app_caps_fail(self):
+        for change, field in (({"rpm_limit": 50}, "KEY_RPM_WITHIN_APP"), ({"tpm_limit": 200000}, "KEY_TPM_WITHIN_APP")):
+            facts = collect(FakeDb(tokens=[key_row(**change)]))
+            self.assertEqual(facts[field], "NO")
+            self.assertEqual(facts["KEY_RATE_LIMITS"], "FAIL")
+            self.assertEqual(facts["KEY_POLICY_GATE"], "FAIL")
+
+    def test_missing_app_caps_never_pass(self):
+        for caps in ({"rpm": None, "tpm": 20000, "budget": 1.0}, {"rpm": 5, "tpm": 0, "budget": 1.0}, {}):
+            facts = collect(caps=caps)
+            self.assertNotEqual(facts["KEY_RATE_LIMITS"], "PASS", caps)
+            self.assertNotEqual(facts["KEY_POLICY_GATE"], "PASS", caps)
+            self.assertIn("APP_CAP_MISSING", (facts["KEY_RPM_WITHIN_APP"], facts["KEY_TPM_WITHIN_APP"]), caps)
+
+    def test_limits_equal_to_the_app_caps_pass(self):
+        facts = collect(FakeDb(tokens=[key_row(rpm_limit=5, tpm_limit=20000)]))
+        self.assertEqual((facts["KEY_RATE_LIMITS"], facts["KEY_POLICY_GATE"]), ("PASS", "PASS"))
+
+
+class ExactScopeTests(unittest.TestCase):
+    """Finding 4: models must be exactly a one-element list holding the S5 alias string."""
+
+    def test_duplicates_non_strings_and_non_lists_fail(self):
+        for models, detail in (
+            ([ALIAS, ALIAS], "DUPLICATE_ENTRIES"),
+            ([ALIAS, None], "INVALID_ENTRY"),
+            ([b"newsflux-s5-free"], "INVALID_ENTRY"),
+            (ALIAS, "INVALID_TYPE"),
+            ({ALIAS: True}, "INVALID_TYPE"),
+            ([ALIAS + " "], "OTHER_MODEL"),
+        ):
+            facts = collect(FakeDb(tokens=[key_row(models=models)]))
+            self.assertEqual(facts["KEY_SCOPE_DETAIL"], detail, models)
+            self.assertEqual(facts["KEY_SCOPE"], "FAIL", models)
+            self.assertNotEqual(facts["KEY_POLICY_GATE"], "PASS", models)
+
+    def test_duplicate_routes_fail_the_exact_route_contract(self):
+        facts = collect(FakeDb(tokens=[key_row(allowed_routes=["llm_api_routes", "llm_api_routes"])]))
+        self.assertEqual(facts["KEY_ROUTES"], "FAIL")
+
+
+class CompletenessTests(unittest.TestCase):
+    """Finding 5: bounded reads are never presented as complete."""
+
+    def test_key_lookup_is_an_exact_server_side_match_without_a_scan_limit(self):
+        tokens = [key_row(token=token_hash(f"sk-synthetic-bulk-{index:06d}-0000000000")) for index in range(6000)]
+        tokens.append(key_row())
+        db = FakeDb(tokens=tokens)
+        facts = collect(db)
+        self.assertEqual((facts["KEY_MATCH"], facts["KEY_LOOKUP"]), ("ONE", "EXACT_FINGERPRINT"))
+        token_sql = next(sql for sql in db.statements if "LiteLLM_VerificationToken" in sql and "information_schema" not in sql)
+        self.assertIn("sha256", token_sql)
+        self.assertEqual(db.token_lookup[0], b"newsflux-s5-key-attestation-v1\x00")
+
+    def test_two_matches_are_multiple_not_one(self):
+        self.assertEqual(collect(FakeDb(tokens=[key_row(), key_row()]))["KEY_MATCH"], "MULTIPLE")
+
+    def test_deployment_read_at_its_bound_is_truncated_not_complete(self):
+        models = [dict(deployment(), model_name=ALIAS) for _ in range(audit.MAX_DEPLOYMENT_ROWS + 1)]
+        facts = collect(FakeDb(models=models))
+        self.assertEqual(facts["DEPLOYMENTS_DB"], "NOT_VERIFIED_TRUNCATED")
+        self.assertEqual(facts["MODEL_ROUTE_GATE"], "NOT_VERIFIED")
+        self.assertEqual(facts["PRICING_GATE"], "NOT_VERIFIED")
+
+    def test_deployments_just_below_the_bound_are_complete(self):
+        models = [dict(deployment(), model_name=ALIAS) for _ in range(audit.MAX_DEPLOYMENT_ROWS)]
+        facts = collect(FakeDb(models=models))
+        self.assertEqual(facts["DEPLOYMENTS_DB"], str(audit.MAX_DEPLOYMENT_ROWS))
+        self.assertEqual(facts["MODEL_ROUTE_GATE"], "PASS")
+
+
+class ContainerYamlLoaderTests(unittest.TestCase):
+    """The in-container loader reports what it read; collect() classifies the root (found by the
+    real-LiteLLM rehearsal: a list root was collapsed into UNREADABLE)."""
+
+    def load(self, content, *, with_config=True):
+        import os
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "config.yaml")
+            if content is not None:
+                with open(path, "w", encoding="utf-8") as handle:
+                    handle.write(content)
+            cmdline = os.path.join(directory, "cmdline")
+            argv = [b"litellm", b"--config", path.encode()] if with_config else [b"litellm"]
+            with open(cmdline, "wb") as handle:
+                handle.write(b"\0".join(argv))
+            return audit._container_yaml(cmdline_path=cmdline, environ={})
+
+    def test_classes(self):
+        import importlib.util
+        if importlib.util.find_spec("yaml") is None:  # present in the LiteLLM image; optional on a CI host
+            self.skipTest("PyYAML not installed on this host")
+        self.assertEqual(self.load("model_list: []\n"), ("LOADED", {"model_list": []}))
+        self.assertEqual(self.load("- just\n- a list\n"), ("LOADED", ["just", "a list"]))
+        self.assertEqual(self.load("")[0], "LOADED")  # None root: collect() calls it INVALID_ROOT
+        self.assertEqual(self.load("model_list: [unclosed\n  : :\n")[0], "UNREADABLE")
+        self.assertEqual(self.load(None)[0], "UNREADABLE")  # named but missing file
+        self.assertEqual(self.load("x: 1\n", with_config=False), ("NOT_FOUND", {}))
+
+    def test_list_root_reaches_collect_as_invalid_root(self):
+        facts = collect_with_yaml("LOADED", ["just", "a list"])
+        self.assertEqual(facts["YAML_CONFIG"], "INVALID_ROOT")
+
+
+class UnreadYamlRouteTests(unittest.TestCase):
+    """No DB deployment while the YAML could not be read is unknown, not a proven absence."""
+
+    def test_no_db_deployment_and_unread_yaml_is_not_verified(self):
+        for status, config in (("NOT_FOUND", {}), ("UNREADABLE", {}), ("LOADED", ["x"])):
+            facts = collect_with_yaml(status, config, FakeDb(models=[]))
+            self.assertEqual(facts["MODEL_ROUTE_GATE"], "NOT_VERIFIED", status)
+
+    def test_no_deployment_with_a_readable_yaml_is_a_fail(self):
+        self.assertEqual(collect_with_yaml("LOADED", {}, FakeDb(models=[]))["MODEL_ROUTE_GATE"], "FAIL")
+
+    def test_proven_route_failures_stay_fail_without_yaml(self):
+        db = FakeDb(tokens=[key_row(aliases={ALIAS: "other"})])
+        self.assertEqual(collect_with_yaml("UNREADABLE", {}, db)["MODEL_ROUTE_GATE"], "FAIL")
