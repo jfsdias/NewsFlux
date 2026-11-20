@@ -79,8 +79,11 @@ OPTIONAL_INDIRECTION_COLUMNS = ("aliases", "router_settings", "team_id", "budget
 
 # ---- S5-R3 read-only increment ------------------------------------------------------------------
 # Versions whose schema and semantics were rehearsed in the disposable lab. Anything else is reported
-# and keeps KEY_POLICY_GATE_R3 from PASS until it has been rehearsed.
-LAB_REHEARSED_VERSIONS = frozenset({"1.109.1"})
+# and keeps KEY_POLICY_GATE_R3 from PASS until it has been rehearsed. 1.110.0 (the production image,
+# ghcr.io/berriai/litellm-database@sha256:eb7a0adf…143a, config sha256:95017a67…f5ab) was admitted in
+# S5-R3 after both lab harnesses passed on that exact image and the user_api_key_auth.py diff was reviewed.
+# Admission is diagnostic only: it never approves a production configuration.
+LAB_REHEARSED_VERSIONS = frozenset({"1.109.1", "1.110.0"})
 # Every column of LiteLLM_VerificationToken in the rehearsed version (1.109.1). An extra column is an
 # unknown mechanism; a missing one is a different schema. Neither is ever presumed safe.
 R3_KNOWN_KEY_COLUMNS = (
@@ -497,6 +500,30 @@ def classify_object_permission(linked: bool, rows: list | None, existing: Iterab
     return facts
 
 
+def classify_jwt_auth(blocks: Iterable[Any], sources_complete: bool) -> dict[str, str]:
+    """general_settings.enable_jwt_auth (DB + YAML). With it, 1.110.0 can link a JWT identity to an existing,
+    unexpired key of the same user (LINK_ONLY / map-existing). Only a boolean False or absence is DISABLED;
+    an unreadable source or any other shape is never read as disabled."""
+    enabled = unrecognized = False
+    for block in blocks:
+        block = _json_value(block)
+        if block is None or block == {}:
+            continue
+        if not isinstance(block, dict):
+            unrecognized = True
+            continue
+        value = block.get("enable_jwt_auth")
+        if value is True:
+            enabled = True
+        elif value not in (None, False):
+            unrecognized = True
+    if enabled:
+        return {"JWT_AUTH": "ENABLED"}
+    if unrecognized:
+        return {"JWT_AUTH": "UNRECOGNIZED"}
+    return {"JWT_AUTH": "DISABLED" if sources_complete else "UNKNOWN"}
+
+
 def classify_r3_gate(facts: Mapping[str, str], linked_permission: bool) -> dict[str, str]:
     """Stricter diagnostic gate. Never promotes: when the R1 gate is not PASS, R3 equals it."""
     reasons = []
@@ -508,6 +535,8 @@ def classify_r3_gate(facts: Mapping[str, str], linked_permission: bool) -> dict[
         reasons.append("EXTRA_INDIRECTION")
     if facts.get("KEY_BUDGET_DURATION") == "UNRECOGNIZED":
         reasons.append("DURATION_UNRECOGNIZED")
+    if facts.get("JWT_AUTH", "UNKNOWN") != "DISABLED":
+        reasons.append("JWT_AUTH_NOT_DISABLED")
     if linked_permission:
         reasons.append("OBJECT_PERMISSION_LINKED")  # contract: never PASS while linked, even if EMPTY
     r1 = facts.get("KEY_POLICY_GATE", "FAIL")
@@ -781,6 +810,7 @@ def collect(query: Query, *, fingerprint: str, alias: str, caps: Mapping[str, An
     facts["KEY_LOOKUP"] = "EXACT_FINGERPRINT"
     facts["KEY_MATCH"] = "ONE" if len(matches) == 1 else ("NONE" if not matches else "MULTIPLE")
     key_row = matches[0] if len(matches) == 1 else None
+    linked = False
     if key_row is None:
         facts.update({"KEY_POLICY_GATE": "FAIL", "KEY_INDIRECTION": "NOT_EVALUATED",
                       "KEY_POLICY_GATE_R3": "FAIL", "KEY_POLICY_GATE_R3_REASONS": "KEY_NOT_MATCHED"})
@@ -814,7 +844,6 @@ def collect(query: Query, *, fingerprint: str, alias: str, caps: Mapping[str, An
             facts.update(classify_object_permission(True, perm_rows, perm_existing))
         else:
             facts.update(classify_object_permission(False, None, ()))
-        facts.update(classify_r3_gate(facts, linked))
         if prestate_sink is not None:
             prestate_sink["PRIVATE_PRESTATE"] = build_private_prestate(
                 key_row, perm_rows[0] if perm_rows and len(perm_rows) == 1 else None, budget_row,
@@ -850,6 +879,10 @@ def collect(query: Query, *, fingerprint: str, alias: str, caps: Mapping[str, An
                                                        yaml_config.get("general_settings")]))
     if facts["FALLBACK_GENERAL_SETTINGS"] != "NONE" and facts["FALLBACK_GATE"] == "PASS":
         facts["FALLBACK_GATE"] = "NOT_VERIFIED"
+    facts.update(classify_jwt_auth([db_config.get("general_settings"), yaml_config.get("general_settings")],  # S5-R3
+                                   sources_complete=yaml_class == "LOADED"))
+    if key_row is not None:
+        facts.update(classify_r3_gate(facts, linked))  # after JWT: every R3 input is known
     facts.update(classify_callbacks([db_config.get("litellm_settings"), yaml_config.get("litellm_settings")],
                                     allowed_callbacks))
     if yaml_class != "LOADED":

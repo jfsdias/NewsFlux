@@ -269,7 +269,9 @@ check("ABOVE_CAPS_EXACT", (f.get("KEY_MAX_BUDGET"), f.get("KEY_RPM"), f.get("KEY
       ("ABOVE_APP_CAP", "ABOVE_APP_CAP", "OK", "MAX_BUDGET_ABOVE_APP_CAP"), json.dumps({k: f.get(k) for k in ("KEY_MAX_BUDGET", "KEY_RPM", "KEY_BUDGET_CAUSE")}))
 f, _ = probe(keys["clean"])
 check("CLEAN_SCHEMA_LAB_EXACT", (f.get("KEY_SCHEMA_COMPAT"), f.get("KEY_SCHEMA_COLUMNS")) == ("LAB_EXACT", "48"), f.get("KEY_SCHEMA_COMPAT"))
-rehearsed = version in audit.LAB_REHEARSED_VERSIONS
+# Literal expectations per exact lab image, independent of the auditor's own allowlist (S5-R3 admission).
+EXPECTED_VERSION_CLASS = {"1.109.1": "LAB_REHEARSED", "1.110.0": "LAB_REHEARSED"}
+rehearsed = EXPECTED_VERSION_CLASS.get(version) == "LAB_REHEARSED"
 check("CLEAN_VERSION_CLASS", (f.get("LITELLM_VERSION"), f.get("LITELLM_VERSION_CLASS")) ==
       (version.replace(".", "_"), "LAB_REHEARSED" if rehearsed else "NOT_REHEARSED"), f.get("LITELLM_VERSION_CLASS"))
 check("CLEAN_EXTRA_NONE", (f.get("KEY_EXTRA_INDIRECTION"), f.get("KEY_EXTRA_LIMITS"), f.get("KEY_AGENT_ID")) == ("NONE", "NONE", "NONE"),
@@ -324,6 +326,28 @@ try:
     check("PRESTATE_NEVER_OVERWRITES", False)
 except audit.ProbeError:
     check("PRESTATE_NEVER_OVERWRITES", True)
+
+# JWT auth in the disposable lab config: enable_jwt_auth blocks the R3 gate (R1 unchanged); then restore.
+def psql(sql):
+    return subprocess.run(["docker", "exec", pg_id, "psql", "-At", "-U", "postgres", "-d", "litellm", "-c", sql],
+                          check=True, capture_output=True, text=True, timeout=60).stdout.strip()
+
+
+prior = psql("SELECT count(*) FROM \"LiteLLM_Config\" WHERE \"param_name\" = 'general_settings'")
+if prior == "0":
+    psql("INSERT INTO \"LiteLLM_Config\" (\"param_name\", \"param_value\") VALUES ('general_settings', '{\"enable_jwt_auth\": true}')")
+else:
+    saved = psql("SELECT \"param_value\"::text FROM \"LiteLLM_Config\" WHERE \"param_name\" = 'general_settings'")
+    psql("UPDATE \"LiteLLM_Config\" SET \"param_value\" = \"param_value\" || '{\"enable_jwt_auth\": true}' WHERE \"param_name\" = 'general_settings'")
+f, _ = probe(keys["clean"])
+check("JWT_ENABLED_BLOCKS_R3", (f.get("JWT_AUTH"), f.get("KEY_POLICY_GATE"), f.get("KEY_POLICY_GATE_R3")) == ("ENABLED", "PASS", "NOT_VERIFIED")
+      and "JWT_AUTH_NOT_DISABLED" in f.get("KEY_POLICY_GATE_R3_REASONS", ""), f.get("KEY_POLICY_GATE_R3_REASONS"))
+if prior == "0":
+    psql("DELETE FROM \"LiteLLM_Config\" WHERE \"param_name\" = 'general_settings'")
+else:
+    psql("UPDATE \"LiteLLM_Config\" SET \"param_value\" = '" + saved.replace("'", "''") + "'::jsonb WHERE \"param_name\" = 'general_settings'")
+f, _ = probe(keys["clean"])
+check("JWT_RESTORED_R3_AS_BEFORE", (f.get("JWT_AUTH"), f.get("KEY_POLICY_GATE_R3")) == ("DISABLED", "PASS" if rehearsed else "NOT_VERIFIED"))
 
 # Schema drift in the disposable lab DB: an unknown key column blocks the R3 gate (R1 unchanged).
 subprocess.run(["docker", "exec", pg_id, "psql", "-q", "-U", "postgres", "-d", "litellm", "-c",

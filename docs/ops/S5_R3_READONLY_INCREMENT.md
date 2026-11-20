@@ -255,3 +255,124 @@ the owner's metadata-only inventory.
   rehearsals above, but this branch does **not** make it without PM review.
 - Production parity of the _image_ is proven. Runtime parity is still not covered: caches,
   environment overrides, egress, and the YAML and DB contents of the real gateway.
+
+## 8. Version admission (1.110.0) and operator readiness (S5-R3, PM comment 7041768917)
+
+### 8.1 Focused authentication review
+
+Sources were extracted from both exact images in `--network none` containers (SHA-256):
+
+| File                                                          | 1.109.1 lab image                                                  | 1.110.0 production image                                           |
+| ------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| `proxy/auth/user_api_key_auth.py`                             | `fba7e31fc115889f486493cccc267898c6bfafd9d6afcd9737e578250fe564d4` | `3f6e5ba25f763c6af357c280b6acf5fcc3e7a0870df7d615b1990cc22ce6562d` |
+| `proxy/pass_through_endpoints/codex_passthrough_endpoints.py` | `561ad21824130cee8ff826c1be5a41d2e02e80a40b4425185d2835250c9dd2fd` | `0554236a9b99cb7a7de2758113119dc7d5a2a0b2e42df4820ca587b5b2140f8d` |
+| `repositories/verification_token_repository.py`               | `560c5df88118f6fb26c7554bc1ea1059fb1128a588203b849512308043446346` | `051c296999360dc2bfd388acba2cbf083f1814c233e61bc567b9963314d0dc22` |
+| `proxy/_types.py`                                             | `87208c437e48a85726343fcb94579d44cde19e02cc560247b90a21c7d18416b8` | `e5cef90f0923dabe8268fffa5f2018b5c2a37ff0babc7a799e779e365dd46616` |
+| `proxy/auth/auth_checks.py`                                   | `7a7fecda26443fb49e9c381eff5a01fd5bf8b29d40755494e54907778fe09e40` | `84ad8222f50270c3ab587ff4c713cc68d8af6bd88afe320a4aa5c28d0115fd4f` |
+| `proxy/management_endpoints/key_management_endpoints.py`      | `cb8ad39b186b8cc39e2e9950edc545277977224413581f31f00c0098c32c5647` | `477375652f3fb667bae7116cbebb6f9a8f2b44cbcd23532f45dbb7cecac607c0` |
+
+The full `user_api_key_auth.py` diff (about 178 changed lines) was reviewed. Findings by area:
+
+- **Virtual-key authentication:** unchanged for virtual keys. The new code is in JWT key mapping,
+  the Codex native route, realtime WebSockets, spend-counter storage, the cache prefetch and
+  telemetry.
+- **Model authorization:**
+  - `can_key_call_model`, `can_team_access_model` and `_can_object_call_model` are identical, and
+    `enforce_key_and_fallback_model_access` still checks the key's model list.
+  - 1.110.0 adds `_resolve_codex_native_chatgpt_model`. On `/backend-api/codex/responses` it rewrites
+    a model to `chatgpt/<model>`, but only when the key may call that rewritten model
+    (`_key_and_team_allow`), and the rewrite happens before the same key check.
+  - `model_group_alias` resolution now also reaches that pass-through route, again before the key
+    check.
+- **Routes:** in both versions, `llm_api_routes` includes `mapped_pass_through_routes`
+  (`/backend-api/codex`, `/anthropic`, `/gemini`, `/bedrock`, `/vertex_ai`, …). **This predates
+  1.110.0**; see 8.4.
+- **Inherited permissions:**
+  - A new JWT `LINK_ONLY` mode, and the repository lookup renamed from
+    `find_newest_reusable_llm_api_key` to `find_newest_reusable_key`, which **no longer requires**
+    `allowed_routes` to be empty or `llm_api_routes`.
+  - Effect: with `general_settings.enable_jwt_auth: true` and LINK_ONLY or map-existing, a JWT
+    identity with the same `user_id` can be linked to any unexpired, unblocked key of that user.
+- **RPM, TPM and budget:**
+  - The spend counters moved to a `SpendCounterStore`; key, budget and `duration_parser.py` logic is
+    identical.
+  - The only key-update change is the `spend` branch, which S5 never uses.
+  - Enforcement at runtime is not exercised (that would need inference).
+- **Cache and invalidation:** `arm_routing_cooldowns` only prefetches routing cooldowns in the same
+  round trip; there is no policy-cache change.
+- **Bypass probe, both images:** `rehearse-s5-r3-auth-surface.sh` runs on an internal network with no
+  egress and a synthetic key scoped to one alias.
+  - Another model is refused at authentication (403) on `/v1/chat/completions`, `/v1/responses`,
+    `/backend-api/codex/responses`, `/anthropic/v1/messages` and `/gemini/...:generateContent`.
+  - The alias is admitted.
+  - The results are **identical** on 1.109.1 and 1.110.0, with the expectation declared per probe.
+    Exit 0 on both.
+
+**Verdict:** no blocker for diagnostic admission. The only new mechanism, JWT linking, is now
+**detected**: `JWT_AUTH=ENABLED|DISABLED|UNRECOGNIZED|UNKNOWN`, read from `general_settings` in the
+DB and YAML. Anything other than `DISABLED` gives `KEY_POLICY_GATE_R3=NOT_VERIFIED`, with reason
+`JWT_AUTH_NOT_DISABLED`. An unreadable YAML gives `UNKNOWN`, which is never treated as disabled.
+
+### 8.2 Admission
+
+`LAB_REHEARSED_VERSIONS = {"1.109.1", "1.110.0"}`. Admission is diagnostic only and approves no
+production configuration. Preserved, and tested with literal expectations independent of the
+allowlist:
+
+- 1.109.1 stays compatible;
+- unrehearsed versions (1.110.1, 1.109.0, 1.111.0, 2.0.0, malformed, unknown) stay `NOT_VERIFIED`;
+- R1 `FAIL` or `NOT_VERIFIED` is never promoted;
+- a linked object permission stays `NOT_VERIFIED`;
+- an unknown schema or extra indirection stays `NOT_VERIFIED`;
+- the S5 contract and `s5_preflight.py` are unchanged.
+
+### 8.3 Evidence
+
+- **Unit tests:**
+  - auditor 128 (10 new, RED 5 failures + 3 errors → GREEN);
+  - inventory 9;
+  - wrapper 13 (all gates and holds);
+  - the `release-governance` suite is OK with `-B`.
+- **Real lab, increment rehearsal:** 31/31 on **both** exact images.
+  - Expected classes come from a literal table, so the clean key is R3 `PASS` on 1.109.1 and on
+    1.110.0.
+  - Live checks: JWT enabled blocks R3, and the restore returns it to `PASS`; schema drift blocks it.
+  - A wrong expected version is refused (exit 1), and the ownership test passes.
+- **Auth-surface probe:** 7/7 PASS on both images.
+- **Cleanup and secrets:** 0 leftover containers or networks; no secrets in any output.
+
+### 8.4 Operator wrapper (prepared, NOT run; PM GO required)
+
+`deploy/release-governance/s5-r3-omv-readonly-run.sh` runs these gates in order, and holds with no
+further call at the first failure:
+
+1. **G1, exact source:** a clean checkout at the expected HEAD; the auditor file tracked,
+   unmodified, with a pinned SHA-256.
+2. **G2, CI:** the GitHub check runs on that exact SHA include `synthetic-release` with success, and
+   none failed or is pending.
+3. **G3, LiteLLM:** the container is matched by full ID, is running, runs the expected image ID, and
+   that image's RepoDigests contain the expected digest.
+4. **G4, binding:** the image ID must be in the wrapper's table of lab-proven images for the expected
+   version. Today that is only `sha256:95017a67…f5ab` → 1.110.0.
+5. **G5, Summary:** exactly one Summary container, whose image revision label equals the expected
+   production revision.
+6. **Run:** the auditor itself refuses unless the inference and external-transfer flags are OFF, and
+   it checks the read-only transaction and that the containers are unchanged.
+7. **Post:** only sanitized enum lines are printed, otherwise the run holds. The receipt must show
+   version `1_110_0` as `LAB_REHEARSED`, `DB_READ_ONLY=VERIFIED`, `CONTAINER_IDENTITY=UNCHANGED` and
+   `COMPLETE`. G3 is re-checked after the run.
+
+`PRIVATE_PRESTATE` is OFF: any argument containing "prestate" makes the wrapper hold.
+
+### 8.5 Residual risks
+
+- **Pre-existing, P1 for the key target:** `allowed_routes=["llm_api_routes"]` admits provider
+  pass-through routes. The key's model scope held on every probed route, but the policy should name
+  explicit routes. That belongs to the D1-B contract, by owner and PM decision; it is not changed
+  here.
+- **Runtime parity** (caches, environment, egress, the real YAML and DB) is still unverified until
+  the gated OMV run. Budget and RPM/TPM enforcement at runtime is untested.
+- **`policies`:** Enterprise-gated in the lab.
+- **JWT:** its effect is only detected, not evaluated.
+- **Summary revision:** the expected production revision is supplied as an argument. The last ledger
+  value is `d54eda2…e852` (R4.5); the PM must confirm the current one.

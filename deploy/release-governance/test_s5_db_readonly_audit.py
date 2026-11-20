@@ -1054,7 +1054,10 @@ class R3ExtraMechanismAndSchemaTests(unittest.TestCase):
         self.assertNotIn("metadata", sql)
 
     def test_version_classes(self):
-        for version, value, cls in ((LAB_VERSION, "1_109_1", "LAB_REHEARSED"), ("1.110.0", "1_110_0", "NOT_REHEARSED"),
+        # Literal expectations, never derived from audit.LAB_REHEARSED_VERSIONS (S5-R3 version admission).
+        for version, value, cls in ((LAB_VERSION, "1_109_1", "LAB_REHEARSED"), ("1.110.0", "1_110_0", "LAB_REHEARSED"),
+                                    ("1.110.1", "1_110_1", "NOT_REHEARSED"), ("1.108.9", "1_108_9", "NOT_REHEARSED"),
+                                    ("2.0.0", "2_0_0", "NOT_REHEARSED"), ("1.110", "UNRECOGNIZED", "UNKNOWN"),
                                     (None, "UNKNOWN", "UNKNOWN"), ("1.109.1-dev; rm -rf", "UNRECOGNIZED", "UNKNOWN")):
             facts = r3_collect(version=version)
             self.assertEqual((facts["LITELLM_VERSION"], facts["LITELLM_VERSION_CLASS"]), (value, cls), version)
@@ -1230,3 +1233,83 @@ class R3HostPrestateTests(HostOrchestrationTests):
         self.assertEqual(code, 2)
         self.assertIn("S5R3_PRIVATE_PRESTATE=NOT_WRITTEN", lines)
         self.assertFalse(os.path.exists(self.path))
+
+
+# ==================================================================================================
+# S5-R3 version admission (1.110.0) and JWT detection. Expectations are literal and independent of the
+# auditor's own allowlist; the allowlist itself is pinned so any change to it is a visible test change.
+# ==================================================================================================
+ADMITTED = "1.110.0"
+
+
+class R3VersionAdmissionTests(unittest.TestCase):
+    def test_rehearsed_set_is_exactly_the_two_lab_proven_versions(self):
+        self.assertEqual(audit.LAB_REHEARSED_VERSIONS, frozenset({"1.109.1", "1.110.0"}))
+
+    def test_both_rehearsed_versions_pass_a_clean_key(self):
+        for version in ("1.109.1", "1.110.0"):
+            facts = r3_collect(version=version)
+            self.assertEqual((facts["KEY_POLICY_GATE"], facts["KEY_POLICY_GATE_R3"], facts["KEY_POLICY_GATE_R3_REASONS"]),
+                             ("PASS", "PASS", "NONE"), version)
+
+    def test_unrehearsed_versions_stay_not_verified(self):
+        for version in ("1.110.1", "1.109.0", "1.111.0", "0.0.0", None, "x"):
+            facts = r3_collect(version=version)
+            self.assertEqual(facts["KEY_POLICY_GATE_R3"], "NOT_VERIFIED", version)
+            self.assertIn("VERSION_NOT_REHEARSED", facts["KEY_POLICY_GATE_R3_REASONS"], version)
+
+    def test_admitted_version_never_promotes_r1(self):
+        cases = ((lab_key_row(models=["all-proxy-models"]), "FAIL"), (lab_key_row(rpm_limit=None), "FAIL"),
+                 (lab_key_row(max_budget=None), "FAIL"), (lab_key_row(team_id="t"), "NOT_VERIFIED"),
+                 (lab_key_row(spend=None), "NOT_VERIFIED"), (lab_key_row(access_group_ids=["g"]), "NOT_VERIFIED"))
+        for row, r1 in cases:
+            facts = r3_collect(R3Db(row=row), version=ADMITTED)
+            self.assertEqual((facts["KEY_POLICY_GATE"], facts["KEY_POLICY_GATE_R3"]), (r1, r1))
+
+    def test_admitted_version_keeps_object_permission_not_verified(self):
+        facts = r3_collect(R3Db(row=lab_key_row(object_permission_id="op-synthetic"),
+                                objperms={"op-synthetic": [empty_objperm()]}), version=ADMITTED)
+        self.assertEqual((facts["OBJPERM_EFFECTIVE"], facts["KEY_POLICY_GATE"], facts["KEY_POLICY_GATE_R3"]),
+                         ("EMPTY", "NOT_VERIFIED", "NOT_VERIFIED"))
+        self.assertEqual(facts["KEY_POLICY_GATE_R3_REASONS"], "OBJECT_PERMISSION_LINKED")
+
+    def test_admitted_version_keeps_unknown_schema_and_extra_indirection_not_verified(self):
+        facts = r3_collect(R3Db(key_columns=LAB_KEY_COLUMNS + ("future_bypass",)), version=ADMITTED)
+        self.assertEqual((facts["KEY_POLICY_GATE_R3"], facts["KEY_POLICY_GATE_R3_REASONS"]), ("NOT_VERIFIED", "SCHEMA_NOT_LAB_EXACT"))
+        facts = r3_collect(R3Db(row=lab_key_row(user_id="u")), version=ADMITTED)
+        self.assertEqual((facts["KEY_POLICY_GATE_R3"], facts["KEY_POLICY_GATE_R3_REASONS"]), ("NOT_VERIFIED", "EXTRA_INDIRECTION"))
+
+
+def jwt_collect(general_settings_db=None, yaml_general=None, yaml_status="LOADED", version=ADMITTED):
+    config = {} if general_settings_db is None else {"general_settings": general_settings_db}
+    yaml_config = {} if yaml_general is None else {"general_settings": yaml_general}
+    return audit.collect(R3Db(config=config), fingerprint=audit.fingerprint_token_hash(token_hash(KEY)), alias=ALIAS,
+                         caps=CAPS, allowed_callbacks=frozenset(), now=NOW, yaml_config=yaml_config, version=version,
+                         yaml_status=yaml_status,
+                         cost_map={"openrouter/vendor/model:free": {"input_cost_per_token": 0, "output_cost_per_token": 0}})
+
+
+class R3JwtDetectionTests(unittest.TestCase):
+    """1.110.0 lets a JWT identity link to any unexpired, unblocked key of the same user (LINK_ONLY /
+    map-existing). That only exists with general_settings.enable_jwt_auth; detect it, never assume it off."""
+
+    def test_disabled_when_absent_or_false(self):
+        for db, yaml_general in ((None, None), ({"enable_jwt_auth": False}, None), (None, {"enable_jwt_auth": False}), ({}, {})):
+            facts = jwt_collect(db, yaml_general)
+            self.assertEqual((facts["JWT_AUTH"], facts["KEY_POLICY_GATE_R3"]), ("DISABLED", "PASS"), (db, yaml_general))
+
+    def test_enabled_in_db_or_yaml_blocks_r3(self):
+        for db, yaml_general in (({"enable_jwt_auth": True}, None), (None, {"enable_jwt_auth": True})):
+            facts = jwt_collect(db, yaml_general)
+            self.assertEqual((facts["JWT_AUTH"], facts["KEY_POLICY_GATE"], facts["KEY_POLICY_GATE_R3"]), ("ENABLED", "PASS", "NOT_VERIFIED"))
+            self.assertIn("JWT_AUTH_NOT_DISABLED", facts["KEY_POLICY_GATE_R3_REASONS"])
+
+    def test_unrecognized_or_unread_is_never_disabled(self):
+        for db, yaml_general, status in (({"enable_jwt_auth": "true"}, None, "LOADED"), ("not-a-mapping", None, "LOADED"),
+                                         (None, None, "UNREADABLE"), (None, None, "NOT_FOUND")):
+            facts = jwt_collect(db, yaml_general, yaml_status=status)
+            self.assertIn(facts["JWT_AUTH"], ("UNRECOGNIZED", "UNKNOWN"), (db, status))
+            self.assertEqual(facts["KEY_POLICY_GATE_R3"], "NOT_VERIFIED", (db, status))
+
+    def test_jwt_value_is_render_safe(self):
+        audit.render(jwt_collect({"enable_jwt_auth": True}), container_identity="UNCHANGED")
