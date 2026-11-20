@@ -66,6 +66,23 @@ class Fixture:
         self.allowed = "\n".join(lines)
         self.bundles = 0
 
+    def commit(self, files, message):
+        """Commit {relative path: content} on top of HEAD; returns the new HEAD (the tested commit is unchanged)."""
+        for rel, content in files.items():
+            path = os.path.join(self.src, rel)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(content)
+        git = ["git", "-C", self.src, "-c", "user.email=t@example.invalid", "-c", "user.name=t"]
+        subprocess.run(git + ["add", "-A"], check=True)
+        subprocess.run(git + ["commit", "-q", "-m", message], check=True)
+        return g2.git(self.src, "rev-parse", "HEAD")
+
+    def admit(self, signers=None):
+        """PM admission commit: only the admitted-signers file changes."""
+        return self.commit({g2.ADMITTED_SIGNERS_PATH: "# admitted by PM\n" + (self.allowed if signers is None else signers) + "\n"},
+                           "admit G2 signers")
+
     def bundle(self, role="PRODUCER", principal="producer", key=None, mutate=None, results_mutate=None, sign=True):
         self.bundles += 1
         out = os.path.join(self.root, f"bundle{self.bundles}")
@@ -77,7 +94,7 @@ class Fixture:
                           "failures": 0, "errors": 0, "skipped": 0, "checks_pass": spec.get("min_checks", 0),
                           "checks_fail": 0, "log_sha256": "a" * 64})
         results = {"schema": g2.EVIDENCE_SCHEMA, "commit": self.head, "run_id": run_id, "steps": steps,
-                   "cleanup": {"status": "PASS", "leftovers": 0}, "secret_scan": {"status": "PASS", "hits": 0}}
+                   "cleanup": {"status": "PASS", "leftovers": 0, "checkout_residue": 0}, "secret_scan": {"status": "PASS", "hits": 0}}
         environment = {"schema": g2.EVIDENCE_SCHEMA, "run_id": run_id,
                        "images": {ref: {"id": image_id} for ref, image_id in self.test_manifest["pinned_images"].items()}}
         if results_mutate:
@@ -278,9 +295,62 @@ class G2LocalVerifierTests(unittest.TestCase):
         bundle = self.f.bundle(results_mutate=lambda r, e: r["steps"][0].update(status="PASSED"))
         self.hold("G2L_SCHEMA_UNKNOWN", evidence=bundle)
 
+    # --- admission lifecycle (R4 A3) -----------------------------------------------------------------------
+    def verify_from_source(self, head):
+        out = io.StringIO()
+        argv = ["--source", self.f.src, "--expect-head", head, "--evidence", self.evidence, "--replay", self.replay,
+                "--approval", self.approval, "--admitted-signers-from-source"]
+        with contextlib.redirect_stdout(out):
+            code = g2.main(argv)
+        return code, out.getvalue().strip()
+
+    def test_admission_only_descendant_keeps_the_tested_evidence_valid(self):
+        self.assertEqual(self.verify_from_source(self.f.head), (2, "G2L_RESULT=HOLD_G2L_SIGNERS_NOT_ADMITTED"))
+        admitted = self.f.admit()
+        self.assertEqual(self.verify_from_source(admitted), (0, "G2L_RESULT=PASS"))
+        # adding evidence files under docs/evidence/ is also admission-only
+        later = self.f.commit({"docs/evidence/x/README.md": "evidence\n"}, "evidence")
+        self.assertEqual(self.verify_from_source(later), (0, "G2L_RESULT=PASS"))
+
+    def test_any_other_change_after_the_tested_commit_holds(self):
+        self.f.admit()
+        for rel in (g2.BOUND_FILES["wrapper"], g2.BOUND_FILES["auditor"], "deploy/release-governance/other.py",
+                    g2.TEST_MANIFEST_PATH, "docs/evidence-not/x.md"):
+            head = self.f.commit({rel: "changed\n"}, "change " + rel)
+            self.assertEqual(self.verify_from_source(head), (2, "G2L_RESULT=HOLD_G2L_ADMISSION_DELTA_NOT_ALLOWED"), rel)
+
+    def test_evidence_commit_not_an_ancestor_holds(self):
+        admitted = self.f.admit()
+        self.f.bundles += 1
+        bundle = self.f.bundle(mutate=lambda m: m.update(commit="5" * 40))
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            g2.main(["--source", self.f.src, "--expect-head", admitted, "--evidence", bundle, "--replay", self.replay,
+                     "--approval", self.approval, "--admitted-signers-from-source"])
+        self.assertEqual(out.getvalue().strip(), "G2L_RESULT=HOLD_G2L_OTHER_SHA")
+
+    def test_admission_does_not_rescue_self_approval_or_unadmitted_signers(self):
+        approval = self.f.approval(self.evidence, self.replay, reviewer="producer", key=self.f.keys["producer"])
+        self.approval = approval
+        self.assertEqual(self.verify_from_source(self.f.admit()), (2, "G2L_RESULT=HOLD_G2L_SELF_APPROVAL"))
+        self.approval = self.f.approval(self.evidence, self.replay)
+        partial = "\n".join(l for l in self.f.allowed.splitlines() if not l.startswith("reviewer "))
+        self.assertEqual(self.verify_from_source(self.f.admit(partial)), (2, "G2L_RESULT=HOLD_G2L_APPROVAL_SIGNATURE"))
+
+    def test_approval_naming_the_admission_commit_is_rejected(self):
+        admitted = self.f.admit()
+        self.approval = self.f.approval(self.evidence, self.replay, commit=admitted)
+        self.assertEqual(self.verify_from_source(admitted), (2, "G2L_RESULT=HOLD_G2L_APPROVAL_OTHER_SHA"))
+
+    def test_comment_only_signer_file_is_not_an_admission(self):
+        head = self.f.admit("# nobody yet")
+        self.assertEqual(self.verify_from_source(head), (2, "G2L_RESULT=HOLD_G2L_SIGNERS_NOT_ADMITTED"))
+
     # --- further isolation and signature negatives ------------------------------------------------------
     def test_cleanup_and_secret_scan_must_pass(self):
         self.hold("G2L_CLEANUP", evidence=self.f.bundle(results_mutate=lambda r, e: r["cleanup"].update(leftovers=1)))
+        self.hold("G2L_CLEANUP", evidence=self.f.bundle(results_mutate=lambda r, e: r["cleanup"].update(checkout_residue=1)))
+        self.hold("G2L_CLEANUP", evidence=self.f.bundle(results_mutate=lambda r, e: r["cleanup"].pop("checkout_residue")))
         self.hold("G2L_SECRET_SCAN", evidence=self.f.bundle(results_mutate=lambda r, e: r["secret_scan"].update(hits=1)))
 
     def test_unexpected_file_in_bundle(self):
@@ -313,6 +383,55 @@ class G2LocalVerifierTests(unittest.TestCase):
             code = g2.main(["--source", self.f.src])
         self.assertEqual((code, out.getvalue().strip()), (2, "G2L_RESULT=HOLD_G2L_USAGE"))
         self.hold("G2L_USAGE", head="not-a-sha")
+
+
+class CleanCheckoutGateTests(unittest.TestCase):
+    """R3B residual: a run must leave the exact checkout clean (no .pyc or any other untracked file)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.src = os.path.join(self.tmp.name, "src")
+        os.makedirs(self.src)
+        with open(os.path.join(self.src, "a.py"), "w") as handle:
+            handle.write("x = 1\n")
+        git = ["git", "-C", self.src, "-c", "user.email=t@example.invalid", "-c", "user.name=t"]
+        subprocess.run(["git", "init", "-q", self.src], check=True)
+        subprocess.run(git + ["add", "-A"], check=True)
+        subprocess.run(git + ["commit", "-q", "-m", "x"], check=True)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_clean_checkout_passes(self):
+        self.assertEqual(g2.checkout_residue(self.src), 0)
+
+    def test_untracked_pyc_or_modified_file_is_residue(self):
+        os.makedirs(os.path.join(self.src, "__pycache__"))
+        with open(os.path.join(self.src, "__pycache__", "a.cpython-312.pyc"), "wb") as handle:
+            handle.write(b"\0")
+        self.assertEqual(g2.checkout_residue(self.src), 1)
+        with open(os.path.join(self.src, "a.py"), "a") as handle:
+            handle.write("y = 2\n")
+        self.assertEqual(g2.checkout_residue(self.src), 2)
+
+
+class RehearsalBytecodeHygieneTests(unittest.TestCase):
+    """Every rehearsal that imports repository modules with python3 -I must also pass -B (-I ignores
+    PYTHONDONTWRITEBYTECODE), so no bytecode is written into the exact checkout."""
+
+    def test_isolated_imports_of_repository_modules_never_write_bytecode(self):
+        import glob
+        import re
+        offenders = []
+        for path in sorted(glob.glob(os.path.join(HERE, "*.sh"))):
+            with open(path, encoding="utf-8") as handle:
+                for number, line in enumerate(handle, 1):
+                    for match in re.finditer(r"python3((?: -[A-Za-z]+)+)", line):
+                        flags = match.group(1).split()
+                        imports_repo = "sys.path.insert" in line or "import s5_" in line
+                        if "-I" in flags and imports_repo and "-B" not in flags:
+                            offenders.append(f"{os.path.basename(path)}:{number}")
+        self.assertEqual(offenders, [])
 
 
 class UnittestParserTests(unittest.TestCase):

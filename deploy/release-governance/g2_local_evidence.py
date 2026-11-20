@@ -54,6 +54,10 @@ SECRET_PATTERNS = (r"sk-[A-Za-z0-9_-]{20,}", r"gh[pousr]_[A-Za-z0-9]{20,}", r"gi
                    r"AKIA[0-9A-Z]{16}", r"-----BEGIN [A-Z ]*PRIVATE KEY-----", r"xox[abprs]-[A-Za-z0-9-]{10,}",
                    r"AIza[0-9A-Za-z_-]{30,}", r"(?i)bearer\s+(?!synthetic)[A-Za-z0-9._~+/-]{24,}")
 HEX40, HEX64 = re.compile(r"^[0-9a-f]{40}$"), re.compile(r"^[0-9a-f]{64}$")
+# Admission lifecycle: the PM admits signers in a commit that descends from the tested commit and changes
+# nothing but these paths, so the evidence (bound to the tested commit and tree) stays valid unchanged.
+ADMITTED_SIGNERS_PATH = "deploy/release-governance/g2-admitted-signers"
+ADMISSION_DELTA_PREFIXES = ("docs/evidence/",)
 
 
 class Hold(Exception):
@@ -199,7 +203,8 @@ def check_bundle(bundle: str, src: str, head: str, tree: str, test_manifest: dic
         if not isinstance(step.get("log_sha256"), str) or not HEX64.match(step["log_sha256"]):
             raise Hold("G2L_MANIFEST_INCOMPLETE")
     cleanup, scan = results.get("cleanup"), results.get("secret_scan")
-    if not isinstance(cleanup, dict) or cleanup.get("status") != "PASS" or cleanup.get("leftovers") != 0:
+    if not isinstance(cleanup, dict) or cleanup.get("status") != "PASS" or cleanup.get("leftovers") != 0 \
+            or cleanup.get("checkout_residue") != 0:
         raise Hold("G2L_CLEANUP")
     if not isinstance(scan, dict) or scan.get("status") != "PASS" or scan.get("hits") != 0:
         raise Hold("G2L_SECRET_SCAN")
@@ -213,6 +218,34 @@ def check_bundle(bundle: str, src: str, head: str, tree: str, test_manifest: dic
             "sums_sha256": sha256_file(os.path.join(bundle, SUMS))}
 
 
+def admission_base(src: str, head: str, evidence: str) -> str:
+    """The tested commit the evidence names: HEAD itself, or an ancestor of HEAD whose difference to HEAD is
+    admission-only (the admitted-signers file and docs/evidence/**). Anything else holds."""
+    try:
+        with open(os.path.join(evidence, "EVIDENCE_MANIFEST.json"), encoding="utf-8") as handle:
+            commit = json.load(handle).get("commit")
+    except (OSError, ValueError, AttributeError):
+        return head   # the full bundle check reports the precise problem
+    if commit == head or not isinstance(commit, str) or not HEX40.match(commit):
+        return head
+    if subprocess.run(["git", "-C", src, "merge-base", "--is-ancestor", commit, head], capture_output=True).returncode:
+        raise Hold("G2L_OTHER_SHA")
+    changed = [p for p in git(src, "diff", "--name-only", "--no-renames", commit, head).splitlines() if p]
+    if any(p != ADMITTED_SIGNERS_PATH and not p.startswith(ADMISSION_DELTA_PREFIXES) for p in changed):
+        raise Hold("G2L_ADMISSION_DELTA_NOT_ALLOWED")
+    return commit
+
+
+def read_admitted_signers(src: str) -> str:
+    """allowed_signers lines from the tracked admission file at the checked-out HEAD (comments dropped)."""
+    try:
+        with open(os.path.join(src, ADMITTED_SIGNERS_PATH), encoding="utf-8") as handle:
+            lines = handle.read().splitlines()
+    except OSError:
+        return ""
+    return "\n".join(l.strip() for l in lines if l.strip() and not l.lstrip().startswith("#"))
+
+
 def verify(src: str, head: str, evidence: str, replay: str, approval_path: str, allowed_signers: str) -> None:
     if not HEX40.match(head):
         raise Hold("G2L_USAGE")
@@ -224,11 +257,15 @@ def verify(src: str, head: str, evidence: str, replay: str, approval_path: str, 
         tree = git(src, "rev-parse", "HEAD^{tree}")
     except (OSError, subprocess.CalledProcessError):
         raise Hold("G2L_SOURCE_UNREADABLE")
+    tested = admission_base(src, head, evidence)   # before reading anything else from the checkout
+    if tested != head:
+        tree = git(src, "rev-parse", tested + "^{tree}")
     test_manifest = load_json(os.path.join(src, TEST_MANIFEST_PATH), "G2L_SCHEMA_UNKNOWN")
     if not isinstance(test_manifest, dict) or test_manifest.get("schema") != TEST_MANIFEST_SCHEMA:
         raise Hold("G2L_SCHEMA_UNKNOWN")
-    produced = check_bundle(evidence, src, head, tree, test_manifest, "PRODUCER")
-    replayed = check_bundle(replay, src, head, tree, test_manifest, "REPLAY")
+    produced = check_bundle(evidence, src, tested, tree, test_manifest, "PRODUCER")
+    replayed = check_bundle(replay, src, tested, tree, test_manifest, "REPLAY")
+    head = tested   # the approval names the tested commit and tree
     if not os.path.isfile(approval_path):
         raise Hold("G2L_APPROVAL_MISSING")
     approval = load_json(approval_path, "G2L_SCHEMA_UNKNOWN")
@@ -282,6 +319,13 @@ def parse_unittest(text: str) -> dict:
     return counts
 
 
+def checkout_residue(src: str) -> int:
+    """Number of modified or untracked paths (ignored ones included) left in the exact checkout by a run."""
+    out = subprocess.run(["git", "-C", src, "status", "--porcelain", "--untracked-files=all", "--ignored"],
+                         capture_output=True, text=True, check=True).stdout
+    return len([line for line in out.splitlines() if line.strip()])
+
+
 def docker_inventory() -> dict:
     def ids(*args):
         result = subprocess.run(["docker", *args], capture_output=True, text=True)
@@ -332,9 +376,10 @@ def run(args) -> int:
                     "skipped": 0, "checks_pass": 0, "checks_fail": 0}
             log_path = os.path.join(logs, spec["id"] + ".log")
             if spec["kind"] == "internal_cleanup_audit":
-                text = json.dumps({"leftovers_after_steps": leftovers_seen, "final": docker_inventory()})
                 final = docker_inventory()
-                ok = leftovers_seen == 0 and final == {"containers": 0, "networks": 0, "volumes": 0}
+                residue = checkout_residue(src)
+                text = json.dumps({"leftovers_after_steps": leftovers_seen, "final": final, "checkout_residue": residue})
+                ok = leftovers_seen == 0 and final == {"containers": 0, "networks": 0, "volumes": 0} and residue == 0
                 step.update(status="PASS" if ok else "FAIL", checks_pass=1 if ok else 0, checks_fail=0 if ok else 1,
                             exit_code=0 if ok else 1)
             else:
@@ -373,6 +418,7 @@ def run(args) -> int:
     except KeyboardInterrupt:
         interrupted = True
     final = docker_inventory()
+    residue_end = checkout_residue(src)   # the exact checkout must still be clean after every step
     hits = 0
     for name in sorted(os.listdir(logs)):
         with open(os.path.join(logs, name), encoding="utf-8", errors="replace") as handle:
@@ -410,8 +456,8 @@ def run(args) -> int:
                    "failed": sum(s["status"] in ("FAIL", "ERROR") for s in steps),
                    "skipped": sum(s["status"] in ("SKIPPED", "BLOCKED") for s in steps),
                    "unittest_ran": sum(s["ran"] for s in steps), "script_checks_pass": sum(s["checks_pass"] for s in steps)},
-        "cleanup": {"status": "PASS" if leftovers_seen == 0 and not any(final.values()) else "FAIL",
-                    "leftovers": leftovers_seen + sum(final.values()), "final": final},
+        "cleanup": {"status": "PASS" if leftovers_seen == 0 and not any(final.values()) and residue_end == 0 else "FAIL",
+                    "leftovers": leftovers_seen + sum(final.values()), "final": final, "checkout_residue": residue_end},
         "secret_scan": {"status": "PASS" if hits == 0 else "FAIL", "hits": hits, "patterns": len(SECRET_PATTERNS),
                         "scope": "every private step log"},
     }
@@ -520,7 +566,10 @@ def main(argv=None) -> int:
     p_ver = sub.add_parser("verify")
     for flag in ("--source", "--expect-head", "--evidence", "--replay", "--approval"):
         p_ver.add_argument(flag, required=True)
-    p_ver.add_argument("--allowed-signers-text", required=True)
+    signers = p_ver.add_mutually_exclusive_group(required=True)
+    signers.add_argument("--allowed-signers-text")
+    signers.add_argument("--admitted-signers-from-source", action="store_true",
+                         help="read the PM-admitted signers from the tracked admission file at --source HEAD")
     # The wrapper calls the verifier without a sub-command name.
     if argv is None:
         argv = sys.argv[1:]
@@ -540,7 +589,9 @@ def main(argv=None) -> int:
         return 2
     try:
         verify(os.path.abspath(args.source), args.expect_head, os.path.abspath(args.evidence),
-               os.path.abspath(args.replay), os.path.abspath(args.approval), args.allowed_signers_text)
+               os.path.abspath(args.replay), os.path.abspath(args.approval),
+               read_admitted_signers(os.path.abspath(args.source)) if args.admitted_signers_from_source
+               else args.allowed_signers_text)
     except Hold as error:
         print(f"G2L_RESULT=HOLD_{error}")
         return 2

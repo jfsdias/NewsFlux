@@ -132,7 +132,7 @@ start_summary() { # $@ extra docker run args (flag environment)
     -e NEWSFLUX_AI_USAGE_DATABASE_PATH=/tmp/usage.sqlite3 "$@" \
     --entrypoint python "$summary_image" -c "import time; time.sleep(900)")"
 }
-ident() { docker inspect --format "$(python3 -I -c 'import sys; sys.path.insert(0, sys.argv[1]); import s5_db_readonly_audit as a; print(a.IDENTITY_FORMAT)' "$here")" "$1"; }
+ident() { docker inspect --format "$(python3 -I -B -c 'import sys; sys.path.insert(0, sys.argv[1]); import s5_db_readonly_audit as a; print(a.IDENTITY_FORMAT)' "$here")" "$1"; }
 litellm_image_id="$(docker inspect --format '{{.Image}}' "$ll_id")"
 auditor() { # $1 expected summary snapshot, $2 expected litellm snapshot, $3 expected summary image, [$4 extra env]
   env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ${4:-} python3 -B -I "$here/s5_db_readonly_audit.py" \

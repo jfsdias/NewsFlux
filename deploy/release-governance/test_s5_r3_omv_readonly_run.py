@@ -6,7 +6,6 @@ import hashlib
 import json
 import os
 import re
-import shlex
 import shutil
 import stat
 import subprocess
@@ -410,43 +409,37 @@ class WrapperLocalIndependentTests(WrapperBase):
         values.update(overrides)
         return self.args(**values)
 
-    def admitted_wrapper(self, signers):
-        with open(WRAPPER) as handle:
-            text = handle.read()
-        assert text.count('LOCAL_ADMITTED_SIGNERS=""') == 1
-        path = os.path.join(self.tmp.name, "wrapper-admitted.sh")
-        with open(path, "w") as handle:
-            handle.write(text.replace('LOCAL_ADMITTED_SIGNERS=""', "LOCAL_ADMITTED_SIGNERS=" + shlex.quote(signers)))
-        return path
-
     def test_empty_admission_table_holds_before_any_docker_call(self):
         lines, calls, _ = self.assert_hold("G2L_SIGNERS_NOT_ADMITTED", self.local_args())
         self.assertEqual(calls, [])                       # no curl, no docker
         self.assertNotIn("S5R3_RUN_CI_GATE=PASS_LOCAL_INDEPENDENT_REPLAYED_APPROVED", lines)
 
     def test_admitted_signers_complete_the_run_with_local_evidence(self):
-        global WRAPPER
-        original, WRAPPER = WRAPPER, self.admitted_wrapper(self.f.allowed)
-        try:
-            code, lines, calls, audits = self.run_wrapper(self.local_args())
-            self.assertEqual(code, 0, lines)
-            self.assertIn("S5R3_RUN_G2_MODE=LOCAL_INDEPENDENT", lines)
-            self.assertIn("S5R3_RUN_CI_GATE=PASS_LOCAL_INDEPENDENT_REPLAYED_APPROVED", lines)
-            self.assertEqual(lines[-1], "S5R3_RUN_RESULT=COMPLETE_DIAGNOSTIC_ONLY_READONLY")
-            self.assertFalse([c for c in calls if c[0] == "curl"])     # offline: GitHub is never asked
-            # tampered evidence, a self-approval or a stale approval still hold through the wrapper
-            with open(os.path.join(self.evidence, "SANITIZED_RECEIPT.txt"), "a") as handle:
-                handle.write("x\n")
-            self.assert_hold("G2L_BUNDLE_TAMPERED", self.local_args())
-            other = self.f.bundle()
-            self.assert_hold("G2L_SELF_APPROVAL", self.local_args(**{
-                "--local-evidence": other, "--local-approval": self.f.approval(other, self.replay, reviewer="producer",
-                                                                               key=self.f.keys["producer"])}))
-            self.assert_hold("G2L_APPROVAL_OTHER_EVIDENCE", self.local_args(**{"--local-evidence": other}))
-            self.assert_hold("G2L_APPROVAL_MISSING", self.local_args(**{"--local-evidence": other,
-                                                                         "--local-approval": "/nonexistent/approval.json"}))
-        finally:
-            WRAPPER = original
+        # PM admission = a commit on top of the tested one that changes only the admitted-signers file
+        self.head = self.f.admit()
+        code, lines, calls, audits = self.run_wrapper(self.local_args())
+        self.assertEqual(code, 0, lines)
+        self.assertIn("S5R3_RUN_G2_MODE=LOCAL_INDEPENDENT", lines)
+        self.assertIn("S5R3_RUN_CI_GATE=PASS_LOCAL_INDEPENDENT_REPLAYED_APPROVED", lines)
+        self.assertEqual(lines[-1], "S5R3_RUN_RESULT=COMPLETE_DIAGNOSTIC_ONLY_READONLY")
+        self.assertFalse([c for c in calls if c[0] == "curl"])     # offline: GitHub is never asked
+        # tampered evidence, a self-approval or a stale approval still hold through the wrapper
+        with open(os.path.join(self.evidence, "SANITIZED_RECEIPT.txt"), "a") as handle:
+            handle.write("x\n")
+        self.assert_hold("G2L_BUNDLE_TAMPERED", self.local_args())
+        other = self.f.bundle()
+        self.assert_hold("G2L_SELF_APPROVAL", self.local_args(**{
+            "--local-evidence": other, "--local-approval": self.f.approval(other, self.replay, reviewer="producer",
+                                                                           key=self.f.keys["producer"])}))
+        self.assert_hold("G2L_APPROVAL_OTHER_EVIDENCE", self.local_args(**{"--local-evidence": other}))
+        self.assert_hold("G2L_APPROVAL_MISSING", self.local_args(**{"--local-evidence": other,
+                                                                     "--local-approval": "/nonexistent/approval.json"}))
+
+    def test_admission_commit_that_also_changes_code_holds(self):
+        self.f.admit()
+        self.head = self.f.commit({"deploy/release-governance/s5_db_readonly_audit.py": "print('swapped')\n"}, "swap")
+        self.sha = hashlib.sha256(b"print('swapped')\n").hexdigest()
+        self.assert_hold("G2L_ADMISSION_DELTA_NOT_ALLOWED", self.local_args())
 
     def test_local_evidence_never_outranks_the_source_gate(self):
         self.assert_hold("SOURCE_HEAD_MISMATCH", self.local_args(**{"--expect-head": "0" * 40}))

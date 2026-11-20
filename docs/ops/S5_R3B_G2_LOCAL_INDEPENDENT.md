@@ -1,7 +1,7 @@
 # S5-R3B: `G2_LOCAL_INDEPENDENT` — offline evidence for the diagnostic executor's G2 gate
 
-Status: implemented for **PM review only**. Not admitted for a privileged run: the wrapper's
-`LOCAL_ADMITTED_SIGNERS` table is empty, so the mode verifies everything and then holds with
+Status: implemented for **PM review only**. Not admitted for a privileged run: the tracked
+`g2-admitted-signers` file is empty, so the mode verifies everything and then holds with
 `G2L_SIGNERS_NOT_ADMITTED`. Nothing here dispatches GitHub Actions, posts a status, changes branch
 protection or installs a runner.
 
@@ -18,7 +18,7 @@ offline evidence instead, under the same safety contract:
 | complete results | job listing complete, every job success       | every manifest step present once, `PASS`, exit 0, no failure/error/skip, test and check counts at or above the floor                                                                          |
 | independence     | GitHub's runner                               | **two** complete runs by two distinct producers (different principals, keys and run IDs) plus a detached approval by a reviewer who is not the producer                                       |
 | identity         | GitHub API                                    | OpenSSH signatures (`ssh-keygen -Y`), namespaced: `newsflux-g2-local-evidence`, `newsflux-g2-local-approval`                                                                                  |
-| admission        | the workflow path and job name in the wrapper | signers listed in the wrapper's `LOCAL_ADMITTED_SIGNERS` (empty)                                                                                                                              |
+| admission        | the workflow path and job name in the wrapper | signers in the tracked `g2-admitted-signers` file (empty), changed only in an admission-only descendant commit                                                                                |
 
 It is **not** a skip: there is no `--skip-ci`, `--force`, `--ignore-gates` or bypass variable, no
 arbitrary JSON with `PASS` is accepted, and a producer can never approve its own evidence (by
@@ -80,11 +80,23 @@ diagnostic only: it authorizes nothing about the key, inference, deploy or activ
 
 The wrapper turns each into `S5R3_RUN_RESULT=HOLD_G2L_<code>` before any Docker call.
 
-## 5. Admission (PM)
+## 5. Admission (PM) — lifecycle without invalidating evidence
 
-To admit the mode for one run the PM would, in a reviewed change: name the producer, replayer and
-reviewer and their public keys in `LOCAL_ADMITTED_SIGNERS`; that changes the wrapper's SHA-256, so the
-evidence must then be produced at the new commit. Until then: `G2_LOCAL_INDEPENDENT=IMPLEMENTED_NOT_ADMITTED`.
+Signers live in the tracked file `deploy/release-governance/g2-admitted-signers` (empty; comment lines are
+ignored). The wrapper hands the verifier `--admitted-signers-from-source`, so the trust root is whatever that
+file says at the exact HEAD the operator runs (G1 proves that HEAD and a clean tree).
+
+1. Evidence is produced at the tested commit `T` (all code, tests and docs final).
+2. The PM admits signers in a commit `A` that descends from `T` and changes **only**
+   `g2-admitted-signers` (and optionally `docs/evidence/**`).
+3. The operator runs `A`. The verifier accepts evidence for `T` because `T` is an ancestor of `A` and
+   `git diff --name-only T A` is admission-only; bound files are re-hashed at `A` and must equal the evidence.
+   Any other change after `T` holds `G2L_ADMISSION_DELTA_NOT_ALLOWED`; an evidence commit that is not an
+   ancestor holds `G2L_OTHER_SHA`; the approval must still name `T` and its tree.
+
+Admission never rescues tampering, self-approval, a non-admitted reviewer, an incomplete run, omitted
+results or skips: every check of §4 still runs. Historical evidence (e.g. `d6dfa2c`) is verified with the
+verifier of its own commit and is not rewritten.
 
 ## 6. Limits
 

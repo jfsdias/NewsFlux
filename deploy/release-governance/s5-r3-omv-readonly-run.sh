@@ -13,7 +13,8 @@
 #     LOCAL_INDEPENDENT  --local-evidence + --local-replay + --local-approval: g2_local_evidence.py (tracked at this
 #                        HEAD) verifies two complete offline runs of every manifest step at this commit and tree by
 #                        two distinct producers and a detached approval by a third signer; signers must be in
-#                        LOCAL_ADMITTED_SIGNERS, which is EMPTY (the mode HOLDs until the PM admits signers)
+#                        the tracked g2-admitted-signers file at this HEAD, which is EMPTY (the mode HOLDs until
+#                        the PM admits signers in an admission-only commit descending from the tested commit)
 #   G3 LITELLM  container by full ID: running, the expected immutable image ID, whose RepoDigests contain the
 #               expected registry digest; lifecycle snapshot recorded (ID|image|StartedAt|RestartCount|state|labels)
 #   G4 BINDING  that image ID is in this wrapper's table of lab-proven images for the expected LiteLLM version
@@ -40,10 +41,8 @@ AUDITOR_PATH="deploy/release-governance/s5_db_readonly_audit.py"
 CI_WORKFLOW_PATH=".github/workflows/summary-release-rehearsal.yaml"
 CI_JOB_NAME="synthetic-release"
 G2L_VERIFIER_PATH="deploy/release-governance/g2_local_evidence.py"
-# G2_LOCAL_INDEPENDENT signers admitted by the PM (OpenSSH allowed_signers lines: "<principal> <keytype> <key>").
-# EMPTY ON PURPOSE: the local mode stays ineligible for a privileged run until the PM admits named reviewers
-# in a reviewed change to this file (which also changes this file's pinned SHA-256).
-LOCAL_ADMITTED_SIGNERS=""
+# G2_LOCAL_INDEPENDENT signers are admitted only in the tracked file deploy/release-governance/g2-admitted-signers
+# (empty), changed by the PM in an admission-only commit that descends from the tested commit.
 IDENTITY_FORMAT='{{.Id}}|{{.Image}}|{{.State.StartedAt}}|{{.RestartCount}}|{{.State.Status}}|{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "com.docker.compose.service"}}'
 # Lab-proven LiteLLM images: immutable image ID (config digest) -> LiteLLM package version.
 declare -A PROVEN_IMAGES=(
@@ -194,12 +193,12 @@ g2_remote() {
 g2_local() {
   # G2_LOCAL_INDEPENDENT: offline evidence produced at this exact HEAD/tree, replayed by a second, distinct
   # producer and approved by a detached SSH-signed review naming both bundles. The verifier is tracked at
-  # this HEAD (G1 proved the tree clean). Signers are admitted only through LOCAL_ADMITTED_SIGNERS below;
-  # while it is empty this mode verifies everything and then HOLDs (not admitted by the PM).
+  # this HEAD (G1 proved the tree clean). Signers come only from the tracked g2-admitted-signers file at this
+  # HEAD; while it is empty this mode verifies everything and then HOLDs (not admitted by the PM).
   local verdict
   verdict="$(env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin python3 -B -I "$src/$G2L_VERIFIER_PATH" \
       --source "$src" --expect-head "$head" --evidence "$local_evidence" --replay "$local_replay" \
-      --approval "$local_approval" --allowed-signers-text "$LOCAL_ADMITTED_SIGNERS" 2>/dev/null | tail -n 1)" || true
+      --approval "$local_approval" --admitted-signers-from-source 2>/dev/null | tail -n 1)" || true
   [[ "$verdict" =~ ^G2L_RESULT=(PASS|HOLD_G2L_[A-Z0-9_]{1,72})$ ]] || hold G2L_VERIFIER_UNAVAILABLE
   [[ "${BASH_REMATCH[1]}" == PASS ]] || hold "${BASH_REMATCH[1]#HOLD_}"
   say G2_MODE LOCAL_INDEPENDENT
