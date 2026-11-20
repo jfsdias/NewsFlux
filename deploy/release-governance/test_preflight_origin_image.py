@@ -17,7 +17,9 @@ import ast
 import os
 import re
 import secrets
+import shutil
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -50,7 +52,23 @@ class ExactSummaryImageOriginCheck(unittest.TestCase):
             build = ["build", "-q", "-f", "services/article_intel_summary/Dockerfile", "--build-arg", f"SOURCE_COMMIT={sha}", "-t", image]
             if os.environ.get("NEWSFLUX_TEST_BUILD_NETWORK"):
                 build += ["--network", os.environ["NEWSFLUX_TEST_BUILD_NETWORK"]]
-            subprocess.run(["docker", *build, "."], cwd=REPO, check=True, capture_output=True, text=True, timeout=900)
+            context = str(REPO)
+            if os.environ.get("NEWSFLUX_TEST_PIP_CA"):   # TLS-inspecting sandboxes only; the FROM stays digest-pinned
+                context = tempfile.mkdtemp(prefix=f"{cls.run_id}-ctx-")
+                shutil.copytree(os.path.join(REPO, "services"), os.path.join(context, "services"))
+                shutil.copyfile(os.environ["NEWSFLUX_TEST_PIP_CA"], os.path.join(context, ".pip-ca.pem"))
+                with open(os.path.join(REPO, "services/article_intel_summary/Dockerfile"), encoding="utf-8") as handle:
+                    dockerfile = handle.read().replace(
+                        "RUN pip install", "COPY .pip-ca.pem /tmp/ca.pem\nARG HTTPS_PROXY\nRUN PIP_CERT=/tmp/ca.pem pip install", 1)
+                with open(os.path.join(context, "Dockerfile.sandbox"), "w", encoding="utf-8") as handle:
+                    handle.write(dockerfile)
+                build[3] = "Dockerfile.sandbox"
+                build += ["--network", "host", "--build-arg", "HTTPS_PROXY=" + os.environ.get("HTTPS_PROXY", "")]
+            try:
+                subprocess.run(["docker", *build, "."], cwd=context, check=True, capture_output=True, text=True, timeout=900)
+            finally:
+                if context != str(REPO):
+                    shutil.rmtree(context, ignore_errors=True)
             cls.built = image
         else:
             cls.built = None

@@ -397,6 +397,10 @@ def run(args) -> int:
         "compose": version("docker", "compose", "version", "--short"),
         "git": version("git", "--version"),
         "docker_daemon_exclusive_before_run": True, "images": images,
+        # Declared deviations from a hosted runner (never hidden): a TLS-inspecting proxy needs its CA for pip
+        # inside Summary image builds; the Dockerfile FROM stays digest-pinned.
+        "sandbox_adaptations": {"NEWSFLUX_TEST_PIP_CA": bool(env_base.get("NEWSFLUX_TEST_PIP_CA")),
+                                "HTTPS_PROXY": bool(env_base.get("HTTPS_PROXY"))},
         "isolation": "disposable lab; synthetic data only; rehearsal networks are Docker --internal where the script uses them; "
                      "no production host, no OMV, no real key",
     }
