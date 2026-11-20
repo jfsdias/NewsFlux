@@ -47,7 +47,7 @@ import {
   MIN_ARTICLE_WIDTH,
   TITLE_ALIGNMENT_OPTIONS,
 } from "@/utils/settings-options"
-import { buildWallhopExternalUrl } from "@/utils/wallhop-external"
+import { wallhopExternalActionUrl } from "@/utils/wallhop-external"
 import "./ActionButtons.css"
 
 const TITLE_ALIGNMENT_ICONS = {
@@ -139,7 +139,7 @@ const ActionButtons = ({ isPhotoSliderVisible = false, scrollContainerRef = null
     ],
   })
 
-  const wallhopExternalUrl = buildWallhopExternalUrl(activeContent?.url)
+  const wallhopExternalUrl = wallhopExternalActionUrl(activeContent?.url)
   const [dropdownVisible, setDropdownVisible] = useState(false)
   const [fontSubmenuVisible, setFontSubmenuVisible] = useState(false)
   const [isCompactTocVisible, setIsCompactTocVisible] = useState(false)

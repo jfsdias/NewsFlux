@@ -6,7 +6,7 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8")
 
 test("Reader exposes explicit WallHop external action only for safe URLs", async () => {
   const source = await read("src/components/Article/ActionButtons.jsx")
-  assert.match(source, /buildWallhopExternalUrl\(activeContent\?\.url\)/u)
+  assert.match(source, /wallhopExternalActionUrl\(activeContent\?\.url\)/u)
   assert.match(source, /wallhopExternalUrl && \(/u)
   assert.match(source, /key="open-with-wallhop"/u)
   assert.match(source, /onClick=\{handleOpenViaWallhop\}/u)

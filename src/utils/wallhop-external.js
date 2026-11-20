@@ -32,3 +32,16 @@ export const buildWallhopExternalUrl = (articleUrl) => {
     return null
   }
 }
+
+/**
+ * Path A ships dark: the external-open action exists only in a build that sets
+ * VITE_WALLHOP_EXTERNAL_OPEN_ENABLED=true (owner direction W0; provider contract still HOLD).
+ * Exactly "true"; anything else (absent, "1", "TRUE ", "yes") keeps it hidden.
+ */
+export const isWallhopExternalOpenEnabled = (
+  configured = import.meta.env?.VITE_WALLHOP_EXTERNAL_OPEN_ENABLED,
+) => configured === "true"
+
+/** The URL to offer, or null when the action is disabled in this build or the article URL is unsafe. */
+export const wallhopExternalActionUrl = (articleUrl, enabled = isWallhopExternalOpenEnabled()) =>
+  enabled ? buildWallhopExternalUrl(articleUrl) : null
