@@ -236,3 +236,17 @@ disabled per request.
 
 The legacy env-driven S5 → Mistral fallback (`NEWSFLUX_AI_ENABLE_S5_MISTRAL_FALLBACK`, v1
 endpoint only) is unchanged and stays off by default.
+
+## D1 successor mode: LiteLLM key and cost authority (default off)
+
+Contract: `docs/ops/NEWSFLUX_D1_LITELLM_AUTHORITY_CONTRACT.md` (#273). Not enabled anywhere.
+
+| Variable                                           | Meaning                                                                                                                                                                                                           |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NEWSFLUX_AI_MODEL_AUTHORITY=litellm_key`          | the virtual key's own model listing is the catalog; no NewsFlux allowlist, no admin approval or policy writes (`MODEL_AUTHORITY_IS_LITELLM_KEY`), no prices anywhere                                              |
+| `NEWSFLUX_AI_LITELLM_COST_AUTHORITY`               | `gateway_budget_enforced` or `explicit_unlimited`; anything else is unknown                                                                                                                                       |
+| `NEWSFLUX_AI_LITELLM_COST_AUTHORITY_EVIDENCE_FILE` | evidence built by `python -m services.article_intel_summary.cost_authority build` from a complete read-only diagnostic receipt; bound to the key fingerprint, at most 7 days old, regular non-world-writable file |
+
+Without matching, fresh evidence for the key the Summary holds, every model is `COST_AUTHORITY_UNPROVEN`. Key rotation
+or revocation invalidates the evidence. Rollback: remove `NEWSFLUX_AI_MODEL_AUTHORITY` (back to the operator-policy
+contract) or turn inference/external transfer off; both are configuration-only.

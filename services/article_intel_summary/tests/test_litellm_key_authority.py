@@ -5,7 +5,7 @@ Não precisa ser controlado ou aparecer no NewsFlux." Mode NEWSFLUX_AI_MODEL_AUT
 off: the current operator-policy contract stays in force). Synthetic gateway answers only; no network.
 
 Gates: KEY_LISTING_IS_THE_CATALOG, NO_SECOND_ALLOWLIST, CAPABILITY_STILL_REQUIRED, COST_AUTHORITY_DECLARED
-(missing declaration fails closed; explicit unlimited is distinct from missing), NON_FINANCIAL_GATES_KEPT
+(declaration must match fresh gateway evidence bound to the key; explicit unlimited is distinct from missing), NON_FINANCIAL_GATES_KEPT
 (inference, external transfer, gateway, discovery), NO_SILENT_SUBSTITUTION, NO_COST_IN_CATALOG,
 NO_CREDENTIAL_EXPOSURE, LOCAL_RATE_THROTTLE_KEPT.
 """
@@ -52,9 +52,21 @@ class KeyAuthorityCatalogTests(unittest.TestCase):
             "NEWSFLUX_AI_MODEL_DISCOVERY_TTL_SECONDS": "0",
             "NEWSFLUX_AI_MODEL_AUTHORITY": "litellm_key",
             "NEWSFLUX_AI_LITELLM_COST_AUTHORITY": "gateway_budget_enforced",
+            "NEWSFLUX_AI_LITELLM_COST_AUTHORITY_EVIDENCE_FILE": self.write_evidence("budget.json"),
         })
         env.pop("NEWSFLUX_AI_LITELLM_MODEL_CHOICE", None)
         self.env = env
+
+    def write_evidence(self, name, declaration="gateway_budget_enforced", facts=None, key=KEY):
+        """Evidence as built from a real diagnostic receipt (see test_cost_authority_evidence)."""
+        from datetime import datetime, timedelta, timezone
+
+        from services.article_intel_summary.tests.test_cost_authority_evidence import BUDGET_FACTS, evidence
+        captured = datetime.now(timezone.utc) - timedelta(hours=1)
+        path = Path(self.tmp.name) / name
+        path.write_text(json.dumps(evidence(declaration, facts or BUDGET_FACTS, key=key, captured=captured)))
+        path.chmod(0o640)
+        return str(path)
 
     def router(self, gateway, **overrides):
         values = {**self.env, **overrides}
@@ -118,9 +130,26 @@ class KeyAuthorityCatalogTests(unittest.TestCase):
             with self.assertRaises(ModelNotAvailable):
                 router.adapter_for(discovered_model_id("acme-7b"))
 
-    def test_explicit_unlimited_is_accepted_as_a_distinct_declaration(self) -> None:
+    def test_declaration_without_matching_fresh_evidence_for_this_key_fails_closed(self) -> None:
+        from services.article_intel_summary.tests.test_cost_authority_evidence import OTHER_KEY, UNLIMITED_FACTS
         gateway = FakeGateway(listed=("acme-7b",), infos=[model_info("acme-7b")])
-        router = self.router(gateway, NEWSFLUX_AI_LITELLM_COST_AUTHORITY="explicit_unlimited")
+        cases = (
+            {"NEWSFLUX_AI_LITELLM_COST_AUTHORITY_EVIDENCE_FILE": None},                                  # no evidence
+            {"NEWSFLUX_AI_LITELLM_COST_AUTHORITY_EVIDENCE_FILE": self.write_evidence("other.json", key=OTHER_KEY)},  # rotated key
+            {"NEWSFLUX_AI_LITELLM_COST_AUTHORITY_EVIDENCE_FILE": self.write_evidence(
+                "nobudget.json", facts={**UNLIMITED_FACTS})},                                          # budget missing
+            {"NEWSFLUX_AI_LITELLM_COST_AUTHORITY": "explicit_unlimited"},                              # declaration mismatch
+        )
+        for overrides in cases:
+            _, models = self.models(self.router(gateway, **overrides))
+            self.assertEqual(models["acme-7b"]["unavailable_reason"], "COST_AUTHORITY_UNPROVEN", overrides)
+
+    def test_explicit_unlimited_is_accepted_as_a_distinct_declaration(self) -> None:
+        from services.article_intel_summary.tests.test_cost_authority_evidence import UNLIMITED_FACTS
+        gateway = FakeGateway(listed=("acme-7b",), infos=[model_info("acme-7b")])
+        router = self.router(gateway, NEWSFLUX_AI_LITELLM_COST_AUTHORITY="explicit_unlimited",
+                             NEWSFLUX_AI_LITELLM_COST_AUTHORITY_EVIDENCE_FILE=self.write_evidence(
+                                 "unlimited.json", "explicit_unlimited", UNLIMITED_FACTS))
         _, models = self.models(router)
         self.assertTrue(models["acme-7b"]["available"])
         self.assertEqual(router.adapter_for(discovered_model_id("acme-7b")).settings.cost_authority, "explicit_unlimited")
@@ -207,3 +236,52 @@ class GatewayCostAuthorityLedgerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class KeyAuthorityAdminTests(unittest.TestCase):
+    """In key-authority mode NewsFlux administers neither models nor costs: no approval writes, no prices."""
+
+    def setUp(self) -> None:
+        from services.article_intel_summary.admin_settings import ManagedSettingsStore
+
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        key = Path(self.tmp.name) / "key"
+        key.write_text(KEY, encoding="utf-8")
+        key.chmod(0o600)
+        self.gateway = FakeGateway(listed=("acme-7b",), infos=[model_info("acme-7b", input_cost=0.00003)])
+        self.env = {
+            "NEWSFLUX_AI_LITELLM_VIRTUAL_KEY_FILE": str(key),
+            "NEWSFLUX_AI_LITELLM_BASE_URL": "https://gateway.example",
+            "NEWSFLUX_AI_ADMIN_CONFIG_WRITES_ENABLED": "true",
+            "NEWSFLUX_AI_MODEL_DISCOVERY_ENABLED": "true",
+            "NEWSFLUX_AI_MODEL_AUTHORITY": "litellm_key",
+        }
+        self.Store = ManagedSettingsStore
+        self.root = str(Path(self.tmp.name) / "managed")
+
+    def store(self, **overrides):
+        env = {k: v for k, v in {**self.env, **overrides}.items() if v is not None}
+        return self.Store(env, root=self.root, getter_factory=lambda *_: self.gateway)
+
+    def test_status_reports_the_authority(self) -> None:
+        self.assertEqual(self.store().status()["model_authority"], "litellm_key")
+        self.assertEqual(self.store(NEWSFLUX_AI_MODEL_AUTHORITY=None).status()["model_authority"], "newsflux_policy")
+
+    def test_no_duplicate_model_administration_in_key_mode(self) -> None:
+        from services.article_intel_summary.admin_settings import ManagedSettingsError
+
+        store = self.store()
+        with self.assertRaises(ManagedSettingsError) as raised:
+            store.approve_model("acme-7b", store.status()["revision"], allow_external=True, allow_paid=True)
+        self.assertEqual(raised.exception.code, "MODEL_AUTHORITY_IS_LITELLM_KEY")
+        with self.assertRaises(ManagedSettingsError) as raised:
+            store.save_policy({"version": 1, "models": []}, store.status()["revision"])
+        self.assertEqual(raised.exception.code, "MODEL_AUTHORITY_IS_LITELLM_KEY")
+
+    def test_public_models_carry_no_price_in_key_mode(self) -> None:
+        document = self.store().public_models()
+        text = json.dumps(document)
+        for field in ("price_known", "price_class", "input_usd_per_million", "output_usd_per_million"):
+            self.assertNotIn(field, text)
+        self.assertEqual([m["id"] for m in document["models"]], ["acme-7b"])

@@ -459,6 +459,8 @@
     "litellm_price_paid": "付费",
     "litellm_price_unknown": "价格未知",
     "litellm_price_required": "价格未知：外部模型在批准前需要经过验证的价格。",
+    "litellm_key_authority_description": "模型由 LiteLLM 虚拟密钥决定，成本和预算由 LiteLLM 管理。",
+    "litellm_key_authority_notice": "只读：NewsFlux 不维护模型列表，也不显示价格。请在 LiteLLM 中更改模型和预算。",
     "litellm_error_conflict": "设置已在其他地方更改。已重新加载当前状态，请检查后重试。",
     "litellm_error_key_invalid": "密钥格式无效。",
     "litellm_error_key_unverified": "LiteLLM 未接受此密钥或无法访问。已保留当前密钥。",

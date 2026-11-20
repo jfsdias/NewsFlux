@@ -459,6 +459,8 @@
     "litellm_price_paid": "Kostenpflichtig",
     "litellm_price_unknown": "Preis unbekannt",
     "litellm_price_required": "Preis unbekannt: Externe Modelle benötigen vor der Freigabe einen geprüften Preis.",
+    "litellm_key_authority_description": "Modelle werden vom virtuellen LiteLLM-Schlüssel bestimmt, Kosten und Budgets von LiteLLM.",
+    "litellm_key_authority_notice": "Nur lesen: NewsFlux führt keine Modellliste und zeigt keine Preise. Modelle und Budgets in LiteLLM ändern.",
     "litellm_error_conflict": "Die Einstellungen wurden anderswo geändert. Der aktuelle Stand wurde neu geladen; bitte prüfen und erneut versuchen.",
     "litellm_error_key_invalid": "Das Schlüsselformat ist ungültig.",
     "litellm_error_key_unverified": "LiteLLM hat diesen Schlüssel nicht akzeptiert oder ist nicht erreichbar. Der aktuelle Schlüssel bleibt erhalten.",

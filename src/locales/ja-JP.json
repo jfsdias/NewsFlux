@@ -459,6 +459,8 @@
     "litellm_price_paid": "有料",
     "litellm_price_unknown": "価格不明",
     "litellm_price_required": "価格不明：外部モデルは承認前に価格の確認が必要です。",
+    "litellm_key_authority_description": "モデルは LiteLLM の仮想キーが、コストと予算は LiteLLM が管理します。",
+    "litellm_key_authority_notice": "読み取り専用：NewsFlux はモデル一覧も価格も持ちません。モデルと予算は LiteLLM で変更してください。",
     "litellm_error_conflict": "設定が別の場所で変更されました。現在の状態を再読み込みしました。確認してからもう一度お試しください。",
     "litellm_error_key_invalid": "キーの形式が無効です。",
     "litellm_error_key_unverified": "LiteLLM がこのキーを受け付けなかったか、接続できません。現在のキーは保持されています。",

@@ -20,6 +20,8 @@ import {
   canApproveModel,
   connectionState,
   errorMessageKey,
+  isKeyAuthority,
+  keyAuthorityModelLabel,
   priceLabelKey,
 } from "@/utils/litellm-admin-state"
 
@@ -240,99 +242,119 @@ const LiteLlmAdminSettings = ({ onPolicyChanged }) => {
           )}
         </div>
       </SettingItem>
-      <SettingItem description={t("models_description")} title={t("models")}>
-        <div className="ai-litellm-admin__stack">
-          <Button
-            disabled={busy || !status.configured}
-            loading={busy}
-            onClick={() => void refresh()}
-          >
-            {t("refresh")}
-          </Button>
-          <Select
-            showSearch
-            aria-label={t("models")}
-            disabled={busy || !status.configured || !status.writes_enabled}
-            placeholder={t("choose")}
-            value={selectedAlias || undefined}
-            onChange={(value) => {
-              setSelectedAlias(value)
-              setAllowExternal(false)
-              setAllowPaid(false)
-            }}
-          >
-            {page.models.map((model) => (
-              <Select.Option key={model.id} value={model.id}>
-                {model.id} · {model.provider} · {t(priceLabelKey(model))}{" "}
-                {model.approved ? "✓" : ""}
-              </Select.Option>
-            ))}
-          </Select>
-          {candidate && (
-            <>
-              <Typography.Text type="secondary">
-                {candidate.local_ollama ? t("local") : t("external")}
-                {" · "}
-                {candidate.mode ?? t("unverified")}
-                {" · "}
-                {t(priceLabelKey(candidate))}
-                {" · "}
-                {candidate.approved ? t("approved") : t("not_approved")}
-              </Typography.Text>
-              {!candidate.local_ollama && (
-                <Checkbox checked={allowExternal} disabled={busy} onChange={setAllowExternal}>
-                  {t("external_consent")}
-                </Checkbox>
-              )}
-              {candidate.price_class === "paid" && (
-                <Checkbox checked={allowPaid} disabled={busy} onChange={setAllowPaid}>
-                  {t("paid_consent")}
-                </Checkbox>
-              )}
-              {!candidate.local_ollama && priceLabelKey(candidate) === "price_unknown" && (
-                <Typography.Text type="warning">{t("price_required")}</Typography.Text>
-              )}
-              <div className="ai-litellm-admin__actions">
-                {candidate.approved ? (
-                  <Button
-                    disabled={busy || !status.writes_enabled}
-                    status="danger"
-                    onClick={() =>
-                      void doAction(
-                        () => removeLiteLLMModel(selectedAlias, status.revision),
-                        t("model_removed"),
-                        { changedPolicy: true },
-                      )
-                    }
-                  >
-                    {t("remove")}
-                  </Button>
-                ) : (
-                  <Button
-                    disabled={busy || !status.writes_enabled || !canApprove}
-                    type="primary"
-                    onClick={() =>
-                      void doAction(
-                        () =>
-                          approveLiteLLMModel(
-                            selectedAlias,
-                            status.revision,
-                            allowPaid,
-                            allowExternal,
-                          ),
-                        t("model_approved"),
-                        { changedPolicy: true },
-                      )
-                    }
-                  >
-                    {t("approve")}
-                  </Button>
+      {isKeyAuthority(status) ? (
+        <SettingItem description={t("key_authority_description")} title={t("models")}>
+          <div className="ai-litellm-admin__stack">
+            <Button
+              disabled={busy || !status.configured}
+              loading={busy}
+              onClick={() => void refresh()}
+            >
+              {t("refresh")}
+            </Button>
+            <Typography.Text type="secondary">{t("key_authority_notice")}</Typography.Text>
+            <ul aria-label={t("models")}>
+              {page.models.map((model) => (
+                <li key={model.id}>{keyAuthorityModelLabel(model)}</li>
+              ))}
+            </ul>
+          </div>
+        </SettingItem>
+      ) : (
+        <SettingItem description={t("models_description")} title={t("models")}>
+          <div className="ai-litellm-admin__stack">
+            <Button
+              disabled={busy || !status.configured}
+              loading={busy}
+              onClick={() => void refresh()}
+            >
+              {t("refresh")}
+            </Button>
+            <Select
+              showSearch
+              aria-label={t("models")}
+              disabled={busy || !status.configured || !status.writes_enabled}
+              placeholder={t("choose")}
+              value={selectedAlias || undefined}
+              onChange={(value) => {
+                setSelectedAlias(value)
+                setAllowExternal(false)
+                setAllowPaid(false)
+              }}
+            >
+              {page.models.map((model) => (
+                <Select.Option key={model.id} value={model.id}>
+                  {model.id} · {model.provider} · {t(priceLabelKey(model))}{" "}
+                  {model.approved ? "✓" : ""}
+                </Select.Option>
+              ))}
+            </Select>
+            {candidate && (
+              <>
+                <Typography.Text type="secondary">
+                  {candidate.local_ollama ? t("local") : t("external")}
+                  {" · "}
+                  {candidate.mode ?? t("unverified")}
+                  {" · "}
+                  {t(priceLabelKey(candidate))}
+                  {" · "}
+                  {candidate.approved ? t("approved") : t("not_approved")}
+                </Typography.Text>
+                {!candidate.local_ollama && (
+                  <Checkbox checked={allowExternal} disabled={busy} onChange={setAllowExternal}>
+                    {t("external_consent")}
+                  </Checkbox>
                 )}
-              </div>
-            </>
-          )}
-        </div>
-      </SettingItem>
+                {candidate.price_class === "paid" && (
+                  <Checkbox checked={allowPaid} disabled={busy} onChange={setAllowPaid}>
+                    {t("paid_consent")}
+                  </Checkbox>
+                )}
+                {!candidate.local_ollama && priceLabelKey(candidate) === "price_unknown" && (
+                  <Typography.Text type="warning">{t("price_required")}</Typography.Text>
+                )}
+                <div className="ai-litellm-admin__actions">
+                  {candidate.approved ? (
+                    <Button
+                      disabled={busy || !status.writes_enabled}
+                      status="danger"
+                      onClick={() =>
+                        void doAction(
+                          () => removeLiteLLMModel(selectedAlias, status.revision),
+                          t("model_removed"),
+                          { changedPolicy: true },
+                        )
+                      }
+                    >
+                      {t("remove")}
+                    </Button>
+                  ) : (
+                    <Button
+                      disabled={busy || !status.writes_enabled || !canApprove}
+                      type="primary"
+                      onClick={() =>
+                        void doAction(
+                          () =>
+                            approveLiteLLMModel(
+                              selectedAlias,
+                              status.revision,
+                              allowPaid,
+                              allowExternal,
+                            ),
+                          t("model_approved"),
+                          { changedPolicy: true },
+                        )
+                      }
+                    >
+                      {t("approve")}
+                    </Button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </SettingItem>
+      )}
     </SettingSection>
   )
 }

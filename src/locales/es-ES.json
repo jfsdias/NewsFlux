@@ -459,6 +459,8 @@
     "litellm_price_paid": "De pago",
     "litellm_price_unknown": "Precio desconocido",
     "litellm_price_required": "Precio desconocido: los modelos externos necesitan un precio verificado antes de aprobarse.",
+    "litellm_key_authority_description": "Los modelos los rige la clave virtual de LiteLLM; costes y presupuestos, LiteLLM.",
+    "litellm_key_authority_notice": "Solo lectura: NewsFlux no mantiene lista de modelos ni muestra precios. Cambie modelos y presupuestos en LiteLLM.",
     "litellm_error_conflict": "La configuración cambió en otro lugar. Se recargó el estado actual; revísalo e inténtalo de nuevo.",
     "litellm_error_key_invalid": "El formato de la clave no es válido.",
     "litellm_error_key_unverified": "LiteLLM no aceptó esta clave o no está disponible. Se conservó la clave actual.",

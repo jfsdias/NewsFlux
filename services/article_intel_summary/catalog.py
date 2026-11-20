@@ -42,6 +42,7 @@ from services.article_intel_summary.budget import (
     UsageLedgerError,
 )
 from services.article_intel_summary.contracts import validate_catalog
+from services.article_intel_summary.cost_authority import evaluate as evaluate_cost_authority
 from services.article_intel_summary.litellm_adapter import (
     MODEL_CHOICE_MISTRAL_SMALL,
     MODEL_CHOICE_S5_FREE,
@@ -991,7 +992,10 @@ def _evaluate_key_model(alias: str, snapshot: DiscoverySnapshot, gateway: LiteLL
     mode = gateway_model.mode if gateway_model is not None else None
     compatible: bool | None = None if mode is None else mode == "chat"
     declared = (values.get("NEWSFLUX_AI_LITELLM_COST_AUTHORITY") or "").strip()
-    cost_authority = declared if declared in GATEWAY_COST_AUTHORITIES else None
+    # The declaration proves nothing alone: it must match fresh gateway evidence bound to this exact key.
+    proof, _proof_reason = evaluate_cost_authority(
+        declared, values.get("NEWSFLUX_AI_LITELLM_COST_AUTHORITY_EVIDENCE_FILE"), gateway.virtual_key)
+    cost_authority = declared if proof == "PROVEN" and declared in GATEWAY_COST_AUTHORITIES else None
     settings = replace(
         gateway,
         model_choice=model_id,

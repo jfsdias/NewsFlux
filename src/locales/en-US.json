@@ -459,6 +459,8 @@
     "litellm_price_paid": "Paid",
     "litellm_price_unknown": "Price unknown",
     "litellm_price_required": "Price unknown: external models need a verified price before approval.",
+    "litellm_key_authority_description": "Models are governed by the LiteLLM virtual key; costs and budgets by LiteLLM.",
+    "litellm_key_authority_notice": "Read-only: NewsFlux keeps no model allowlist and shows no prices. Change models and budgets in LiteLLM.",
     "litellm_error_conflict": "Settings changed elsewhere. Reloaded the current state; review and try again.",
     "litellm_error_key_invalid": "The key format is invalid.",
     "litellm_error_key_unverified": "LiteLLM did not accept this key or is unreachable. The current key was kept.",
