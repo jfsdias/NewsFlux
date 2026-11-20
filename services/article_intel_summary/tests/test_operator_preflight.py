@@ -51,10 +51,11 @@ class OperatorPreflightTests(unittest.TestCase):
         self.assertIn("D1_PREFLIGHT=NOT_APPLICABLE_LEGACY_CONTRACT", lines)
 
     def test_d1_key_mode_holds_without_bound_cost_authority_evidence(self):
-        from services.article_intel_summary.tests.test_cost_authority_evidence import (
-            evidence, trust_current_user, write_trusted,
-        )
         from datetime import datetime, timedelta, timezone
+
+        from services.article_intel_summary.tests.test_cost_authority_evidence import (
+            evidence, sha_of, trust_current_user, write_trusted,
+        )
         trust_current_user(self)
         env = {**self.env, "NEWSFLUX_AI_MODEL_AUTHORITY": "litellm_key",
                "NEWSFLUX_AI_LITELLM_COST_AUTHORITY": "gateway_budget_enforced"}
@@ -64,10 +65,13 @@ class OperatorPreflightTests(unittest.TestCase):
         self.assertEqual(lines[-1], "PREFLIGHT=HOLD")
         directory = Path(self.tmp.name) / "evidence"
         directory.mkdir(mode=0o755)
-        fresh = evidence(key=KEY, captured=datetime.now(timezone.utc) - timedelta(hours=1))
-        env["NEWSFLUX_AI_LITELLM_COST_AUTHORITY_EVIDENCE_FILE"] = write_trusted(directory, "e.json", fresh)
-        code, lines = run(env, store_factory=self.factory)
+        path = write_trusted(directory, "e.json", evidence(key=KEY, captured=datetime.now(timezone.utc) - timedelta(hours=1)))
+        env.update(NEWSFLUX_AI_LITELLM_COST_AUTHORITY_EVIDENCE_FILE=path, NEWSFLUX_AI_LITELLM_COST_AUTHORITY_EVIDENCE_SHA256=sha_of(path),
+                   NEWSFLUX_AI_INFERENCE_ENABLED="true", NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER="true",
+                   NEWSFLUX_AI_MODEL_DISCOVERY_ENABLED="true")
+        code, lines = run(env, store_factory=self.factory)            # no --check-gateway: offline gates only
         self.assertIn("D1_COST_AUTHORITY=PROVEN_GATEWAY_ENFORCEMENT_EVIDENCE", lines, lines)
+        self.assertIn("D1_PREFLIGHT=PASS_OFFLINE_ONLY", lines)
         self.assertEqual(code, 0, lines)
         self.assertEqual(lines.count("SECRET_PRINTED=NO"), 1)
         self.assertNotIn(KEY, "\n".join(lines))

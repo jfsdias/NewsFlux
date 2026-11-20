@@ -12,6 +12,7 @@ NO_CREDENTIAL_EXPOSURE, LOCAL_RATE_THROTTLE_KEPT.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
@@ -34,6 +35,15 @@ COST_ENV = (
     "NEWSFLUX_AI_LITELLM_MISTRAL_SMALL_OUTPUT_USD_PER_MILLION",
     "NEWSFLUX_AI_ALLOW_PAID_INFERENCE",
 )
+
+
+def with_pinned_evidence(values):
+    """The deployment pins the ledger-recorded evidence digest; tests pin the digest of the file they wrote."""
+    values = {k: v for k, v in values.items() if v is not None}
+    path = values.get("NEWSFLUX_AI_LITELLM_COST_AUTHORITY_EVIDENCE_FILE")
+    if path and "NEWSFLUX_AI_LITELLM_COST_AUTHORITY_EVIDENCE_SHA256" not in values and Path(path).is_file():
+        values["NEWSFLUX_AI_LITELLM_COST_AUTHORITY_EVIDENCE_SHA256"] = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    return values
 
 
 class KeyAuthorityCatalogTests(unittest.TestCase):
@@ -73,8 +83,7 @@ class KeyAuthorityCatalogTests(unittest.TestCase):
         return write_trusted(directory, name, evidence(declaration, facts, key=key, captured=captured))
 
     def router(self, gateway, **overrides):
-        values = {**self.env, **overrides}
-        values = {k: v for k, v in values.items() if v is not None}
+        values = with_pinned_evidence({**self.env, **overrides})
         router, adapter = create_model_router(values, discovery_getter=gateway, default_adapter=object())
         if router.ledger_owner is not None:
             self.addCleanup(router.ledger_owner.__exit__)

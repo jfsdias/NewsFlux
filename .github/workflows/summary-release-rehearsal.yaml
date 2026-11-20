@@ -7,6 +7,10 @@ on:
       - "services/article_intel_summary/s5_preflight.py"
       - "services/article_intel_summary/tests/test_s5_preflight.py"
       - "services/article_intel_summary/Dockerfile"
+      - "services/article_intel_summary/cost_authority.py"
+      - "services/article_intel_summary/d1_evidence.py"
+      - "services/article_intel_summary/d1_receipt_contract.py"
+      - "services/article_intel_summary/catalog.py"
       - ".github/workflows/summary-release-rehearsal.yaml"
   # Manual run on an exact test-only integration tree (e.g. route PR + this tooling together).
   workflow_dispatch:
@@ -17,7 +21,7 @@ env:
 jobs:
   synthetic-release:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
         with:
@@ -42,6 +46,10 @@ jobs:
         run: bash deploy/release-governance/rehearse-r12f09.sh
       - name: S5 key gate against a real disposable LiteLLM (least-privilege 403, admin attestation, pricing)
         run: bash deploy/release-governance/rehearse-s5-key-gate.sh
+      - name: D1 budget enforcement on the production LiteLLM pin (negative + positive control, local mock provider)
+        run: bash deploy/release-governance/rehearse-d1-budget-enforcement.sh
+      - name: D1 transition end to end (capture with the authorized auditor, target preflight, activation, canary, rollback)
+        run: sudo -E bash deploy/release-governance/rehearse-d1-transition.sh
       - name: Upgrade from the deployed Stage 1 (57f1c6a) with exact rollback to Stage 1
         run: bash deploy/release-governance/rehearse-stage1-upgrade.sh
       - name: Rehearse synthetic scoped promotion and rollback (shell)

@@ -39,7 +39,7 @@ class D1SyntheticCanaryTests(unittest.TestCase):
         self.requests: list[dict] = []
 
     def router(self, **overrides):
-        values = {k: v for k, v in {**self.env, **overrides}.items() if v is not None}
+        values = key_authority.with_pinned_evidence({**self.env, **overrides})
         router, _ = create_model_router(values, discovery_getter=self.gateway, default_adapter=object())
         if router.ledger_owner is not None:
             self.addCleanup(router.ledger_owner.__exit__)

@@ -10,6 +10,9 @@ values, secrets or file contents):
             selected service with the exact candidate image ID
   rollback  restore the manifest's previous image when, and only when, the live
             state still corresponds to that release
+  candidate-run  run one read-only command in a one-off container of the
+            manifest's TARGET configuration (`compose run --rm --no-deps -T`),
+            before promotion; the running service is not touched (D1-R7-02)
 
 Safety properties:
   * a closed policy decides which (project, service) pairs may ever be touched;
@@ -22,7 +25,10 @@ Safety properties:
     hash before and after the operation;
   * a host-wide exclusive lock (flock) serializes release operations;
   * only `docker compose up -d --no-deps --no-build --pull never <service>` is
-    ever executed, with a release-owned override that pins the image ID;
+    ever executed to change the service, with a release-owned override that
+    pins the image ID; candidate-run adds `compose run --rm --no-deps -T`;
+  * an override may add networks and read-only bind mounts only when declared
+    (--network-added / --mount-added), so the shape check stays exact;
   * a failed promotion is rolled back automatically; rollback is idempotent and
     refuses when the live state is neither the candidate nor the previous image.
 """
@@ -191,6 +197,14 @@ class Docker:
     def compose_up(self, identity: ContainerIdentity, files: Sequence[str], service: str) -> None:
         self.run([*self.compose_args(identity, files), "up", "-d", "--no-deps", "--no-build", "--pull", "never", service])
 
+    def compose_run(self, identity: ContainerIdentity, files: Sequence[str], service: str, argv: Sequence[str]) -> tuple[int, str]:
+        """One-off container of the given Compose sequence; never touches the running service container."""
+        completed = subprocess.run(
+            ["docker", *self.compose_args(identity, files), "run", "--rm", "--no-deps", "-T", service, *argv],
+            check=False, capture_output=True, text=True, timeout=300,
+        )
+        return completed.returncode, completed.stdout
+
     def resolved_service_image(self, identity: ContainerIdentity, files: Sequence[str], service: str) -> str | None:
         """Image ID the given Compose sequence resolves to. Config output stays in memory (it may hold secrets)."""
         try:
@@ -256,6 +270,7 @@ def build_manifest(
     ready_probe: Sequence[str] | None = None,
     extra_overrides: Sequence[str] = (),
     networks_added: Sequence[str] = (),
+    mounts_added: Sequence[str] = (),
 ) -> dict:
     require((project, service) in policy, "SERVICE_NOT_AUTHORIZED")
     require(IMAGE_ID_RE.fullmatch(candidate_image), "CANDIDATE_IMAGE_NOT_IMMUTABLE")
@@ -280,6 +295,14 @@ def build_manifest(
     extras = [{"path": str(Path(item)), "sha256": sha256_file(Path(item))} for item in extra_overrides]
     require(not {item["path"] for item in extras} & set(base_files), "EXTRA_OVERRIDE_IN_BASE")
     require(not networks_added or extras, "NETWORK_CHANGE_REQUIRES_OVERRIDE")
+    require(not mounts_added or extras, "MOUNT_CHANGE_REQUIRES_OVERRIDE")
+    added_mounts = []
+    for item in mounts_added:
+        source, _, destination = item.partition(":")
+        path = Path(source)
+        require(path.is_absolute() and Path(destination).is_absolute() and destination != "/", "MOUNT_ADDED_INVALID")
+        require(path.is_file() and not path.is_symlink(), "MOUNT_ADDED_SOURCE_INVALID")
+        added_mounts.append(["bind", source, destination, False])   # read-only only
     env_files = [{"path": item, "sha256": sha256_file(Path(item))} for item in target.env_files]
     protected_state = {name: docker.container_by_name(name).protected_fingerprint() for name in protected}
     # Exact restoration: when the approved base sequence alone resolves to the current image,
@@ -304,6 +327,8 @@ def build_manifest(
         # Networks the approved configuration override adds (and rollback removes again).
         "candidate_networks": sorted(set(target.networks) | set(networks_added)),
         "mounts": [list(item) for item in target.mounts],
+        # Read-only bind mounts the approved override adds (and rollback removes again).
+        "candidate_mounts": sorted([list(item) for item in target.mounts] + added_mounts),
         "published_ports": target.published_ports,
         "ready_probe": list(ready_probe) if ready_probe else None,
         "protected": protected_state,
@@ -372,7 +397,8 @@ def _check_configuration(manifest: dict, identity: ContainerIdentity) -> None:
 def _check_shape(manifest: dict, identity: ContainerIdentity, state: str | None = None) -> None:
     expected = manifest["candidate_networks"] if (state or _state(manifest, identity)) == "CANDIDATE" else manifest["networks"]
     require(list(identity.networks) == expected, "NETWORK_DRIFT")
-    require([list(item) for item in identity.mounts] == manifest["mounts"], "VOLUME_DRIFT")
+    mounts = manifest.get("candidate_mounts", manifest["mounts"]) if (state or _state(manifest, identity)) == "CANDIDATE" else manifest["mounts"]
+    require([list(item) for item in identity.mounts] == mounts, "VOLUME_DRIFT")
     require(identity.published_ports == manifest["published_ports"], "PORT_DRIFT")
 
 
@@ -547,6 +573,29 @@ def _transition(docker: Docker, manifest: dict, *, target: str, timeout: float) 
     return "APPLIED"
 
 
+SAFE_OUTPUT_LINE = re.compile(r"^[A-Z][A-Z0-9_]{0,63}=[A-Za-z0-9_.,:-]{0,200}$")
+
+
+def candidate_run(docker: Docker, manifest: dict, policy: set, argv: Sequence[str], *, lock: str) -> tuple[int, list[str]]:
+    """Run `argv` in the manifest's target configuration before promotion (e.g. the D1 preflight).
+
+    Same verification as promote (manifest, configuration hashes, protected services, live state = PREVIOUS);
+    only gate-shaped output lines (NAME=VALUE, no spaces) are returned, anything else is dropped."""
+    verify_manifest(manifest, policy)
+    require(argv and all(isinstance(item, str) and item for item in argv), "CANDIDATE_RUN_ARGV_INVALID")
+    with release_lock(lock):
+        identity = docker.service_container(manifest["project"], manifest["service"])
+        require(_state(manifest, identity) == "PREVIOUS", "CANDIDATE_RUN_REQUIRES_PREVIOUS_STATE")
+        _check_configuration(manifest, identity)
+        _check_protected(docker, manifest)
+        _write_override(manifest, _candidate_override(manifest), manifest["candidate_image"])
+        code, output = docker.compose_run(identity, _candidate_files(manifest), manifest["service"], argv)
+        after = docker.service_container(manifest["project"], manifest["service"])
+        require(after.container_id == identity.container_id and after.config_hash == identity.config_hash, "CANDIDATE_RUN_TOUCHED_SERVICE")
+        _check_protected(docker, manifest)
+    return code, [line for line in output.splitlines() if SAFE_OUTPUT_LINE.match(line)]
+
+
 def promote(docker: Docker, manifest: dict, policy: set, *, lock: str, timeout: float = 120) -> str:
     verify_manifest(manifest, policy)
     with release_lock(lock):
@@ -647,6 +696,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     p_plan.add_argument("--ready-probe", help="JSON argv run with docker exec; required when no healthcheck exists")
     p_plan.add_argument("--extra-override", action="append", default=[], help="Approved configuration-only Compose override")
     p_plan.add_argument("--network-added", action="append", default=[], help="Network the extra override adds")
+    p_plan.add_argument("--mount-added", action="append", default=[], help="SOURCE:TARGET read-only bind the extra override adds")
+    p_run = sub.add_parser("candidate-run")
+    p_run.add_argument("--manifest", required=True)
+    p_run.add_argument("argv", nargs=argparse.REMAINDER)
     for name in ("promote", "rollback"):
         p = sub.add_parser(name)
         p.add_argument("--manifest", required=True)
@@ -666,6 +719,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 ready_probe=json.loads(args.ready_probe) if args.ready_probe else None,
                 extra_overrides=args.extra_override,
                 networks_added=args.network_added,
+                mounts_added=args.mount_added,
             )
             path = release_dir / "manifest.json"
             require(not path.exists(), "MANIFEST_ALREADY_EXISTS")
@@ -673,6 +727,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"PLAN=PASS MANIFEST={path} MANIFEST_SHA256={manifest['manifest_sha256']}")
             return 0
         manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+        if args.command == "candidate-run":
+            argv = args.argv[1:] if args.argv[:1] == ["--"] else args.argv
+            code, lines = candidate_run(docker, manifest, policy, argv, lock=args.lock)
+            for line in lines:
+                print(line)
+            print(f"CANDIDATE_RUN=EXIT_{code} SERVICE={manifest['project']}/{manifest['service']}")
+            return 0 if code == 0 else 3
         action = promote if args.command == "promote" else rollback
         result = action(docker, manifest, policy, lock=args.lock, timeout=args.timeout)
         print(f"{args.command.upper()}={result} SERVICE={manifest['project']}/{manifest['service']}")

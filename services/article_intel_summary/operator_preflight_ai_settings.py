@@ -87,7 +87,7 @@ def run(environ=None, *, check_gateway: bool = False, store_factory=ManagedSetti
         lines.append("STORE=HOLD_UNVERIFIED")
         hold = True
     # D1-R6-01: key-authority mode needs bound, fresh cost-authority evidence; mode off is N/A (legacy contract).
-    d1_code, d1_lines = cost_authority_preflight(env)
+    d1_code, d1_lines = cost_authority_preflight(env, live=check_gateway)
     lines.extend(line for line in d1_lines if line != "SECRET_PRINTED=NO")
     if d1_code != 0:
         hold = True

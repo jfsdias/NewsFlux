@@ -307,6 +307,64 @@ class DockerReleaseRehearsal(unittest.TestCase):
         self.assertNotIn(network, self.current().networks)
         self.assertEqual(self.current().config_hash, self.summary_before.config_hash)
 
+    def test_candidate_run_uses_the_target_configuration_without_touching_the_service(self) -> None:
+        """D1-R7-02: the preflight runs in the TARGET configuration (override env + read-only evidence mount)."""
+        evidence = self.release_dir.parent / "evidence.json"
+        evidence.write_text('{"synthetic": true}\n', encoding="utf-8")
+        overlay = self.release_dir.parent / "d1.override.json"
+        overlay.write_text(json.dumps({"services": {"summary-api": {
+            "environment": {"MODE": "target"},
+            "volumes": [{"type": "bind", "source": str(evidence), "target": "/run/newsflux-d1/evidence.json", "read_only": True}],
+        }}}), encoding="utf-8")
+        manifest = release.build_manifest(
+            self.client, project=self.project, service="summary-api", candidate_image=self.previous,
+            approved_sha=self.sha_previous, protected=self.protected, policy=self.policy,
+            release_dir=self.release_dir / "d1", extra_overrides=[str(overlay)],
+            mounts_added=[f"{evidence}:/run/newsflux-d1/evidence.json"],
+        )
+        script = ('echo "MODE_SEEN=$MODE"; test -r /run/newsflux-d1/evidence.json && echo EVIDENCE_READABLE=YES; '
+                  'touch /run/newsflux-d1/evidence.json 2>/dev/null && echo EVIDENCE_WRITABLE=YES || echo EVIDENCE_WRITABLE=NO; '
+                  'echo "not a gate line"')
+        code, lines = release.candidate_run(self.client, manifest, self.policy, ["sh", "-c", script], lock=self.lock)
+        self.assertEqual(code, 0)
+        self.assertEqual(lines, ["MODE_SEEN=target", "EVIDENCE_READABLE=YES", "EVIDENCE_WRITABLE=NO"])
+        self.assertEqual(self.current().container_id, self.summary_before.container_id)      # service untouched
+        self.assertEqual(self.current().config_hash, self.summary_before.config_hash)
+        code, _ = release.candidate_run(self.client, manifest, self.policy, ["sh", "-c", "exit 3"], lock=self.lock)
+        self.assertEqual(code, 3)
+        # Promotion with the declared mount passes the exact shape check; rollback removes it again.
+        self.assertEqual(release.promote(self.client, manifest, self.policy, lock=self.lock), "APPLIED")
+        self.assertIn(("bind", str(evidence), "/run/newsflux-d1/evidence.json", False), self.current().mounts)
+        with self.assertRaises(release.GateError) as raised:
+            release.candidate_run(self.client, manifest, self.policy, ["true"], lock=self.lock)
+        self.assertEqual(raised.exception.code, "CANDIDATE_RUN_REQUIRES_PREVIOUS_STATE")
+        self.assertEqual(release.rollback(self.client, manifest, self.policy, lock=self.lock), "APPLIED")
+        self.assertEqual(self.current().config_hash, self.summary_before.config_hash)
+        self.assertNotIn("/run/newsflux-d1/evidence.json", [m[2] for m in self.current().mounts])
+
+    def test_undeclared_mount_is_volume_drift(self) -> None:
+        evidence = self.release_dir.parent / "evidence2.json"
+        evidence.write_text("{}\n", encoding="utf-8")
+        overlay = self.release_dir.parent / "d1b.override.json"
+        overlay.write_text(json.dumps({"services": {"summary-api": {"volumes": [
+            {"type": "bind", "source": str(evidence), "target": "/run/newsflux-d1/evidence.json", "read_only": True}]}}}),
+            encoding="utf-8")
+        manifest = release.build_manifest(
+            self.client, project=self.project, service="summary-api", candidate_image=self.previous,
+            approved_sha=self.sha_previous, protected=self.protected, policy=self.policy,
+            release_dir=self.release_dir / "undeclared-mount", extra_overrides=[str(overlay)],
+        )
+        with self.assertRaises(release.GateError) as raised:
+            release.promote(self.client, manifest, self.policy, lock=self.lock)
+        self.assertEqual(raised.exception.code, "PROMOTION_FAILED_ROLLED_BACK:VOLUME_DRIFT")
+        with self.assertRaises(release.GateError) as raised:
+            release.build_manifest(
+                self.client, project=self.project, service="summary-api", candidate_image=self.previous,
+                approved_sha=self.sha_previous, protected=self.protected, policy=self.policy,
+                release_dir=self.release_dir / "bad", extra_overrides=[str(overlay)], mounts_added=["relative:/x"])
+        self.assertEqual(raised.exception.code, "MOUNT_ADDED_INVALID")
+
+
 class PolicyTests(unittest.TestCase):
     def test_policy_rejects_forbidden_services(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

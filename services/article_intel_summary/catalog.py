@@ -994,7 +994,8 @@ def _evaluate_key_model(alias: str, snapshot: DiscoverySnapshot, gateway: LiteLL
     declared = (values.get("NEWSFLUX_AI_LITELLM_COST_AUTHORITY") or "").strip()
     # The declaration proves nothing alone: it must match fresh gateway evidence bound to this exact key.
     proof, _proof_reason = evaluate_cost_authority(
-        declared, values.get("NEWSFLUX_AI_LITELLM_COST_AUTHORITY_EVIDENCE_FILE"), gateway.virtual_key)
+        declared, values.get("NEWSFLUX_AI_LITELLM_COST_AUTHORITY_EVIDENCE_FILE"), gateway.virtual_key,
+        values.get("NEWSFLUX_AI_LITELLM_COST_AUTHORITY_EVIDENCE_SHA256"))
     cost_authority = declared if proof == "PROVEN" and declared in GATEWAY_COST_AUTHORITIES else None
     settings = replace(
         gateway,
