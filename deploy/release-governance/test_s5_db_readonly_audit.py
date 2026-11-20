@@ -386,10 +386,13 @@ class HostOrchestrationTests(unittest.TestCase):
                 return "summary-id\n" if "label=com.docker.compose.service=summary-api" in argv else "litellm-id\n"
             if argv[:2] == ["docker", "inspect"] and "{{range .Config.Env}}" in " ".join(argv):
                 return "\n".join(f"{k}={v}" for k, v in env.items()) + "\n"
+            if argv[:2] == ["docker", "inspect"] and "{{json .Config.Env}}" in " ".join(argv):
+                return json.dumps([f"{k}={v}" for k, v in env.items()])
             if argv[:2] == ["docker", "inspect"]:
                 return snaps.pop(0)
             if argv[:3] == ["docker", "exec", "-u"]:  # Summary: fingerprint + alias + caps
-                return json.dumps({"fingerprint": "f" * 64, "alias": ALIAS, "caps": CAPS, "allowed_callbacks": []})
+                return json.dumps({"fingerprint": "f" * 64, "alias": ALIAS, "caps": CAPS, "allowed_callbacks": [],
+                                   "runtime_flags": {"inference": False, "external_transfer": False}})
             if argv[:3] == ["docker", "exec", "-i"]:
                 return json.dumps(probe or {"KEY_MATCH": "ONE", "KEY_POLICY_GATE": "FAIL", "DB_READ_ONLY": "VERIFIED"})
             raise AssertionError(argv)
@@ -1313,3 +1316,286 @@ class R3JwtDetectionTests(unittest.TestCase):
 
     def test_jwt_value_is_render_safe(self):
         audit.render(jwt_collect({"enable_jwt_auth": True}), container_identity="UNCHANGED")
+
+
+# ==================================================================================================
+# S5-R3A — PM-R3-01 exact container binding and PM-R3-02 effective flags OFF.
+# ==================================================================================================
+import os as _os
+import sys as _sys
+from unittest import mock
+
+_REPO = _os.path.abspath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", ".."))
+SUMMARY_ID = "a" * 64
+LITELLM_ID = "b" * 64
+SUMMARY_IMAGE = "sha256:6cee8366be056e84893b32dd6708248d983f1d3a939261af6cfe27db8572adc3"
+LITELLM_IMAGE = "sha256:95017a6781a986878745e4577172c9f5e74a060d5311491ce452bd9015d2f5ab"
+OFF_ENV = ["NEWSFLUX_AI_INFERENCE_ENABLED=false", "NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER=false", "OTHER=x"]
+PROBE_OK = {"KEY_MATCH": "ONE", "KEY_POLICY_GATE": "FAIL", "DB_READ_ONLY": "VERIFIED"}
+
+
+def identity(cid, image, started="2026-11-19T23:30:00Z", restarts=0, status="running", project="newsflux", service="summary-api"):
+    return "|".join((cid, image, started, str(restarts), status, project, service))
+
+
+class World:
+    """A fake Docker host for the strict path: two containers, mutable between calls."""
+
+    def __init__(self):
+        self.containers = {
+            SUMMARY_ID: {"image": SUMMARY_IMAGE, "started": "2026-11-19T23:30:00Z", "restarts": 0, "status": "running",
+                         "project": "newsflux", "service": "summary-api", "env": list(OFF_ENV)},
+            LITELLM_ID: {"image": LITELLM_IMAGE, "started": "2026-11-01T00:00:00Z", "restarts": 0, "status": "running",
+                         "project": "litellm", "service": "litellm", "env": []},
+        }
+        self.runtime_flags = {"inference": False, "external_transfer": False}
+        self.calls = []
+        self.hooks = {}  # call index -> callable(world)
+
+    def snapshot(self, cid):
+        c = self.containers[cid]
+        return identity(cid, c["image"], c["started"], c["restarts"], c["status"], c["project"], c["service"])
+
+    def __call__(self, argv, stdin=None):
+        index = len(self.calls)
+        self.calls.append((argv, stdin))
+        hook = self.hooks.get(index)
+        if hook:
+            hook(self)
+        target = argv[-1]
+        if argv[:2] == ["docker", "inspect"]:
+            fmt = argv[argv.index("--format") + 1]
+            if target not in self.containers:
+                raise audit.ProbeError("DOCKER_INSPECT_FAILED")
+            if fmt == audit.IDENTITY_FORMAT:
+                return self.snapshot(target) + "\n"
+            if fmt == "{{json .Config.Env}}":
+                return json.dumps(self.containers[target]["env"])
+            raise AssertionError(argv)
+        if argv[:3] == ["docker", "exec", "-u"]:
+            if argv[4] not in self.containers:
+                raise audit.ProbeError("DOCKER_EXEC_FAILED")
+            return json.dumps({"fingerprint": "f" * 64, "alias": ALIAS, "caps": CAPS, "allowed_callbacks": [],
+                               "runtime_flags": self.runtime_flags})
+        if argv[:3] == ["docker", "exec", "-i"]:
+            if argv[3] not in self.containers:
+                raise audit.ProbeError("DOCKER_EXEC_FAILED")
+            return json.dumps(PROBE_OK)
+        raise AssertionError(argv)  # strict mode never lists containers (no discovery)
+
+
+def strict_argv(world, **overrides):
+    values = {"--litellm-container": LITELLM_ID, "--summary-container": SUMMARY_ID, "--project": "newsflux",
+              "--summary-service": "summary-api", "--expect-summary-image": SUMMARY_IMAGE,
+              "--expect-litellm-image": LITELLM_IMAGE, "--expect-summary-snapshot": world.snapshot(SUMMARY_ID),
+              "--expect-litellm-snapshot": world.snapshot(LITELLM_ID)}
+    values.update(overrides)
+    return [part for key, value in values.items() if value is not None for part in (key, value)]
+
+
+def run_strict(world, argv=None, env=None):
+    out = io.StringIO()
+    clean = {k: v for k, v in _os.environ.items() if k not in ("NEWSFLUX_PROJECT", "NEWSFLUX_SUMMARY_SERVICE")}
+    clean.update(env or {})
+    with mock.patch.dict(_os.environ, clean, clear=True), contextlib.redirect_stdout(out):
+        code = audit.main(argv if argv is not None else strict_argv(world), run=world, euid=0)
+    return code, out.getvalue().splitlines()
+
+
+def execs(world):
+    return [argv for argv, _ in world.calls if argv[:2] == ["docker", "exec"]]
+
+
+class R3AExactBindingTests(unittest.TestCase):
+    def test_unchanged_identity_completes_with_exact_ids_and_no_discovery(self):
+        world = World()
+        code, lines = run_strict(world)
+        self.assertEqual(code, 0, lines)
+        for expected in ("S5R1_SUMMARY_BINDING=EXACT_ID_IMAGE_LABELS_LIFECYCLE", "S5R1_LITELLM_BINDING=EXACT_ID_IMAGE_LIFECYCLE",
+                         "S5R1_CONTAINER_IDENTITY=UNCHANGED", "S5R1_AUDIT=COMPLETE_DIAGNOSTIC_ONLY"):
+            self.assertIn(expected, lines)
+        self.assertFalse([argv for argv, _ in world.calls if argv[:2] == ["docker", "ps"]])
+        self.assertEqual([argv[4] if argv[2] == "-u" else argv[3] for argv in execs(world)], [SUMMARY_ID, LITELLM_ID])
+
+    def test_strict_mode_requires_every_binding_argument(self):
+        world = World()
+        for missing in ("--expect-summary-snapshot", "--expect-litellm-snapshot", "--expect-summary-image",
+                        "--expect-litellm-image", "--project", "--summary-service"):
+            code, lines = run_strict(world, strict_argv(world, **{missing: None}))
+            self.assertEqual((code, lines), (2, ["S5R1_AUDIT=HOLD_STRICT_BINDING_INCOMPLETE"]), missing)
+        code, lines = run_strict(world, strict_argv(world, **{"--litellm-container": "litellm"}))
+        self.assertEqual(lines, ["S5R1_AUDIT=HOLD_STRICT_BINDING_INCOMPLETE"])
+        self.assertEqual(world.calls, [])
+
+    def test_divergent_environment_holds_before_any_docker_call(self):
+        for env in ({"NEWSFLUX_PROJECT": "other"}, {"NEWSFLUX_SUMMARY_SERVICE": "summary-api-2"}):
+            world = World()
+            code, lines = run_strict(world, env=env)
+            self.assertEqual((code, lines), (2, ["S5R1_AUDIT=HOLD_ENV_DIVERGENT"]), env)
+            self.assertEqual(world.calls, [])
+        world = World()
+        code, _ = run_strict(world, env={"NEWSFLUX_PROJECT": "newsflux", "NEWSFLUX_SUMMARY_SERVICE": "summary-api"})
+        self.assertEqual(code, 0)  # the same values are not a divergence
+
+    def test_wrong_summary_or_litellm_holds_before_any_exec(self):
+        cases = (
+            (lambda w: w.containers[SUMMARY_ID].update(project="other"), "IDENTITY_MISMATCH_SUMMARY"),
+            (lambda w: w.containers[SUMMARY_ID].update(service="reader"), "IDENTITY_MISMATCH_SUMMARY"),
+            (lambda w: w.containers[SUMMARY_ID].update(image="sha256:" + "1" * 64), "IDENTITY_MISMATCH_SUMMARY"),
+            (lambda w: w.containers[SUMMARY_ID].update(status="exited"), "IDENTITY_MISMATCH_SUMMARY"),
+            (lambda w: w.containers[LITELLM_ID].update(image="sha256:" + "2" * 64), "IDENTITY_MISMATCH_LITELLM"),
+            (lambda w: w.containers[LITELLM_ID].update(restarts=1), "IDENTITY_MISMATCH_LITELLM"),
+        )
+        for mutate, reason in cases:
+            world = World()
+            argv = strict_argv(world)          # expected identities captured by the wrapper's gates
+            mutate(world)                      # ...then the host changed before the auditor started
+            code, lines = run_strict(world, argv)
+            self.assertEqual((code, lines), (2, [f"S5R1_AUDIT=HOLD_{reason}"]), reason)
+            self.assertEqual(execs(world), [], reason)
+
+    def test_expected_image_must_match_the_snapshot_image(self):
+        world = World()
+        code, lines = run_strict(world, strict_argv(world, **{"--expect-summary-image": "sha256:" + "3" * 64}))
+        self.assertEqual(lines, ["S5R1_AUDIT=HOLD_IDENTITY_MISMATCH_SUMMARY"])
+
+    def test_missing_or_replaced_container_holds(self):
+        world = World()
+        argv = strict_argv(world)
+        world.containers["c" * 64] = world.containers.pop(SUMMARY_ID)   # replaced by a new container ID
+        code, lines = run_strict(world, argv)
+        self.assertEqual(code, 2)
+        self.assertEqual(execs(world), [])
+
+    def test_restart_between_identity_gate_and_first_exec_holds(self):
+        world = World()
+        argv = strict_argv(world)
+        # calls: 0 identity S, 1 identity L, 2 env, 3 pre-exec identity S ... restart lands right before 3
+        world.hooks[3] = lambda w: w.containers[SUMMARY_ID].update(restarts=1, started="2026-11-20T00:00:00Z")
+        code, lines = run_strict(world, argv)
+        self.assertEqual((code, lines), (2, ["S5R1_AUDIT=HOLD_IDENTITY_CHANGED_BEFORE_EXEC"]))
+        self.assertEqual(execs(world), [])
+
+    def test_replacement_between_pre_exec_check_and_exec_holds(self):
+        world = World()
+        argv = strict_argv(world)
+        world.hooks[5] = lambda w: w.containers.pop(SUMMARY_ID)       # gone when the first exec runs
+        code, lines = run_strict(world, argv)
+        self.assertEqual((code, lines), (2, ["S5R1_AUDIT=HOLD_DOCKER_EXEC_FAILED"]))
+
+    def test_restart_during_the_audit_is_changed_and_exit_3(self):
+        world = World()
+        argv = strict_argv(world)
+        world.hooks[7] = lambda w: w.containers[LITELLM_ID].update(restarts=1)   # after both execs
+        code, lines = run_strict(world, argv)
+        self.assertEqual(code, 3, lines)
+        self.assertIn("S5R1_CONTAINER_IDENTITY=CHANGED", lines)
+        self.assertEqual(lines[-1], "S5R1_AUDIT=HOLD_CONTAINER_STATE_CHANGED")
+        self.assertNotIn("S5R1_AUDIT=COMPLETE_DIAGNOSTIC_ONLY", lines)
+
+    def test_legacy_mode_is_reported_as_discovered(self):
+        run, _ = self.fake_legacy()
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = audit.main(["--litellm-container", "litellm"], run=run, euid=0)
+        self.assertEqual(code, 0)
+        self.assertIn("S5R1_SUMMARY_BINDING=DISCOVERED_BY_LABELS", out.getvalue().splitlines())
+
+    def fake_legacy(self):
+        return HostOrchestrationTests.fake_docker(self)
+
+
+def _runtime_parsers():
+    if _REPO not in _sys.path:
+        _sys.path.insert(0, _REPO)
+    from services.article_intel_summary import litellm_adapter
+    return litellm_adapter
+
+
+FLAG_TABLE = (  # literal expectations, derived from the runtime parser semantics at 12929fb
+    ("true", "ON"), ("TRUE", "ON"), (" True ", "ON"), ("\ttrue\n", "ON"),
+    ("false", "OFF_EXPLICIT"), ("FALSE", "OFF_EXPLICIT"), (" False ", "OFF_EXPLICIT"),
+    ("1", "AMBIGUOUS"), ("0", "AMBIGUOUS"), ("yes", "AMBIGUOUS"), ("no", "AMBIGUOUS"), ("on", "AMBIGUOUS"),
+    ("off", "AMBIGUOUS"), ("", "AMBIGUOUS"), ("enabled", "AMBIGUOUS"), ("tru", "AMBIGUOUS"), ("falsey", "AMBIGUOUS"),
+)
+
+
+class R3AEffectiveFlagTests(unittest.TestCase):
+    NAME = "NEWSFLUX_AI_INFERENCE_ENABLED"
+
+    def test_literal_table(self):
+        for value, expected in FLAG_TABLE:
+            self.assertEqual(audit.classify_flag([f"{self.NAME}={value}"], self.NAME), expected, repr(value))
+        self.assertEqual(audit.classify_flag(["OTHER=1"], self.NAME), "OFF_DEFAULT_RUNTIME")
+        self.assertEqual(audit.classify_flag([f"{self.NAME}=false", f"{self.NAME}=false"], self.NAME), "DUPLICATE")
+        self.assertEqual(audit.classify_flag([f"{self.NAME}=false", f"{self.NAME}=true"], self.NAME), "DUPLICATE")
+        self.assertEqual(audit.classify_flag([self.NAME], self.NAME), "AMBIGUOUS")
+        self.assertEqual(audit.classify_flag(["X=1", 7, None], self.NAME), "OFF_DEFAULT_RUNTIME")
+
+    def test_classification_never_admits_what_any_runtime_parser_turns_on(self):
+        adapter = _runtime_parsers()
+        values = [v for v, _ in FLAG_TABLE] + [" TRUE", "true ", "TrUe", "true", "faLse\t", "NULL", "none"]
+        for value in values:
+            runtime_on = adapter._read_bool({self.NAME: value}, self.NAME)   # litellm_adapter / catalog
+            admin_on = value.lower() == "true"                                # admin_settings / operator preflight
+            cls = audit.classify_flag([f"{self.NAME}={value}"], self.NAME)
+            if runtime_on or admin_on:
+                self.assertEqual(cls, "ON", repr(value))
+            else:
+                self.assertIn(cls, ("OFF_EXPLICIT", "AMBIGUOUS"), repr(value))
+            if cls == "OFF_EXPLICIT":
+                self.assertFalse(runtime_on or admin_on, repr(value))
+
+    def test_default_off_is_proven_at_this_revision(self):
+        adapter = _runtime_parsers()
+        settings = adapter.load_gateway_settings({}, read_key=False)
+        self.assertFalse(settings.enabled)
+        self.assertFalse(settings.external_transfer_authorized)
+        import inspect
+        from services.article_intel_summary import admin_settings
+        source = inspect.getsource(admin_settings.ManagedSettingsStore.effective_values)
+        for name in audit.FLAGS_THAT_MUST_BE_OFF:  # managed settings never override the two flags
+            self.assertNotIn(name, source)
+
+    def host_flags(self, env, runtime=None):
+        world = World()
+        world.containers[SUMMARY_ID]["env"] = env
+        if runtime is not None:
+            world.runtime_flags = runtime
+        code, lines = run_strict(world)
+        return code, lines, world
+
+    def test_host_admits_only_effective_off(self):
+        for env, expected in ((OFF_ENV, ("OFF_EXPLICIT", "OFF_EXPLICIT")), (["OTHER=x"], ("OFF_DEFAULT_RUNTIME", "OFF_DEFAULT_RUNTIME")),
+                              (["NEWSFLUX_AI_INFERENCE_ENABLED= FALSE "], ("OFF_EXPLICIT", "OFF_DEFAULT_RUNTIME"))):
+            code, lines, _ = self.host_flags(env)
+            self.assertEqual(code, 0, (env, lines))
+            self.assertIn(f"S5R1_INFERENCE_EFFECTIVE={expected[0]}", lines)
+            self.assertIn(f"S5R1_EXTERNAL_TRANSFER_EFFECTIVE={expected[1]}", lines)
+            self.assertIn("S5R1_FLAGS_RUNTIME_PARSER=CONFIRMED_OFF", lines)
+
+    def test_host_holds_on_any_unclear_flag_before_any_exec(self):
+        cases = ((["NEWSFLUX_AI_INFERENCE_ENABLED=True"], "AI_FLAGS_NOT_OFF"),
+                 (["NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER= true"], "AI_FLAGS_NOT_OFF"),
+                 (["NEWSFLUX_AI_INFERENCE_ENABLED=1"], "AI_FLAGS_AMBIGUOUS"),
+                 (["NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER=yes"], "AI_FLAGS_AMBIGUOUS"),
+                 (["NEWSFLUX_AI_INFERENCE_ENABLED=on"], "AI_FLAGS_AMBIGUOUS"),
+                 (["NEWSFLUX_AI_INFERENCE_ENABLED="], "AI_FLAGS_AMBIGUOUS"),
+                 (["NEWSFLUX_AI_INFERENCE_ENABLED=false", "NEWSFLUX_AI_INFERENCE_ENABLED=false"], "AI_FLAGS_DUPLICATE"))
+        for env, reason in cases:
+            code, lines, world = self.host_flags(env)
+            self.assertEqual((code, lines), (2, [f"S5R1_AUDIT=HOLD_{reason}"]), env)
+            self.assertEqual(execs(world), [], env)
+
+    def test_runtime_parser_must_confirm_off_before_the_litellm_exec(self):
+        for runtime, reason in (({"inference": True, "external_transfer": False}, "FLAGS_RUNTIME_NOT_OFF"),
+                                ({"inference": False, "external_transfer": True}, "FLAGS_RUNTIME_NOT_OFF"),
+                                ({"inference": "false", "external_transfer": False}, "FLAGS_RUNTIME_UNAVAILABLE"),
+                                ({}, "FLAGS_RUNTIME_UNAVAILABLE")):
+            code, lines, world = self.host_flags(OFF_ENV, runtime)
+            self.assertEqual((code, lines), (2, [f"S5R1_AUDIT=HOLD_{reason}"]), runtime)
+            self.assertFalse([a for a in execs(world) if a[2] == "-i"], runtime)   # LiteLLM never reached
+
+    def test_summary_snippet_uses_the_real_runtime_parser(self):
+        self.assertIn("load_gateway_settings(os.environ, read_key=False)", audit.SUMMARY_SNIPPET)
+        self.assertIn("runtime_flags", audit.SUMMARY_SNIPPET)

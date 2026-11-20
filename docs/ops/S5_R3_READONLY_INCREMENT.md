@@ -376,3 +376,160 @@ further call at the first failure:
 - **JWT:** its effect is only detected, not evaluated.
 - **Summary revision:** the expected production revision is supplied as an argument. The last ledger
   value is `d54eda2…e852` (R4.5); the PM must confirm the current one.
+
+## 9. S5-R3A — operator safety and evidence binding (PM comment 7043425083)
+
+### 9.1 PM-R3-01: exact container binding
+
+The wrapper now passes the auditor exactly what its gates verified. There is no discovery and no
+environment-derived default:
+
+- the full Summary and LiteLLM container IDs;
+- both immutable image IDs and the Compose project/service;
+- both lifecycle snapshots: `ID|image|StartedAt|RestartCount|state|project|service`
+  (`IDENTITY_FORMAT`, identical in the auditor and the wrapper; a test checks they match).
+
+What the auditor does in strict mode (`--summary-container`):
+
+- it requires every binding argument (`HOLD_STRICT_BINDING_INCOMPLETE`);
+- it holds if `NEWSFLUX_PROJECT` or `NEWSFLUX_SUMMARY_SERVICE` differ from the explicit values
+  (`HOLD_ENV_DIVERGENT`); the wrapper also runs it under `env -i`;
+- it re-reads both identities before reading the environment, again immediately before the first
+  `docker exec` (`HOLD_IDENTITY_CHANGED_BEFORE_EXEC`), and after the last exec
+  (`CONTAINER_IDENTITY=CHANGED`, exit 3).
+
+The wrapper also re-reads both snapshots between its gates and the run, and again after the run.
+
+**Atomicity is not absolute:** every exec targets a full ID, so a replacement makes the exec fail and
+a restart is caught by the post-run comparison.
+
+Tests:
+
+- **Unit:** divergent environment, wrong Summary (project, service, image, state), wrong LiteLLM
+  image, restart before the auditor, restart right before the first exec, replacement between the
+  check and the exec, restart during the run, unchanged identity.
+- **Real lab** (`rehearse-s5-r3a-strict-binding.sh`, real Summary image built from this checkout,
+  real LiteLLM and Postgres, `--internal` network): divergent environment, wrong image, Summary
+  restart and LiteLLM restart after the gate snapshot all hold; the unchanged identity completes.
+
+### 9.2 PM-R3-02: effective flags OFF
+
+Runtime semantics at the authorized Summary revision `12929fb` (reviewed in source):
+
+| Module                                             | Rule                                       | Effect                                                         |
+| -------------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------- |
+| `litellm_adapter._read_bool`, `catalog._read_bool` | `value.strip().casefold() == "true"`       | only "true" turns a flag on                                    |
+| `admin_settings`, `operator_preflight`             | `value.lower() == "true"`                  | `" true"` is ON in the adapter but OFF here: a real divergence |
+| absent name                                        | `get(name, "")`                            | OFF                                                            |
+| managed settings (`effective_values`)              | override only the key and the model policy | never the two flags                                            |
+
+Classification (`classify_flag`):
+
+- **`ON`:** any parser would turn it on. **HOLD.**
+- **`OFF_EXPLICIT`:** "false" in any case or with surrounding whitespace.
+- **`OFF_DEFAULT_RUNTIME`:** absent. Admitted only because the wrapper binds the Summary to a revision
+  whose parser was reviewed.
+- **`AMBIGUOUS`:** `1`, `0`, `yes`, `no`, `on`, `off`, empty, unknown. **HOLD.**
+- **`DUPLICATE`:** the name appears more than once. **HOLD.**
+
+On top of that, the Summary itself runs the real runtime parser (`load_gateway_settings(os.environ,
+read_key=False)`) inside the snippet. Both flags must come back as booleans `False`, otherwise
+`HOLD_FLAGS_RUNTIME_NOT_OFF` or `HOLD_FLAGS_RUNTIME_UNAVAILABLE`, before the LiteLLM exec.
+
+Tests:
+
+- **Unit:** a literal table, and a matrix cross-checked against the real parsers imported from this
+  checkout. Nothing any parser turns on is ever admitted, and `OFF_EXPLICIT` is never ON anywhere. The
+  default OFF is proven, and `effective_values` is shown never to touch the flags.
+- **Real lab:** `1` and `yes` → AMBIGUOUS; `" TRUE "` → NOT_OFF; empty → AMBIGUOUS; absent →
+  `OFF_DEFAULT_RUNTIME` completes; `" FALSE "` → `OFF_EXPLICIT` completes.
+- **Docker deduplicates** a repeated `-e`, so the duplicate case is covered by the unit tests.
+
+No inference was run.
+
+### 9.3 PM-R3-03: strict receipt contract
+
+The contract is embedded in the wrapper, between the `RECEIPT CONTRACT` markers:
+
+- **Fields and values:** every known field has its own allowed value set, comma subsets or bounded
+  counts. Unknown fields, duplicates, other lines and any prestate text are rejected. Required fields
+  must be present.
+- **Fixed values:** `FILESYSTEM_INTEGRITY` must be `NOT_PROVEN`, and the bindings and flags must
+  have their strict values.
+- **Version:** it must be the bound version, `LAB_REHEARSED`.
+- **Exit-code coherence:**
+  - 0 ⇔ `COMPLETE` as the last field, followed by the fixed `NEXT` line;
+  - 2 ⇔ a single HOLD line;
+  - 3 ⇔ `CONTAINER_IDENTITY=CHANGED` + `HOLD_CONTAINER_STATE_CHANGED`.
+- **Auditor HOLD codes:** bounded to an explicit set, which a test proves complete against the
+  auditor source.
+
+The raw receipt is kept in memory and dropped after validation. Nothing from it is printed unless the
+contract **and** the post-run identity gate pass. On failure, only `S5R3_RUN_RESULT=HOLD_<code>` is
+printed.
+
+Tests:
+
+- **End to end, rejections without echoing any content:** an uppercase synthetic secret, an unknown
+  line, a duplicate status, a partially valid receipt, a count out of bounds, unexpected output, a
+  non-zero exit, a post-gate change, missing required fields, prestate, an incoherent exit.
+- **Coverage:** every line the real auditor produces across more than 300 field instances is in the
+  contract. The real lab receipt is validated with the same code.
+
+### 9.4 PM-R3-04: exit status and CI binding
+
+- **Exit status:** the operator command runs the wrapper under `bash -o pipefail` and prints
+  `S5R3_RUN_WRAPPER_EXIT`, so `tee` can no longer hide a failure.
+- **CI binding (G2):** `--expect-ci-run-id`, checked through the GitHub API:
+  - the run ID, `head_sha` equal to HEAD and the workflow path `summary-release-rehearsal.yaml`;
+  - the run completed with success;
+  - exactly one `synthetic-release` job, on the same SHA, completed with success;
+  - no job failed or pending.
+
+  Any incomplete, ambiguous or other-SHA answer holds.
+
+**What CI actually ran** (run 44755113665 on `6f9cdda`, from its logs):
+
+- `unittest discover` over release-governance: "Ran 257 tests". The R3 unit modules match the
+  discovery pattern, but the log does not name them.
+- the R1 DB-audit rehearsal: 19 checks.
+- **Not run by CI:** the R3 increment rehearsal, the auth-surface probe and the R3A strict-binding
+  rehearsal. Those are developer-run lab evidence only.
+
+**CI for the R3A HEAD:** none. The owner reports no Actions credits, and no run was dispatched. So
+`CI_EXACT_NEW_HEAD=HOLD` and `OPERATOR_GATE=HOLD_CI`. The gate is not bypassed.
+
+### 9.5 PM-R3-05: Summary production provenance
+
+**Last authorized deploy:** `12929fbabe603ec24dcc700c8393f1f6bc7bbf60`. This was the exact-main
+release after `GO-MERGE-PR270`, with the receipt in
+[PR #270 comment 7025312981](https://github.com/jfsdias/NewsFlux/pull/270#issuecomment-7025312981)
+and in the homeserver ledger (`3f211e24`, 2026-11-19).
+
+- **Summary image:** `sha256:6cee8366be056e84893b32dd6708248d983f1d3a939261af6cfe27db8572adc3`.
+- **Recorded revision:** `12929fb`.
+- **Evidence class:** `REPORTED_OPERATOR`.
+- **Superseded:** `d54eda2` (R4.5).
+
+**Live check:** this agent has no legitimate access to the OMV (cloud session; `codex-ha` has no
+Docker or sudo, per `core/ACCESS.md`). So `OMV_METADATA_ACCESS=BLOCKED_ACCESS` and
+`LIVE_SUMMARY_REVISION=UNVERIFIED`. No privilege was requested or changed.
+
+**G5 in the wrapper:**
+
+- it accepts only a revision listed in its authorized-deploy table, together with the recorded image
+  ID;
+- it requires the live container to run exactly that image, with that revision label;
+- it never adopts an observed SHA.
+
+`--gates-only` is the single supervised metadata-only executor: no exec, no environment, no DB.
+
+### 9.6 Residual risks
+
+- **No CI on the new HEAD:** `HOLD_CI`.
+- **Live Summary revision:** unverified until a supervised run.
+- **Atomicity:** not absolute (see 9.1).
+- **Duplicate environment:** Docker deduplicates it, so it is unit-tested only.
+- **Lab only:** the real-lab evidence is developer-run, not CI.
+- **Unchanged from earlier:** route breadth, JWT detected but not evaluated, `policies`
+  Enterprise-gated, and runtime parity.

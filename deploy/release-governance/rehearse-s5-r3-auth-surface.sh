@@ -54,8 +54,14 @@ model_list:
 YAML
 chmod 0644 "$work/config.yaml"
 MASTER="sk-synthetic-master-$(head -c 8 /dev/urandom | od -An -tx1 | tr -d ' \n')"
-for name in "$run-pg" "$run-litellm"; do [[ -z "$(docker ps -a -q --filter "name=^/$name\$")" ]] || { echo "S5R3AUTH OWNERSHIP_PREEXISTING=FAIL"; exit 1; }; done
-[[ -z "$(docker network ls -q --filter "name=^$net\$")" ]] || { echo "S5R3AUTH OWNERSHIP_PREEXISTING=FAIL"; exit 1; }
+# Names must be provably free: a Docker query that fails is never read as "absent".
+docker info >/dev/null 2>&1 || { echo "S5R3AUTH DOCKER_UNAVAILABLE=FAIL"; exit 1; }
+for name in "$run-pg" "$run-litellm"; do
+  found="$(docker ps -a -q --filter "name=^/$name\$")" || { echo "S5R3AUTH OWNERSHIP_CHECK=FAIL"; exit 1; }
+  [[ -z "$found" ]] || { echo "S5R3AUTH OWNERSHIP_PREEXISTING=FAIL"; exit 1; }
+done
+found="$(docker network ls -q --filter "name=^$net\$")" || { echo "S5R3AUTH OWNERSHIP_CHECK=FAIL"; exit 1; }
+[[ -z "$found" ]] || { echo "S5R3AUTH OWNERSHIP_PREEXISTING=FAIL"; exit 1; }
 docker_used=1
 docker network create --internal --label "$OWNER_LABEL=$nonce" "$net" >/dev/null   # --internal: no egress
 pg_id="$(docker run -d --name "$run-pg" --label "$OWNER_LABEL=$nonce" --network "$net" -e POSTGRES_PASSWORD=synthetic -e POSTGRES_DB=litellm "$PG_IMAGE")"

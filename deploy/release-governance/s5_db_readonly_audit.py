@@ -1053,6 +1053,11 @@ SUMMARY_SNIPPET = r"""
 import json, os
 from services.article_intel_summary.litellm_adapter import load_litellm_settings
 from services.article_intel_summary.s5_preflight import key_fingerprint, simulated_environment
+def _runtime_flags():
+    # S5-R3A: the deployed runtime's own parser on the real process environment (no key read).
+    from services.article_intel_summary.litellm_adapter import load_gateway_settings
+    g = load_gateway_settings(os.environ, read_key=False)
+    return {"inference": g.enabled, "external_transfer": g.external_transfer_authorized}
 s = load_litellm_settings(simulated_environment(os.environ))
 budget = s.monthly_budget_usd
 print(json.dumps({
@@ -1060,6 +1065,7 @@ print(json.dumps({
     "alias": s.model_id,
     "caps": {"rpm": s.requests_per_minute, "tpm": s.tokens_per_minute, "budget": float(budget) if budget is not None else None},
     "allowed_callbacks": [i.strip() for i in os.environ.get("NEWSFLUX_AI_ALLOWED_LITELLM_CALLBACKS", "").split(",") if i.strip()],
+    "runtime_flags": _runtime_flags(),
 }))
 """
 PROBE_BOOTSTRAP = (
@@ -1068,6 +1074,69 @@ PROBE_BOOTSTRAP = (
     "sys.exit(g['probe_main'](payload))"
 )
 SNAPSHOT_FORMAT = "{{.Id}} {{.Image}} {{.State.StartedAt}} {{.RestartCount}} {{.State.Status}}"
+# S5-R3A strict binding: one line per container, compared byte for byte with the wrapper's gate snapshot.
+IDENTITY_FORMAT = ('{{.Id}}|{{.Image}}|{{.State.StartedAt}}|{{.RestartCount}}|{{.State.Status}}|'
+                   '{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "com.docker.compose.service"}}')
+FLAG_LABELS = {"NEWSFLUX_AI_INFERENCE_ENABLED": "INFERENCE_EFFECTIVE",
+               "NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER": "EXTERNAL_TRANSFER_EFFECTIVE"}
+HOST_FACT_NAMES = frozenset({*FLAG_LABELS.values(), "FLAGS_RUNTIME_PARSER", "SUMMARY_BINDING", "LITELLM_BINDING"})
+
+
+def classify_flag(environment: Iterable[Any], name: str) -> str:
+    """Effective value of one AI flag from the container's Config.Env, per the runtime parsers at the
+    reviewed Summary revision: litellm_adapter/catalog use value.strip().casefold() == "true",
+    admin_settings/operator preflight use value.lower() == "true"; a missing name is OFF (runtime
+    default), and managed settings never override these flags.
+      ON                  any parser would turn it on
+      OFF_EXPLICIT        "false" in any case/surrounding whitespace (OFF in every parser)
+      OFF_DEFAULT_RUNTIME absent: the runtime default (only valid for a reviewed Summary revision)
+      AMBIGUOUS           anything else (1/0/yes/no/on/off/empty/unknown): OFF at runtime, intent unclear
+      DUPLICATE           the name appears more than once
+    Only OFF_EXPLICIT and OFF_DEFAULT_RUNTIME admit a diagnostic run."""
+    values: list[str | None] = []
+    for entry in environment:
+        if not isinstance(entry, str):
+            continue
+        key, sep, value = entry.partition("=")
+        if key == name:
+            values.append(value if sep else None)
+    if len(values) > 1:
+        return "DUPLICATE"
+    if not values:
+        return "OFF_DEFAULT_RUNTIME"
+    value = values[0]
+    if value is None:
+        return "AMBIGUOUS"
+    if value.strip().casefold() == "true" or value.lower() == "true":
+        return "ON"
+    if value.strip().casefold() == "false":
+        return "OFF_EXPLICIT"
+    return "AMBIGUOUS"
+
+
+def _flag_facts(environment: Any) -> dict[str, str]:
+    if not isinstance(environment, list):
+        raise ProbeError("AI_FLAGS_UNREADABLE")
+    facts = {}
+    for name, label in FLAG_LABELS.items():
+        cls = classify_flag(environment, name)
+        if cls == "ON":
+            raise ProbeError("AI_FLAGS_NOT_OFF")
+        if cls in ("AMBIGUOUS", "DUPLICATE"):
+            raise ProbeError(f"AI_FLAGS_{cls}")
+        facts[label] = cls
+    return facts
+
+
+def _identity_matches(observed: str, expected: str, cid: str, image: str,
+                      project: str | None = None, service: str | None = None) -> bool:
+    observed = observed.strip()
+    parts = observed.split("|")
+    if observed != expected or len(parts) != 7:
+        return False
+    if parts[0] != cid or parts[1] != image or parts[4] != "running":
+        return False
+    return project is None or (parts[5] == project and parts[6] == service)
 
 
 def validate_prestate_path(path: str, *, euid: int) -> str | None:
@@ -1121,14 +1190,36 @@ def main(argv: list[str] | None = None, *, run: Callable[..., str] = _docker, eu
          prestate_owner: int | None = None) -> int:
     parser = argparse.ArgumentParser(description="S5-R1 read-only LiteLLM DB/config diagnostic (operator only).")
     parser.add_argument("--litellm-container")
-    parser.add_argument("--project", default=os.environ.get("NEWSFLUX_PROJECT", "newsflux"))
-    parser.add_argument("--summary-service", default=os.environ.get("NEWSFLUX_SUMMARY_SERVICE", "summary-api"))
+    parser.add_argument("--project")
+    parser.add_argument("--summary-service")
     parser.add_argument("--private-prestate", metavar="ABSOLUTE_PATH",
                         help="S5-R3, opt-in: write a redacted policy prestate (0600, root-only 0700 parent); prints its SHA-256 only")
+    # S5-R3A strict binding (used by s5-r3-omv-readonly-run.sh): exact containers, no discovery.
+    parser.add_argument("--summary-container")
+    parser.add_argument("--expect-summary-image")
+    parser.add_argument("--expect-litellm-image")
+    parser.add_argument("--expect-summary-snapshot")
+    parser.add_argument("--expect-litellm-snapshot")
     args = parser.parse_args(argv)
     if (os.geteuid() if euid is None else euid) != 0:
         print("S5R1_AUDIT=HOLD_NOT_ROOT")
         return 2
+    strict = args.summary_container is not None
+    if strict:
+        hex64, image_id = re.compile(r"^[0-9a-f]{64}$"), re.compile(r"^sha256:[0-9a-f]{64}$")
+        complete = (hex64.match(args.summary_container or "") and hex64.match(args.litellm_container or "")
+                    and image_id.match(args.expect_summary_image or "") and image_id.match(args.expect_litellm_image or "")
+                    and all(isinstance(v, str) and v and "\n" not in v
+                            for v in (args.expect_summary_snapshot, args.expect_litellm_snapshot, args.project, args.summary_service)))
+        if not complete:
+            print("S5R1_AUDIT=HOLD_STRICT_BINDING_INCOMPLETE")
+            return 2
+        for variable, explicit in (("NEWSFLUX_PROJECT", args.project), ("NEWSFLUX_SUMMARY_SERVICE", args.summary_service)):
+            if variable in os.environ and os.environ[variable] != explicit:
+                print("S5R1_AUDIT=HOLD_ENV_DIVERGENT")  # never let the environment pick another Summary
+                return 2
+    project = args.project or os.environ.get("NEWSFLUX_PROJECT", "newsflux")
+    service = args.summary_service or os.environ.get("NEWSFLUX_SUMMARY_SERVICE", "summary-api")
     prestate_path = args.private_prestate
     if prestate_path is not None:  # refused before any docker call
         owner = prestate_owner if prestate_owner is not None else (os.geteuid() if euid is None else euid)
@@ -1136,40 +1227,76 @@ def main(argv: list[str] | None = None, *, run: Callable[..., str] = _docker, eu
         if problem:
             print(f"S5R3_PRIVATE_PRESTATE=HOLD_{problem}")
             return 2
+    host_facts: dict[str, str] = {}
     try:
-        summary = run(["docker", "ps", "-q", "--filter", f"label=com.docker.compose.project={args.project}",
-                       "--filter", f"label=com.docker.compose.service={args.summary_service}"]).split()
-        if len(summary) != 1:
-            raise ProbeError("SUMMARY_CONTAINER_NOT_UNIQUE")
-        summary_id = summary[0]
-        if args.litellm_container:
-            litellm = [args.litellm_container]
-        else:  # by image, not by name: a "litellm_db" Postgres container must not match
-            litellm = []
-            for line in run(["docker", "ps", "--format", "{{.ID}} {{.Image}}"]).splitlines():
-                parts = line.split()
-                image = parts[1].lower() if len(parts) == 2 else ""
-                repository = image.split("@", 1)[0].rsplit(":", 1)[0]
-                if repository.rsplit("/", 1)[-1] == "litellm":
-                    litellm.append(parts[0])
-        if len(litellm) != 1:
-            raise ProbeError("LITELLM_CONTAINER_NOT_UNIQUE")
-        litellm_id = litellm[0]
-        environment = run(["docker", "inspect", "-f", "{{range .Config.Env}}{{println .}}{{end}}", summary_id])
-        values = dict(line.split("=", 1) for line in environment.splitlines() if "=" in line)
-        if any(values.get(name, "").strip().lower() == "true" for name in FLAGS_THAT_MUST_BE_OFF):
-            raise ProbeError("AI_FLAGS_NOT_OFF")
-        before = run(["docker", "inspect", "-f", SNAPSHOT_FORMAT, summary_id, litellm_id])
+        if strict:
+            summary_id, litellm_id = args.summary_container, args.litellm_container
+            expected = {summary_id: args.expect_summary_snapshot, litellm_id: args.expect_litellm_snapshot}
+
+            def identities() -> dict[str, str]:
+                return {cid: run(["docker", "inspect", "--format", IDENTITY_FORMAT, cid]).strip() for cid in (summary_id, litellm_id)}
+
+            def bound(observed: dict[str, str]) -> tuple[bool, bool]:
+                return (_identity_matches(observed[summary_id], expected[summary_id], summary_id, args.expect_summary_image,
+                                          project, service),
+                        _identity_matches(observed[litellm_id], expected[litellm_id], litellm_id, args.expect_litellm_image))
+
+            summary_ok, litellm_ok = bound(identities())
+            if not summary_ok:
+                raise ProbeError("IDENTITY_MISMATCH_SUMMARY")
+            if not litellm_ok:
+                raise ProbeError("IDENTITY_MISMATCH_LITELLM")
+            host_facts.update(SUMMARY_BINDING="EXACT_ID_IMAGE_LABELS_LIFECYCLE", LITELLM_BINDING="EXACT_ID_IMAGE_LIFECYCLE")
+        else:
+            summary = run(["docker", "ps", "-q", "--filter", f"label=com.docker.compose.project={project}",
+                           "--filter", f"label=com.docker.compose.service={service}"]).split()
+            if len(summary) != 1:
+                raise ProbeError("SUMMARY_CONTAINER_NOT_UNIQUE")
+            summary_id = summary[0]
+            if args.litellm_container:
+                litellm = [args.litellm_container]
+            else:  # by image, not by name: a "litellm_db" Postgres container must not match
+                litellm = []
+                for line in run(["docker", "ps", "--format", "{{.ID}} {{.Image}}"]).splitlines():
+                    parts = line.split()
+                    image = parts[1].lower() if len(parts) == 2 else ""
+                    repository = image.split("@", 1)[0].rsplit(":", 1)[0]
+                    if repository.rsplit("/", 1)[-1] == "litellm":
+                        litellm.append(parts[0])
+            if len(litellm) != 1:
+                raise ProbeError("LITELLM_CONTAINER_NOT_UNIQUE")
+            litellm_id = litellm[0]
+            host_facts.update(SUMMARY_BINDING="DISCOVERED_BY_LABELS", LITELLM_BINDING="NAME_OR_IMAGE_DISCOVERY")
+        environment = json.loads(run(["docker", "inspect", "--format", "{{json .Config.Env}}", summary_id]))
+        host_facts.update(_flag_facts(environment))
+        if strict:  # immediately before the first exec: still exactly the gated containers
+            if bound(identities()) != (True, True):
+                raise ProbeError("IDENTITY_CHANGED_BEFORE_EXEC")
+            before = None
+        else:
+            before = run(["docker", "inspect", "-f", SNAPSHOT_FORMAT, summary_id, litellm_id])
         # -B: no bytecode is written inside the containers.
         summary_info = json.loads(run(["docker", "exec", "-u", "10001", summary_id, "python", "-B", "-c", SUMMARY_SNIPPET]))
         if not isinstance(summary_info, dict) or not isinstance(summary_info.get("fingerprint"), str):
             raise ProbeError("SUMMARY_KEY_UNAVAILABLE")
+        flags = summary_info.pop("runtime_flags", None)
+        if (not isinstance(flags, dict) or set(flags) != {"inference", "external_transfer"}
+                or not all(isinstance(value, bool) for value in flags.values())):
+            raise ProbeError("FLAGS_RUNTIME_UNAVAILABLE")
+        if any(flags.values()):
+            raise ProbeError("FLAGS_RUNTIME_NOT_OFF")
+        host_facts["FLAGS_RUNTIME_PARSER"] = "CONFIRMED_OFF"
         with open(os.path.abspath(__file__), encoding="utf-8") as handle:
             source = handle.read()
         request = dict(summary_info, private_prestate=prestate_path is not None)
         stdin = json.dumps(request) + "\n" + source  # alias + fingerprint on stdin only, never argv
         raw = run(["docker", "exec", "-i", litellm_id, "python3", "-B", "-c", PROBE_BOOTSTRAP], stdin=stdin)
-        after = run(["docker", "inspect", "-f", SNAPSHOT_FORMAT, summary_id, litellm_id])
+        if strict:
+            unchanged = bound(identities()) == (True, True)
+            before = after = None
+        else:
+            after = run(["docker", "inspect", "-f", SNAPSHOT_FORMAT, summary_id, litellm_id])
+            unchanged = before == after
         output = raw.strip().splitlines()
         facts = json.loads(output[-1]) if output else {}
         if not isinstance(facts, dict):
@@ -1187,7 +1314,9 @@ def main(argv: list[str] | None = None, *, run: Callable[..., str] = _docker, eu
         if "PROBE" in facts:
             code = facts["PROBE"] if isinstance(facts["PROBE"], str) and SAFE_NAME.match(facts["PROBE"]) else "UNSAFE"
             raise ProbeError("PROBE_" + code)
-        lines = render(facts, container_identity="UNCHANGED" if before == after else "CHANGED")
+        if HOST_FACT_NAMES & set(facts):
+            raise ProbeError("PROBE_OUTPUT_UNSAFE")  # the probe can never speak for the host checks
+        lines = render({**facts, **host_facts}, container_identity="UNCHANGED" if unchanged else "CHANGED")
     except ProbeError as error:
         print(f"S5R1_AUDIT=HOLD_{error}")
         return 2
@@ -1196,7 +1325,7 @@ def main(argv: list[str] | None = None, *, run: Callable[..., str] = _docker, eu
         return 2
     for line in lines:
         print(line)
-    if before != after:
+    if not unchanged:
         print("S5R1_AUDIT=HOLD_CONTAINER_STATE_CHANGED")
         return 3
     if prestate_path is not None:
@@ -1206,7 +1335,8 @@ def main(argv: list[str] | None = None, *, run: Callable[..., str] = _docker, eu
             print("S5R3_PRIVATE_PRESTATE=NOT_WRITTEN")
             print("S5R1_AUDIT=HOLD_PRIVATE_PRESTATE_NOT_WRITTEN")
             return 2
-        binding.update(litellm_container=litellm_id, container_snapshot_sha256=hashlib.sha256(before.encode()).hexdigest())
+        snapshot = before if before is not None else "\n".join(expected.values())
+        binding.update(litellm_container=litellm_id, container_snapshot_sha256=hashlib.sha256(snapshot.encode()).hexdigest())
         try:
             digest = write_private_prestate(prestate_path, prestate)
         except ProbeError as error:
@@ -1218,7 +1348,6 @@ def main(argv: list[str] | None = None, *, run: Callable[..., str] = _docker, eu
     print("S5R1_AUDIT=COMPLETE_DIAGNOSTIC_ONLY")
     print("NEXT=evidence for PM review only; S5_PREFLIGHT is unchanged (no official attestation produced)")
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())
