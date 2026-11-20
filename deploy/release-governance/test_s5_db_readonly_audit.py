@@ -1506,10 +1506,32 @@ class R3AExactBindingTests(unittest.TestCase):
 
 
 def _runtime_parsers():
+    """The full runtime (needs the Summary's dependencies); absent on a bare CI Python -> explicit skip."""
     if _REPO not in _sys.path:
         _sys.path.insert(0, _REPO)
-    from services.article_intel_summary import litellm_adapter
+    try:
+        from services.article_intel_summary import litellm_adapter
+    except ImportError as error:  # e.g. fastapi/httpx not installed on the runner
+        raise unittest.SkipTest(f"Summary runtime dependencies unavailable: {error.name}") from None
     return litellm_adapter
+
+
+def _function_source(relative, name):
+    """Exact source of one top-level function of the Summary package, read statically (no imports)."""
+    import ast
+    path = _os.path.join(_REPO, "services", "article_intel_summary", relative)
+    with open(path, encoding="utf-8") as handle:
+        text = handle.read()
+    for node in ast.walk(ast.parse(text)):
+        if isinstance(node, ast.FunctionDef) and node.name == name:
+            return ast.get_source_segment(text, node)
+    raise AssertionError(f"{name} not found in {relative}")
+
+
+def _static_read_bool(relative):
+    namespace = {"Mapping": dict}
+    exec(compile(_function_source(relative, "_read_bool"), relative, "exec"), namespace)  # noqa: S102 - repo source
+    return namespace["_read_bool"]
 
 
 FLAG_TABLE = (  # literal expectations, derived from the runtime parser semantics at 12929fb
@@ -1545,6 +1567,27 @@ class R3AEffectiveFlagTests(unittest.TestCase):
                 self.assertIn(cls, ("OFF_EXPLICIT", "AMBIGUOUS"), repr(value))
             if cls == "OFF_EXPLICIT":
                 self.assertFalse(runtime_on or admin_on, repr(value))
+
+    def test_static_parsers_of_this_revision_never_admit_on(self):
+        """Runs without the Summary dependencies: the real _read_bool bodies, executed in isolation."""
+        parsers = [_static_read_bool("litellm_adapter.py")]
+        catalog_source = open(_os.path.join(_REPO, "services", "article_intel_summary", "catalog.py"), encoding="utf-8").read()
+        self.assertNotIn("def _read_bool", catalog_source)        # catalog reuses the adapter's parser
+        self.assertRegex(catalog_source, r"from services\.article_intel_summary\.litellm_adapter import \([^)]*\b_read_bool\b")
+        values = [v for v, _ in FLAG_TABLE] + [" TRUE", "true ", "TrUe", "faLse\t", "NULL", "none"]
+        for value in values:
+            on = any(parse({self.NAME: value}, self.NAME) for parse in parsers) or value.lower() == "true"
+            cls = audit.classify_flag([f"{self.NAME}={value}"], self.NAME)
+            self.assertEqual(cls == "ON", on, repr(value))
+        self.assertFalse(any(parse({}, self.NAME) for parse in parsers))          # absent -> OFF
+        admin = open(_os.path.join(_REPO, "services", "article_intel_summary", "admin_settings.py"), encoding="utf-8").read()
+        self.assertIn('self.env.get("NEWSFLUX_AI_INFERENCE_ENABLED", "").lower() == "true"', admin)
+        gateway = _function_source("litellm_adapter.py", "load_gateway_settings")
+        self.assertIn('enabled=_read_bool(values, "NEWSFLUX_AI_INFERENCE_ENABLED")', gateway)
+        self.assertIn('external_transfer_authorized=_read_bool(values, "NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER")', gateway)
+        effective = _function_source("admin_settings.py", "effective_values")
+        for name in audit.FLAGS_THAT_MUST_BE_OFF:   # managed settings never override the two flags
+            self.assertNotIn(name, effective)
 
     def test_default_off_is_proven_at_this_revision(self):
         adapter = _runtime_parsers()
