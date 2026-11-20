@@ -418,6 +418,35 @@ class HostOrchestrationTests(unittest.TestCase):
         self.assertEqual(code, 3)
         self.assertIn("S5R1_AUDIT=HOLD_CONTAINER_STATE_CHANGED", lines)
 
+    def test_litellm_container_is_detected_by_image_not_by_name(self):
+        run, calls = self.fake_docker()
+
+        def wrapped(argv, stdin=None):
+            if argv[:2] == ["docker", "ps"] and "--format" in argv:
+                return ("aaa postgres:16\nbbb ghcr.io/berriai/litellm-database:main-stable\n"
+                        "ccc litellm/litellm@sha256:abc\nddd redis:7\n")
+            return run(argv, stdin)
+
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = audit.main([], run=wrapped, euid=0)
+        self.assertEqual(code, 0, out.getvalue())
+        probe = [argv for argv, _ in calls if argv[:3] == ["docker", "exec", "-i"]]
+        self.assertEqual(probe[0][3], "ccc")
+
+    def test_ambiguous_litellm_containers_hold(self):
+        run, _ = self.fake_docker()
+
+        def wrapped(argv, stdin=None):
+            if argv[:2] == ["docker", "ps"] and "--format" in argv:
+                return "ccc litellm/litellm:v1\neee ghcr.io/berriai/litellm:main\n"
+            return run(argv, stdin)
+
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = audit.main([], run=wrapped, euid=0)
+        self.assertEqual((code, out.getvalue().strip()), (2, "S5R1_AUDIT=HOLD_LITELLM_CONTAINER_NOT_UNIQUE"))
+
     def test_unsafe_probe_output_is_rejected(self):
         run, _ = self.fake_docker(probe={"KEY_MATCH": "newsflux-s5-free"})
         code, lines = self.host(run)

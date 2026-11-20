@@ -10,7 +10,9 @@
 #     limits fail; YAML fallbacks and callbacks are detected; a configured zero price never
 #     passes PRICING_GATE;
 #   - the probe's transaction is really READ ONLY (a write inside it is refused by Postgres);
-#   - the output never contains a key, token hash, fingerprint, alias, URL or DSN.
+#   - the output never contains a key, token hash, fingerprint, alias, URL or DSN;
+#   - the host entry point (the operator command) end to end against a real Summary image labelled
+#     like production: least-privilege PASS, unrestricted FAIL, refusal with inference ON.
 set -Eeuo pipefail
 umask 022
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -25,9 +27,9 @@ fail=0
 ok() { echo "S5_DB_AUDIT $1=PASS"; pass=$((pass + 1)); }
 ko() { echo "S5_DB_AUDIT $1=FAIL"; fail=$((fail + 1)); }
 cleanup() {
-  docker rm -f "$run-litellm" "$run-pg" >/dev/null 2>&1 || true
+  docker rm -f "$run-litellm" "$run-pg" "$run-summary" >/dev/null 2>&1 || true
   docker network rm "$net" >/dev/null 2>&1 || true
-  rm -rf "$work"
+  sudo -n rm -rf "$work" 2>/dev/null || rm -rf "$work" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -131,6 +133,70 @@ for key in "$LP" "$OPEN" "$NOLIMITS"; do
   grep -qF "$(printf '%s' "$key" | sha256sum | cut -c1-64)" <<<"$all" && leak=1
 done
 [[ "$leak" == 0 ]] && ok NO_SECRET_ALIAS_URL_OR_HASH_IN_OUTPUT || ko NO_SECRET_ALIAS_URL_OR_HASH_IN_OUTPUT
+
+# --- Host entry point end to end: real Summary image (labelled like production) + real LiteLLM -----
+repo="$(cd "$here/../.." && pwd)"
+build_args=(-f "$repo/services/article_intel_summary/Dockerfile")
+context="$repo"
+if [[ -n "${NEWSFLUX_TEST_PIP_CA:-}" ]]; then # TLS-inspecting sandboxes only (same pattern as rehearse-s5-key-gate.sh)
+  context="$work/ctx"
+  mkdir -p "$context"
+  cp -R "$repo/services" "$context/services"
+  cp "$NEWSFLUX_TEST_PIP_CA" "$context/.pip-ca.pem"
+  python3 - "$repo/services/article_intel_summary/Dockerfile" "$context/Dockerfile.sandbox" <<'PY'
+import re, sys
+s = open(sys.argv[1]).read()
+s = re.sub(r"^FROM (\S+)@sha256:\S+", r"FROM \1", s, count=1, flags=re.M)
+s = s.replace("RUN pip install", "COPY .pip-ca.pem /tmp/ca.pem\nARG HTTPS_PROXY\nRUN PIP_CERT=/tmp/ca.pem pip install", 1)
+open(sys.argv[2], "w").write(s)
+PY
+  build_args=(-f "$context/Dockerfile.sandbox" --network host --build-arg "HTTPS_PROXY=${HTTPS_PROXY:-}")
+fi
+docker build -q "${build_args[@]}" -t "$run-summary:synthetic" "$context" >/dev/null
+summary() { # $1 key value, $2 inference flag; starts a Summary container labelled like the production service
+  local secrets
+  secrets="$(mktemp -d "$work/secrets.XXXXXX")"
+  chmod 0755 "$secrets"
+  printf '%s\n' "$1" >"$secrets/key"
+  chmod 0400 "$secrets/key"
+  chown -R 10001:10001 "$secrets"
+  docker rm -f "$run-summary" >/dev/null 2>&1 || true
+  docker run -d --name "$run-summary" --label "com.docker.compose.project=$run-proj" \
+    --label com.docker.compose.service=summary-api --network "$net" --read-only --cap-drop ALL \
+    -v "$secrets:/run/secrets/litellm:ro" -e NEWSFLUX_AI_LITELLM_BASE_URL=https://litellm.invalid \
+    -e NEWSFLUX_AI_LITELLM_VIRTUAL_KEY_FILE=/run/secrets/litellm/key -e NEWSFLUX_AI_LITELLM_S5_FREE_ALIAS=newsflux-s5-free \
+    -e NEWSFLUX_AI_LITELLM_MISTRAL_SMALL_ALIAS=mistral-small -e NEWSFLUX_AI_LITELLM_S5_FREE_INPUT_USD_PER_MILLION=0 \
+    -e NEWSFLUX_AI_LITELLM_S5_FREE_OUTPUT_USD_PER_MILLION=0 -e NEWSFLUX_AI_MONTHLY_BUDGET_USD=1.00 \
+    -e NEWSFLUX_AI_MAX_INPUT_TOKENS=4096 -e NEWSFLUX_AI_MAX_OUTPUT_TOKENS=512 -e NEWSFLUX_AI_MAX_REQUESTS_PER_MINUTE=5 \
+    -e NEWSFLUX_AI_MAX_TOKENS_PER_MINUTE=20000 -e NEWSFLUX_AI_INFERENCE_TIMEOUT_SECONDS=15 \
+    -e NEWSFLUX_AI_INFERENCE_ENABLED="$2" -e NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER=false \
+    -e NEWSFLUX_AI_USAGE_DATABASE_PATH=/tmp/usage.sqlite3 --tmpfs /tmp \
+    --entrypoint python "$run-summary:synthetic" -c "import time; time.sleep(600)" >/dev/null
+}
+host() { sudo -n python3 -I "$here/s5_db_readonly_audit.py" --project "$run-proj" --litellm-container "$run-litellm" 2>&1 || true; }
+
+summary "$LP" false
+out="$(host)"
+has() { grep -qx "$2" <<<"$1"; }
+has "$out" S5R1_KEY_POLICY_GATE=PASS && has "$out" S5R1_DB_READ_ONLY=VERIFIED && has "$out" S5R1_PRODUCTION_MUTATIONS=0 \
+  && has "$out" S5R1_AUDIT=COMPLETE_DIAGNOSTIC_ONLY && has "$out" S5R1_OFFICIAL_ATTESTATION=HOLD_NO_ACCEPTABLE_ATTESTATION_SOURCE \
+  && ok HOST_END_TO_END_LEAST_PRIVILEGE || { ko HOST_END_TO_END_LEAST_PRIVILEGE; echo "$out"; }
+leak=0
+for secret in "$LP" "$MASTER" newsflux-s5 127.0.0.1 postgresql:// openrouter/ "$(printf '%s' "$LP" | sha256sum | cut -c1-64)"; do
+  grep -qF -- "$secret" <<<"$out" && leak=1
+done
+[[ "$leak" == 0 ]] && ok HOST_OUTPUT_HAS_NO_SECRET || ko HOST_OUTPUT_HAS_NO_SECRET
+
+summary "$OPEN" false
+out="$(host)"
+has "$out" S5R1_KEY_POLICY_GATE=FAIL && has "$out" S5R1_KEY_SCOPE_DETAIL=UNRESTRICTED_ALL_MODELS \
+  && ok HOST_END_TO_END_UNRESTRICTED_FAILS || { ko HOST_END_TO_END_UNRESTRICTED_FAILS; echo "$out"; }
+
+summary "$LP" true
+out="$(host)"
+[[ "$out" == "S5R1_AUDIT=HOLD_AI_FLAGS_NOT_OFF" ]] && ok HOST_REFUSES_WITH_INFERENCE_ON || { ko HOST_REFUSES_WITH_INFERENCE_ON; echo "$out"; }
+docker rm -f "$run-summary" >/dev/null 2>&1 || true
+docker image rm "$run-summary:synthetic" >/dev/null 2>&1 || true
 
 echo "S5_DB_AUDIT_PASSED=$pass S5_DB_AUDIT_FAILED=$fail"
 [[ "$fail" -eq 0 ]]

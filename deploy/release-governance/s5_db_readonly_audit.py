@@ -589,8 +589,16 @@ def main(argv: list[str] | None = None, *, run: Callable[..., str] = _docker, eu
         if len(summary) != 1:
             raise ProbeError("SUMMARY_CONTAINER_NOT_UNIQUE")
         summary_id = summary[0]
-        litellm = [args.litellm_container] if args.litellm_container else run(
-            ["docker", "ps", "-q", "--filter", "name=litellm"]).split()
+        if args.litellm_container:
+            litellm = [args.litellm_container]
+        else:  # by image, not by name: a "litellm_db" Postgres container must not match
+            litellm = []
+            for line in run(["docker", "ps", "--format", "{{.ID}} {{.Image}}"]).splitlines():
+                parts = line.split()
+                image = parts[1].lower() if len(parts) == 2 else ""
+                repository = image.split("@", 1)[0].rsplit(":", 1)[0]
+                if repository.rsplit("/", 1)[-1] == "litellm":
+                    litellm.append(parts[0])
         if len(litellm) != 1:
             raise ProbeError("LITELLM_CONTAINER_NOT_UNIQUE")
         litellm_id = litellm[0]
