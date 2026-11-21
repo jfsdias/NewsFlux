@@ -315,3 +315,36 @@ test("MODEL_PICKER typing or pasting over the selected label searches exactly th
   await page.keyboard.press("Escape")
   await expect(primary).toHaveValue("gemini-2.5-flash")
 })
+
+test("MODEL_PICKER IME input after a choice or Escape searches the composed text", async ({
+  page,
+}) => {
+  await page.goto(`${HARNESS}?catalog=d1&primary=auto`)
+  const primary = primaryPicker(page)
+  const list = page.getByRole("listbox", { name: "AI model" })
+  const cdp = await page.context().newCDPSession(page)
+  const compose = async (composing, committed) => {
+    await cdp.send("Input.imeSetComposition", {
+      text: composing,
+      selectionStart: composing.length,
+      selectionEnd: composing.length,
+    })
+    await cdp.send("Input.insertText", { text: committed })
+  }
+  await primary.focus()
+  await page.keyboard.press("ArrowDown")
+  await page.keyboard.type("gpt-4o")
+  await page.keyboard.press("ArrowDown")
+  await page.keyboard.press("Enter")
+  await expect(primary).toHaveValue("gpt-4o")
+  await compose("so", "son")
+  await expect(primary).toHaveValue("son")
+  await expect(list.getByRole("option", { name: /^sonar/ })).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(primary).toHaveValue("gpt-4o")
+  // Japanese input after Escape: the committed text alone is the search.
+  await compose("そ", "ソ")
+  await expect(primary).toHaveValue("ソ")
+  await page.keyboard.press("Escape")
+  await expect(primary).toHaveValue("gpt-4o")
+})

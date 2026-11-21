@@ -40,6 +40,17 @@ const ModelCombobox = ({ details, label, noResults, onChange, options, placehold
     }
   }, [open, activeIndex])
 
+  // When the list closes with focus still in the field (a choice, Escape, Alt+↑), the shown
+  // label is selected again, so the next input (typed, pasted or composed by an IME) replaces
+  // it as a whole instead of editing it mid-composition.
+  useEffect(() => {
+    const input = inputRef.current
+    if (!open && input && document.activeElement === input) {
+      input.select()
+      selectionRef.current = { start: 0, end: input.value.length }
+    }
+  }, [open, value])
+
   const openList = () => {
     setQuery("")
     setActiveIndex(Math.max(0, options.indexOf(selected)))
