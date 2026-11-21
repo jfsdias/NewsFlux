@@ -41,6 +41,15 @@ Owner endorsed the Red Team / RSS benchmark audit and requested its conversion i
 
 ---
 
+## Historical operational report (2026-11-21, post-#285; reconciled from #290)
+
+- Source evidence: [PR #290](https://github.com/jfsdias/NewsFlux/pull/290), reported production SHA `08929008e726273695e9e002df6cae41c3f4cda8`, release PREPARE/PREFLIGHT/BUILD/PROMOTE/SMOKE reported PASS. This is owner-reported evidence, not a current direct runtime verification. Main subsequently advanced through #286 and #287; parity is unverified.
+- D1 enabled and 16-model catalog, real Reader Summary in Safari, WallHop path A explicit external link reported verified by owner. Preserve existing path A behavior; no new activation is authorized. Path B remains OFF by design; provider policy unresolved. PWA-03A2C remains NOT_VERIFIED.
+- #290's prioritized queue was an operational snapshot; the owner-approved S0–S8+ queue above is the current PLANNING order. #260 local-only consent remains a separately gated candidate; Mac mini model integration is not implicitly authorized by this roadmap.
+- #290 and #291 overlap in this file; reconcile by preserving these timestamped facts in #291 rather than maintaining two competing canonical roadmaps. No merge or closure executed by this edit.
+
+---
+
 ## Historical canonical state (verified 2026-11-08; post-PR #193)
 
 This snapshot records the state as of 2026-11-08 and superseded Section 24 at that date. It is historical following the 2026-11-21 sprint queue; Section 24 remains intact as the 2026-11-06 record.
