@@ -68,7 +68,8 @@ class OperatorPreflightTests(unittest.TestCase):
         path = write_trusted(directory, "e.json", evidence(key=KEY, captured=datetime.now(timezone.utc) - timedelta(hours=1)))
         env.update(NEWSFLUX_AI_LITELLM_COST_AUTHORITY_EVIDENCE_FILE=path, NEWSFLUX_AI_LITELLM_COST_AUTHORITY_EVIDENCE_SHA256=sha_of(path),
                    NEWSFLUX_AI_INFERENCE_ENABLED="true", NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER="true",
-                   NEWSFLUX_AI_MODEL_DISCOVERY_ENABLED="true")
+                   NEWSFLUX_AI_MODEL_DISCOVERY_ENABLED="true", NEWSFLUX_AI_MAX_INPUT_TOKENS="32000",
+                   NEWSFLUX_AI_MAX_OUTPUT_TOKENS="1024", NEWSFLUX_AI_MAX_REQUESTS_PER_MINUTE="10")
         code, lines = run(env, store_factory=self.factory)            # no --check-gateway: offline gates only
         self.assertIn("D1_COST_AUTHORITY=PROVEN_GATEWAY_ENFORCEMENT_EVIDENCE", lines, lines)
         self.assertIn("D1_PREFLIGHT=PASS_OFFLINE_ONLY", lines)

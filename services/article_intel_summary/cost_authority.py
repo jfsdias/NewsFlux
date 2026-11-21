@@ -52,6 +52,9 @@ DUPLICATE_COST_ENV = (
     "NEWSFLUX_AI_LITELLM_MISTRAL_SMALL_INPUT_USD_PER_MILLION",
     "NEWSFLUX_AI_LITELLM_MISTRAL_SMALL_OUTPUT_USD_PER_MILLION",
 )
+# Smallest local limits that fit the summary prompt plus an ordinary article with the adapter's conservative
+# estimate (1 token per UTF-8 byte; prompt framing alone is ~2.7k). Below this every article is refused.
+D1_MIN_INPUT_TOKENS = 16000
 D1_REQUIRED_FLAGS = ("NEWSFLUX_AI_INFERENCE_ENABLED", "NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER",
                      "NEWSFLUX_AI_MODEL_DISCOVERY_ENABLED")
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
@@ -249,6 +252,15 @@ def preflight(values: Mapping[str, str], *, now: datetime | None = None,
     hold = False
     flags_ok = all(_true(values, name) for name in D1_REQUIRED_FLAGS)
     lines.append(f"D1_FLAGS={'PASS' if flags_ok else 'HOLD_INFERENCE_TRANSFER_OR_DISCOVERY_OFF'}")
+    def _int(name: str) -> int:
+        try:
+            return int((values.get(name) or "0").strip())
+        except ValueError:
+            return 0
+    limits_ok = (_int("NEWSFLUX_AI_MAX_INPUT_TOKENS") >= D1_MIN_INPUT_TOKENS and _int("NEWSFLUX_AI_MAX_REQUESTS_PER_MINUTE") >= 2
+                 and _int("NEWSFLUX_AI_MAX_OUTPUT_TOKENS") >= 256)
+    lines.append(f"D1_LIMITS={'PASS' if limits_ok else 'HOLD_LOCAL_LIMITS_TOO_SMALL_FOR_AN_ARTICLE'}")
+    hold = hold or not limits_ok
     duplicated = [name for name in DUPLICATE_COST_ENV if (values.get(name) or "").strip()]
     lines.append(f"D1_NO_DUPLICATE_COST_CONTROL={'PASS' if not duplicated else 'HOLD_NEWSFLUX_COST_CONFIGURED'}")
     hold = hold or not flags_ok or bool(duplicated)
