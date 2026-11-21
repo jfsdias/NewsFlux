@@ -205,6 +205,15 @@ class Docker:
         )
         return completed.returncode, completed.stdout
 
+    def service_network_keys(self, identity: ContainerIdentity, files: Sequence[str], service: str) -> list[str]:
+        """Compose-level network keys of the service in the given sequence (config output stays in memory)."""
+        try:
+            document = json.loads(self.run([*self.compose_args(identity, files), "config", "--format", "json"]))
+            networks = document["services"][service].get("networks") or {}
+        except (KeyError, TypeError, AttributeError, json.JSONDecodeError):
+            raise GateError("CANDIDATE_RUN_CONFIG_UNREADABLE") from None
+        return sorted(networks if isinstance(networks, dict) else list(networks))
+
     def resolved_service_image(self, identity: ContainerIdentity, files: Sequence[str], service: str) -> str | None:
         """Image ID the given Compose sequence resolves to. Config output stays in memory (it may hold secrets)."""
         try:
@@ -574,6 +583,21 @@ def _transition(docker: Docker, manifest: dict, *, target: str, timeout: float) 
 
 
 SAFE_OUTPUT_LINE = re.compile(r"^[A-Z][A-Z0-9_]{0,63}=[A-Za-z0-9_.,:-]{0,200}$")
+STATIC_ADDRESS_FIELDS = ("ipv4_address", "ipv6_address", "mac_address")
+
+
+def _run_override_document(service: str, network_keys: Sequence[str]) -> str:
+    """Run-only Compose override: the one-off container must not claim the running service's fixed addresses
+    (the daemon refuses "Address already in use"). `!reset` drops each static field per network; everything
+    else (networks, aliases, env, mounts, image) is the target configuration unchanged. JSON-quoted keys are
+    valid YAML scalars."""
+    lines = ["services:", f"  {json.dumps(service)}:"]
+    if network_keys:
+        lines.append("    networks:")
+        for key in network_keys:
+            lines.append(f"      {json.dumps(key)}:")
+            lines.extend(f"        {field}: !reset null" for field in STATIC_ADDRESS_FIELDS)
+    return "\n".join(lines) + "\n"
 
 
 def candidate_run(docker: Docker, manifest: dict, policy: set, argv: Sequence[str], *, lock: str) -> tuple[int, list[str]]:
@@ -589,7 +613,16 @@ def candidate_run(docker: Docker, manifest: dict, policy: set, argv: Sequence[st
         _check_configuration(manifest, identity)
         _check_protected(docker, manifest)
         _write_override(manifest, _candidate_override(manifest), manifest["candidate_image"])
-        code, output = docker.compose_run(identity, _candidate_files(manifest), manifest["service"], argv)
+        files = _candidate_files(manifest)
+        # Outside the manifest, its hashes and promote/rollback: written here, removed in `finally`.
+        run_override = Path(manifest["release_dir"]) / f"candidate-run.{os.getpid()}.{os.urandom(4).hex()}.override.yaml"
+        try:
+            keys = docker.service_network_keys(identity, files, manifest["service"])
+            _atomic_write(run_override, _run_override_document(manifest["service"], keys), 0o600)
+            code, output = docker.compose_run(identity, [*files, str(run_override)], manifest["service"], argv)
+        finally:
+            with contextlib.suppress(FileNotFoundError):
+                run_override.unlink()
         after = docker.service_container(manifest["project"], manifest["service"])
         require(after.container_id == identity.container_id and after.config_hash == identity.config_hash, "CANDIDATE_RUN_TOUCHED_SERVICE")
         _check_protected(docker, manifest)

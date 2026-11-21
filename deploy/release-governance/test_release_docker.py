@@ -365,6 +365,51 @@ class DockerReleaseRehearsal(unittest.TestCase):
         self.assertEqual(raised.exception.code, "MOUNT_ADDED_INVALID")
 
 
+@unittest.skipUnless(os.environ.get("RELEASE_DOCKER_TESTS") == "1", "set RELEASE_DOCKER_TESTS=1 to run the Docker rehearsal")
+class CandidateRunFixedAddressRehearsal(unittest.TestCase):
+    """OMV shape: summary-api has a fixed ipv4_address. A plain `compose run` of the target configuration asks for
+    the same address and the daemon refuses it; candidate-run's run-only `!reset` override avoids that."""
+
+    def test_fixed_ipv4_service_candidate_run(self) -> None:
+        run_id = f"nfrun-{secrets.token_hex(3)}"
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        work = Path(tmp.name)
+        image = build_image(work, f"{run_id}-img:test", "a" * 40, True)
+        self.addCleanup(subprocess.run, ["docker", "image", "rm", "-f", f"{run_id}-img:test"], capture_output=True)
+        octet = 16 + secrets.randbelow(200)
+        base = work / "compose.yaml"
+        base.write_text(json.dumps({
+            "services": {
+                "summary-api": {"image": f"{run_id}-img:test", "networks": {"fixed": {"ipv4_address": f"10.{octet}.7.10"}}},
+                "miniflux": {"image": image, "networks": ["fixed"]},
+            },
+            "networks": {"fixed": {"internal": True, "ipam": {"config": [{"subnet": f"10.{octet}.7.0/24"}]}}},
+        }), encoding="utf-8")
+        compose = ["compose", "-p", run_id, "--project-directory", str(work), "-f", str(base)]
+        docker(*compose, "up", "-d", "--wait")
+        self.addCleanup(subprocess.run, ["docker", *compose, "down", "-v", "--remove-orphans"], capture_output=True, timeout=300)
+        overlay = work / "target.override.json"
+        overlay.write_text(json.dumps({"services": {"summary-api": {"environment": {"MODE": "target"}}}}), encoding="utf-8")
+        client = release.Docker()
+        policy = {(run_id, "summary-api")}
+        manifest = release.build_manifest(
+            client, project=run_id, service="summary-api", candidate_image=image, approved_sha="a" * 40,
+            protected=[f"{run_id}-miniflux-1"], policy=policy, release_dir=work / "release", extra_overrides=[str(overlay)])
+        before = client.service_container(run_id, "summary-api")
+        # Without the run-only override the daemon refuses the duplicate fixed address (the OMV failure).
+        plain = subprocess.run(["docker", *compose, "-f", str(overlay), "run", "--rm", "--no-deps", "-T", "summary-api", "true"],
+                               capture_output=True, text=True, timeout=300)
+        self.assertNotEqual(plain.returncode, 0)
+        self.assertIn("already in use", (plain.stderr + plain.stdout).lower())
+        code, lines = release.candidate_run(client, manifest, policy, ["sh", "-c", 'echo "MODE_SEEN=$MODE"'],
+                                            lock=str(work / "lock"))
+        self.assertEqual((code, lines), (0, ["MODE_SEEN=target"]))
+        after = client.service_container(run_id, "summary-api")
+        self.assertEqual((after.container_id, after.config_hash), (before.container_id, before.config_hash))
+        self.assertEqual([p for p in os.listdir(work / "release") if p.startswith("candidate-run.")], [])
+
+
 class PolicyTests(unittest.TestCase):
     def test_policy_rejects_forbidden_services(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
