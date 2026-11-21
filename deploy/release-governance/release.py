@@ -12,7 +12,10 @@ values, secrets or file contents):
             state still corresponds to that release
   candidate-run  run one read-only command in a one-off container of the
             manifest's TARGET configuration (`compose run --rm --no-deps -T`),
-            before promotion; the running service is not touched (D1-R7-02)
+            before promotion; the running service is not touched (D1-R7-02).
+            Fixed ipv4/ipv6/mac/link_local addresses are reset for the one-off
+            container only, so it keeps the same networks without colliding
+            with the running service
 
 Safety properties:
   * a closed policy decides which (project, service) pairs may ever be touched;
@@ -26,7 +29,10 @@ Safety properties:
   * a host-wide exclusive lock (flock) serializes release operations;
   * only `docker compose up -d --no-deps --no-build --pull never <service>` is
     ever executed to change the service, with a release-owned override that
-    pins the image ID; candidate-run adds `compose run --rm --no-deps -T`;
+    pins the image ID; candidate-run adds `compose run --rm --no-deps -T` and,
+    when needed, an ephemeral override that resets fixed addresses (never part
+    of the manifest, state, hashes or promote/rollback sequence, deleted after
+    the run);
   * an override may add networks and read-only bind mounts only when declared
     (--network-added / --mount-added), so the shape check stays exact;
   * a failed promotion is rolled back automatically; rollback is idempotent and
@@ -197,13 +203,19 @@ class Docker:
     def compose_up(self, identity: ContainerIdentity, files: Sequence[str], service: str) -> None:
         self.run([*self.compose_args(identity, files), "up", "-d", "--no-deps", "--no-build", "--pull", "never", service])
 
-    def compose_run(self, identity: ContainerIdentity, files: Sequence[str], service: str, argv: Sequence[str]) -> tuple[int, str]:
+    def compose_config(self, identity: ContainerIdentity, files: Sequence[str]) -> dict:
+        """Resolved Compose document. Stays in memory; never written to disk (it may hold secrets)."""
+        document = json.loads(self.run([*self.compose_args(identity, files), "config", "--format", "json"]))
+        require(isinstance(document, dict), "COMPOSE_CONFIG_INVALID")
+        return document
+
+    def compose_run(self, identity: ContainerIdentity, files: Sequence[str], service: str, argv: Sequence[str]) -> tuple[int, str, str]:
         """One-off container of the given Compose sequence; never touches the running service container."""
         completed = subprocess.run(
             ["docker", *self.compose_args(identity, files), "run", "--rm", "--no-deps", "-T", service, *argv],
             check=False, capture_output=True, text=True, timeout=300,
         )
-        return completed.returncode, completed.stdout
+        return completed.returncode, completed.stdout, completed.stderr
 
     def resolved_service_image(self, identity: ContainerIdentity, files: Sequence[str], service: str) -> str | None:
         """Image ID the given Compose sequence resolves to. Config output stays in memory (it may hold secrets)."""
@@ -576,11 +588,89 @@ def _transition(docker: Docker, manifest: dict, *, target: str, timeout: float) 
 SAFE_OUTPUT_LINE = re.compile(r"^[A-Z][A-Z0-9_]{0,63}=[A-Za-z0-9_.,:-]{0,200}$")
 
 
+_RUN_OVERRIDE_NAME = "candidate-run.ephemeral.override.yaml"
+_ADDRESS_FIELDS = ("ipv4_address", "ipv6_address", "mac_address", "link_local_ips")
+_ADDRESS_IN_USE = re.compile(r"address already in use", re.I)
+
+
+def _run_override_path(manifest: dict) -> Path:
+    return Path(manifest["release_dir"]) / _RUN_OVERRIDE_NAME
+
+
+def _unlink_quietly(path: Path) -> None:
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def _fixed_address_fields(attachment: object) -> tuple[str, ...]:
+    if not isinstance(attachment, dict):
+        return ()
+    present = []
+    for key in _ADDRESS_FIELDS:
+        value = attachment.get(key)
+        if value not in (None, "", [], ()):
+            present.append(key)
+    return tuple(present)
+
+
+def _yaml_scalar(value: str) -> str:
+    """JSON strings are valid YAML and cannot inject new structure."""
+    require(isinstance(value, str) and value != "" and "\0" not in value, "COMPOSE_CONFIG_INVALID")
+    return json.dumps(value)
+
+
+def run_override_yaml(document: dict, service: str) -> str | None:
+    """YAML that resets fixed addresses on the one-off container; None if there is nothing to reset.
+
+    Network and service names are the only interpolated values and are emitted as JSON strings.
+    The resolved Compose document itself is never written (it may hold secrets).
+    """
+    require(isinstance(service, str) and NAME_RE.fullmatch(service), "COMPOSE_CONFIG_INVALID")
+    services = document.get("services") if isinstance(document, dict) else None
+    require(isinstance(services, dict) and service in services, "COMPOSE_CONFIG_INVALID")
+    cfg = services[service]
+    require(isinstance(cfg, dict), "COMPOSE_CONFIG_INVALID")
+    lines = ["services:", f"  {_yaml_scalar(service)}:"]
+    wrote = False
+    if cfg.get("mac_address") not in (None, "", []):
+        lines.append("    mac_address: !reset null")
+        wrote = True
+    networks = cfg.get("networks")
+    reset_nets: list[tuple[str, tuple[str, ...]]] = []
+    if isinstance(networks, dict):
+        for name, attachment in networks.items():
+            require(isinstance(name, str) and name != "" and "\0" not in name, "COMPOSE_CONFIG_INVALID")
+            fields = _fixed_address_fields(attachment)
+            if fields:
+                reset_nets.append((name, fields))
+    if reset_nets:
+        lines.append("    networks:")
+        for name, fields in reset_nets:
+            lines.append(f"      {_yaml_scalar(name)}:")
+            for field in fields:
+                lines.append(f"        {field}: !reset null")
+        wrote = True
+    if not wrote:
+        return None
+    return "\n".join(lines) + "\n"
+
+
+def _candidate_run_diag(stderr: str) -> str:
+    """Closed diagnostic code derived from stderr; never returns stderr content."""
+    if _ADDRESS_IN_USE.search(stderr or ""):
+        return "NETWORK_ADDRESS_IN_USE"
+    return "COMPOSE_ERROR"
+
+
 def candidate_run(docker: Docker, manifest: dict, policy: set, argv: Sequence[str], *, lock: str) -> tuple[int, list[str]]:
     """Run `argv` in the manifest's target configuration before promotion (e.g. the D1 preflight).
 
     Same verification as promote (manifest, configuration hashes, protected services, live state = PREVIOUS);
-    only gate-shaped output lines (NAME=VALUE, no spaces) are returned, anything else is dropped."""
+    only gate-shaped output lines (NAME=VALUE, no spaces) are returned, anything else is dropped.
+    When the one-off container would inherit fixed addresses, an ephemeral Compose override
+    (`!reset`) is added for the run only and deleted afterwards, including on error."""
     verify_manifest(manifest, policy)
     require(argv and all(isinstance(item, str) and item for item in argv), "CANDIDATE_RUN_ARGV_INVALID")
     with release_lock(lock):
@@ -589,11 +679,24 @@ def candidate_run(docker: Docker, manifest: dict, policy: set, argv: Sequence[st
         _check_configuration(manifest, identity)
         _check_protected(docker, manifest)
         _write_override(manifest, _candidate_override(manifest), manifest["candidate_image"])
-        code, output = docker.compose_run(identity, _candidate_files(manifest), manifest["service"], argv)
+        files = _candidate_files(manifest)
+        ephemeral = _run_override_path(manifest)
+        output, stderr = "", ""
+        try:
+            yaml_text = run_override_yaml(docker.compose_config(identity, files), manifest["service"])
+            if yaml_text is not None:
+                _atomic_write(ephemeral, yaml_text, 0o644)
+                files = files + [str(ephemeral)]
+            code, output, stderr = docker.compose_run(identity, files, manifest["service"], argv)
+        finally:
+            _unlink_quietly(ephemeral)
         after = docker.service_container(manifest["project"], manifest["service"])
         require(after.container_id == identity.container_id and after.config_hash == identity.config_hash, "CANDIDATE_RUN_TOUCHED_SERVICE")
         _check_protected(docker, manifest)
-    return code, [line for line in output.splitlines() if SAFE_OUTPUT_LINE.match(line)]
+    lines = [line for line in output.splitlines() if SAFE_OUTPUT_LINE.match(line)]
+    if code != 0 and not lines:
+        lines.append(f"CANDIDATE_RUN_DIAG={_candidate_run_diag(stderr)}")
+    return code, lines
 
 
 def promote(docker: Docker, manifest: dict, policy: set, *, lock: str, timeout: float = 120) -> str:
