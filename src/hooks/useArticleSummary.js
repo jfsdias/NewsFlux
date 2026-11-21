@@ -72,6 +72,7 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
     hasProvisionedApiKey(auth)
   const cacheKey = summaryCacheKey({
     authSessionKey,
+    sessionRevision,
     entryId,
     entryVersion: activeContent?.changed_at ?? activeContent?.hash,
     settings,
