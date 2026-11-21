@@ -84,6 +84,7 @@ settingsState.set({
   ...settingsState.get(),
   markReadBy: "manually",
   aiSummaryAutoOnOpen: autoSummary,
+  aiSummaryAutoConsent: autoSummary,
 })
 dataState.set({ ...dataState.get(), sessionRevision: 4 })
 contentState.set({
