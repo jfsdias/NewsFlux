@@ -31,6 +31,10 @@ _ENTRY_ID_RE = re.compile(r"^[1-9][0-9]{0,18}$")
 _REQUEST_ID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$")
 
 
+class _ClientClosed(Exception):
+    """The browser went away (navigation, a newer request): nobody reads the response."""
+
+
 class _ApiError(Exception):
     def __init__(self, code: str, status_code: int, request_id: str | None = None, retryable: bool = False) -> None:
         self.code = code
@@ -274,6 +278,10 @@ def create_app(
                 raise _ApiError("SUMMARY_BUSY", 504, request_id)
             try:
                 outcome = await _supervised_request(request, supervisor, work, remaining)
+            except _ClientClosed:
+                # Expected when the reader moves on; not an application error (no traceback).
+                _LOG.info("summary api client closed the request")
+                return Response(status_code=499)
             except OperationBusy:
                 raise _ApiError("SUMMARY_BUSY", 429, request_id, retryable=True) from None
             except OperationDeadline:
@@ -310,7 +318,7 @@ async def _supervised_request(request: Request, supervisor: Supervisor, work, ti
         if watcher in done and operation not in done:
             operation.cancel()
             await asyncio.gather(operation, return_exceptions=True)
-            raise asyncio.CancelledError()
+            raise _ClientClosed()
         return await operation
     finally:
         watcher.cancel()

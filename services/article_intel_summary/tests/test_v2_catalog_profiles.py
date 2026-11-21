@@ -295,11 +295,29 @@ class SummaryV2HTTPTests(unittest.TestCase):
         self.assertEqual(response.json()["status"], "unavailable")
         self.assertEqual((len(s5.calls), len(mistral.calls)), (1, 0))
 
-    def test_unrequested_section_or_invented_reference_is_rejected(self) -> None:
+    def test_ungrounded_parts_are_dropped_never_shown(self) -> None:
+        """OMV 2026-11-21: real models cite paragraphs that do not exist, add unrequested sections or omit
+        one. Those parts are removed (a point keeps only snapshot references; one without any is dropped;
+        a missing section is empty), so nothing ungrounded is shown and the rest stays usable."""
+        cases = (
+            ({**V2_OUTPUT, "facts": [{"text": "Inventado", "paragraph_ids": ["p1"]}]}, "Inventado"),
+            ({**V2_OUTPUT, "key_points": [{"text": "Sem apoio", "paragraph_ids": ["p99"]}]}, "Sem apoio"),
+            ({k: v for k, v in V2_OUTPUT.items() if k != "open_questions"}, None),
+        )
+        for output, absent in cases:
+            client, _ = make_client(make_router(s5=RecordingAdapter("s5", output=output)))
+            response = client.post(f"/api/ai/v1/entries/{ENTRY_ID}/summary", headers=request_headers(), json=v2_request())
+            self.assertEqual(response.status_code, 200, output)
+            if absent:
+                self.assertNotIn(absent, response.text)
+            for field in ("key_points", "facts", "implications", "action_points", "open_questions"):
+                for point in response.json()[field]:
+                    self.assertTrue(point["paragraph_ids"])
+
+    def test_summary_without_any_valid_reference_is_still_rejected(self) -> None:
         for output in (
-            {**V2_OUTPUT, "facts": [{"text": "Inventado", "paragraph_ids": ["p1"]}]},
-            {**V2_OUTPUT, "key_points": [{"text": "x", "paragraph_ids": ["p99"]}]},
-            {k: v for k, v in V2_OUTPUT.items() if k != "open_questions"},
+            {**V2_OUTPUT, "summary_paragraph_ids": ["p99"]},
+            {k: v for k, v in V2_OUTPUT.items() if k != "summary"},
         ):
             client, _ = make_client(make_router(s5=RecordingAdapter("s5", output=output)))
             response = client.post(f"/api/ai/v1/entries/{ENTRY_ID}/summary", headers=request_headers(), json=v2_request())
