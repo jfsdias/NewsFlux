@@ -166,7 +166,7 @@ else
 fi
 say "    a chave antiga NAO foi bloqueada; bloqueie-a so depois de validar o novo caminho"
 
-# 8. D1 capture (needs GO-NEWSFLUX-D1-CAPTURE-2; release preflight accepts it for 24 h)
+# 8. D1 capture (needs GO-NEWSFLUX-D1-CAPTURE-2; release preflight accepts it for 7 days)
 echo
 read -r -p "D1KEY 8/8 Executar a captura D1 agora (GO-NEWSFLUX-D1-CAPTURE-2)? Digite CAPTURAR ou Enter para sair: " CAP
 [[ "$CAP" == CAPTURAR ]] || { say "fim sem captura"; exit 0; }

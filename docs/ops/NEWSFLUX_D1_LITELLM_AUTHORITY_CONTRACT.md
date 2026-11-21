@@ -90,7 +90,7 @@ The old "official attestation" (admin key + provider-cost-zero confirmation) is 
 already exists, with provenance:
 
 1. **Read-only DB/config receipt** (`s5_db_readonly_audit.py`, strict binding, contract-validated): key scope,
-   routes, validity, budget fields, JWT, inheritance, callbacks, fallback config. Freshness ≤ 7 days, bound to
+   routes, validity, budget fields, JWT, inheritance, callbacks, fallback config. Freshness ≤ 7 days at release (no runtime expiry; see AI_MODEL_CATALOG.md), bound to
    the key fingerprint and the exact LiteLLM image. It is a **diagnostic**, not a certification.
 2. **Operator-provided administrative evidence**: a screenshot or export from the LiteLLM admin UI of the key's
    budget and model list, dated, attached to the PM record (no new admin key).

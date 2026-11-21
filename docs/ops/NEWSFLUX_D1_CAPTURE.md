@@ -38,7 +38,7 @@ service. `AI flags` must be OFF (dark Summary), as for the diagnostic.
 
 1. Record `D1CAPTURE_EVIDENCE_SHA256` and `D1CAPTURE_CAPTURED_AT` in the homeserver ledger. That record is the
    external witness of the capture.
-2. Within 24 h, run the release preflight in the target configuration (see `AI_MODEL_CATALOG.md`, Release
+2. Within 7 days, run the release preflight in the target configuration (see `AI_MODEL_CATALOG.md`, Release
    transition): `RELEASE_MODE=d1 … ai-functional-release.sh d1-preflight`. This changes nothing.
 3. Activation (`enable-s5` in D1 mode) needs its own GO. It requires the owner's external-transfer consent and the
    declaration (`gateway_budget_enforced` recommended; `explicit_unlimited` only with a ledger decision).
