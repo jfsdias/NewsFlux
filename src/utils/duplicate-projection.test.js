@@ -1,6 +1,10 @@
-import { test } from "node:test"
+/* eslint-disable import/extensions -- Native ESM tests import these utilities directly. */
+
 import assert from "node:assert/strict"
+import { test } from "node:test"
+
 import { projectDuplicates } from "./duplicate-projection.js"
+import { getRelativeUnreadTargetIds } from "./relative-read-targets.js"
 
 test("collapse and expand preserve canonical entries and chronological positions", () => {
   const entries = [
@@ -29,4 +33,18 @@ test("equal titles can always be revealed independently", () => {
     { id: 2, title: "Update" },
   ]
   assert.deepEqual(projectDuplicates(entries, "title", new Set([1])).entries, entries)
+})
+
+test("relative actions target displayed entries in collapsed and expanded groups", () => {
+  const entries = [
+    { id: 1, title: "same", status: "unread" },
+    { id: 2, title: "same", status: "unread" },
+    { id: 3, title: "other", status: "unread" },
+  ]
+  const collapsed = projectDuplicates(entries, "title").entries
+  const expanded = projectDuplicates(entries, "title", new Set([1])).entries
+  assert.deepEqual(getRelativeUnreadTargetIds(collapsed, 3, "above"), [1])
+  assert.deepEqual(getRelativeUnreadTargetIds(expanded, 3, "above"), [1, 2])
+  assert.deepEqual(getRelativeUnreadTargetIds(collapsed, 1, "below"), [3])
+  assert.deepEqual(getRelativeUnreadTargetIds(expanded, 1, "below"), [2, 3])
 })

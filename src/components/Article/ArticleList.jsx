@@ -1,7 +1,7 @@
 import { Button, Divider, Typography } from "@arco-design/web-react"
 import { IconEmpty, IconExclamationCircle } from "@arco-design/web-react/icon"
 import { useStore } from "@nanostores/react"
-import { forwardRef, useState } from "react"
+import { forwardRef, useLayoutEffect } from "react"
 import { Virtualizer } from "virtua"
 
 import ArticleCard from "./ArticleCard"
@@ -18,16 +18,17 @@ import useArticleListLayout from "@/hooks/useArticleListLayout"
 import { polyglotState } from "@/hooks/useLanguage"
 import useReadOnScroll from "@/hooks/useReadOnScroll"
 import articleListEmptyState from "@/store/articleListEmptyState"
-import { contentState, filteredEntriesState } from "@/store/contentState"
-import { dataState } from "@/store/dataState"
 import {
-  articleListLayoutState,
-  articleListRequestSettingsState,
-  settingsState,
-} from "@/store/settingsState"
+  contentState,
+  duplicateProjectionState,
+  filteredEntriesState,
+  setDuplicateSelectionMode,
+  toggleDuplicateGroup,
+} from "@/store/contentState"
+import { dataState } from "@/store/dataState"
+import { articleListLayoutState, articleListRequestSettingsState } from "@/store/settingsState"
 import createArticleListSnapshotIdentity from "@/utils/article-list-snapshot-identity"
 import { formatLocalizedDate } from "@/utils/date"
-import { projectDuplicates } from "@/utils/duplicate-projection"
 
 import "./ArticleList.css"
 
@@ -122,29 +123,21 @@ const ArticleList = forwardRef(
       currentSnapshotIdentity !== null && articleListSnapshotIdentity === currentSnapshotIdentity
     const emptyState = useStore(articleListEmptyState)
     const filteredEntries = useStore(filteredEntriesState)
-    const { removeDuplicates } = useStore(settingsState, { keys: ["removeDuplicates"] })
-    const [expanded, setExpanded] = useState({ scope: null, ids: new Set() })
-    const scope = `${sessionRevision}:${currentSnapshotIdentity}:${removeDuplicates}`
-    const expandedIds = expanded.scope === scope ? expanded.ids : new Set()
-    const projection = projectDuplicates(
-      filteredEntries,
-      selectionMode || ["starred", "history"].includes(listState.infoFrom)
-        ? "none"
-        : removeDuplicates,
-      expandedIds,
-    )
-    const toggleGroup = (id) => {
-      const ids = new Set(expandedIds)
-      if (ids.has(id)) ids.delete(id)
-      else ids.add(id)
-      setExpanded({ scope, ids })
-    }
+    const projection = useStore(duplicateProjectionState)
+    useLayoutEffect(() => {
+      setDuplicateSelectionMode(selectionMode)
+      return () => setDuplicateSelectionMode(false)
+    }, [selectionMode])
+    const expandedIds = projection.ids
+    const toggleGroup = toggleDuplicateGroup
     const groupControl = (entry) => {
       const count = projection.counts.get(entry.id)
-      if (!count) return null
+      if (!count) {
+        return null
+      }
       const isExpanded = expandedIds.has(entry.id)
       return (
-        <Button size="small" aria-expanded={isExpanded} onClick={() => toggleGroup(entry.id)}>
+        <Button aria-expanded={isExpanded} size="small" onClick={() => toggleGroup(entry.id)}>
           {isExpanded ? `Hide ${count - 1} duplicates` : `Show ${count - 1} duplicates`}
         </Button>
       )

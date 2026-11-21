@@ -7,6 +7,7 @@ import { polyglotState } from "@/hooks/useLanguage"
 import useRefreshCounts from "@/hooks/useRefreshCounts"
 import {
   contentState,
+  displayedEntriesState,
   invalidateArticleList,
   setActiveContent,
   setEntries,
@@ -118,7 +119,7 @@ const useMarkRelativeRead = () => {
   return useCallback(
     async (anchorId, direction) => {
       const content = contentState.get()
-      const targetIds = getRelativeUnreadTargetIds(content.entries, anchorId, direction)
+      const targetIds = getRelativeUnreadTargetIds(displayedEntriesState.get(), anchorId, direction)
       if (targetIds.length === 0) {
         return
       }
