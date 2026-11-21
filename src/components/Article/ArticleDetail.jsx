@@ -1001,16 +1001,28 @@ const ArticleDetail = forwardRef((_, ref) => {
                       ? "article_intelligence.insufficient"
                       : "article_intelligence.unavailable",
                   )}
+                  {articleSummary.status === "unavailable" && articleSummary.unavailableReason && (
+                    <>
+                      {" "}
+                      {polyglot.t(
+                        `article_intelligence.unavailable_reason_${articleSummary.unavailableReason}`,
+                      )}{" "}
+                      {polyglot.t("article_intelligence.error_code", {
+                        code: articleSummary.unavailableReason,
+                      })}
+                    </>
+                  )}
                 </p>
               )}
-              {articleSummary.summary && (
-                <ArticleSummaryResult
-                  modelLabel={articleSummary.modelLabel}
-                  modelLabels={articleSummary.modelLabels}
-                  polyglot={polyglot}
-                  summary={articleSummary.summary}
-                />
-              )}
+              {articleSummary.summary &&
+                (articleSummary.status === "partial" || articleSummary.status === "complete") && (
+                  <ArticleSummaryResult
+                    modelLabel={articleSummary.modelLabel}
+                    modelLabels={articleSummary.modelLabels}
+                    polyglot={polyglot}
+                    summary={articleSummary.summary}
+                  />
+                )}
             </section>
           )}
           <div

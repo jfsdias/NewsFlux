@@ -52,6 +52,8 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
     idleState(activeContent?.id ?? null, authSessionKey, sessionRevision),
   )
   const requestRef = useRef(null)
+  // The cache key an automatic summary was last started for: at most one per article and settings.
+  const autoStartedRef = useRef(null)
   const currentRef = useRef({
     activeEntryId: activeContent?.id ?? null,
     routeEntryId,
@@ -73,7 +75,9 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
   const cacheKey = summaryCacheKey({
     authSessionKey,
     entryId,
-    entryVersion: activeContent?.changed_at ?? activeContent?.hash,
+    // The entry hash only: changed_at also moves when the article is marked read, which would
+    // look like a new article, re-trigger the automatic summary and cancel the one in flight.
+    entryVersion: activeContent?.hash,
     settings,
   })
 
@@ -221,10 +225,13 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
     if (peekCachedSummary(cacheKey)) {
       return
     }
-    if (!autoOnOpen) {
+    if (!autoOnOpen || autoStartedRef.current === cacheKey) {
       return
     }
-    const timer = setTimeout(() => void summarize(), AUTO_SUMMARY_DELAY_MS)
+    const timer = setTimeout(() => {
+      autoStartedRef.current = cacheKey
+      void summarize()
+    }, AUTO_SUMMARY_DELAY_MS)
     return () => clearTimeout(timer)
   }, [authSessionKey, autoOnOpen, cacheKey, canSummarize, entryId, sessionRevision, summarize])
 
@@ -248,6 +255,8 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
     summary: view?.summary ?? null,
     retryable: Boolean(view?.retryable),
     errorCode: view?.errorCode ?? null,
+    // Why no model result was available (closed codes from the API's provenance), when known.
+    unavailableReason: view?.summary?.provenance?.fallback_reason ?? null,
     autoOnOpen: Boolean(autoOnOpen),
     modelLabels: view?.modelLabels ?? null,
     modelLabel: view?.modelLabel ?? null,

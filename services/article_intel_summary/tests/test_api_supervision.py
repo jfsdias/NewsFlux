@@ -258,3 +258,21 @@ class SupervisedAPITests(unittest.IsolatedAsyncioTestCase):
         # Same race family as the Quality failure: the 0.05 s request deadline must not be able to
         # expire before the adapter is reached merely because the runner is slow.
         await self.request_deadline_capacity_scenario(pre_adapter_delay=0.1)
+
+
+class ClientClosedTests(unittest.IsolatedAsyncioTestCase):
+    """OMV 2026-11-21: a reader that navigated away produced 'Exception in ASGI application' tracebacks."""
+
+    async def test_disconnect_cancels_the_work_and_raises_a_quiet_signal(self):
+        from services.article_intel_summary import app as app_module
+
+        class GoneRequest:
+            async def is_disconnected(self):
+                return True
+
+        class SlowSupervisor:
+            async def run(self, work, timeout):
+                await asyncio.sleep(5)
+
+        with self.assertRaises(app_module._ClientClosed):
+            await app_module._supervised_request(GoneRequest(), SlowSupervisor(), None, 5)

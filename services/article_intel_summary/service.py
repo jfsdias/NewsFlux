@@ -199,7 +199,7 @@ class SummaryService:
             _ensure_bounded_json(inference.output)
         except ModelOutputInvalid:
             _invalid_output("MODEL_OUTPUT_LENGTH_EXCEEDED")
-        output = inference.output
+        output = _repair_output(inference.output, allowed, profile)
         if set(output) != set(V2_OUTPUT_FIELDS):
             _invalid_output("MODEL_OUTPUT_MISSING_FIELD" if set(V2_OUTPUT_FIELDS) - set(output) else "MODEL_OUTPUT_EXTRA_FIELD")
         provider_id = _safe_metadata(inference.provider_id)
@@ -303,8 +303,10 @@ class SummaryService:
                 trace["effective"] = primary_model_id
             except TransientLiteLLMFailure as failure:
                 primary_failure = failure
-            except Exception:  # noqa: BLE001 - non-transient primary failure: never eligible
+            except Exception as failure:  # noqa: BLE001 - non-transient primary failure: never eligible
                 trace["outcome"] = "NOT_ELIGIBLE" if fallback_model_id else "NOT_CONFIGURED"
+                # Class name only: never the message, which may carry gateway or article text.
+                _logger.warning("PRIMARY_FAILED_%s", type(failure).__name__)
             if primary_failure is not None:
                 # Outside any exception handler: a stale session/content raised by `revalidate`
                 # must abort the request, never be mistaken for a model failure.
@@ -333,6 +335,9 @@ class SummaryService:
                 deadline.end_inference()
 
         if inference is None:
+            _logger.warning(
+                "SUMMARY_UNAVAILABLE reason=%s outcome=%s attempts=%s", trace["reason"], trace["outcome"], trace["attempts"]
+            )
             payload = self._v3_payload(
                 snapshot, request_id=request_id, status="unavailable", profile=profile, output=None,
                 limitations=["No model result is available; no summary was generated."],
@@ -347,7 +352,7 @@ class SummaryService:
             _ensure_bounded_json(inference.output)
         except ModelOutputInvalid:
             _invalid_output("MODEL_OUTPUT_LENGTH_EXCEEDED")
-        output = inference.output
+        output = _repair_output(inference.output, allowed, profile)
         if set(output) != set(V2_OUTPUT_FIELDS):
             _invalid_output("MODEL_OUTPUT_MISSING_FIELD" if set(V2_OUTPUT_FIELDS) - set(output) else "MODEL_OUTPUT_EXTRA_FIELD")
         provider_id = _safe_metadata(inference.provider_id)
@@ -565,6 +570,62 @@ class SummaryService:
             },
         }
 
+
+
+_POINT_FIELDS = tuple(field for field in V2_OUTPUT_FIELDS if field not in ("summary", "summary_paragraph_ids"))
+
+
+def _repair_output(output: dict, allowed: set[str], profile) -> dict:
+    """Mechanical repairs of common model slips that keep every claim grounded (OMV 2026-11-21).
+
+    - a missing or unrequested point section becomes an empty list;
+    - paragraph references outside the request snapshot are dropped (duplicates too), and a point
+      left without any reference is dropped, so nothing is shown without a supporting paragraph;
+    - a section longer than the profile allows is cut to the first points.
+    The summary text and its references are never invented: if no valid summary reference remains,
+    validation still rejects the output. Malformed shapes are left alone for validation to reject.
+    Only fixed repair codes are logged.
+    """
+    repaired = dict(output)
+    repairs = set()
+    requested = set(profile.requested_output_fields)
+    for field in _POINT_FIELDS:
+        if field not in repaired:
+            repaired[field] = []
+            repairs.add("MISSING_SECTION")
+        elif field not in requested and repaired[field]:
+            repaired[field] = []
+            repairs.add("UNREQUESTED_SECTION")
+
+    def keep(ids):
+        if not isinstance(ids, list) or not all(isinstance(item, str) for item in ids):
+            return ids
+        kept = list(dict.fromkeys(item for item in ids if item in allowed))
+        if len(kept) != len(ids):
+            repairs.add("INVALID_REFERENCE")
+        return kept
+
+    if "summary_paragraph_ids" in repaired:
+        repaired["summary_paragraph_ids"] = keep(repaired["summary_paragraph_ids"])
+    for field in _POINT_FIELDS:
+        items = repaired[field]
+        if not isinstance(items, list):
+            continue
+        points = []
+        for item in items:
+            if isinstance(item, dict) and "paragraph_ids" in item:
+                item = {**item, "paragraph_ids": keep(item["paragraph_ids"])}
+                if item["paragraph_ids"] == []:
+                    repairs.add("UNSUPPORTED_POINT")
+                    continue
+            points.append(item)
+        if len(points) > profile.max_points:
+            points = points[: profile.max_points]
+            repairs.add("TOO_MANY_POINTS")
+        repaired[field] = points
+    if repairs:
+        _logger.warning("MODEL_OUTPUT_REPAIRED %s", ",".join(sorted(repairs)))
+    return repaired
 
 
 def _invalid_output(code: str) -> None:
