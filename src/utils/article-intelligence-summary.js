@@ -408,11 +408,13 @@ const validateModelCatalogV1 = (payload) => {
     return null
   }
   const models = []
+  const seen = new Set()
   for (const model of payload.models) {
     if (
       !model ||
       typeof model !== "object" ||
       !CATALOG_MODEL_IDS.has(model.id) ||
+      seen.has(model.id) ||
       !isShortText(model.label, 64) ||
       !isShortText(model.provider, 64) ||
       typeof model.available !== "boolean" ||
@@ -432,6 +434,7 @@ const validateModelCatalogV1 = (payload) => {
     ) {
       return null
     }
+    seen.add(model.id)
     models.push({
       id: model.id,
       label: model.label,

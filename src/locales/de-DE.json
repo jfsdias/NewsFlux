@@ -337,6 +337,7 @@
     "model_description": "Nur auf dem Server freigegebene Modelle werden angezeigt. Nicht verfügbare Modelle bleiben deaktiviert.",
     "model_auto": "Automatisch — Betreiberstandard (%{model})",
     "model_available": "Verfügbar",
+    "model_search_no_results": "Keine Modelle entsprechen Ihrer Suche.",
     "model_limits": "Limits: %{input} Eingabe- / %{output} Ausgabe-Token, %{rpm} Anfragen/Min",
     "model_selection_unavailable": "Dein gespeichertes Modell ist derzeit nicht verfügbar. Zusammenfassungen zeigen einen Fehler, bis du ein verfügbares Modell wählst.",
     "catalog_loading": "Freigegebene Modelle werden geladen…",

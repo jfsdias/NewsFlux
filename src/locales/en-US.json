@@ -337,6 +337,7 @@
     "model_description": "Only models approved on the server are listed. Unavailable models stay disabled.",
     "model_auto": "Automatic — operator default (%{model})",
     "model_available": "Available",
+    "model_search_no_results": "No models match your search.",
     "model_limits": "Limits: %{input} input / %{output} output tokens, %{rpm} requests/min",
     "model_selection_unavailable": "Your saved model is not available now. Summaries will show an error until you choose an available model.",
     "catalog_loading": "Loading approved models…",

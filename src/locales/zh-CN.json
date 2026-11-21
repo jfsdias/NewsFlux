@@ -337,6 +337,7 @@
     "model_description": "仅列出服务器已批准的模型。不可用的模型保持禁用。",
     "model_auto": "自动 — 运营方默认（%{model}）",
     "model_available": "可用",
+    "model_search_no_results": "没有与搜索匹配的模型。",
     "model_limits": "限制：输入 %{input} / 输出 %{output} 个 token，每分钟 %{rpm} 次请求",
     "model_selection_unavailable": "你保存的模型当前不可用。在选择可用模型之前，摘要将显示错误。",
     "catalog_loading": "正在加载已批准的模型…",

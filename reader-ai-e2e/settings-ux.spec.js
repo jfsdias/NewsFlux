@@ -37,14 +37,22 @@ const modalScrollTop = (page) =>
 
 // The AI controls (#248 catalog, #249 primary/fallback) must be untouched by this visual PR.
 const expectPrimaryControls = async (page) => {
-  const primary = page.getByRole("radiogroup", { name: "AI model" })
-  await expect(primary.getByRole("radio", { name: /^S5/ })).toBeChecked()
-  await expect(primary.getByRole("radio", { name: /^S5/ })).toBeEnabled()
-  await expect(primary.getByRole("radio", { name: /^Mistral Small/ })).toBeEnabled()
+  const picker = page.getByRole("combobox", { name: "AI model" })
+  await expect(picker).toHaveValue("S5")
+  await picker.click()
+  const primary = page.getByRole("listbox", { name: "AI model" })
+  await expect(primary.getByRole("option", { name: /^S5/ })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  )
+  await expect(primary.getByRole("option", { name: /^S5/ })).toBeEnabled()
+  await expect(primary.getByRole("option", { name: /^Mistral Small/ })).toBeEnabled()
   // Not approved: it can be saved as an inert preference, but never runs.
   await expect(
-    primary.getByRole("radio", { name: /^synthetic-long-model-name-from-gateway/ }),
+    primary.getByRole("option", { name: /^synthetic-long-model-name-from-gateway/ }),
   ).toHaveAccessibleName(/Not approved by the operator/)
+  await page.keyboard.press("Escape")
+  await expect(primary).toBeHidden()
   await expect(page.getByRole("switch", { name: "Fallback model" })).toBeVisible()
 }
 
@@ -188,14 +196,17 @@ test("AI_CONTROLS_PRESERVED fallback off: primary choice and the fallback switch
   await page.goto(HARNESS)
   await expectPrimaryControls(page)
   await expect(page.getByRole("switch", { name: "Fallback model" })).not.toBeChecked()
-  await expect(page.getByRole("radiogroup", { name: "Fallback model" })).toHaveCount(0)
-  // Turning it on reveals the fallback list without the primary model.
+  await expect(page.getByRole("combobox", { name: "Fallback model" })).toHaveCount(0)
+  // Turning it on reveals the fallback picker without the primary model.
   await page.getByRole("switch", { name: "Fallback model" }).click()
-  const fallback = page.getByRole("radiogroup", { name: "Fallback model" })
-  await expect(fallback.getByRole("radio", { name: "No fallback" })).toBeEnabled()
+  const picker = page.getByRole("combobox", { name: "Fallback model" })
+  await expect(picker).toHaveValue("No fallback")
+  await picker.click()
+  const fallback = page.getByRole("listbox", { name: "Fallback model" })
+  await expect(fallback.getByRole("option", { name: "No fallback" })).toBeEnabled()
   await expect(fallback.getByText("No fallback", { exact: true })).toBeVisible()
-  await expect(fallback.getByRole("radio", { name: /^S5/ })).toHaveCount(0)
-  await expect(fallback.getByRole("radio", { name: /^Mistral Small/ })).toBeEnabled()
+  await expect(fallback.getByRole("option", { name: /^S5/ })).toHaveCount(0)
+  await expect(fallback.getByRole("option", { name: /^Mistral Small/ })).toBeEnabled()
 })
 
 test("AI_CONTROLS_PRESERVED fallback on: paid and cross-provider consent stay explicit", async ({
@@ -204,8 +215,7 @@ test("AI_CONTROLS_PRESERVED fallback on: paid and cross-provider consent stay ex
   await page.setViewportSize({ width: 884, height: 1104 })
   await page.goto(FALLBACK_ON)
   await expectPrimaryControls(page)
-  const fallback = page.getByRole("radiogroup", { name: "Fallback model" })
-  await expect(fallback.getByRole("radio", { name: /^Mistral Small/ })).toBeChecked()
+  await expect(page.getByRole("combobox", { name: "Fallback model" })).toHaveValue("Mistral Small")
   const paid = page.getByRole("checkbox", { name: /Allow a paid fallback/ })
   const cross = page.getByRole("checkbox", { name: /Allow a fallback from another provider/ })
   await expect(paid).not.toBeChecked()

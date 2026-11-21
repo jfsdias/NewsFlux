@@ -159,7 +159,7 @@ test("writes OFF: preview allowed, migration impossible and no write request", a
 test("non-admin reader: no migration panel and the API refuses", async ({ page, request }) => {
   await request.post("/__admin/legacy/on")
   await page.goto(page_("?role=reader"))
-  await expect(page.getByRole("radiogroup", { name: "AI model" })).toBeVisible()
+  await expect(page.getByRole("combobox", { name: "AI model" })).toBeVisible()
   await expect(page.getByText("Model policy migration")).toHaveCount(0)
   const headers = {
     "X-Miniflux-API-Key": "synthetic-reader-miniflux-key",

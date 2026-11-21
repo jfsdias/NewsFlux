@@ -337,6 +337,7 @@
     "model_description": "Seuls les modèles approuvés sur le serveur sont listés. Les modèles indisponibles restent désactivés.",
     "model_auto": "Automatique — par défaut de l'opérateur (%{model})",
     "model_available": "Disponible",
+    "model_search_no_results": "Aucun modèle ne correspond à votre recherche.",
     "model_limits": "Limites : %{input} jetons en entrée / %{output} en sortie, %{rpm} requêtes/min",
     "model_selection_unavailable": "Votre modèle enregistré n'est pas disponible actuellement. Les résumés afficheront une erreur jusqu'à ce que vous choisissiez un modèle disponible.",
     "catalog_loading": "Chargement des modèles approuvés…",
