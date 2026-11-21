@@ -38,7 +38,7 @@ service. `AI flags` must be OFF (dark Summary), as for the diagnostic.
 
 1. Record `D1CAPTURE_EVIDENCE_SHA256` and `D1CAPTURE_CAPTURED_AT` in the homeserver ledger. That record is the
    external witness of the capture.
-2. Within 7 days, run the release preflight in the target configuration (see `AI_MODEL_CATALOG.md`, Release
+2. Within 24 h, run the release preflight in the target configuration (see `AI_MODEL_CATALOG.md`, Release
    transition): `RELEASE_MODE=d1 … ai-functional-release.sh d1-preflight`. This changes nothing.
 3. Activation (`enable-s5` in D1 mode) needs its own GO. It requires the owner's external-transfer consent and the
    declaration (`gateway_budget_enforced` recommended; `explicit_unlimited` only with a ledger decision).
@@ -74,3 +74,7 @@ It never prints the key or the policy amounts.
 > com `--private-prestate` gravando apenas em diretório novo `/root/newsflux-d1.*` (0700), sem alteração de chave,
 > configuração, banco ou contêiner, sem inferência e sem transferência de artigo; o digest da evidência será
 > registrado no ledger.
+
+## Planned evidence renewal
+
+The runtime evidence expires seven days after capture; release preflight accepts evidence for 24 hours. Schedule an operator-led renewal before expiry: obtain the required capture authorization, follow the capture steps above, record the new digest in the homeserver ledger, and run the target release preflight and separately authorized activation using the new pinned digest. The current mechanism does not automatically renew evidence or deploy it. If renewal is not completed in time, cost authority fails closed and Summary becomes unavailable until valid evidence is admitted. A same-key policy change requires a fresh capture; do not wait for expiry.
