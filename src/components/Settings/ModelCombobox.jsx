@@ -114,7 +114,17 @@ const ModelCombobox = ({ details, label, noResults, onChange, options, placehold
   }
 
   const onQueryChange = (event) => {
-    const next = event.target.value
+    let next = event.target.value
+    if (!open) {
+      // Closed, the field shows the chosen label: what the user typed is the search, not the
+      // label plus the typed text (or the label minus a deleted character).
+      const shown = selected?.label ?? ""
+      if (next.startsWith(shown)) {
+        next = next.slice(shown.length)
+      } else if (shown.startsWith(next)) {
+        next = ""
+      }
+    }
     const matches = filterModelOptions(options, next)
     // While searching, the first matching model is active, not "Automatic"/"No fallback".
     const firstModel = matches.findIndex((option) => option.type === "model")
@@ -147,6 +157,7 @@ const ModelCombobox = ({ details, label, noResults, onChange, options, placehold
           value={open ? query : (selected?.label ?? "")}
           onBlur={closeList}
           onChange={onQueryChange}
+          onFocus={(event) => event.target.select()}
           onKeyDown={onKeyDown}
           onMouseDown={() => !open && openList()}
         />
@@ -172,6 +183,8 @@ const ModelCombobox = ({ details, label, noResults, onChange, options, placehold
         hidden={!open}
         id={listId}
         role="listbox"
+        // The list's own scrollbar, padding and border keep focus in the field (pointer only).
+        onMouseDown={(event) => event.preventDefault()}
       >
         {open &&
           visible.map((option, index) => (

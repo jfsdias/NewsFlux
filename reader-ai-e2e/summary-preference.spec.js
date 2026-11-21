@@ -185,6 +185,8 @@ test("MODEL_PICKER D1: keyboard, search, each model once, details for the chosen
   await page.keyboard.press("Escape")
   await expect(primary).toHaveAttribute("aria-expanded", "false")
   await expect(primary).toHaveValue("nvidia/nemotron-3-ultra-550b-a55b:free")
+  // The open list consumed Escape: the settings dialog was not asked to close.
+  expect(await page.evaluate(() => globalThis.__settingsCancels ?? 0)).toBe(0)
   await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible()
 
   // Fallback: every model except the primary, each exactly once; unavailable ones say why.
@@ -239,3 +241,41 @@ for (const viewport of [
     await page.screenshot({ path: testInfo.outputPath(`model-picker-${viewport.name}.png`) })
   })
 }
+
+test("MODEL_PICKER typing after a choice or Escape searches what was typed", async ({ page }) => {
+  await page.goto(`${HARNESS}?catalog=d1&primary=auto`)
+  const primary = primaryPicker(page)
+  const list = page.getByRole("listbox", { name: "AI model" })
+  // Pointer focus, then typing: the shown label is not part of the search.
+  await primary.click()
+  await page.keyboard.press("Escape")
+  await page.keyboard.type("gem")
+  await expect(list.getByRole("option", { name: /^gemini-2\.5-flash/ })).toBeVisible()
+  await page.keyboard.press("Enter")
+  await expect(primary).toHaveValue("gemini-2.5-flash")
+  // Focus stays in the field after the choice; typing again searches anew.
+  await page.keyboard.type("son")
+  await expect(list.getByRole("option")).toHaveText([
+    "Automatic — operator default (gpt-4o-mini)",
+    /^sonar/,
+  ])
+  // Backspace on the closed field clears the search instead of searching a cut label.
+  await page.keyboard.press("Escape")
+  await page.keyboard.press("Backspace")
+  await expect(list.getByRole("option")).toHaveCount(18)
+  await page.keyboard.press("Escape")
+  await expect(primary).toHaveValue("gemini-2.5-flash")
+})
+
+test("MODEL_PICKER two models with the same name stay distinct and are told apart by ID", async ({
+  page,
+}) => {
+  await page.goto(`${HARNESS}?catalog=d1-same-label&primary=auto`)
+  await primaryPicker(page).click()
+  const twins = page.getByRole("listbox", { name: "AI model" }).getByRole("option", {
+    name: /^gpt-4o openai/,
+  })
+  await expect(twins).toHaveText([/· gw-d1000000001$/, /· gw-d1-same-label$/])
+  await twins.nth(1).click()
+  await expect.poll(() => savedSettings(page)).toContain("gw-d1-same-label")
+})

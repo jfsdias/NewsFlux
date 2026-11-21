@@ -117,7 +117,7 @@ if (params.get("catalog") === "inert") {
 }
 // ?catalog=d1: D1 key authority, shaped like production — every model the LiteLLM virtual key
 // lists (gw-<hash> IDs, gateway-governed cost, no price shown), one still unverified.
-if (params.get("catalog") === "d1") {
+if (params.get("catalog")?.startsWith("d1")) {
   const aliases = [
     ["gpt-4o-mini", "openai"],
     ["gpt-4o", "openai"],
@@ -166,6 +166,12 @@ if (params.get("catalog") === "d1") {
   )
   catalog.default_model_id = catalog.models[0].id
 }
+// ?catalog=d1-same-label: two distinct entries (different IDs) that share one name.
+if (params.get("catalog") === "d1-same-label") {
+  catalog.models = catalog.models.map((entry) =>
+    entry.label === "kimi-k2" ? { ...catalog.models[1], id: "gw-d1-same-label" } : entry,
+  )
+}
 // ?fallback=<id> starts with that fallback enabled; default: fallback off.
 // ?primary=<id> sets the saved primary (default S5); it may name a model not in the catalog.
 const fallback = params.get("fallback")
@@ -191,9 +197,14 @@ globalThis.fetch = (url, options) => {
     : nativeFetch(url, options)
 }
 
+const countSettingsCancel = () => {
+  globalThis.__settingsCancels = (globalThis.__settingsCancels ?? 0) + 1
+}
+
 const Harness = () => {
   const [tab, setTab] = useState("reading")
   return (
+    // onCancel counts requests to close the settings (Escape, close button) for the Escape tests.
     <AccessibleModal
       visible
       className="settings-modal"
@@ -202,6 +213,7 @@ const Harness = () => {
       footer={null}
       title={null}
       wrapClassName="settings-modal-wrapper"
+      onCancel={countSettingsCancel}
     >
       <SettingsTabs activeTab={tab} onTabChange={setTab} />
     </AccessibleModal>

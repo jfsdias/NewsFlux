@@ -62,6 +62,7 @@ const d1Payload = (models = ALIASES.map((alias, index) => d1Entry(alias, index))
   models,
 })
 const d1 = validateModelCatalog(d1Payload())
+const v1Payload = (models) => ({ schema_version: "1", default_model_id: "s5-free", models })
 
 const values = (options) => options.map((option) => option.value)
 const counts = (options) => {
@@ -178,4 +179,45 @@ test("search matches label, provider or ID and keeps Automatic, No fallback and 
   assert.equal(filterModelOptions(primary, ""), primary)
   const fallback = buildFallbackModelOptions(d1, d1.default_model_id, "none")
   assert.deepEqual(values(filterModelOptions(fallback, "gemma")), ["none", "gw-000000000006"])
+})
+
+test("two entries with the same name are both listed and marked so the picker shows their IDs", () => {
+  const models = ALIASES.map((alias, index) => d1Entry(alias, index))
+  const twin = { ...models[1], id: "gw-twin00000001" }
+  const catalog = validateModelCatalog(d1Payload([...models, twin]))
+  const options = buildFallbackModelOptions(catalog, catalog.default_model_id, "none")
+  assertEachOnce(options)
+  assert.deepEqual(
+    options.filter((option) => option.sameLabel).map((option) => option.value),
+    ["gw-000000000001", "gw-twin00000001"],
+  )
+  assert.equal(
+    buildFallbackModelOptions(d1, d1.default_model_id, "none").some((option) => option.sameLabel),
+    false,
+  )
+})
+
+test("a v1 catalog with a repeated model ID is refused like v2", () => {
+  const legacy = {
+    id: "s5-free",
+    label: "S5",
+    provider: "LiteLLM",
+    available: true,
+    unavailable_reason: null,
+    requires_paid_authorization: false,
+    pricing: {
+      status: "operator_declared_zero",
+      input_usd_per_million: "0",
+      output_usd_per_million: "0",
+    },
+    limits: {
+      max_input_tokens: 4096,
+      max_output_tokens: 2048,
+      requests_per_minute: 5,
+      timeout_seconds: 25,
+    },
+    notices: ["ARTICLE_SENT_TO_MODEL_PROVIDER"],
+  }
+  assert.ok(validateModelCatalog(v1Payload([legacy])))
+  assert.equal(validateModelCatalog(v1Payload([legacy, { ...legacy }])), null)
 })

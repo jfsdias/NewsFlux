@@ -3,8 +3,10 @@
  * read-only: it lists what the catalog offers and the saved preference as it is. It never
  * rewrites, swaps or approves a model; the server decides on every request.
  *
- * Every catalog entry appears at most once per picker, and a saved preference gets its own
- * "saved, no longer offered" row only when the catalog does not list it.
+ * Every catalog entry appears once per picker (the catalog validators refuse a repeated ID), and
+ * a saved preference gets its own "saved, no longer offered" row only when the catalog does not
+ * list it. Two distinct entries that share a label are both kept (they are different models to
+ * the server) and marked sameLabel, so the picker can tell them apart by ID.
  */
 import {
   isSummaryModelId,
@@ -12,7 +14,13 @@ import {
   SUMMARY_MODEL_AUTO,
 } from "./article-intelligence-profile.js" // eslint-disable-line import/extensions -- Node ESM tests require the explicit extension.
 
-const modelOption = (model) => ({ type: "model", value: model.id, model, disabled: false })
+const modelOption = (model, models) => ({
+  type: "model",
+  value: model.id,
+  model,
+  disabled: false,
+  sameLabel: models.some((other) => other !== model && other.label === model.label),
+})
 
 /** "Automatic", every catalog model, then the saved primary when the catalog no longer lists it. */
 export const buildPrimaryModelOptions = (catalog, savedModelId) => {
@@ -27,7 +35,7 @@ export const buildPrimaryModelOptions = (catalog, savedModelId) => {
       model: defaultModel ?? null,
       disabled: !defaultModel?.available,
     },
-    ...catalog.models.map((model) => modelOption(model)),
+    ...catalog.models.map((model) => modelOption(model, catalog.models)),
   ]
   if (
     isSummaryModelId(savedModelId) &&
@@ -50,7 +58,7 @@ export const buildFallbackModelOptions = (catalog, primaryModelId, savedModelId)
     { type: "none", value: SUMMARY_FALLBACK_NONE, model: null, disabled: false },
     ...catalog.models
       .filter((model) => model.id !== primaryModelId)
-      .map((model) => modelOption(model)),
+      .map((model) => modelOption(model, catalog.models)),
   ]
   if (
     isSummaryModelId(savedModelId) &&

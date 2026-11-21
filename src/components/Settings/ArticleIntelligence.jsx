@@ -181,7 +181,11 @@ const ArticleIntelligence = () => {
   const withTexts = (option) => ({
     ...option,
     label: optionLabel(polyglot, option),
-    description: option.type === "model" ? availabilityLine(polyglot, option.model) : null,
+    // Two entries with the same name are different models to the server: show their IDs.
+    description:
+      option.type === "model"
+        ? `${availabilityLine(polyglot, option.model)}${option.sameLabel ? ` · ${option.value}` : ""}`
+        : null,
   })
   const primaryOptions = buildPrimaryModelOptions(catalog, aiSummaryModel).map((option) =>
     withTexts(option),
