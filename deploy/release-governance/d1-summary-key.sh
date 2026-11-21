@@ -103,23 +103,40 @@ say "    arquivo-chave = $KEY_FILE (sera substituido; backup root 0600)"
 read -r -p "D1KEY    Digite CRIAR para continuar: " OK
 [[ "$OK" == CRIAR ]] || die "cancelled (nothing changed)"
 
-# 4. model_info.mode = chat on the chosen deployments (the catalog's capability gate)
+# 4. model_info.mode = chat on the chosen deployments (the catalog's capability gate). A model whose deployment cannot
+#    be updated (e.g. defined in the YAML config) or whose name NewsFlux cannot address (e.g. trailing space) is left
+#    out of the key, by name, instead of stopping: it would never be offered anyway.
 say "4/8 mode=chat nos modelos escolhidos"
 OUT="$(admin "$COMMON"'
+import re
 status, info = call("GET", "/model/info")
-wanted = set(sys.argv[1].split(","))
-changed = kept = failed = 0
+wanted = sys.argv[1].split(",")
+valid = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]*")
+dropped = [n for n in wanted if not (1 <= len(n) <= 128 and n == n.strip() and n.isascii() and valid.fullmatch(n))]
+ok = {}
+changed = kept = 0
 for d in info.get("data", []):
-    if d.get("model_name") not in wanted: continue
+    name = d.get("model_name")
+    if name not in wanted or name in dropped: continue
     mi = d.get("model_info") or {}
-    if mi.get("mode") == "chat": kept += 1; continue
+    if mi.get("mode") == "chat":
+        kept += 1; ok.setdefault(name, True); continue
     s, _ = call("PATCH", "/model/" + str(mi.get("id")) + "/update", {"model_info": {"mode": "chat"}})
-    if s == 200: changed += 1
-    else: failed += 1
-print(f"MODE_CHAT changed={changed} already={kept} failed={failed}")   # never the response (it holds encrypted params)
-sys.exit(1 if failed else 0)
-' "$MODELS")" || die "mode update failed ($OUT)"
-say "    $OUT"
+    if s == 200:
+        changed += 1; ok.setdefault(name, True)
+    else:
+        ok[name] = False   # one deployment of this alias could not be marked chat: leave the alias out
+keep = [n for n in wanted if ok.get(n) is True]
+dropped += [n for n in wanted if n not in keep and n not in dropped]
+print(f"MODE_CHAT changed={changed} already={kept} dropped={len(dropped)}")   # never the response (it holds encrypted params)
+print("KEEP=" + ",".join(keep))
+print("DROPPED=" + " | ".join(dropped))
+sys.exit(0 if keep else 1)
+' "$MODELS")" || die "no model could be marked chat ($OUT)"
+say "    $(sed -n 1p <<<"$OUT")"
+[[ -n "$(sed -n 's/^DROPPED=//p' <<<"$OUT")" ]] && say "    fora da chave: $(sed -n 's/^DROPPED=//p' <<<"$OUT")"
+MODELS="$(sed -n 's/^KEEP=//p' <<<"$OUT")"
+say "    modelos na chave: $MODELS"
 
 # 5. the key (no user_id, explicit models, budget, limits, LLM routes only)
 say "5/8 criando a chave"
