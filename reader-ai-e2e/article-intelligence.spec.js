@@ -7,10 +7,12 @@ test.skip(
   "requires explicit build-time AI UI enablement",
 )
 
-const openReader = async (page, mode, viewport) => {
+const openReader = async (page, mode, viewport, { auto = false } = {}) => {
   await page.setViewportSize(viewport)
   await page.goto(
-    `/scripts/tests/content-fallback-reader.html?mode=disabled&article_summary=${mode}`,
+    `/scripts/tests/content-fallback-reader.html?mode=disabled&article_summary=${mode}${
+      auto ? "&auto_summary=1" : ""
+    }`,
   )
   await expect(page.getByTestId("reader-recovery-report")).toHaveAttribute("data-status", "pass")
   await expect(page.getByTestId("article-intelligence-summary")).toBeVisible()
@@ -86,8 +88,9 @@ test("loading is announced; a safe error remains recoverable with the original b
   await openReader(page, "retry", { width: 884, height: 1104 })
   await summaryButton(page).click()
   await expect(
-    page.getByText("The summary could not be created. The original article is unchanged."),
+    page.getByText("The summary took too long or the server is busy. Try again in a moment."),
   ).toBeVisible()
+  await expect(page.getByText("(code: SUMMARY_BUSY)")).toBeVisible()
   await expect(summaryButton(page)).toBeEnabled()
   await summaryButton(page).click()
   await expect(page.getByText("Synthetic AI summary for the current article.")).toBeVisible()
@@ -132,6 +135,16 @@ test("a late summary is discarded after the Miniflux account session changes", a
   await expect(page.getByText("Synthetic AI summary for the current article.")).toHaveCount(0)
   await expect(page.getByText("Original Miniflux body stays visible on failure.")).toBeVisible()
 
+  const report = await page.evaluate(() => globalThis.__contentFallbackReaderReport)
+  expect(report.articleSummaryRequests).toHaveLength(1)
+  expect(report.minifluxWrites).toBe(0)
+})
+
+test("automatic summaries start shortly after opening, once, without a click", async ({ page }) => {
+  await openReader(page, "success", { width: 390, height: 844 }, { auto: true })
+  await expect(page.getByText("Synthetic AI summary for the current article.")).toBeVisible({
+    timeout: 10_000,
+  })
   const report = await page.evaluate(() => globalThis.__contentFallbackReaderReport)
   expect(report.articleSummaryRequests).toHaveLength(1)
   expect(report.minifluxWrites).toBe(0)

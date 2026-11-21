@@ -62,7 +62,9 @@ for (const scenario of [
   { mode: "failure", expected: "A summary is not available right now.", calls: 1 },
   {
     mode: "denied",
-    expected: "The summary could not be created. The original article is unchanged.",
+    // Miniflux rejects the identity (401 -> UNAUTHENTICATED): the reader names the cause.
+    expected:
+      "This session is not authorized to create summaries. Open NewsFlux at its usual address and sign in again.",
     calls: 0,
   },
 ]) {

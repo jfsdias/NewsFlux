@@ -81,16 +81,8 @@ test("NAV-02F formatNavigationCountLabel produces plural-aware unread and item c
   )
 })
 
-test("NAV-02F all 6 locales define grammatically appropriate singular/plural forms for sidebar.unread_count_aria and sidebar.items_count_aria", () => {
+test("NAV-02F every shipped locale define grammatically appropriate singular/plural forms for sidebar.unread_count_aria and sidebar.items_count_aria", () => {
   const expectedByLocale = {
-    "de-DE": {
-      unread1: "Alle, 1 ungelesen",
-      unread2: "Alle, 2 ungelesen",
-      items1: "Lesezeichen, 1 Eintrag",
-      items2: "Lesezeichen, 2 Einträge",
-      labelUnread: "Alle",
-      labelItems: "Lesezeichen",
-    },
     "en-US": {
       unread1: "All, 1 unread",
       unread2: "All, 2 unread",
@@ -98,38 +90,6 @@ test("NAV-02F all 6 locales define grammatically appropriate singular/plural for
       items2: "Starred, 2 items",
       labelUnread: "All",
       labelItems: "Starred",
-    },
-    "es-ES": {
-      unread1: "Todo, 1 sin leer",
-      unread2: "Todo, 2 sin leer",
-      items1: "Favoritos, 1 elemento",
-      items2: "Favoritos, 2 elementos",
-      labelUnread: "Todo",
-      labelItems: "Favoritos",
-    },
-    "fr-FR": {
-      unread1: "Tout, 1 non lu",
-      unread2: "Tout, 2 non lus",
-      items1: "Favoris, 1 élément",
-      items2: "Favoris, 2 éléments",
-      labelUnread: "Tout",
-      labelItems: "Favoris",
-    },
-    "ja-JP": {
-      unread1: "すべて、未読 1 件",
-      unread2: "すべて、未読 2 件",
-      items1: "スター付き、1 件",
-      items2: "スター付き、2 件",
-      labelUnread: "すべて",
-      labelItems: "スター付き",
-    },
-    "zh-CN": {
-      unread1: "全部，1 篇未读",
-      unread2: "全部，2 篇未读",
-      items1: "收藏，1 个条目",
-      items2: "收藏，2 个条目",
-      labelUnread: "全部",
-      labelItems: "收藏",
     },
   }
 

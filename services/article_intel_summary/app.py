@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
 import time
 from contextlib import asynccontextmanager
@@ -25,6 +26,7 @@ from services.article_intel_summary.admin_settings import ManagedSettingsStore, 
 
 MAX_REQUEST_BODY_BYTES = 8 * 1024
 MAX_IN_FLIGHT_SUMMARIES = 2
+_LOG = logging.getLogger(__name__)
 _ENTRY_ID_RE = re.compile(r"^[1-9][0-9]{0,18}$")
 _REQUEST_ID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$")
 
@@ -389,6 +391,8 @@ def _error_response(
     *,
     canonical_origin: str | None,
 ) -> JSONResponse:
+    # Code and status only: never headers, keys, origins or article content.
+    _LOG.warning("summary api refused: code=%s status=%s", error.code, error.status_code)
     payload = {
         "schema_version": "1",
         "request_id": error.request_id if isinstance(error.request_id, str) and _REQUEST_ID_RE.fullmatch(error.request_id) else None,

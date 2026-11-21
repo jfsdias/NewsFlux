@@ -10,11 +10,14 @@ depends on where the evidence is evaluated:
   mount      in the container the file must sit on a read-only mount (/proc/self/mountinfo);
   key        the captured fingerprint must equal the fingerprint of the key the catalog actually uses
              (managed key if present): a key changed after the capture is KEY_MISMATCH at once;
-  freshness  the auditor's read time; runtime window MAX_EVIDENCE_AGE, release preflight MAX_PREFLIGHT_AGE.
+  freshness  the auditor's read time. The release preflight requires a capture at most MAX_PREFLIGHT_AGE old.
+             The running service has no age limit (MAX_EVIDENCE_AGE is None): admitted evidence stays valid for
+             as long as it is pinned and bound to the key in use. A runtime window only made a correctly running
+             service stop by itself every week (owner decision 2026-11-21).
 
 Validity, stated: a policy change on the same key (budget removed, raised, routes widened) is not visible until
-the next capture; it is bounded by the window, and any LiteLLM key edit requires a new capture before the next
-release. A revoked key fails discovery and authentication, so nothing is offered; there is no instant
+the next capture. A new or replaced key is KEY_MISMATCH at once; any LiteLLM edit of the same key requires a new
+capture and a release. A revoked key fails discovery and authentication, so nothing is offered; there is no instant
 revocation signal beyond that. No price, budget or spend amount is read, stored or shown by NewsFlux.
 
     python -m services.article_intel_summary.cost_authority preflight   # target configuration (release)
@@ -39,8 +42,8 @@ from services.article_intel_summary.s5_preflight import key_fingerprint
 
 EVIDENCE_SCHEMA = d1_evidence.EVIDENCE_SCHEMA
 DECLARATIONS = d1_evidence.DECLARATIONS
-MAX_EVIDENCE_AGE = timedelta(days=7)
-MAX_PREFLIGHT_AGE = timedelta(hours=24)
+MAX_EVIDENCE_AGE: timedelta | None = None      # runtime: no expiry while pinned and key-bound
+MAX_PREFLIGHT_AGE = timedelta(days=7)          # release preflight
 MAX_EVIDENCE_BYTES = 128 * 1024
 TRUSTED_UID = 0
 EVIDENCE_PATH = "/run/newsflux-d1/evidence.json"
@@ -122,7 +125,7 @@ mount_is_readonly: Callable[[str], bool] = on_readonly_mount
 
 # ------------------------------------------------------------------------------------------------ evaluation
 def evaluate(declaration: str | None, evidence_path: str | None, virtual_key: str | None, expected_sha256: str | None = None,
-             *, now: datetime | None = None, max_age: timedelta = MAX_EVIDENCE_AGE,
+             *, now: datetime | None = None, max_age: timedelta | None = MAX_EVIDENCE_AGE,
              trusted_uid: int | None = None) -> tuple[str, str]:
     """("PROVEN", GATEWAY_ENFORCEMENT_EVIDENCE|EXPLICIT_UNLIMITED_AUTHORIZED) or ("UNPROVEN", reason). Never raises."""
     now = now or _now()
@@ -158,7 +161,7 @@ def evaluate(declaration: str | None, evidence_path: str | None, virtual_key: st
     captured = info["captured_at"]
     if captured > now + timedelta(minutes=5):
         return "UNPROVEN", "EVIDENCE_FUTURE"
-    if now - captured > max_age:
+    if max_age is not None and now - captured > max_age:
         return "UNPROVEN", "EVIDENCE_STALE"
     if info["declaration"] != declaration:
         return "UNPROVEN", "DECLARATION_MISMATCH"

@@ -32,14 +32,9 @@ const FONT_FAMILY_MIGRATIONS = {
   "'Noto Serif SC', serif": "'Noto Serif', 'Noto Serif SC', serif",
 }
 
-const LANGUAGE_BY_BASE = {
-  de: "de-DE",
-  en: "en-US",
-  es: "es-ES",
-  fr: "fr-FR",
-  ja: "ja-JP",
-  zh: "zh-CN",
-}
+// The interface ships in English only. Any saved or browser language (including the former
+// de-DE, es-ES, fr-FR, ja-JP and zh-CN choices) resolves to en-US.
+const INTERFACE_LANGUAGE = "en-US"
 
 const booleanSetting = (defaultValue) => ({
   defaultValue,
@@ -105,14 +100,8 @@ const nearestNumberSetting = (defaultValue, values) => ({
   },
 })
 
-const sanitizeLanguage = (value, fallback) => {
-  if (typeof value !== "string") {
-    return fallback
-  }
-
-  const [baseLanguage] = value.trim().toLowerCase().split("-", 1)
-  return LANGUAGE_BY_BASE[baseLanguage] ?? fallback
-}
+const sanitizeLanguage = (value, fallback) =>
+  typeof value === "string" ? INTERFACE_LANGUAGE : fallback
 
 const SETTINGS_SCHEMA = {
   // Article Intelligence preferences: closed identifiers only, never prompts, keys or articles.
@@ -128,6 +117,7 @@ const SETTINGS_SCHEMA = {
   },
   aiSummarySections: { defaultValue: DEFAULT_SUMMARY_SECTIONS, sanitize: sanitizeSummarySections },
   // Fallback is off by default; consent for paid or cross-provider fallback is explicit.
+  aiSummaryAutoOnOpen: booleanSetting(true),
   aiSummaryFallbackEnabled: booleanSetting(false),
   aiSummaryFallbackModel: {
     defaultValue: SUMMARY_FALLBACK_NONE,

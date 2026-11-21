@@ -98,12 +98,7 @@ test("a 404 outside an entry detail route does not change route or article state
 })
 
 const unavailableEntryPhrases = {
-  "de-DE": "Dieser Artikel ist nicht mehr verfügbar.",
   "en-US": "This article is no longer available.",
-  "es-ES": "Este artículo ya no está disponible.",
-  "fr-FR": "Cet article n’est plus disponible.",
-  "ja-JP": "この記事は利用できなくなりました。",
-  "zh-CN": "这篇文章已无法访问。",
 }
 
 test("provides unavailable-article feedback in every shipped locale", () => {

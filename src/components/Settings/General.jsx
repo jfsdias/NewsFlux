@@ -28,14 +28,8 @@ import {
   SETTINGS_IMPORT_ERROR_CODES,
 } from "@/utils/settings-transfer"
 
-const languageOptions = [
-  { label: "Deutsch", value: "de-DE" },
-  { label: "English", value: "en-US" },
-  { label: "Español", value: "es-ES" },
-  { label: "Français", value: "fr-FR" },
-  { label: "日本語", value: "ja-JP" },
-  { label: "简体中文", value: "zh-CN" },
-]
+// English only for now; add a locale file and an entry here to offer another language.
+const languageOptions = [{ label: "English", value: "en-US" }]
 
 const General = () => {
   const { checkForUpdates, language } = useStore(settingsState, {
