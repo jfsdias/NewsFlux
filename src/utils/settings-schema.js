@@ -118,6 +118,7 @@ const SETTINGS_SCHEMA = {
   aiSummarySections: { defaultValue: DEFAULT_SUMMARY_SECTIONS, sanitize: sanitizeSummarySections },
   // Fallback is off by default; consent for paid or cross-provider fallback is explicit.
   aiSummaryAutoOnOpen: booleanSetting(false),
+  aiSummaryAutoConsent: booleanSetting(false),
   aiSummaryFallbackEnabled: booleanSetting(false),
   aiSummaryFallbackModel: {
     defaultValue: SUMMARY_FALLBACK_NONE,
