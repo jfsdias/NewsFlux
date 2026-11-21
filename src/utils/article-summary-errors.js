@@ -15,6 +15,7 @@ const MESSAGE_BY_CODE = {
   INVALID_JSON: "error_request",
   INVALID_RESPONSE: "error_request",
   NETWORK: "error_network",
+  CATALOG_UNAVAILABLE: "error_catalog",
 }
 
 const summaryErrorMessageKey = (code) => `article_intelligence.${MESSAGE_BY_CODE[code] ?? "error"}`

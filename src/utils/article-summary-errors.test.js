@@ -22,6 +22,7 @@ test("every message key and the code line exist in every locale", async () => {
     "MINIFLUX_UNAVAILABLE",
     "INVALID_REQUEST",
     "NETWORK",
+    "CATALOG_UNAVAILABLE",
   ]
   const keys = new Set([
     ...codes.map((code) => summaryErrorMessageKey(code).split(".", 2)[1]),

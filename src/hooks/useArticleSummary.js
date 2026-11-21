@@ -18,7 +18,21 @@ import { getAuthSessionKey, hasProvisionedApiKey } from "@/utils/auth"
 
 // Opening an article summarizes it after this dwell time, so skimming quickly through
 // several articles does not spend the model's rate limit.
-export const AUTO_SUMMARY_DELAY_MS = 1500
+const AUTO_SUMMARY_DELAY_MS = 1500
+
+// A thrown request: an HTTP status from the model catalog names the cause; anything else is
+// the network (fetch itself failed) or an unreadable catalog.
+const catchErrorCode = (error) => {
+  if (error?.status === 401 || error?.status === 403) {
+    return "UNAUTHENTICATED"
+  }
+  if (Number.isInteger(error?.status)) {
+    return "CATALOG_UNAVAILABLE"
+  }
+  return error?.name === "TypeError" && error?.message !== "Model catalog is unavailable"
+    ? "NETWORK"
+    : "CATALOG_UNAVAILABLE"
+}
 
 const idleState = (entryId, authSessionKey, sessionRevision) => ({
   entryId,
@@ -182,7 +196,7 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
           errorCode: "INVALID_RESPONSE",
         })
       }
-    } catch {
+    } catch (error) {
       if (isCurrent()) {
         setState({
           entryId,
@@ -191,7 +205,7 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
           status: "error",
           summary: null,
           retryable: true,
-          errorCode: "NETWORK",
+          errorCode: catchErrorCode(error),
         })
       }
     }
