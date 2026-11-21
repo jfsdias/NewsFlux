@@ -39,6 +39,7 @@ import { activeContentState, contentState } from "@/store/contentState"
 import { catalogFeedsByIdState, dataState } from "@/store/dataState"
 import { articleDetailSettingsState } from "@/store/settingsState"
 import returnToArticleImage from "@/utils/article-image-return"
+import summaryErrorMessageKey from "@/utils/article-summary-errors"
 import formatCategoryDisplayName from "@/utils/category-display-name"
 import extractCodeContent from "@/utils/code-content"
 import { getCodeLanguage } from "@/utils/code-languages"
@@ -939,7 +940,11 @@ const ArticleDetail = forwardRef((_, ref) => {
               )}
               {articleSummary.status === "idle" && (
                 <p className="article-intelligence-summary__notice">
-                  {polyglot.t("article_intelligence.transfer_notice")}
+                  {polyglot.t(
+                    articleSummary.autoOnOpen
+                      ? "article_intelligence.transfer_notice_auto"
+                      : "article_intelligence.transfer_notice",
+                  )}
                 </p>
               )}
               <button
@@ -968,7 +973,15 @@ const ArticleDetail = forwardRef((_, ref) => {
               )}
               {articleSummary.status === "error" && (
                 <p aria-live="polite" className="article-intelligence-summary__error" role="status">
-                  {polyglot.t("article_intelligence.error")}
+                  {polyglot.t(summaryErrorMessageKey(articleSummary.errorCode))}
+                  {articleSummary.errorCode && (
+                    <span className="article-intelligence-summary__error-code">
+                      {" "}
+                      {polyglot.t("article_intelligence.error_code", {
+                        code: articleSummary.errorCode,
+                      })}
+                    </span>
+                  )}
                 </p>
               )}
               {articleSummary.status === "model_unavailable" && (

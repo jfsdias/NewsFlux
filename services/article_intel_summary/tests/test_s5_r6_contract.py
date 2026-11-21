@@ -177,3 +177,17 @@ class ModelOutputFramingTests(unittest.TestCase):
                      '{"a": 1} trailing {"b": 2}'):
             with self.assertRaises(InferenceUnavailable, msg=text):
                 self.parse(text)
+
+
+class RefusalLoggingTests(unittest.TestCase):
+    """OMV 2026-11-21: a Safari 403 took several round trips because the reason was only in the response body."""
+
+    def test_refusal_logs_code_and_status_only(self):
+        client, _, _, _ = make_test_client()
+        headers = {**request_headers(), "Origin": "https://evil.example"}
+        with self.assertLogs("services.article_intel_summary.app", level="WARNING") as captured:
+            result = client.post(f"/api/ai/v1/entries/{ENTRY_ID}/summary", headers=headers, json=valid_request())
+        self.assertEqual(result.status_code, 403)
+        self.assertIn("code=NOT_AUTHORIZED status=403", captured.output[0])
+        self.assertNotIn(API_KEY, " ".join(captured.output))
+        self.assertNotIn("evil.example", " ".join(captured.output))

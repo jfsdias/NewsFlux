@@ -8,7 +8,17 @@ import { settingsState } from "@/store/settingsState"
 import isArticleIntelligenceEnabled from "@/utils/article-intelligence-feature"
 import { buildSummaryProfile, resolveSummaryRouting } from "@/utils/article-intelligence-profile"
 import { isCurrentArticleSummaryRequest } from "@/utils/article-intelligence-summary"
+import {
+  peekCachedSummary,
+  storeCachedSummary,
+  SUMMARY_SETTING_KEYS,
+  summaryCacheKey,
+} from "@/utils/article-summary-cache"
 import { getAuthSessionKey, hasProvisionedApiKey } from "@/utils/auth"
+
+// Opening an article summarizes it after this dwell time, so skimming quickly through
+// several articles does not spend the model's rate limit.
+export const AUTO_SUMMARY_DELAY_MS = 1500
 
 const idleState = (entryId, authSessionKey, sessionRevision) => ({
   entryId,
@@ -21,17 +31,7 @@ const idleState = (entryId, authSessionKey, sessionRevision) => ({
 const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => {
   const auth = useStore(authState)
   const settings = useStore(settingsState, {
-    keys: [
-      "aiSummaryModel",
-      "aiSummaryFallbackEnabled",
-      "aiSummaryFallbackModel",
-      "aiSummaryFallbackAllowPaid",
-      "aiSummaryFallbackAllowCrossProvider",
-      "aiSummaryLength",
-      "aiSummaryFocus",
-      "aiSummarySections",
-      "aiSummaryLanguage",
-    ],
+    keys: [...SUMMARY_SETTING_KEYS, "aiSummaryAutoOnOpen"],
   })
   const authSessionKey = getAuthSessionKey(auth)
   const [state, setState] = useState(() =>
@@ -56,6 +56,12 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
     entryId > 0 &&
     Number(routeEntryId) === entryId &&
     hasProvisionedApiKey(auth)
+  const cacheKey = summaryCacheKey({
+    authSessionKey,
+    entryId,
+    entryVersion: activeContent?.changed_at ?? activeContent?.hash,
+    settings,
+  })
 
   useEffect(() => {
     requestRef.current?.controller.abort()
@@ -141,15 +147,19 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
         return
       }
       if (result.kind === "summary") {
-        setState({
-          entryId,
-          authSessionKey,
-          sessionRevision: request.sessionRevision,
+        const finished = {
           status: result.summary.status,
           summary: result.summary,
           modelLabel: selection.entry.label,
           // Labels for verifiable primary/fallback provenance (catalog IDs -> display labels).
           modelLabels: Object.fromEntries(catalog.models.map((model) => [model.id, model.label])),
+        }
+        storeCachedSummary(cacheKey, finished)
+        setState({
+          entryId,
+          authSessionKey,
+          sessionRevision: request.sessionRevision,
+          ...finished,
         })
       } else if (result.kind === "error") {
         setState({
@@ -159,6 +169,7 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
           status: "error",
           summary: null,
           retryable: result.error.retryable,
+          errorCode: result.error.code,
         })
       } else {
         setState({
@@ -168,6 +179,7 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
           status: "error",
           summary: null,
           retryable: false,
+          errorCode: "INVALID_RESPONSE",
         })
       }
     } catch {
@@ -179,23 +191,52 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
           status: "error",
           summary: null,
           retryable: true,
+          errorCode: "NETWORK",
         })
       }
     }
-  }, [authSessionKey, canSummarize, entryId, settings])
+  }, [authSessionKey, cacheKey, canSummarize, entryId, settings])
+
+  // Opening an article: show this tab's cached summary at once; otherwise, with automatic
+  // summaries on, request one after a short dwell. Errors are never retried automatically.
+  const autoOnOpen = settings.aiSummaryAutoOnOpen
+  useEffect(() => {
+    if (!canSummarize) {
+      return
+    }
+    if (peekCachedSummary(cacheKey)) {
+      return
+    }
+    if (!autoOnOpen) {
+      return
+    }
+    const timer = setTimeout(() => void summarize(), AUTO_SUMMARY_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [authSessionKey, autoOnOpen, cacheKey, canSummarize, entryId, sessionRevision, summarize])
 
   const stateIsCurrent =
     state.entryId === entryId &&
     state.authSessionKey === authSessionKey &&
     state.sessionRevision === sessionRevision
 
+  // A summary already created in this tab for the same entry and settings is shown at once,
+  // until the user asks for a new one.
+  const cached =
+    canSummarize && (!stateIsCurrent || state.status === "idle")
+      ? peekCachedSummary(cacheKey)
+      : null
+  const view = cached ?? (stateIsCurrent ? state : null)
+
   return {
     canSummarize,
     summarize,
-    status: stateIsCurrent ? state.status : "idle",
-    summary: stateIsCurrent ? state.summary : null,
-    retryable: stateIsCurrent ? Boolean(state.retryable) : false,
-    modelLabel: stateIsCurrent ? (state.modelLabel ?? null) : null,
+    status: view?.status ?? "idle",
+    summary: view?.summary ?? null,
+    retryable: Boolean(view?.retryable),
+    errorCode: view?.errorCode ?? null,
+    autoOnOpen: Boolean(autoOnOpen),
+    modelLabels: view?.modelLabels ?? null,
+    modelLabel: view?.modelLabel ?? null,
   }
 }
 
