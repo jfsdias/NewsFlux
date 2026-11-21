@@ -266,6 +266,13 @@ def _manifest_digest(manifest: dict) -> str:
     return hashlib.sha256(json.dumps(body, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+def candidate_mounts(current: list[list], added: list[list]) -> list[list]:
+    """Mounts after an override adds read-only binds. Compose merges service volumes by target path, so an added
+    bind replaces a current mount with the same destination (e.g. a re-run of D1 over an earlier D1 release)."""
+    replaced = {item[2] for item in added}
+    return sorted([item for item in current if item[2] not in replaced] + added)
+
+
 def build_manifest(
     docker: Docker,
     *,
@@ -337,7 +344,7 @@ def build_manifest(
         "candidate_networks": sorted(set(target.networks) | set(networks_added)),
         "mounts": [list(item) for item in target.mounts],
         # Read-only bind mounts the approved override adds (and rollback removes again).
-        "candidate_mounts": sorted([list(item) for item in target.mounts] + added_mounts),
+        "candidate_mounts": candidate_mounts([list(item) for item in target.mounts], added_mounts),
         "published_ports": target.published_ports,
         "ready_probe": list(ready_probe) if ready_probe else None,
         "protected": protected_state,
