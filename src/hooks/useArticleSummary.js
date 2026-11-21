@@ -14,7 +14,7 @@ import {
   SUMMARY_SETTING_KEYS,
   summaryCacheKey,
 } from "@/utils/article-summary-cache"
-import { automaticSummaryEnabled } from "@/utils/article-summary-consent"
+import { automaticSummaryEnabled, maySendAutomaticSummary } from "@/utils/article-summary-consent"
 import { getAuthSessionKey, hasProvisionedApiKey } from "@/utils/auth"
 
 // Opening an article summarizes it after this dwell time, so skimming quickly through
@@ -88,7 +88,7 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
     }
   }, [activeContent?.id, authSessionKey, routeEntryId, sessionRevision])
 
-  const summarize = useCallback(async () => {
+  const summarize = useCallback(async (automatic = false) => {
     if (!canSummarize) {
       return
     }
@@ -138,7 +138,7 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
       // The catalog is revalidated on every explicit action; a stored choice is never
       // silently replaced by another model.
       const catalog = await fetchModelCatalog({ signal: controller.signal })
-      if (!catalog || !isCurrent()) {
+      if (!catalog || !isCurrent() || !maySendAutomaticSummary(automatic === true, settingsState.get())) {
         return
       }
       const selection = resolveSummaryRouting(settings, catalog)
@@ -226,7 +226,7 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
     if (!autoOnOpen) {
       return
     }
-    const timer = setTimeout(() => void summarize(), AUTO_SUMMARY_DELAY_MS)
+    const timer = setTimeout(() => void summarize(true), AUTO_SUMMARY_DELAY_MS)
     return () => clearTimeout(timer)
   }, [authSessionKey, autoOnOpen, cacheKey, canSummarize, entryId, sessionRevision, summarize])
 

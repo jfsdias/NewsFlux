@@ -13,3 +13,7 @@ export const withoutAutomaticSummaryConsent = (settings) => ({
   aiSummaryAutoOnOpen: false,
   aiSummaryAutoConsent: false,
 })
+
+// Recheck consent after the catalog request and immediately before article transmission.
+export const maySendAutomaticSummary = (automatic, settings) =>
+  !automatic || automaticSummaryEnabled(settings)
