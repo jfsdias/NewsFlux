@@ -30,6 +30,8 @@
 # content-fallback sidecar are never touched. Output is gate names, identifiers and hashes only.
 set -Eeuo pipefail
 umask 077
+# No bytecode in the exact source checkout: a __pycache__ left by any python3 run makes require_source DIRTY_SOURCE.
+export PYTHONDONTWRITEBYTECODE=1
 
 : "${APPROVED_SHA:?APPROVED_SHA (40-hex commit on main) is required}"
 [[ "$APPROVED_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo "GATE=BLOCKED CODE=APPROVED_SHA_INVALID"; exit 1; }
@@ -59,12 +61,15 @@ READER_PORT="${NEWSFLUX_READER_PORT:-2000}"
 READER_BASE_PATH="${READER_BASE_PATH:-/}"
 READER_AI_ENABLED="${READER_AI_ENABLED:-1}"
 READER_RECOVERY_BASE_PATH="${READER_RECOVERY_BASE_PATH:-}"
+# WallHop path A (user's browser opens the article on WallHop after a per-click consent). Off unless exactly "true".
+READER_WALLHOP_EXTERNAL_OPEN="${READER_WALLHOP_EXTERNAL_OPEN:-}"
+[[ -z "$READER_WALLHOP_EXTERNAL_OPEN" || "$READER_WALLHOP_EXTERNAL_OPEN" == true ]] || { echo "GATE=BLOCKED CODE=READER_WALLHOP_EXTERNAL_OPEN_INVALID"; exit 1; }
 PUBLIC_CURL_RESOLVE="${NEWSFLUX_PUBLIC_CURL_RESOLVE:-}" # optional "host:443:ip" when hairpin DNS is unavailable
 PUBLIC_CURL_CACERT="${NEWSFLUX_PUBLIC_CURL_CACERT:-}"   # optional CA bundle (disposable rehearsal only)
 
 gate() { printf '%s=%s\n' "$1" "$2"; }
 die() { gate "$1" BLOCKED; echo "CODE=$2"; exit 1; }
-release_tool() { python3 "$SRC/deploy/release-governance/release.py" --policy "$SRC/deploy/release-governance/policy.json" --lock "$LOCK" "$@"; }
+release_tool() { python3 -B "$SRC/deploy/release-governance/release.py" --policy "$SRC/deploy/release-governance/policy.json" --lock "$LOCK" "$@"; }
 summary_container() { docker ps -q --filter "label=com.docker.compose.project=$PROJECT" --filter "label=com.docker.compose.service=$SUMMARY_SERVICE"; }
 container_name() { docker inspect -f '{{.Name}}' "$1" | sed 's#^/##'; }
 reader_service() { docker inspect -f '{{index .Config.Labels "com.docker.compose.service"}}' "$READER_CONTAINER"; }
@@ -94,6 +99,9 @@ prepare() {
     git -C "$SRC" fetch --quiet origin main
     git -C "$SRC" merge-base --is-ancestor "$APPROVED_SHA" origin/main || exit 3
     git -C "$SRC" -c advice.detachedHead=false checkout --quiet --force "$APPROVED_SHA"
+    # Bytecode is never source: drop __pycache__ left by an earlier run (untracked; tracked files stay untouched).
+    git -C "$SRC" ls-files --others --exclude-standard --directory | { grep -E '(^|/)__pycache__/$' || true; } \
+      | while read -r dir; do rm -rf -- "${SRC:?}/$dir"; done
   ) || die SOURCE_GATE APPROVED_SHA_NOT_ON_MAIN_OR_CHECKOUT_FAILED
   require_source
   gate RELEASE_DIR "$RELEASE_DIR"
@@ -146,6 +154,7 @@ build() {
     --build-arg VITE_BASE_PATH="$READER_BASE_PATH" \
     --build-arg VITE_ARTICLE_INTELLIGENCE_ENABLED="$READER_AI_ENABLED" \
     --build-arg VITE_CONTENT_FALLBACK_READER_BASE_PATH="$READER_RECOVERY_BASE_PATH" \
+    --build-arg VITE_WALLHOP_EXTERNAL_OPEN_ENABLED="$READER_WALLHOP_EXTERNAL_OPEN" \
     -t "newsflux-reader:$APPROVED_SHA" "$SRC" >/dev/null
   local kind
   for kind in summary reader; do

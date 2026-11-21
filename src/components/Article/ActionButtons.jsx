@@ -47,6 +47,7 @@ import {
   MIN_ARTICLE_WIDTH,
   TITLE_ALIGNMENT_OPTIONS,
 } from "@/utils/settings-options"
+import { wallhopExternalActionUrl } from "@/utils/wallhop-external"
 import "./ActionButtons.css"
 
 const TITLE_ALIGNMENT_ICONS = {
@@ -138,6 +139,7 @@ const ActionButtons = ({ isPhotoSliderVisible = false, scrollContainerRef = null
     ],
   })
 
+  const wallhopExternalUrl = wallhopExternalActionUrl(activeContent?.url)
   const [dropdownVisible, setDropdownVisible] = useState(false)
   const [fontSubmenuVisible, setFontSubmenuVisible] = useState(false)
   const [isCompactTocVisible, setIsCompactTocVisible] = useState(false)
@@ -235,6 +237,15 @@ const ActionButtons = ({ isPhotoSliderVisible = false, scrollContainerRef = null
   }
 
   const handleViewComments = () => window.open(activeContent.comments_url, "_blank")
+
+  const handleOpenViaWallhop = () => {
+    if (
+      wallhopExternalUrl &&
+      globalThis.confirm(polyglot.t("article_card.wallhop_external_consent"))
+    ) {
+      globalThis.open(wallhopExternalUrl, "_blank", "noopener,noreferrer")
+    }
+  }
 
   const handleDropdownVisibleChange = (visible) => {
     setDropdownVisible(visible)
@@ -449,6 +460,15 @@ const ActionButtons = ({ isPhotoSliderVisible = false, scrollContainerRef = null
                   <IconLaunch aria-hidden="true" />
                 </div>
               </Menu.Item>
+
+              {wallhopExternalUrl && (
+                <Menu.Item key="open-with-wallhop" onClick={handleOpenViaWallhop}>
+                  <div className="settings-menu-item">
+                    <span>{polyglot.t("article_card.open_with_wallhop")}</span>
+                    <IconLaunch aria-hidden="true" />
+                  </div>
+                </Menu.Item>
+              )}
 
               <Divider style={{ margin: "4px 0" }} />
 

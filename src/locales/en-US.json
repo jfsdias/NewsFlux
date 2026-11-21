@@ -168,6 +168,8 @@
     "mark_articles_above_as_read_tooltip": "Mark articles above as read",
     "mark_articles_below_as_read_tooltip": "Mark articles below as read",
     "open_link_externally_tooltip": "Open source link in new tab",
+    "open_with_wallhop": "Open with WallHop",
+    "wallhop_external_consent": "This sends the article URL to the external WallHop service. Open in a new tab?",
     "open_in_reactflux_tooltip": "Open in ReactFlux",
     "invalid_source_link_fallback": "The source link is invalid. Opening the article in ReactFlux instead.",
     "unread_article_aria_label": "%{title}, unread",

@@ -1,0 +1,73 @@
+/* eslint-disable import/extensions -- Native Node ESM tests require explicit file extensions. */
+import assert from "node:assert/strict"
+import test from "node:test"
+
+import {
+  buildWallhopExternalUrl,
+  isWallhopExternalOpenEnabled,
+  wallhopExternalActionUrl,
+} from "./wallhop-external.js"
+
+test("public HTTPS article creates an explicit third-party WallHop URL", () => {
+  assert.equal(
+    buildWallhopExternalUrl("https://example.com/news/42?lang=pt#section"),
+    "https://wallhop.io/https://example.com/news/42?lang=pt",
+  )
+})
+
+test("never forwards private, credentialed, non-HTTPS or local URLs", () => {
+  const refused = [
+    "javascript:alert(1)",
+    // eslint-disable-next-line unicorn/prefer-https -- insecure URLs must be rejected.
+    "http://example.com/article",
+    "https://u:secret@example.com/a",
+    "https://localhost/a",
+    "https://internal.home/a",
+    "https://192.168.1.1/",
+    "https://[::1]/",
+    "https://127.0.0.1/",
+    "https://example.com:444/a",
+    "https://example.com/a?api%5Fkey=topsecret",
+    "https://example.com@127.0.0.1/a",
+    "",
+    null,
+  ]
+  for (const url of refused) {
+    assert.equal(buildWallhopExternalUrl(url), null, String(url))
+  }
+})
+
+test("long and malformed sources are blocked before opening an external service", () => {
+  assert.equal(buildWallhopExternalUrl(`https://example.com/${"a".repeat(8192)}`), null)
+  assert.equal(buildWallhopExternalUrl("https://"), null)
+})
+
+test("external open ships dark: only an exact build flag enables it", () => {
+  for (const value of [undefined, "", "false", "1", "yes", "TRUE", " true"]) {
+    assert.equal(isWallhopExternalOpenEnabled(value), false, String(value))
+    assert.equal(
+      wallhopExternalActionUrl("https://example.com/a", isWallhopExternalOpenEnabled(value)),
+      null,
+    )
+  }
+  assert.equal(isWallhopExternalOpenEnabled("true"), true)
+  assert.equal(
+    wallhopExternalActionUrl("https://example.com/a", true),
+    "https://wallhop.io/https://example.com/a",
+  )
+})
+
+test("the flag never makes an unsafe URL acceptable", () => {
+  for (const unsafe of [
+    "https://localhost/a",
+    "https://u:p@example.com/a",
+    "https://example.com/?token=x",
+  ]) {
+    assert.equal(wallhopExternalActionUrl(unsafe, true), null, unsafe)
+  }
+})
+
+test("without the build flag the default is disabled", () => {
+  assert.equal(isWallhopExternalOpenEnabled(), false)
+  assert.equal(wallhopExternalActionUrl("https://example.com/a"), null)
+})
