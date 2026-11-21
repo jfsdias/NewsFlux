@@ -40,7 +40,10 @@ export const fetchModelCatalog = async ({ signal } = {}) => {
     !response.ok ||
     !response.headers.get("content-type")?.toLowerCase().includes("application/json")
   ) {
-    throw new TypeError("Model catalog is unavailable")
+    const error = new TypeError("Model catalog is unavailable")
+    // Lets the Reader name the cause (for example an unauthorized session) instead of "network".
+    error.status = response.status
+    throw error
   }
   const text = await response.text()
   if (new TextEncoder().encode(text).byteLength > MAX_CATALOG_BYTES) {

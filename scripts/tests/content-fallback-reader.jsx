@@ -34,6 +34,7 @@ import "@/components/Content/Content.css"
 
 const mode = new URLSearchParams(location.search).get("mode") ?? "success"
 const articleSummaryMode = new URLSearchParams(location.search).get("article_summary")
+const autoSummary = new URLSearchParams(location.search).get("auto_summary") === "1"
 const polyglot = new Polyglot({ phrases, locale: "en-US" })
 polyglotState.set({ polyglot })
 
@@ -77,7 +78,13 @@ authState.set({
   username: "synthetic-user",
   password: "",
 })
-settingsState.set({ ...settingsState.get(), markReadBy: "manually" })
+// Click-only by default so the explicit-action scenarios stay deterministic; ?auto_summary=1
+// exercises automatic summaries on open.
+settingsState.set({
+  ...settingsState.get(),
+  markReadBy: "manually",
+  aiSummaryAutoOnOpen: autoSummary,
+})
 dataState.set({ ...dataState.get(), sessionRevision: 4 })
 contentState.set({
   ...contentState.get(),
@@ -353,7 +360,7 @@ const driveChecks = async () => {
     results.SUMMARY_ACTION_ACCESSIBLE =
       summaryAction?.tagName === "BUTTON" &&
       summaryAction.textContent.trim() === "Summarize with AI"
-    results.NO_SUMMARY_BEFORE_ACTIVATION = articleSummaryLedger.length === 0
+    results.NO_SUMMARY_BEFORE_ACTIVATION = autoSummary || articleSummaryLedger.length === 0
     results.NO_HORIZONTAL_OVERFLOW = document.documentElement.scrollWidth <= window.innerWidth
     results.READ_STAR_STATE_PRESERVED =
       contentState.get().activeContent?.status === "unread" &&

@@ -112,6 +112,7 @@ const ArticleIntelligence = () => {
   const auth = useStore(authState)
   const authSessionKey = getAuthSessionKey(auth)
   const {
+    aiSummaryAutoOnOpen,
     aiSummaryFallbackAllowCrossProvider,
     aiSummaryFallbackAllowPaid,
     aiSummaryFallbackEnabled,
@@ -123,6 +124,7 @@ const ArticleIntelligence = () => {
     aiSummarySections,
   } = useStore(settingsState, {
     keys: [
+      "aiSummaryAutoOnOpen",
       "aiSummaryFallbackAllowCrossProvider",
       "aiSummaryFallbackAllowPaid",
       "aiSummaryFallbackEnabled",
@@ -267,6 +269,16 @@ const ArticleIntelligence = () => {
               {polyglot.t("article_intelligence.preference_inert")}
             </Typography.Text>
           )}
+        </SettingItem>
+        <SettingItem
+          description={polyglot.t("article_intelligence.auto_on_open_description")}
+          title={polyglot.t("article_intelligence.auto_on_open_label")}
+        >
+          <Switch
+            aria-label={polyglot.t("article_intelligence.auto_on_open_label")}
+            checked={aiSummaryAutoOnOpen}
+            onChange={(value) => updateSettings({ aiSummaryAutoOnOpen: value })}
+          />
         </SettingItem>
         {catalog && (
           <SettingItem
