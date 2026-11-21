@@ -278,9 +278,13 @@ def preflight(values: Mapping[str, str], *, now: datetime | None = None,
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("preflight")
-    parser.parse_args(argv)
-    code, lines = preflight(os.environ)
+    pre = sub.add_parser("preflight")
+    # --offline: the gates that need no network (flags, cost control, evidence, mount, key, non-financial gates).
+    # Used in the one-off candidate container, which cannot use the service's fixed addresses (the gateway path
+    # may allow only those); the live gates then run in the promoted container, with automatic rollback.
+    pre.add_argument("--offline", action="store_true")
+    args = parser.parse_args(argv)
+    code, lines = preflight(os.environ, live=not args.offline)
     print("\n".join(lines))
     return code
 
