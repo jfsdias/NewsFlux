@@ -13,6 +13,15 @@
 #   sudo python3 s5_key_audit.py ... --out "$(sudo -E bash ai-functional-release.sh s5-attestation-path)"
 #   sudo -E bash ai-functional-release.sh s5-preflight     # read-only LiteLLM key/model/price/budget/logging gates
 #   sudo -E bash ai-functional-release.sh enable-s5        # only after s5-preflight PASS (re-run internally)
+#
+# D1 mode (LiteLLM governs models and cost; D1-R7-02). Explicit, never inferred:
+#   export RELEASE_MODE=d1 D1_COST_AUTHORITY=gateway_budget_enforced|explicit_unlimited \
+#          D1_EVIDENCE_FILE=/root/newsflux-d1.XXXXXXXX/evidence.json D1_EVIDENCE_SHA256=<64 hex, from the ledger> \
+#          D1_EXTERNAL_TRANSFER_CONSENT=GRANTED   # the owner's external-transfer consent, recorded in the ledger
+#   [D1_OWNER_LEDGER_REPO=<homeserver checkout>]   # required for explicit_unlimited
+#   sudo -E bash ai-functional-release.sh d1-preflight     # plan + D1 preflight in the TARGET configuration (no change)
+#   sudo -E bash ai-functional-release.sh enable-s5        # d1-preflight PASS -> promote -> live re-check
+#   sudo -E bash ai-functional-release.sh disable-s5       # exact rollback to the dark configuration
 #   sudo -E bash ai-functional-release.sh all              # prepare..smoke, stops at the first failed gate
 #   rollbacks: disable-s5 | rollback-reader | rollback-caddy | rollback-summary
 #
@@ -393,8 +402,112 @@ s5_preflight() {
   fi
 }
 
+RELEASE_MODE="${RELEASE_MODE:-legacy}"
+[[ "$RELEASE_MODE" == legacy || "$RELEASE_MODE" == d1 ]] || { echo "GATE=BLOCKED CODE=RELEASE_MODE_INVALID"; exit 1; }
+D1_DIR="$RELEASE_DIR/d1-enable"
+D1_EVIDENCE_TARGET=/run/newsflux-d1/evidence.json
+D1_PREFLIGHT_ARGV=(python -B -m services.article_intel_summary.cost_authority preflight)
+
+d1_inputs() {
+  [[ "$RELEASE_MODE" == d1 ]] || die D1 RELEASE_MODE_NOT_D1
+  [[ "${D1_COST_AUTHORITY:-}" == gateway_budget_enforced || "${D1_COST_AUTHORITY:-}" == explicit_unlimited ]] || die D1 DECLARATION_MISSING
+  [[ "${D1_EVIDENCE_SHA256:-}" =~ ^[0-9a-f]{64}$ ]] || die D1 EVIDENCE_DIGEST_NOT_PINNED
+  [[ "${D1_EXTERNAL_TRANSFER_CONSENT:-}" == GRANTED ]] || die D1 EXTERNAL_TRANSFER_CONSENT_MISSING
+  local src="${D1_EVIDENCE_FILE:-}"
+  [[ "$src" == /* && -f "$src" && ! -L "$src" ]] || die D1 EVIDENCE_FILE_INVALID
+  [[ "$(stat -c '%u %a' "$src")" == "0 644" ]] || die D1 EVIDENCE_FILE_NOT_ROOT_0644
+  [[ "$(sha_of "$src")" == "$D1_EVIDENCE_SHA256" ]] || die D1 EVIDENCE_DIGEST_MISMATCH
+  if [[ "$D1_COST_AUTHORITY" == explicit_unlimited ]]; then
+    # The embedded owner decision must be the file at the pinned commit of the homeserver ledger's main line.
+    [[ -d "${D1_OWNER_LEDGER_REPO:-}/.git" ]] || die D1 OWNER_LEDGER_REPO_MISSING
+    python3 -I -B - "$SRC/services/article_intel_summary" "$src" "$D1_OWNER_LEDGER_REPO" <<'PY' || die D1 OWNER_DECISION_NOT_IN_LEDGER
+import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location("d1_evidence", sys.argv[1] + "/d1_evidence.py")
+lib = importlib.util.module_from_spec(spec); spec.loader.exec_module(lib)
+document = json.load(open(sys.argv[2], encoding="utf-8"))
+problem = lib.verify_owner_decision_in_ledger(document.get("owner_decision") or {}, sys.argv[3])
+print(f"D1_OWNER_DECISION_LEDGER={problem or 'PASS'}")
+sys.exit(1 if problem else 0)
+PY
+  fi
+}
+
+# Release-owned copy of the pinned evidence (root, 0644, in the root-only release dir) and the D1 override:
+# LiteLLM governs models and cost, NewsFlux money controls are blanked, consent and every non-financial gate stay.
+d1_prepare() {
+  local evidence="$D1_DIR/evidence.json" policy="$RELEASE_DIR/d1-enable.policy.json"
+  mkdir -p "$D1_DIR"
+  if [[ ! -f "$evidence" ]]; then
+    install -m 0644 -o 0 -g 0 "$D1_EVIDENCE_FILE" "$evidence"
+  fi
+  [[ "$(sha_of "$evidence")" == "$D1_EVIDENCE_SHA256" ]] || die D1 RELEASE_EVIDENCE_COPY_DRIFT
+  if [[ ! -f "$policy" ]]; then
+    python3 -I -B - "$SUMMARY_SERVICE" "$evidence" "$D1_EVIDENCE_TARGET" "$D1_COST_AUTHORITY" "$D1_EVIDENCE_SHA256" >"$policy" <<'PY'
+import json, sys
+service, source, target, declaration, digest = sys.argv[1:]
+environment = {
+    "NEWSFLUX_AI_INFERENCE_ENABLED": "true",
+    "NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER": "true",
+    "NEWSFLUX_AI_MODEL_DISCOVERY_ENABLED": "true",
+    "NEWSFLUX_AI_MODEL_AUTHORITY": "litellm_key",
+    "NEWSFLUX_AI_LITELLM_COST_AUTHORITY": declaration,
+    "NEWSFLUX_AI_LITELLM_COST_AUTHORITY_EVIDENCE_FILE": target,
+    "NEWSFLUX_AI_LITELLM_COST_AUTHORITY_EVIDENCE_SHA256": digest,
+    "NEWSFLUX_AI_ALLOW_PAID_INFERENCE": "false",
+}
+# No duplicated cost control: NewsFlux budget and prices are blanked (LiteLLM is the cost authority).
+for name in ("NEWSFLUX_AI_MONTHLY_BUDGET_USD", "NEWSFLUX_AI_LITELLM_S5_FREE_INPUT_USD_PER_MILLION",
+             "NEWSFLUX_AI_LITELLM_S5_FREE_OUTPUT_USD_PER_MILLION", "NEWSFLUX_AI_LITELLM_MISTRAL_SMALL_INPUT_USD_PER_MILLION",
+             "NEWSFLUX_AI_LITELLM_MISTRAL_SMALL_OUTPUT_USD_PER_MILLION"):
+    environment[name] = ""
+print(json.dumps({"services": {service: {"environment": environment, "volumes": [
+    {"type": "bind", "source": source, "target": target, "read_only": True}]}}}, indent=2, sort_keys=True))
+PY
+    chmod 0444 "$policy"
+  fi
+  if [[ ! -f "$D1_DIR/manifest.json" ]]; then
+    local summary
+    summary="$(summary_container)"
+    [[ "$(image_revision "$(docker inspect -f '{{.Image}}' "$summary")")" == "$APPROVED_SHA" ]] || die D1 SUMMARY_NOT_ON_APPROVED_SHA
+    mapfile -t prot < <(protected_args)
+    release_tool plan --project "$PROJECT" --service "$SUMMARY_SERVICE" \
+      --candidate-image "$(docker inspect -f '{{.Image}}' "$summary")" --approved-sha "$APPROVED_SHA" "${prot[@]}" \
+      --release-dir "$D1_DIR" --extra-override "$policy" --mount-added "$evidence:$D1_EVIDENCE_TARGET" >/dev/null \
+      || die D1 PLAN_FAILED
+  fi
+}
+
+# The D1 preflight runs in a one-off container of the TARGET configuration (override env + read-only evidence
+# mount, candidate image), never in the running dark container: NOT_APPLICABLE there is not an admission.
+d1_preflight() {
+  require_source
+  d1_inputs
+  d1_prepare
+  local out
+  out="$(release_tool candidate-run --manifest "$D1_DIR/manifest.json" -- "${D1_PREFLIGHT_ARGV[@]}")" || true
+  printf '%s\n' "$out"
+  grep -qx 'D1_PREFLIGHT=PASS' <<<"$out" || die D1_PREFLIGHT TARGET_CONFIGURATION_NOT_PASS
+  gate D1_TARGET_PREFLIGHT PASS
+}
+
+enable_d1() {
+  d1_preflight
+  release_tool promote --manifest "$D1_DIR/manifest.json" --timeout 180
+  # Live re-check in the promoted container: same evidence, real catalog, live callbacks.
+  local out
+  out="$(docker exec "$(summary_container)" "${D1_PREFLIGHT_ARGV[@]}")" || true
+  printf '%s\n' "$out" | sed 's/^/LIVE_/'
+  if ! grep -qx 'D1_PREFLIGHT=PASS' <<<"$out"; then
+    release_tool rollback --manifest "$D1_DIR/manifest.json" --timeout 180
+    die ENABLE_D1 LIVE_RECHECK_FAILED_ROLLED_BACK
+  fi
+  gate D1_ENABLED PASS
+  echo "NEXT=in the Reader: Settings lists the key's models; summarize one public article once."
+}
+
 enable_s5() {
   require_source
+  [[ "$RELEASE_MODE" == d1 ]] && { enable_d1; return; }
   s5_preflight || die ENABLE_S5 S5_PREFLIGHT_NOT_PASS
   local summary policy dir="$RELEASE_DIR/s5-enable"
   summary="$(summary_container)"
@@ -426,8 +539,11 @@ case "${1:-}" in
   smoke) smoke ;;
   s5-attestation-path) require_source; echo "$S5_KEY_ATTESTATION" ;;
   s5-preflight) s5_preflight ;;
+  d1-preflight) d1_preflight ;;
   enable-s5) enable_s5 ;;
-  disable-s5) require_source; release_tool rollback --manifest "$RELEASE_DIR/s5-enable/manifest.json" ;;
+  disable-s5) require_source
+    if [[ "$RELEASE_MODE" == d1 ]]; then release_tool rollback --manifest "$D1_DIR/manifest.json"
+    else release_tool rollback --manifest "$RELEASE_DIR/s5-enable/manifest.json"; fi ;;
   rollback-summary) require_source; release_tool rollback --manifest "$RELEASE_DIR/$SUMMARY_SERVICE/manifest.json" ;;
   rollback-reader) require_source; release_tool rollback --manifest "$RELEASE_DIR/$(reader_service)/manifest.json" ;;
   rollback-caddy) rollback_caddy ;;

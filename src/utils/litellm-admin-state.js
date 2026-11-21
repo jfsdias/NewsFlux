@@ -34,6 +34,13 @@ export const connectionState = (status, discovery) => {
   return "unverified"
 }
 
+/** D1 successor: the LiteLLM virtual key governs models and LiteLLM governs cost; NewsFlux shows neither. */
+export const isKeyAuthority = (status) => status?.model_authority === "litellm_key"
+
+/** Key-authority rows: identity facts only, never a price or an approval flag. */
+export const keyAuthorityModelLabel = (model) =>
+  [model?.id, model?.provider, model?.mode ?? "unverified"].filter(Boolean).join(" · ")
+
 export const priceLabelKey = (model) => {
   if (model?.price_class === "free") {
     return "price_free"

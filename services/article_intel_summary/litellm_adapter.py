@@ -72,6 +72,10 @@ _URL_RE = re.compile(
 _TRAILING_URL_PUNCTUATION = ".,;:!?)]}»\"'”’"
 
 
+GATEWAY_COST_AUTHORITIES = frozenset({"gateway_budget_enforced", "explicit_unlimited"})
+COST_AUTHORITIES = GATEWAY_COST_AUTHORITIES | {"newsflux"}
+
+
 @dataclass(frozen=True)
 class LiteLLMSettings:
     gateway_base_url: str | None = None
@@ -96,6 +100,9 @@ class LiteLLMSettings:
     # Set only by the catalog for an entry of the operator model policy. A non-legacy catalog ID
     # is never ready without it, so an arbitrary choice/alias cannot reach the gateway.
     operator_approved: bool = False
+    # D1 successor: "newsflux" (default, current contract: local USD budget and prices) or a declared LiteLLM
+    # cost authority ("gateway_budget_enforced" | "explicit_unlimited"), set only by the key-authority catalog.
+    cost_authority: str = "newsflux"
 
     def is_ready(self) -> bool:
         if not self.enabled or not self.external_transfer_authorized:
@@ -134,19 +141,24 @@ class LiteLLMSettings:
             return False
         if not _positive_bounded_int(self.tokens_per_minute, MAX_TOKENS_PER_MINUTE_SETTING):
             return False
-        if not _positive_decimal(self.monthly_budget_usd):
+        if self.cost_authority not in COST_AUTHORITIES:
             return False
-        if not _nonnegative_decimal(self.input_price_usd_per_million):
-            return False
-        if not _nonnegative_decimal(self.output_price_usd_per_million):
-            return False
-        if self.model_choice == MODEL_CHOICE_MISTRAL_SMALL and not self.paid_inference_authorized:
-            return False
-        if (
-            (self.input_price_usd_per_million or Decimal("0")) > 0
-            or (self.output_price_usd_per_million or Decimal("0")) > 0
-        ) and not self.paid_inference_authorized:
-            return False
+        if self.cost_authority == "newsflux":
+            if not _positive_decimal(self.monthly_budget_usd):
+                return False
+            if not _nonnegative_decimal(self.input_price_usd_per_million):
+                return False
+            if not _nonnegative_decimal(self.output_price_usd_per_million):
+                return False
+            if self.model_choice == MODEL_CHOICE_MISTRAL_SMALL and not self.paid_inference_authorized:
+                return False
+            if (
+                (self.input_price_usd_per_million or Decimal("0")) > 0
+                or (self.output_price_usd_per_million or Decimal("0")) > 0
+            ) and not self.paid_inference_authorized:
+                return False
+        elif self.model_choice in SUPPORTED_MODEL_CHOICES:
+            return False   # the legacy IDs keep the NewsFlux cost contract
         if not isinstance(self.timeout_seconds, (int, float)) or isinstance(self.timeout_seconds, bool):
             return False
         if not 0 < self.timeout_seconds <= MAX_TIMEOUT_SECONDS:
@@ -371,12 +383,13 @@ class LiteLLMInferenceAdapter:
             estimated_input_tokens = _estimate_input_tokens(messages)
             if estimated_input_tokens > self.settings.max_input_tokens:
                 raise InferenceUnavailable("input token limit reached") from None
-            estimated_cost = _estimate_max_cost(self.settings)
+            gateway_cost = self.settings.cost_authority in GATEWAY_COST_AUTHORITIES
+            estimated_cost = Decimal("0") if gateway_cost else _estimate_max_cost(self.settings)
             reservation_id = self.ledger.reserve(
                 estimated_cost_usd=estimated_cost,
                 input_tokens=self.settings.max_input_tokens,
                 output_tokens=self.settings.max_output_tokens,
-                monthly_budget_usd=self.settings.monthly_budget_usd,
+                monthly_budget_usd=None if gateway_cost else self.settings.monthly_budget_usd,
                 requests_per_minute=self.settings.requests_per_minute,
                 tokens_per_minute=self.settings.tokens_per_minute,
                 max_concurrent=MAX_IN_FLIGHT_REQUESTS,
@@ -399,7 +412,7 @@ class LiteLLMInferenceAdapter:
                 timeout = min(timeout, deadline.remaining())
             response_document = self._post(payload, timeout)
             usage = _read_usage(response_document)
-            actual_cost = _calculate_cost(
+            actual_cost = Decimal("0") if gateway_cost else _calculate_cost(
                 usage["prompt_tokens"],
                 usage["completion_tokens"],
                 self.settings.input_price_usd_per_million,

@@ -478,6 +478,7 @@ const CATALOG_V2_REASONS = new Set([
   "PRICE_NOT_VERIFIED",
   "PAID_NOT_AUTHORIZED",
   "RUNTIME_UNAVAILABLE",
+  "COST_AUTHORITY_UNPROVEN",
 ])
 const CATALOG_V2_PRICING = new Set([
   "verified_zero",
@@ -487,6 +488,8 @@ const CATALOG_V2_PRICING = new Set([
   "gateway_published_only",
   "mismatch",
   "not_verified",
+  // D1 successor: LiteLLM governs cost; NewsFlux shows no amount.
+  "gateway_governed",
 ])
 const CATALOG_V2_NOTICES = new Set([...CATALOG_NOTICES, "PRICE_VERIFIED_BY_GATEWAY"])
 const CATALOG_V2_CHECKS = [
@@ -517,7 +520,7 @@ const validateModelCatalogV2 = (payload) => {
   if (
     !(payload.default_model_id === null || isV2Id(payload.default_model_id)) ||
     !["DISABLED", "OK", "UNAVAILABLE"].includes(payload.discovery?.status) ||
-    !["LEGACY", "CONFIGURED", "INVALID"].includes(payload.policy?.status) ||
+    !["LEGACY", "CONFIGURED", "INVALID", "KEY_AUTHORITY"].includes(payload.policy?.status) ||
     !Array.isArray(payload.models) ||
     payload.models.length > 32
   ) {

@@ -47,6 +47,7 @@ def _safe_error(code: str, status: int, origin: str | None) -> Response:
         "CONFIG_INVALID", "CONFIG_CONFLICT", "KEY_INVALID", "KEY_UNVERIFIED",
         "POLICY_INVALID", "MODEL_NOT_DISCOVERED", "MODEL_UNVERIFIED",
         "CHANGES_DISABLED", "MIGRATION_REQUIRED", "MIGRATION_NOT_CONFIRMED",
+        "MODEL_AUTHORITY_IS_LITELLM_KEY",
     }:
         code = "CONFIG_UNAVAILABLE"
     return _response({"error": {"code": code}}, status, origin=origin)
@@ -188,7 +189,7 @@ def create_admin_router(auth: MinifluxAuthService, store: ManagedSettingsStore) 
         except ManagedSettingsError as err:
             status = (
                 403 if err.code == "CHANGES_DISABLED" else
-                409 if err.code in {"CONFIG_CONFLICT", "MIGRATION_REQUIRED"} else
+                409 if err.code in {"CONFIG_CONFLICT", "MIGRATION_REQUIRED", "MODEL_AUTHORITY_IS_LITELLM_KEY"} else
                 422 if err.code in {
                     "KEY_INVALID", "POLICY_INVALID", "MODEL_NOT_DISCOVERED", "MIGRATION_NOT_CONFIRMED"
                 } else

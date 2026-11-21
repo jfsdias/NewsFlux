@@ -63,7 +63,9 @@ const ModelDetails = ({ model, polyglot }) => (
         ? polyglot.t("article_intelligence.model_available")
         : polyglot.t(`article_intelligence.reason_${model.unavailableReason}`)}
     </span>
-    <span>{formatPrice(polyglot, model.pricing)}</span>
+    {model.pricing.status !== "gateway_governed" && (
+      <span>{formatPrice(polyglot, model.pricing)}</span>
+    )}
     {model.limits.max_output_tokens !== null && (
       <span>
         {polyglot.t("article_intelligence.model_limits", {

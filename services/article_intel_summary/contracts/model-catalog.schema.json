@@ -30,7 +30,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["status"],
-      "properties": { "status": { "enum": ["LEGACY", "CONFIGURED", "INVALID"] } }
+      "properties": { "status": { "enum": ["LEGACY", "CONFIGURED", "INVALID", "KEY_AUTHORITY"] } }
     },
     "models": {
       "type": "array",
@@ -84,7 +84,8 @@
               "PRICE_MISMATCH",
               "PRICE_NOT_VERIFIED",
               "PAID_NOT_AUTHORIZED",
-              "RUNTIME_UNAVAILABLE"
+              "RUNTIME_UNAVAILABLE",
+              "COST_AUTHORITY_UNPROVEN"
             ]
           },
           "requires_paid_authorization": { "type": "boolean" },
@@ -122,7 +123,8 @@
                   "gateway_published_only",
                   "mismatch",
                   "not_verified",
-                  "local_unpriced"
+                  "local_unpriced",
+                  "gateway_governed"
                 ]
               },
               "input_usd_per_million": { "type": ["string", "null"], "maxLength": 32 },

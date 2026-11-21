@@ -5,6 +5,8 @@ import {
   canApproveModel,
   connectionState,
   errorMessageKey,
+  isKeyAuthority,
+  keyAuthorityModelLabel,
   priceLabelKey,
 } from "./litellm-admin-state.js" // eslint-disable-line import/extensions -- Node ESM tests require the explicit extension.
 
@@ -88,4 +90,19 @@ test("admin component and transport never persist or log the transient credentia
   assert.match(component, /type="password"/)
   assert.match(component, /autoComplete="off"/)
   assert.equal(/\bvalue=\{status\./.test(component), false)
+})
+
+test("D1 key authority: admin shows identity facts only, never a price or approval", () => {
+  assert.equal(isKeyAuthority({ model_authority: "litellm_key" }), true)
+  assert.equal(isKeyAuthority({ model_authority: "newsflux_policy" }), false)
+  assert.equal(isKeyAuthority({}), false)
+  assert.equal(isKeyAuthority(null), false)
+  const label = keyAuthorityModelLabel({
+    id: "acme-7b",
+    provider: "openai",
+    mode: "chat",
+    price_class: "paid",
+  })
+  assert.equal(label, "acme-7b · openai · chat")
+  assert.doesNotMatch(label, /paid|price|approved/u)
 })

@@ -84,7 +84,7 @@ class ManagedSettingsError(Exception):
             "POLICY_INVALID", "MODEL_NOT_DISCOVERED", "MODEL_UNVERIFIED",
             "CHANGES_DISABLED", "MIGRATION_REQUIRED", "MIGRATION_NOT_CONFIRMED",
             "ROLLBACK_STATE_CHANGED", "INFERENCE_ENABLED", "RECOVERY_INTEGRITY_FAILED",
-            "KEY_STATE_INCONCLUSIVE", "COMMIT_INDETERMINATE",
+            "KEY_STATE_INCONCLUSIVE", "COMMIT_INDETERMINATE", "MODEL_AUTHORITY_IS_LITELLM_KEY",
         }:
             code = "CONFIG_UNAVAILABLE"
         self.code = code
@@ -117,6 +117,9 @@ class ManagedSettingsStore:
             raise ManagedSettingsError("CONFIG_UNSAFE")
         self.getter_factory = getter_factory or gateway_getter
         self.enabled = self.env.get("NEWSFLUX_AI_ADMIN_CONFIG_WRITES_ENABLED", "").lower() == "true"
+        # D1 successor: when the LiteLLM virtual key is the model authority, NewsFlux keeps no model allowlist
+        # and no prices; approval and policy writes are refused instead of being silently ignored.
+        self.key_authority = (self.env.get("NEWSFLUX_AI_MODEL_AUTHORITY") or "").strip() == "litellm_key"
 
     def _check_dir(self, *, create: bool = False) -> bool:
         if not self.root.exists() and not self.root.is_symlink():
@@ -248,6 +251,7 @@ class ManagedSettingsStore:
             "policy_models": len(state["policy"]["models"]) if state["policy"] else 0,
             "policy_source": self._source(state),
             "migration_required": bool(self._legacy_models(state)),
+            "model_authority": "litellm_key" if self.key_authority else "newsflux_policy",
         }
 
     def _preview(self, state: dict, *, key: str | None = None, secret: bytes | None = None) -> dict:
@@ -362,6 +366,16 @@ class ManagedSettingsStore:
             price_class = "unknown"
             if price_known:
                 price_class = "paid" if (detail.input_price > 0 or detail.output_price > 0) else "free"
+            if self.key_authority:
+                # The key's listing is the authority; LiteLLM owns cost. No approval flag, no price class.
+                results.append({
+                    "id": alias,
+                    "provider": detail.provider if detail and detail.provider else "Unverified",
+                    "mode": detail.mode if detail else None,
+                    "identity_verified": bool(detail and detail.provider_identity),
+                    "local_ollama": bool(detail and detail.provider_identity == "ollama@ollama:11434"),
+                })
+                continue
             results.append({
                 "id": alias,
                 "approved": alias in approved,
@@ -677,6 +691,8 @@ class ManagedSettingsStore:
         return self._save(expected_revision, key=key, change="key")
 
     def save_policy(self, policy: dict, expected_revision: str) -> dict:
+        if self.key_authority:
+            raise ManagedSettingsError("MODEL_AUTHORITY_IS_LITELLM_KEY")
         if not isinstance(policy, dict):
             raise ManagedSettingsError("POLICY_INVALID")
         try:
@@ -711,6 +727,8 @@ class ManagedSettingsStore:
 
     def approve_model(self, alias: str, expected_revision: str,
                       *, allow_paid: bool = False, allow_external: bool = False) -> dict:
+        if self.key_authority:
+            raise ManagedSettingsError("MODEL_AUTHORITY_IS_LITELLM_KEY")
         if not self.enabled:
             raise ManagedSettingsError("CHANGES_DISABLED")
         if not _valid_model_alias(alias) or not isinstance(expected_revision, str):

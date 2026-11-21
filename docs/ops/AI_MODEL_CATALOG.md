@@ -236,3 +236,70 @@ disabled per request.
 
 The legacy env-driven S5 → Mistral fallback (`NEWSFLUX_AI_ENABLE_S5_MISTRAL_FALLBACK`, v1
 endpoint only) is unchanged and stays off by default.
+
+## D1 successor mode: LiteLLM key and cost authority (default off)
+
+Contract: `docs/ops/NEWSFLUX_D1_LITELLM_AUTHORITY_CONTRACT.md` (#273). Not enabled anywhere.
+
+| Variable                                             | Meaning                                                                                                                                                              |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NEWSFLUX_AI_MODEL_AUTHORITY=litellm_key`            | the virtual key's own model listing is the catalog; no NewsFlux allowlist, no admin approval or policy writes (`MODEL_AUTHORITY_IS_LITELLM_KEY`), no prices anywhere |
+| `NEWSFLUX_AI_LITELLM_COST_AUTHORITY`                 | `gateway_budget_enforced` or `explicit_unlimited`; anything else is unknown                                                                                          |
+| `NEWSFLUX_AI_LITELLM_COST_AUTHORITY_EVIDENCE_FILE`   | `/run/newsflux-d1/evidence.json`: evidence (schema v3) from one root capture on the OMV, bind-mounted **read-only**, root 0644                                       |
+| `NEWSFLUX_AI_LITELLM_COST_AUTHORITY_EVIDENCE_SHA256` | the evidence digest recorded in the homeserver ledger at capture time; no pin or another digest is `UNPROVEN`                                                        |
+
+### Cost-authority evidence (D1-R7-01)
+
+The declaration alone proves nothing. One root invocation on the OMV (`deploy/release-governance/d1_capture.py`,
+own authorization; see `docs/ops/NEWSFLUX_D1_CAPTURE.md`) produces the evidence; the catalog (every build) and the
+release preflight judge it with the same code (`services/article_intel_summary/d1_evidence.py`):
+
+| Binding                           | How                                                                                                                                                                                                                                                                    |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Key                               | the admitted auditor (57c536f, sha256 pinned) reads the Summary key fingerprint, matches it in the LiteLLM DB and, with `--private-prestate`, writes that same fingerprint into a root-only prestate whose sha256 it prints in its own receipt; no later `docker exec` |
+| Time                              | the auditor's read time inside the hashed prestate, inside the capture window recorded by the same process; file mtime is never used                                                                                                                                   |
+| Receipt / exit                    | the auditor's stdout kept whole and judged by the verbatim admitted contract (`d1_receipt_contract.py`, sha256 checked), including exit-code coherence; exit code stored and must be 0                                                                                 |
+| Summary / gateway                 | identity lines (ID, image, start, restarts, state, compose labels) read before and after, byte-identical; LiteLLM image ID and repo digest pinned                                                                                                                      |
+| Policy                            | budget facts plus the non-financial gates from the same receipt: key identity and validity, explicit model scope, LLM routes only, not a management key, JWT auth off, no indirection, no object permissions, no fallback rules, callbacks within the allowed set      |
+| External witness                  | the evidence sha256, recorded in the homeserver ledger and pinned in the deployment config; re-dating or rebuilding changes the digest                                                                                                                                 |
+| Owner (`explicit_unlimited` only) | embedded decision with digest and a key-bound, expiring marker; byte-identical to the file at the pinned commit on the homeserver ledger's main line (checked with git at capture and in `d1-preflight`)                                                               |
+| File / mount                      | root-owned, not group/other-writable, `O_NOFOLLOW`, checked on the descriptor; in the container on a read-only mount (`/proc/self/mountinfo`)                                                                                                                          |
+
+Classifications: `GATEWAY_ENFORCEMENT_EVIDENCE` only for a key-level budget on a LiteLLM image whose enforcement was
+proven in the lab with a positive control (`rehearse-d1-budget-enforcement.sh`, production pin litellm-database
+1.110.0, config `95017a67…`: over-budget refused before routing, under-budget admitted and routed to a local mock);
+`EXPLICIT_UNLIMITED_AUTHORIZED`. A budget from a budget table or on another image is `GATEWAY_POLICY_OBSERVED_ONLY`.
+Everything else is `COST_AUTHORITY_UNPROVEN`.
+
+Validity: runtime 7 days, release preflight 24 hours from the auditor's read time. A key changed after the capture is
+`KEY_MISMATCH` at once. A policy change on the same key (budget removed or raised, routes widened) is not visible
+until the next capture: it is bounded by the window, and any LiteLLM key edit requires a new capture before the next
+release. A revoked key fails discovery and authentication, so nothing is offered; there is no faster revocation
+signal. Root on the OMV is the operational authority; the ledger record of the digest is the external witness.
+
+### Release transition (D1-R7-02)
+
+`ai-functional-release.sh` is mode-aware and the mode is explicit (`RELEASE_MODE=legacy` by default):
+
+- **legacy**: unchanged (`s5-preflight` with zero price, NewsFlux budget and attestation, then the legacy override).
+- **d1**: `d1-preflight` writes the D1 override (key authority, cost authority, pinned evidence, inference, discovery,
+  external transfer only with `D1_EXTERNAL_TRANSFER_CONSENT=GRANTED`, NewsFlux budget and prices blanked), plans it with
+  the read-only evidence mount declared (`release.py plan --mount-added`), and runs the D1 preflight in a one-off
+  container of that **target configuration** (`release.py candidate-run`). The running service is not touched.
+  `NOT_APPLICABLE` in the current container is never an admission. `enable-s5` then promotes and re-checks live,
+  rolling back on failure; `disable-s5` restores the exact dark configuration (same Compose config hash).
+- The D1 preflight checks: flags, no duplicated cost control, evidence (pin, file, mount, key, freshness,
+  non-financial gates), the real catalog (at least one available model, GET-only discovery) and live callbacks.
+
+Rehearsed end to end in a disposable lab (`rehearse-d1-transition.sh`): dark baseline, capture with the real auditor,
+target preflight, activation, catalog, one synthetic canary through LiteLLM to a local mock, rollback, dark baseline.
+
+### Local-only consent in key mode
+
+Local-only consent (`NEWSFLUX_AI_ALLOW_LOCAL_ARTICLE_PROCESSING`, PR #260) admits nothing in key mode (fail-closed):
+the alias, the provider string or a price is not identity, and the key's view does not show fallbacks, callbacks or
+indirect routes. Proposal for a verifiable local route proof: `docs/ops/NEWSFLUX_LOCAL_CONSENT_ROUTE_PROOF.md`.
+
+Rollback: `disable-s5` (D1 mode) restores the dark configuration exactly; removing `NEWSFLUX_AI_MODEL_AUTHORITY` returns
+to the operator-policy contract; turning inference or external transfer off stops everything. All are
+configuration-only.
