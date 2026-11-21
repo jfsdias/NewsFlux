@@ -298,7 +298,7 @@ Defect-driven: each sub-phase starts from PWA-VAL-01 findings. If validation fin
 - **NON_GOALS:** any sync of settings/credentials between Safari and the installed app (that would be a persistence architecture change).
 - **CANDIDATE_FILES:** `src/main.jsx` (installed-app viewport workaround), `src/index.css`, `src/pages/Login.*`, locale files (all six).
 - **ARCHITECTURE_ASSUMPTIONS:** standalone storage is isolated from Safari (`PLATFORM_KNOWLEDGE`); `100vh`/`dvh` and the keyboard `visualViewport` need explicit validation.
-- **PREREQUISITES:** PWA-VAL-01 Apple findings; `i18n` rule: every new string ships in `de-DE`, `en-US`, `es-ES`, `fr-FR`, `ja-JP`, `zh-CN`.
+- **PREREQUISITES:** PWA-VAL-01 Apple findings; `i18n` rule: every new string ships in `en-US` (the only interface locale).
 - **GATES:** `PWA_SAFE_AREA`, `PWA_AUTH_PERSISTENCE`, `PWA_NAV_ESCAPE`, `PWA_BACK_NAV` (swipe-back), `A11Y_*`, `PWA_FOLD_TABLET`/iPad split-view widths, `MOBILE-SCROLL-FLICKER-01` real-device gate remains required before any glass work.
 - **MATRIX:** M6, M8 (primary), M7, M9 (control), M2.
 - **ROLLBACK:** revert the PR.

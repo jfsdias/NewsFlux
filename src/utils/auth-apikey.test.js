@@ -737,8 +737,8 @@ test("buildDedicatedApiKeyDescription produces unique non-empty descriptions and
   assert.equal(normalizeApiKeyId(null), null)
 })
 
-test("all 6 locales define AUTH_APIKEY_01 consent and migration strings", () => {
-  const locales = ["de-DE", "en-US", "es-ES", "fr-FR", "ja-JP", "zh-CN"]
+test("every shipped locale define AUTH_APIKEY_01 consent and migration strings", () => {
+  const locales = ["en-US"]
   const requiredLoginKeys = [
     "api_key_consent_label",
     "api_key_consent_required",
