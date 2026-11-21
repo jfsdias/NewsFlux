@@ -88,7 +88,7 @@ test("key replacement sends the credential in one transient JSON body, never URL
     assert.equal(url, "/api/ai/v1/admin/litellm/save-key")
     assert.equal(options.method, "POST")
     assert.equal(options.credentials, "omit")
-    assert.equal(options.referrerPolicy, "no-referrer")
+    assert.equal(options.referrerPolicy, "strict-origin")
     const request = JSON.parse(options.body)
     assert.deepEqual(request, { key, expected_revision: "bootstrap" })
     assert.equal(url.includes(key), false)

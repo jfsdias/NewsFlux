@@ -47,7 +47,9 @@ const request = async (action, body, { signal } = {}) => {
     credentials: "omit",
     cache: "no-store",
     redirect: "error",
-    referrerPolicy: "no-referrer",
+    // A POST must carry a real Origin header: under the page's no-referrer policy browsers send `Origin: null`,
+    // which the API refuses (NOT_AUTHORIZED). strict-origin sends only the origin, never the path.
+    referrerPolicy: body === undefined ? "no-referrer" : "strict-origin",
     signal,
     headers: {
       "X-Miniflux-API-Key": auth.token,
