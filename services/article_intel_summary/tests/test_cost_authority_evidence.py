@@ -321,9 +321,9 @@ class RuntimeEvaluateTests(unittest.TestCase):
 
     def test_old_receipt_and_redating(self):
         """Freshness is the auditor's read time inside the hashed document; re-dating changes the digest, so the
-        ledger-pinned digest no longer matches. At runtime an old capture stays valid (no runtime expiry)."""
-        self.assertEqual(self.check("gateway_budget_enforced", evidence(captured=NOW - timedelta(days=400))),
-                         ("PROVEN", "GATEWAY_ENFORCEMENT_EVIDENCE"))
+        ledger-pinned digest no longer matches, and an old capture is stale."""
+        self.assertEqual(self.check("gateway_budget_enforced", evidence(captured=NOW - timedelta(days=8))),
+                         ("UNPROVEN", "EVIDENCE_STALE"))
         pinned = write_trusted(self.dir, "old.json", evidence(captured=NOW - timedelta(days=8)))
         digest = sha_of(pinned)
         redated = json.loads(Path(pinned).read_text())
@@ -334,26 +334,14 @@ class RuntimeEvaluateTests(unittest.TestCase):
         self.assertEqual(self.check("gateway_budget_enforced", evidence(captured=NOW + timedelta(hours=1))),
                          ("UNPROVEN", "EVIDENCE_FUTURE"))
 
-    def test_runtime_has_no_expiry_but_key_binding_still_holds(self):
-        """OMV 2026-11-21: a 7-day runtime window would have switched every model off on its own one week after
-        the capture. Runtime now never expires the evidence; a different key is still refused at once."""
-        self.assertIsNone(ca.MAX_EVIDENCE_AGE)
-        self.assertEqual(self.check("gateway_budget_enforced", evidence(captured=NOW - timedelta(days=8)))[0], "PROVEN")
-        self.assertEqual(self.check("gateway_budget_enforced", evidence(captured=NOW - timedelta(days=8), key=OTHER_KEY)),
-                         ("UNPROVEN", "KEY_MISMATCH"))
-
     def test_file_mtime_is_irrelevant(self):
         path = write_trusted(self.dir, "e.json", evidence(captured=NOW - timedelta(days=8)))
         moment = (NOW - timedelta(minutes=1)).timestamp()
         os.utime(path, (moment, moment))
-        self.assertEqual(ca.evaluate("gateway_budget_enforced", path, KEY, sha_of(path), now=NOW,
-                                     max_age=ca.MAX_PREFLIGHT_AGE), ("UNPROVEN", "EVIDENCE_STALE"))
+        self.assertEqual(ca.evaluate("gateway_budget_enforced", path, KEY, sha_of(path), now=NOW), ("UNPROVEN", "EVIDENCE_STALE"))
 
-    def test_preflight_window_is_seven_days(self):
-        self.assertEqual(ca.MAX_PREFLIGHT_AGE, timedelta(days=7))
-        self.assertEqual(self.check("gateway_budget_enforced", evidence(captured=NOW - timedelta(days=6)),
-                                    max_age=ca.MAX_PREFLIGHT_AGE)[0], "PROVEN")
-        self.assertEqual(self.check("gateway_budget_enforced", evidence(captured=NOW - timedelta(days=8)),
+    def test_preflight_window_is_shorter(self):
+        self.assertEqual(self.check("gateway_budget_enforced", evidence(captured=NOW - timedelta(hours=25)),
                                     max_age=ca.MAX_PREFLIGHT_AGE), ("UNPROVEN", "EVIDENCE_STALE"))
 
     def test_declaration(self):
@@ -455,7 +443,7 @@ class ReleasePreflightTests(unittest.TestCase):
             "D1_NO_DUPLICATE_COST_CONTROL=HOLD_NEWSFLUX_COST_CONFIGURED":
                 (self.env(evidence(), NEWSFLUX_AI_MONTHLY_BUDGET_USD="5"), {}),
             "D1_COST_AUTHORITY=UNPROVEN_EVIDENCE_MISSING": (self.env(), {}),
-            "D1_COST_AUTHORITY=UNPROVEN_EVIDENCE_STALE": (self.env(evidence(captured=NOW - timedelta(days=8))), {}),
+            "D1_COST_AUTHORITY=UNPROVEN_EVIDENCE_STALE": (self.env(evidence(captured=NOW - timedelta(hours=25))), {}),
             "D1_COST_AUTHORITY=UNPROVEN_KEY_MISMATCH": (self.env(evidence(key=OTHER_KEY)), {}),
             "D1_CATALOG=HOLD_MODELS_0": (self.env(evidence()), {"models": 0}),
             "D1_LIMITS=HOLD_LOCAL_LIMITS_TOO_SMALL_FOR_AN_ARTICLE": (self.env(evidence(), NEWSFLUX_AI_MAX_INPUT_TOKENS="2048"), {}),
