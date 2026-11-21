@@ -106,6 +106,20 @@ class CandidateRunOverrideTests(unittest.TestCase):
         self.assertEqual(text.count("!reset null"), 6)
 
 
+class CandidateMountsTests(unittest.TestCase):
+    def test_added_bind_replaces_a_mount_with_the_same_destination(self):
+        """OMV: a D1 release over an earlier D1 release (old evidence bind at the same target) was VOLUME_DRIFT."""
+        current = [["bind", "/old/evidence.json", "/run/newsflux-d1/evidence.json", False], ["volume", "ledger", "/data", True]]
+        added = [["bind", "/new/evidence.json", "/run/newsflux-d1/evidence.json", False]]
+        self.assertEqual(release.candidate_mounts(current, added),
+                         [["bind", "/new/evidence.json", "/run/newsflux-d1/evidence.json", False], ["volume", "ledger", "/data", True]])
+
+    def test_new_destination_is_added(self):
+        current = [["volume", "ledger", "/data", True]]
+        added = [["bind", "/e.json", "/run/newsflux-d1/evidence.json", False]]
+        self.assertEqual(release.candidate_mounts(current, added), sorted(current + added))
+
+
 class NetworkKeysTests(unittest.TestCase):
     def test_mapping_list_and_unreadable(self):
         identity = SimpleNamespace(project="p", working_dir="/w", env_files=())
