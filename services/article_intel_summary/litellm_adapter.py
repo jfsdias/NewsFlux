@@ -707,9 +707,27 @@ def _read_usage(document: dict[str, Any]) -> dict[str, int]:
     return {"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens}
 
 
+_FENCED_JSON = re.compile(r"\A```(?:json|JSON)?[ \t]*\r?\n(.*?)\r?\n?```\s*\Z", re.S)
+
+
+def _json_candidate(content: str) -> str:
+    """The JSON object a model returned. Real models often wrap it in a Markdown ```json fence or add a short
+    sentence around it; only that framing is removed. The object itself is still parsed strictly (no duplicate
+    keys, no non-finite numbers) and validated against the output schema afterwards."""
+    text = content.strip()
+    fenced = _FENCED_JSON.match(text)
+    if fenced:
+        return fenced.group(1).strip()
+    if text.startswith("{"):
+        return text
+    start, end = text.find("{"), text.rfind("}")
+    return text[start:end + 1] if 0 <= start < end else text
+
+
 def _parse_json_output(content: str) -> dict[str, object]:
     try:
-        output = json.loads(content, object_pairs_hook=_reject_duplicate_keys, parse_constant=_reject_nonfinite)
+        output = json.loads(_json_candidate(content), object_pairs_hook=_reject_duplicate_keys,
+                            parse_constant=_reject_nonfinite)
     except (json.JSONDecodeError, ValueError, TypeError):
         _logger.warning("MODEL_OUTPUT_INVALID_JSON")
         raise InferenceUnavailable("model response was not valid structured JSON") from None
