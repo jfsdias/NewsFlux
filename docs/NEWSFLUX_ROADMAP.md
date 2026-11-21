@@ -31,8 +31,8 @@ This live snapshot supersedes the 2026-11-08 block below and Section 24 for curr
 | `WALLHOP_PATH_B`          | OFF by design (in-Reader recovery via WallHop). Provider robots.txt disallows automated use                                                                                                                          |
 | `PWA_03A2C`               | NOT_VERIFIED. Not claimed fixed.                                                                                                                                                                                     |
 | `CURRENT_QA_BASELINE`     | NOT_VERIFIED in this reconciliation                                                                                                                                                                                  |
-| `NEXT_RECOMMENDED_TRACK`  | `ROADMAP_PRIORITIZATION_2026_11_21 (pending owner decision)`                                                                                                                                                         |
-| `NEXT_AUTHORIZED_ACTION`  | None authorized by this document. This reconciliation does not authorize merge, deploy, PR creation or closure of any PR. Prioritization is owned separately.                                                        |
+| `NEXT_RECOMMENDED_TRACK`  | `LOCAL_MODEL_MACMINI_01` — see Prioritized queue (2026-11-21) below                                                                                                                                                  |
+| `NEXT_AUTHORIZED_ACTION`  | Owner-authorized 2026-11-21: #288 (no runtime evidence expiry, summary cache, readable errors, automatic summaries), #289 (retire finished-phase CI), closure of the 18 stale PRs. Anything else needs its own GO.   |
 
 ### Owner-side pending (`OPERATOR_REPORTED`)
 
@@ -50,11 +50,27 @@ Descriptions are taken from merge and commit subjects only. PRs #188 and #190 we
 - **Tests and harness:** #212 and #221 read-sync and UX-REACH readiness; #219 isolated Docker HTTPS gate; #267 deterministic supervision deadline regression.
 - **Research and docs:** #196 to #202 Home personalization relevance gate, pilot, synthetic rehearsal, LimeSurvey CE gate and Stage A preparation; #261 AI Settings integration docs and runbooks.
 
-### Open PRs (GitHub REST check, 2026-11-21)
+### Open PRs (after the 2026-11-21 cleanup)
 
-- **Still relevant:** #260 local-only processing consent (open Draft); #266 deterministic clock test (open Draft). #286 searchable model pickers was open at `08929008`; GitHub now reports it merged into `main` as `f4ffc48c`, after this snapshot.
-- **Likely superseded, owner to confirm (not closed):** #278 (open, not Draft; #279 is merged); #269 (open Draft); #277 (open Draft on GitHub, although `c0fabd26` is titled as merging #277; the two records conflict).
-- **Old Drafts, listed for owner review (not closed, not reviewed):** #195, #201, #203, #204, #211 (open, not Draft), #213, #216, #220, #227, #234, #239, #244, #275, #276.
+- **Closed 2026-11-21 (owner authorization), with a reason comment on each:** #277 and #278 (already on main), #269, #266, #227, #220, #211, #204, #203, #201, #195, #213, and WallHop path B #244, #239, #234, #216, #276, #275 (path B stays off: the provider's robots.txt disallows automated use).
+- **Still open:** #260 local-only processing consent (to be re-scoped for the Mac mini local model, below).
+
+### Prioritized queue (2026-11-21, Pareto)
+
+Ranking criteria (owner profile): reads in Safari, wants it to keep working without maintenance, prefers free models, avoids spending tokens/CI on ceremony, cares about look and privacy.
+
+| Rank | Item                                                                                                                                                            | Value                                               | Status                                                                                          |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| 1    | D1 evidence: no runtime expiry (Summary would have stopped about 2026-11-28)                                                                                    | Keeps the feature alive                             | Done in #288                                                                                    |
+| 2    | Instant reopen (in-tab summary cache)                                                                                                                           | Speed, no repeated model calls                      | Done in #288                                                                                    |
+| 3    | Readable summary errors + server refusal log                                                                                                                    | Self-service diagnosis                              | Done in #288                                                                                    |
+| 4    | Automatic summary on open (setting, 1.5 s dwell)                                                                                                                | The product's original on-open intent               | Done in #288                                                                                    |
+| 5    | Retire finished-phase CI, close stale PRs                                                                                                                       | Less noise and CI time                              | #289 + closures                                                                                 |
+| 6    | `LOCAL_MODEL_MACMINI_01`: Mac mini as the local model host in LiteLLM (re-scope #260 local-only consent onto it)                                                | Private, free, more capable summaries               | Next; needs owner GO and Mac mini endpoint                                                      |
+| 7    | `PWA-03A2C`: after a deploy, a tab left open (or the installed app) can request a code chunk that no longer exists and fail until reload; recover automatically | Fewer "blank screen after update" moments           | Verify first (NOT_VERIFIED)                                                                     |
+| 8    | Model list quality (broken models shown)                                                                                                                        | Fewer failed picks                                  | Owner rejected hiding models; LiteLLM hygiene on the owner side instead                         |
+| 9    | Per-component Arco CSS                                                                                                                                          | ~67 KB gz less render-blocking CSS, first load only | Not pursued: whole-app style regression risk for a first-visit gain the PWA cache already hides |
+| 10   | Personalization V2, story grouping, daily briefing, discovery                                                                                                   | Large and uncertain                                 | Unchanged (HOLD)                                                                                |
 
 ### PWA
 
