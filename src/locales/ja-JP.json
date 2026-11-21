@@ -337,6 +337,7 @@
     "model_description": "サーバーで承認されたモデルのみ表示されます。利用できないモデルは無効のままです。",
     "model_auto": "自動 — 運用者の既定 (%{model})",
     "model_available": "利用可能",
+    "model_search_no_results": "検索に一致するモデルはありません。",
     "model_limits": "上限: 入力 %{input} / 出力 %{output} トークン、毎分 %{rpm} リクエスト",
     "model_selection_unavailable": "保存したモデルは現在利用できません。利用可能なモデルを選ぶまで要約はエラーになります。",
     "catalog_loading": "承認済みモデルを読み込み中…",

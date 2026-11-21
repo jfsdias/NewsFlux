@@ -1,9 +1,10 @@
-import { Button, Checkbox, Input, Radio, Select, Switch, Typography } from "@arco-design/web-react"
+import { Button, Checkbox, Radio, Select, Switch, Typography } from "@arco-design/web-react"
 import { useStore } from "@nanostores/react"
 import { useEffect, useRef, useState } from "react"
 
 import LiteLlmAdminSettings from "./LiteLlmAdminSettings"
 import LiteLlmPolicyMigration from "./LiteLlmPolicyMigration"
+import ModelCombobox from "./ModelCombobox"
 import SettingItem from "./SettingItem"
 import SettingSection from "./SettingSection"
 
@@ -15,7 +16,6 @@ import isArticleIntelligenceEnabled from "@/utils/article-intelligence-feature"
 import {
   sanitizeSummaryFocus,
   sanitizeSummarySections,
-  SUMMARY_FALLBACK_NONE,
   SUMMARY_FOCUSES,
   SUMMARY_LANGUAGES,
   SUMMARY_LENGTHS,
@@ -23,6 +23,7 @@ import {
   SUMMARY_SECTIONS,
 } from "@/utils/article-intelligence-profile"
 import { getAuthSessionKey, hasProvisionedApiKey } from "@/utils/auth"
+import { buildFallbackModelOptions, buildPrimaryModelOptions } from "@/utils/summary-model-options"
 import {
   describeFallbackPreference,
   describePrimaryPreference,
@@ -55,14 +56,33 @@ const formatPrice = (polyglot, pricing) => {
   })
 }
 
+const availabilityLine = (polyglot, model) =>
+  `${model.provider} · ${
+    model.available
+      ? polyglot.t("article_intelligence.model_available")
+      : polyglot.t(`article_intelligence.reason_${model.unavailableReason}`)
+  }`
+
+const optionLabel = (polyglot, option) => {
+  switch (option.type) {
+    case "auto": {
+      return polyglot.t("article_intelligence.model_auto", { model: option.model?.label ?? "—" })
+    }
+    case "none": {
+      return polyglot.t("article_intelligence.fallback_none")
+    }
+    case "missing": {
+      return polyglot.t("article_intelligence.preference_saved_missing", { model: option.value })
+    }
+    default: {
+      return option.model.label
+    }
+  }
+}
+
 const ModelDetails = ({ model, polyglot }) => (
   <span className="ai-model-option__details">
-    <span>
-      {model.provider} ·{" "}
-      {model.available
-        ? polyglot.t("article_intelligence.model_available")
-        : polyglot.t(`article_intelligence.reason_${model.unavailableReason}`)}
-    </span>
+    <span>{availabilityLine(polyglot, model)}</span>
     {model.pricing.status !== "gateway_governed" && (
       <span>{formatPrice(polyglot, model.pricing)}</span>
     )}
@@ -114,7 +134,6 @@ const ArticleIntelligence = () => {
   const [reloadCount, setReloadCount] = useState(0)
   // Bumped after a policy migration so the admin panels re-read the new revision.
   const [adminGeneration, setAdminGeneration] = useState(0)
-  const [modelSearch, setModelSearch] = useState("")
   const languageSelectRef = useRef(null)
   const languageClosedAtRef = useRef(Number.NEGATIVE_INFINITY)
   const [loaded, setLoaded] = useState({ key: null, status: "loading", catalog: null })
@@ -149,7 +168,6 @@ const ArticleIntelligence = () => {
   const catalogState =
     loaded.key === requestKey ? loaded : { key: requestKey, status: "loading", catalog: null }
   const { catalog } = catalogState
-  const defaultModel = catalog?.models.find((model) => model.id === catalog.default_model_id)
   const primaryId =
     aiSummaryModel === SUMMARY_MODEL_AUTO ? catalog?.default_model_id : aiSummaryModel
   const primaryEntry = catalog?.models.find((model) => model.id === primaryId)
@@ -160,9 +178,25 @@ const ArticleIntelligence = () => {
     { aiSummaryModel, aiSummaryFallbackEnabled, aiSummaryFallbackModel },
     catalog,
   )
-  const savedPrimaryMissing =
-    primaryPreference.state === "saved_missing" && aiSummaryModel !== SUMMARY_MODEL_AUTO
-  const savedFallbackMissing = fallbackPreference.state === "saved_missing"
+  const withTexts = (option) => ({
+    ...option,
+    label: optionLabel(polyglot, option),
+    description: option.type === "model" ? availabilityLine(polyglot, option.model) : null,
+  })
+  const primaryOptions = buildPrimaryModelOptions(catalog, aiSummaryModel).map((option) =>
+    withTexts(option),
+  )
+  const fallbackOptions = buildFallbackModelOptions(catalog, primaryId, aiSummaryFallbackModel).map(
+    (option) => withTexts(option),
+  )
+  // Provider, availability, price, limits and notices: for the chosen model only.
+  const primaryDetails = primaryEntry ? (
+    <ModelDetails model={primaryEntry} polyglot={polyglot} />
+  ) : null
+  const fallbackDetails =
+    fallbackEntry && fallbackEntry.id !== primaryId ? (
+      <ModelDetails model={fallbackEntry} polyglot={polyglot} />
+    ) : null
   const adminKey = `${authSessionKey}:${adminGeneration}`
 
   return (
@@ -199,55 +233,15 @@ const ArticleIntelligence = () => {
             </div>
           )}
           {catalog && (
-            <Input
-              aria-label={polyglot.t("article_intelligence.litellm_search")}
-              className="ai-model-search"
+            <ModelCombobox
+              details={primaryDetails}
+              label={polyglot.t("article_intelligence.model_label")}
+              noResults={polyglot.t("article_intelligence.model_search_no_results")}
+              options={primaryOptions}
               placeholder={polyglot.t("article_intelligence.litellm_search")}
-              value={modelSearch}
-              onChange={setModelSearch}
-            />
-          )}
-          {catalog && (
-            <Radio.Group
-              aria-label={polyglot.t("article_intelligence.model_label")}
-              className="ai-model-catalog"
-              direction="vertical"
               value={aiSummaryModel}
               onChange={(value) => updateSettings({ aiSummaryModel: value })}
-            >
-              <Radio disabled={!defaultModel?.available} value={SUMMARY_MODEL_AUTO}>
-                <span className="ai-model-option__title">
-                  {polyglot.t("article_intelligence.model_auto", {
-                    model: defaultModel?.label ?? "—",
-                  })}
-                </span>
-              </Radio>
-              {catalog.models
-                .filter(
-                  (model) =>
-                    !modelSearch.trim() ||
-                    `${model.label} ${model.provider} ${model.id}`
-                      .toLowerCase()
-                      .includes(modelSearch.trim().toLowerCase()),
-                )
-                .map((model) => (
-                  // Unavailable models can be saved as an inert preference; they never run
-                  // until the server reports them available (see summary-model-preference).
-                  <Radio key={model.id} value={model.id}>
-                    <span className="ai-model-option__title">{model.label}</span>
-                    <ModelDetails model={model} polyglot={polyglot} />
-                  </Radio>
-                ))}
-              {savedPrimaryMissing && (
-                <Radio disabled value={aiSummaryModel}>
-                  <span className="ai-model-option__title">
-                    {polyglot.t("article_intelligence.preference_saved_missing", {
-                      model: aiSummaryModel,
-                    })}
-                  </span>
-                </Radio>
-              )}
-            </Radio.Group>
+            />
           )}
           {(primaryPreference.state === "saved_unavailable" ||
             primaryPreference.state === "saved_missing") && (
@@ -270,36 +264,15 @@ const ArticleIntelligence = () => {
               />
               {aiSummaryFallbackEnabled && (
                 <>
-                  <Radio.Group
-                    aria-label={polyglot.t("article_intelligence.fallback_label")}
-                    className="ai-model-catalog"
-                    direction="vertical"
+                  <ModelCombobox
+                    details={fallbackDetails}
+                    label={polyglot.t("article_intelligence.fallback_label")}
+                    noResults={polyglot.t("article_intelligence.model_search_no_results")}
+                    options={fallbackOptions}
+                    placeholder={polyglot.t("article_intelligence.litellm_search")}
                     value={aiSummaryFallbackModel}
                     onChange={(value) => updateSettings({ aiSummaryFallbackModel: value })}
-                  >
-                    <Radio value={SUMMARY_FALLBACK_NONE}>
-                      <span className="ai-model-option__title">
-                        {polyglot.t("article_intelligence.fallback_none")}
-                      </span>
-                    </Radio>
-                    {catalog.models
-                      .filter((model) => model.id !== primaryId)
-                      .map((model) => (
-                        <Radio key={model.id} value={model.id}>
-                          <span className="ai-model-option__title">{model.label}</span>
-                          <ModelDetails model={model} polyglot={polyglot} />
-                        </Radio>
-                      ))}
-                    {savedFallbackMissing && (
-                      <Radio disabled value={aiSummaryFallbackModel}>
-                        <span className="ai-model-option__title">
-                          {polyglot.t("article_intelligence.preference_saved_missing", {
-                            model: aiSummaryFallbackModel,
-                          })}
-                        </span>
-                      </Radio>
-                    )}
-                  </Radio.Group>
+                  />
                   {fallbackEntry?.requiresPaidAuthorization && (
                     <Checkbox
                       checked={aiSummaryFallbackAllowPaid}

@@ -132,8 +132,9 @@ test("model approval gates: local, external free, paid, unpriced and non-chat", 
   await approve.click()
   await expect(page.getByText("Model approved")).toBeVisible()
   // The user-facing primary selector now lists it, still subject to inference flags.
-  const primary = page.getByRole("radiogroup", { name: "AI model" })
-  const llama = primary.getByRole("radio", { name: /^llama3\.2:3b/ })
+  await page.getByRole("combobox", { name: "AI model" }).click()
+  const primary = page.getByRole("listbox", { name: "AI model" })
+  const llama = primary.getByRole("option", { name: /^llama3\.2:3b/ })
   // Approved by policy, but inference flags remain OFF: it can be saved as an inert
   // preference, is reported as not running, and nothing else is used instead.
   await expect(llama).toHaveAccessibleName(/Disabled/)
@@ -149,8 +150,9 @@ test("revocation returns the model to not-approved in the user catalog without c
   await chooseGatewayModel(page, "llama3.2:3b")
   await page.getByRole("button", { name: "Remove approval" }).click()
   await expect(page.getByText("Model approval removed")).toBeVisible()
-  const primary = page.getByRole("radiogroup", { name: "AI model" })
-  await expect(primary.getByRole("radio", { name: /^llama3\.2:3b/ })).toHaveAccessibleName(
+  await page.getByRole("combobox", { name: "AI model" }).click()
+  const primary = page.getByRole("listbox", { name: "AI model" })
+  await expect(primary.getByRole("option", { name: /^llama3\.2:3b/ })).toHaveAccessibleName(
     /Not approved by the operator/,
   )
 })
@@ -174,7 +176,7 @@ test("non-admin reader never sees the integration and cannot call the API", asyn
   request,
 }) => {
   await page.goto(page_("?role=reader"))
-  await expect(page.getByRole("radiogroup", { name: "AI model" })).toBeVisible()
+  await expect(page.getByRole("combobox", { name: "AI model" })).toBeVisible()
   await expect(page.getByText("LiteLLM integration")).toHaveCount(0)
   await expect(page.getByLabel("LiteLLM virtual key")).toHaveCount(0)
   const denied = await request.post("/api/ai/v1/admin/litellm/save-key", {

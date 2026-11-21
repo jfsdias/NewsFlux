@@ -115,6 +115,57 @@ if (params.get("catalog") === "inert") {
     unavailable_reason: "INFERENCE_DISABLED",
   }))
 }
+// ?catalog=d1: D1 key authority, shaped like production — every model the LiteLLM virtual key
+// lists (gw-<hash> IDs, gateway-governed cost, no price shown), one still unverified.
+if (params.get("catalog") === "d1") {
+  const aliases = [
+    ["gpt-4o-mini", "openai"],
+    ["gpt-4o", "openai"],
+    ["nvidia/nemotron-3-ultra-550b-a55b:free", "openrouter"],
+    ["mistral-small-latest", "mistral"],
+    ["mistral-medium-latest", "mistral"],
+    ["claude-haiku", "anthropic"],
+    ["gemini-2.5-flash", "gemini"],
+    ["gemini-2.5-pro", "gemini"],
+    ["llama-3.3-70b", "groq"],
+    ["qwen3-32b", "groq"],
+    ["deepseek-chat", "deepseek"],
+    ["command-r", "cohere"],
+    ["grok-3-mini", "xai"],
+    ["sonar", "perplexity"],
+    ["gemma3-local", "ollama"],
+    ["phi4-local", "ollama"],
+    ["kimi-k2", "moonshot"],
+  ]
+  catalog.policy = { status: "KEY_AUTHORITY" }
+  catalog.models = aliases.map(([alias, provider], index) =>
+    model(`gw-d1${String(index).padStart(9, "0")}`, alias, {
+      provider,
+      checks: checks({ pricing_verified: false }),
+      pricing: {
+        status: "gateway_governed",
+        input_usd_per_million: null,
+        output_usd_per_million: null,
+      },
+      limits: {
+        max_input_tokens: 16_000,
+        max_output_tokens: 4096,
+        requests_per_minute: 30,
+        timeout_seconds: 25,
+      },
+      notices: ["ARTICLE_SENT_TO_MODEL_PROVIDER"],
+      ...(alias === "kimi-k2"
+        ? {
+            status: "UNVERIFIED",
+            available: false,
+            unavailable_reason: "COMPATIBILITY_UNVERIFIED",
+            checks: checks({ compatible: null, pricing_verified: false }),
+          }
+        : {}),
+    }),
+  )
+  catalog.default_model_id = catalog.models[0].id
+}
 // ?fallback=<id> starts with that fallback enabled; default: fallback off.
 // ?primary=<id> sets the saved primary (default S5); it may name a model not in the catalog.
 const fallback = params.get("fallback")

@@ -337,6 +337,7 @@
     "model_description": "Solo se muestran los modelos aprobados en el servidor. Los no disponibles permanecen desactivados.",
     "model_auto": "Automático — predeterminado del operador (%{model})",
     "model_available": "Disponible",
+    "model_search_no_results": "Ningún modelo coincide con la búsqueda.",
     "model_limits": "Límites: %{input} tokens de entrada / %{output} de salida, %{rpm} solicitudes/min",
     "model_selection_unavailable": "Tu modelo guardado no está disponible ahora. Los resúmenes mostrarán un error hasta que elijas un modelo disponible.",
     "catalog_loading": "Cargando modelos aprobados…",

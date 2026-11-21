@@ -1,19 +1,140 @@
 /* Article Intelligence settings: opaque, editorial controls inside the existing settings surface. */
-.ai-model-catalog,
 .ai-checkbox-list {
   max-width: 360px;
 }
 
-/* Model search shares the catalog column; it must not widen the control column. */
-.ai-model-search.arco-input-inner-wrapper,
-.ai-model-search.arco-input {
-  display: block;
-  margin-bottom: 8px;
+/* Model pickers (ModelCombobox): one searchable field per picker; the list opens in the page
+   flow under the field (never clipped by the settings modal), scrolls on its own, and only the
+   chosen model's details are shown under it. */
+.ai-model-combobox {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   max-width: 360px;
   width: 360px;
 }
 
-/* Fallback: switch, then the list, then the consents, stacked in one column. */
+.ai-model-combobox__field {
+  align-items: center;
+  background: var(--color-bg-2);
+  border: 1px solid var(--color-border-2);
+  border-radius: var(--border-radius-small);
+  display: flex;
+  min-height: 36px;
+  position: relative;
+}
+
+.ai-model-combobox__field:hover {
+  border-color: var(--color-border-3);
+}
+
+.ai-model-combobox__field:focus-within {
+  border-color: var(--nf-focus-ring);
+  outline: 2px solid var(--nf-focus-ring);
+  outline-offset: 1px;
+}
+
+.ai-model-combobox__input {
+  background: transparent;
+  border: 0;
+  color: var(--color-text-1);
+  flex: 1;
+  font: inherit;
+  min-width: 0;
+  outline: none;
+  padding: 6px 0 6px 12px;
+  text-overflow: ellipsis;
+}
+
+/* The field draws the focus ring (focus-within) around the input and the chevron. */
+.ai-model-combobox__input:focus-visible {
+  outline: none;
+}
+
+.ai-model-combobox__input::placeholder {
+  color: var(--color-text-3);
+}
+
+/* A plain CSS chevron: decorative, a pointer shortcut to open and close the list. */
+.ai-model-combobox__chevron {
+  align-self: stretch;
+  cursor: pointer;
+  flex: none;
+  position: relative;
+  width: 36px;
+}
+
+.ai-model-combobox__chevron::after {
+  border-bottom: 1.5px solid var(--color-text-2);
+  border-right: 1.5px solid var(--color-text-2);
+  content: "";
+  height: 7px;
+  left: 50%;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -70%) rotate(45deg);
+  transition: transform 0.15s ease;
+  width: 7px;
+}
+
+.ai-model-combobox__field--open .ai-model-combobox__chevron::after {
+  transform: translate(-50%, -30%) rotate(-135deg);
+}
+
+.ai-model-combobox__listbox {
+  background: var(--color-bg-popup);
+  border: 1px solid var(--color-border-2);
+  border-radius: var(--border-radius-small);
+  box-shadow: 0 4px 10px rgb(0 0 0 / 10%);
+  box-sizing: border-box;
+  list-style: none;
+  margin: 0;
+  max-height: min(320px, 50vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 0;
+}
+
+.ai-model-combobox__listbox[hidden] {
+  display: none;
+}
+
+.ai-model-combobox__option {
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  justify-content: center;
+  line-height: 1.4;
+  min-height: 44px;
+  padding: 6px 12px;
+  overflow-wrap: anywhere;
+}
+
+.ai-model-combobox__option--active {
+  background: var(--color-fill-2);
+}
+
+.ai-model-combobox__option--selected .ai-model-option__title {
+  color: rgb(var(--primary-6));
+}
+
+.ai-model-combobox__option--disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ai-model-combobox__description,
+.ai-model-combobox__empty {
+  color: var(--color-text-3);
+  font-size: 12px;
+}
+
+.ai-model-combobox__details .ai-model-option__details {
+  margin-top: 0;
+}
+
+/* Fallback: switch, then the picker, then the consents, stacked in one column. */
 .ai-fallback-control {
   align-items: flex-start;
   display: flex;
@@ -33,7 +154,6 @@
   max-width: 360px;
 }
 
-.ai-model-catalog .arco-radio,
 .ai-checkbox-list .arco-checkbox,
 .ai-fallback-consent.arco-checkbox {
   align-items: flex-start;
@@ -43,7 +163,6 @@
   white-space: normal;
 }
 
-.ai-model-catalog .arco-radio-text,
 .ai-checkbox-list .arco-checkbox-text {
   line-height: 1.4;
 }
@@ -92,18 +211,24 @@
 }
 
 @media screen and (max-width: 768px) {
-  .ai-model-catalog,
+  .ai-model-combobox,
   .ai-checkbox-list,
   .ai-fallback-consent.arco-checkbox,
-  .ai-preference-status.arco-typography,
-  .ai-model-search.arco-input-inner-wrapper,
-  .ai-model-search.arco-input {
+  .ai-preference-status.arco-typography {
     max-width: none;
   }
 
-  .ai-model-search.arco-input-inner-wrapper,
-  .ai-model-search.arco-input {
+  .ai-model-combobox {
     width: 100%;
+  }
+
+  .ai-model-combobox__field {
+    min-height: var(--mobile-form-control-size);
+  }
+
+  /* 16 px keeps iOS from zooming into the field. */
+  .ai-model-combobox__input {
+    font-size: var(--mobile-form-font-size);
   }
 
   .setting-control .ai-language-select {
