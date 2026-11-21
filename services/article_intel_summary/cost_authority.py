@@ -32,6 +32,7 @@ import sys
 import tempfile
 from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from services.article_intel_summary import d1_evidence
 from services.article_intel_summary.s5_preflight import key_fingerprint
@@ -184,19 +185,31 @@ def _true(values: Mapping[str, str], name: str) -> bool:
     return (values.get(name) or "").strip().casefold() == "true"
 
 
-def live_catalog(values: Mapping[str, str]) -> tuple[int, str]:
+def live_catalog(values: Mapping[str, str], *, attempts: int = 4, pause: float = 15.0,
+                 sleep: Callable[[float], None] | None = None) -> tuple[int, str]:
     """Available models in the real catalog for this exact configuration (GET-only discovery, no inference).
-    The usage ledger goes to a throwaway file so the preflight never writes the service's volume."""
+    The usage ledger goes to a throwaway file so the preflight never writes the service's volume. A discovery that
+    is not OK (e.g. the key's rate limit right after a restart) is retried; the detail then says DISCOVERY_<status>
+    instead of an empty, reason-less catalog."""
+    import time
+
     from services.article_intel_summary.catalog import create_model_router
-    with tempfile.TemporaryDirectory() as scratch:
-        probe = dict(values, NEWSFLUX_AI_USAGE_DATABASE_PATH=os.path.join(scratch, "usage.sqlite3"),
-                     NEWSFLUX_AI_MODEL_DISCOVERY_TTL_SECONDS="0")
-        router, _ = create_model_router(probe, default_adapter=object())
-        try:
-            document = router.catalog_document()
-        finally:
-            if router.ledger_owner is not None:
-                router.ledger_owner.__exit__(None, None, None)
+    sleep = sleep or time.sleep
+    document: dict[str, Any] = {}
+    for attempt in range(attempts):
+        with tempfile.TemporaryDirectory() as scratch:
+            probe = dict(values, NEWSFLUX_AI_USAGE_DATABASE_PATH=os.path.join(scratch, "usage.sqlite3"),
+                         NEWSFLUX_AI_MODEL_DISCOVERY_TTL_SECONDS="0")
+            router, _ = create_model_router(probe, default_adapter=object())
+            try:
+                document = router.catalog_document()
+            finally:
+                if router.ledger_owner is not None:
+                    router.ledger_owner.__exit__(None, None, None)
+        if (document.get("discovery") or {}).get("status") == "OK" or attempt == attempts - 1:
+            break
+        sleep(pause)
+    status = str((document.get("discovery") or {}).get("status") or "UNKNOWN")
     models = document.get("models", [])
     reasons: dict[str, int] = {}
     for model in models:
@@ -204,6 +217,8 @@ def live_catalog(values: Mapping[str, str]) -> tuple[int, str]:
             reason = str(model.get("unavailable_reason") or "UNKNOWN")
             reasons[reason] = reasons.get(reason, 0) + 1
     detail = ",".join(f"{name}:{count}" for name, count in sorted(reasons.items())) or "NONE"
+    if status != "OK":
+        detail = "DISCOVERY_" + re.sub(r"[^A-Z0-9_]", "_", status.upper())
     return sum(1 for model in models if model.get("available")), detail
 
 

@@ -485,6 +485,24 @@ class ReleasePreflightTests(unittest.TestCase):
         self.assertIn("D1_LIVE_GATES=NOT_RUN", out)
         self.assertEqual(out[-1], "D1_PREFLIGHT=PASS_OFFLINE_ONLY")
 
+    def test_live_catalog_retries_discovery_and_names_it(self):
+        docs = [{"discovery": {"status": "UNAVAILABLE"}, "models": []},
+                {"discovery": {"status": "OK"}, "models": [{"available": True}, {"available": False,
+                                                                                "unavailable_reason": "NOT_COMPATIBLE"}]}]
+        calls, pauses = [], []
+
+        def factory(values, default_adapter=None):
+            calls.append(values["NEWSFLUX_AI_MODEL_DISCOVERY_TTL_SECONDS"])
+            doc = docs[min(len(calls) - 1, len(docs) - 1)]
+            return SimpleNamespace(catalog_document=lambda: doc, ledger_owner=None), None
+        with mock.patch("services.article_intel_summary.catalog.create_model_router", factory):
+            self.assertEqual(ca.live_catalog({}, sleep=pauses.append), (1, "NOT_COMPATIBLE:1"))
+            self.assertEqual((len(calls), pauses), (2, [15.0]))
+            docs[1] = docs[0]
+            calls.clear()
+            self.assertEqual(ca.live_catalog({}, sleep=pauses.append), (0, "DISCOVERY_UNAVAILABLE"))
+            self.assertEqual(len(calls), 4)
+
     def test_cli_mode_off(self):
         with mock.patch.dict(os.environ, {"NEWSFLUX_AI_MODEL_AUTHORITY": ""}), mock.patch("builtins.print") as printed:
             self.assertEqual(ca.main(["preflight"]), 0)

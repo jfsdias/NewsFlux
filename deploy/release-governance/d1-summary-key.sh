@@ -65,20 +65,30 @@ printf '%s\n' "$LIST" | awk -F'\t' '{printf "   %3s) %-40s %s %s\n", $1, $2, $3,
 
 # 2. YOUR choice: the reduced model list and the budget
 echo
-read -r -p "D1KEY 2/8 Numeros dos modelos para a chave do Summary (ex.: 1,3): " PICK
+read -r -p "D1KEY 2/8 Numeros dos modelos (ex.: 1,3) ou 'todos' = todos os modelos de chat: " PICK
+# Summaries need chat models: rerank/embedding/audio/image/moderation models are refused (never marked chat).
 MODELS="$(python3 -I -c '
-import sys
-rows = [l.split("\t")[1] for l in sys.argv[1].splitlines()]
-picked = []
-for part in sys.argv[2].replace(" ", "").split(","):
-    if not part.isdigit() or not 1 <= int(part) <= len(rows): sys.exit("invalid choice: " + part)
-    name = rows[int(part) - 1]
-    if name not in picked: picked.append(name)
-if not picked: sys.exit("no model chosen")
-print(",".join(picked))' "$LIST" "$PICK")" || die "invalid model choice"
+import re, sys
+NOT_CHAT = re.compile(r"rerank|embed|whisper|tts|speech|transcri|audio|image|dall-e|moderation|vision-embed", re.I)
+rows = [l.split("\t") for l in sys.argv[1].splitlines()]
+names = [r[1] for r in rows]
+modes = {r[1]: r[2].removeprefix("mode=") for r in rows}
+choice = sys.argv[2].strip().lower()
+if choice == "todos":
+    picked = [n for n in names if not NOT_CHAT.search(n) and set(modes[n].split(",")) <= {"chat", "-"}]
+else:
+    picked = []
+    for part in choice.replace(" ", "").split(","):
+        if not part.isdigit() or not 1 <= int(part) <= len(names): sys.exit("invalid choice: " + part)
+        name = names[int(part) - 1]
+        if NOT_CHAT.search(name) or not set(modes[name].split(",")) <= {"chat", "-"}:
+            sys.exit("not a chat model (cannot summarize): " + name)
+        if name not in picked: picked.append(name)
+if not picked: sys.exit("no chat model chosen")
+print(",".join(picked))' "$LIST" "$PICK")" || die "invalid model choice ($MODELS)"
 read -r -p "D1KEY    Orcamento max_budget em USD (> 0, ex.: 5): " BUDGET
 read -r -p "D1KEY    Janela budget_duration [30d]: " DURATION; DURATION="${DURATION:-30d}"
-read -r -p "D1KEY    rpm_limit [5]: " RPM; RPM="${RPM:-5}"
+read -r -p "D1KEY    rpm_limit [30]: " RPM; RPM="${RPM:-30}"   # discovery and preflight also count
 read -r -p "D1KEY    tpm_limit [20000]: " TPM; TPM="${TPM:-20000}"
 [[ "$BUDGET" =~ ^[0-9]+(\.[0-9]+)?$ ]] && python3 -c "import sys; sys.exit(0 if float(sys.argv[1])>0 else 1)" "$BUDGET" || die "max_budget must be > 0"
 [[ "$DURATION" =~ ^[0-9]+[smhd]$|^[0-9]+mo$ ]] || die "budget_duration like 30d, 1mo"
