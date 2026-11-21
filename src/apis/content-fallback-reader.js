@@ -55,7 +55,9 @@ export const requestReaderContentRecovery = async ({ entryId, url, basePath, sig
     credentials: "omit",
     cache: "no-store",
     redirect: "error",
-    referrerPolicy: "no-referrer",
+    // POST must carry a real Origin header: under the page's no-referrer policy browsers send `Origin: null`,
+    // which the API refuses (NOT_AUTHORIZED). strict-origin sends only the origin, never the path.
+    referrerPolicy: "strict-origin",
     signal,
   })
   throwIfAborted(signal)

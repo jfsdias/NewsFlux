@@ -101,7 +101,7 @@ test("summary API posts only fixed identifiers and server-controlled auth to sam
     assert.equal(request.credentials, "omit")
     assert.equal(request.redirect, "error")
     assert.equal(request.cache, "no-store")
-    assert.equal(request.referrerPolicy, "no-referrer")
+    assert.equal(request.referrerPolicy, "strict-origin")
     assert.equal(request.headers["X-Miniflux-API-Key"], "synthetic-miniflux-key")
     assert.equal(request.headers["X-NewsFlux-Miniflux-Server"], "https://miniflux.example")
     assert.equal(request.headers["Content-Type"], "application/json")
