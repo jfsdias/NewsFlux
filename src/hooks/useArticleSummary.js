@@ -14,6 +14,7 @@ import {
   SUMMARY_SETTING_KEYS,
   summaryCacheKey,
 } from "@/utils/article-summary-cache"
+import { automaticSummaryEnabled } from "@/utils/article-summary-consent"
 import { getAuthSessionKey, hasProvisionedApiKey } from "@/utils/auth"
 
 // Opening an article summarizes it after this dwell time, so skimming quickly through
@@ -45,7 +46,7 @@ const idleState = (entryId, authSessionKey, sessionRevision) => ({
 const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => {
   const auth = useStore(authState)
   const settings = useStore(settingsState, {
-    keys: [...SUMMARY_SETTING_KEYS, "aiSummaryAutoOnOpen"],
+    keys: [...SUMMARY_SETTING_KEYS, "aiSummaryAutoOnOpen", "aiSummaryAutoConsent"],
   })
   const authSessionKey = getAuthSessionKey(auth)
   const [state, setState] = useState(() =>
@@ -72,6 +73,7 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
     hasProvisionedApiKey(auth)
   const cacheKey = summaryCacheKey({
     authSessionKey,
+    sessionRevision,
     entryId,
     entryVersion: activeContent?.changed_at ?? activeContent?.hash,
     settings,
@@ -213,7 +215,7 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
 
   // Opening an article: show this tab's cached summary at once; otherwise, with automatic
   // summaries on, request one after a short dwell. Errors are never retried automatically.
-  const autoOnOpen = settings.aiSummaryAutoOnOpen
+  const autoOnOpen = automaticSummaryEnabled(settings)
   useEffect(() => {
     if (!canSummarize) {
       return
