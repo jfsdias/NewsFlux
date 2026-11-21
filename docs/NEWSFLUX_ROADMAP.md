@@ -1,8 +1,8 @@
 # NewsFlux Roadmap
 
-- **Status:** operational snapshot reconciled on 2026-11-08 against GitHub `main` `e949fdd5fd1975cd3437d3981232b0dbe18a74e5`, after PR #193. Section 24 is retained as a historical snapshot.
+- **Status:** product sprint queue approved on 2026-11-21, source baseline `86922a91d4aa7b4d0540072a521dd8410cca2b93` (post-#287). Historical operational snapshots retained; live production parity is unverified.
 - **Created:** 2026-10-15.
-- **Last reconciled:** 2026-11-08.
+- **Last reconciled:** 2026-11-21 (planning and GitHub source state only).
 - **Reconciled against (historical, post-PR #129):** GitHub `main` at `de138bc961d665005fe3322082034963bf263b16`. The production baseline remains `dc4154d7729204c65c8a1abaa50f9bfc9f92be64` (image `newsflux-local:dc4154d77292`); main/production SHA parity is **NO**, while there is no application runtime delta since production and PR #129 requires no deployment. Open PR: #130 (documentation reconciliation, draft). Active track: STORY-01B-D (human labeling gate).
 - **Previously reconciled against (historical, post-PR #128):** GitHub `main` at `dc4154d7729204c65c8a1abaa50f9bfc9f92be64`; production at `dc4154d7729204c65c8a1abaa50f9bfc9f92be64`. The earlier post-PR #120, post-PR #108 and post-PR #96 snapshots and prior states are preserved below; see Sections 19–22.
 - **Purpose:** preserve completed work, accepted findings, sequencing, architecture/product gates, upstream baseline, and the next recommended action without turning the roadmap into implementation authorization.
@@ -10,13 +10,40 @@
 
 This document is the canonical **roadmap**, not an implementation authorization. Detailed design decisions remain in the dedicated design documents and implementation plans remain in `docs/superpowers/plans/` where present.
 
-For present execution status, current PRs and audit outcomes, the current canonical snapshot below is authoritative. Section 24 and earlier status tables remain historical records; they do not override it.
+For current planning order and the latest source reconciliation, use the 2026-11-21 approved sprint queue below. Older snapshots preserve their original evidence and are historical; no snapshot establishes live production parity.
 
 No roadmap item may bypass project governance: one identifiable purpose per PR; no merge without explicit user authorization; no blind upstream sync; upstream sync, redesign and functional changes stay isolated; incidental findings are reported, classified and routed to backlog; no new persistent NewsFlux state without an explicit architecture decision; and no incidental scope expansion.
 
-## Current canonical state (verified 2026-11-08; post-PR #193)
+## Approved product direction and sprint queue (2026-11-21)
 
-This live snapshot supersedes Section 24 for current-state questions. Section 24 remains intact as the 2026-11-06 historical record.
+Owner endorsed the Red Team / RSS benchmark audit and requested its conversion into epics/sprints. This queue supersedes the older **recommended execution order**, not the recorded historical evidence or the standing architecture/production gates. Source reconciled at `86922a91d4aa7b4d0540072a521dd8410cca2b93` (post-#287); live production SHA, flags and parity remain unverified in this planning run. Open PRs at snapshot: #288 (Summary), #289 (CI) and #260 (local-only consent, Draft). #286 and #287 merged; #190 merged offline evaluation only. #257 merged; #275–277 closed without merge, not provider activation.
+
+**Execution plan:** [epics, dependencies, acceptance gates and baseline](../tasks/plan.md). **Task register:** [sprint backlog](../tasks/todo.md). Audit context: 2026-11-21 product Red Team / RSS benchmark. Planning approval is not implementation, merge, deployment, provider activation or persistent-state authorization.
+
+| Sprint | Epic | Priority | Delivery |
+| --- | --- | --- | --- |
+| 0 | NF-E00 Foundation closeout | P0 | Close/disposition existing Summary, CI and local-consent work; release identity and focused device smoke |
+| 1 | NF-E01 Dedup integrity | P0 | Remove implicit read-state mutations; reversible duplicate presentation |
+| 2 | NF-E02 Smart Views MVP | P1 | Named reusable queries, supported filters, explicit storage decision |
+| 3 | NF-E02 / NF-E03 Reading continuity | P1 | Smart View polish, Reader and list resume; account-scoped local storage gate |
+| 3 conditional | NF-E04 Interface locale | P1 / HOLD | pt-BR only after reconfirming the explicit English-only decision in #287 |
+| 4 | NF-E05 Story Groups | P1 | Conservative Home-only related coverage; reuse Story research |
+| 5 | NF-E05 Focus | P1 | Explicit reversible preference signals and quiet-source diversity |
+| 6 | NF-E05 Briefing | P1 | Deterministic Essential of Today; optional authorized IA, never required |
+| 7 | NF-E06 Feed quality | P2 | Provider-backed quality and health diagnostics |
+| 8+ | NF-E07 Advanced workflows | P2/P3 / conditional | Offline, rules, integrations, newsletters, annotations and TTS after evidence and architecture decisions |
+
+**Next recommended gate:** Sprint 0 — reconcile existing PRs and exact authorized runtime release; independently assess #288 automatic-summary consent/cost and evidence-freshness change, #289 QA retirement, and #260 privacy separation. No merge, production promotion or new implementation implied by this roadmap update.
+
+**Invariants:** Miniflux authority; chronological All/Unread; no implicit read mutations; explicit, explainable Home personalization; reuse-first; scoped PRs; independent upstream/design/function lanes; no new persistent state without architecture approval; WallHop A/B independent HOLD and protected NPM111/PR188. Suggested one-week relative timeboxes, no calendar commitment. Advance on material criteria, avoiding non-blocking review loops.
+
+**Locale reconciliation:** #287 explicitly records owner English-only policy; the subsequently endorsed audit included pt-BR. Preserve both facts and hold only locale execution until owner reconfirms/revises #287. Summary-language choice is independent.
+
+---
+
+## Historical canonical state (verified 2026-11-08; post-PR #193)
+
+This snapshot records the state as of 2026-11-08 and superseded Section 24 at that date. It is historical following the 2026-11-21 sprint queue; Section 24 remains intact as the 2026-11-06 record.
 
 | Field                      | Verified state                                                                                                                     |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
