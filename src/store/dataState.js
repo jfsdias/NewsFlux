@@ -2,6 +2,7 @@ import { computed, map } from "nanostores"
 
 import { settingsState } from "./settingsState"
 
+import { clearSummaryCache } from "@/utils/article-summary-cache"
 import { sortMixedLanguageArray } from "@/utils/locales"
 import { selectStore } from "@/utils/nanostores"
 
@@ -288,6 +289,7 @@ export const setUnreadInfo = createResourceFieldSetter("unreadInfo", "counts")
 export const setUnreadStarredCount = createResourceFieldSetter("unreadStarredCount", "counts")
 export const setUnreadTodayCount = createResourceFieldSetter("unreadTodayCount", "counts")
 export const resetData = () => {
+  clearSummaryCache()
   const nextSessionRevision = dataState.get().sessionRevision + 1
   dataState.set(createDefaultValue(nextSessionRevision))
 }

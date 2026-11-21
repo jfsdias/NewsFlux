@@ -328,7 +328,7 @@
     "error_catalog": "The list of available models could not be loaded. Try again in a moment.",
     "transfer_notice_auto": "Automatic summaries are on: a moment after you open an article, its original Miniflux text is sent to the selected model through the NewsFlux LiteLLM gateway.",
     "auto_on_open_label": "Summarize automatically",
-    "auto_on_open_description": "Create the summary a moment after an article opens. Summaries already created in this tab appear instantly.",
+    "auto_on_open_description": "Send the original article text through the NewsFlux LiteLLM gateway to the selected model automatically when an article opens. This may incur costs. Summaries already created in this tab appear instantly.",
     "summary": "Summary",
     "key_points": "Key points",
     "action_points": "Action points",

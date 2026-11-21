@@ -1,5 +1,6 @@
 import { persistentAtom } from "@nanostores/persistent"
 
+import { withoutAutomaticSummaryConsent } from "@/utils/article-summary-consent"
 import { getBrowserLanguage } from "@/utils/locales"
 import { selectStore, shallowEqual } from "@/utils/nanostores"
 import {
@@ -130,4 +131,4 @@ export const updateSettings = (settingsChanges) => {
 }
 
 export const replaceSettings = (settings) =>
-  settingsState.set(sanitizeSettings(settings, defaultSettings))
+  settingsState.set(withoutAutomaticSummaryConsent(sanitizeSettings(settings, defaultSettings)))

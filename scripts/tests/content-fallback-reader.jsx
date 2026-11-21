@@ -84,6 +84,7 @@ settingsState.set({
   ...settingsState.get(),
   markReadBy: "manually",
   aiSummaryAutoOnOpen: autoSummary,
+  aiSummaryAutoConsent: autoSummary,
 })
 dataState.set({ ...dataState.get(), sessionRevision: 4 })
 contentState.set({
@@ -96,6 +97,8 @@ contentState.set({
 
 let pendingResolve = null
 let pendingSummaryResolve = null
+let pendingCatalogResolve = null
+let delayedCatalogUsed = false
 const requestLedger = []
 const otherRequestLedger = []
 const articleSummaryLedger = []
@@ -197,6 +200,12 @@ globalThis.fetch = async (url, options = {}) => {
   if (requestUrl.endsWith("/api/ai/v1/models")) {
     if (articleSummaryMode === "pilot-http") {
       return nativeFetch(url, options)
+    }
+    if (articleSummaryMode === "catalog-paused" && !delayedCatalogUsed) {
+      delayedCatalogUsed = true
+      return new Promise((resolve) => {
+        pendingCatalogResolve = () => resolve(Response.json(syntheticModelCatalog))
+      })
     }
     return Response.json(syntheticModelCatalog)
   }
@@ -508,6 +517,19 @@ const NavigateControls = () => {
         navigate("/all/entry/502")
       },
       resolvePendingSummary: () => pendingSummaryResolve?.(),
+      catalogPending: () => pendingCatalogResolve !== null,
+      revokeAutoSummary: () => {
+        settingsState.set({
+          ...settingsState.get(),
+          aiSummaryAutoOnOpen: false,
+          aiSummaryAutoConsent: false,
+        })
+      },
+      resolvePendingCatalog: () => {
+        const resolve = pendingCatalogResolve
+        pendingCatalogResolve = null
+        resolve?.()
+      },
       changeSession: () => {
         dataState.set({ ...dataState.get(), sessionRevision: 5 })
         authState.set({ ...authState.get(), token: "synthetic-rotated-user-api-key" })
