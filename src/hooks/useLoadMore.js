@@ -3,12 +3,10 @@ import { useStore } from "@nanostores/react"
 import { atom } from "nanostores"
 import { useRef } from "react"
 
-import { markDuplicatesAsRead } from "@/hooks/useEntryActions"
 import { polyglotState } from "@/hooks/useLanguage"
 import {
   contentState,
   setEntries,
-  setEntriesWithDeduplication,
   setHomePaginationBoundary,
   setLoadMoreError,
   setLoadMoreVisible,
@@ -74,12 +72,7 @@ const useLoadMore = () => {
       return true
     })
     const combinedEntries = [...currentEntries, ...uniqueNewEntries]
-    if (infoFrom === "home") {
-      setEntries(combinedEntries)
-    } else {
-      const duplicateEntries = setEntriesWithDeduplication(combinedEntries)
-      markDuplicatesAsRead(duplicateEntries)
-    }
+    setEntries(combinedEntries)
   }
 
   const getFilterParams = (currentEntries, requestKey, sessionRevision) => {
@@ -345,8 +338,7 @@ const useLoadMore = () => {
             sortProperty,
             cursorDirection,
           )
-          const duplicateEntries = setEntriesWithDeduplication(sortedEntries)
-          markDuplicatesAsRead(duplicateEntries)
+          setEntries(sortedEntries)
         }
 
         const nextTemporalState = appendTemporalCanonicalEntries(

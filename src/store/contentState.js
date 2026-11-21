@@ -11,7 +11,6 @@ import { settingsState } from "./settingsState"
 
 import { reconcileArticleListFilterScope } from "@/utils/article-list-filter-scope"
 import { hasArticleListFilters } from "@/utils/article-list-filters"
-import removeDuplicateEntries from "@/utils/deduplicate"
 import { extractHeadings } from "@/utils/dom"
 import createSetter, { selectStore } from "@/utils/nanostores"
 
@@ -166,27 +165,16 @@ export const commitArticleListSnapshot = ({
   total,
 }) => {
   const current = contentState.get()
-  const { infoFrom } = current
-  const { removeDuplicates } = settingsState.get()
-  let entries = nextEntries
-  let duplicates = []
-
-  if (removeDuplicates !== "none" && !["starred", "history"].includes(infoFrom)) {
-    const result = removeDuplicateEntries(nextEntries, removeDuplicates)
-    entries = result.entries
-    duplicates = result.duplicates
-  }
 
   contentState.set({
     ...current,
     articleListSnapshotIdentity: snapshotIdentity,
     articleListSnapshotRevision: (current.articleListSnapshotRevision ?? 0) + 1,
-    entries,
+    entries: nextEntries,
     loadMoreVisible,
     temporalPaginationState,
     total,
   })
-  return duplicates
 }
 export const clearArticleListSnapshot = () => {
   const current = contentState.get()
@@ -342,23 +330,4 @@ export const invalidateArticleListForFeed = (feed) => {
   if (isFeedInCurrentArticleList(feed, contentState.get())) {
     invalidateArticleList()
   }
-}
-
-// Updates the entry list and returns entries dropped by deduplication.
-export const setEntriesWithDeduplication = (newEntries) => {
-  const { infoFrom } = contentState.get()
-  const { removeDuplicates } = settingsState.get()
-
-  // Skip deduplication when disabled or for specific sources (starred/history)
-  if (removeDuplicates === "none" || ["starred", "history"].includes(infoFrom)) {
-    setEntries(newEntries)
-    return []
-  }
-
-  const { entries: deduplicatedEntries, duplicates } = removeDuplicateEntries(
-    newEntries,
-    removeDuplicates,
-  )
-  setEntries(deduplicatedEntries)
-  return duplicates
 }
