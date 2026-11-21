@@ -92,6 +92,22 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
     }
   }, [activeContent?.id, authSessionKey, routeEntryId, sessionRevision])
 
+  // Revoke an automatic request synchronously when consent changes while it is still
+  // waiting for the catalog. Do not cancel manual requests or an already dispatched POST.
+  useEffect(() => settingsState.listen((nextSettings) => {
+    if (automaticSummaryEnabled(nextSettings)) return
+    const pending = requestRef.current
+    if (pending?.automatic && pending.phase === "catalog") {
+      pending.controller.abort()
+      requestRef.current = null
+    }
+    setState((current) =>
+      current.status === "loading" && current.automatic && current.phase === "catalog"
+        ? idleState(current.entryId, current.authSessionKey, current.sessionRevision)
+        : current,
+    )
+  }), [])
+
   const summarize = useCallback(async (automatic = false) => {
     if (!canSummarize) {
       return
@@ -102,6 +118,8 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
       authSessionKey,
       controller,
       entryId,
+      automatic: automatic === true,
+      phase: "catalog",
       requestId: globalThis.crypto?.randomUUID?.() ?? `request-${Date.now()}`,
       sessionRevision: getDataSessionRevision(),
     }
@@ -126,6 +144,9 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
       sessionRevision: request.sessionRevision,
       status: "loading",
       summary: null,
+      requestId: request.requestId,
+      automatic: request.automatic,
+      phase: request.phase,
     })
 
     const setModelUnavailable = () =>
@@ -156,6 +177,8 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
         return
       }
       const profile = buildSummaryProfile(settings)
+      request.phase = "summary"
+      setState((current) => current.requestId === request.requestId ? { ...current, phase: request.phase } : current)
       const result = await requestArticleSummary({
         entryId,
         signal: controller.signal,
