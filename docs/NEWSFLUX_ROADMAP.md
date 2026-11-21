@@ -1,8 +1,8 @@
 # NewsFlux Roadmap
 
-- **Status:** operational snapshot reconciled on 2026-11-08 against GitHub `main` `e949fdd5fd1975cd3437d3981232b0dbe18a74e5`, after PR #193. Section 24 is retained as a historical snapshot.
+- **Status:** operational snapshot reconciled on 2026-11-21 against GitHub `main` `08929008e726273695e9e002df6cae41c3f4cda8`, after PR #285. The 2026-11-08 block (`main` `e949fdd5`, post-PR #193) and Section 24 are retained as historical snapshots.
 - **Created:** 2026-10-15.
-- **Last reconciled:** 2026-11-08.
+- **Last reconciled:** 2026-11-21.
 - **Reconciled against (historical, post-PR #129):** GitHub `main` at `de138bc961d665005fe3322082034963bf263b16`. The production baseline remains `dc4154d7729204c65c8a1abaa50f9bfc9f92be64` (image `newsflux-local:dc4154d77292`); main/production SHA parity is **NO**, while there is no application runtime delta since production and PR #129 requires no deployment. Open PR: #130 (documentation reconciliation, draft). Active track: STORY-01B-D (human labeling gate).
 - **Previously reconciled against (historical, post-PR #128):** GitHub `main` at `dc4154d7729204c65c8a1abaa50f9bfc9f92be64`; production at `dc4154d7729204c65c8a1abaa50f9bfc9f92be64`. The earlier post-PR #120, post-PR #108 and post-PR #96 snapshots and prior states are preserved below; see Sections 19–22.
 - **Purpose:** preserve completed work, accepted findings, sequencing, architecture/product gates, upstream baseline, and the next recommended action without turning the roadmap into implementation authorization.
@@ -14,9 +14,57 @@ For present execution status, current PRs and audit outcomes, the current canoni
 
 No roadmap item may bypass project governance: one identifiable purpose per PR; no merge without explicit user authorization; no blind upstream sync; upstream sync, redesign and functional changes stay isolated; incidental findings are reported, classified and routed to backlog; no new persistent NewsFlux state without an explicit architecture decision; and no incidental scope expansion.
 
-## Current canonical state (verified 2026-11-08; post-PR #193)
+## Current canonical state (verified 2026-11-21; main 08929008, post-PR #285)
 
-This live snapshot supersedes Section 24 for current-state questions. Section 24 remains intact as the 2026-11-06 historical record.
+This live snapshot supersedes the 2026-11-08 block below and Section 24 for current-state questions. Items marked `OPERATOR_REPORTED` were supplied by the owner on 2026-11-21 and were not independently inspected in this reconciliation. Git facts were read from `origin/main` on 2026-11-21 and are limited to the range ending at `08929008`.
+
+| Field                     | Verified state                                                                                                                                                                                                       |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CURRENT_MAIN_SHA`        | `08929008e726273695e9e002df6cae41c3f4cda8` (merge of PR #285). `origin/main` has since advanced to `f4ffc48ce9e3dd622dd60f2363a1d59458bf1451` (merge of PR #286); that commit is not described in this block.        |
+| `LAST_MERGED_PR`          | #285, merge `08929008e726273695e9e002df6cae41c3f4cda8`                                                                                                                                                               |
+| `PRODUCTION_RELEASE`      | `08929008` via `deploy/release-governance/ai-functional-release.sh`: PREPARE, PREFLIGHT, BUILD, PROMOTE and SMOKE PASS (`OPERATOR_REPORTED`, 2026-11-21)                                                             |
+| `D1_MODE`                 | LiteLLM virtual key is the model and cost authority; `D1_ENABLED=PASS`; live catalog 16 models (`OPERATOR_REPORTED`)                                                                                                 |
+| `PRODUCTION_SHA_VERIFIED` | `08929008e726273695e9e002df6cae41c3f4cda8` (`OPERATOR_REPORTED`)                                                                                                                                                     |
+| `MAIN_PRODUCTION_PARITY`  | YES at `08929008` (`OPERATOR_REPORTED`); NOT_VERIFIED for any later `main`, including `f4ffc48c`                                                                                                                     |
+| `READER_AI_SUMMARY`       | Owner confirmed a real article summary in the Reader on Safari after PR #285 (`OPERATOR_REPORTED`). Cause recorded: Safari sent `Origin: null` under `no-referrer`; AI POSTs now use `referrerPolicy: strict-origin` |
+| `WALLHOP_PATH_A`          | Explicit "open in WallHop" external link is live and verified by the owner (`OPERATOR_REPORTED`)                                                                                                                     |
+| `WALLHOP_PATH_B`          | OFF by design (in-Reader recovery via WallHop). Provider robots.txt disallows automated use                                                                                                                          |
+| `PWA_03A2C`               | NOT_VERIFIED. Not claimed fixed.                                                                                                                                                                                     |
+| `CURRENT_QA_BASELINE`     | NOT_VERIFIED in this reconciliation                                                                                                                                                                                  |
+| `NEXT_RECOMMENDED_TRACK`  | `ROADMAP_PRIORITIZATION_2026_11_21 (pending owner decision)`                                                                                                                                                         |
+| `NEXT_AUTHORIZED_ACTION`  | None authorized by this document. This reconciliation does not authorize merge, deploy, PR creation or closure of any PR. Prioritization is owned separately.                                                        |
+
+### Owner-side pending (`OPERATOR_REPORTED`)
+
+- Rotate the Miniflux API key.
+- LiteLLM hygiene: rename the local `gpt-4o-mini` alias, which points to a slow local Ollama model; fix or remove `s5-free`, which returns 404; block the old wildcard key and the reranker-only key.
+
+### PRs merged in #194–#285, by track
+
+Descriptions are taken from merge and commit subjects only. PRs #188 and #190 were merged inside the same window but fall outside #194–#285; both were open Drafts in the 2026-11-08 block.
+
+- **Article Intelligence / Summary API and LiteLLM D1 (AI):** #205 Miniflux-native auth foundation; #207 first summary API flow; #209 gated Mistral LiteLLM adapter; #230 on-demand Summary API pilot; #231 opt-in S5 to Mistral Small fallback; #232 and #233 S5 output and supervision; #240 approved model catalog (contract v2); #245 to #249 readiness, S5 E2E, key gate, dynamic model catalog and primary plus fallback model; #258 and #259 mixed catalog rows and verified local Ollama without price declarations; #262 to #264 admin-only AI settings API, UI and scoped Caddy ingress; #270 explicit legacy policy migration; #271 and #272 read-only LiteLLM auditor and S5 diagnostics; #273 and #274 D1 contract and LiteLLM key authority (default off); #284 JSON extraction from model output.
+- **Release governance:** #242 executable governed release tool; #265 governed Stage 1 to AI Settings Caddy transition; #268 governed Summary admin allowlist procedure; #279 candidate-run network reset and WallHop path A build flag; #280 to #282 D1 candidate preflight, catalog retry and realistic limits; #283 read-only bind replaces a mount with the same destination.
+- **WallHop content fallback:** #206 and #208 Content Fallback rehearsal and opt-in Reader recovery; #224 on-demand Reader content recovery; #215 and #225 sidecar packaging and HTTPS candidate harness; #228 and #229 admin-safe recovery scoped to verified identity; #251 and #253 to #256 sidecar design, read-only NPM111 audit, dark sidecar and operator-only G4 and G5 scripts; WallHop path A (`c0fabd26`, citing #257 and #277) adds explicit external open, dark by default.
+- **UI and settings:** #210 editorial card quick actions; #214 bulk-read confirmed-count feedback with partial Undo; #241 article intelligence settings, model selector and WallHop consent; #250 Summary language select and fallback row layout; #252 AI UI reconciliation docs; #285 Reader sends a real Origin on AI POSTs.
+- **Tests and harness:** #212 and #221 read-sync and UX-REACH readiness; #219 isolated Docker HTTPS gate; #267 deterministic supervision deadline regression.
+- **Research and docs:** #196 to #202 Home personalization relevance gate, pilot, synthetic rehearsal, LimeSurvey CE gate and Stage A preparation; #261 AI Settings integration docs and runbooks.
+
+### Open PRs (GitHub REST check, 2026-11-21)
+
+- **Still relevant:** #260 local-only processing consent (open Draft); #266 deterministic clock test (open Draft). #286 searchable model pickers was open at `08929008`; GitHub now reports it merged into `main` as `f4ffc48c`, after this snapshot.
+- **Likely superseded, owner to confirm (not closed):** #278 (open, not Draft; #279 is merged); #269 (open Draft); #277 (open Draft on GitHub, although `c0fabd26` is titled as merging #277; the two records conflict).
+- **Old Drafts, listed for owner review (not closed, not reviewed):** #195, #201, #203, #204, #211 (open, not Draft), #213, #216, #220, #227, #234, #239, #244, #275, #276.
+
+### PWA
+
+- **PWA-03A2C:** NOT_VERIFIED. No fixed claim is made.
+
+---
+
+## Historical snapshot: 2026-11-08 canonical state (post-PR #193)
+
+Historical snapshot, superseded for current-state questions by the 2026-11-21 canonical state above; retained unchanged as the record of `main` `e949fdd5` after PR #193.
 
 | Field                      | Verified state                                                                                                                     |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
