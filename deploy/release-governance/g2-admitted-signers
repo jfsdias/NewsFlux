@@ -1,0 +1,5 @@
+# G2_LOCAL_INDEPENDENT admitted signers (OpenSSH allowed_signers format: "<principal> <keytype> <base64-key>").
+# EMPTY ON PURPOSE. Only the PM admits signers, in a commit that descends from the tested commit and changes
+# nothing but this file (and docs/evidence/**); the evidence for the tested commit then stays valid.
+# Keys must be held by separate parties/environments; ephemeral keys generated together in one sandbox
+# (e.g. the R3B claude-producer/replayer/reviewer keys) must never be listed here.

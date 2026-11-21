@@ -6,3 +6,6 @@ public/styles/fonts.css
 src/components/ui/*.tsx
 src/hooks/use-mobile.tsx
 src/lib/utils.ts
+
+# Frozen, hash-pinned evidence bundles: never reformat
+docs/evidence/

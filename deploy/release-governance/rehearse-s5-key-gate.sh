@@ -29,7 +29,7 @@ ko() { echo "S5_KEY_GATE $1=FAIL"; fail=$((fail + 1)); }
 
 cleanup() {
   # Only this run's resources, by exact name.
-  docker rm -f "$run-litellm" "$run-pg" "$run-tls" >/dev/null 2>&1 || true
+  docker rm -f -v "$run-litellm" "$run-pg" "$run-tls" >/dev/null 2>&1 || true
   docker network rm "$net" >/dev/null 2>&1 || true
   docker image rm "$run-summary:synthetic" >/dev/null 2>&1 || true
   # Key copies are owned by the Summary uid (10001); a non-root runner needs sudo to remove them.
