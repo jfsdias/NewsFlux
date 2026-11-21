@@ -54,6 +54,31 @@ MODELS = [
 ]
 
 
+def _large_catalog():
+    """26 aliases mirroring the audited gateway shape: 14 chat, 7 price-known (3 free, 4 paid),
+    13 identity-verified, the rest unverified (a provider/model prefix mismatch proves nothing)."""
+    kinds = ["embedding", "image_generation", "audio_transcription", "rerank", "completion", None]
+    models = []
+    for index in range(26):
+        chat = index < 14
+        alias = f"catalog-{'chat' if chat else 'other'}-{index:02d}"
+        priced = index % 4 == 0
+        cost = (0.000001 if index % 8 == 0 else 0) if priced else None
+        verified = index % 2 == 0
+        provider = "groq" if index % 3 else "mistral"
+        entry = _model(alias, provider, f"https://api.{provider}.example", cost, cost,
+                       mode="chat" if chat else kinds[index % len(kinds)])
+        if entry["model_info"]["mode"] is None:
+            del entry["model_info"]["mode"]
+        if not verified:
+            entry["litellm_params"]["model"] = f"unverifiable/{alias}"
+        models.append(entry)
+    return models
+
+
+_CATALOGS = {"default": list(MODELS), "large": _large_catalog()}
+
+
 def _fake_litellm(request: httpx.Request) -> httpx.Response:
     auth = request.headers.get("authorization", "")
     key = auth.removeprefix("Bearer ")
@@ -144,6 +169,23 @@ async def state():
         "has_any_key_bytes": bool(raw),
         "gateway_calls": list(_gateway_calls),
     })
+
+
+@app.post("/__admin/catalog/{name}")
+async def catalog_fixture(name: str):
+    if name not in _CATALOGS:
+        return JSONResponse({"error": "invalid"}, status_code=400)
+    MODELS[:] = _CATALOGS[name]
+    return JSONResponse({"catalog": name, "models": len(MODELS)})
+
+
+@app.post("/__admin/writes/{mode}")
+async def writes(mode: str):
+    # Harness-only switch of the real store's write gate (NEWSFLUX_AI_ADMIN_CONFIG_WRITES_ENABLED).
+    if mode not in {"on", "off"}:
+        return JSONResponse({"error": "invalid"}, status_code=400)
+    store.enabled = mode == "on"
+    return JSONResponse({"writes_enabled": store.enabled})
 
 
 @app.post("/__admin/gateway/{mode}")

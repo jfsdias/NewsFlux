@@ -18,9 +18,12 @@ import {
 import { polyglotState } from "@/hooks/useLanguage"
 import {
   canApproveModel,
+  canBrowseCatalog,
   connectionState,
   errorMessageKey,
+  inspectModel,
   priceLabelKey,
+  summarizeCatalog,
 } from "@/utils/litellm-admin-state"
 
 import "./LiteLLMAdminSettings.css"
@@ -114,6 +117,11 @@ const LiteLlmAdminSettings = ({ onPolicyChanged }) => {
   const connection = connectionState(status, page.discovery)
   const candidate = page.models.find((entry) => entry.id === selectedAlias)
   const canApprove = canApproveModel(candidate, { allowExternal, allowPaid })
+  // Browsing is read-only and independent of write permission; mutations stay gated below.
+  const browsable = canBrowseCatalog(status, page.discovery)
+  const writable = status.writes_enabled === true
+  const inspection = inspectModel(candidate, { writesEnabled: writable })
+  const counts = summarizeCatalog(page.models)
   const clearSecret = () => {
     setSecret("")
     setVerified(false)
@@ -249,10 +257,24 @@ const LiteLlmAdminSettings = ({ onPolicyChanged }) => {
           >
             {t("refresh")}
           </Button>
+          {browsable && (
+            <Typography.Text type="secondary">
+              {polyglot.t("article_intelligence.litellm_catalog_summary", {
+                discovered: counts.discovered,
+                chat: counts.chat,
+                approved: counts.approved,
+                identity: counts.identityVerified,
+                price: counts.priceKnown,
+              })}
+            </Typography.Text>
+          )}
+          {browsable && !writable && (
+            <Typography.Text type="warning">{t("browse_only")}</Typography.Text>
+          )}
           <Select
             showSearch
             aria-label={t("models")}
-            disabled={busy || !status.configured || !status.writes_enabled}
+            disabled={busy || !browsable}
             placeholder={t("choose")}
             value={selectedAlias || undefined}
             onChange={(value) => {
@@ -268,30 +290,53 @@ const LiteLlmAdminSettings = ({ onPolicyChanged }) => {
               </Select.Option>
             ))}
           </Select>
-          {candidate && (
+          {candidate && inspection && (
             <>
-              <Typography.Text type="secondary">
-                {candidate.local_ollama ? t("local") : t("external")}
-                {" · "}
-                {candidate.mode ?? t("unverified")}
-                {" · "}
-                {t(priceLabelKey(candidate))}
-                {" · "}
-                {candidate.approved ? t("approved") : t("not_approved")}
-              </Typography.Text>
-              {!candidate.local_ollama && (
+              <section aria-label={t("inspect_title")} className="ai-litellm-admin__inspect">
+                <Typography.Text bold>{candidate.id}</Typography.Text>
+                <dl className="ai-litellm-admin__facts">
+                  <dt>{t("inspect_gateway")}</dt>
+                  <dd>{t(inspection.discovery)}</dd>
+                  <dt>{t("inspect_mode")}</dt>
+                  <dd>{t(inspection.mode)}</dd>
+                  <dt>{t("inspect_identity")}</dt>
+                  <dd>{t(inspection.identity)}</dd>
+                  <dt>{t("inspect_price")}</dt>
+                  <dd>{t(inspection.price)}</dd>
+                  <dt>{t("inspect_location")}</dt>
+                  <dd>{t(`location_${inspection.location.replace("location_", "")}`)}</dd>
+                  <dt>{t("inspect_approval")}</dt>
+                  <dd>{t(inspection.approval)}</dd>
+                  <dt>{t("inspect_availability")}</dt>
+                  <dd>{t(inspection.availability)}</dd>
+                </dl>
+                {inspection.blockers.length > 0 && (
+                  <>
+                    <Typography.Text type="secondary">{t("inspect_blockers")}</Typography.Text>
+                    <ul className="ai-litellm-admin__blockers">
+                      {inspection.blockers.map((reason) => (
+                        <li key={reason}>{t(reason)}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+                <Typography.Text type="secondary">{t("select_note")}</Typography.Text>
+              </section>
+              {writable && !candidate.local_ollama && (
                 <Checkbox checked={allowExternal} disabled={busy} onChange={setAllowExternal}>
                   {t("external_consent")}
                 </Checkbox>
               )}
-              {candidate.price_class === "paid" && (
+              {writable && candidate.price_class === "paid" && (
                 <Checkbox checked={allowPaid} disabled={busy} onChange={setAllowPaid}>
                   {t("paid_consent")}
                 </Checkbox>
               )}
-              {!candidate.local_ollama && priceLabelKey(candidate) === "price_unknown" && (
-                <Typography.Text type="warning">{t("price_required")}</Typography.Text>
-              )}
+              {writable &&
+                !candidate.local_ollama &&
+                priceLabelKey(candidate) === "price_unknown" && (
+                  <Typography.Text type="warning">{t("price_required")}</Typography.Text>
+                )}
               <div className="ai-litellm-admin__actions">
                 {candidate.approved ? (
                   <Button
