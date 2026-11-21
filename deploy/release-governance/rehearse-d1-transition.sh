@@ -222,9 +222,9 @@ export D1_EVIDENCE_SHA256="$EVIDENCE_SHA" D1_EXTERNAL_TRANSFER_CONSENT=GRANTED
 before="$(summary)"
 out="$(op d1-preflight || true)"
 printf '%s\n' "$out" | grep -E '^D1_' | sed 's/^/D1E2E   /'
-if grep -qx 'D1_PREFLIGHT=PASS' <<<"$out" && grep -qx 'D1_TARGET_PREFLIGHT=PASS' <<<"$out" \
+if grep -qx 'D1_PREFLIGHT=PASS_OFFLINE_ONLY' <<<"$out" && grep -qx 'D1_TARGET_PREFLIGHT=PASS_OFFLINE_GATES' <<<"$out" \
    && [[ "$(summary)" == "$before" && "$(confhash)" == "$BASELINE_HASH" ]]; then
-  ok D1_TARGET_PREFLIGHT "evidence mount, pin, key, non-financial gates, live catalog and callbacks; service untouched"
+  ok D1_TARGET_PREFLIGHT "evidence mount, pin, key, non-financial gates in the target config; service untouched"
 else
   ko D1_TARGET_PREFLIGHT
 fi
