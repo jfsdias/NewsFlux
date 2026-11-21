@@ -271,11 +271,10 @@ proven in the lab with a positive control (`rehearse-d1-budget-enforcement.sh`, 
 `EXPLICIT_UNLIMITED_AUTHORIZED`. A budget from a budget table or on another image is `GATEWAY_POLICY_OBSERVED_ONLY`.
 Everything else is `COST_AUTHORITY_UNPROVEN`.
 
-Validity: the release preflight requires a capture at most 7 days old (auditor's read time). The running service
-has no age limit: admitted evidence stays valid while it is pinned and bound to the key in use (owner decision
-2026-11-21; a runtime window switched every model off on its own one week after the capture). A key changed after
-the capture is `KEY_MISMATCH` at once. A policy change on the same key (budget removed or raised, routes widened) is
-not visible until the next capture, so any LiteLLM edit of the key requires a new capture and a release. A revoked key fails discovery and authentication, so nothing is offered; there is no faster revocation
+Validity: runtime 7 days, release preflight 24 hours from the auditor's read time. A key changed after the capture is
+`KEY_MISMATCH` at once. A policy change on the same key (budget removed or raised, routes widened) is not visible
+until the next capture: it is bounded by the window, and any LiteLLM key edit requires a new capture before the next
+release. A revoked key fails discovery and authentication, so nothing is offered; there is no faster revocation
 signal. Root on the OMV is the operational authority; the ledger record of the digest is the external witness.
 
 ### Release transition (D1-R7-02)
