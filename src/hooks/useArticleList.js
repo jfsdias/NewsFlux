@@ -1,7 +1,6 @@
 import { useStore } from "@nanostores/react"
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react"
 
-import { markDuplicatesAsRead } from "@/hooks/useEntryActions"
 import {
   clearArticleListSnapshot,
   commitArticleListSnapshot,
@@ -81,7 +80,7 @@ const handleResponses = (
       }),
     })
   } else {
-    const duplicateEntries = commitArticleListSnapshot({
+    commitArticleListSnapshot({
       entries: preparedEntries,
       loadMoreVisible: canonicalEntries.length < response.total,
       snapshotIdentity: articleListSnapshotIdentity,
@@ -93,7 +92,6 @@ const handleResponses = (
       }),
       total: response.total,
     })
-    markDuplicatesAsRead(duplicateEntries)
   }
   if (isHome) {
     setTotal(response.total)
