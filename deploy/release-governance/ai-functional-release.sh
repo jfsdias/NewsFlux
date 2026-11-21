@@ -416,6 +416,10 @@ RELEASE_MODE="${RELEASE_MODE:-legacy}"
 D1_DIR="$RELEASE_DIR/d1-enable"
 D1_EVIDENCE_TARGET=/run/newsflux-d1/evidence.json
 D1_PREFLIGHT_ARGV=(python -B -m services.article_intel_summary.cost_authority preflight)
+# The one-off candidate container gets no fixed address (candidate-run resets them), and the gateway path (NPM access
+# list) may admit only the service's fixed addresses: there, only the gates that need no network run; the live gates
+# (real catalog, callbacks) run in the promoted container, which rolls back automatically if they fail.
+D1_CANDIDATE_ARGV=("${D1_PREFLIGHT_ARGV[@]}" --offline)
 
 d1_inputs() {
   [[ "$RELEASE_MODE" == d1 ]] || die D1 RELEASE_MODE_NOT_D1
@@ -493,10 +497,10 @@ d1_preflight() {
   d1_inputs
   d1_prepare
   local out
-  out="$(release_tool candidate-run --manifest "$D1_DIR/manifest.json" -- "${D1_PREFLIGHT_ARGV[@]}")" || true
+  out="$(release_tool candidate-run --manifest "$D1_DIR/manifest.json" -- "${D1_CANDIDATE_ARGV[@]}")" || true
   printf '%s\n' "$out"
-  grep -qx 'D1_PREFLIGHT=PASS' <<<"$out" || die D1_PREFLIGHT TARGET_CONFIGURATION_NOT_PASS
-  gate D1_TARGET_PREFLIGHT PASS
+  grep -qx 'D1_PREFLIGHT=PASS_OFFLINE_ONLY' <<<"$out" || die D1_PREFLIGHT TARGET_CONFIGURATION_NOT_PASS
+  gate D1_TARGET_PREFLIGHT PASS_OFFLINE_GATES
 }
 
 enable_d1() {

@@ -473,6 +473,18 @@ class ReleasePreflightTests(unittest.TestCase):
         self.assertIn("D1_LIVE_GATES=NOT_RUN", lines)
         self.assertEqual(lines[-1], "D1_PREFLIGHT=PASS_OFFLINE_ONLY")
 
+    def test_cli_offline_runs_no_live_gate(self):
+        env = self.env(evidence())
+        with mock.patch.dict(os.environ, env, clear=False), \
+                mock.patch.object(ca, "effective_virtual_key", lambda _v: KEY), \
+                mock.patch.object(ca, "live_catalog", side_effect=AssertionError("network")), \
+                mock.patch.object(ca, "live_callbacks", side_effect=AssertionError("network")), \
+                mock.patch.object(ca, "_now", lambda: NOW), mock.patch("builtins.print") as printed:
+            self.assertEqual(ca.main(["preflight", "--offline"]), 0)
+        out = printed.call_args[0][0].splitlines()
+        self.assertIn("D1_LIVE_GATES=NOT_RUN", out)
+        self.assertEqual(out[-1], "D1_PREFLIGHT=PASS_OFFLINE_ONLY")
+
     def test_cli_mode_off(self):
         with mock.patch.dict(os.environ, {"NEWSFLUX_AI_MODEL_AUTHORITY": ""}), mock.patch("builtins.print") as printed:
             self.assertEqual(ca.main(["preflight"]), 0)
