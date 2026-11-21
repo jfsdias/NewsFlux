@@ -409,7 +409,8 @@ class ReleasePreflightTests(unittest.TestCase):
     def env(self, document=None, **values):
         env = {"NEWSFLUX_AI_MODEL_AUTHORITY": "litellm_key", "NEWSFLUX_AI_LITELLM_COST_AUTHORITY": "gateway_budget_enforced",
                "NEWSFLUX_AI_INFERENCE_ENABLED": "true", "NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER": "true",
-               "NEWSFLUX_AI_MODEL_DISCOVERY_ENABLED": "true"}
+               "NEWSFLUX_AI_MODEL_DISCOVERY_ENABLED": "true", "NEWSFLUX_AI_MAX_INPUT_TOKENS": "32000",
+               "NEWSFLUX_AI_MAX_OUTPUT_TOKENS": "1024", "NEWSFLUX_AI_MAX_REQUESTS_PER_MINUTE": "10"}
         if document is not None:
             self.count = getattr(self, "count", 0) + 1
             path = write_trusted(self.dir, f"e{self.count}.json", document)
@@ -430,7 +431,7 @@ class ReleasePreflightTests(unittest.TestCase):
     def test_target_configuration_passes(self):
         code, lines = self.run_preflight(self.env(evidence()))
         self.assertEqual(code, 0, lines)
-        for line in ("D1_FLAGS=PASS", "D1_NO_DUPLICATE_COST_CONTROL=PASS",
+        for line in ("D1_FLAGS=PASS", "D1_LIMITS=PASS", "D1_NO_DUPLICATE_COST_CONTROL=PASS",
                      "D1_COST_AUTHORITY=PROVEN_GATEWAY_ENFORCEMENT_EVIDENCE", "D1_NONFINANCIAL_GATES=PASS",
                      "D1_CATALOG=PASS_MODELS_2", "D1_LIVE_CALLBACKS=PASS", "D1_PREFLIGHT=PASS"):
             self.assertIn(line, lines)
@@ -445,6 +446,7 @@ class ReleasePreflightTests(unittest.TestCase):
             "D1_COST_AUTHORITY=UNPROVEN_EVIDENCE_STALE": (self.env(evidence(captured=NOW - timedelta(hours=25))), {}),
             "D1_COST_AUTHORITY=UNPROVEN_KEY_MISMATCH": (self.env(evidence(key=OTHER_KEY)), {}),
             "D1_CATALOG=HOLD_MODELS_0": (self.env(evidence()), {"models": 0}),
+            "D1_LIMITS=HOLD_LOCAL_LIMITS_TOO_SMALL_FOR_AN_ARTICLE": (self.env(evidence(), NEWSFLUX_AI_MAX_INPUT_TOKENS="2048"), {}),
             "D1_CATALOG_UNAVAILABLE=COMPATIBILITY_UNVERIFIED:2": (self.env(evidence()), {"models": (0, "COMPATIBILITY_UNVERIFIED:2")}),
             "D1_LIVE_CALLBACKS=FAIL": (self.env(evidence()), {"callbacks": "FAIL"}),
         }

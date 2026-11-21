@@ -145,7 +145,7 @@ summary_env = {
     "NEWSFLUX_AI_LITELLM_BASE_URL": "https://litellm-tls:8443", "SSL_CERT_FILE": "/run/lab-ca.crt",
     "NEWSFLUX_AI_LITELLM_VIRTUAL_KEY_FILE": "/run/secrets/litellm/key", "NEWSFLUX_AI_USAGE_DATABASE_PATH": "/data/usage.sqlite3",
     "NEWSFLUX_AI_INFERENCE_ENABLED": "false", "NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER": "false",
-    "NEWSFLUX_AI_LITELLM_S5_FREE_ALIAS": "newsflux-s5-free", "NEWSFLUX_AI_MAX_INPUT_TOKENS": "4096",
+    "NEWSFLUX_AI_LITELLM_S5_FREE_ALIAS": "newsflux-s5-free", "NEWSFLUX_AI_MAX_INPUT_TOKENS": "2048",
     "NEWSFLUX_AI_MAX_OUTPUT_TOKENS": "512", "NEWSFLUX_AI_MAX_REQUESTS_PER_MINUTE": "5",
     "NEWSFLUX_AI_MAX_TOKENS_PER_MINUTE": "20000", "NEWSFLUX_AI_INFERENCE_TIMEOUT_SECONDS": "20",
     # Legacy money controls as configured today: the D1 override must blank them (no duplicated cost control).

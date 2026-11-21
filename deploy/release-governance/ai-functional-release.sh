@@ -455,9 +455,18 @@ d1_prepare() {
   fi
   [[ "$(sha_of "$evidence")" == "$D1_EVIDENCE_SHA256" ]] || die D1 RELEASE_EVIDENCE_COPY_DRIFT
   if [[ ! -f "$policy" ]]; then
-    python3 -I -B - "$SUMMARY_SERVICE" "$evidence" "$D1_EVIDENCE_TARGET" "$D1_COST_AUTHORITY" "$D1_EVIDENCE_SHA256" >"$policy" <<'PY'
+    # Local NewsFlux limits for D1 (inference safety, not cost: LiteLLM governs cost). The input estimate is
+    # conservative (1 token per UTF-8 byte, prompt framing ~2.7k), so the legacy 2048 refused every article.
+    local lim
+    for lim in "${D1_MAX_INPUT_TOKENS:=32000}" "${D1_MAX_OUTPUT_TOKENS:=1024}" "${D1_MAX_REQUESTS_PER_MINUTE:=10}" \
+               "${D1_MAX_TOKENS_PER_MINUTE:=100000}" "${D1_INFERENCE_TIMEOUT_SECONDS:=30}"; do
+      [[ "$lim" =~ ^[1-9][0-9]{0,6}$ ]] || die D1 LIMIT_INVALID
+    done
+    python3 -I -B - "$SUMMARY_SERVICE" "$evidence" "$D1_EVIDENCE_TARGET" "$D1_COST_AUTHORITY" "$D1_EVIDENCE_SHA256" \
+      "$D1_MAX_INPUT_TOKENS" "$D1_MAX_OUTPUT_TOKENS" "$D1_MAX_REQUESTS_PER_MINUTE" "$D1_MAX_TOKENS_PER_MINUTE" \
+      "$D1_INFERENCE_TIMEOUT_SECONDS" >"$policy" <<'PY'
 import json, sys
-service, source, target, declaration, digest = sys.argv[1:]
+service, source, target, declaration, digest, max_in, max_out, rpm, tpm, timeout = sys.argv[1:]
 environment = {
     "NEWSFLUX_AI_INFERENCE_ENABLED": "true",
     "NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER": "true",
@@ -467,6 +476,11 @@ environment = {
     "NEWSFLUX_AI_LITELLM_COST_AUTHORITY_EVIDENCE_FILE": target,
     "NEWSFLUX_AI_LITELLM_COST_AUTHORITY_EVIDENCE_SHA256": digest,
     "NEWSFLUX_AI_ALLOW_PAID_INFERENCE": "false",
+    "NEWSFLUX_AI_MAX_INPUT_TOKENS": max_in,
+    "NEWSFLUX_AI_MAX_OUTPUT_TOKENS": max_out,
+    "NEWSFLUX_AI_MAX_REQUESTS_PER_MINUTE": rpm,
+    "NEWSFLUX_AI_MAX_TOKENS_PER_MINUTE": tpm,
+    "NEWSFLUX_AI_INFERENCE_TIMEOUT_SECONDS": timeout,
 }
 # No duplicated cost control: NewsFlux budget and prices are blanked (LiteLLM is the cost authority).
 for name in ("NEWSFLUX_AI_MONTHLY_BUDGET_USD", "NEWSFLUX_AI_LITELLM_S5_FREE_INPUT_USD_PER_MILLION",
