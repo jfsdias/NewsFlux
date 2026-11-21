@@ -100,7 +100,7 @@ prepare() {
     git -C "$SRC" merge-base --is-ancestor "$APPROVED_SHA" origin/main || exit 3
     git -C "$SRC" -c advice.detachedHead=false checkout --quiet --force "$APPROVED_SHA"
     # Bytecode is never source: drop __pycache__ left by an earlier run (untracked; tracked files stay untouched).
-    git -C "$SRC" ls-files --others --exclude-standard --directory | grep -E '(^|/)__pycache__/$' \
+    git -C "$SRC" ls-files --others --exclude-standard --directory | { grep -E '(^|/)__pycache__/$' || true; } \
       | while read -r dir; do rm -rf -- "${SRC:?}/$dir"; done
   ) || die SOURCE_GATE APPROVED_SHA_NOT_ON_MAIN_OR_CHECKOUT_FAILED
   require_source
