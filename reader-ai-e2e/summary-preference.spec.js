@@ -278,4 +278,40 @@ test("MODEL_PICKER two models with the same name stay distinct and are told apar
   await expect(twins).toHaveText([/· gw-d1000000001$/, /· gw-d1-same-label$/])
   await twins.nth(1).click()
   await expect.poll(() => savedSettings(page)).toContain("gw-d1-same-label")
+  // Closed, the chosen twin is still identifiable: its ID is in the details under the field.
+  await expect(page.getByText("openai · Available · gw-d1-same-label")).toBeVisible()
+})
+
+test("MODEL_PICKER typing or pasting over the selected label searches exactly that text", async ({
+  page,
+}) => {
+  await page.goto(`${HARNESS}?catalog=d1&primary=gw-d1000000006`)
+  const primary = primaryPicker(page)
+  const list = page.getByRole("listbox", { name: "AI model" })
+  await expect(primary).toHaveValue("gemini-2.5-flash")
+  // Focus selects the label; a first key that is also the label's first letter is kept.
+  await primary.focus()
+  await page.keyboard.type("grok")
+  await expect(primary).toHaveValue("grok")
+  await expect(list.getByRole("option")).toHaveText([
+    "Automatic — operator default (gpt-4o-mini)",
+    /^grok-3-mini/,
+  ])
+  await page.keyboard.press("Escape")
+  // A paste of a prefix of the label, over the selection, is the search.
+  await primary.blur()
+  await primary.focus()
+  await page.keyboard.insertText("gemini")
+  await expect(primary).toHaveValue("gemini")
+  await expect(list.getByRole("option")).toHaveCount(3)
+  await page.keyboard.press("Escape")
+  // Typing with the caret inside the label searches the typed text only.
+  await primary.blur()
+  await primary.focus()
+  await page.keyboard.press("Home")
+  await page.keyboard.type("son")
+  await expect(primary).toHaveValue("son")
+  await expect(list.getByRole("option", { name: /^sonar/ })).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(primary).toHaveValue("gemini-2.5-flash")
 })

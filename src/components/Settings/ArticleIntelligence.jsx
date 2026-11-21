@@ -80,9 +80,12 @@ const optionLabel = (polyglot, option) => {
   }
 }
 
-const ModelDetails = ({ model, polyglot }) => (
+const ModelDetails = ({ model, polyglot, showId = false }) => (
   <span className="ai-model-option__details">
-    <span>{availabilityLine(polyglot, model)}</span>
+    <span>
+      {availabilityLine(polyglot, model)}
+      {showId ? ` · ${model.id}` : ""}
+    </span>
     {model.pricing.status !== "gateway_governed" && (
       <span>{formatPrice(polyglot, model.pricing)}</span>
     )}
@@ -195,11 +198,21 @@ const ArticleIntelligence = () => {
   )
   // Provider, availability, price, limits and notices: for the chosen model only.
   const primaryDetails = primaryEntry ? (
-    <ModelDetails model={primaryEntry} polyglot={polyglot} />
+    <ModelDetails
+      model={primaryEntry}
+      polyglot={polyglot}
+      showId={primaryOptions.some((option) => option.value === primaryEntry.id && option.sameLabel)}
+    />
   ) : null
   const fallbackDetails =
     fallbackEntry && fallbackEntry.id !== primaryId ? (
-      <ModelDetails model={fallbackEntry} polyglot={polyglot} />
+      <ModelDetails
+        model={fallbackEntry}
+        polyglot={polyglot}
+        showId={fallbackOptions.some(
+          (option) => option.value === fallbackEntry.id && option.sameLabel,
+        )}
+      />
     ) : null
   const adminKey = `${authSessionKey}:${adminGeneration}`
 

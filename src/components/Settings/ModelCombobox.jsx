@@ -22,6 +22,8 @@ const ModelCombobox = ({ details, label, noResults, onChange, options, placehold
   const statusId = `${baseId}-status`
   const inputRef = useRef(null)
   const listRef = useRef(null)
+  // Selection in the closed field (which shows the chosen label), read before each edit.
+  const selectionRef = useRef({ start: 0, end: 0 })
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
   const [activeIndex, setActiveIndex] = useState(-1)
@@ -67,7 +69,17 @@ const ModelCombobox = ({ details, label, noResults, onChange, options, placehold
     setActiveIndex((index) => Math.min(visible.length - 1, Math.max(0, index + delta)))
   }
 
+  const rememberSelection = (event) => {
+    selectionRef.current = {
+      start: event.target.selectionStart ?? 0,
+      end: event.target.selectionEnd ?? 0,
+    }
+  }
+
   const onKeyDown = (event) => {
+    if (!open) {
+      rememberSelection(event)
+    }
     switch (event.key) {
       case "ArrowDown": {
         event.preventDefault()
@@ -116,14 +128,13 @@ const ModelCombobox = ({ details, label, noResults, onChange, options, placehold
   const onQueryChange = (event) => {
     let next = event.target.value
     if (!open) {
-      // Closed, the field shows the chosen label: what the user typed is the search, not the
-      // label plus the typed text (or the label minus a deleted character).
+      // Closed, the field shows the chosen label. The search is only what this edit inserted
+      // (typed, pasted or composed) in place of the selection; a deletion starts an empty
+      // search. Never the label plus or minus the typed text.
       const shown = selected?.label ?? ""
-      if (next.startsWith(shown)) {
-        next = next.slice(shown.length)
-      } else if (shown.startsWith(next)) {
-        next = ""
-      }
+      const { start, end } = selectionRef.current
+      const keptAfter = shown.length - end
+      next = next.length - keptAfter > start ? next.slice(start, next.length - keptAfter) : ""
     }
     const matches = filterModelOptions(options, next)
     // While searching, the first matching model is active, not "Automatic"/"No fallback".
@@ -157,9 +168,13 @@ const ModelCombobox = ({ details, label, noResults, onChange, options, placehold
           value={open ? query : (selected?.label ?? "")}
           onBlur={closeList}
           onChange={onQueryChange}
-          onFocus={(event) => event.target.select()}
           onKeyDown={onKeyDown}
           onMouseDown={() => !open && openList()}
+          onSelect={rememberSelection}
+          onFocus={(event) => {
+            event.target.select()
+            rememberSelection(event)
+          }}
         />
         <span
           aria-hidden="true"
