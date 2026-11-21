@@ -138,7 +138,12 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
       // The catalog is revalidated on every explicit action; a stored choice is never
       // silently replaced by another model.
       const catalog = await fetchModelCatalog({ signal: controller.signal })
-      if (!catalog || !isCurrent() || !maySendAutomaticSummary(automatic === true, settingsState.get())) {
+      if (!catalog || !isCurrent()) {
+        return
+      }
+      if (!maySendAutomaticSummary(automatic === true, settingsState.get())) {
+        requestRef.current = null
+        setState(idleState(entryId, authSessionKey, request.sessionRevision))
         return
       }
       const selection = resolveSummaryRouting(settings, catalog)
