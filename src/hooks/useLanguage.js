@@ -1,11 +1,6 @@
 import { useStore } from "@nanostores/react"
 import dayjs from "dayjs"
-import "dayjs/locale/de"
 import "dayjs/locale/en"
-import "dayjs/locale/es"
-import "dayjs/locale/fr"
-import "dayjs/locale/ja"
-import "dayjs/locale/zh-cn"
 import { map } from "nanostores"
 import Polyglot from "node-polyglot"
 import { useEffect } from "react"
@@ -14,14 +9,6 @@ import { settingsState, updateSettings } from "@/store/settingsState"
 import { getBrowserLanguage } from "@/utils/locales"
 import createSetter from "@/utils/nanostores"
 import { applyRuntimeProductIdentity } from "@/utils/product-identity"
-
-const languageToLocale = {
-  "ja-JP": "ja",
-  "zh-CN": "zh-cn",
-  de: "de",
-  es: "es",
-  fr: "fr",
-}
 
 export const polyglotState = map({
   polyglot: null,
@@ -61,15 +48,7 @@ const useLanguage = () => {
   useEffect(() => {
     if (language) {
       loadLanguage(language)
-
-      const locale =
-        language.startsWith("de-") ||
-        language.startsWith("es-") ||
-        language.startsWith("fr-") ||
-        language.startsWith("ja-")
-          ? language.slice(0, 2)
-          : languageToLocale[language] || "en"
-      dayjs.locale(locale)
+      dayjs.locale("en")
     } else {
       updateSettings({ language: getBrowserLanguage() })
     }
