@@ -213,7 +213,7 @@ Caveat: screenshots show one moment of NNW's own platform conventions (AppKit/UI
 - Material-style interaction feedback (short state layers, reduced-motion aware).
 - Touch targets ≥ 44 px (form) and ≥ 48 px (navigation); density relaxations apply to fine pointers only.
 - Accessibility gates apply to every track: keyboard, focus, reduced motion, touch target, contrast, screen-reader naming, 200 % text/zoom.
-- Every user-visible string ships in all six locales (`de-DE`, `en-US`, `es-ES`, `fr-FR`, `ja-JP`, `zh-CN`).
+- Every user-visible string ships in `en-US`, the only interface locale since the English-only change (the de-DE, es-ES, fr-FR, ja-JP and zh-CN files were removed; saved choices fall back to English).
 - One purpose per PR. Never mix PWA architecture, visual redesign, upstream sync and functional feed behavior.
 - Incidental findings are reported and routed to the roadmap, not fixed opportunistically.
 

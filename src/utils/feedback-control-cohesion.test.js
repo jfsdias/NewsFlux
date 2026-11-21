@@ -46,14 +46,7 @@ const { getMarkAllReadUndoNotificationId, MARK_ALL_READ_UNDO_DURATION_MS } =
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const localesDir = path.resolve(__dirname, "../locales")
-const localeFiles = [
-  "de-DE.json",
-  "en-US.json",
-  "es-ES.json",
-  "fr-FR.json",
-  "ja-JP.json",
-  "zh-CN.json",
-]
+const localeFiles = ["en-US.json"]
 
 const getNestedProperty = (object, keyPath) => {
   let current = object
@@ -63,7 +56,7 @@ const getNestedProperty = (object, keyPath) => {
   return current
 }
 
-test("CHROME-01B: All 6 shipped locales provide non-empty verb-first confirmation strings", () => {
+test("CHROME-01B: Every shipped locale provide non-empty verb-first confirmation strings", () => {
   const confirmationKeys = [
     "sidebar.context_menu.mark_all_as_read",
     "search.cancel",

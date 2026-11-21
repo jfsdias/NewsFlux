@@ -1,10 +1,5 @@
 import { Button, ConfigProvider, Layout, Tooltip } from "@arco-design/web-react"
-import deDE from "@arco-design/web-react/es/locale/de-DE"
 import enUS from "@arco-design/web-react/es/locale/en-US"
-import esES from "@arco-design/web-react/es/locale/es-ES"
-import frFR from "@arco-design/web-react/es/locale/fr-FR"
-import jaJP from "@arco-design/web-react/es/locale/ja-JP"
-import zhCN from "@arco-design/web-react/es/locale/zh-CN"
 import { IconMenuFold } from "@arco-design/web-react/icon"
 import { useStore } from "@nanostores/react"
 import { useCallback, useEffect, useMemo, useRef } from "react"
@@ -50,16 +45,6 @@ const scheduleFocus = (callback) => {
   return () => globalThis.clearTimeout(timeoutId)
 }
 
-const localMap = {
-  "de-DE": deDE,
-  "es-ES": esES,
-  "fr-FR": frFR,
-  "ja-JP": jaJP,
-  "zh-CN": zhCN,
-}
-
-const getLocale = (language) => localMap[language] || enUS
-
 const App = () => {
   useLanguage()
   useTheme()
@@ -71,9 +56,7 @@ const App = () => {
   const { activeContent } = useStore(contentState, { keys: ["activeContent"] })
 
   const { polyglot } = useStore(polyglotState)
-  const { language } = useStore(settingsState, { keys: ["language"] })
   const isDesktopSidebarCollapsed = useStore(desktopSidebarCollapsedState)
-  const locale = getLocale(language)
   const sidebarCollapseLabel = polyglot?.t("sidebar.collapse")
   const sidebarWidth = isDesktopSidebarCollapsed ? 0 : EXPANDED_SIDEBAR_WIDTH
   const desktopSidebarColumnWidth = isBelowLarge ? 0 : sidebarWidth
@@ -142,7 +125,7 @@ const App = () => {
 
   return (
     polyglot && (
-      <ConfigProvider locale={locale}>
+      <ConfigProvider locale={enUS}>
         <AppNotifications />
         <HomePageManager />
         <DesktopSidebarContext.Provider value={desktopSidebarContextValue}>

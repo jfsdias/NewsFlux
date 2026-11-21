@@ -1,13 +1,5 @@
-export const getBrowserLanguage = () => {
-  const browserLanguage = navigator.language
-  if (browserLanguage === "zh-Hans-CN") {
-    return "zh-CN"
-  }
-  if (browserLanguage === "ja" || browserLanguage.startsWith("ja-")) {
-    return "ja-JP"
-  }
-  return browserLanguage
-}
+// The settings schema maps any language to the single interface language (en-US).
+export const getBrowserLanguage = () => navigator.language
 
 // Determine priority type for sorting text
 const getTextType = (text) => {

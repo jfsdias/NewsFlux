@@ -30,16 +30,9 @@ test("NNW-03 CHROME-01: FooterPanel preserves Content ownership and provides acc
   )
 })
 
-test("NNW-03 CHROME-01: all 6 locales define article_list.filter_status_group_label", () => {
+test("NNW-03 CHROME-01: every shipped locale define article_list.filter_status_group_label", () => {
   const localesDir = path.join(repoRoot, "src/locales")
-  const localeFiles = [
-    "de-DE.json",
-    "en-US.json",
-    "es-ES.json",
-    "fr-FR.json",
-    "ja-JP.json",
-    "zh-CN.json",
-  ]
+  const localeFiles = ["en-US.json"]
 
   for (const file of localeFiles) {
     const data = JSON.parse(fs.readFileSync(path.join(localesDir, file), "utf8"))

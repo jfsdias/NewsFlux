@@ -237,20 +237,3 @@ for (const viewport of [
     })
   }
 }
-
-for (const [locale, title] of [
-  ["de-DE", "de-DE"],
-  ["es-ES", "es-ES"],
-  ["fr-FR", "fr-FR"],
-  ["ja-JP", "ja-JP"],
-  ["zh-CN", "zh-CN"],
-]) {
-  test(`locale ${locale} renders translated admin strings`, async ({ page }) => {
-    await page.goto(page_(`?locale=${title}`))
-    await expect(page.getByLabel(/./).first()).toBeVisible()
-    const text = await page.locator("main").textContent()
-    expect(text).not.toContain("LiteLLM integration")
-    expect(text).not.toMatch(/article_intelligence\.litellm_/)
-    expect(text).toContain("LiteLLM")
-  })
-}

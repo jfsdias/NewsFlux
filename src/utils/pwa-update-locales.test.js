@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import test from "node:test"
 
-const LOCALES = ["de-DE", "en-US", "es-ES", "fr-FR", "ja-JP", "zh-CN"]
+const LOCALES = ["en-US"]
 const read = (locale) =>
   JSON.parse(readFileSync(new URL(`../locales/${locale}.json`, import.meta.url), "utf8"))
 
