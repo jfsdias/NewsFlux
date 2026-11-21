@@ -53,7 +53,7 @@ An eventual deploy `--execute` uses the **same** four flags plus root, explicit 
 
 ## Tests and outstanding gates
 
-Offline GitHub Actions: `wallhop-g5-dark-deploy.yaml` runs both G5 deployment **and teardown** negative admission tests, both `bash -n` checks, and the existing G4/IPAM/topology regression suite. All are offline: no production smoke has been performed.
+Offline GitHub Actions: `wallhop-g5-dark-deploy.yaml` (retired 2026-11-21 with WallHop path B off by design) ran both G5 deployment **and teardown** negative admission tests, both `bash -n` checks, and the G4/IPAM/topology regression suite. The tests remain under `deploy/wallhop-isolated/` and can be run locally. No production smoke was performed.
 
 Before any OMV trial: review rollback behavior under partial Docker creates and signal interruption, validate release-directory mount persistence, review and prove the new `g5-dark-teardown.sh` operator teardown (exact container image IDs/source revision, released-source bind mount, project-owned networks, synthetic-only environment, protected poststate), verify CIDRs at that time and repeat independent protected host111/PR188 readback. No provider/network source-policy gate can be waived by G5 passing.
 
