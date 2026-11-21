@@ -85,6 +85,8 @@ class FakeDb:
         if '"litellm_budgettable"' in lowered:
             row = self.budgets.get(params[0])
             return [row] if row else []
+        if '"litellm_objectpermissiontable"' in lowered:  # S5-R3: no permission row in the R1 fixtures
+            return []
         raise AssertionError(sql)
 
 
@@ -384,10 +386,13 @@ class HostOrchestrationTests(unittest.TestCase):
                 return "summary-id\n" if "label=com.docker.compose.service=summary-api" in argv else "litellm-id\n"
             if argv[:2] == ["docker", "inspect"] and "{{range .Config.Env}}" in " ".join(argv):
                 return "\n".join(f"{k}={v}" for k, v in env.items()) + "\n"
+            if argv[:2] == ["docker", "inspect"] and "{{json .Config.Env}}" in " ".join(argv):
+                return json.dumps([f"{k}={v}" for k, v in env.items()])
             if argv[:2] == ["docker", "inspect"]:
                 return snaps.pop(0)
             if argv[:3] == ["docker", "exec", "-u"]:  # Summary: fingerprint + alias + caps
-                return json.dumps({"fingerprint": "f" * 64, "alias": ALIAS, "caps": CAPS, "allowed_callbacks": []})
+                return json.dumps({"fingerprint": "f" * 64, "alias": ALIAS, "caps": CAPS, "allowed_callbacks": [],
+                                   "runtime_flags": {"inference": False, "external_transfer": False}})
             if argv[:3] == ["docker", "exec", "-i"]:
                 return json.dumps(probe or {"KEY_MATCH": "ONE", "KEY_POLICY_GATE": "FAIL", "DB_READ_ONLY": "VERIFIED"})
             raise AssertionError(argv)
@@ -804,3 +809,873 @@ class NoBytecodeAndHonestMutationClaimTests(HostOrchestrationTests):
         self.assertIn("S5R1_CONTAINER_IDENTITY=UNCHANGED", lines)
         self.assertIn("S5R1_FILESYSTEM_INTEGRITY=NOT_PROVEN", lines)
         self.assertFalse([line for line in lines if line.startswith("S5R1_PRODUCTION_MUTATIONS")])
+
+
+# ==================================================================================================
+# S5-R3 read-only increment: budget cause, rate detail, effective object permissions, extra
+# mechanisms, schema/version compatibility, strict R3 gate and the optional private prestate.
+# ==================================================================================================
+LAB_VERSION = "1.109.1"
+# Literal copy of the 48 columns of LiteLLM_VerificationToken in the rehearsed lab image (1.109.1):
+# a change in the auditor's list must be deliberate and visible here.
+LAB_KEY_COLUMNS = (
+    "token", "key_name", "key_alias", "soft_budget_cooldown", "spend", "expires", "models", "aliases", "config",
+    "user_id", "team_id", "permissions", "max_parallel_requests", "metadata", "blocked", "tpm_limit", "rpm_limit",
+    "max_budget", "budget_duration", "budget_reset_at", "allowed_cache_controls", "model_spend", "model_max_budget",
+    "budget_id", "organization_id", "created_at", "created_by", "updated_at", "updated_by", "allowed_routes",
+    "object_permission_id", "auto_rotate", "key_rotation_at", "last_rotation_at", "rotation_count",
+    "rotation_interval", "project_id", "router_settings", "policies", "access_group_ids", "last_active", "agent_id",
+    "budget_limits", "budget_fallbacks", "key_type", "settings_updated_at", "tpd_limit", "total_spend",
+)
+LAB_OBJPERM_COLUMNS = (
+    "object_permission_id", "mcp_servers", "vector_stores", "mcp_access_groups", "mcp_tool_permissions", "agents",
+    "agent_access_groups", "blocked_tools", "models", "mcp_toolsets", "search_tools", "mcp_tool_search_enabled", "skills",
+)
+
+
+def lab_key_row(**overrides):
+    row = {name: None for name in LAB_KEY_COLUMNS}
+    row.update(key_row())
+    row.update(key_name="sk-...0000", auto_rotate=False, rotation_count=0, soft_budget_cooldown=False, key_type="default",
+               total_spend=0.0, permissions={}, model_spend={}, model_max_budget={}, allowed_cache_controls=[],
+               created_by="default_user_id", updated_by="default_user_id")
+    row.update(overrides)
+    return row
+
+
+def empty_objperm(**overrides):
+    row = {name: [] for name in LAB_OBJPERM_COLUMNS}
+    row.update(object_permission_id="op-synthetic", mcp_tool_permissions={}, mcp_tool_search_enabled=None)
+    row.update(overrides)
+    return row
+
+
+class R3Db(FakeDb):
+    def __init__(self, *, row=None, objperms=None, key_columns=LAB_KEY_COLUMNS, objperm_columns=LAB_OBJPERM_COLUMNS, **kwargs):
+        super().__init__(tokens=[row or lab_key_row()], columns=list(key_columns), **kwargs)
+        self.objperms = objperms or {}
+        self.objperm_columns = list(objperm_columns)
+
+    def __call__(self, sql, params=()):
+        lowered = " ".join(sql.split()).lower()
+        if "information_schema.columns" in lowered and params and params[0] == "LiteLLM_ObjectPermissionTable":
+            self.statements.append(sql)
+            return [{"column_name": name} for name in self.objperm_columns]
+        if '"litellm_objectpermissiontable"' in lowered:
+            self.statements.append(sql)
+            selected = re.findall(r'"([a-z_]+)"', sql.split("FROM")[0])
+            rows = self.objperms.get(params[0], [])
+            return [{k: v for k, v in r.items() if k in selected} for r in rows][:2]
+        return super().__call__(sql, params)
+
+
+def r3_collect(db=None, *, version=LAB_VERSION, caps=CAPS, sink=None):
+    return audit.collect(
+        db or R3Db(), fingerprint=audit.fingerprint_token_hash(token_hash(KEY)), alias=ALIAS, caps=caps,
+        allowed_callbacks=frozenset(), now=NOW, yaml_config={}, version=version, prestate_sink=sink,
+        cost_map={"openrouter/vendor/model:free": {"input_cost_per_token": 0, "output_cost_per_token": 0}},
+    )
+
+
+class R3BudgetCauseTests(unittest.TestCase):
+    """KEY_BUDGET=FAIL is resolved into its exact cause(s), consistent with the R1 KEY_BUDGET verdict."""
+
+    CASES = (
+        ({"max_budget": None}, "MISSING", "MAX_BUDGET_MISSING"),
+        ({"max_budget": "abc"}, "INVALID", "MAX_BUDGET_INVALID"),
+        ({"max_budget": float("nan")}, "INVALID", "MAX_BUDGET_INVALID"),
+        ({"max_budget": 0}, "NONPOSITIVE", "MAX_BUDGET_NONPOSITIVE"),
+        ({"max_budget": -1.0}, "NONPOSITIVE", "MAX_BUDGET_NONPOSITIVE"),
+        ({"max_budget": 2.0}, "ABOVE_APP_CAP", "MAX_BUDGET_ABOVE_APP_CAP"),
+    )
+
+    def test_each_max_budget_cause_is_named(self):
+        for overrides, detail, cause in self.CASES:
+            facts = r3_collect(R3Db(row=lab_key_row(**overrides)))
+            self.assertEqual(facts["KEY_MAX_BUDGET"], detail, overrides)
+            self.assertIn(cause, facts["KEY_BUDGET_CAUSE"].split(","), overrides)
+            self.assertEqual(facts["KEY_BUDGET"], "FAIL", overrides)
+
+    def test_duration_causes(self):
+        for value, detail in ((None, "MISSING"), ("", "BLANK"), ("  ", "BLANK"), ("30d", "CALENDAR_MONTH"),
+                              ("1mo", "CALENDAR_MONTH"), ("1d", "DAILY"), ("7d", "WEEKLY"), ("14d", "OTHER_WINDOW"),
+                              ("monthly", "UNRECOGNIZED"), (30, "UNRECOGNIZED")):
+            facts = r3_collect(R3Db(row=lab_key_row(budget_duration=value)))
+            self.assertEqual(facts["KEY_BUDGET_DURATION"], detail, value)
+        facts = r3_collect(R3Db(row=lab_key_row(budget_duration=None)))
+        self.assertIn("BUDGET_DURATION_MISSING", facts["KEY_BUDGET_CAUSE"].split(","))
+
+    def test_spend_and_app_cap(self):
+        facts = r3_collect(R3Db(row=lab_key_row(spend=0.5, max_budget=0.5)))
+        self.assertEqual((facts["KEY_SPEND_VS_MAX"], facts["KEY_BUDGET"]), ("AT_OR_ABOVE", "FAIL"))
+        self.assertIn("SPEND_AT_OR_ABOVE_MAX", facts["KEY_BUDGET_CAUSE"])
+        facts = r3_collect(caps={"rpm": 5, "tpm": 20000, "budget": None})
+        self.assertEqual(facts["APP_BUDGET_CAP"], "MISSING")
+        self.assertIn("APP_BUDGET_CAP_MISSING", facts["KEY_BUDGET_CAUSE"])
+        facts = r3_collect(R3Db(row=lab_key_row(spend=None)))
+        self.assertEqual((facts["KEY_SPEND_VS_MAX"], facts["KEY_BUDGET"]), ("NOT_APPLICABLE", "NOT_VERIFIED"))
+        self.assertIn("SPEND_UNKNOWN", facts["KEY_BUDGET_CAUSE"])
+
+    def test_healthy_budget_has_no_cause(self):
+        facts = r3_collect()
+        self.assertEqual((facts["KEY_MAX_BUDGET"], facts["KEY_BUDGET_DURATION"], facts["KEY_SPEND_VS_MAX"],
+                          facts["APP_BUDGET_CAP"], facts["KEY_BUDGET_CAUSE"]), ("OK", "CALENDAR_MONTH", "BELOW", "PRESENT", "NONE"))
+
+    def test_cause_is_consistent_with_r1_verdict(self):
+        failing = {"MAX_BUDGET_MISSING", "MAX_BUDGET_INVALID", "MAX_BUDGET_NONPOSITIVE", "MAX_BUDGET_ABOVE_APP_CAP",
+                   "BUDGET_DURATION_MISSING", "BUDGET_DURATION_BLANK", "APP_BUDGET_CAP_MISSING", "SPEND_AT_OR_ABOVE_MAX"}
+        rows = [lab_key_row(**o) for o, _, _ in self.CASES] + [lab_key_row(budget_duration=d) for d in (None, "", "x", "30d")]
+        rows += [lab_key_row(spend=s) for s in (None, 0.0, 0.5, 9.0)]
+        for row in rows:
+            facts = r3_collect(R3Db(row=row))
+            causes = set(facts["KEY_BUDGET_CAUSE"].split(","))
+            self.assertEqual(facts["KEY_BUDGET"] == "FAIL", bool(causes & failing), (row["max_budget"], row["budget_duration"], row["spend"]))
+
+    def test_budget_table_fallback_is_named(self):
+        db = R3Db(row=lab_key_row(max_budget=None, budget_duration=None, budget_id="bud-1"),
+                  budgets={"bud-1": {"rpm_limit": None, "tpm_limit": None, "max_budget": 0.5, "budget_duration": "30d"}})
+        facts = r3_collect(db)
+        self.assertEqual((facts["KEY_LIMIT_SOURCE"], facts["KEY_MAX_BUDGET"], facts["KEY_BUDGET_CAUSE"]), ("BUDGET_TABLE", "OK", "NONE"))
+
+
+class R3RateDetailTests(unittest.TestCase):
+    def test_rpm_and_tpm_are_classified_individually(self):
+        for value, detail in ((None, "MISSING"), ("", "MISSING"), ("5", "NON_INTEGER"), (5.5, "NON_INTEGER"),
+                              (True, "NON_INTEGER"), (0, "NONPOSITIVE"), (-3, "NONPOSITIVE"), (6, "ABOVE_APP_CAP"), (5, "OK")):
+            facts = r3_collect(R3Db(row=lab_key_row(rpm_limit=value)))
+            self.assertEqual(facts["KEY_RPM"], detail, value)
+            self.assertEqual(facts["KEY_TPM"], "OK", value)
+        facts = r3_collect(R3Db(row=lab_key_row(tpm_limit=None)))
+        self.assertEqual((facts["KEY_RPM"], facts["KEY_TPM"]), ("OK", "MISSING"))
+        facts = r3_collect(caps={"rpm": None, "tpm": 20000, "budget": 1.0})
+        self.assertEqual(facts["KEY_RPM"], "APP_CAP_MISSING")
+
+    def test_rate_detail_is_consistent_with_r1_verdict(self):
+        for rpm in (None, 0, 5, 6, "5"):
+            for tpm in (None, 20000, 20001):
+                facts = r3_collect(R3Db(row=lab_key_row(rpm_limit=rpm, tpm_limit=tpm)))
+                both_ok = facts["KEY_RPM"] == "OK" and facts["KEY_TPM"] == "OK"
+                self.assertEqual(facts["KEY_RATE_LIMITS"] == "PASS", both_ok, (rpm, tpm))
+
+    def test_wildcard_token_is_named_by_keyword(self):
+        for models, token in ((["all-proxy-models"], "ALL_PROXY_MODELS"), (["all-team-models"], "ALL_TEAM_MODELS"),
+                              (["*"], "STAR"), (["openrouter/*"], "CONTAINS_STAR"), ([ALIAS], "NONE")):
+            self.assertEqual(r3_collect(R3Db(row=lab_key_row(models=models)))["KEY_SCOPE_TOKEN"], token, models)
+
+
+class R3ObjectPermissionTests(unittest.TestCase):
+    def facts(self, perm=None, *, link="op-synthetic", columns=LAB_OBJPERM_COLUMNS, rows=None):
+        objperms = {link: rows if rows is not None else ([perm] if perm is not None else [])} if link else {}
+        return r3_collect(R3Db(row=lab_key_row(object_permission_id=link), objperms=objperms, objperm_columns=columns))
+
+    def test_no_link(self):
+        facts = self.facts(link=None)
+        self.assertEqual((facts["OBJPERM_ROW"], facts["OBJPERM_EFFECTIVE"]), ("NONE", "NONE"))
+
+    def test_empty_row_is_empty_but_r1_gate_stays_not_verified(self):
+        facts = self.facts(empty_objperm())
+        self.assertEqual((facts["OBJPERM_ROW"], facts["OBJPERM_EFFECTIVE"]), ("PRESENT", "EMPTY"))
+        self.assertEqual(facts["KEY_POLICY_GATE"], "NOT_VERIFIED")      # R1 contract unchanged
+        self.assertEqual(facts["KEY_POLICY_GATE_R3"], "NOT_VERIFIED")   # an inert row never promotes
+        self.assertIn("OBJECT_PERMISSION_LINKED", facts["KEY_POLICY_GATE_R3_REASONS"].split(","))
+
+    def test_grants_are_counted_by_field(self):
+        facts = self.facts(empty_objperm(vector_stores=["a", "b"], mcp_servers=["m"], mcp_tool_permissions={"m": ["t"]},
+                                         skills=["s"], mcp_tool_search_enabled=True))
+        self.assertEqual(facts["OBJPERM_EFFECTIVE"], "GRANTS_PRESENT")
+        self.assertEqual((facts["OBJPERM_VECTOR_STORES_COUNT"], facts["OBJPERM_MCP_SERVERS_COUNT"],
+                          facts["OBJPERM_MCP_TOOL_PERMISSIONS_COUNT"], facts["OBJPERM_SKILLS_COUNT"],
+                          facts["OBJPERM_MCP_TOOL_SEARCH_ENABLED"]), ("2", "1", "1", "1", "TRUE"))
+
+    def test_blocked_tools_is_a_restriction_not_a_grant(self):
+        facts = self.facts(empty_objperm(blocked_tools=["x"]))
+        self.assertEqual((facts["OBJPERM_EFFECTIVE"], facts["OBJPERM_BLOCKED_TOOLS_COUNT"]), ("EMPTY", "1"))
+
+    def test_model_grant_with_agent_is_flagged(self):
+        db = R3Db(row=lab_key_row(object_permission_id="op-synthetic", agent_id="agent-1"),
+                  objperms={"op-synthetic": [empty_objperm(models=["m"])]})
+        facts = r3_collect(db)
+        self.assertEqual((facts["OBJPERM_MODELS_COUNT"], facts["KEY_AGENT_ID"], facts["OBJPERM_EFFECTIVE"]), ("1", "PRESENT", "GRANTS_PRESENT"))
+
+    def test_unknown_states_are_never_empty(self):
+        self.assertEqual(self.facts(rows=[])["OBJPERM_ROW"], "MISSING")
+        self.assertEqual(self.facts(rows=[])["OBJPERM_EFFECTIVE"], "UNKNOWN")
+        self.assertEqual(self.facts(rows=[empty_objperm(), empty_objperm()])["OBJPERM_ROW"], "MULTIPLE")
+        unknown = self.facts(empty_objperm(), columns=LAB_OBJPERM_COLUMNS + ("future_grant",))
+        self.assertEqual((unknown["OBJPERM_UNKNOWN_COLUMNS"], unknown["OBJPERM_EFFECTIVE"]), ("1", "UNKNOWN"))
+        missing = self.facts(empty_objperm(), columns=tuple(c for c in LAB_OBJPERM_COLUMNS if c != "skills"))
+        self.assertEqual((missing["OBJPERM_MISSING_COLUMNS"], missing["OBJPERM_EFFECTIVE"]), ("1", "UNKNOWN"))
+        odd = self.facts(empty_objperm(vector_stores="not-a-list"))
+        self.assertEqual((odd["OBJPERM_UNRECOGNIZED_VALUES"], odd["OBJPERM_EFFECTIVE"]), ("1", "UNKNOWN"))
+
+    def test_unknown_columns_are_never_selected(self):
+        db = R3Db(row=lab_key_row(object_permission_id="op-synthetic"), objperms={"op-synthetic": [empty_objperm()]},
+                  objperm_columns=LAB_OBJPERM_COLUMNS + ("future_grant",))
+        r3_collect(db)
+        sql = next(s for s in db.statements if '"LiteLLM_ObjectPermissionTable"' in s and "information_schema" not in s)
+        self.assertNotIn("future_grant", sql)
+        self.assertNotIn("*", sql.split("FROM")[0])
+
+
+class R3ExtraMechanismAndSchemaTests(unittest.TestCase):
+    def test_extra_indirection_and_limits(self):
+        facts = r3_collect(R3Db(row=lab_key_row(user_id="u1", organization_id="o1", permissions={"x": 1},
+                                                budget_fallbacks={"m": ["n"]}, tpd_limit=100, model_max_budget={"m": 1})))
+        self.assertEqual(facts["KEY_EXTRA_INDIRECTION"], "BUDGET_FALLBACKS,ORGANIZATION,PERMISSIONS,USER")
+        self.assertEqual(facts["KEY_EXTRA_LIMITS"], "MODEL_MAX_BUDGET,TPD_LIMIT")
+        self.assertEqual(facts["KEY_POLICY_GATE"], "PASS")              # R1 does not see these
+        self.assertEqual(facts["KEY_POLICY_GATE_R3"], "NOT_VERIFIED")
+        self.assertIn("EXTRA_INDIRECTION", facts["KEY_POLICY_GATE_R3_REASONS"])
+
+    def test_unrecognized_extra_shape_is_reported(self):
+        facts = r3_collect(R3Db(row=lab_key_row(config="not-json-mapping")))
+        self.assertIn("CONFIG_UNRECOGNIZED", facts["KEY_EXTRA_INDIRECTION"])
+
+    def test_clean_lab_key_passes_r3(self):
+        facts = r3_collect()
+        self.assertEqual((facts["KEY_EXTRA_INDIRECTION"], facts["KEY_EXTRA_LIMITS"], facts["KEY_AGENT_ID"],
+                          facts["KEY_TYPE"], facts["KEY_SCHEMA_COMPAT"], facts["LITELLM_VERSION_CLASS"]),
+                         ("NONE", "NONE", "NONE", "DEFAULT", "LAB_EXACT", "LAB_REHEARSED"))
+        self.assertEqual((facts["KEY_POLICY_GATE"], facts["KEY_POLICY_GATE_R3"], facts["KEY_POLICY_GATE_R3_REASONS"]),
+                         ("PASS", "PASS", "NONE"))
+
+    def test_schema_drift_blocks_r3_pass(self):
+        facts = r3_collect(R3Db(key_columns=LAB_KEY_COLUMNS + ("future_bypass",)))
+        self.assertEqual((facts["KEY_SCHEMA_UNKNOWN_COLUMNS"], facts["KEY_SCHEMA_COMPAT"]), ("1", "UNKNOWN_COLUMNS"))
+        self.assertEqual(facts["KEY_POLICY_GATE_R3"], "NOT_VERIFIED")
+        older = r3_collect(R3Db(key_columns=tuple(c for c in LAB_KEY_COLUMNS if c not in ("agent_id", "policies"))))
+        self.assertEqual((older["KEY_SCHEMA_MISSING_KNOWN"], older["KEY_SCHEMA_COMPAT"], older["KEY_AGENT_ID"]),
+                         ("2", "MISSING_COLUMNS", "COLUMN_ABSENT"))
+        self.assertEqual(older["KEY_POLICY_GATE_R3"], "NOT_VERIFIED")
+
+    def test_unknown_column_values_are_never_read(self):
+        db = R3Db(key_columns=LAB_KEY_COLUMNS + ("future_bypass",))
+        r3_collect(db)
+        sql = next(s for s in db.statements if "LiteLLM_VerificationToken" in s and "information_schema" not in s)
+        self.assertNotIn("future_bypass", sql)
+        self.assertNotIn("key_name", sql)     # contains a key fragment: never selected
+        self.assertNotIn("metadata", sql)
+
+    def test_version_classes(self):
+        # Literal expectations, never derived from audit.LAB_REHEARSED_VERSIONS (S5-R3 version admission).
+        for version, value, cls in ((LAB_VERSION, "1_109_1", "LAB_REHEARSED"), ("1.110.0", "1_110_0", "LAB_REHEARSED"),
+                                    ("1.110.1", "1_110_1", "NOT_REHEARSED"), ("1.108.9", "1_108_9", "NOT_REHEARSED"),
+                                    ("2.0.0", "2_0_0", "NOT_REHEARSED"), ("1.110", "UNRECOGNIZED", "UNKNOWN"),
+                                    (None, "UNKNOWN", "UNKNOWN"), ("1.109.1-dev; rm -rf", "UNRECOGNIZED", "UNKNOWN")):
+            facts = r3_collect(version=version)
+            self.assertEqual((facts["LITELLM_VERSION"], facts["LITELLM_VERSION_CLASS"]), (value, cls), version)
+            self.assertEqual(facts["KEY_POLICY_GATE_R3"] == "PASS", cls == "LAB_REHEARSED", version)
+
+    def test_r3_gate_never_promotes_r1(self):
+        for row in (lab_key_row(models=["all-proxy-models"]), lab_key_row(rpm_limit=None), lab_key_row(team_id="t"),
+                    lab_key_row(spend=None)):
+            facts = r3_collect(R3Db(row=row))
+            if facts["KEY_POLICY_GATE"] != "PASS":
+                self.assertEqual(facts["KEY_POLICY_GATE_R3"], facts["KEY_POLICY_GATE"])
+
+    def test_every_r3_value_is_render_safe(self):
+        facts = r3_collect(R3Db(row=lab_key_row(object_permission_id="op-synthetic", user_id="u", models=["*"]),
+                                objperms={"op-synthetic": [empty_objperm(vector_stores=["v"])]}), version="9.9.9")
+        audit.render(facts, container_identity="UNCHANGED")
+        text = json.dumps(facts)
+        for secret in ("op-synthetic", KEY, token_hash(KEY), "sk-...0000", '"u"'):
+            self.assertNotIn(secret, text)
+
+
+class R3PrivatePrestateTests(unittest.TestCase):
+    """Opt-in, never published: a redacted allowlist of policy fields, bound to the audited key."""
+
+    def sink(self, db=None):
+        sink = {}
+        facts = r3_collect(db or R3Db(row=lab_key_row(object_permission_id="op-synthetic", budget_id="bud-1",
+                                                      config={"api_key": "sk-provider-secret"}, metadata={"note": "x"}),
+                                      objperms={"op-synthetic": [empty_objperm(vector_stores=["vs"])]},
+                                      budgets={"bud-1": {"rpm_limit": 1, "tpm_limit": 2, "max_budget": 0.5, "budget_duration": "30d"}}),
+                           sink=sink)
+        return facts, sink
+
+    def test_prestate_is_bound_and_redacted(self):
+        facts, sink = self.sink()
+        document = sink["PRIVATE_PRESTATE"]
+        self.assertEqual(document["binding"]["fingerprint"], audit.fingerprint_token_hash(token_hash(KEY)))
+        self.assertEqual(document["binding"]["key_match"], "ONE")
+        self.assertEqual(document["binding"]["litellm_version"], LAB_VERSION)
+        self.assertEqual(document["key"]["models"], [ALIAS])
+        self.assertEqual(document["object_permission"]["vector_stores"], ["vs"])
+        self.assertEqual(document["budget"]["max_budget"], 0.5)
+        text = json.dumps(document)
+        for forbidden in (token_hash(KEY), KEY, "sk-provider-secret", "sk-...0000", '"note"'):
+            self.assertNotIn(forbidden, text)
+        self.assertNotIn("token", document["key"])
+        self.assertEqual(set(document["key"]) - set(audit.PRESTATE_KEY_FIELDS), set())
+
+    def test_secret_like_values_are_redacted_even_in_allowed_fields(self):
+        _, sink = self.sink(R3Db(row=lab_key_row(key_alias="sk-looks-like-a-key", team_id="https://user:pw@host/x")))
+        key = sink["PRIVATE_PRESTATE"]["key"]
+        self.assertEqual((key["key_alias"], key["team_id"]), ("REDACTED", "REDACTED"))
+
+    def test_no_prestate_without_exactly_one_key(self):
+        sink = {}
+        db = R3Db()
+        db.tokens = []
+        r3_collect(db, sink=sink)
+        self.assertNotIn("PRIVATE_PRESTATE", sink)
+
+    def test_facts_never_contain_the_prestate(self):
+        facts, _ = self.sink()
+        self.assertNotIn("PRIVATE_PRESTATE", facts)
+        audit.render(facts, container_identity="UNCHANGED")
+
+
+class R3PrestateFileTests(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = self.tmp.name
+        import os
+        os.chmod(self.dir, 0o700)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_path_validation(self):
+        import os
+        ok = os.path.join(self.dir, "prestate.json")
+        self.assertIsNone(audit.validate_prestate_path(ok, euid=os.geteuid()))
+        self.assertEqual(audit.validate_prestate_path("relative.json", euid=os.geteuid()), "NOT_ABSOLUTE")
+        self.assertEqual(audit.validate_prestate_path(os.path.join(self.dir, "no", "x.json"), euid=os.geteuid()), "PARENT_INVALID")
+        open(ok, "w").close()
+        self.assertEqual(audit.validate_prestate_path(ok, euid=os.geteuid()), "EXISTS")
+        os.unlink(ok)
+        os.chmod(self.dir, 0o755)
+        self.assertEqual(audit.validate_prestate_path(ok, euid=os.geteuid()), "PARENT_NOT_PRIVATE")
+        os.chmod(self.dir, 0o700)
+        self.assertEqual(audit.validate_prestate_path(ok, euid=os.geteuid() + 1), "PARENT_NOT_OWNED")
+        link = os.path.join(self.dir, "link")
+        os.symlink(self.dir, link)
+        self.assertEqual(audit.validate_prestate_path(os.path.join(link, "x.json"), euid=os.geteuid()), "PARENT_INVALID")
+
+    def test_write_is_exclusive_private_and_hashed(self):
+        import os, stat
+        path = os.path.join(self.dir, "prestate.json")
+        digest = audit.write_private_prestate(path, {"a": 1})
+        mode = stat.S_IMODE(os.stat(path).st_mode)
+        self.assertEqual(mode, 0o600)
+        with open(path, "rb") as handle:
+            self.assertEqual(hashlib.sha256(handle.read()).hexdigest(), digest)
+        with self.assertRaises(audit.ProbeError):
+            audit.write_private_prestate(path, {"a": 2})   # never overwrites
+        target = os.path.join(self.dir, "target")
+        os.symlink(target, os.path.join(self.dir, "dangling.json"))
+        with self.assertRaises(audit.ProbeError):
+            audit.write_private_prestate(os.path.join(self.dir, "dangling.json"), {"a": 3})
+        self.assertFalse(os.path.exists(target))
+
+
+class R3HostPrestateTests(HostOrchestrationTests):
+    def setUp(self):
+        import tempfile, os
+        self.tmp = tempfile.TemporaryDirectory()
+        os.chmod(self.tmp.name, 0o700)
+        self.path = os.path.join(self.tmp.name, "prestate.json")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def host_with(self, probe_lines, argv_extra):
+        run, calls = self.fake_docker()
+
+        def wrapped(argv, stdin=None):
+            if argv[:3] == ["docker", "exec", "-i"]:
+                calls.append((argv, stdin))
+                return "\n".join(probe_lines) + "\n"
+            return run(argv, stdin)
+
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = audit.main(["--litellm-container", "litellm", *argv_extra], run=wrapped, euid=0,
+                              prestate_owner=__import__("os").geteuid())
+        return code, out.getvalue().splitlines(), calls
+
+    def test_prestate_written_privately_and_only_its_hash_printed(self):
+        import os
+        facts = {"KEY_MATCH": "ONE", "KEY_POLICY_GATE": "FAIL", "DB_READ_ONLY": "VERIFIED"}
+        prestate = {"PRIVATE_PRESTATE": {"binding": {"fingerprint": "f" * 64}, "key": {"models": [ALIAS]}}}
+        code, lines, calls = self.host_with([json.dumps(prestate), json.dumps(facts)], ["--private-prestate", self.path])
+        self.assertEqual(code, 0, lines)
+        self.assertTrue(os.path.exists(self.path))
+        self.assertTrue(any(line.startswith("S5R3_PRIVATE_PRESTATE_SHA256=") for line in lines))
+        self.assertIn("S5R3_PRIVATE_PRESTATE=WRITTEN", lines)
+        self.assertNotIn(ALIAS, "\n".join(lines))
+        probe_stdin = next(stdin for argv, stdin in calls if argv[:3] == ["docker", "exec", "-i"])
+        self.assertTrue(json.loads(probe_stdin.splitlines()[0])["private_prestate"])
+        with open(self.path, encoding="utf-8") as handle:
+            stored = json.load(handle)
+        self.assertEqual(stored["binding"]["litellm_container"], "litellm")
+
+    def test_bad_path_refused_before_any_docker_call(self):
+        calls = []
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = audit.main(["--litellm-container", "litellm", "--private-prestate", "relative.json"],
+                              run=lambda argv, stdin=None: calls.append(argv) or "", euid=0)
+        self.assertEqual(code, 2)
+        self.assertIn("S5R3_PRIVATE_PRESTATE=HOLD_NOT_ABSOLUTE", out.getvalue())
+        self.assertEqual(calls, [])
+
+    def test_unrequested_prestate_from_probe_is_refused(self):
+        facts = {"KEY_MATCH": "ONE", "KEY_POLICY_GATE": "FAIL", "DB_READ_ONLY": "VERIFIED"}
+        code, lines, _ = self.host_with([json.dumps({"PRIVATE_PRESTATE": {}}), json.dumps(facts)], [])
+        self.assertEqual(code, 2)
+        self.assertIn("S5R1_AUDIT=HOLD_PROBE_OUTPUT_UNSAFE", lines)
+
+    def test_requested_but_missing_prestate_is_a_hold(self):
+        import os
+        facts = {"KEY_MATCH": "NONE", "KEY_POLICY_GATE": "FAIL", "DB_READ_ONLY": "VERIFIED"}
+        code, lines, _ = self.host_with([json.dumps(facts)], ["--private-prestate", self.path])
+        self.assertEqual(code, 2)
+        self.assertIn("S5R3_PRIVATE_PRESTATE=NOT_WRITTEN", lines)
+        self.assertFalse(os.path.exists(self.path))
+
+
+# ==================================================================================================
+# S5-R3 version admission (1.110.0) and JWT detection. Expectations are literal and independent of the
+# auditor's own allowlist; the allowlist itself is pinned so any change to it is a visible test change.
+# ==================================================================================================
+ADMITTED = "1.110.0"
+
+
+class R3VersionAdmissionTests(unittest.TestCase):
+    def test_rehearsed_set_is_exactly_the_two_lab_proven_versions(self):
+        self.assertEqual(audit.LAB_REHEARSED_VERSIONS, frozenset({"1.109.1", "1.110.0"}))
+
+    def test_both_rehearsed_versions_pass_a_clean_key(self):
+        for version in ("1.109.1", "1.110.0"):
+            facts = r3_collect(version=version)
+            self.assertEqual((facts["KEY_POLICY_GATE"], facts["KEY_POLICY_GATE_R3"], facts["KEY_POLICY_GATE_R3_REASONS"]),
+                             ("PASS", "PASS", "NONE"), version)
+
+    def test_unrehearsed_versions_stay_not_verified(self):
+        for version in ("1.110.1", "1.109.0", "1.111.0", "0.0.0", None, "x"):
+            facts = r3_collect(version=version)
+            self.assertEqual(facts["KEY_POLICY_GATE_R3"], "NOT_VERIFIED", version)
+            self.assertIn("VERSION_NOT_REHEARSED", facts["KEY_POLICY_GATE_R3_REASONS"], version)
+
+    def test_admitted_version_never_promotes_r1(self):
+        cases = ((lab_key_row(models=["all-proxy-models"]), "FAIL"), (lab_key_row(rpm_limit=None), "FAIL"),
+                 (lab_key_row(max_budget=None), "FAIL"), (lab_key_row(team_id="t"), "NOT_VERIFIED"),
+                 (lab_key_row(spend=None), "NOT_VERIFIED"), (lab_key_row(access_group_ids=["g"]), "NOT_VERIFIED"))
+        for row, r1 in cases:
+            facts = r3_collect(R3Db(row=row), version=ADMITTED)
+            self.assertEqual((facts["KEY_POLICY_GATE"], facts["KEY_POLICY_GATE_R3"]), (r1, r1))
+
+    def test_admitted_version_keeps_object_permission_not_verified(self):
+        facts = r3_collect(R3Db(row=lab_key_row(object_permission_id="op-synthetic"),
+                                objperms={"op-synthetic": [empty_objperm()]}), version=ADMITTED)
+        self.assertEqual((facts["OBJPERM_EFFECTIVE"], facts["KEY_POLICY_GATE"], facts["KEY_POLICY_GATE_R3"]),
+                         ("EMPTY", "NOT_VERIFIED", "NOT_VERIFIED"))
+        self.assertEqual(facts["KEY_POLICY_GATE_R3_REASONS"], "OBJECT_PERMISSION_LINKED")
+
+    def test_admitted_version_keeps_unknown_schema_and_extra_indirection_not_verified(self):
+        facts = r3_collect(R3Db(key_columns=LAB_KEY_COLUMNS + ("future_bypass",)), version=ADMITTED)
+        self.assertEqual((facts["KEY_POLICY_GATE_R3"], facts["KEY_POLICY_GATE_R3_REASONS"]), ("NOT_VERIFIED", "SCHEMA_NOT_LAB_EXACT"))
+        facts = r3_collect(R3Db(row=lab_key_row(user_id="u")), version=ADMITTED)
+        self.assertEqual((facts["KEY_POLICY_GATE_R3"], facts["KEY_POLICY_GATE_R3_REASONS"]), ("NOT_VERIFIED", "EXTRA_INDIRECTION"))
+
+
+def jwt_collect(general_settings_db=None, yaml_general=None, yaml_status="LOADED", version=ADMITTED):
+    config = {} if general_settings_db is None else {"general_settings": general_settings_db}
+    yaml_config = {} if yaml_general is None else {"general_settings": yaml_general}
+    return audit.collect(R3Db(config=config), fingerprint=audit.fingerprint_token_hash(token_hash(KEY)), alias=ALIAS,
+                         caps=CAPS, allowed_callbacks=frozenset(), now=NOW, yaml_config=yaml_config, version=version,
+                         yaml_status=yaml_status,
+                         cost_map={"openrouter/vendor/model:free": {"input_cost_per_token": 0, "output_cost_per_token": 0}})
+
+
+class R3JwtDetectionTests(unittest.TestCase):
+    """1.110.0 lets a JWT identity link to any unexpired, unblocked key of the same user (LINK_ONLY /
+    map-existing). That only exists with general_settings.enable_jwt_auth; detect it, never assume it off."""
+
+    def test_disabled_when_absent_or_false(self):
+        for db, yaml_general in ((None, None), ({"enable_jwt_auth": False}, None), (None, {"enable_jwt_auth": False}), ({}, {})):
+            facts = jwt_collect(db, yaml_general)
+            self.assertEqual((facts["JWT_AUTH"], facts["KEY_POLICY_GATE_R3"]), ("DISABLED", "PASS"), (db, yaml_general))
+
+    def test_enabled_in_db_or_yaml_blocks_r3(self):
+        for db, yaml_general in (({"enable_jwt_auth": True}, None), (None, {"enable_jwt_auth": True})):
+            facts = jwt_collect(db, yaml_general)
+            self.assertEqual((facts["JWT_AUTH"], facts["KEY_POLICY_GATE"], facts["KEY_POLICY_GATE_R3"]), ("ENABLED", "PASS", "NOT_VERIFIED"))
+            self.assertIn("JWT_AUTH_NOT_DISABLED", facts["KEY_POLICY_GATE_R3_REASONS"])
+
+    def test_unrecognized_or_unread_is_never_disabled(self):
+        for db, yaml_general, status in (({"enable_jwt_auth": "true"}, None, "LOADED"), ("not-a-mapping", None, "LOADED"),
+                                         (None, None, "UNREADABLE"), (None, None, "NOT_FOUND")):
+            facts = jwt_collect(db, yaml_general, yaml_status=status)
+            self.assertIn(facts["JWT_AUTH"], ("UNRECOGNIZED", "UNKNOWN"), (db, status))
+            self.assertEqual(facts["KEY_POLICY_GATE_R3"], "NOT_VERIFIED", (db, status))
+
+    def test_jwt_value_is_render_safe(self):
+        audit.render(jwt_collect({"enable_jwt_auth": True}), container_identity="UNCHANGED")
+
+
+# ==================================================================================================
+# S5-R3A — PM-R3-01 exact container binding and PM-R3-02 effective flags OFF.
+# ==================================================================================================
+import os as _os
+import sys as _sys
+from unittest import mock
+
+_REPO = _os.path.abspath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", ".."))
+SUMMARY_ID = "a" * 64
+LITELLM_ID = "b" * 64
+SUMMARY_IMAGE = "sha256:6cee8366be056e84893b32dd6708248d983f1d3a939261af6cfe27db8572adc3"
+LITELLM_IMAGE = "sha256:95017a6781a986878745e4577172c9f5e74a060d5311491ce452bd9015d2f5ab"
+OFF_ENV = ["NEWSFLUX_AI_INFERENCE_ENABLED=false", "NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER=false", "OTHER=x"]
+PROBE_OK = {"KEY_MATCH": "ONE", "KEY_POLICY_GATE": "FAIL", "DB_READ_ONLY": "VERIFIED"}
+
+
+def identity(cid, image, started="2026-11-19T23:30:00Z", restarts=0, status="running", project="newsflux", service="summary-api"):
+    return "|".join((cid, image, started, str(restarts), status, project, service))
+
+
+class World:
+    """A fake Docker host for the strict path: two containers, mutable between calls."""
+
+    def __init__(self):
+        self.containers = {
+            SUMMARY_ID: {"image": SUMMARY_IMAGE, "started": "2026-11-19T23:30:00Z", "restarts": 0, "status": "running",
+                         "project": "newsflux", "service": "summary-api", "env": list(OFF_ENV)},
+            LITELLM_ID: {"image": LITELLM_IMAGE, "started": "2026-11-01T00:00:00Z", "restarts": 0, "status": "running",
+                         "project": "litellm", "service": "litellm", "env": []},
+        }
+        self.runtime_flags = {"inference": False, "external_transfer": False}
+        self.calls = []
+        self.hooks = {}  # call index -> callable(world)
+
+    def snapshot(self, cid):
+        c = self.containers[cid]
+        return identity(cid, c["image"], c["started"], c["restarts"], c["status"], c["project"], c["service"])
+
+    def __call__(self, argv, stdin=None):
+        index = len(self.calls)
+        self.calls.append((argv, stdin))
+        hook = self.hooks.get(index)
+        if hook:
+            hook(self)
+        target = argv[-1]
+        if argv[:2] == ["docker", "inspect"]:
+            fmt = argv[argv.index("--format") + 1]
+            if target not in self.containers:
+                raise audit.ProbeError("DOCKER_INSPECT_FAILED")
+            if fmt == audit.IDENTITY_FORMAT:
+                return self.snapshot(target) + "\n"
+            if fmt == "{{json .Config.Env}}":
+                return json.dumps(self.containers[target]["env"])
+            raise AssertionError(argv)
+        if argv[:3] == ["docker", "exec", "-u"]:
+            if argv[4] not in self.containers:
+                raise audit.ProbeError("DOCKER_EXEC_FAILED")
+            return json.dumps({"fingerprint": "f" * 64, "alias": ALIAS, "caps": CAPS, "allowed_callbacks": [],
+                               "runtime_flags": self.runtime_flags})
+        if argv[:3] == ["docker", "exec", "-i"]:
+            if argv[3] not in self.containers:
+                raise audit.ProbeError("DOCKER_EXEC_FAILED")
+            return json.dumps(PROBE_OK)
+        raise AssertionError(argv)  # strict mode never lists containers (no discovery)
+
+
+def strict_argv(world, **overrides):
+    values = {"--litellm-container": LITELLM_ID, "--summary-container": SUMMARY_ID, "--project": "newsflux",
+              "--summary-service": "summary-api", "--expect-summary-image": SUMMARY_IMAGE,
+              "--expect-litellm-image": LITELLM_IMAGE, "--expect-summary-snapshot": world.snapshot(SUMMARY_ID),
+              "--expect-litellm-snapshot": world.snapshot(LITELLM_ID)}
+    values.update(overrides)
+    return [part for key, value in values.items() if value is not None for part in (key, value)]
+
+
+def run_strict(world, argv=None, env=None):
+    out = io.StringIO()
+    clean = {k: v for k, v in _os.environ.items() if k not in ("NEWSFLUX_PROJECT", "NEWSFLUX_SUMMARY_SERVICE")}
+    clean.update(env or {})
+    with mock.patch.dict(_os.environ, clean, clear=True), contextlib.redirect_stdout(out):
+        code = audit.main(argv if argv is not None else strict_argv(world), run=world, euid=0)
+    return code, out.getvalue().splitlines()
+
+
+def execs(world):
+    return [argv for argv, _ in world.calls if argv[:2] == ["docker", "exec"]]
+
+
+class R3AExactBindingTests(unittest.TestCase):
+    def test_unchanged_identity_completes_with_exact_ids_and_no_discovery(self):
+        world = World()
+        code, lines = run_strict(world)
+        self.assertEqual(code, 0, lines)
+        for expected in ("S5R1_SUMMARY_BINDING=EXACT_ID_IMAGE_LABELS_LIFECYCLE", "S5R1_LITELLM_BINDING=EXACT_ID_IMAGE_LIFECYCLE",
+                         "S5R1_CONTAINER_IDENTITY=UNCHANGED", "S5R1_AUDIT=COMPLETE_DIAGNOSTIC_ONLY"):
+            self.assertIn(expected, lines)
+        self.assertFalse([argv for argv, _ in world.calls if argv[:2] == ["docker", "ps"]])
+        self.assertEqual([argv[4] if argv[2] == "-u" else argv[3] for argv in execs(world)], [SUMMARY_ID, LITELLM_ID])
+
+    def test_strict_mode_requires_every_binding_argument(self):
+        world = World()
+        for missing in ("--expect-summary-snapshot", "--expect-litellm-snapshot", "--expect-summary-image",
+                        "--expect-litellm-image", "--project", "--summary-service"):
+            code, lines = run_strict(world, strict_argv(world, **{missing: None}))
+            self.assertEqual((code, lines), (2, ["S5R1_AUDIT=HOLD_STRICT_BINDING_INCOMPLETE"]), missing)
+        code, lines = run_strict(world, strict_argv(world, **{"--litellm-container": "litellm"}))
+        self.assertEqual(lines, ["S5R1_AUDIT=HOLD_STRICT_BINDING_INCOMPLETE"])
+        self.assertEqual(world.calls, [])
+
+    def test_divergent_environment_holds_before_any_docker_call(self):
+        for env in ({"NEWSFLUX_PROJECT": "other"}, {"NEWSFLUX_SUMMARY_SERVICE": "summary-api-2"}):
+            world = World()
+            code, lines = run_strict(world, env=env)
+            self.assertEqual((code, lines), (2, ["S5R1_AUDIT=HOLD_ENV_DIVERGENT"]), env)
+            self.assertEqual(world.calls, [])
+        world = World()
+        code, _ = run_strict(world, env={"NEWSFLUX_PROJECT": "newsflux", "NEWSFLUX_SUMMARY_SERVICE": "summary-api"})
+        self.assertEqual(code, 0)  # the same values are not a divergence
+
+    def test_wrong_summary_or_litellm_holds_before_any_exec(self):
+        cases = (
+            (lambda w: w.containers[SUMMARY_ID].update(project="other"), "IDENTITY_MISMATCH_SUMMARY"),
+            (lambda w: w.containers[SUMMARY_ID].update(service="reader"), "IDENTITY_MISMATCH_SUMMARY"),
+            (lambda w: w.containers[SUMMARY_ID].update(image="sha256:" + "1" * 64), "IDENTITY_MISMATCH_SUMMARY"),
+            (lambda w: w.containers[SUMMARY_ID].update(status="exited"), "IDENTITY_MISMATCH_SUMMARY"),
+            (lambda w: w.containers[LITELLM_ID].update(image="sha256:" + "2" * 64), "IDENTITY_MISMATCH_LITELLM"),
+            (lambda w: w.containers[LITELLM_ID].update(restarts=1), "IDENTITY_MISMATCH_LITELLM"),
+        )
+        for mutate, reason in cases:
+            world = World()
+            argv = strict_argv(world)          # expected identities captured by the wrapper's gates
+            mutate(world)                      # ...then the host changed before the auditor started
+            code, lines = run_strict(world, argv)
+            self.assertEqual((code, lines), (2, [f"S5R1_AUDIT=HOLD_{reason}"]), reason)
+            self.assertEqual(execs(world), [], reason)
+
+    def test_expected_image_must_match_the_snapshot_image(self):
+        world = World()
+        code, lines = run_strict(world, strict_argv(world, **{"--expect-summary-image": "sha256:" + "3" * 64}))
+        self.assertEqual(lines, ["S5R1_AUDIT=HOLD_IDENTITY_MISMATCH_SUMMARY"])
+
+    def test_missing_or_replaced_container_holds(self):
+        world = World()
+        argv = strict_argv(world)
+        world.containers["c" * 64] = world.containers.pop(SUMMARY_ID)   # replaced by a new container ID
+        code, lines = run_strict(world, argv)
+        self.assertEqual(code, 2)
+        self.assertEqual(execs(world), [])
+
+    def test_restart_between_identity_gate_and_first_exec_holds(self):
+        world = World()
+        argv = strict_argv(world)
+        # calls: 0 identity S, 1 identity L, 2 env, 3 pre-exec identity S ... restart lands right before 3
+        world.hooks[3] = lambda w: w.containers[SUMMARY_ID].update(restarts=1, started="2026-11-20T00:00:00Z")
+        code, lines = run_strict(world, argv)
+        self.assertEqual((code, lines), (2, ["S5R1_AUDIT=HOLD_IDENTITY_CHANGED_BEFORE_EXEC"]))
+        self.assertEqual(execs(world), [])
+
+    def test_replacement_between_pre_exec_check_and_exec_holds(self):
+        world = World()
+        argv = strict_argv(world)
+        world.hooks[5] = lambda w: w.containers.pop(SUMMARY_ID)       # gone when the first exec runs
+        code, lines = run_strict(world, argv)
+        self.assertEqual((code, lines), (2, ["S5R1_AUDIT=HOLD_DOCKER_EXEC_FAILED"]))
+
+    def test_restart_during_the_audit_is_changed_and_exit_3(self):
+        world = World()
+        argv = strict_argv(world)
+        # calls: 0-1 gate, 2 env, 3-4 pre-exec, 5 Summary exec, 6-7 inter-exec, 8 LiteLLM exec, 9-10 post
+        world.hooks[9] = lambda w: w.containers[LITELLM_ID].update(restarts=1)   # after both execs
+        code, lines = run_strict(world, argv)
+        self.assertEqual(code, 3, lines)
+        self.assertIn("S5R1_CONTAINER_IDENTITY=CHANGED", lines)
+        self.assertEqual(lines[-1], "S5R1_AUDIT=HOLD_CONTAINER_STATE_CHANGED")
+        self.assertNotIn("S5R1_AUDIT=COMPLETE_DIAGNOSTIC_ONLY", lines)
+
+    def test_change_between_summary_parser_and_litellm_exec_never_reaches_litellm(self):
+        # R3B A1.1: the LiteLLM exec runs only on the containers re-proven right after the Summary parser.
+        cases = (
+            (5, lambda w: w.containers[LITELLM_ID].update(restarts=1), "LiteLLM restarted while Summary ran"),
+            (5, lambda w: w.containers[SUMMARY_ID].update(restarts=1, started="2026-11-20T00:00:00Z"),
+             "Summary restarted during its own parser"),
+            (6, lambda w: w.containers[LITELLM_ID].update(image="sha256:" + "4" * 64), "LiteLLM image swapped"),
+            (7, lambda w: w.containers[LITELLM_ID].update(status="paused"), "LiteLLM lifecycle changed"),
+            (6, lambda w: w.containers[SUMMARY_ID].update(project="other"), "Summary relabelled"),
+        )
+        for index, mutate, label in cases:
+            world = World()
+            argv = strict_argv(world)
+            world.hooks[index] = mutate
+            code, lines = run_strict(world, argv)
+            self.assertEqual((code, lines), (2, ["S5R1_AUDIT=HOLD_IDENTITY_CHANGED_BETWEEN_EXECS"]), label)
+            self.assertEqual([a[2] for a in execs(world)], ["-u"], label)   # the Summary exec only
+
+    def test_inter_exec_check_runs_after_the_flags_are_confirmed_off(self):
+        world = World()
+        world.runtime_flags = {"inference": True, "external_transfer": False}
+        world.hooks[6] = lambda w: w.containers[LITELLM_ID].update(restarts=1)
+        code, lines = run_strict(world, strict_argv(world))
+        self.assertEqual(lines, ["S5R1_AUDIT=HOLD_FLAGS_RUNTIME_NOT_OFF"])   # flags fail first, LiteLLM never touched
+        world = World()
+        run_strict(world)
+        kinds = [("exec-" + a[2]) if a[1] == "exec" else a[a.index("--format") + 1][:6] for a, _ in world.calls]
+        self.assertEqual(kinds[5:9], ["exec--u", "{{.Id}", "{{.Id}", "exec--i"])
+
+    def test_replacement_after_inter_exec_check_fails_the_exec_by_full_id(self):
+        world = World()
+        argv = strict_argv(world)
+        world.hooks[8] = lambda w: w.containers.pop(LITELLM_ID)   # bounded atomicity: the exec targets the full ID
+        code, lines = run_strict(world, argv)
+        self.assertEqual((code, lines), (2, ["S5R1_AUDIT=HOLD_DOCKER_EXEC_FAILED"]))
+
+    def test_legacy_mode_is_reported_as_discovered(self):
+        run, _ = self.fake_legacy()
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = audit.main(["--litellm-container", "litellm"], run=run, euid=0)
+        self.assertEqual(code, 0)
+        self.assertIn("S5R1_SUMMARY_BINDING=DISCOVERED_BY_LABELS", out.getvalue().splitlines())
+
+    def fake_legacy(self):
+        return HostOrchestrationTests.fake_docker(self)
+
+
+def _runtime_parsers():
+    """The full runtime (needs the Summary's dependencies); absent on a bare CI Python -> explicit skip."""
+    if _REPO not in _sys.path:
+        _sys.path.insert(0, _REPO)
+    try:
+        from services.article_intel_summary import litellm_adapter
+    except ImportError as error:  # e.g. fastapi/httpx not installed on the runner
+        raise unittest.SkipTest(f"Summary runtime dependencies unavailable: {error.name}") from None
+    return litellm_adapter
+
+
+def _function_source(relative, name):
+    """Exact source of one top-level function of the Summary package, read statically (no imports)."""
+    import ast
+    path = _os.path.join(_REPO, "services", "article_intel_summary", relative)
+    with open(path, encoding="utf-8") as handle:
+        text = handle.read()
+    for node in ast.walk(ast.parse(text)):
+        if isinstance(node, ast.FunctionDef) and node.name == name:
+            return ast.get_source_segment(text, node)
+    raise AssertionError(f"{name} not found in {relative}")
+
+
+def _static_read_bool(relative):
+    namespace = {"Mapping": dict}
+    exec(compile(_function_source(relative, "_read_bool"), relative, "exec"), namespace)  # noqa: S102 - repo source
+    return namespace["_read_bool"]
+
+
+FLAG_TABLE = (  # literal expectations, derived from the runtime parser semantics at 12929fb
+    ("true", "ON"), ("TRUE", "ON"), (" True ", "ON"), ("\ttrue\n", "ON"),
+    ("false", "OFF_EXPLICIT"), ("FALSE", "OFF_EXPLICIT"), (" False ", "OFF_EXPLICIT"),
+    ("1", "AMBIGUOUS"), ("0", "AMBIGUOUS"), ("yes", "AMBIGUOUS"), ("no", "AMBIGUOUS"), ("on", "AMBIGUOUS"),
+    ("off", "AMBIGUOUS"), ("", "AMBIGUOUS"), ("enabled", "AMBIGUOUS"), ("tru", "AMBIGUOUS"), ("falsey", "AMBIGUOUS"),
+)
+
+
+class R3AEffectiveFlagTests(unittest.TestCase):
+    NAME = "NEWSFLUX_AI_INFERENCE_ENABLED"
+
+    def test_literal_table(self):
+        for value, expected in FLAG_TABLE:
+            self.assertEqual(audit.classify_flag([f"{self.NAME}={value}"], self.NAME), expected, repr(value))
+        self.assertEqual(audit.classify_flag(["OTHER=1"], self.NAME), "OFF_DEFAULT_RUNTIME")
+        self.assertEqual(audit.classify_flag([f"{self.NAME}=false", f"{self.NAME}=false"], self.NAME), "DUPLICATE")
+        self.assertEqual(audit.classify_flag([f"{self.NAME}=false", f"{self.NAME}=true"], self.NAME), "DUPLICATE")
+        self.assertEqual(audit.classify_flag([self.NAME], self.NAME), "AMBIGUOUS")
+        self.assertEqual(audit.classify_flag(["X=1", 7, None], self.NAME), "OFF_DEFAULT_RUNTIME")
+
+    def test_classification_never_admits_what_any_runtime_parser_turns_on(self):
+        adapter = _runtime_parsers()
+        values = [v for v, _ in FLAG_TABLE] + [" TRUE", "true ", "TrUe", "true", "faLse\t", "NULL", "none"]
+        for value in values:
+            runtime_on = adapter._read_bool({self.NAME: value}, self.NAME)   # litellm_adapter / catalog
+            admin_on = value.lower() == "true"                                # admin_settings / operator preflight
+            cls = audit.classify_flag([f"{self.NAME}={value}"], self.NAME)
+            if runtime_on or admin_on:
+                self.assertEqual(cls, "ON", repr(value))
+            else:
+                self.assertIn(cls, ("OFF_EXPLICIT", "AMBIGUOUS"), repr(value))
+            if cls == "OFF_EXPLICIT":
+                self.assertFalse(runtime_on or admin_on, repr(value))
+
+    def test_static_parsers_of_this_revision_never_admit_on(self):
+        """Runs without the Summary dependencies: the real _read_bool bodies, executed in isolation."""
+        parsers = [_static_read_bool("litellm_adapter.py")]
+        catalog_source = open(_os.path.join(_REPO, "services", "article_intel_summary", "catalog.py"), encoding="utf-8").read()
+        self.assertNotIn("def _read_bool", catalog_source)        # catalog reuses the adapter's parser
+        self.assertRegex(catalog_source, r"from services\.article_intel_summary\.litellm_adapter import \([^)]*\b_read_bool\b")
+        values = [v for v, _ in FLAG_TABLE] + [" TRUE", "true ", "TrUe", "faLse\t", "NULL", "none"]
+        for value in values:
+            on = any(parse({self.NAME: value}, self.NAME) for parse in parsers) or value.lower() == "true"
+            cls = audit.classify_flag([f"{self.NAME}={value}"], self.NAME)
+            self.assertEqual(cls == "ON", on, repr(value))
+        self.assertFalse(any(parse({}, self.NAME) for parse in parsers))          # absent -> OFF
+        admin = open(_os.path.join(_REPO, "services", "article_intel_summary", "admin_settings.py"), encoding="utf-8").read()
+        self.assertIn('self.env.get("NEWSFLUX_AI_INFERENCE_ENABLED", "").lower() == "true"', admin)
+        gateway = _function_source("litellm_adapter.py", "load_gateway_settings")
+        self.assertIn('enabled=_read_bool(values, "NEWSFLUX_AI_INFERENCE_ENABLED")', gateway)
+        self.assertIn('external_transfer_authorized=_read_bool(values, "NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER")', gateway)
+        effective = _function_source("admin_settings.py", "effective_values")
+        for name in audit.FLAGS_THAT_MUST_BE_OFF:   # managed settings never override the two flags
+            self.assertNotIn(name, effective)
+
+    def test_default_off_is_proven_at_this_revision(self):
+        adapter = _runtime_parsers()
+        settings = adapter.load_gateway_settings({}, read_key=False)
+        self.assertFalse(settings.enabled)
+        self.assertFalse(settings.external_transfer_authorized)
+        import inspect
+        from services.article_intel_summary import admin_settings
+        source = inspect.getsource(admin_settings.ManagedSettingsStore.effective_values)
+        for name in audit.FLAGS_THAT_MUST_BE_OFF:  # managed settings never override the two flags
+            self.assertNotIn(name, source)
+
+    def host_flags(self, env, runtime=None):
+        world = World()
+        world.containers[SUMMARY_ID]["env"] = env
+        if runtime is not None:
+            world.runtime_flags = runtime
+        code, lines = run_strict(world)
+        return code, lines, world
+
+    def test_host_admits_only_effective_off(self):
+        for env, expected in ((OFF_ENV, ("OFF_EXPLICIT", "OFF_EXPLICIT")), (["OTHER=x"], ("OFF_DEFAULT_RUNTIME", "OFF_DEFAULT_RUNTIME")),
+                              (["NEWSFLUX_AI_INFERENCE_ENABLED= FALSE "], ("OFF_EXPLICIT", "OFF_DEFAULT_RUNTIME"))):
+            code, lines, _ = self.host_flags(env)
+            self.assertEqual(code, 0, (env, lines))
+            self.assertIn(f"S5R1_INFERENCE_EFFECTIVE={expected[0]}", lines)
+            self.assertIn(f"S5R1_EXTERNAL_TRANSFER_EFFECTIVE={expected[1]}", lines)
+            self.assertIn("S5R1_FLAGS_RUNTIME_PARSER=CONFIRMED_OFF", lines)
+
+    def test_host_holds_on_any_unclear_flag_before_any_exec(self):
+        cases = ((["NEWSFLUX_AI_INFERENCE_ENABLED=True"], "AI_FLAGS_NOT_OFF"),
+                 (["NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER= true"], "AI_FLAGS_NOT_OFF"),
+                 (["NEWSFLUX_AI_INFERENCE_ENABLED=1"], "AI_FLAGS_AMBIGUOUS"),
+                 (["NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER=yes"], "AI_FLAGS_AMBIGUOUS"),
+                 (["NEWSFLUX_AI_INFERENCE_ENABLED=on"], "AI_FLAGS_AMBIGUOUS"),
+                 (["NEWSFLUX_AI_INFERENCE_ENABLED="], "AI_FLAGS_AMBIGUOUS"),
+                 (["NEWSFLUX_AI_INFERENCE_ENABLED=false", "NEWSFLUX_AI_INFERENCE_ENABLED=false"], "AI_FLAGS_DUPLICATE"))
+        for env, reason in cases:
+            code, lines, world = self.host_flags(env)
+            self.assertEqual((code, lines), (2, [f"S5R1_AUDIT=HOLD_{reason}"]), env)
+            self.assertEqual(execs(world), [], env)
+
+    def test_runtime_parser_must_confirm_off_before_the_litellm_exec(self):
+        for runtime, reason in (({"inference": True, "external_transfer": False}, "FLAGS_RUNTIME_NOT_OFF"),
+                                ({"inference": False, "external_transfer": True}, "FLAGS_RUNTIME_NOT_OFF"),
+                                ({"inference": "false", "external_transfer": False}, "FLAGS_RUNTIME_UNAVAILABLE"),
+                                ({}, "FLAGS_RUNTIME_UNAVAILABLE")):
+            code, lines, world = self.host_flags(OFF_ENV, runtime)
+            self.assertEqual((code, lines), (2, [f"S5R1_AUDIT=HOLD_{reason}"]), runtime)
+            self.assertFalse([a for a in execs(world) if a[2] == "-i"], runtime)   # LiteLLM never reached
+
+    def test_summary_snippet_uses_the_real_runtime_parser(self):
+        self.assertIn("load_gateway_settings(os.environ, read_key=False)", audit.SUMMARY_SNIPPET)
+        self.assertIn("runtime_flags", audit.SUMMARY_SNIPPET)

@@ -1,0 +1,3 @@
+claude-producer ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDSOzfaBX9LIaEVbeWlPtivBXJkAT/s0yIs8urrvdr9K
+claude-replayer ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIbb6Np0cN1Ccrx1XMlys0n+61KU4JcXrIcAqNMPJC5t
+claude-reviewer ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEjAEn/xeKplxYgLlCZRCTlvN6wIrTw1kBFrauMglMMT

@@ -35,7 +35,22 @@ git -C "$repo" show "$R4_REF:deploy/release-governance/ai-settings-readonly-pref
 r4_check="$(extract "$r4_file")"
 rm -f "$r4_file"
 
-docker build -q -f "$repo/services/article_intel_summary/Dockerfile" --build-arg SOURCE_COMMIT="$sha" -t "$image" "$repo" >/dev/null
+build_args=(-f "$repo/services/article_intel_summary/Dockerfile")
+context="$repo"
+if [[ -n "${NEWSFLUX_TEST_PIP_CA:-}" ]]; then   # TLS-inspecting sandboxes only; the FROM stays digest-pinned
+  context="$(mktemp -d)"
+  cp -R "$repo/services" "$context/services"
+  cp "$NEWSFLUX_TEST_PIP_CA" "$context/.pip-ca.pem"
+  python3 -I - "$repo/services/article_intel_summary/Dockerfile" "$context/Dockerfile.sandbox" <<'PY'
+import sys
+s = open(sys.argv[1]).read()
+s = s.replace("RUN pip install", "COPY .pip-ca.pem /tmp/ca.pem\nARG HTTPS_PROXY\nRUN PIP_CERT=/tmp/ca.pem pip install", 1)
+open(sys.argv[2], "w").write(s)
+PY
+  build_args=(-f "$context/Dockerfile.sandbox" --network host --build-arg "HTTPS_PROXY=${HTTPS_PROXY:-}")
+fi
+docker build -q "${build_args[@]}" --build-arg SOURCE_COMMIT="$sha" -t "$image" "$context" >/dev/null
+[[ "$context" == "$repo" ]] || rm -rf -- "$context"
 [[ "$(docker image inspect -f '{{.Config.User}} {{.Config.WorkingDir}}' "$image")" == "10001:10001 /app" ]] \
   && ok IMAGE_USER_10001_WORKDIR_APP || ko IMAGE_USER_10001_WORKDIR_APP
 
