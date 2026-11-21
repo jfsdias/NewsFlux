@@ -22,6 +22,7 @@ import {
   SUMMARY_MODEL_AUTO,
   SUMMARY_SECTIONS,
 } from "@/utils/article-intelligence-profile"
+import { automaticSummaryChoice, automaticSummaryEnabled } from "@/utils/article-summary-consent"
 import { getAuthSessionKey, hasProvisionedApiKey } from "@/utils/auth"
 import { buildFallbackModelOptions, buildPrimaryModelOptions } from "@/utils/summary-model-options"
 import {
@@ -113,6 +114,7 @@ const ArticleIntelligence = () => {
   const authSessionKey = getAuthSessionKey(auth)
   const {
     aiSummaryAutoOnOpen,
+    aiSummaryAutoConsent,
     aiSummaryFallbackAllowCrossProvider,
     aiSummaryFallbackAllowPaid,
     aiSummaryFallbackEnabled,
@@ -125,6 +127,7 @@ const ArticleIntelligence = () => {
   } = useStore(settingsState, {
     keys: [
       "aiSummaryAutoOnOpen",
+      "aiSummaryAutoConsent",
       "aiSummaryFallbackAllowCrossProvider",
       "aiSummaryFallbackAllowPaid",
       "aiSummaryFallbackEnabled",
@@ -276,8 +279,8 @@ const ArticleIntelligence = () => {
         >
           <Switch
             aria-label={polyglot.t("article_intelligence.auto_on_open_label")}
-            checked={aiSummaryAutoOnOpen}
-            onChange={(value) => updateSettings({ aiSummaryAutoOnOpen: value })}
+            checked={automaticSummaryEnabled({ aiSummaryAutoOnOpen, aiSummaryAutoConsent })}
+            onChange={(value) => updateSettings(automaticSummaryChoice(value))}
           />
         </SettingItem>
         {catalog && (
