@@ -156,3 +156,24 @@ class S5CanaryPreflightTests(unittest.TestCase):
         snapshot = make_snapshot(html)
         self.assertTrue(snapshot.is_sufficient)
         self.assertLessEqual(_estimate_input_tokens(_build_messages(build_model_input(snapshot), s5=True)), 3072)
+
+
+class ModelOutputFramingTests(unittest.TestCase):
+    """Real models (OMV, mistral-small-2603) wrap the JSON in a Markdown fence or add a sentence; the object inside
+    is accepted and still parsed strictly. Anything that is not one JSON object stays MODEL_OUTPUT_INVALID_JSON."""
+
+    def parse(self, text):
+        from services.article_intel_summary.litellm_adapter import _parse_json_output
+        return _parse_json_output(text)
+
+    def test_fenced_and_framed_objects_are_accepted(self):
+        for text in ('```json\n{"summary": "x"}\n```', '```\n{"summary": "x"}\n```', ' {"summary": "x"} ',
+                     'Aqui está o resumo:\n{"summary": "x"}', '```JSON\n{"summary": "x"}```'):
+            self.assertEqual(self.parse(text), {"summary": "x"}, text)
+
+    def test_strictness_is_kept(self):
+        from services.article_intel_summary.litellm_adapter import InferenceUnavailable
+        for text in ('```json\n{"a": 1, "a": 2}\n```', '{"a": NaN}', 'no json here', '[1, 2]', '```json\n[1]\n```',
+                     '{"a": 1} trailing {"b": 2}'):
+            with self.assertRaises(InferenceUnavailable, msg=text):
+                self.parse(text)
