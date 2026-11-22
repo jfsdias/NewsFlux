@@ -222,6 +222,7 @@ const useArticleListLayout = ({ entries, layout, scrollRootRef }) => {
 
   return {
     cardColumnCount,
+    scrollRootRevision,
     handleVirtualizerScroll: scheduleAnchorCapture,
     setScrollRoot,
     virtualItems,

@@ -34,9 +34,14 @@ import { updateEntriesStatusOptimistically } from "@/hooks/useEntryActions"
 import { polyglotState } from "@/hooks/useLanguage"
 import usePhotoSlider from "@/hooks/usePhotoSlider"
 import useReaderContentRecovery from "@/hooks/useReaderContentRecovery"
-import useScreenWidth, { prefersReducedMotionState } from "@/hooks/useScreenWidth"
+import useReaderContinuity from "@/hooks/useReaderContinuity"
+import useScreenWidth, {
+  hasCoarsePointerState,
+  prefersReducedMotionState,
+} from "@/hooks/useScreenWidth"
 import { activeContentState, contentState } from "@/store/contentState"
 import { catalogFeedsByIdState, dataState } from "@/store/dataState"
+import { homeIdentityState } from "@/store/homePageState"
 import { articleDetailSettingsState } from "@/store/settingsState"
 import returnToArticleImage from "@/utils/article-image-return"
 import summaryErrorMessageKey from "@/utils/article-summary-errors"
@@ -45,6 +50,7 @@ import extractCodeContent from "@/utils/code-content"
 import { getCodeLanguage } from "@/utils/code-languages"
 import { generateReadableDate, generateReadingTime } from "@/utils/date"
 import getEntryDisplayTitle from "@/utils/entry-display-title"
+import { getHomeIdentityKey } from "@/utils/home-page"
 import buildArticleImageModel from "@/utils/images"
 import { getReaderSourceIdentity } from "@/utils/source-identity"
 import { getSafeExternalUrl } from "@/utils/url"
@@ -428,6 +434,17 @@ const ArticleDetail = forwardRef((_, ref) => {
   const activeContentHtml = readerRecovery.contentHtml ?? activeContent.content ?? ""
   const deferredContentHtml = useDeferredValue(activeContentHtml, "")
   const isArticleBodyPending = deferredContentHtml !== activeContentHtml
+  const continuityIdentity = useStore(homeIdentityState)
+  const hasCoarsePointer = useStore(hasCoarsePointerState)
+  useReaderContinuity({
+    identityKey: getHomeIdentityKey(continuityIdentity),
+    entryId: activeContent.id,
+    content: activeContentHtml,
+    pending: isArticleBodyPending,
+    scrollRef: scrollContainerRef,
+    scrollMode: isBelowMedium || hasCoarsePointer,
+    sessionRevision,
+  })
   const renderableContentHtml = isArticleBodyPending ? "" : deferredContentHtml
   useLayoutEffect(() => {
     const savedPosition = recoveryScrollPositionRef.current

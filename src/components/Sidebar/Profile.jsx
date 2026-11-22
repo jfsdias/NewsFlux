@@ -21,9 +21,13 @@ import { polyglotState } from "@/hooks/useLanguage"
 import useModalToggle from "@/hooks/useModalToggle"
 import { authState } from "@/store/authState"
 import { resetSettings } from "@/store/contentBrowsingDirectionState"
+import { homeIdentityState } from "@/store/homePageState"
+import { clearReadingContinuity } from "@/store/readingContinuityState"
 import { settingsState, updateSettings } from "@/store/settingsState"
 import { confirmDialogProps, destructiveConfirmButtonProps } from "@/utils/confirm-dialog"
 import { PRODUCT_GITHUB_REPO_PATH } from "@/utils/constants"
+import { continuityFingerprint } from "@/utils/continuity-fingerprint"
+import { getHomeIdentityKey } from "@/utils/home-page"
 import { logoutSession } from "@/utils/session"
 import { preloadSettingsTabs } from "@/utils/settings-loader"
 import { THEME_MODE_OPTIONS } from "@/utils/settings-options"
@@ -39,6 +43,7 @@ export default function Profile() {
   const navigate = useNavigate()
   const { server } = useStore(authState)
   const { polyglot } = useStore(polyglotState)
+  const identity = useStore(homeIdentityState)
 
   const { themeMode } = useStore(settingsState, { keys: ["themeMode"] })
 
@@ -71,6 +76,26 @@ export default function Profile() {
               keys: conflicts.join(", "),
             }),
           })
+        }
+      },
+    })
+  }
+
+  const handleClearContinuity = () => {
+    const key = getHomeIdentityKey(identity)
+    if (!key) {
+      return
+    }
+    Modal.confirm({
+      ...confirmDialogProps,
+      title: "Clear reading positions?",
+      content: <p>Remove saved reader and list positions for this account on this browser.</p>,
+      okText: "Clear positions",
+      cancelText: polyglot.t("search.cancel"),
+      onOk: async () => {
+        const account = await continuityFingerprint(key)
+        if (account) {
+          clearReadingContinuity(account)
         }
       },
     })
@@ -161,6 +186,10 @@ export default function Profile() {
                   {polyglot.t("sidebar.about")}
                 </Menu.Item>
                 <Divider style={{ margin: "4px 0" }} />
+                <Menu.Item key="clear-reading-positions" onClick={handleClearContinuity}>
+                  <IconRefresh aria-hidden="true" className="icon-right" />
+                  Clear reading positions
+                </Menu.Item>
                 <Menu.Item key="reset-settings" onClick={handleResetSettings}>
                   <IconRefresh aria-hidden="true" className="icon-right" />
                   {polyglot.t("sidebar.reset_settings")}

@@ -16,6 +16,7 @@ import FadeTransition from "@/components/ui/FadeTransition"
 import useArticleCardActivation from "@/hooks/useArticleCardActivation"
 import useArticleListLayout from "@/hooks/useArticleListLayout"
 import { polyglotState } from "@/hooks/useLanguage"
+import useListContinuity from "@/hooks/useListContinuity"
 import useReadOnScroll from "@/hooks/useReadOnScroll"
 import articleListEmptyState from "@/store/articleListEmptyState"
 import {
@@ -26,9 +27,11 @@ import {
   toggleDuplicateGroup,
 } from "@/store/contentState"
 import { dataState } from "@/store/dataState"
+import { homeIdentityState } from "@/store/homePageState"
 import { articleListLayoutState, articleListRequestSettingsState } from "@/store/settingsState"
 import createArticleListSnapshotIdentity from "@/utils/article-list-snapshot-identity"
 import { formatLocalizedDate } from "@/utils/date"
+import { getHomeIdentityKey } from "@/utils/home-page"
 
 import "./ArticleList.css"
 
@@ -145,7 +148,7 @@ const ArticleList = forwardRef(
     const { polyglot } = useStore(polyglotState)
     const articleListLayout = useStore(articleListLayoutState)
     const articleActivation = useArticleCardActivation(handleEntryClick)
-    const observeRead = useReadOnScroll(cardsRef)
+    const { observeRead, suspendReadOnScroll, resumeReadOnScroll } = useReadOnScroll(cardsRef)
     const isWaitingForCatalog = emptyState?.phase === "waiting-for-catalog"
     const showEmptyState = emptyState?.phase === "empty"
     const canRenderResults =
@@ -158,6 +161,7 @@ const ArticleList = forwardRef(
     const isCardLayout = articleListLayout === "card"
     const {
       cardColumnCount,
+      scrollRootRevision,
       handleVirtualizerScroll,
       setScrollRoot,
       virtualItems,
@@ -169,12 +173,38 @@ const ArticleList = forwardRef(
       scrollRootRef: cardsRef,
     })
 
+    const account = getHomeIdentityKey(useStore(homeIdentityState))
+    const continuitySnapshot = createArticleListSnapshotIdentity({
+      content: listState,
+      settings: requestSettings,
+      info: { from: listState.infoFrom, id: listState.infoId },
+      sessionRevision: 0,
+    })
+    const continuity = useListContinuity({
+      account,
+      snapshot: continuitySnapshot,
+      ready: hasCurrentSnapshot && isArticleListReady,
+      entries: projection.entries,
+      layout: articleListLayout,
+      columns: cardColumnCount,
+      scrollRef: cardsRef,
+      scrollRootRevision,
+      virtualizerRef,
+      suspendReadOnScroll,
+      resumeReadOnScroll,
+    })
+
     return (
       <AdaptiveScrollArea
         ref={ref}
         className={`entry-list entry-list-layout-${articleListLayout}`}
         scrollableNodeProps={{ ref: setScrollRoot, tabIndex: 0 }}
       >
+        {continuity.canResume && (
+          <Button data-continuity-resume onClick={continuity.resume}>
+            Resume list position
+          </Button>
+        )}
         <LoadingCards
           cardColumnCount={cardColumnCount}
           layout={articleListLayout}
