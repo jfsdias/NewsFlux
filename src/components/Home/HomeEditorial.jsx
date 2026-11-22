@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react"
 
 import HomeCategorySections from "./HomeCategorySections"
 import HomeHighlights from "./HomeHighlights"
+import HomeIntelligence from "./HomeIntelligence"
 import HomeRecent from "./HomeRecent"
 import HomeStates from "./HomeStates"
 
@@ -11,6 +12,7 @@ import LoadMoreSentinel from "@/components/Article/LoadMoreSentinel"
 import SearchAndSortBar from "@/components/Article/SearchAndSortBar"
 import AdaptiveScrollArea from "@/components/ui/AdaptiveScrollArea"
 import useArticleCardActivation from "@/hooks/useArticleCardActivation"
+import { polyglotState } from "@/hooks/useLanguage"
 import useReadOnScroll from "@/hooks/useReadOnScroll"
 import { contentState } from "@/store/contentState"
 import { dataState, getDataSessionRevision, globallyHiddenFeedIdsState } from "@/store/dataState"
@@ -70,6 +72,7 @@ const HomeEditorial = ({
     contentState,
     { keys: ["articleListError", "entries", "isArticleListReady", "loadMoreVisible", "total"] },
   )
+  const { polyglot } = useStore(polyglotState)
   const articleActivation = useArticleCardActivation(handleEntryClick)
   const observeRead = useReadOnScroll(cardsRef)
   const identity = useStore(homeIdentityState)
@@ -441,6 +444,12 @@ const HomeEditorial = ({
           {isInitialError && <HomeStates initialError retryArticleList={retryArticleList} />}
           {projection && !isZeroUnread && (
             <>
+              <HomeIntelligence
+                key={requestKey}
+                articleActivation={articleActivation}
+                entries={entries}
+                polyglot={polyglot}
+              />
               <HomeHighlights
                 articleActivation={articleActivation}
                 disclosureVisible={Boolean(activeSession.disclosureVisible)}

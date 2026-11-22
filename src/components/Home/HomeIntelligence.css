@@ -1,0 +1,28 @@
+.home-intelligence {
+  padding: 1rem;
+  border: 1px solid var(--color-border-2);
+  border-radius: 0.75rem;
+}
+.home-intelligence p {
+  margin: 0.5rem 0;
+}
+.home-intelligence h3 {
+  margin: 1rem 0 0.5rem;
+}
+.home-intelligence details {
+  margin: 0.5rem 0;
+}
+.home-intelligence summary {
+  cursor: pointer;
+}
+.home-intelligence select {
+  max-width: 100%;
+}
+.home-intelligence button,
+.home-intelligence select,
+.home-intelligence summary {
+  min-height: 44px;
+}
+.home-intelligence summary {
+  display: list-item;
+}

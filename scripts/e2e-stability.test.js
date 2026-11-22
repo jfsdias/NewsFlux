@@ -194,6 +194,8 @@ test("BULK-01C increments the scenario contract with all approved scenarios pass
   assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === "F06-3")?.state, "PASSED")
   assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === "F12-10b")?.state, "PASSED")
   assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === "F15-4")?.state, "PASSED")
+  assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === "NF-E05-1")?.state, "PASSED")
+  assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === "NF-E05-2")?.state, "PASSED")
   for (const id of [
     "CARD-QUICK-ACTIONS-01-1",
     "CARD-QUICK-ACTIONS-01-2",

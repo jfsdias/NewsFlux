@@ -54,6 +54,8 @@ export const EXPECTED_SCENARIOS = [
   { id: "QA-001-1024", state: "PASSED" },
   { id: "QA-001-1440", state: "PASSED" },
   { id: "QA-001-mouse", state: "PASSED" },
+  { id: "NF-E05-1", state: "PASSED" },
+  { id: "NF-E05-2", state: "PASSED" },
   { id: "CARD-QUICK-ACTIONS-01-1", state: "PASSED" },
   { id: "CARD-QUICK-ACTIONS-01-2", state: "PASSED" },
   { id: "CARD-QUICK-ACTIONS-01-3", state: "PASSED" },
