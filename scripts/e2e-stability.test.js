@@ -174,9 +174,9 @@ test("fewer than three runs cannot establish stability", () => {
   assert.match(result.problems.join("\n"), /at least 3 runs/)
 })
 
-test("the frozen expected scenario contract contains the reviewed 75 unique identities", () => {
-  assert.equal(EXPECTED_SCENARIOS.length, 75)
-  assert.equal(new Set(EXPECTED_SCENARIOS.map(({ id }) => id)).size, 75)
+test("contract preserves the 75 baseline identities and unique reviewed additions", () => {
+  assert.equal(EXPECTED_SCENARIOS.filter(({ id }) => !/^NF-E0[25]-[0-9]+$/u.test(id)).length, 75)
+  assert.equal(new Set(EXPECTED_SCENARIOS.map(({ id }) => id)).size, EXPECTED_SCENARIOS.length)
   assert.ok(EXPECTED_SCENARIOS.every(({ id, state }) => id && state))
 })
 
@@ -186,8 +186,8 @@ test("BULK-01C increments the scenario contract with all approved scenarios pass
     states[state] = (states[state] ?? 0) + 1
   }
 
-  assert.equal(E2E_SCENARIO_CONTRACT_VERSION, 14)
-  assert.deepEqual(states, { PASSED: 75 })
+  assert.equal(E2E_SCENARIO_CONTRACT_VERSION, 15)
+  assert.deepEqual(states, { PASSED: EXPECTED_SCENARIOS.length })
   for (const id of ["F02-2", "F04-1", "F04-3", "QA-001-884", "QA-001-939"]) {
     assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === id)?.state, "PASSED")
   }
@@ -438,7 +438,7 @@ test("the actual Playwright reporter accepts the complete reviewed scenario cont
     const recorded = JSON.parse(readFileSync(outputFile, "utf8"))
 
     assert.equal(result, undefined)
-    assert.equal(recorded.scenarios.length, 75)
+    assert.equal(recorded.scenarios.length, EXPECTED_SCENARIOS.length)
     assert.deepEqual(recorded.contractProblems, [])
   } finally {
     rmSync(directory, { recursive: true, force: true })
@@ -526,4 +526,12 @@ test("the frozen scenario inventory exactly matches discovered Playwright test i
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }
+})
+
+test("Smart Views scenarios are required to pass", () => {
+  const smart = EXPECTED_SCENARIOS.filter(({ id }) => /^NF-E02-[0-9]+$/u.test(id))
+  assert.deepEqual(
+    smart,
+    [1, 2, 3, 4, 5].map((n) => ({ id: `NF-E02-${n}`, state: "PASSED" })),
+  )
 })

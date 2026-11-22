@@ -8,4 +8,6 @@ The versioned `smart-views-v1` browser-local store partitions views by the exist
 
 The search dialog provides per-view deletion, account-level reset, and JSON export of the current account's views. Export is a user-controlled file and may include sensitive search text. Views are not included in the existing settings backup; import and cross-device synchronization are not provided in this MVP. Deleting/resetting a view does not alter Miniflux content. A missing source prevents opening its view and leaves the view available to delete. Storage schema versioning does not imply compatibility with future schema versions.
 
+Concurrent tabs use last-writer-wins browser storage; simultaneous edits can overwrite one another.
+
 Validation still required: real browser and device testing of navigation, selection, search parity, offline/error behavior, and persistence; assess concurrent-tab updates and site storage failures before release. Opening a view updates existing status and sort preferences to the saved values. No deploy or merge is authorized by this document.

@@ -43,7 +43,7 @@ const entryRequestFor = (page, query) =>
   )
 
 test.describe("NF-E02 Smart Views", () => {
-  test("NF-0201/0202: create, open and reload preserve query and source scope", async ({
+  test("NF-E02-1: create, open and reload preserve query and source scope", async ({
     openApp,
     mock,
   }) => {
@@ -70,7 +70,7 @@ test.describe("NF-E02 Smart Views", () => {
     expect(await mock.mutations()).toEqual([])
   })
 
-  test("NF-0202/0301: reopening a view has scope parity and no implicit writes", async ({
+  test("NF-E02-2: reopening a view has scope parity and no implicit writes", async ({
     openApp,
     mock,
   }) => {
@@ -89,7 +89,7 @@ test.describe("NF-E02 Smart Views", () => {
     expect(await mock.mutations()).toEqual([])
   })
 
-  test("NF-0203: rename, reorder and delete are explicit and persisted", async ({
+  test("NF-E02-3: rename, reorder and delete are explicit and persisted", async ({
     openApp,
     mock,
   }) => {
@@ -122,7 +122,7 @@ test.describe("NF-E02 Smart Views", () => {
   })
 })
 
-test("restores a starred feed view from all without changing read state", async ({
+test("NF-E02-4: restores a starred feed view from all without changing read state", async ({
   openApp,
   mock,
 }) => {
@@ -144,11 +144,28 @@ test("restores a starred feed view from all without changing read state", async 
   expect(await mock.mutations()).toEqual([])
 })
 
-test("Today shortcut can be saved as a dated view", async ({ openApp, mock }) => {
+test("NF-E02-5: Today shortcut restores date and sort", async ({ openApp, mock }) => {
   const { page } = await openApp({ path: "/all" })
   await page.getByRole("button", { name: "Select date" }).click()
   await page.getByRole("button", { name: "Today", exact: true }).click()
   await saveView(page, "Today search", QUERY_B)
   await expect(page.getByText(/date \d{4}-\d{2}-\d{2}/)).toBeVisible()
+  await closeSearch(page)
+  await page.getByRole("button", { name: "Select date" }).click()
+  await page.getByRole("button", { name: "Clear", exact: true }).click()
+  await openSearch(page)
+  const request = page.waitForRequest((r) => {
+    const url = new URL(r.url())
+    return (
+      url.pathname === "/v1/entries" &&
+      url.searchParams.get("search") === QUERY_B &&
+      url.searchParams.get("order") === "created_at" &&
+      url.searchParams.get("direction") === "desc" &&
+      Boolean(url.searchParams.get("published_after")) &&
+      Boolean(url.searchParams.get("published_before"))
+    )
+  })
+  await page.getByRole("button", { name: "Open Today search" }).click()
+  await request
   expect(await mock.mutations()).toEqual([])
 })

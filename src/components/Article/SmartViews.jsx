@@ -126,7 +126,7 @@ const SmartViews = ({ source, sourceId, query, filterDate, onClose, onOpenView }
       <h3>Saved views</h3>
       <p>
         Saved only in this browser for this server account. They do not sync and are not included in
-        the settings backup.
+        the settings backup. Opening a view updates your shared list status and sort preferences.
       </p>
       {!key && <p>Saved views are unavailable until your account is identified.</p>}
       {key && (

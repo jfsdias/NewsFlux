@@ -24,6 +24,7 @@ import useScreenWidth from "@/hooks/useScreenWidth"
 import {
   contentState,
   dynamicCountState,
+  setActiveContent,
   setFilterDate,
   setFilterString,
 } from "@/store/contentState"
@@ -407,7 +408,7 @@ const SearchAndSortBar = ({
         onChange={handleModalInputChange}
         onConfirm={handleConfirmSearch}
         onOpenView={() => {
-          closeActiveContent()
+          setActiveContent(null)
           entryListRef.current?.getScrollElement()?.scroll({ top: 0 })
         }}
       />
