@@ -71,6 +71,26 @@ test.describe("NF-QA01 ephemeral visual evidence", () => {
         await panel.getByRole("button", { name: "Enable editorial tools" }).click()
         await expect(panel.getByText(/Based only on up to the first 250 entries/)).toBeVisible()
         await expect(panel.locator("ol a").first()).toBeVisible()
+        await expect(page.locator("body")).toHaveAttribute("arco-theme", theme)
+        const contrast = await panel.evaluate((root) => {
+          const luminance = (value) => {
+            const channels = value.match(/[\\d.]+/g).slice(0, 3).map(Number)
+            return channels.reduce((sum, channel, index) => {
+              const s = channel / 255
+              return sum + [0.2126, 0.7152, 0.0722][index] * (s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4)
+            }, 0)
+          }
+          const surface = getComputedStyle(root).backgroundColor
+          const against = luminance(surface)
+          const ratios = ["p", "h3", "ol a"].map((selector) => {
+            const text = luminance(getComputedStyle(root.querySelector(selector)).color)
+            return (Math.max(text, against) + 0.05) / (Math.min(text, against) + 0.05)
+          })
+          return { surface, ratios }
+        })
+        expect(contrast.surface).toMatch(/^rgb\\(/)
+        for (const ratio of contrast.ratios) expect(ratio).toBeGreaterThanOrEqual(4.5)
+        await assertNoOverflow(page, "Enabled editorial tools")
         await page.screenshot({
           path: testInfo.outputPath(output("home", viewport.name, theme, "editorial-enabled")),
           fullPage: true,
@@ -96,6 +116,14 @@ test.describe("NF-QA01 ephemeral visual evidence", () => {
         await page.getByRole("button", { name: "Save this search" }).click()
         await expect(page.getByText("View saved on this browser.")).toBeVisible()
         await expect(page.locator('[aria-label="Saved views"]')).toContainText("NF-QA01 saved view")
+        const touchTargets = await page.locator(".smart-views__actions button").evaluateAll((buttons) =>
+          buttons.map((button) => {
+            const { width, height } = button.getBoundingClientRect()
+            return Math.min(width, height)
+          }),
+        )
+        expect(touchTargets.length).toBeGreaterThan(0)
+        for (const dimension of touchTargets) expect(dimension).toBeGreaterThanOrEqual(44)
         await assertNoOverflow(page, "Smart Views dialog")
         expect(errors).toEqual([])
         await page.screenshot({
