@@ -1,4 +1,6 @@
-# Smart Views: local storage decision (draft)
+# Smart Views: local storage candidate (draft)
+
+This document proposes the storage architecture for review; it is not a production approval.
 
 A view stores a name, the entered search string, source kind and ID, status, date, and existing sort settings. Results and article content are not stored. Opening a view sends the same search through the existing list pipeline; Miniflux remains authoritative for articles and read/star state. Saved views do not change All/Unread ordering rules.
 

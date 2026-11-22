@@ -1,17 +1,24 @@
 import { Button, Input } from "@arco-design/web-react"
 import { useStore } from "@nanostores/react"
 import { useState } from "react"
-import { useNavigate } from "react-router"
+import { useLocation, useNavigate } from "react-router"
 
-import { catalogCategoriesState, catalogFeedsState } from "@/store/dataState"
+import {
+  catalogCategoriesState,
+  catalogFeedsState,
+  getDataSessionRevision,
+} from "@/store/dataState"
 import { homeIdentityState } from "@/store/homePageState"
-import { settingsState, updateSettings } from "@/store/settingsState"
+import { settingsState } from "@/store/settingsState"
 import { pendingSmartViewState, smartViewsState, updateSmartViews } from "@/store/smartViewsState"
+import { downloadFile } from "@/utils/file"
 import { getHomeIdentityKey } from "@/utils/home-page"
 import {
   canOpenSmartView,
+  describeSmartView,
   getSmartViews,
   moveSmartView,
+  normalizeSmartViewDate,
   sanitizeSmartView,
   smartViewPath,
 } from "@/utils/smart-views"
@@ -23,10 +30,27 @@ const SmartViews = ({ source, sourceId, query, filterDate, onClose, onOpenView }
   const feeds = useStore(catalogFeedsState)
   const categories = useStore(catalogCategoriesState)
   const navigate = useNavigate()
+  const location = useLocation()
   const [name, setName] = useState("")
   const [message, setMessage] = useState("")
   const key = getHomeIdentityKey(identity)
   const views = getSmartViews(storage, key)
+  const sourceName = (view) => {
+    if (view.source === "feed") {
+      return (
+        feeds.find((item) => Number(item.id) === view.sourceId)?.title ??
+        `Unavailable feed ${view.sourceId}`
+      )
+    }
+    if (view.source === "category") {
+      return (
+        categories.find((item) => Number(item.id) === view.sourceId)?.title ??
+        `Unavailable category ${view.sourceId}`
+      )
+    }
+    return null
+  }
+  const touchTarget = { minHeight: 44, minWidth: 44 }
   const save = () => {
     let sequence = 1
     while (views.some((view) => view.id === `view-${sequence}`)) {
@@ -38,7 +62,7 @@ const SmartViews = ({ source, sourceId, query, filterDate, onClose, onOpenView }
       query,
       source,
       sourceId,
-      filterDate,
+      filterDate: normalizeSmartViewDate(filterDate),
       showStatus: settings.showStatus,
       orderBy: settings.orderBy,
       orderDirection: settings.orderDirection,
@@ -68,26 +92,34 @@ const SmartViews = ({ source, sourceId, query, filterDate, onClose, onOpenView }
       setMessage("This feed or category is unavailable. The saved view was not opened.")
       return
     }
-    updateSettings({
-      showStatus: view.showStatus,
-      orderBy: view.orderBy,
-      orderDirection: view.orderDirection,
-    })
-    pendingSmartViewState.set({ key, view })
+    const targetPath = smartViewPath(view)
+    const pending = {
+      key,
+      view,
+      targetPath,
+      originPath: location.pathname,
+      sessionRevision: getDataSessionRevision(),
+    }
+    pendingSmartViewState.set(pending)
+    globalThis.setTimeout(() => {
+      if (pendingSmartViewState.get() === pending) {
+        pendingSmartViewState.set(null)
+      }
+    }, 10_000)
     onOpenView()
     onClose()
-    navigate(smartViewPath(view))
+    navigate(targetPath)
   }
   const exportViews = () => {
-    const file = new Blob([JSON.stringify({ version: 1, views }, null, 2)], {
-      type: "application/json",
-    })
-    const url = URL.createObjectURL(file)
-    const link = document.createElement("a")
-    link.href = url
-    link.download = "newsflux-smart-views.json"
-    link.click()
-    URL.revokeObjectURL(url)
+    try {
+      downloadFile(
+        JSON.stringify({ version: 1, views }, null, 2),
+        "newsflux-smart-views.json",
+        "application/json",
+      )
+    } catch {
+      setMessage("Could not export saved views.")
+    }
   }
   return (
     <section aria-label="Saved views" style={{ marginTop: 20 }}>
@@ -120,16 +152,20 @@ const SmartViews = ({ source, sourceId, query, filterDate, onClose, onOpenView }
               {views.map((view, index) => (
                 <li key={view.id} style={{ marginTop: 10 }}>
                   <strong>{view.name}</strong>{" "}
-                  <span>
-                    ({view.source}
-                    {view.sourceId ? ` ${view.sourceId}` : ""}; {view.showStatus})
-                  </span>
+                  <span>({describeSmartView(view, sourceName(view))})</span>
                   <div>{view.query}</div>
-                  <Button size="mini" onClick={() => open(view)}>
+                  <Button
+                    aria-label={`Open ${view.name}`}
+                    size="mini"
+                    style={touchTarget}
+                    onClick={() => open(view)}
+                  >
                     Open
                   </Button>
                   <Button
+                    aria-label={`Rename ${view.name}`}
                     size="mini"
+                    style={touchTarget}
                     onClick={() => {
                       const next = globalThis.prompt("Rename view", view.name)
                       if (next === null) {
@@ -151,6 +187,7 @@ const SmartViews = ({ source, sourceId, query, filterDate, onClose, onOpenView }
                     aria-label={`Move ${view.name} up`}
                     disabled={index === 0}
                     size="mini"
+                    style={touchTarget}
                     onClick={() => edit((current) => moveSmartView(current, view.id, -1))}
                   >
                     ↑
@@ -159,12 +196,15 @@ const SmartViews = ({ source, sourceId, query, filterDate, onClose, onOpenView }
                     aria-label={`Move ${view.name} down`}
                     disabled={index === views.length - 1}
                     size="mini"
+                    style={touchTarget}
                     onClick={() => edit((current) => moveSmartView(current, view.id, 1))}
                   >
                     ↓
                   </Button>
                   <Button
+                    aria-label={`Delete ${view.name}`}
                     size="mini"
+                    style={touchTarget}
                     onClick={() => {
                       if (globalThis.confirm(`Delete saved view "${view.name}"?`)) {
                         edit((current) => current.filter((item) => item.id !== view.id))

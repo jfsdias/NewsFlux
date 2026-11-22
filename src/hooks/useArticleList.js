@@ -1,5 +1,6 @@
 import { useStore } from "@nanostores/react"
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react"
+import { useLocation } from "react-router"
 
 import {
   clearArticleListSnapshot,
@@ -27,7 +28,11 @@ import {
   setUnreadTodayCount,
 } from "@/store/dataState"
 import { homeIdentityState } from "@/store/homePageState"
-import { articleListRequestSettingsState, settingsState } from "@/store/settingsState"
+import {
+  articleListRequestSettingsState,
+  settingsState,
+  updateSettings,
+} from "@/store/settingsState"
 import { pendingSmartViewState } from "@/store/smartViewsState"
 import { reconcileArticleListFilterScope } from "@/utils/article-list-filter-scope"
 import { hasArticleListFilters } from "@/utils/article-list-filters"
@@ -48,7 +53,7 @@ import {
 } from "@/utils/home-editorial-session"
 import { getHomeIdentityKey } from "@/utils/home-page"
 import { getRequestErrorCategory, getSafeRequestErrorDetails } from "@/utils/safe-request-error"
-import { smartViewRestorationState } from "@/utils/smart-views"
+import { getSmartViewRestoredStatus, smartViewRestorationState } from "@/utils/smart-views"
 import {
   createTemporalPaginationState,
   getArticleListTemporalSortProperty,
@@ -111,6 +116,7 @@ const useArticleList = (source, sourceId, getEntries) => {
   })
   const settingsSnapshot = useStore(articleListRequestSettingsState)
   const pendingSmartView = useStore(pendingSmartViewState)
+  const location = useLocation()
   const { sessionRevision } = useStore(dataState, { keys: ["sessionRevision"] })
   const automaticRequestKey = createArticleListRequestKey({
     content: contentSnapshot,
@@ -145,13 +151,18 @@ const useArticleList = (source, sourceId, getEntries) => {
     const restoration = smartViewRestorationState(
       pendingSmartView,
       getHomeIdentityKey(homeIdentityState.get()),
+      sessionRevision,
+      location.pathname,
       source,
       sourceId,
-      settingsSnapshot.showStatus,
     )
     if (restoration === "cancel") {
       pendingSmartViewState.set(null)
     } else if (restoration === "restore") {
+      const { view } = pendingSmartView
+      const showStatus = getSmartViewRestoredStatus(view)
+      previousFilterScopeRef.current = { ...nextScope, showStatus }
+      updateSettings({ showStatus, orderBy: view.orderBy, orderDirection: view.orderDirection })
       setArticleListSource({ from: source, id: sourceId })
       reconcileArticleListFilters({
         filterDate: pendingSmartView.view.filterDate,
@@ -166,7 +177,15 @@ const useArticleList = (source, sourceId, getEntries) => {
     ) {
       reconcileArticleListFilters(transition)
     }
-  }, [pendingSmartView, searchScopeKey, settingsSnapshot.showStatus, source, sourceId])
+  }, [
+    pendingSmartView,
+    searchScopeKey,
+    settingsSnapshot.showStatus,
+    source,
+    sourceId,
+    sessionRevision,
+    location.pathname,
+  ])
 
   useLayoutEffect(() => {
     if (currentRequestKey.current === automaticRequestKey) {

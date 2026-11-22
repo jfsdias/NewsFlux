@@ -1,10 +1,15 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
+import dayjs from "dayjs"
+
 import {
   canOpenSmartView,
+  describeSmartView,
+  getSmartViewRestoredStatus,
   getSmartViews,
   moveSmartView,
+  normalizeSmartViewDate,
   sanitizeSmartView,
   sanitizeSmartViewStorage,
   setSmartViews,
@@ -60,10 +65,82 @@ test("malformed storage and duplicates do not become views", () => {
   assert.deepEqual(sanitizeSmartViewStorage({ version: 2 }), { version: 1, accounts: [] })
 })
 
-test("restoration waits for the exact destination and cancels on account change", () => {
-  const pending = { key: "account-a", view: base }
-  assert.equal(smartViewRestorationState(pending, "account-a", "all", null, "unread"), "wait")
-  assert.equal(smartViewRestorationState(pending, "account-a", "feed", 7, "all"), "wait")
-  assert.equal(smartViewRestorationState(pending, "account-a", "feed", "7", "unread"), "restore")
-  assert.equal(smartViewRestorationState(pending, "account-b", "feed", 7, "unread"), "cancel")
+test("restoration is bound to identity, session and destination lifecycle", () => {
+  const pending = {
+    key: "account-a",
+    sessionRevision: 4,
+    originPath: "/all",
+    targetPath: "/feed/7",
+    view: base,
+  }
+  assert.equal(smartViewRestorationState(pending, "account-a", 4, "/all", "all", null), "wait")
+  assert.equal(
+    smartViewRestorationState(pending, "account-a", 4, "/feed/7", "feed", "7"),
+    "restore",
+  )
+  assert.equal(smartViewRestorationState(pending, "account-b", 4, "/feed/7", "feed", 7), "cancel")
+  assert.equal(smartViewRestorationState(pending, "account-a", 5, "/feed/7", "feed", 7), "cancel")
+  assert.equal(
+    smartViewRestorationState(pending, "account-a", 4, "/starred", "starred", null),
+    "cancel",
+  )
+})
+
+test("restore normalizes starred only where destination controls do", () => {
+  assert.equal(getSmartViewRestoredStatus({ ...base, source: "all", showStatus: "starred" }), "all")
+  assert.equal(
+    getSmartViewRestoredStatus({ ...base, source: "today", showStatus: "starred" }),
+    "all",
+  )
+  assert.equal(
+    getSmartViewRestoredStatus({ ...base, source: "starred", showStatus: "starred" }),
+    "all",
+  )
+  assert.equal(
+    getSmartViewRestoredStatus({ ...base, source: "feed", showStatus: "starred" }),
+    "starred",
+  )
+  assert.equal(
+    getSmartViewRestoredStatus({ ...base, source: "category", showStatus: "starred" }),
+    "starred",
+  )
+})
+
+test("date picker Today and calendar values retain the local calendar date", () => {
+  const today = dayjs("2026-11-20T00:00:00")
+  assert.equal(normalizeSmartViewDate(today), "2026-11-20")
+  assert.equal(normalizeSmartViewDate("2026-11-19"), "2026-11-19")
+  assert.equal(
+    sanitizeSmartView({ ...base, filterDate: normalizeSmartViewDate(today) }).filterDate,
+    "2026-11-20",
+  )
+  assert.equal(
+    sanitizeSmartView({ ...base, filterDate: normalizeSmartViewDate(dayjs("invalid")) }),
+    null,
+  )
+})
+
+test("descriptions reflect the effective predicates of source adapters", () => {
+  const view = { ...base, filterDate: null, showStatus: "starred" }
+  assert.equal(
+    describeSmartView({ ...view, source: "all", sourceId: null }),
+    "all; all statuses; published_at desc",
+  )
+  assert.equal(
+    describeSmartView({ ...view, source: "today", sourceId: null }),
+    "today; all statuses; published_at desc",
+  )
+  assert.equal(
+    describeSmartView({ ...view, source: "starred", sourceId: null }),
+    "starred; starred; changed_at desc",
+  )
+  assert.equal(
+    describeSmartView({ ...view, source: "starred", sourceId: null, showStatus: "unread" }),
+    "starred; unread starred; changed_at desc",
+  )
+  assert.equal(
+    describeSmartView({ ...view, source: "history", sourceId: null }),
+    "history; read; changed_at desc",
+  )
+  assert.equal(describeSmartView(view), "feed 7; starred; published_at desc")
 })

@@ -1,3 +1,10 @@
+import dayjs from "dayjs"
+
+// The date picker also emits Dayjs values (notably its Today shortcut).
+// Persist the local calendar date rather than serializing it as a UTC instant.
+export const normalizeSmartViewDate = (value) =>
+  dayjs.isDayjs(value) && value.isValid() ? value.format("YYYY-MM-DD") : value
+
 const ALLOWED_SOURCES = new Set(["all", "today", "starred", "history", "feed", "category"])
 
 export const sanitizeSmartView = (value) => {
@@ -113,17 +120,55 @@ export const canOpenSmartView = (view, feeds, categories) => {
   return true
 }
 
-export const smartViewRestorationState = (pending, identityKey, source, sourceId, status) => {
+export const getSmartViewRestoredStatus = (view) =>
+  view.showStatus === "starred" && ["all", "today", "starred"].includes(view.source)
+    ? "all"
+    : view.showStatus
+
+export const smartViewRestorationState = (
+  pending,
+  identityKey,
+  sessionRevision,
+  locationPath,
+  source,
+  sourceId,
+) => {
   if (!pending) {
     return "none"
   }
-  if (!identityKey || pending.key !== identityKey) {
+  if (!identityKey || pending.key !== identityKey || pending.sessionRevision !== sessionRevision) {
+    return "cancel"
+  }
+  if (locationPath !== pending.originPath && locationPath !== pending.targetPath) {
     return "cancel"
   }
   const { view } = pending
-  return view.source === source &&
-    String(view.sourceId ?? "") === String(sourceId ?? "") &&
-    view.showStatus === status
+  return locationPath === pending.targetPath &&
+    view.source === source &&
+    String(view.sourceId ?? "") === String(sourceId ?? "")
     ? "restore"
     : "wait"
+}
+
+// These descriptions follow the current source adapters, which intentionally do
+// not all consume the same status or sort arguments.
+export const describeSmartView = (view, sourceName = null) => {
+  let status
+  if (view.source === "history") {
+    status = "read"
+  } else if (view.source === "starred") {
+    status = view.showStatus === "unread" ? "unread starred" : "starred"
+  } else if (["all", "today"].includes(view.source)) {
+    status = view.showStatus === "unread" ? "unread" : "all statuses"
+  } else {
+    status =
+      view.showStatus === "starred"
+        ? "starred"
+        : view.showStatus === "unread"
+          ? "unread"
+          : "all statuses"
+  }
+  const order = ["history", "starred"].includes(view.source) ? "changed_at" : view.orderBy
+  const source = sourceName ?? `${view.source}${view.sourceId ? ` ${view.sourceId}` : ""}`
+  return `${source}; ${status}; ${order} ${view.orderDirection}${view.filterDate ? `; date ${view.filterDate}` : ""}`
 }
