@@ -14,6 +14,7 @@ import {
   SUMMARY_SETTING_KEYS,
   summaryCacheKey,
 } from "@/utils/article-summary-cache"
+import { automaticSummaryEnabled, maySendAutomaticSummary } from "@/utils/article-summary-consent"
 import { getAuthSessionKey, hasProvisionedApiKey } from "@/utils/auth"
 
 // Opening an article summarizes it after this dwell time, so skimming quickly through
@@ -45,7 +46,7 @@ const idleState = (entryId, authSessionKey, sessionRevision) => ({
 const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => {
   const auth = useStore(authState)
   const settings = useStore(settingsState, {
-    keys: [...SUMMARY_SETTING_KEYS, "aiSummaryAutoOnOpen"],
+    keys: [...SUMMARY_SETTING_KEYS, "aiSummaryAutoOnOpen", "aiSummaryAutoConsent"],
   })
   const authSessionKey = getAuthSessionKey(auth)
   const [state, setState] = useState(() =>
@@ -74,6 +75,7 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
     hasProvisionedApiKey(auth)
   const cacheKey = summaryCacheKey({
     authSessionKey,
+    sessionRevision,
     entryId,
     // The entry hash only: changed_at also moves when the article is marked read, which would
     // look like a new article, re-trigger the automatic summary and cancel the one in flight.
@@ -90,7 +92,25 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
     }
   }, [activeContent?.id, authSessionKey, routeEntryId, sessionRevision])
 
-  const summarize = useCallback(async () => {
+  // Revoke an automatic request synchronously when consent changes while it is still
+  // waiting for the catalog. Do not cancel manual requests or an already dispatched POST.
+  useEffect(() => settingsState.listen((nextSettings) => {
+    if (automaticSummaryEnabled(nextSettings)) {
+      return
+    }
+    const pending = requestRef.current
+    if (pending?.automatic && pending.phase === "catalog") {
+      pending.controller.abort()
+      requestRef.current = null
+    }
+    setState((current) =>
+      current.status === "loading" && current.automatic && current.phase === "catalog"
+        ? idleState(current.entryId, current.authSessionKey, current.sessionRevision)
+        : current,
+    )
+  }), [])
+
+  const summarize = useCallback(async (automatic = false) => {
     if (!canSummarize) {
       return
     }
@@ -100,6 +120,8 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
       authSessionKey,
       controller,
       entryId,
+      automatic: automatic === true,
+      phase: "catalog",
       requestId: globalThis.crypto?.randomUUID?.() ?? `request-${Date.now()}`,
       sessionRevision: getDataSessionRevision(),
     }
@@ -124,6 +146,9 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
       sessionRevision: request.sessionRevision,
       status: "loading",
       summary: null,
+      requestId: request.requestId,
+      automatic: request.automatic,
+      phase: request.phase,
     })
 
     const setModelUnavailable = () =>
@@ -143,12 +168,19 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
       if (!catalog || !isCurrent()) {
         return
       }
+      if (!maySendAutomaticSummary(automatic === true, settingsState.get())) {
+        requestRef.current = null
+        setState(idleState(entryId, authSessionKey, request.sessionRevision))
+        return
+      }
       const selection = resolveSummaryRouting(settings, catalog)
       if (!selection.modelId) {
         setModelUnavailable()
         return
       }
       const profile = buildSummaryProfile(settings)
+      request.phase = "summary"
+      setState((current) => current.requestId === request.requestId ? { ...current, phase: request.phase } : current)
       const result = await requestArticleSummary({
         entryId,
         signal: controller.signal,
@@ -217,7 +249,7 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
 
   // Opening an article: show this tab's cached summary at once; otherwise, with automatic
   // summaries on, request one after a short dwell. Errors are never retried automatically.
-  const autoOnOpen = settings.aiSummaryAutoOnOpen
+  const autoOnOpen = automaticSummaryEnabled(settings)
   useEffect(() => {
     if (!canSummarize) {
       return
@@ -230,7 +262,7 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
     }
     const timer = setTimeout(() => {
       autoStartedRef.current = cacheKey
-      void summarize()
+      void summarize(true)
     }, AUTO_SUMMARY_DELAY_MS)
     return () => clearTimeout(timer)
   }, [authSessionKey, autoOnOpen, cacheKey, canSummarize, entryId, sessionRevision, summarize])

@@ -82,6 +82,11 @@ test("loading is announced; a safe error remains recoverable with the original b
   await summaryButton(page).click()
   await expect(summaryButton(page)).toBeDisabled()
   await expect(page.getByRole("status").filter({ hasText: "Generating summary" })).toBeVisible()
+  await expect
+    .poll(() =>
+      page.evaluate(() => globalThis.__articleIntelligenceHarness.summaryRequests().length),
+    )
+    .toBe(1)
   await page.evaluate(() => globalThis.__articleIntelligenceHarness.resolvePendingSummary())
   await expect(page.getByText("Synthetic AI summary for the current article.")).toBeVisible()
 
@@ -145,6 +150,29 @@ test("automatic summaries start shortly after opening, once, without a click", a
   await expect(page.getByText("Synthetic AI summary for the current article.")).toBeVisible({
     timeout: 10_000,
   })
+  const report = await page.evaluate(() => globalThis.__contentFallbackReaderReport)
+  expect(report.articleSummaryRequests).toHaveLength(1)
+  expect(report.minifluxWrites).toBe(0)
+})
+
+
+test("revoking automatic consent during catalog wait blocks POST and restores manual action", async ({
+  page,
+}) => {
+  await openReader(page, "catalog-paused", { width: 390, height: 844 }, { auto: true })
+  await expect
+    .poll(() => page.evaluate(() => globalThis.__articleIntelligenceHarness.catalogPending()))
+    .toBe(true)
+  await expect(summaryButton(page)).toBeDisabled()
+  await page.evaluate(() => {
+    globalThis.__articleIntelligenceHarness.revokeAutoSummary()
+    globalThis.__articleIntelligenceHarness.resolvePendingCatalog()
+  })
+  await expect(summaryButton(page)).toBeEnabled()
+  const before = await page.evaluate(() => globalThis.__articleIntelligenceHarness.summaryRequests())
+  expect(before).toHaveLength(0)
+  await summaryButton(page).click()
+  await expect(page.getByText("Synthetic AI summary for the current article.")).toBeVisible()
   const report = await page.evaluate(() => globalThis.__contentFallbackReaderReport)
   expect(report.articleSummaryRequests).toHaveLength(1)
   expect(report.minifluxWrites).toBe(0)
