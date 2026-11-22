@@ -9,7 +9,9 @@ test("NF-E03-2: list resume remains scoped and does not mark entries read", asyn
     path: "/all",
     settings: { markReadOnScroll: true, markReadBy: "manually", showStatus: "all" },
   })
-  const list = page.locator(".entry-list")
+  const list = page.locator(
+    ".entry-list.adaptive-scroll-area-native, .entry-list .simplebar-content-wrapper",
+  )
   expect(
     await page.evaluate(() => JSON.parse(localStorage.getItem("settings")).markReadOnScroll),
   ).toBe(true)
@@ -37,7 +39,12 @@ test("NF-E03-2: list resume remains scoped and does not mark entries read", asyn
   await list.hover()
   await page.mouse.wheel(0, 800)
   await page.mouse.wheel(0, 800)
-  await expect.poll(async () => (await mock.mutations()).length).toBeGreaterThan(before.length)
+  await expect
+    .poll(async () => {
+      const mutations = await mock.mutations()
+      return mutations.length
+    })
+    .toBeGreaterThan(before.length)
   await page.goto("/starred")
   await expect(page.getByRole("button", { name: "Resume list position" })).toHaveCount(0)
 })
