@@ -74,7 +74,7 @@ test.describe("NF-QA01 ephemeral visual evidence", () => {
         await expect(page.locator("body")).toHaveAttribute("arco-theme", theme)
         const contrast = await panel.evaluate((root) => {
           const luminance = (value) => {
-            const channels = value.match(/[\\d.]+/g).slice(0, 3).map(Number)
+            const channels = value.match(/[0-9.]+/g).slice(0, 3).map(Number)
             return channels.reduce((sum, channel, index) => {
               const s = channel / 255
               return sum + [0.2126, 0.7152, 0.0722][index] * (s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4)
@@ -88,7 +88,7 @@ test.describe("NF-QA01 ephemeral visual evidence", () => {
           })
           return { surface, ratios }
         })
-        expect(contrast.surface).toMatch(/^rgb\\(/)
+        expect(contrast.surface.startsWith("rgb(")).toBe(true)
         for (const ratio of contrast.ratios) expect(ratio).toBeGreaterThanOrEqual(4.5)
         await assertNoOverflow(page, "Enabled editorial tools")
         await page.screenshot({
@@ -122,6 +122,8 @@ test.describe("NF-QA01 ephemeral visual evidence", () => {
             return Math.min(width, height)
           }),
         )
+        const inputBox = await page.getByRole("textbox", { name: "View name" }).boundingBox()
+        expect(inputBox?.height).toBeGreaterThanOrEqual(44)
         expect(touchTargets.length).toBeGreaterThan(0)
         for (const dimension of touchTargets) expect(dimension).toBeGreaterThanOrEqual(44)
         await assertNoOverflow(page, "Smart Views dialog")
