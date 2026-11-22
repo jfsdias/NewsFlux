@@ -141,7 +141,7 @@ test.describe("NF-QA01 ephemeral visual evidence", () => {
 
       test(`Appearance settings ${viewport.name} ${theme}`, async ({ openApp }, testInfo) => {
         const { page, errors } = await openApp({
-          path: viewport.width < 768 ? "/all/entry/3" : "/all",
+          path: viewport.width <= 992 ? "/all/entry/3" : "/all",
           width: viewport.width,
           height: viewport.height,
           touch: viewport.touch,
