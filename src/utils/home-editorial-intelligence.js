@@ -1,4 +1,6 @@
 // Local, view-only calculations over the entries already loaded on Home.
+export const getEditorialTitle = (entry, fallback) =>
+  typeof entry?.title === "string" && entry.title.trim() ? entry.title : fallback
 const tokens = (title) =>
   new Set(
     String(title ?? "")
@@ -62,15 +64,23 @@ export const buildBriefing = (
     const time = Date.parse(entry.published_at)
     return Number.isFinite(time) && time <= now && now - time <= 86_400_000
   })
+  const sourceFrequency = new Map()
+  for (const entry of recent) {
+    const source = sourceId(entry)
+    if (source != null) {
+      sourceFrequency.set(String(source), (sourceFrequency.get(String(source)) ?? 0) + 1)
+    }
+  }
   const ranked = recent
     .map((entry, index) => ({
       entry,
       index,
+      frequency: sourceFrequency.get(String(sourceId(entry))) ?? Number.POSITIVE_INFINITY,
       score:
         (preferences[String(sourceId(entry))] ?? 0) +
         (categoryPreferences[String(entry.feed?.category?.id)] ?? 0),
     }))
-    .toSorted((a, b) => b.score - a.score || a.index - b.index)
+    .toSorted((a, b) => b.score - a.score || a.frequency - b.frequency || a.index - b.index)
   const chosen = []
   const usedSources = new Set()
   const usedCategories = new Set()
@@ -86,6 +96,7 @@ export const buildBriefing = (
       const story = storyById.get(item.entry.id)
       if (
         chosen.includes(item.entry) ||
+        chosen.some((existing) => duplicate(existing, item.entry)) ||
         (source != null && usedSources.has(source)) ||
         (story != null && usedStories.has(story)) ||
         (requireNewCategory && category != null && usedCategories.has(category))

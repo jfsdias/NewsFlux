@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState } from "react"
 
 import { projectDuplicates } from "@/utils/duplicate-projection"
-import { buildBriefing, groupHomeStories, projectFocus } from "@/utils/home-editorial-intelligence"
+import {
+  buildBriefing,
+  getEditorialTitle,
+  groupHomeStories,
+  projectFocus,
+} from "@/utils/home-editorial-intelligence"
 
 import "./HomeIntelligence.css"
 
@@ -98,7 +103,8 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
     }
     return result
   }, [enabled, loaded, activeFeedId])
-  const link = (entry) => <a {...articleActivation.getPrimaryLinkProps(entry)}>{entry.title}</a>
+  const titleFor = (entry) => getEditorialTitle(entry, polyglot.t("article_card.untitled_article"))
+  const link = (entry) => <a {...articleActivation.getPrimaryLinkProps(entry)}>{titleFor(entry)}</a>
   const title = polyglot.t("home_intelligence.title")
   return (
     <section aria-label={title} className="home-intelligence">
@@ -264,7 +270,7 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
           {stories.map((group) => (
             <details key={group.entries.map((entry) => entry.id).join("-")}>
               <summary>
-                {group.entries[0].title} ({group.entries.length})
+                {titleFor(group.entries[0])} ({group.entries.length})
               </summary>
               <ul>
                 {group.entries.map((entry) => (
@@ -281,7 +287,7 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
           {duplicateGroups.map((group) => (
             <details key={`${group.key}-${group.members[0].id}`}>
               <summary>
-                {group.members[0].title} ({group.members.length}; {group.key})
+                {titleFor(group.members[0])} ({group.members.length}; {group.key})
               </summary>
               <ul>
                 {group.members.map((entry) => (

@@ -2,8 +2,13 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 
 // Node tests require the explicit extension.
-// eslint-disable-next-line import/extensions
-import { buildBriefing, groupHomeStories, projectFocus } from "./home-editorial-intelligence.js"
+import {
+  buildBriefing,
+  getEditorialTitle,
+  groupHomeStories,
+  projectFocus,
+  // eslint-disable-next-line import/extensions
+} from "./home-editorial-intelligence.js"
 
 const entry = (id, feed, title, date = "2026-01-01T00:00:00Z") => ({
   id,
@@ -36,7 +41,7 @@ test("focus and briefing preserve order and do not mutate input", () => {
     [1, 2, 3],
   )
   assert.deepEqual(buildBriefing(entries, { now: Date.parse("2026-01-01T12:00:00Z") }), {
-    entries: entries.slice(0, 2),
+    entries: [entries[1], entries[0]],
     recentCount: 3,
     sourceCount: 2,
     unreadCount: 3,
@@ -97,4 +102,39 @@ test("category preference changes within-category choice without changing entrie
   assert.equal(result.entries[0].id, 2)
   assert.deepEqual(entries, before)
   assert.equal(buildBriefing(entries, { now, categoryPreferences: { 2: -1 } }).entries[0].id, 1)
+})
+
+// eslint-disable-next-line import/extensions
+const { projectHomePersonalization } = await import("./home-personalization-projection.js")
+
+test("briefing avoids exact copies and surfaces a rarer source relative to affinity V1", () => {
+  const now = Date.parse("2026-01-01T12:00:00Z")
+  const entries = [
+    { ...entry(1, 1, "Dominant one"), hash: "same", feed: { id: 1, category: { id: 1 } } },
+    { ...entry(2, 1, "Dominant two"), feed: { id: 1, category: { id: 1 } } },
+    { ...entry(3, 1, "Dominant three"), feed: { id: 1, category: { id: 1 } } },
+    { ...entry(4, 2, "Rare source"), feed: { id: 2, category: { id: 1 } } },
+    {
+      ...entry(5, 3, "Copy from another source"),
+      hash: "same",
+      feed: { id: 3, category: { id: 1 } },
+    },
+  ]
+  const result = buildBriefing(entries, { now })
+  assert.equal(result.entries[0].id, 4)
+  assert.notEqual(result.entries.filter((item) => item.hash === "same").length, 2)
+  const v1 = projectHomePersonalization({
+    entries,
+    baselineHighlightIds: [1, 2, 3],
+    baselineRecentIds: [4, 5],
+    freshnessWindow: 3_600_000,
+  })
+  assert.equal(v1.highlightIds[0], 1)
+  assert.equal(result.entries[0].id, 4)
+})
+
+test("blank or missing titles get an accessible fallback", () => {
+  assert.equal(getEditorialTitle({ title: "  " }, "Untitled article"), "Untitled article")
+  assert.equal(getEditorialTitle({ title: null }, "Untitled article"), "Untitled article")
+  assert.equal(getEditorialTitle({ title: "Named" }, "Untitled article"), "Named")
 })
