@@ -1,0 +1,11 @@
+# Reading continuity storage
+
+Reading continuity is browser-local, per NewsFlux origin and Miniflux account. It uses the Smart Views account identity (normalized server and user ID), hashed with SHA-256 before storage. It does not synchronize across browsers or devices and does not change Miniflux read, unread or starred state.
+
+`reading-continuity-v1` stores a versioned array of at most 200 validated descriptors, newest first. Each descriptor contains a SHA-256 account digest, a SHA-256 scope digest, a positive entry ID, a kind (`reader` or `list`) and a bounded scroll offset. Reader scope is the article body digest; list scope is the existing non-Home snapshot identity, including source and query/filter/sort settings, without the ephemeral session revision. Raw article bodies, search text, credentials and server names are not stored. Digests are identifiers, not encryption: low-entropy inputs may be guessable. Invalid or unsupported records are ignored; missing Web Crypto disables saving and restoration.
+
+Reader positions are saved after user interaction and restored on reopening the same article with matching content. Offsets are clamped to the current scroll extent. Different or recovered content does not inherit another body's position. Layout changes and delayed images can shift the apparent location.
+
+For lists, scrolling after user interaction captures the first visible entry and its offset. The **Resume list position** action is offered only for the same account and snapshot when that entry is in the loaded results. If the entry is missing, filtered out or not yet loaded, the list stays at its normal position; it does not fetch more pages to find it. Restoration suspends read-on-scroll processing until the next user interaction. The action does not change ordering or invoke a Miniflux mutation.
+
+**Clear reading positions**, in the profile menu, removes this account's Reader and list descriptors on this browser. Existing active views require a new user interaction before recording again. Browser site-data deletion removes all local descriptors; normal logout does not erase other accounts' data. The 200-record cap evicts older records; there is no time-based expiry or export. Site-data eviction, unavailable storage or storage corruption can discard continuity without affecting Miniflux data.

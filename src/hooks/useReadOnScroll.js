@@ -6,6 +6,7 @@ const READ_UPDATE_BATCH_DELAY_MS = 50
 
 const useReadOnScroll = (rootRef) => {
   const observerRef = useRef(null)
+  const suspendedRef = useRef(false)
   const observerRootRef = useRef(null)
   const entryByElementRef = useRef(new WeakMap())
   const wasVisibleRef = useRef(new WeakSet())
@@ -46,6 +47,9 @@ const useReadOnScroll = (rootRef) => {
     observerRootRef.current = root
     observerRef.current = new IntersectionObserver(
       (observerEntries, observer) => {
+        if (suspendedRef.current) {
+          return
+        }
         for (const observerEntry of observerEntries) {
           const element = observerEntry.target
           if (observerEntry.isIntersecting) {
@@ -86,6 +90,7 @@ const useReadOnScroll = (rootRef) => {
         const root = observerRootRef.current
         const observedEntry = entryByElementRef.current.get(element)
         const movedAboveViewport =
+          !suspendedRef.current &&
           observedEntry &&
           wasVisibleRef.current.has(element) &&
           element.isConnected &&
@@ -119,7 +124,23 @@ const useReadOnScroll = (rootRef) => {
     [flushPendingEntries],
   )
 
-  return observeRead
+  const suspendReadOnScroll = useCallback(() => {
+    suspendedRef.current = true
+    wasVisibleRef.current = new WeakSet()
+    pendingEntriesRef.current.clear()
+    if (flushTimerRef.current !== null) {
+      globalThis.clearTimeout(flushTimerRef.current)
+      flushTimerRef.current = null
+    }
+  }, [])
+  const resumeReadOnScroll = useCallback(() => {
+    if (suspendedRef.current) {
+      observerRef.current?.takeRecords()
+      wasVisibleRef.current = new WeakSet()
+      suspendedRef.current = false
+    }
+  }, [])
+  return { observeRead, suspendReadOnScroll, resumeReadOnScroll }
 }
 
 export default useReadOnScroll
