@@ -82,6 +82,11 @@ test("loading is announced; a safe error remains recoverable with the original b
   await summaryButton(page).click()
   await expect(summaryButton(page)).toBeDisabled()
   await expect(page.getByRole("status").filter({ hasText: "Generating summary" })).toBeVisible()
+  await expect
+    .poll(() =>
+      page.evaluate(() => globalThis.__articleIntelligenceHarness.summaryRequests().length),
+    )
+    .toBe(1)
   await page.evaluate(() => globalThis.__articleIntelligenceHarness.resolvePendingSummary())
   await expect(page.getByText("Synthetic AI summary for the current article.")).toBeVisible()
 
