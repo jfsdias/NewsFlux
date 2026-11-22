@@ -175,7 +175,7 @@ test("fewer than three runs cannot establish stability", () => {
 })
 
 test("contract preserves the 75 baseline identities and unique reviewed additions", () => {
-  assert.equal(EXPECTED_SCENARIOS.filter(({ id }) => !/^NF-E0[25]-[0-9]+$/.test(id)).length, 75)
+  assert.equal(EXPECTED_SCENARIOS.filter(({ id }) => !/^NF-E0[25]-[0-9]+$/u.test(id)).length, 75)
   assert.equal(new Set(EXPECTED_SCENARIOS.map(({ id }) => id)).size, EXPECTED_SCENARIOS.length)
   assert.ok(EXPECTED_SCENARIOS.every(({ id, state }) => id && state))
 })
