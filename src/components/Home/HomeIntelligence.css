@@ -18,3 +18,11 @@
 .home-intelligence select {
   max-width: 100%;
 }
+.home-intelligence button,
+.home-intelligence select,
+.home-intelligence summary {
+  min-height: 44px;
+}
+.home-intelligence summary {
+  display: list-item;
+}

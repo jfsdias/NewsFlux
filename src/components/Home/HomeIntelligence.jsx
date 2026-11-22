@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { projectDuplicates } from "@/utils/duplicate-projection"
 import { buildBriefing, groupHomeStories, projectFocus } from "@/utils/home-editorial-intelligence"
@@ -12,6 +12,14 @@ const sourceName = (entry) => entry.feed?.title || String(sourceId(entry) ?? "Un
 const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
   const [feedId, setFeedId] = useState("")
   const [enabled, setEnabled] = useState(false)
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!enabled) {
+      return
+    }
+    const timer = globalThis.setInterval(() => setNow(Date.now()), 60_000)
+    return () => globalThis.clearInterval(timer)
+  }, [enabled])
   const [preferences, setPreferences] = useState({})
   const [previousPreferences, setPreviousPreferences] = useState(null)
   const updatePreferences = (next) => {
@@ -29,39 +37,63 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
     }
     return [...found]
   }, [loaded])
-  const focused = useMemo(() => projectFocus(loaded, feedId), [loaded, feedId])
-  const briefing = useMemo(() => buildBriefing(focused, { preferences }), [focused, preferences])
-  const stories = useMemo(() => (enabled ? groupHomeStories(focused) : []), [enabled, focused])
+  const activeFeedId = sources.some(([id]) => id === feedId) ? feedId : ""
+  const focused = useMemo(() => projectFocus(loaded, activeFeedId), [loaded, activeFeedId])
+  const briefing = useMemo(
+    () => buildBriefing(focused, { preferences, now }),
+    [focused, preferences, now],
+  )
+  const stories = useMemo(
+    () =>
+      enabled
+        ? groupHomeStories(loaded).filter(
+            (group) =>
+              !activeFeedId ||
+              group.entries.some((entry) => String(sourceId(entry)) === activeFeedId),
+          )
+        : [],
+    [enabled, loaded, activeFeedId],
+  )
   const duplicateGroups = useMemo(() => {
     if (!enabled) {
       return []
     }
     const result = []
-    const seen = new Set()
     for (const key of ["hash", "url", "title"]) {
-      const { counts } = projectDuplicates(focused, key)
+      const { counts } = projectDuplicates(loaded, key)
       for (const [id] of counts) {
-        const representative = focused.find((entry) => entry.id === id)
-        const members = focused.filter(
-          (entry) => entry[key] === representative[key] && !seen.has(entry.id),
-        )
-        if (members.length < 2) {
+        const representative = loaded.find((entry) => entry.id === id)
+        const members = [
+          ...new Map(
+            loaded
+              .filter((entry) => entry[key] === representative[key])
+              .map((entry) => [entry.id, entry]),
+          ).values(),
+        ]
+        if (activeFeedId && !members.some((entry) => String(sourceId(entry)) === activeFeedId)) {
           continue
         }
-        for (const entry of members) {
-          seen.add(entry.id)
+        if (members.length < 2) {
+          continue
         }
         result.push({ key, members })
       }
     }
     return result
-  }, [enabled, focused])
+  }, [enabled, loaded, activeFeedId])
   const link = (entry) => <a {...articleActivation.getPrimaryLinkProps(entry)}>{entry.title}</a>
   const title = polyglot.t("home_intelligence.title")
   return (
     <section aria-label={title} className="home-intelligence">
       <h2 className="home-section-heading">{title}</h2>
-      <button aria-pressed={enabled} type="button" onClick={() => setEnabled(!enabled)}>
+      <button
+        aria-pressed={enabled}
+        type="button"
+        onClick={() => {
+          setNow(Date.now())
+          setEnabled(!enabled)
+        }}
+      >
         {polyglot.t(enabled ? "home_intelligence.disable" : "home_intelligence.enable")}
       </button>
       {enabled && (
@@ -69,7 +101,7 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
           <p>{polyglot.t("home_intelligence.scope")}</p>
           <label>
             {polyglot.t("home_intelligence.focus")}{" "}
-            <select value={feedId} onChange={(event) => setFeedId(event.target.value)}>
+            <select value={activeFeedId} onChange={(event) => setFeedId(event.target.value)}>
               <option value="">{polyglot.t("home_intelligence.all_sources")}</option>
               {sources.map(([id, name]) => (
                 <option key={id} value={id}>
@@ -78,17 +110,17 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
               ))}
             </select>
           </label>
-          {feedId && (
+          {activeFeedId && (
             <p>
               <button
                 type="button"
-                onClick={() => updatePreferences({ ...preferences, [feedId]: 1 })}
+                onClick={() => updatePreferences({ ...preferences, [activeFeedId]: 1 })}
               >
                 {polyglot.t("home_intelligence.more")}
               </button>{" "}
               <button
                 type="button"
-                onClick={() => updatePreferences({ ...preferences, [feedId]: -1 })}
+                onClick={() => updatePreferences({ ...preferences, [activeFeedId]: -1 })}
               >
                 {polyglot.t("home_intelligence.less")}
               </button>{" "}
@@ -105,7 +137,9 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
               >
                 {polyglot.t("home_intelligence.undo")}
               </button>{" "}
-              {polyglot.t("home_intelligence.preference", { value: preferences[feedId] ?? 0 })}
+              {polyglot.t("home_intelligence.preference", {
+                value: preferences[activeFeedId] ?? 0,
+              })}
             </p>
           )}
           <h3>{polyglot.t("home_intelligence.briefing")}</h3>

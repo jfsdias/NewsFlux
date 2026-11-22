@@ -814,7 +814,7 @@
     "title": "Editorial tools",
     "enable": "Enable editorial tools",
     "disable": "Disable editorial tools",
-    "scope": "Based only on up to the first 250 entries currently loaded on Home, in their loaded order. The briefing uses the last 24 hours and shows at most one entry per source and related group, prioritizing distinct categories, your source preferences, then loaded order. Groups use loaded entries regardless of age. Results change as entries load or refresh.",
+    "scope": "Based only on up to the first 250 entries currently loaded on Home, in their loaded order. The briefing uses the last 24 hours and shows at most one entry per source and related group, prioritizing distinct categories, your source preferences, then loaded order. Groups use loaded entries regardless of age and show every source even when a focus is selected. Return to All sources to apply source preferences across the briefing. Results change as entries load or refresh.",
     "more": "More from this source",
     "less": "Less from this source",
     "reset": "Reset preferences",
