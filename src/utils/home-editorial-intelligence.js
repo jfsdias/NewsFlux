@@ -1,0 +1,86 @@
+// Local, view-only calculations over the entries already loaded on Home.
+const tokens = (title) =>
+  new Set(
+    String(title ?? "")
+      .toLocaleLowerCase("en-US")
+      .normalize("NFKD")
+      .replaceAll(/\p{M}/gu, "")
+      .match(/[\p{L}\p{N}]{4,}/gu),
+  )
+const sourceId = (entry) => entry.feed_id ?? entry.feed?.id
+const duplicate = (a, b) =>
+  ["hash", "url", "title"].some(
+    (key) => typeof a[key] === "string" && a[key].trim() && a[key] === b[key],
+  )
+const related = (a, b) => {
+  if (
+    duplicate(a, b) ||
+    sourceId(a) == null ||
+    sourceId(b) == null ||
+    sourceId(a) === sourceId(b)
+  ) {
+    return false
+  }
+  const aTime = Date.parse(a.published_at)
+  const bTime = Date.parse(b.published_at)
+  if (!Number.isFinite(aTime) || !Number.isFinite(bTime) || Math.abs(aTime - bTime) > 86_400_000) {
+    return false
+  }
+  const left = tokens(a.title)
+  const right = tokens(b.title)
+  const common = [...left].filter((word) => right.has(word))
+  return common.length >= 3 && common.length / Math.max(left.size, right.size) >= 0.6
+}
+
+// Every member must directly match every other member; no transitive chaining.
+export const groupHomeStories = (entries) => {
+  const groups = []
+  for (const entry of entries) {
+    if (
+      entry?.id == null ||
+      groups.some((group) => group.entries.some((item) => item.id === entry.id))
+    ) {
+      continue
+    }
+    const match = groups.find((group) => group.entries.every((item) => related(item, entry)))
+    if (match) {
+      match.entries.push(entry)
+    } else {
+      groups.push({ entries: [entry] })
+    }
+  }
+  return groups.filter((group) => group.entries.length > 1)
+}
+
+export const projectFocus = (entries, feedId) =>
+  feedId === "" ? entries : entries.filter((entry) => String(sourceId(entry)) === feedId)
+export const buildBriefing = (entries, { now = Date.now(), preferences = {} } = {}) => {
+  const recent = entries.filter((entry) => {
+    const time = Date.parse(entry.published_at)
+    return Number.isFinite(time) && time <= now && now - time <= 86_400_000
+  })
+  const ranked = recent
+    .map((entry, index) => ({ entry, index, score: preferences[String(sourceId(entry))] ?? 0 }))
+    .toSorted((a, b) => b.score - a.score || a.index - b.index)
+  const chosen = []
+  const used = new Set()
+  for (const item of ranked) {
+    const source = sourceId(item.entry)
+    if (source != null && used.has(source)) {
+      continue
+    }
+    chosen.push(item.entry)
+    if (source != null) {
+      used.add(source)
+    }
+    if (chosen.length === 5) {
+      break
+    }
+  }
+  return {
+    entries: chosen,
+    recentCount: recent.length,
+    sourceCount: new Set(entries.map((entry) => sourceId(entry)).filter((id) => id != null)).size,
+    unreadCount: entries.filter((entry) => entry.status === "unread").length,
+  }
+}
