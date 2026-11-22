@@ -12,7 +12,7 @@ import useContentContext from "@/hooks/useContentContext"
 import {
   activeEntryIndexState,
   contentState,
-  filteredEntriesState,
+  displayedEntriesState,
   nextContentState,
   prevContentState,
   setActiveContent,
@@ -182,7 +182,7 @@ const useKeyHandlers = ({ readerNavigation } = {}) => {
     const adjacentUnreadEntry = findAdjacentUnreadEntry(
       activeEntryIndexState.get(),
       direction,
-      filteredEntriesState.get(),
+      displayedEntriesState.get(),
     )
     if (adjacentUnreadEntry) {
       handleEntryClick(adjacentUnreadEntry)

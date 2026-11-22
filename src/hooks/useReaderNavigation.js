@@ -7,6 +7,9 @@ import useContentContext from "@/hooks/useContentContext"
 import { polyglotState } from "@/hooks/useLanguage"
 import {
   contentState,
+  displayedEntriesState,
+  duplicateProjectionState,
+  duplicateViewState,
   setArticleListSource,
   setEntries,
   setHomePaginationBoundary,
@@ -42,6 +45,7 @@ const useReaderNavigation = ({ source, sourceId, getEntries, homeProjection }) =
   const { entryListRef, handleEntryClick } = useContentContext()
   const content = useStore(contentState)
   const settings = useStore(settingsState)
+  const displayedEntries = useStore(displayedEntriesState)
   const { sessionRevision } = useStore(dataState, { keys: ["sessionRevision"] })
   const categories = useStore(visibleCategoriesState)
   const feeds = useStore(visibleFeedsState)
@@ -66,8 +70,8 @@ const useReaderNavigation = ({ source, sourceId, getEntries, homeProjection }) =
       }
       return [...homeProjection.highlightIds, ...homeProjection.recentIds]
     }
-    return content.entries.map(({ id }) => id)
-  }, [content.entries, homeProjection, listRequestKey, source])
+    return displayedEntries.map(({ id }) => id)
+  }, [displayedEntries, homeProjection, listRequestKey, source])
   const activeSequenceIndex = sequenceIds.findIndex((id) => idsEqual(id, content.activeContent?.id))
   const navigationIdentity = JSON.stringify([
     listRequestKey,
@@ -158,6 +162,7 @@ const useReaderNavigation = ({ source, sourceId, getEntries, homeProjection }) =
         direction,
         source,
         removeDuplicates: settingsState.get().removeDuplicates,
+        expandedIds: duplicateProjectionState.get().ids,
         homeHighlightIds: homeProjection?.highlightIds,
       })
       if (appended.newEntries.length === 0) {
@@ -185,7 +190,13 @@ const useReaderNavigation = ({ source, sourceId, getEntries, homeProjection }) =
           cursor: getHomePaginationBoundary(pageEntries),
         })
       }
-      return { entries: appended.entries, sequenceIds: appended.sequenceIds }
+      return {
+        entries: appended.entries,
+        sequenceIds:
+          source === "home"
+            ? appended.sequenceIds
+            : displayedEntriesState.get().map(({ id }) => id),
+      }
     },
     [homeProjection?.highlightIds, settings.pageSize, source, sourceId],
   )
@@ -225,7 +236,10 @@ const useReaderNavigation = ({ source, sourceId, getEntries, homeProjection }) =
       const entryId = content.activeContent.id
       const requestKey = listRequestKey
       const revision = sessionRevision
-      const operationIsCurrent = () => isOperationCurrent({ entryId, requestKey, revision })
+      const viewAtStart = duplicateViewState.get()
+      const operationIsCurrent = () =>
+        viewAtStart === duplicateViewState.get() &&
+        isOperationCurrent({ entryId, requestKey, revision })
       const endKey = `${mode}:${direction}`
 
       if (provenEnds.has(endKey)) {

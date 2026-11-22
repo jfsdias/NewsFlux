@@ -1,7 +1,7 @@
 import { Button, Divider, Typography } from "@arco-design/web-react"
 import { IconEmpty, IconExclamationCircle } from "@arco-design/web-react/icon"
 import { useStore } from "@nanostores/react"
-import { forwardRef } from "react"
+import { forwardRef, useLayoutEffect } from "react"
 import { Virtualizer } from "virtua"
 
 import ArticleCard from "./ArticleCard"
@@ -18,7 +18,13 @@ import useArticleListLayout from "@/hooks/useArticleListLayout"
 import { polyglotState } from "@/hooks/useLanguage"
 import useReadOnScroll from "@/hooks/useReadOnScroll"
 import articleListEmptyState from "@/store/articleListEmptyState"
-import { contentState, filteredEntriesState } from "@/store/contentState"
+import {
+  contentState,
+  duplicateProjectionState,
+  filteredEntriesState,
+  setDuplicateSelectionMode,
+  toggleDuplicateGroup,
+} from "@/store/contentState"
 import { dataState } from "@/store/dataState"
 import { articleListLayoutState, articleListRequestSettingsState } from "@/store/settingsState"
 import createArticleListSnapshotIdentity from "@/utils/article-list-snapshot-identity"
@@ -117,6 +123,25 @@ const ArticleList = forwardRef(
       currentSnapshotIdentity !== null && articleListSnapshotIdentity === currentSnapshotIdentity
     const emptyState = useStore(articleListEmptyState)
     const filteredEntries = useStore(filteredEntriesState)
+    const projection = useStore(duplicateProjectionState)
+    useLayoutEffect(() => {
+      setDuplicateSelectionMode(selectionMode)
+      return () => setDuplicateSelectionMode(false)
+    }, [selectionMode])
+    const expandedIds = projection.ids
+    const toggleGroup = toggleDuplicateGroup
+    const groupControl = (entry) => {
+      const count = projection.counts.get(entry.id)
+      if (!count) {
+        return null
+      }
+      const isExpanded = expandedIds.has(entry.id)
+      return (
+        <Button aria-expanded={isExpanded} size="small" onClick={() => toggleGroup(entry.id)}>
+          {isExpanded ? `Hide ${count - 1} duplicates` : `Show ${count - 1} duplicates`}
+        </Button>
+      )
+    }
     const { polyglot } = useStore(polyglotState)
     const articleListLayout = useStore(articleListLayoutState)
     const articleActivation = useArticleCardActivation(handleEntryClick)
@@ -139,7 +164,7 @@ const ArticleList = forwardRef(
       virtualizerKey,
       virtualizerRef,
     } = useArticleListLayout({
-      entries: filteredEntries,
+      entries: projection.entries,
       layout: articleListLayout,
       scrollRootRef: cardsRef,
     })
@@ -225,6 +250,7 @@ const ArticleList = forwardRef(
                             onSelectionCheckboxFocus={onSelectionCheckboxFocus}
                             onToggleSelection={onToggleSelection}
                           />
+                          {groupControl(entry)}
                         </div>
                       ))}
                     </div>
@@ -245,6 +271,7 @@ const ArticleList = forwardRef(
                       onSelectionCheckboxFocus={onSelectionCheckboxFocus}
                       onToggleSelection={onToggleSelection}
                     />
+                    {groupControl(item)}
                     {index < virtualItems.length - 1 && (
                       <Divider className="article-list-divider" />
                     )}

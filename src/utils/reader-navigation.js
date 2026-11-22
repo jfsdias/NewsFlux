@@ -1,5 +1,5 @@
 /* eslint-disable import/extensions -- Native ESM tests import this pure utility directly. */
-import removeDuplicateEntries from "./deduplicate.js"
+import { projectDuplicates } from "./duplicate-projection.js"
 import { buildPaginationCursorParams } from "./pagination-cursor.js"
 /* eslint-enable import/extensions */
 
@@ -123,6 +123,7 @@ export const appendReaderPageEntries = ({
   direction,
   source,
   removeDuplicates = "none",
+  expandedIds = new Set(),
   homeHighlightIds = [],
 }) => {
   const knownIds = new Set(currentEntries.map(({ id }) => String(id)))
@@ -131,11 +132,6 @@ export const appendReaderPageEntries = ({
     direction === "previous"
       ? [...newEntries, ...currentEntries]
       : [...currentEntries, ...newEntries]
-  const shouldDeduplicate =
-    source !== "home" && !["starred", "history"].includes(source) && removeDuplicates !== "none"
-  const retainedEntries = shouldDeduplicate
-    ? removeDuplicateEntries(combinedEntries, removeDuplicates).entries
-    : combinedEntries
 
   if (source === "home") {
     const retainedSequenceIds = [
@@ -149,12 +145,16 @@ export const appendReaderPageEntries = ({
         )
         .map(({ id }) => id),
     ]
-    return { entries: retainedEntries, sequenceIds: retainedSequenceIds, newEntries }
+    return { entries: combinedEntries, sequenceIds: retainedSequenceIds, newEntries }
   }
 
   return {
-    entries: retainedEntries,
-    sequenceIds: retainedEntries.map(({ id }) => id),
+    entries: combinedEntries,
+    sequenceIds: projectDuplicates(
+      combinedEntries,
+      ["starred", "history"].includes(source) ? "none" : removeDuplicates,
+      expandedIds,
+    ).entries.map(({ id }) => id),
     newEntries,
   }
 }

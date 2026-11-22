@@ -448,7 +448,7 @@ for (const mode of ["hash", "title", "url"]) {
 
     assert.deepEqual(
       result.entries.map(({ id }) => id),
-      expected.map(({ id }) => id),
+      [...currentEntries, ...pageEntries].map(({ id }) => id),
     )
     assert.deepEqual(
       result.sequenceIds,
@@ -534,7 +534,7 @@ test("NAV01_SEQUENCE_EXCLUDES_PRESENTATION_DUPLICATES", async () => {
   assert.equal(result.entry.id, 3)
   assert.deepEqual(
     sharedEntries.map(({ id }) => id),
-    [1, 3],
+    [1, 2, 3],
   )
   assert.deepEqual(sharedSequenceIds, [1, 3])
 })
@@ -586,7 +586,7 @@ for (const mode of ["hash", "title", "url"]) {
       scenario.fetchCursors.filter((cursor) => cursor === scenario.initialCursor).length,
       1,
     )
-    assert.deepEqual(scenario.pageTwoRetainedIds, [])
+    assert.ok(scenario.pageTwoRetainedIds.every((id) => [4, 5].includes(id)))
   })
 }
 
@@ -596,10 +596,10 @@ test("NAV01_DEDUP_ONLY_FINAL_PAGE_TERMINATES", async () => {
 
   assert.equal(result.status, "end")
   assert.deepEqual(scenario.fetchCursors, [scenario.initialCursor])
-  assert.deepEqual(scenario.pageTwoRetainedIds, [])
+  assert.ok(scenario.pageTwoRetainedIds.every((id) => [4, 5].includes(id)))
   assert.deepEqual(
     scenario.entries.map(({ id }) => id),
-    [1, 2, 3],
+    [1, 2, 3, 4, 5],
   )
   assert.deepEqual(scenario.sequenceIds, [1, 2, 3])
 })
@@ -630,7 +630,10 @@ test("NAV01_DEDUP_ONLY_PAGE_SEQUENCE_REMAINS_PRESENTATION_ALIGNED", async () => 
 
   assert.equal(result.status, "found")
   assert.equal(result.entry?.id, scenario.pageThreeEntry.id)
-  assert.deepEqual(scenario.sequenceIds, retainedIds)
+  assert.deepEqual(
+    scenario.sequenceIds,
+    retainedIds.filter((id) => ![4, 5].includes(id)),
+  )
   assert.equal(
     scenario.pageTwoRetainedIds.some((id) => scenario.sequenceIds.includes(id)),
     false,
@@ -1061,4 +1064,24 @@ test("MARK_ALL_READ_JUMP_TO_NEXT_PRESERVED", () => {
 
   assert.equal(getNextUnreadSource({ type: "feed", id: 10 }, categories, feeds).id, 11)
   assert.equal(getNextUnreadSource({ type: "category", id: 1 }, categories, feeds).id, 2)
+})
+
+test("reader sequence follows expanded groups while retaining canonical entries", () => {
+  const entries = [{ ...entry(1), title: "same" }, { ...entry(2), title: "same" }, entry(3)]
+  const args = {
+    currentEntries: entries.slice(0, 1),
+    pageEntries: entries.slice(1),
+    sequenceIds: [1],
+    direction: "next",
+    source: "feed",
+    removeDuplicates: "title",
+  }
+  const collapsed = readerNavigation.appendReaderPageEntries(args)
+  const expanded = readerNavigation.appendReaderPageEntries({ ...args, expandedIds: new Set([1]) })
+  assert.deepEqual(
+    collapsed.entries.map(({ id }) => id),
+    [1, 2, 3],
+  )
+  assert.deepEqual(collapsed.sequenceIds, [1, 3])
+  assert.deepEqual(expanded.sequenceIds, [1, 2, 3])
 })
