@@ -1,0 +1,62 @@
+.smart-views {
+  margin-top: 20px;
+}
+
+.smart-views__save {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.smart-views__save > .arco-input,
+.smart-views__save > .arco-input-wrapper {
+  flex: 1 1 180px;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 44px;
+}
+
+.smart-views__save .arco-btn,
+.smart-views__actions .arco-btn {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.smart-views__list {
+  display: grid;
+  gap: 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.smart-views__item {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--nf-separator-subtle, var(--color-border-2));
+  border-radius: var(--nf-radius-surface, var(--border-radius-medium));
+}
+
+.smart-views__name,
+.smart-views__metadata {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.smart-views__metadata {
+  margin-top: 4px;
+  color: var(--nf-text-secondary, var(--color-text-2));
+  font-size: 0.875em;
+}
+
+.smart-views__query {
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+
+.smart-views__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}

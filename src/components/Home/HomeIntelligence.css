@@ -1,10 +1,14 @@
 .home-intelligence {
   padding: 1rem;
-  border: 1px solid var(--color-border-2);
+  border: 1px solid var(--nf-separator-subtle, var(--color-border-2));
   border-radius: 0.75rem;
+  background-color: var(--nf-surface-content, var(--color-bg-1));
+  color: var(--nf-text-primary, var(--color-text-1));
+  overflow-wrap: anywhere;
 }
 .home-intelligence p {
   margin: 0.5rem 0;
+  color: var(--nf-text-secondary, var(--color-text-2));
 }
 .home-intelligence h3 {
   margin: 1rem 0 0.5rem;
@@ -13,16 +17,44 @@
   margin: 0.5rem 0;
 }
 .home-intelligence summary {
+  display: list-item;
   cursor: pointer;
 }
-.home-intelligence select {
-  max-width: 100%;
+.home-intelligence label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
 }
 .home-intelligence button,
-.home-intelligence select,
+.home-intelligence select {
+  min-height: 44px;
+  max-width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--nf-separator-subtle, var(--color-border-2));
+  border-radius: var(--nf-radius-control, 8px);
+  background-color: var(--nf-surface-raised, var(--color-bg-3));
+  color: var(--nf-text-primary, var(--color-text-1));
+  font: inherit;
+}
+.home-intelligence button {
+  cursor: pointer;
+}
+.home-intelligence button:disabled {
+  color: var(--nf-text-secondary, var(--color-text-2));
+  opacity: 0.65;
+  cursor: not-allowed;
+}
 .home-intelligence summary {
   min-height: 44px;
 }
-.home-intelligence summary {
-  display: list-item;
+.home-intelligence a {
+  color: var(--nf-text-primary, var(--color-text-1));
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+.home-intelligence :is(a, button, select, summary):focus-visible {
+  outline: 2px solid var(--nf-focus-ring, var(--color-text-1));
+  outline-offset: 2px;
 }
