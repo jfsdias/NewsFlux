@@ -1,4 +1,5 @@
 import path from "node:path"
+import process from "node:process"
 import { pathToFileURL } from "node:url"
 
 // Run from the exact NewsFlux checkout so the audited fixture comes from that source SHA.
@@ -73,12 +74,16 @@ test.describe("NF-QA01 ephemeral visual evidence", () => {
         await expect(panel.locator("ol a").first()).toBeVisible()
         await expect(page.locator("body")).toHaveAttribute("arco-theme", theme)
         const contrast = await panel.evaluate((root) => {
+          // Browser-context helper must remain inside evaluate.
+          // eslint-disable-next-line unicorn/consistent-function-scoping
           const luminance = (value) => {
             const channels = value.match(/[0-9.]+/g).slice(0, 3).map(Number)
-            return channels.reduce((sum, channel, index) => {
+            let sum = 0
+            for (const [index, channel] of channels.entries()) {
               const s = channel / 255
-              return sum + [0.2126, 0.7152, 0.0722][index] * (s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4)
-            }, 0)
+              sum += [0.2126, 0.7152, 0.0722][index] * (s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4)
+            }
+            return sum
           }
           const surface = getComputedStyle(root).backgroundColor
           const against = luminance(surface)
@@ -89,7 +94,9 @@ test.describe("NF-QA01 ephemeral visual evidence", () => {
           return { surface, ratios }
         })
         expect(contrast.surface.startsWith("rgb(")).toBe(true)
-        for (const ratio of contrast.ratios) expect(ratio).toBeGreaterThanOrEqual(4.5)
+        for (const ratio of contrast.ratios) {
+          expect(ratio).toBeGreaterThanOrEqual(4.5)
+        }
         await assertNoOverflow(page, "Enabled editorial tools")
         await page.screenshot({
           path: testInfo.outputPath(output("home", viewport.name, theme, "editorial-enabled")),
@@ -125,7 +132,9 @@ test.describe("NF-QA01 ephemeral visual evidence", () => {
         const inputBox = await page.getByRole("textbox", { name: "View name" }).boundingBox()
         expect(inputBox?.height).toBeGreaterThanOrEqual(44)
         expect(touchTargets.length).toBeGreaterThan(0)
-        for (const dimension of touchTargets) expect(dimension).toBeGreaterThanOrEqual(44)
+        for (const dimension of touchTargets) {
+          expect(dimension).toBeGreaterThanOrEqual(44)
+        }
         await assertNoOverflow(page, "Smart Views dialog")
         expect(errors).toEqual([])
         await page.screenshot({
