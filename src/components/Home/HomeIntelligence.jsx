@@ -20,7 +20,8 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
     const timer = globalThis.setInterval(() => setNow(Date.now()), 60_000)
     return () => globalThis.clearInterval(timer)
   }, [enabled])
-  const [preferences, setPreferences] = useState({})
+  const [preferences, setPreferences] = useState({ sources: {}, categories: {} })
+  const [categoryId, setCategoryId] = useState("")
   const [previousPreferences, setPreviousPreferences] = useState(null)
   const updatePreferences = (next) => {
     setPreviousPreferences(preferences)
@@ -37,10 +38,26 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
     }
     return [...found]
   }, [loaded])
+  const categories = useMemo(() => {
+    const found = new Map()
+    for (const entry of loaded) {
+      const category = entry.feed?.category
+      if (category?.id != null && !found.has(String(category.id))) {
+        found.set(String(category.id), category.title || String(category.id))
+      }
+    }
+    return [...found]
+  }, [loaded])
+  const activeCategoryId = categories.some(([id]) => id === categoryId) ? categoryId : ""
   const activeFeedId = sources.some(([id]) => id === feedId) ? feedId : ""
   const focused = useMemo(() => projectFocus(loaded, activeFeedId), [loaded, activeFeedId])
   const briefing = useMemo(
-    () => buildBriefing(focused, { preferences, now }),
+    () =>
+      buildBriefing(focused, {
+        preferences: preferences.sources,
+        categoryPreferences: preferences.categories,
+        now,
+      }),
     [focused, preferences, now],
   )
   const stories = useMemo(
@@ -114,17 +131,30 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
             <p>
               <button
                 type="button"
-                onClick={() => updatePreferences({ ...preferences, [activeFeedId]: 1 })}
+                onClick={() =>
+                  updatePreferences({
+                    ...preferences,
+                    sources: { ...preferences.sources, [activeFeedId]: 1 },
+                  })
+                }
               >
                 {polyglot.t("home_intelligence.more")}
               </button>{" "}
               <button
                 type="button"
-                onClick={() => updatePreferences({ ...preferences, [activeFeedId]: -1 })}
+                onClick={() =>
+                  updatePreferences({
+                    ...preferences,
+                    sources: { ...preferences.sources, [activeFeedId]: -1 },
+                  })
+                }
               >
                 {polyglot.t("home_intelligence.less")}
               </button>{" "}
-              <button type="button" onClick={() => updatePreferences({})}>
+              <button
+                type="button"
+                onClick={() => updatePreferences({ sources: {}, categories: {} })}
+              >
                 {polyglot.t("home_intelligence.reset")}
               </button>{" "}
               <button
@@ -138,8 +168,71 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
                 {polyglot.t("home_intelligence.undo")}
               </button>{" "}
               {polyglot.t("home_intelligence.preference", {
-                value: preferences[activeFeedId] ?? 0,
+                value: preferences.sources[activeFeedId] ?? 0,
               })}
+            </p>
+          )}
+          <label>
+            {polyglot.t("home_intelligence.category")}{" "}
+            <select
+              value={activeCategoryId}
+              onChange={(event) => setCategoryId(event.target.value)}
+            >
+              <option value="">{polyglot.t("home_intelligence.choose_category")}</option>
+              {categories.map(([id, name]) => (
+                <option key={id} value={id}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {activeCategoryId && (
+            <p>
+              <button
+                type="button"
+                onClick={() =>
+                  updatePreferences({
+                    ...preferences,
+                    categories: { ...preferences.categories, [activeCategoryId]: 1 },
+                  })
+                }
+              >
+                {polyglot.t("home_intelligence.more_category")}
+              </button>{" "}
+              <button
+                type="button"
+                onClick={() =>
+                  updatePreferences({
+                    ...preferences,
+                    categories: { ...preferences.categories, [activeCategoryId]: -1 },
+                  })
+                }
+              >
+                {polyglot.t("home_intelligence.less_category")}
+              </button>{" "}
+              {polyglot.t("home_intelligence.preference", {
+                value: preferences.categories[activeCategoryId] ?? 0,
+              })}
+            </p>
+          )}
+          {!activeFeedId && (
+            <p>
+              <button
+                type="button"
+                onClick={() => updatePreferences({ sources: {}, categories: {} })}
+              >
+                {polyglot.t("home_intelligence.reset")}
+              </button>{" "}
+              <button
+                disabled={!previousPreferences}
+                type="button"
+                onClick={() => {
+                  setPreferences(previousPreferences)
+                  setPreviousPreferences(null)
+                }}
+              >
+                {polyglot.t("home_intelligence.undo")}
+              </button>
             </p>
           )}
           <h3>{polyglot.t("home_intelligence.briefing")}</h3>
@@ -156,7 +249,11 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
             <ol>
               {briefing.entries.map((entry) => (
                 <li key={entry.id}>
-                  {link(entry)} — {sourceName(entry)}
+                  {link(entry)} — {sourceName(entry)} —{" "}
+                  {polyglot.t("home_intelligence.reason", {
+                    source: preferences.sources[String(sourceId(entry))] ?? 0,
+                    category: preferences.categories[String(entry.feed?.category?.id)] ?? 0,
+                  })}
                 </li>
               ))}
             </ol>

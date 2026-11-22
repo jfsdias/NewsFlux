@@ -84,3 +84,17 @@ test("groups require direct support from every member and never chain a bridge",
     [],
   )
 })
+
+test("category preference changes within-category choice without changing entries or source state", () => {
+  const now = Date.parse("2026-01-01T12:00:00Z")
+  const entries = [
+    { ...entry(1, 1, "First report"), feed: { category: { id: 1 } } },
+    { ...entry(2, 2, "Second report"), feed: { category: { id: 2 } } },
+    { ...entry(3, 3, "Third report"), feed: { category: { id: 2 } } },
+  ]
+  const before = structuredClone(entries)
+  const result = buildBriefing(entries, { now, categoryPreferences: { 2: 1 } })
+  assert.equal(result.entries[0].id, 2)
+  assert.deepEqual(entries, before)
+  assert.equal(buildBriefing(entries, { now, categoryPreferences: { 2: -1 } }).entries[0].id, 1)
+})

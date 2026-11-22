@@ -54,13 +54,22 @@ export const groupHomeStories = (entries) => {
 
 export const projectFocus = (entries, feedId) =>
   feedId === "" ? entries : entries.filter((entry) => String(sourceId(entry)) === feedId)
-export const buildBriefing = (entries, { now = Date.now(), preferences = {} } = {}) => {
+export const buildBriefing = (
+  entries,
+  { now = Date.now(), preferences = {}, categoryPreferences = {} } = {},
+) => {
   const recent = entries.filter((entry) => {
     const time = Date.parse(entry.published_at)
     return Number.isFinite(time) && time <= now && now - time <= 86_400_000
   })
   const ranked = recent
-    .map((entry, index) => ({ entry, index, score: preferences[String(sourceId(entry))] ?? 0 }))
+    .map((entry, index) => ({
+      entry,
+      index,
+      score:
+        (preferences[String(sourceId(entry))] ?? 0) +
+        (categoryPreferences[String(entry.feed?.category?.id)] ?? 0),
+    }))
     .toSorted((a, b) => b.score - a.score || a.index - b.index)
   const chosen = []
   const usedSources = new Set()
