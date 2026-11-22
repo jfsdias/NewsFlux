@@ -9,8 +9,11 @@
   margin: 16px 0;
 }
 
-.smart-views__save .arco-input-wrapper {
+.smart-views__save > .arco-input,
+.smart-views__save > .arco-input-wrapper {
   flex: 1 1 180px;
+  min-width: 0;
+  max-width: 100%;
   min-height: 44px;
 }
 
