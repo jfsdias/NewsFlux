@@ -95,7 +95,9 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
   // Revoke an automatic request synchronously when consent changes while it is still
   // waiting for the catalog. Do not cancel manual requests or an already dispatched POST.
   useEffect(() => settingsState.listen((nextSettings) => {
-    if (automaticSummaryEnabled(nextSettings)) return
+    if (automaticSummaryEnabled(nextSettings)) {
+      return
+    }
     const pending = requestRef.current
     if (pending?.automatic && pending.phase === "catalog") {
       pending.controller.abort()
