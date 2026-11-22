@@ -1,5 +1,6 @@
 import { useStore } from "@nanostores/react"
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react"
+import { useLocation } from "react-router"
 
 import {
   clearArticleListSnapshot,
@@ -9,6 +10,7 @@ import {
   reconcileArticleListFilters,
   setArticleListError,
   setArticleListErrorCategory,
+  setArticleListSource,
   setEntries,
   setHomePaginationBoundary,
   setIsArticleListReady,
@@ -25,7 +27,13 @@ import {
   setUnreadStarredCount,
   setUnreadTodayCount,
 } from "@/store/dataState"
-import { articleListRequestSettingsState, settingsState } from "@/store/settingsState"
+import { homeIdentityState } from "@/store/homePageState"
+import {
+  articleListRequestSettingsState,
+  settingsState,
+  updateSettings,
+} from "@/store/settingsState"
+import { pendingSmartViewState } from "@/store/smartViewsState"
 import { reconcileArticleListFilterScope } from "@/utils/article-list-filter-scope"
 import { hasArticleListFilters } from "@/utils/article-list-filters"
 import createArticleListRequestKey from "@/utils/article-list-request-key"
@@ -43,7 +51,9 @@ import {
   deduplicateHomeEntriesById,
   mergeHomeSessionEntries,
 } from "@/utils/home-editorial-session"
+import { getHomeIdentityKey } from "@/utils/home-page"
 import { getRequestErrorCategory, getSafeRequestErrorDetails } from "@/utils/safe-request-error"
+import { getSmartViewRestoredStatus, smartViewRestorationState } from "@/utils/smart-views"
 import {
   createTemporalPaginationState,
   getArticleListTemporalSortProperty,
@@ -105,6 +115,8 @@ const useArticleList = (source, sourceId, getEntries) => {
     keys: ["articleListRevision", "filterDate", "filterString", "infoFrom", "infoId"],
   })
   const settingsSnapshot = useStore(articleListRequestSettingsState)
+  const pendingSmartView = useStore(pendingSmartViewState)
+  const location = useLocation()
   const { sessionRevision } = useStore(dataState, { keys: ["sessionRevision"] })
   const automaticRequestKey = createArticleListRequestKey({
     content: contentSnapshot,
@@ -136,13 +148,44 @@ const useArticleList = (source, sourceId, getEntries) => {
     })
 
     previousFilterScopeRef.current = nextScope
+    const restoration = smartViewRestorationState(
+      pendingSmartView,
+      getHomeIdentityKey(homeIdentityState.get()),
+      sessionRevision,
+      location.pathname,
+      source,
+      sourceId,
+    )
+    if (restoration === "cancel") {
+      pendingSmartViewState.set(null)
+    } else if (restoration === "restore") {
+      const { view } = pendingSmartView
+      const showStatus = getSmartViewRestoredStatus(view)
+      previousFilterScopeRef.current = { ...nextScope, showStatus }
+      updateSettings({ showStatus, orderBy: view.orderBy, orderDirection: view.orderDirection })
+      setArticleListSource({ from: source, id: sourceId })
+      reconcileArticleListFilters({
+        filterDate: pendingSmartView.view.filterDate,
+        filterString: pendingSmartView.view.query,
+      })
+      pendingSmartViewState.set(null)
+      return
+    }
     if (
       transition.filterDate !== content.filterDate ||
       transition.filterString !== content.filterString
     ) {
       reconcileArticleListFilters(transition)
     }
-  }, [searchScopeKey, settingsSnapshot.showStatus, source, sourceId])
+  }, [
+    pendingSmartView,
+    searchScopeKey,
+    settingsSnapshot.showStatus,
+    source,
+    sourceId,
+    sessionRevision,
+    location.pathname,
+  ])
 
   useLayoutEffect(() => {
     if (currentRequestKey.current === automaticRequestKey) {
