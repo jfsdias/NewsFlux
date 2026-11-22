@@ -13,6 +13,7 @@ import { useNavigate, useParams } from "react-router"
 
 import ArticleSelectionControls from "./ArticleSelectionControls.jsx"
 import SidebarTrigger from "./SidebarTrigger.jsx"
+import SmartViews from "./SmartViews.jsx"
 
 import AccessibleModal from "@/components/ui/AccessibleModal"
 import CustomTooltip from "@/components/ui/CustomTooltip"
@@ -41,79 +42,91 @@ import formatCategoryDisplayName from "@/utils/category-display-name"
 import { getStartOfToday } from "@/utils/date"
 import "./SearchAndSortBar.css"
 
-const SearchModal = memo(({ value, visible, onCancel, onConfirm, onChange }) => {
-  const { polyglot } = useStore(polyglotState)
-  const tooltipLines = polyglot.t("search.article_tooltip").split("\n")
-  const searchInputRef = useRef(null)
+const SearchModal = memo(
+  ({ value, visible, onCancel, onConfirm, onChange, source, sourceId, filterDate, onOpenView }) => {
+    const { polyglot } = useStore(polyglotState)
+    const tooltipLines = polyglot.t("search.article_tooltip").split("\n")
+    const searchInputRef = useRef(null)
 
-  const handleAfterOpen = () => searchInputRef.current?.focus()
+    const handleAfterOpen = () => searchInputRef.current?.focus()
 
-  const handleConfirm = () => onConfirm(value)
+    const handleConfirm = () => onConfirm(value)
 
-  const handleKeyDown = (event) => {
-    if (event.key === "Enter") {
-      handleConfirm()
-    }
-  }
-
-  const modalTitle = polyglot.t("search.search")
-
-  return (
-    <AccessibleModal
-      afterOpen={handleAfterOpen}
-      className="search-modal"
-      closeLabel={polyglot.t("actions.close_dialog", { name: modalTitle })}
-      title={modalTitle}
-      visible={visible}
-      footer={
-        <>
-          <Button onClick={onCancel}>{polyglot.t("search.cancel")}</Button>
-          <Button type="primary" onClick={handleConfirm}>
-            {polyglot.t("search.confirm")}
-          </Button>
-        </>
+    const handleKeyDown = (event) => {
+      if (event.key === "Enter") {
+        handleConfirm()
       }
-      onCancel={onCancel}
-    >
-      <div className="search-modal-content">
-        <Input.Search
-          ref={searchInputRef}
-          allowClear
-          aria-label={polyglot.t("search.article_input_label")}
-          placeholder={polyglot.t("search.article_placeholder")}
-          value={value}
-          prefix={
-            <Tooltip
-              mini
-              trigger={["hover", "click"]}
-              content={
-                <div>
-                  {tooltipLines.map((line, index) => (
-                    <Fragment key={`tooltip-line-${index}`}>
-                      {line}
-                      {index < tooltipLines.length - 1 && <br />}
-                    </Fragment>
-                  ))}
-                </div>
-              }
-            >
-              <Button
-                aria-label={polyglot.t("search.syntax_help")}
-                className="search-syntax-help"
-                icon={<IconQuestionCircle aria-hidden="true" />}
-                shape="circle"
-                size="mini"
-                type="text"
-              />
-            </Tooltip>
-          }
-          onChange={onChange}
-          onKeyDown={handleKeyDown}
-        />
-      </div>
-    </AccessibleModal>
-  )
-})
+    }
+
+    const modalTitle = polyglot.t("search.search")
+
+    return (
+      <AccessibleModal
+        afterOpen={handleAfterOpen}
+        className="search-modal"
+        closeLabel={polyglot.t("actions.close_dialog", { name: modalTitle })}
+        title={modalTitle}
+        visible={visible}
+        footer={
+          <>
+            <Button onClick={onCancel}>{polyglot.t("search.cancel")}</Button>
+            <Button type="primary" onClick={handleConfirm}>
+              {polyglot.t("search.confirm")}
+            </Button>
+          </>
+        }
+        onCancel={onCancel}
+      >
+        <div className="search-modal-content">
+          <Input.Search
+            ref={searchInputRef}
+            allowClear
+            aria-label={polyglot.t("search.article_input_label")}
+            placeholder={polyglot.t("search.article_placeholder")}
+            value={value}
+            prefix={
+              <Tooltip
+                mini
+                trigger={["hover", "click"]}
+                content={
+                  <div>
+                    {tooltipLines.map((line, index) => (
+                      <Fragment key={`tooltip-line-${index}`}>
+                        {line}
+                        {index < tooltipLines.length - 1 && <br />}
+                      </Fragment>
+                    ))}
+                  </div>
+                }
+              >
+                <Button
+                  aria-label={polyglot.t("search.syntax_help")}
+                  className="search-syntax-help"
+                  icon={<IconQuestionCircle aria-hidden="true" />}
+                  shape="circle"
+                  size="mini"
+                  type="text"
+                />
+              </Tooltip>
+            }
+            onChange={onChange}
+            onKeyDown={handleKeyDown}
+          />
+        </div>
+        {visible && (
+          <SmartViews
+            filterDate={filterDate}
+            query={value}
+            source={source}
+            sourceId={sourceId}
+            onClose={onCancel}
+            onOpenView={onOpenView}
+          />
+        )}
+      </AccessibleModal>
+    )
+  },
+)
 SearchModal.displayName = "SearchModal"
 
 const ActiveButton = ({ active, expanded, icon, tooltip, onClick }) => (
@@ -385,11 +398,18 @@ const SearchAndSortBar = ({
         )}
       </div>
       <SearchModal
+        filterDate={filterDate}
+        source={homeMode ? "home" : infoFrom}
+        sourceId={infoId}
         value={modalInputValue}
         visible={searchModalVisible}
         onCancel={closeSearchModal}
         onChange={handleModalInputChange}
         onConfirm={handleConfirmSearch}
+        onOpenView={() => {
+          closeActiveContent()
+          entryListRef.current?.getScrollElement()?.scroll({ top: 0 })
+        }}
       />
     </div>
   )
