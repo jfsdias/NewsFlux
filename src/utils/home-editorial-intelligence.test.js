@@ -66,3 +66,21 @@ test("briefing honors source preference, source diversity and related-coverage c
     [1, 3],
   )
 })
+
+test("groups require direct support from every member and never chain a bridge", () => {
+  const entries = [
+    entry(1, 1, "alpha bravo charlie delta"),
+    entry(2, 2, "alpha bravo charlie echo"),
+    entry(3, 3, "alpha bravo charlie foxtrot"),
+    entry(4, 4, "bravo charlie echo foxtrot"),
+  ]
+  const groups = groupHomeStories(entries)
+  assert.deepEqual(
+    groups.map((group) => group.entries.map((item) => item.id)),
+    [[1, 2, 3]],
+  )
+  assert.deepEqual(
+    groupHomeStories([entries[0], entry(5, 5, "alpha unrelated remote different")]),
+    [],
+  )
+})
