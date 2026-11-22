@@ -1,6 +1,6 @@
 import { expect, test } from "./support/fixtures.js"
 
-test("NF-E05 Home editorial controls are opt-in, reversible and local to the session", async ({
+test("NF-E05-1: Home editorial controls are opt-in, reversible and local to the session", async ({
   openApp,
   mock,
 }) => {
@@ -34,7 +34,10 @@ test("NF-E05 Home editorial controls are opt-in, reversible and local to the ses
   expect(errors).toEqual([])
 })
 
-test("NF-E05 editorial entries use the normal explicit article link", async ({ openApp, mock }) => {
+test("NF-E05-2: editorial entries use the normal explicit article link", async ({
+  openApp,
+  mock,
+}) => {
   const { page } = await openApp({ path: "/", settings: { markReadBy: "manually" } })
   const panel = page.getByRole("region", { name: "Editorial tools" })
   await panel.getByRole("button", { name: "Enable editorial tools" }).click()
