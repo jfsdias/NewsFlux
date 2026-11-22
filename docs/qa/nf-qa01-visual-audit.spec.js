@@ -27,20 +27,16 @@ const assertNoOverflow = async (page, label) => {
   expect(overflow, `${label}: unexpected horizontal overflow`).toBe(false)
 }
 
-const openAppearanceSettings = async (page) => {
-  // At phone width the user menu belongs to the existing mobile source drawer.
-  const drawerProfile = page.locator(".sidebar-drawer .sidebar-profile-trigger")
-  if (await drawerProfile.isVisible().catch(() => false)) {
-    await drawerProfile.click()
+const openAppearanceSettings = async (page, viewport) => {
+  await expect(page.locator("a.article-entry").first()).toBeVisible()
+  if (viewport.width <= 992) {
+    const sources = page.getByTestId(viewport.width <= 768 ? "compact-nav-sources" : "medium-nav-sources")
+    await expect(sources).toBeVisible()
+    await sources.click()
+    await expect(page.locator(".sidebar-drawer .mobile-sidebar-close")).toBeVisible()
+    await page.locator(".sidebar-drawer .sidebar-profile-trigger").click()
   } else {
-    const sidebarTrigger = page.locator(".reader-sidebar-trigger")
-    if (await sidebarTrigger.isVisible().catch(() => false)) {
-      await sidebarTrigger.click()
-      await expect(page.locator(".sidebar-drawer .mobile-sidebar-close")).toBeVisible()
-      await page.locator(".sidebar-drawer .sidebar-profile-trigger").click()
-    } else {
-      await page.locator(".sidebar-profile-trigger:visible").first().click()
-    }
+    await page.locator(".sidebar-profile-trigger:visible").first().click()
   }
   await page.getByRole("menuitem", { name: "Settings", exact: true }).click()
   await expect(page.getByRole("dialog")).toBeVisible()
@@ -141,14 +137,14 @@ test.describe("NF-QA01 ephemeral visual evidence", () => {
 
       test(`Appearance settings ${viewport.name} ${theme}`, async ({ openApp }, testInfo) => {
         const { page, errors } = await openApp({
-          path: viewport.width <= 992 ? "/all/entry/3" : "/all",
+          path: "/all",
           width: viewport.width,
           height: viewport.height,
           touch: viewport.touch,
           settings: { themeMode: theme },
         })
         await settle(page)
-        await openAppearanceSettings(page)
+        await openAppearanceSettings(page, viewport)
         await expect(page.locator('[data-settings-panel-key="appearance"]')).toBeVisible()
         await assertNoOverflow(page, "Appearance settings")
         expect(errors).toEqual([])
