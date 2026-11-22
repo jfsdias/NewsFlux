@@ -445,6 +445,7 @@ const HomeEditorial = ({
           {projection && !isZeroUnread && (
             <>
               <HomeIntelligence
+                key={requestKey}
                 articleActivation={articleActivation}
                 entries={entries}
                 polyglot={polyglot}

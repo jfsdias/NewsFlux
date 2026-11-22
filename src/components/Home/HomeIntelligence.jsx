@@ -13,6 +13,11 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
   const [feedId, setFeedId] = useState("")
   const [enabled, setEnabled] = useState(false)
   const [preferences, setPreferences] = useState({})
+  const [previousPreferences, setPreviousPreferences] = useState(null)
+  const updatePreferences = (next) => {
+    setPreviousPreferences(preferences)
+    setPreferences(next)
+  }
   const loaded = useMemo(() => entries.slice(0, LIMIT), [entries])
   const sources = useMemo(() => {
     const found = new Map()
@@ -75,17 +80,30 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
           </label>
           {feedId && (
             <p>
-              <button type="button" onClick={() => setPreferences({ ...preferences, [feedId]: 1 })}>
+              <button
+                type="button"
+                onClick={() => updatePreferences({ ...preferences, [feedId]: 1 })}
+              >
                 {polyglot.t("home_intelligence.more")}
               </button>{" "}
               <button
                 type="button"
-                onClick={() => setPreferences({ ...preferences, [feedId]: -1 })}
+                onClick={() => updatePreferences({ ...preferences, [feedId]: -1 })}
               >
                 {polyglot.t("home_intelligence.less")}
               </button>{" "}
-              <button type="button" onClick={() => setPreferences({})}>
+              <button type="button" onClick={() => updatePreferences({})}>
                 {polyglot.t("home_intelligence.reset")}
+              </button>{" "}
+              <button
+                disabled={!previousPreferences}
+                type="button"
+                onClick={() => {
+                  setPreferences(previousPreferences)
+                  setPreviousPreferences(null)
+                }}
+              >
+                {polyglot.t("home_intelligence.undo")}
               </button>{" "}
               {polyglot.t("home_intelligence.preference", { value: preferences[feedId] ?? 0 })}
             </p>

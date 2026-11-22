@@ -47,3 +47,22 @@ test("focus and briefing preserve order and do not mutate input", () => {
   )
   assert.deepEqual(entries, snapshot)
 })
+
+test("briefing honors source preference, source diversity and related-coverage cap", () => {
+  const now = Date.parse("2026-01-01T12:00:00Z")
+  const entries = [
+    entry(1, 1, "Major climate agreement reaches global summit"),
+    entry(2, 2, "Global summit reaches major climate agreement today"),
+    entry(3, 3, "Independent technology report"),
+    entry(4, 3, "Another technology report"),
+  ]
+  const result = buildBriefing(entries, { now, preferences: { 2: 1 } })
+  assert.deepEqual(
+    result.entries.map((item) => item.id),
+    [2, 3],
+  )
+  assert.deepEqual(
+    buildBriefing(entries, { now }).entries.map((item) => item.id),
+    [1, 3],
+  )
+})

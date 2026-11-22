@@ -63,15 +63,39 @@ export const buildBriefing = (entries, { now = Date.now(), preferences = {} } = 
     .map((entry, index) => ({ entry, index, score: preferences[String(sourceId(entry))] ?? 0 }))
     .toSorted((a, b) => b.score - a.score || a.index - b.index)
   const chosen = []
-  const used = new Set()
-  for (const item of ranked) {
-    const source = sourceId(item.entry)
-    if (source != null && used.has(source)) {
-      continue
-    }
-    chosen.push(item.entry)
-    if (source != null) {
-      used.add(source)
+  const usedSources = new Set()
+  const usedCategories = new Set()
+  const stories = groupHomeStories(recent)
+  const storyById = new Map(
+    stories.flatMap((group, index) => group.entries.map((entry) => [entry.id, index])),
+  )
+  const usedStories = new Set()
+  for (const requireNewCategory of [true, false]) {
+    for (const item of ranked) {
+      const source = sourceId(item.entry)
+      const category = item.entry.feed?.category?.id
+      const story = storyById.get(item.entry.id)
+      if (
+        chosen.includes(item.entry) ||
+        (source != null && usedSources.has(source)) ||
+        (story != null && usedStories.has(story)) ||
+        (requireNewCategory && category != null && usedCategories.has(category))
+      ) {
+        continue
+      }
+      chosen.push(item.entry)
+      if (source != null) {
+        usedSources.add(source)
+      }
+      if (category != null) {
+        usedCategories.add(category)
+      }
+      if (story != null) {
+        usedStories.add(story)
+      }
+      if (chosen.length === 5) {
+        break
+      }
     }
     if (chosen.length === 5) {
       break
