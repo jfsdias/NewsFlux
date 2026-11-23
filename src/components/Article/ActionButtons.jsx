@@ -56,16 +56,10 @@ const TITLE_ALIGNMENT_ICONS = {
 }
 
 const DesktopButtons = memo(
-  ({
-    commonButtons,
-    hasIntegrations,
-    handleSaveToThirdPartyServices,
-    polyglot,
-    showSidebarTrigger,
-  }) => (
+  ({ commonButtons, hasIntegrations, handleSaveToThirdPartyServices, polyglot }) => (
     <>
       <div className="left-side nf-glass-group">
-        {showSidebarTrigger && <ReaderSidebarTrigger placement="actionbar" />}
+        <ReaderSidebarTrigger placement="actionbar" />
         {commonButtons.close}
         {commonButtons.navigationLeft}
         {commonButtons.navigationRight}
@@ -181,7 +175,7 @@ const ActionButtons = ({ isPhotoSliderVisible = false, scrollContainerRef = null
     navigateToPreviousArticle,
   } = useReaderCommands()
 
-  const { isBelowCompact, isBelowMedium, isBelowLarge } = useScreenWidth()
+  const { isBelowCompact, isBelowMedium } = useScreenWidth()
 
   const isUnread = activeContent.status === "unread"
   const isStarred = activeContent.starred
@@ -606,7 +600,6 @@ const ActionButtons = ({ isPhotoSliderVisible = false, scrollContainerRef = null
           handleSaveToThirdPartyServices={() => handleSaveToThirdPartyServices(activeContent)}
           hasIntegrations={hasIntegrations}
           polyglot={polyglot}
-          showSidebarTrigger={isBelowLarge && !isBelowMedium}
         />
       )}
     </div>
