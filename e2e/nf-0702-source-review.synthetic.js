@@ -25,7 +25,17 @@ test("source review uses the loaded sample independently of focus without mutati
   await context.route("**/v1/entries?*", async (route) => {
     const request = route.request()
     const url = new URL(request.url())
-    if (request.method() !== "GET" || url.searchParams.has("starred")) {
+    const query = url.searchParams
+    const isInitialHomeSample =
+      request.method() === "GET" &&
+      query.get("status") === "unread" &&
+      query.get("order") === "published_at" &&
+      query.get("direction") === "desc" &&
+      Number(query.get("limit")) > 1 &&
+      !["starred", "published_before", "published_after", "before_entry_id", "offset"].some((key) =>
+        query.has(key),
+      )
+    if (!isInitialHomeSample) {
       await route.continue()
       return
     }
@@ -34,15 +44,20 @@ test("source review uses the loaded sample independently of focus without mutati
     const first = data.entries[0]
     const second = data.entries.find((entry) => entry.feed_id !== first?.feed_id)
     if (!first || !second) {
-      throw new Error("Synthetic fixture needs two sources")
+      await route.fulfill({ response })
+      return
     }
-    const date = new Date().toISOString()
+    const now = Date.now()
     const entries = [
-      { ...first, title: "Major climate agreement reaches global summit", published_at: date },
+      {
+        ...first,
+        title: "Major climate agreement reaches global summit",
+        published_at: new Date(now).toISOString(),
+      },
       {
         ...second,
         title: "Global summit reaches major climate agreement today",
-        published_at: date,
+        published_at: new Date(now - 60_000).toISOString(),
       },
     ]
     await route.fulfill({ response, json: { ...data, total: entries.length, entries } })
