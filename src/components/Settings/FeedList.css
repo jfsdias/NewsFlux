@@ -125,3 +125,37 @@
     touch-action: manipulation;
   }
 }
+
+.feed-health-dashboard {
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid var(--color-border-2);
+  border-radius: 8px;
+}
+
+.feed-health-dashboard h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.feed-health-dashboard p {
+  margin: 0 0 8px;
+}
+
+.feed-health-dashboard dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin: 0;
+}
+
+.feed-health-dashboard dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.feed-health-row-labels {
+  display: block;
+  color: var(--color-text-2);
+  font-size: 12px;
+}
