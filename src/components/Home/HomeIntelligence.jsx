@@ -7,7 +7,7 @@ import {
   groupHomeStories,
   projectFocus,
 } from "@/utils/home-editorial-intelligence"
-import { buildSourceReview } from "@/utils/source-review"
+import buildSourceReview from "@/utils/source-review"
 
 import "./HomeIntelligence.css"
 
@@ -71,8 +71,7 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
     () =>
       allStories.filter(
         (group) =>
-          !activeFeedId ||
-          group.entries.some((entry) => String(sourceId(entry)) === activeFeedId),
+          !activeFeedId || group.entries.some((entry) => String(sourceId(entry)) === activeFeedId),
       ),
     [allStories, activeFeedId],
   )
@@ -247,9 +246,7 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
           )}
           <details>
             <summary>{polyglot.t("home_intelligence.source_review")}</summary>
-            <p>
-              {polyglot.t("home_intelligence.source_review_scope")}
-            </p>
+            <p>{polyglot.t("home_intelligence.source_review_scope")}</p>
             {sourceReview.length === 0 ? (
               <p>{polyglot.t("home_intelligence.source_review_empty")}</p>
             ) : (

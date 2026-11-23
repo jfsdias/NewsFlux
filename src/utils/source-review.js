@@ -1,5 +1,5 @@
 // View-only counts from the bounded Home sample and its existing related-story groups.
-export const buildSourceReview = (entries, groups) => {
+const buildSourceReview = (entries, groups) => {
   const sources = new Map()
   const seen = new Set()
   for (const entry of entries) {
@@ -34,3 +34,5 @@ export const buildSourceReview = (entries, groups) => {
   }
   return [...sources.values()]
 }
+
+export default buildSourceReview

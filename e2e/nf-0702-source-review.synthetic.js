@@ -9,9 +9,16 @@ test("source review uses the loaded sample independently of focus without mutati
     settings: { markReadBy: "manually" },
   })
   const writes = []
+  let observeRequests = false
+  const requests = []
   context.on("request", (request) => {
-    if (new URL(request.url()).pathname.startsWith("/v1/") &&
-        !["GET", "OPTIONS"].includes(request.method())) {
+    if (observeRequests && new URL(request.url()).pathname.startsWith("/v1/")) {
+      requests.push(request.method())
+    }
+    if (
+      new URL(request.url()).pathname.startsWith("/v1/") &&
+      !["GET", "OPTIONS"].includes(request.method())
+    ) {
       writes.push(request.method())
     }
   })
@@ -32,15 +39,23 @@ test("source review uses the loaded sample independently of focus without mutati
     const date = new Date().toISOString()
     const entries = [
       { ...first, title: "Major climate agreement reaches global summit", published_at: date },
-      { ...second, title: "Global summit reaches major climate agreement today", published_at: date },
+      {
+        ...second,
+        title: "Global summit reaches major climate agreement today",
+        published_at: date,
+      },
     ]
     await route.fulfill({ response, json: { ...data, total: entries.length, entries } })
   })
   await page.goto("/")
   const panel = page.getByRole("region", { name: "Editorial tools" })
   await expect(panel.getByText("Review sources in this sample")).toHaveCount(0)
+  await page.waitForLoadState("networkidle")
+  observeRequests = true
   await panel.getByRole("button", { name: "Enable editorial tools" }).click()
-  const review = panel.locator("details").filter({ has: page.getByText("Review sources in this sample") })
+  const review = panel
+    .locator("details")
+    .filter({ has: page.getByText("Review sources in this sample") })
   await expect(review).not.toHaveAttribute("open", "")
   await review.locator("summary").click()
   await expect(review.getByText(/These counts are not reading history/)).toBeVisible()
@@ -48,10 +63,15 @@ test("source review uses the loaded sample independently of focus without mutati
   await expect(rows).toHaveCount(2)
   await expect(rows.nth(0)).toContainText("1 entries in sample; 1 in possible related coverage")
   await expect(rows.nth(1)).toContainText("1 entries in sample; 1 in possible related coverage")
-  const source = await panel.getByLabel("Focus on source").locator("option").nth(1).getAttribute("value")
+  const source = await panel
+    .getByLabel("Focus on source")
+    .locator("option")
+    .nth(1)
+    .getAttribute("value")
   await panel.getByLabel("Focus on source").selectOption(source)
   await expect(rows).toHaveCount(2)
   await expect(rows.nth(1)).toContainText("1 entries in sample; 1 in possible related coverage")
+  expect(requests).toEqual([])
   expect(writes).toEqual([])
   expect(await mock.mutations()).toEqual([])
   expect(errors).toEqual([])

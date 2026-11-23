@@ -4,7 +4,7 @@ import test from "node:test"
 // eslint-disable-next-line import/extensions -- Node ESM requires explicit extensions.
 import { groupHomeStories } from "./home-editorial-intelligence.js"
 // eslint-disable-next-line import/extensions -- Node ESM requires explicit extensions.
-import { buildSourceReview } from "./source-review.js"
+import buildSourceReview from "./source-review.js"
 
 test("counts only unique sampled entries and related group members per source", () => {
   const a = { id: 1, feed_id: 10, feed: { title: "A" } }
