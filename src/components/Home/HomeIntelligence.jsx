@@ -7,6 +7,7 @@ import {
   groupHomeStories,
   projectFocus,
 } from "@/utils/home-editorial-intelligence"
+import buildSourceReview from "@/utils/source-review"
 
 import "./HomeIntelligence.css"
 
@@ -65,16 +66,18 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
       }),
     [focused, preferences, now],
   )
+  const allStories = useMemo(() => (enabled ? groupHomeStories(loaded) : []), [enabled, loaded])
   const stories = useMemo(
     () =>
-      enabled
-        ? groupHomeStories(loaded).filter(
-            (group) =>
-              !activeFeedId ||
-              group.entries.some((entry) => String(sourceId(entry)) === activeFeedId),
-          )
-        : [],
-    [enabled, loaded, activeFeedId],
+      allStories.filter(
+        (group) =>
+          !activeFeedId || group.entries.some((entry) => String(sourceId(entry)) === activeFeedId),
+      ),
+    [allStories, activeFeedId],
+  )
+  const sourceReview = useMemo(
+    () => (enabled ? buildSourceReview(loaded, allStories) : []),
+    [enabled, loaded, allStories],
   )
   const duplicateGroups = useMemo(() => {
     if (!enabled) {
@@ -241,6 +244,25 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
               </button>
             </p>
           )}
+          <details>
+            <summary>{polyglot.t("home_intelligence.source_review")}</summary>
+            <p>{polyglot.t("home_intelligence.source_review_scope")}</p>
+            {sourceReview.length === 0 ? (
+              <p>{polyglot.t("home_intelligence.source_review_empty")}</p>
+            ) : (
+              <ul>
+                {sourceReview.map((source) => (
+                  <li key={source.id}>
+                    {polyglot.t("home_intelligence.source_review_counts", {
+                      name: source.name,
+                      entries: source.entryCount,
+                      related: source.relatedCount,
+                    })}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </details>
           <h3>{polyglot.t("home_intelligence.briefing")}</h3>
           <p>
             {polyglot.t("home_intelligence.counts", {
