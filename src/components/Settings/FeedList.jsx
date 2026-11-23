@@ -559,7 +559,8 @@ const FeedList = () => {
       dataIndex: "title",
       sorter: (a, b) => a.title.localeCompare(b.title, "en"),
       render: (title, feed) => {
-        const { parsing_error_count: errorCount, disabled, key } = feed
+        const { parsing_error_count: errorCount, key } = feed
+        const disabled = feed.disabled === true
 
         const errorStatus = providerErrorStatus(feed)
         let displayText = title
