@@ -91,9 +91,7 @@ export function ReaderSidebarTrigger({ placement = "overlay" } = {}) {
   const sidebarTriggerLabel = polyglot?.t("sidebar.open")
 
   const isActionBarPlacement = placement === "actionbar"
-  const shouldRender = isActionBarPlacement
-    ? !isBelowMedium && isMedium
-    : isCompact || (isBelowMedium && isMedium)
+  const shouldRender = isActionBarPlacement || isCompact || (isBelowMedium && isMedium)
 
   if (!shouldRender) {
     return null

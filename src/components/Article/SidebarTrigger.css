@@ -51,7 +51,14 @@
 }
 
 .reader-sidebar-trigger-actionbar {
+  display: none;
   margin-left: 0;
+}
+
+@media screen and (min-width: 769px) and (max-width: 992px) {
+  .reader-sidebar-trigger-actionbar {
+    display: flex;
+  }
 }
 
 .reader-sidebar-trigger.arco-btn {
