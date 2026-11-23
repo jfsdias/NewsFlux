@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 
+import { buildSourceReview } from "@/utils/source-review"
 import { projectDuplicates } from "@/utils/duplicate-projection"
 import {
   buildBriefing,
@@ -75,6 +76,10 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
           )
         : [],
     [enabled, loaded, activeFeedId],
+  )
+  const sourceReview = useMemo(
+    () => (enabled ? buildSourceReview(loaded, groupHomeStories(loaded)) : []),
+    [enabled, loaded],
   )
   const duplicateGroups = useMemo(() => {
     if (!enabled) {
@@ -241,6 +246,26 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
               </button>
             </p>
           )}
+          <details>
+            <summary>Review sources in this sample</summary>
+            <p>
+              This uses up to 250 entries already loaded on Home. Related coverage is a
+              title-and-date approximation and can be wrong. These counts are not reading history
+              or a measure of source quality. Review sources yourself; no subscriptions are changed.
+            </p>
+            {sourceReview.length === 0 ? (
+              <p>No sources are available in this sample.</p>
+            ) : (
+              <ul>
+                {sourceReview.map((source) => (
+                  <li key={source.id}>
+                    {source.name}: {source.entryCount} entries in sample; {source.relatedCount} in
+                    possible related coverage.
+                  </li>
+                ))}
+              </ul>
+            )}
+          </details>
           <h3>{polyglot.t("home_intelligence.briefing")}</h3>
           <p>
             {polyglot.t("home_intelligence.counts", {
