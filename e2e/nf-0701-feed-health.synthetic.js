@@ -60,7 +60,7 @@ for (const viewport of viewports) {
         await expect(dashboard.locator("div").filter({ has: page.getByText(label, { exact: true }) }).locator("dd")).toHaveText(count)
       }
       const getsBeforeSearch = feedGets
-      const search = page.locator(".feed-table-action-bar .search-input input")
+      const search = page.locator(".feed-table-action-bar").getByRole("textbox", { name: "Search..." })
       await search.fill("Alfa Tech")
       await expect(page.locator(".feed-table tbody tr").filter({ hasText: "Alfa Tech" })).toBeVisible()
       await expect(page.locator(".feed-table tbody tr").filter({ hasText: "Beta Mundo" })).toHaveCount(0)
