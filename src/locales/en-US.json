@@ -564,7 +564,8 @@
     "suggestions_portuguese": "Portuguese",
     "suggestions_english": "English",
     "suggestions_any": "Any",
-    "suggestions_reason": "Matches your selected topic and language. Language is an editorial classification.",
+    "suggestions_reason": "Topic: %{topic} · Language: %{language} (editorial classification)",
+    "suggestions_empty": "No suggestions match these choices, or matching feeds are already subscribed.",
     "suggestions_source": "Catalog source: Plenary, pinned revision (CC0 1.0)"
   },
   "feed_table": {

@@ -157,6 +157,9 @@ const AddFeedModal = () => {
 
   const navigate = useNavigate()
   const modalTitle = polyglot.t("main.add_feed_modal_title")
+  const suggestions = getFeedSuggestions(suggestionTopic, suggestionLanguage, feeds)
+  const topicLabels = { brazil: "brazil", tech: "tech", science: "science", economy: "economy" }
+  const languageLabels = { pt: "portuguese", en: "english" }
 
   const handleAfterOpen = () => feedUrlInputRef.current?.focus()
   const handleDiscoveryPromptAfterClose = () => {
@@ -373,18 +376,39 @@ const AddFeedModal = () => {
                   </select>
                 </label>
                 {suggestionTopic && suggestionLanguage && (
-                  <ul>
-                    {getFeedSuggestions(suggestionTopic, suggestionLanguage, feeds).map((item) => (
-                      <li key={item.url}>
-                        <Button type="text" onClick={() => feedForm.setFieldValue("url", item.url)}>
-                          {item.title}
-                        </Button>
-                        <div>{polyglot.t("main.suggestions_reason")}</div>
-                        <div>{item.url}</div>
-                        <div>Plenary: {item.source}</div>
-                      </li>
-                    ))}
-                  </ul>
+                  <div aria-live="polite" role="status">
+                    {suggestions.length === 0 ? (
+                      <p>{polyglot.t("main.suggestions_empty")}</p>
+                    ) : (
+                      <ul className="feed-suggestions-list">
+                        {suggestions.map((item) => (
+                          <li key={item.url}>
+                            <Button
+                              className="feed-suggestion-choice"
+                              type="text"
+                              onClick={() => feedForm.setFieldValue("url", item.url)}
+                            >
+                              {item.title}
+                            </Button>
+                            <div>
+                              {polyglot.t("main.suggestions_reason", {
+                                topic: polyglot.t(`main.suggestions_${topicLabels[item.topic]}`),
+                                language: polyglot.t(
+                                  `main.suggestions_${languageLabels[item.language]}`,
+                                ),
+                              })}
+                            </div>
+                            <div>
+                              <UrlText value={item.url} />
+                            </div>
+                            <div>
+                              Plenary: <UrlText value={item.source} />
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 )}
                 <a
                   href="https://github.com/plenaryapp/awesome-rss-feeds/tree/9ab2482cae9031a5a39635c887fcfc8ece7e130a"
