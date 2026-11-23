@@ -54,3 +54,18 @@ test("unknown error and check metadata remain unknown", async () => {
   assert.equal(result.errors, 0)
   assert.equal(result.unknown, 4)
 })
+
+test("check timestamps require valid RFC3339 calendar dates and explicit timezones", async () => {
+  const { feedCheckTime } = await import(new URL("feed-health.js", import.meta.url))
+  const now = Date.parse("2026-12-31T00:00:00Z")
+  for (const checked_at of ["0", "2026-02-30T12:00:00Z", "2025-02-29T12:00:00Z", "2026-01-01T24:00:00Z", "2026-01-01T00:00:00", "2026-01-01T00:00:00+24:00", "0001-01-01T00:00:00Z", "2027-01-01T00:00:00Z"]) {
+    assert.equal(feedCheckTime({ checked_at }, now), null, checked_at)
+  }
+  assert.equal(feedCheckTime({ checked_at: "2024-02-29T12:00:00.123456789Z" }, now), Date.parse("2024-02-29T12:00:00.123Z"))
+  assert.equal(feedCheckTime({ checked_at: "2026-01-01T01:00:00+01:00" }, now), Date.parse("2026-01-01T00:00:00Z"))
+})
+
+test("disabled count requires an explicit boolean true", async () => {
+  const { summarizeFeedHealth } = await import(new URL("feed-health.js", import.meta.url))
+  assert.equal(summarizeFeedHealth([{ disabled: "true" }, { disabled: 1 }, { disabled: true }]).disabled, 1)
+})
