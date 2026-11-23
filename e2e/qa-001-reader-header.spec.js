@@ -52,6 +52,144 @@ const readerControlsOverlap = async (page) =>
     )
   })
 
+// Diagnostic only: record the final 993 -> 884 transition without changing the input path.
+const startFoldObservation = (page) =>
+  page.evaluate(() => {
+    const events = []
+    const url = () => location.pathname.replace(/\d+/g, ":id")
+    const describe = (element) => {
+      if (!(element instanceof Element)) return null
+      const button = element.closest("button")
+      const label = button?.getAttribute("aria-label")
+      return {
+        tag: element.tagName,
+        classes: [...element.classList].filter((name) =>
+          /^(reader-|left-side|nf-glass|arco-drawer|mobile-sidebar)/.test(name),
+        ),
+        nearestButton:
+          label === "Close article" || label === "Open sidebar" ? label : button ? "other" : null,
+      }
+    }
+    const rect = (element) => {
+      if (!element) return null
+      const { x, y, width, height } = element.getBoundingClientRect()
+      return { x, y, width, height }
+    }
+    const snapshot = () => {
+      const close = document.querySelector('[aria-label="Close article"]')
+      const sidebar = document.querySelector(".reader-sidebar-trigger")
+      const drawer = document.querySelector(".sidebar-drawer, #mobile-sidebar-drawer")
+      const drawerStyle = drawer ? getComputedStyle(drawer) : null
+      return {
+        viewport: { width: innerWidth, height: innerHeight },
+        windowClass:
+          document.querySelector("[data-window-class]")?.getAttribute("data-window-class") ?? null,
+        closeRect: rect(close),
+        sidebarRect: rect(sidebar),
+        sidebarWrapperClass: sidebar?.parentElement?.className ?? null,
+        drawer: drawer
+          ? {
+              classes: [...drawer.classList],
+              display: drawerStyle.display,
+              visibility: drawerStyle.visibility,
+              ariaHidden: drawer.getAttribute("aria-hidden"),
+            }
+          : null,
+        url: url(),
+      }
+    }
+    const record = (type, details = {}) =>
+      events.push({
+        t: Math.round(performance.now() * 100) / 100,
+        type,
+        ...details,
+        state: snapshot(),
+      })
+    window.__qa001FoldObservation = { events, record }
+    addEventListener("resize", () => record("resize"), true)
+    for (const query of [
+      "(max-width: 359px)",
+      "(max-width: 768px)",
+      "(max-width: 992px)",
+      "(pointer: coarse)",
+    ]) {
+      const media = matchMedia(query)
+      media.addEventListener("change", (event) =>
+        record("media-change", { query, matches: event.matches }),
+      )
+      record("media-initial", { query, matches: media.matches })
+    }
+    for (const type of [
+      "pointerdown",
+      "pointerup",
+      "pointercancel",
+      "touchstart",
+      "touchend",
+      "touchcancel",
+      "click",
+    ]) {
+      document.addEventListener(
+        type,
+        (event) => {
+          const point = event.changedTouches?.[0] ?? event
+          record(type, {
+            target: describe(event.target),
+            point: { x: point.clientX ?? null, y: point.clientY ?? null },
+            pointerType: event.pointerType ?? null,
+            trusted: event.isTrusted,
+          })
+        },
+        true,
+      )
+    }
+    for (const method of ["pushState", "replaceState"]) {
+      const original = history[method]
+      history[method] = function (...args) {
+        const result = original.apply(this, args)
+        record(method)
+        return result
+      }
+    }
+    addEventListener("popstate", () => record("popstate"))
+    new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        const target =
+          mutation.target instanceof Element ? mutation.target : mutation.target.parentElement
+        if (
+          target?.matches(".left-side.nf-glass-group") ||
+          target?.closest(".left-side.nf-glass-group")
+        ) {
+          record("actionbar-mutation", {
+            target: describe(target),
+            added: [...mutation.addedNodes].map(describe),
+            removed: [...mutation.removedNodes].map(describe),
+          })
+        }
+      }
+    }).observe(document.documentElement, { subtree: true, childList: true })
+    record("before-final-resize")
+  })
+
+const finishFoldObservation = async (page, outcome) => {
+  try {
+    const data = await page.evaluate((result) => {
+      const observation = window.__qa001FoldObservation
+      observation.record("outcome", { result })
+      return observation.events
+    }, outcome)
+    await test.info().attach("qa001-fold-observation.json", {
+      body: Buffer.from(`${JSON.stringify(data, null, 2)}\n`),
+      contentType: "application/json",
+    })
+    console.log(
+      `QA001_FOLD_OBSERVATION ${JSON.stringify({ outcome, events: data.map(({ t, type, target, point, matches, query, state }) => ({ t, type, target, point, matches, query, width: state.viewport.width, windowClass: state.windowClass, url: state.url, drawer: state.drawer })) })}`,
+    )
+  } catch (error) {
+    // Observation must never replace the original test outcome.
+    console.log(`QA001_FOLD_OBSERVATION unavailable: ${error.message}`)
+  }
+}
+
 test.describe("QA-001 Close article hit-testing with a coarse pointer", () => {
   for (const { width, height, label } of VIEWPORTS) {
     test(`QA-001-${width}: [touch] Close article receives the pointer at ${width}x${height} (${label})`, async ({
@@ -137,19 +275,29 @@ test.describe("QA-001 Close article hit-testing with a coarse pointer", () => {
           }
         }
 
-        await page.setViewportSize({ width, height })
-        const restoredViewportDiagnostics = await inspectPointerAtCenter(close, "touch")
-        await test.info().attach("qa001-restored-viewport-hit.json", {
-          body: Buffer.from(`${JSON.stringify(restoredViewportDiagnostics, null, 2)}\n`),
-          contentType: "application/json",
-        })
-        assertQa001CenterHit(restoredViewportDiagnostics)
+        await startFoldObservation(page)
       }
 
-      const { x, y } = await center(close)
-      await page.touchscreen.tap(x, y)
-      await expect(page).toHaveURL(/\/all$/)
-      await expect(close).toBeHidden()
+      let foldOutcome = "failed"
+      try {
+        if (width === 884) {
+          await page.setViewportSize({ width, height })
+          const restoredViewportDiagnostics = await inspectPointerAtCenter(close, "touch")
+          await test.info().attach("qa001-restored-viewport-hit.json", {
+            body: Buffer.from(`${JSON.stringify(restoredViewportDiagnostics, null, 2)}\n`),
+            contentType: "application/json",
+          })
+          assertQa001CenterHit(restoredViewportDiagnostics)
+        }
+
+        const { x, y } = await center(close)
+        await page.touchscreen.tap(x, y)
+        await expect(page).toHaveURL(/\/all$/)
+        await expect(close).toBeHidden()
+        foldOutcome = "passed"
+      } finally {
+        if (width === 884) await finishFoldObservation(page, foldOutcome)
+      }
     })
   }
 
