@@ -554,6 +554,16 @@
     "add_feed_modal_crawler_label": "Fetch original content"
   },
   "feed_table": {
+    "health_title": "Feed health",
+    "health_description": "All feeds in the loaded snapshot, independent of search. Errors and disabled feeds can overlap. Check age does not indicate publication activity.",
+    "health_snapshot_stale": "The latest feed data could not be loaded. Showing the previous snapshot.",
+    "health_total": "Feeds",
+    "health_errors": "Provider-reported errors",
+    "health_errorUnknown": "Error status unknown",
+    "health_disabled": "Disabled",
+    "health_recent": "Checked within 24 hours",
+    "health_old": "Checked over 24 hours ago",
+    "health_unknown": "Check time unknown",
     "refresh_success": "Refreshed",
     "refresh_error": "Failed to refresh",
     "refresh_feed": "Refresh feed",

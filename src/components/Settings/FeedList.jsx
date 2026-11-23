@@ -42,6 +42,7 @@ import { dataState, setFeedsData } from "@/store/dataState"
 import { settingsState } from "@/store/settingsState"
 import formatCategoryDisplayName from "@/utils/category-display-name"
 import { generateRelativeTime } from "@/utils/date"
+import { feedCheckAge, feedCheckTime, providerErrorStatus, summarizeFeedHealth } from "@/utils/feed-health"
 import filterFeedsByQuery from "@/utils/feed-search"
 import createSetter from "@/utils/nanostores"
 import sleep from "@/utils/time"
@@ -506,6 +507,8 @@ const FeedList = () => {
   const { showDetailedRelativeTime } = useStore(settingsState, {
     keys: ["showDetailedRelativeTime"],
   })
+  const { feedsData } = useStore(dataState, { keys: ["feedsData"] })
+  const health = summarizeFeedHealth(feedsData)
   const filterType = useStore(filterTypeState)
   const tableData = useStore(tableDataState)
   const { polyglot } = useStore(polyglotState)
@@ -556,10 +559,12 @@ const FeedList = () => {
       dataIndex: "title",
       sorter: (a, b) => a.title.localeCompare(b.title, "en"),
       render: (title, feed) => {
-        const { parsing_error_count: errorCount, disabled, key } = feed
+        const { parsing_error_count: errorCount, key } = feed
+        const disabled = feed.disabled === true
 
+        const errorStatus = providerErrorStatus(feed)
         let displayText = title
-        if (errorCount > 0) {
+        if (errorStatus === "errors") {
           displayText = `⚠️ ${title}`
         } else if (disabled) {
           displayText = `🚫 ${title}`
@@ -568,7 +573,7 @@ const FeedList = () => {
         const tooltipContent = (
           <div>
             {title}
-            {errorCount > 0 && (
+            {errorStatus === "errors" && (
               <>
                 <br />
                 ⚠️ Parsing error count: {errorCount}
@@ -578,11 +583,16 @@ const FeedList = () => {
         )
 
         return (
-          <Typography.Ellipsis expandable={false}>
-            <CustomTooltip mini content={tooltipContent}>
-              <CustomLink text={displayText} url={`/feed/${key}`} />
-            </CustomTooltip>
-          </Typography.Ellipsis>
+          <div>
+            <Typography.Ellipsis expandable={false}>
+              <CustomTooltip mini content={tooltipContent}>
+                <CustomLink text={displayText} url={`/feed/${key}`} />
+              </CustomTooltip>
+            </Typography.Ellipsis>
+            <span className="feed-health-row-labels">
+              {[errorStatus !== "none" && polyglot.t(`feed_table.health_${errorStatus}`), disabled && polyglot.t("feed_table.health_disabled")].filter(Boolean).join(" · ")}
+            </span>
+          </div>
         )
       },
     },
@@ -618,11 +628,12 @@ const FeedList = () => {
     {
       title: polyglot.t("feed_table.table_checked_at"),
       dataIndex: "checked_at",
-      sorter: (a, b) => a.checked_at.localeCompare(b.checked_at, "en"),
-      render: (checkedAt) => (
-        <Typography.Ellipsis expandable={false}>
-          {generateRelativeTime(checkedAt, showDetailedRelativeTime)}
-        </Typography.Ellipsis>
+      sorter: (a, b) => (feedCheckTime(a) ?? 0) - (feedCheckTime(b) ?? 0),
+      render: (checkedAt, feed) => (
+        <div>
+          <span>{polyglot.t(`feed_table.health_${feedCheckAge(feed)}`)}</span>
+          {feedCheckTime(feed) !== null && <span className="feed-health-row-labels">{generateRelativeTime(checkedAt, showDetailedRelativeTime)}</span>}
+        </div>
       ),
     },
 
@@ -658,6 +669,21 @@ const FeedList = () => {
 
   return (
     <>
+      {catalogLoadState.hasSnapshot && (
+        <section aria-labelledby="feed-health-title" className="feed-health-dashboard">
+          <h2 id="feed-health-title">{polyglot.t("feed_table.health_title")}</h2>
+          <p>{polyglot.t("feed_table.health_description")}</p>
+          {catalogLoadState.error && <p>{polyglot.t("feed_table.health_snapshot_stale")}</p>}
+          <dl>
+            {["total", "errors", "errorUnknown", "disabled", "recent", "old", "unknown"].map((key) => (
+              <div key={key}>
+                <dt>{polyglot.t(`feed_table.health_${key}`)}</dt>
+                <dd>{health[key]}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
       <div className="feed-table-action-bar">
         <div className="feed-search-container">
           <Input.Search
