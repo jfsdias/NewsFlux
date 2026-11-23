@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
 
-import { buildSourceReview } from "@/utils/source-review"
 import { projectDuplicates } from "@/utils/duplicate-projection"
 import {
   buildBriefing,
@@ -8,6 +7,7 @@ import {
   groupHomeStories,
   projectFocus,
 } from "@/utils/home-editorial-intelligence"
+import { buildSourceReview } from "@/utils/source-review"
 
 import "./HomeIntelligence.css"
 
@@ -66,20 +66,19 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
       }),
     [focused, preferences, now],
   )
+  const allStories = useMemo(() => (enabled ? groupHomeStories(loaded) : []), [enabled, loaded])
   const stories = useMemo(
     () =>
-      enabled
-        ? groupHomeStories(loaded).filter(
-            (group) =>
-              !activeFeedId ||
-              group.entries.some((entry) => String(sourceId(entry)) === activeFeedId),
-          )
-        : [],
-    [enabled, loaded, activeFeedId],
+      allStories.filter(
+        (group) =>
+          !activeFeedId ||
+          group.entries.some((entry) => String(sourceId(entry)) === activeFeedId),
+      ),
+    [allStories, activeFeedId],
   )
   const sourceReview = useMemo(
-    () => (enabled ? buildSourceReview(loaded, groupHomeStories(loaded)) : []),
-    [enabled, loaded],
+    () => (enabled ? buildSourceReview(loaded, allStories) : []),
+    [enabled, loaded, allStories],
   )
   const duplicateGroups = useMemo(() => {
     if (!enabled) {
@@ -247,20 +246,21 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
             </p>
           )}
           <details>
-            <summary>Review sources in this sample</summary>
+            <summary>{polyglot.t("home_intelligence.source_review")}</summary>
             <p>
-              This uses up to 250 entries already loaded on Home. Related coverage is a
-              title-and-date approximation and can be wrong. These counts are not reading history
-              or a measure of source quality. Review sources yourself; no subscriptions are changed.
+              {polyglot.t("home_intelligence.source_review_scope")}
             </p>
             {sourceReview.length === 0 ? (
-              <p>No sources are available in this sample.</p>
+              <p>{polyglot.t("home_intelligence.source_review_empty")}</p>
             ) : (
               <ul>
                 {sourceReview.map((source) => (
                   <li key={source.id}>
-                    {source.name}: {source.entryCount} entries in sample; {source.relatedCount} in
-                    possible related coverage.
+                    {polyglot.t("home_intelligence.source_review_counts", {
+                      name: source.name,
+                      entries: source.entryCount,
+                      related: source.relatedCount,
+                    })}
                   </li>
                 ))}
               </ul>

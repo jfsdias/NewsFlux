@@ -4,7 +4,9 @@ export const buildSourceReview = (entries, groups) => {
   const seen = new Set()
   for (const entry of entries) {
     const source = entry?.feed_id ?? entry?.feed?.id
-    if (source == null || entry?.id == null || seen.has(entry.id)) continue
+    if (source == null || entry?.id == null || seen.has(entry.id)) {
+      continue
+    }
     seen.add(entry.id)
     const id = String(source)
     if (!sources.has(id)) {
@@ -21,10 +23,14 @@ export const buildSourceReview = (entries, groups) => {
   const counted = new Set()
   for (const entry of entries) {
     const source = entry?.feed_id ?? entry?.feed?.id
-    if (source == null || !relatedIds.has(entry?.id) || counted.has(entry.id)) continue
+    if (source == null || !relatedIds.has(entry?.id) || counted.has(entry.id)) {
+      continue
+    }
     counted.add(entry.id)
     const summary = sources.get(String(source))
-    if (summary) summary.relatedCount += 1
+    if (summary) {
+      summary.relatedCount += 1
+    }
   }
   return [...sources.values()]
 }
