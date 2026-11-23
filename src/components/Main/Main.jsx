@@ -14,6 +14,7 @@ import useScreenWidth from "@/hooks/useScreenWidth"
 import { catalogCategoriesState, catalogFeedsState } from "@/store/dataState"
 import formatCategoryDisplayName from "@/utils/category-display-name"
 import { discoverAndSubscribeFeed } from "@/utils/feed-discovery"
+import { getFeedSuggestions } from "@/utils/feed-suggestions"
 import includesIgnoreCase from "@/utils/filter"
 import { DEFAULT_SETTINGS_TAB } from "@/utils/settings-navigation"
 import "./Main.css"
@@ -133,6 +134,14 @@ const AddFeedModal = () => {
   const feeds = useStore(catalogFeedsState)
   const { isBelowMedium } = useScreenWidth()
 
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false)
+  const [suggestionTopic, setSuggestionTopic] = useState("")
+  const [suggestionLanguage, setSuggestionLanguage] = useState("")
+  const resetSuggestions = () => {
+    setSuggestionsOpen(false)
+    setSuggestionTopic("")
+    setSuggestionLanguage("")
+  }
   const [feedModalLoading, setFeedModalLoading] = useState(false)
   const [discoveryLoading, setDiscoveryLoading] = useState(false)
   const [discoveryPrompt, setDiscoveryPrompt] = useState(null)
@@ -173,6 +182,7 @@ const AddFeedModal = () => {
       })
       Message.success({ id, content: polyglot.t("main.add_feed_success") })
       setAddFeedModalVisible(false)
+      resetSuggestions()
       navigate(`/feed/${response.feed_id}`)
       feedForm.resetFields()
       return true
@@ -266,6 +276,7 @@ const AddFeedModal = () => {
     setDiscoveryLoading(false)
     finishDiscoveryPrompt(null)
     setAddFeedModalVisible(false)
+    resetSuggestions()
     feedForm.resetFields()
   }
 
@@ -325,6 +336,66 @@ const AddFeedModal = () => {
               {polyglot.t("main.add_feed_discover_button")}
             </Button>
           </Form.Item>
+          <div className="feed-suggestions">
+            <Button
+              aria-expanded={suggestionsOpen}
+              type="text"
+              onClick={() => setSuggestionsOpen(!suggestionsOpen)}
+            >
+              {polyglot.t("main.suggestions_toggle")}
+            </Button>
+            {suggestionsOpen && (
+              <div>
+                <p>{polyglot.t("main.suggestions_explanation")}</p>
+                <label>
+                  {polyglot.t("main.suggestions_topic")}{" "}
+                  <select
+                    value={suggestionTopic}
+                    onChange={(event) => setSuggestionTopic(event.target.value)}
+                  >
+                    <option value="">{polyglot.t("main.suggestions_choose")}</option>
+                    <option value="brazil">{polyglot.t("main.suggestions_brazil")}</option>
+                    <option value="tech">{polyglot.t("main.suggestions_tech")}</option>
+                    <option value="science">{polyglot.t("main.suggestions_science")}</option>
+                    <option value="economy">{polyglot.t("main.suggestions_economy")}</option>
+                  </select>
+                </label>{" "}
+                <label>
+                  {polyglot.t("main.suggestions_language")}{" "}
+                  <select
+                    value={suggestionLanguage}
+                    onChange={(event) => setSuggestionLanguage(event.target.value)}
+                  >
+                    <option value="">{polyglot.t("main.suggestions_choose")}</option>
+                    <option value="pt">{polyglot.t("main.suggestions_portuguese")}</option>
+                    <option value="en">{polyglot.t("main.suggestions_english")}</option>
+                    <option value="any">{polyglot.t("main.suggestions_any")}</option>
+                  </select>
+                </label>
+                {suggestionTopic && suggestionLanguage && (
+                  <ul>
+                    {getFeedSuggestions(suggestionTopic, suggestionLanguage, feeds).map((item) => (
+                      <li key={item.url}>
+                        <Button type="text" onClick={() => feedForm.setFieldValue("url", item.url)}>
+                          {item.title}
+                        </Button>
+                        <div>{polyglot.t("main.suggestions_reason")}</div>
+                        <div>{item.url}</div>
+                        <div>Plenary: {item.source}</div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <a
+                  href="https://github.com/plenaryapp/awesome-rss-feeds/tree/9ab2482cae9031a5a39635c887fcfc8ece7e130a"
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  {polyglot.t("main.suggestions_source")}
+                </a>
+              </div>
+            )}
+          </div>
           <Form.Item
             required
             field="category"
