@@ -8,7 +8,7 @@ const viewports = [
 
 for (const viewport of viewports) {
   for (const theme of ["light", "dark"]) {
-    test(`feed health ${viewport.name} ${theme}`, async ({ openApp, mock }, testInfo) => {
+    test(`${viewport.width <= 768 ? "phone Settings availability" : "feed health"} ${viewport.name} ${theme}`, async ({ openApp, mock }, testInfo) => {
       const { context, page, errors } = await openApp({
         path: null,
         ...viewport,
@@ -44,6 +44,18 @@ for (const viewport of viewports) {
         await page.locator(".sidebar-profile-trigger:visible").first().click()
       }
       await page.getByRole("menuitem", { name: "Settings", exact: true }).click()
+      if (viewport.width <= 768) {
+        await expect(page.getByRole("dialog")).toBeVisible()
+        await expect(page.locator('[data-settings-tab-key="feeds"]')).toHaveCount(0)
+        await expect(page.getByRole("region", { name: "Feed health" })).toHaveCount(0)
+        await page.locator('[data-settings-tab-key="appearance"]').click()
+        await expect(page.locator('[data-settings-panel-key="appearance"]')).toBeVisible()
+        await page.screenshot({ path: testInfo.outputPath(`phone-settings-${theme}.png`), fullPage: true })
+        expect(writes).toEqual([])
+        expect(await mock.mutations()).toEqual([])
+        expect(errors).toEqual([])
+        return
+      }
       await page.locator('[data-settings-tab-key="feeds"]').click()
       const dashboard = page.getByRole("region", { name: "Feed health" })
       await expect(dashboard).toBeVisible()
