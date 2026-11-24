@@ -5,10 +5,19 @@
 // and transient state until the user chooses to switch builds.
 const resolveImmediately = () => Promise.resolve()
 
-const createPwaUpdateController = ({ registerSW, reload, serviceWorker, state }) => {
+const createPwaUpdateController = ({
+  registerSW,
+  reload,
+  serviceWorker,
+  state,
+  documentObject,
+  now = Date.now,
+}) => {
   let updateServiceWorker = resolveImmediately
   let isAccepted = false
   let hasReloaded = false
+  let lastCheck = -Infinity
+  let checking = false
 
   const setAvailable = (available) => {
     if (state.get().available !== available) {
@@ -61,6 +70,28 @@ const createPwaUpdateController = ({ registerSW, reload, serviceWorker, state })
 
       setAvailable(true)
     },
+  })
+
+  // A suspended installed app or long-lived tab may not navigate for hours.
+  // Ask the browser to check on foregrounding, but never activate or reload here.
+  documentObject?.addEventListener("visibilitychange", async () => {
+    if (
+      documentObject.visibilityState !== "visible" ||
+      checking ||
+      now() - lastCheck < 60_000
+    ) {
+      return
+    }
+    checking = true
+    lastCheck = now()
+    try {
+      const registration = await serviceWorker?.getRegistration()
+      await registration?.update()
+    } catch {
+      // Offline or transient registration errors are non-fatal.
+    } finally {
+      checking = false
+    }
   })
 }
 
