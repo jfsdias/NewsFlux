@@ -104,6 +104,7 @@ const register = () => {
     registerSW,
     reload: () => globalThis.location.reload(),
     serviceWorker: globalThis.navigator.serviceWorker,
+    documentObject: globalThis.document,
     state: pwaUpdateState,
   })
   void warmLoadedRuntimeAssets().catch(() => null)
