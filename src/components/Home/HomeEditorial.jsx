@@ -451,7 +451,11 @@ const HomeEditorial = ({
                 entries={entries}
                 polyglot={polyglot}
               />
-              <HomeSourceRecommendations key={requestKey} entries={entries} polyglot={polyglot} />
+              <HomeSourceRecommendations
+                key={`recommendations:${requestKey}`}
+                entries={entries}
+                polyglot={polyglot}
+              />
               <HomeHighlights
                 articleActivation={articleActivation}
                 disclosureVisible={Boolean(activeSession.disclosureVisible)}

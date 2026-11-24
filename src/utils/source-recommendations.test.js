@@ -105,3 +105,36 @@ test("excludes a feed host even when its site host differs", () => {
     [],
   )
 })
+
+test("ignores anchors in inert template and noscript content", () => {
+  const item = entry(1, "unknown", {
+    content:
+      '<template><a href="https://www.nature.com/x">x</a></template><noscript><a href="https://www.nature.com/y">y</a></noscript>',
+    feed: { site_url: "https://another.example", category: { title: "unknown" } },
+  })
+  assert.deepEqual(
+    recommendSources({ entries: [item], subscribedFeeds: [], hiddenFeedIds: new Set(), now }),
+    [],
+  )
+})
+
+test("includes the exact 30-day boundary but not earlier dates", () => {
+  const date = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString()
+  const entries = [
+    entry(1, "science", { published_at: date }),
+    entry(2, "science", { published_at: new Date(Date.parse(date) - 1).toISOString() }),
+  ]
+  const result = recommendSources({ entries, subscribedFeeds: [], hiddenFeedIds: new Set(), now })
+  assert.equal(result[0].evidence.entries, 1)
+})
+
+test("ignores article content beyond the 65536-character parsing bound", () => {
+  const item = entry(1, "unknown", {
+    content: `${"x".repeat(65_536)}<a href="https://www.nature.com/x">x</a>`,
+    feed: { site_url: "https://another.example", category: { title: "unknown" } },
+  })
+  assert.deepEqual(
+    recommendSources({ entries: [item], subscribedFeeds: [], hiddenFeedIds: new Set(), now }),
+    [],
+  )
+})

@@ -53,9 +53,14 @@ export const recommendSources = ({ entries, subscribedFeeds, hiddenFeedIds, now 
     }
     if (ownHosts.size > 0 && typeof entry.content === "string") {
       const linked = new Set()
+      let inertDepth = 0
       const parser = new Parser({
         onopentag(name, attributes) {
-          if (name !== "a" || !attributes.href) {
+          if (name === "template" || name === "noscript") {
+            inertDepth += 1
+            return
+          }
+          if (inertDepth > 0 || name !== "a" || !attributes.href) {
             return
           }
           try {
@@ -71,6 +76,11 @@ export const recommendSources = ({ entries, subscribedFeeds, hiddenFeedIds, now 
             }
           } catch {
             /* Ignore invalid and relative links. */
+          }
+        },
+        onclosetag(name) {
+          if ((name === "template" || name === "noscript") && inertDepth > 0) {
+            inertDepth -= 1
           }
         },
       })
