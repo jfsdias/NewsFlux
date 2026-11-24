@@ -170,3 +170,28 @@
   overflow-wrap: anywhere;
   height: auto;
 }
+
+.feed-table .arco-tag {
+  max-width: 100%;
+  min-width: 0;
+}
+.feed-table .arco-tag-content {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.feed-table .arco-table-td :is(a, span, div) {
+  word-break: normal;
+}
+.feed-table .arco-table-td a {
+  overflow-wrap: break-word;
+}
+.feed-table .arco-tag-content {
+  overflow-wrap: break-word;
+}
+.feed-health-dashboard dl > div {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: break-word;
+}

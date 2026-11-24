@@ -31,7 +31,9 @@ const assertNoOverflow = async (page, label) => {
 const openAppearanceSettings = async (page, viewport) => {
   await expect(page.locator("a.article-entry").first()).toBeVisible()
   if (viewport.width <= 992) {
-    const sources = page.getByTestId(viewport.width <= 768 ? "compact-nav-sources" : "medium-nav-sources")
+    const sources = page.getByTestId(
+      viewport.width <= 768 ? "compact-nav-sources" : "medium-nav-sources",
+    )
     await expect(sources).toBeVisible()
     await sources.click()
     await expect(page.locator(".sidebar-drawer .mobile-sidebar-close")).toBeVisible()
@@ -70,7 +72,11 @@ test.describe("NF-QA01 ephemeral visual evidence", () => {
           animations: "disabled",
         })
         await panel.getByRole("button", { name: "Enable editorial tools" }).click()
-        await expect(panel.getByText("Uses up to 250 entries already loaded on Home. Editorial tools are optional and do not change your subscriptions.")).toBeVisible()
+        await expect(
+          panel.getByText(
+            "Uses up to 250 entries already loaded on Home. Editorial tools are optional and do not change your subscriptions.",
+          ),
+        ).toBeVisible()
         await panel.getByText("How the editorial tools work").click()
         await expect(panel.getByText(/Based only on up to the first 250 entries/)).toBeVisible()
         await expect(panel.locator("ol a").first()).toBeVisible()
@@ -79,11 +85,16 @@ test.describe("NF-QA01 ephemeral visual evidence", () => {
           // Browser-context helper must remain inside evaluate.
           // eslint-disable-next-line unicorn/consistent-function-scoping
           const luminance = (value) => {
-            const channels = value.match(/[0-9.]+/g).slice(0, 3).map(Number)
+            const channels = value
+              .match(/[0-9.]+/g)
+              .slice(0, 3)
+              .map(Number)
             let sum = 0
             for (const [index, channel] of channels.entries()) {
               const s = channel / 255
-              sum += [0.2126, 0.7152, 0.0722][index] * (s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4)
+              sum +=
+                [0.2126, 0.7152, 0.0722][index] *
+                (s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4)
             }
             return sum
           }
@@ -117,7 +128,10 @@ test.describe("NF-QA01 ephemeral visual evidence", () => {
         })
         await settle(page)
         await expect(page.locator("a.article-entry").first()).toBeVisible()
-        await page.getByRole("button", { name: /^Search(?::|$)/ }).first().click()
+        await page
+          .getByRole("button", { name: /^Search(?::|$)/ })
+          .first()
+          .click()
         await expect(page.getByRole("dialog")).toBeVisible()
         const query = page.getByLabel("Search article titles and content")
         await query.fill('"Notícia 4"')
@@ -125,12 +139,14 @@ test.describe("NF-QA01 ephemeral visual evidence", () => {
         await page.getByRole("button", { name: "Save this search" }).click()
         await expect(page.getByText("View saved on this browser.")).toBeVisible()
         await expect(page.locator('[aria-label="Saved views"]')).toContainText("NF-QA01 saved view")
-        const touchTargets = await page.locator(".smart-views__actions button").evaluateAll((buttons) =>
-          buttons.map((button) => {
-            const { width, height } = button.getBoundingClientRect()
-            return Math.min(width, height)
-          }),
-        )
+        const touchTargets = await page
+          .locator(".smart-views__actions button")
+          .evaluateAll((buttons) =>
+            buttons.map((button) => {
+              const { width, height } = button.getBoundingClientRect()
+              return Math.min(width, height)
+            }),
+          )
         const inputBox = await page.getByRole("textbox", { name: "View name" }).boundingBox()
         expect(inputBox?.height).toBeGreaterThanOrEqual(44)
         expect(touchTargets.length).toBeGreaterThan(0)
@@ -165,9 +181,9 @@ test.describe("NF-QA01 ephemeral visual evidence", () => {
           fullPage: true,
           animations: "disabled",
         })
-        await page.locator(".article-body").evaluate((element) =>
-          element.scrollIntoView({ block: "end" }),
-        )
+        await page
+          .locator(".article-body")
+          .evaluate((element) => element.scrollIntoView({ block: "end" }))
         await page.waitForTimeout(250)
         await page.screenshot({
           path: testInfo.outputPath(output("reader", viewport.name, theme, "body")),

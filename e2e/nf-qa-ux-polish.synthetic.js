@@ -2,7 +2,23 @@ import { expect, test } from "./support/fixtures.js"
 
 for (const path of ["/all", "/history"]) {
   test(`list preview bounds ${path}`, async ({ openApp }, testInfo) => {
-    const { page, errors } = await openApp({ path, width: 1440, height: 900 })
+    const { page, context, errors } = await openApp({ path: null, width: 1440, height: 900 })
+    if (path === "/history") {
+      await context.route("**/v1/entries?*", async (route) => {
+        const url = new URL(route.request().url())
+        if (url.searchParams.get("status") !== "read") {
+          return route.continue()
+        }
+        url.searchParams.set("status", "unread")
+        const response = await route.fetch({ url: url.toString() })
+        const data = await response.json()
+        await route.fulfill({
+          response,
+          json: { ...data, entries: data.entries.map((entry) => ({ ...entry, status: "read" })) },
+        })
+      })
+    }
+    await page.goto(path)
     const covers = page.locator(".card-image-wide")
     await expect(covers.first()).toBeVisible()
     for (const cover of await covers.all()) {
@@ -64,9 +80,14 @@ test("desktop feed rows wrap titles, categories and check age", async ({ openApp
       wordBreak: getComputedStyle(element).wordBreak,
       scrollWidth: element.scrollWidth,
       clientWidth: element.clientWidth,
+      text: element.textContent,
+      column: element.cellIndex,
+      columnName: element.closest("table")?.querySelectorAll("thead th")[element.cellIndex]
+        ?.textContent,
     }))
-    expect(style.wordBreak).not.toBe("break-all")
-    expect(style.scrollWidth).toBeLessThanOrEqual(style.clientWidth + 1)
+    const description = `Column ${style.column} (${style.columnName}), text ${JSON.stringify(style.text)}, widths ${style.scrollWidth}/${style.clientWidth}`
+    expect(style.wordBreak, description).not.toBe("break-all")
+    expect(style.scrollWidth, description).toBeLessThanOrEqual(style.clientWidth + 1)
   }
   await page.screenshot({ path: testInfo.outputPath("feeds.png") })
   expect(errors).toEqual([])
