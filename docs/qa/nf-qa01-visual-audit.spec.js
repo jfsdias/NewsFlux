@@ -70,7 +70,7 @@ test.describe("NF-QA01 ephemeral visual evidence", () => {
           animations: "disabled",
         })
         await panel.getByRole("button", { name: "Enable editorial tools" }).click()
-        await expect(panel.getByText(/Uses up to 250 entries already loaded on Home/)).toBeVisible()
+        await expect(panel.getByText("Uses up to 250 entries already loaded on Home. Editorial tools are optional and do not change your subscriptions.")).toBeVisible()
         await panel.getByText("How the editorial tools work").click()
         await expect(panel.getByText(/Based only on up to the first 250 entries/)).toBeVisible()
         await expect(panel.locator("ol a").first()).toBeVisible()

@@ -9,6 +9,12 @@ test("NF-E05-1: Home editorial controls are opt-in, reversible and local to the 
   await expect(panel).toBeVisible()
   await expect(panel.getByRole("heading", { name: "Briefing: recent coverage" })).toHaveCount(0)
   await panel.getByRole("button", { name: "Enable editorial tools" }).click()
+  await expect(
+    panel.getByText(
+      "Uses up to 250 entries already loaded on Home. Editorial tools are optional and do not change your subscriptions.",
+    ),
+  ).toBeVisible()
+  await panel.getByText("How the editorial tools work").click()
   await expect(panel.getByText(/Based only on up to the first 250 entries/)).toBeVisible()
   const sources = panel.getByLabel("Focus on source")
   await expect.poll(() => sources.locator("option").count()).toBeGreaterThan(1)
