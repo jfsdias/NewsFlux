@@ -108,6 +108,7 @@ test("source review uses the loaded sample independently of focus without mutati
     .getAttribute("value")
   await panel.getByLabel("Focus on source").selectOption(source)
   await expect(rows).toHaveCount(2)
+  await expect(rows.nth(1)).toContainText("Entries in sample: 1")
   await expect(rows.nth(1)).toContainText("Possible related coverage: 1")
   expect(requests).toEqual([])
   expect(writes).toEqual([])
