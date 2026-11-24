@@ -932,5 +932,16 @@
     "generic_description": "We could not open this page. Return home and try again.",
     "back_home": "Back to Home",
     "sign_in": "Sign in"
+  },
+  "source_recommendations": {
+    "title": "Recommend sources",
+    "enable": "Recommend sources",
+    "disable": "Turn off recommendations",
+    "scope": "Uses up to 200 currently loaded entries published in the 30 days before activation. Counts reflect their current read and starred marks, not when those marks occurred. Categories must match known names. No learned profile is saved. Copy a feed URL into Add Feed and confirm the category there to subscribe. References count only links to exact catalog feed hosts in the first 65,536 characters of each loaded article, so coverage is limited; links do not imply endorsement.",
+    "empty": "No matching recommendations from the current sample.",
+    "reason": "Category: %{topic}; %{entries} matching entries, %{read} currently marked read, %{starred} currently starred.",
+    "copy_url": "Feed URL (select and copy):",
+    "linked": "Linked in %{count} loaded articles.",
+    "catalog_unavailable": "Recommendations are unavailable until your feed catalog loads successfully."
   }
 }

@@ -38,6 +38,9 @@ importers:
       html-react-parser:
         specifier: ^6.1.8
         version: 6.1.8(@types/react@19.3.0)(react@19.3.0)
+      htmlparser2:
+        specifier: 12.0.0
+        version: 12.0.0
       littlefoot:
         specifier: ^4.1.4
         version: 4.1.4

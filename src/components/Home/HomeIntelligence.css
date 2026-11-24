@@ -79,3 +79,9 @@
   padding: 0.35rem 0;
   border-top: 1px solid var(--nf-separator-subtle, var(--color-border-2));
 }
+
+.home-source-recommendations input {
+  box-sizing: border-box;
+  max-width: 100%;
+  width: 24rem;
+}
