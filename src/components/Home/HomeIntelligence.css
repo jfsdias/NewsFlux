@@ -85,3 +85,15 @@
   max-width: 100%;
   width: 24rem;
 }
+
+.home-intelligence-compact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  padding: 0.5rem 0.75rem;
+}
+.home-intelligence-compact :is(h2, h3) {
+  margin: 0;
+}
