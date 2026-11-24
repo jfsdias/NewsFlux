@@ -551,7 +551,22 @@
     "add_feed_discover_subscribe": "Subscribe",
     "add_feed_modal_category_label": "Category",
     "add_feed_modal_category_placeholder": "Please select a category",
-    "add_feed_modal_crawler_label": "Fetch original content"
+    "add_feed_modal_crawler_label": "Fetch original content",
+    "suggestions_toggle": "Browse suggested feeds",
+    "suggestions_explanation": "Choose a topic and language to see a local list. Selecting a feed fills the URL; choose a category and add it when ready.",
+    "suggestions_topic": "Topic",
+    "suggestions_language": "Language",
+    "suggestions_choose": "Choose…",
+    "suggestions_brazil": "Brazil / news",
+    "suggestions_tech": "Technology",
+    "suggestions_science": "Science",
+    "suggestions_economy": "Economy",
+    "suggestions_portuguese": "Portuguese",
+    "suggestions_english": "English",
+    "suggestions_any": "Any",
+    "suggestions_reason": "Topic: %{topic} · Language: %{language} (editorial classification)",
+    "suggestions_empty": "No suggestions match these choices, or matching feeds are already subscribed.",
+    "suggestions_source": "Catalog source: Plenary, pinned revision (CC0 1.0)"
   },
   "feed_table": {
     "health_title": "Feed health",
