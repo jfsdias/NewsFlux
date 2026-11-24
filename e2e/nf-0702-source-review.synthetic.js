@@ -97,8 +97,10 @@ test("source review uses the loaded sample independently of focus without mutati
   expect(columns.every((cell) => cell.width > 0)).toBe(true)
   expect(columns[0].x).toBeLessThan(columns[1].x)
   expect(columns[1].x).toBeLessThan(columns[2].x)
-  await expect(rows.nth(0)).toContainText("Entries in sample: 1")
-  await expect(rows.nth(1)).toContainText("Possible related coverage: 1")
+  for (const row of await rows.all()) {
+    await expect(row).toContainText("Entries in sample: 1")
+    await expect(row).toContainText("Possible related coverage: 1")
+  }
   const source = await panel
     .getByLabel("Focus on source")
     .locator("option")
