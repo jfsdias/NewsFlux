@@ -29,7 +29,7 @@
 }
 
 .card-image-wide {
-  width: 100%;
+  width: min(100%, calc(183px * var(--card-cover-aspect-ratio, 1.7778)));
   aspect-ratio: var(--card-cover-aspect-ratio, 16 / 9);
   margin: 4px 0;
   border-radius: var(--nf-radius-card, var(--border-radius-medium));

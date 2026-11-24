@@ -159,3 +159,14 @@
   color: var(--color-text-2);
   font-size: 12px;
 }
+
+.feed-table .arco-table-td {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.feed-table .arco-table-td a,
+.feed-table .arco-tag {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  height: auto;
+}
