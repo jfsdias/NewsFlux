@@ -64,7 +64,7 @@ for (const width of [466, 884]) {
       await page.waitForLoadState("networkidle")
       observe = true
       await toggle.click()
-      await expect(panel.getByText(/uses up to 200 currently loaded entries/)).toBeVisible()
+      await expect(panel.getByText(/Uses up to 200 currently loaded entries/)).toBeVisible()
       await expect(
         panel.getByText(/current read and starred marks, not when those marks occurred/),
       ).toBeVisible()
@@ -98,7 +98,7 @@ for (const width of [466, 884]) {
       ).toEqual([])
       expect(posts).toEqual([])
       await panel.getByRole("button", { name: "Turn off recommendations" }).click()
-      await expect(panel.getByText(/uses up to 200 currently loaded entries/)).toHaveCount(0)
+      await expect(panel.getByText(/Uses up to 200 currently loaded entries/)).toHaveCount(0)
       await panel.getByRole("button", { name: "Recommend sources" }).click()
       const dialog = await openAddFeed(page, width)
       await dialog.getByPlaceholder("Enter a website or feed URL").fill(selected)
