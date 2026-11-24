@@ -1,11 +1,5 @@
 import { expect, test } from "./support/fixtures.js"
 
-const openAddFeed = async (page, width) => {
-  await page.getByTestId(width <= 768 ? "compact-nav-sources" : "medium-nav-sources").click()
-  await page.getByRole("button", { name: "Add a feed" }).first().click()
-  return page.getByRole("dialog", { name: "Add Feed" })
-}
-
 for (const width of [466, 884]) {
   for (const theme of ["light", "dark"]) {
     test(`recommendations: ${width}px ${theme}, explicit add and reset`, async ({
@@ -64,6 +58,11 @@ for (const width of [466, 884]) {
       await page.waitForLoadState("networkidle")
       observe = true
       await toggle.click()
+      await expect(panel.getByText(/Suggestions use your recently loaded articles/)).toBeVisible()
+      const details = panel.getByText("How suggestions work")
+      await expect(panel.getByText(/Uses up to 200 currently loaded entries/)).toBeHidden()
+      await details.focus()
+      await page.keyboard.press("Enter")
       await expect(panel.getByText(/Uses up to 200 currently loaded entries/)).toBeVisible()
       await expect(
         panel.getByText(/current read and starred marks, not when those marks occurred/),
@@ -100,7 +99,9 @@ for (const width of [466, 884]) {
       await panel.getByRole("button", { name: "Turn off recommendations" }).click()
       await expect(panel.getByText(/Uses up to 200 currently loaded entries/)).toHaveCount(0)
       await panel.getByRole("button", { name: "Recommend sources" }).click()
-      const dialog = await openAddFeed(page, width)
+      await panel.getByRole("button", { name: "Open Add Feed" }).first().click()
+      const dialog = page.getByRole("dialog", { name: "Add Feed" })
+      await expect(dialog.getByPlaceholder("Enter a website or feed URL")).toHaveValue("")
       await dialog.getByPlaceholder("Enter a website or feed URL").fill(selected)
       expect(posts).toEqual([])
       expect(requests.filter(({ url }) => new URL(url).pathname === "/v1/discover")).toEqual([])
@@ -142,4 +143,37 @@ test("recommendations stay unavailable when the feed catalog fails", async ({ op
     "unavailable until your feed catalog loads successfully",
   )
   await expect(panel.getByLabel("Feed URL (select and copy):")).toHaveCount(0)
+})
+
+test("empty recommendations offer Add Feed without a request or subscription", async ({
+  openApp,
+}) => {
+  const { context, page } = await openApp({ path: null, settings: { markReadBy: "manually" } })
+  const mutations = []
+  context.on("request", (request) => {
+    if (
+      request.method() === "POST" &&
+      /\/v1\/(feeds|discover)$/u.test(new URL(request.url()).pathname)
+    ) {
+      mutations.push(request.url())
+    }
+  })
+  await context.route("**/v1/entries?*", async (route) => {
+    const response = await route.fetch()
+    const data = await response.json()
+    if (Array.isArray(data.entries)) {
+      data.entries = data.entries.map((entry) => ({
+        ...entry,
+        feed: { ...entry.feed, category: { ...entry.feed?.category, title: "Unmatched category" } },
+      }))
+    }
+    await route.fulfill({ response, json: data })
+  })
+  await page.goto("/")
+  const panel = page.getByRole("region", { name: "Recommend sources" })
+  await panel.getByRole("button", { name: "Recommend sources" }).click()
+  await expect(panel.getByText(/No suggestions match/)).toBeVisible()
+  await panel.getByRole("button", { name: "Open Add Feed" }).click()
+  await expect(page.getByRole("dialog", { name: "Add Feed" })).toBeVisible()
+  expect(mutations).toEqual([])
 })

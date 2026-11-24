@@ -1,11 +1,13 @@
 import { useStore } from "@nanostores/react"
 import { useMemo, useState } from "react"
 
+import useModalToggle from "@/hooks/useModalToggle"
 import { dataState, globallyHiddenFeedIdsState } from "@/store/dataState"
 import { recommendSources } from "@/utils/source-recommendations"
 
 const HomeSourceRecommendations = ({ entries, polyglot }) => {
   const [enabled, setEnabled] = useState(false)
+  const { setAddFeedModalVisible } = useModalToggle()
   const [now, setNow] = useState(0)
   const { feedsData, loadState } = useStore(dataState, { keys: ["feedsData", "loadState"] })
   const hasCatalog = loadState.catalog.hasSnapshot
@@ -20,7 +22,7 @@ const HomeSourceRecommendations = ({ entries, polyglot }) => {
   return (
     <section
       aria-label={polyglot.t("source_recommendations.title")}
-      className="home-intelligence home-source-recommendations"
+      className={`home-intelligence home-source-recommendations${enabled ? "" : " home-intelligence-compact"}`}
     >
       <h3>{polyglot.t("source_recommendations.title")}</h3>
       <button
@@ -35,10 +37,19 @@ const HomeSourceRecommendations = ({ entries, polyglot }) => {
       </button>
       {enabled && (
         <>
-          <p>{polyglot.t("source_recommendations.scope")}</p>
+          <p>{polyglot.t("source_recommendations.summary")}</p>
+          <details>
+            <summary>{polyglot.t("source_recommendations.details")}</summary>
+            <p>{polyglot.t("source_recommendations.scope")}</p>
+          </details>
           {hasCatalog ? (
             recommendations.length === 0 ? (
-              <p>{polyglot.t("source_recommendations.empty")}</p>
+              <div>
+                <p>{polyglot.t("source_recommendations.empty")}</p>
+                <button type="button" onClick={() => setAddFeedModalVisible(true)}>
+                  {polyglot.t("source_recommendations.add_feed")}
+                </button>
+              </div>
             ) : (
               <ul>
                 {recommendations.map((item) => (
@@ -56,6 +67,7 @@ const HomeSourceRecommendations = ({ entries, polyglot }) => {
                         {polyglot.t("source_recommendations.linked", { count: item.linkedEntries })}
                       </span>
                     )}
+                    <p>{polyglot.t("source_recommendations.copy_instructions")}</p>
                     <p>
                       <label>
                         {polyglot.t("source_recommendations.copy_url")}{" "}
@@ -65,6 +77,9 @@ const HomeSourceRecommendations = ({ entries, polyglot }) => {
                           onFocus={(event) => event.target.select()}
                         />
                       </label>
+                      <button type="button" onClick={() => setAddFeedModalVisible(true)}>
+                        {polyglot.t("source_recommendations.add_feed")}
+                      </button>
                     </p>
                   </li>
                 ))}

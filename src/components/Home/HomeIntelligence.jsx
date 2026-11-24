@@ -110,7 +110,10 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
   const link = (entry) => <a {...articleActivation.getPrimaryLinkProps(entry)}>{titleFor(entry)}</a>
   const title = polyglot.t("home_intelligence.title")
   return (
-    <section aria-label={title} className="home-intelligence">
+    <section
+      aria-label={title}
+      className={`home-intelligence${enabled ? "" : " home-intelligence-compact"}`}
+    >
       <h2 className="home-section-heading">{title}</h2>
       <button
         aria-pressed={enabled}
