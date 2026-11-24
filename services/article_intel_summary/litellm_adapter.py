@@ -11,7 +11,7 @@ import time
 from dataclasses import dataclass, field, replace
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 from urllib.parse import urlsplit
 
 import httpx
@@ -87,6 +87,9 @@ class LiteLLMSettings:
     mistral_small_model_alias: str | None = None
     enabled: bool = False
     external_transfer_authorized: bool = False
+    # Effective local-only consent: filled only after catalog verifies a pinned Ollama deployment.
+    # Unlike the global external-transfer flag this never authorizes remote models.
+    local_processing_authorized: bool = False
     paid_inference_authorized: bool = False
     input_price_usd_per_million: Decimal | None = None
     output_price_usd_per_million: Decimal | None = None
@@ -105,7 +108,7 @@ class LiteLLMSettings:
     cost_authority: str = "newsflux"
 
     def is_ready(self) -> bool:
-        if not self.enabled or not self.external_transfer_authorized:
+        if not self.enabled or not (self.external_transfer_authorized or self.local_processing_authorized):
             return False
         if not _valid_gateway_base_url(self.gateway_base_url):
             return False
@@ -201,6 +204,7 @@ def load_gateway_settings(environ: Mapping[str, str] | None = None, *, read_key:
         virtual_key=virtual_key,
         enabled=_read_bool(values, "NEWSFLUX_AI_INFERENCE_ENABLED"),
         external_transfer_authorized=_read_bool(values, "NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER"),
+        local_processing_authorized=_read_bool(values, "NEWSFLUX_AI_ALLOW_LOCAL_ARTICLE_PROCESSING"),
         paid_inference_authorized=_read_bool(values, "NEWSFLUX_AI_ALLOW_PAID_INFERENCE"),
         monthly_budget_usd=_read_decimal(values.get("NEWSFLUX_AI_MONTHLY_BUDGET_USD")),
         max_input_tokens=_read_int(values.get("NEWSFLUX_AI_MAX_INPUT_TOKENS")),
@@ -345,8 +349,11 @@ class LiteLLMInferenceAdapter:
         *,
         ledger: BudgetLedger | None = None,
         client: httpx.Client | None = None,
+        pre_dispatch_check: Callable[[], bool] | None = None,
     ) -> None:
         self.settings = settings
+        # Mandatory for local-only adapters; invoked freshly before any model payload is built.
+        self._pre_dispatch_check = pre_dispatch_check
         self._owner = None
         self._requires_owner = False
         self.ledger = ledger or (
@@ -379,6 +386,15 @@ class LiteLLMInferenceAdapter:
         try:
             if deadline is not None:
                 deadline.remaining()
+            if self.settings.local_processing_authorized:
+                # Revalidate only while holding the one-in-flight slot, and before any payload
+                # is constructed or token reservation created. No implicit gateway fallback.
+                try:
+                    route_valid = self._pre_dispatch_check() if self._pre_dispatch_check is not None else False
+                except Exception:  # noqa: BLE001 - never disclose metadata or article content
+                    route_valid = False
+                if route_valid is not True:
+                    raise InferenceUnavailable("local model route could not be verified") from None
             messages = _build_messages(request, s5=self.settings.model_choice == MODEL_CHOICE_S5_FREE)
             estimated_input_tokens = _estimate_input_tokens(messages)
             if estimated_input_tokens > self.settings.max_input_tokens:

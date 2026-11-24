@@ -261,6 +261,16 @@ class SummaryService:
         if self.router is None:
             raise ModelNotAvailable("MODEL_NOT_AVAILABLE")
         primary = self.router.adapter_for(primary_model_id)  # refuses before any content access
+        # Local-only consent must never authorize a second provider/model attempt.
+        # Reject an explicitly requested fallback before resolving or sending article content.
+        primary_settings = getattr(primary, "settings", None)
+        if (
+            fallback_model_id is not None
+            and primary_settings is not None
+            and primary_settings.local_processing_authorized
+            and not primary_settings.external_transfer_authorized
+        ):
+            raise ModelNotAvailable("MODEL_NOT_AUTHORIZED")
         # Provider identities as verified when the request started; the fallback decision demands
         # the very same identities at the attempt (drift fails closed).
         identities = tuple(

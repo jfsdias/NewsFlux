@@ -153,6 +153,7 @@
             "items": {
               "enum": [
                 "ARTICLE_SENT_TO_MODEL_PROVIDER",
+                "ARTICLE_SENT_TO_LOCAL_MODEL",
                 "PRICE_DECLARED_BY_OPERATOR",
                 "PRICE_VERIFIED_BY_GATEWAY",
                 "PAID_INFERENCE"
