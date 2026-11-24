@@ -58,3 +58,24 @@
   outline: 2px solid var(--nf-focus-ring, var(--color-text-1));
   outline-offset: 2px;
 }
+
+.source-review-heading,
+.source-review-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(5rem, 0.4fr) minmax(6rem, 0.5fr);
+  gap: 0.5rem;
+  align-items: baseline;
+}
+.source-review-heading {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.source-review-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.source-review-list li {
+  padding: 0.35rem 0;
+  border-top: 1px solid var(--nf-separator-subtle, var(--color-border-2));
+}

@@ -42,7 +42,12 @@ import { dataState, setFeedsData } from "@/store/dataState"
 import { settingsState } from "@/store/settingsState"
 import formatCategoryDisplayName from "@/utils/category-display-name"
 import { generateRelativeTime } from "@/utils/date"
-import { feedCheckAge, feedCheckTime, providerErrorStatus, summarizeFeedHealth } from "@/utils/feed-health"
+import {
+  feedCheckAge,
+  feedCheckTime,
+  providerErrorStatus,
+  summarizeFeedHealth,
+} from "@/utils/feed-health"
 import filterFeedsByQuery from "@/utils/feed-search"
 import createSetter from "@/utils/nanostores"
 import sleep from "@/utils/time"
@@ -584,13 +589,16 @@ const FeedList = () => {
 
         return (
           <div>
-            <Typography.Ellipsis expandable={false}>
-              <CustomTooltip mini content={tooltipContent}>
-                <CustomLink text={displayText} url={`/feed/${key}`} />
-              </CustomTooltip>
-            </Typography.Ellipsis>
+            <CustomTooltip mini content={tooltipContent}>
+              <CustomLink text={displayText} url={`/feed/${key}`} />
+            </CustomTooltip>
             <span className="feed-health-row-labels">
-              {[errorStatus !== "none" && polyglot.t(`feed_table.health_${errorStatus}`), disabled && polyglot.t("feed_table.health_disabled")].filter(Boolean).join(" · ")}
+              {[
+                errorStatus !== "none" && polyglot.t(`feed_table.health_${errorStatus}`),
+                disabled && polyglot.t("feed_table.health_disabled"),
+              ]
+                .filter(Boolean)
+                .join(" · ")}
             </span>
           </div>
         )
@@ -613,15 +621,13 @@ const FeedList = () => {
       dataIndex: "category.title",
       sorter: (a, b) => a.category.title.localeCompare(b.category.title, "en"),
       render: (category, feed) => (
-        <Typography.Ellipsis showTooltip expandable={false}>
-          <Tag
-            size="small"
-            style={{ cursor: "pointer" }}
-            onClick={() => navigate(`/category/${feed.category.id}`)}
-          >
-            {formatCategoryDisplayName(feed.category)}
-          </Tag>
-        </Typography.Ellipsis>
+        <Tag
+          size="small"
+          style={{ cursor: "pointer" }}
+          onClick={() => navigate(`/category/${feed.category.id}`)}
+        >
+          {formatCategoryDisplayName(feed.category)}
+        </Tag>
       ),
     },
 
@@ -632,7 +638,11 @@ const FeedList = () => {
       render: (checkedAt, feed) => (
         <div>
           <span>{polyglot.t(`feed_table.health_${feedCheckAge(feed)}`)}</span>
-          {feedCheckTime(feed) !== null && <span className="feed-health-row-labels">{generateRelativeTime(checkedAt, showDetailedRelativeTime)}</span>}
+          {feedCheckTime(feed) !== null && (
+            <span className="feed-health-row-labels">
+              {generateRelativeTime(checkedAt, showDetailedRelativeTime)}
+            </span>
+          )}
         </div>
       ),
     },
@@ -675,12 +685,14 @@ const FeedList = () => {
           <p>{polyglot.t("feed_table.health_description")}</p>
           {catalogLoadState.error && <p>{polyglot.t("feed_table.health_snapshot_stale")}</p>}
           <dl>
-            {["total", "errors", "errorUnknown", "disabled", "recent", "old", "unknown"].map((key) => (
-              <div key={key}>
-                <dt>{polyglot.t(`feed_table.health_${key}`)}</dt>
-                <dd>{health[key]}</dd>
-              </div>
-            ))}
+            {["total", "errors", "errorUnknown", "disabled", "recent", "old", "unknown"].map(
+              (key) => (
+                <div key={key}>
+                  <dt>{polyglot.t(`feed_table.health_${key}`)}</dt>
+                  <dd>{health[key]}</dd>
+                </div>
+              ),
+            )}
           </dl>
         </section>
       )}

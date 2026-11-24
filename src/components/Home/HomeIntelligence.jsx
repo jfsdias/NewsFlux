@@ -124,7 +124,11 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
       </button>
       {enabled && (
         <>
-          <p>{polyglot.t("home_intelligence.scope")}</p>
+          <p>{polyglot.t("home_intelligence.scope_short")}</p>
+          <details>
+            <summary>{polyglot.t("home_intelligence.methodology")}</summary>
+            <p>{polyglot.t("home_intelligence.scope")}</p>
+          </details>
           <label>
             {polyglot.t("home_intelligence.focus")}{" "}
             <select value={activeFeedId} onChange={(event) => setFeedId(event.target.value)}>
@@ -250,17 +254,32 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
             {sourceReview.length === 0 ? (
               <p>{polyglot.t("home_intelligence.source_review_empty")}</p>
             ) : (
-              <ul>
-                {sourceReview.map((source) => (
-                  <li key={source.id}>
-                    {polyglot.t("home_intelligence.source_review_counts", {
-                      name: source.name,
-                      entries: source.entryCount,
-                      related: source.relatedCount,
-                    })}
-                  </li>
-                ))}
-              </ul>
+              <>
+                <div aria-hidden="true" className="source-review-heading">
+                  <span>{polyglot.t("home_intelligence.source_review_name")}</span>
+                  <span>{polyglot.t("home_intelligence.source_review_entries")}</span>
+                  <span>{polyglot.t("home_intelligence.source_review_related")}</span>
+                </div>
+                <ul className="source-review-list">
+                  {sourceReview.map((source) => (
+                    <li key={source.id}>
+                      <span>{source.name}</span>
+                      <span>
+                        <span className="visually-hidden">
+                          {polyglot.t("home_intelligence.source_review_entries")}:{" "}
+                        </span>
+                        {source.entryCount}
+                      </span>
+                      <span>
+                        <span className="visually-hidden">
+                          {polyglot.t("home_intelligence.source_review_related")}:{" "}
+                        </span>
+                        {source.relatedCount}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
           </details>
           <h3>{polyglot.t("home_intelligence.briefing")}</h3>

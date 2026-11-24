@@ -68,16 +68,39 @@ test("source review uses the loaded sample independently of focus without mutati
   await page.waitForLoadState("networkidle")
   observeRequests = true
   await panel.getByRole("button", { name: "Enable editorial tools" }).click()
+  await expect(panel.getByText(/Uses up to 250 entries already loaded on Home/)).toBeVisible()
+  await expect(panel.getByText("How the editorial tools work")).toBeVisible()
   const review = panel
     .locator("details")
     .filter({ has: page.getByText("Review sources in this sample") })
   await expect(review).not.toHaveAttribute("open", "")
   await review.locator("summary").click()
   await expect(review.getByText(/These counts are not reading history/)).toBeVisible()
+  await expect(
+    review.locator(".source-review-heading").getByText("Entries in sample"),
+  ).toBeVisible()
+  await expect(
+    review.locator(".source-review-heading").getByText("Possible related coverage"),
+  ).toBeVisible()
   const rows = review.locator("li")
   await expect(rows).toHaveCount(2)
-  await expect(rows.nth(0)).toContainText("1 entries in sample; 1 in possible related coverage")
-  await expect(rows.nth(1)).toContainText("1 entries in sample; 1 in possible related coverage")
+  const columns = await rows
+    .first()
+    .locator(":scope > span")
+    .evaluateAll((cells) =>
+      cells.map((cell) => ({
+        x: cell.getBoundingClientRect().x,
+        width: cell.getBoundingClientRect().width,
+      })),
+    )
+  expect(columns).toHaveLength(3)
+  expect(columns.every((cell) => cell.width > 0)).toBe(true)
+  expect(columns[0].x).toBeLessThan(columns[1].x)
+  expect(columns[1].x).toBeLessThan(columns[2].x)
+  for (const row of await rows.all()) {
+    await expect(row).toContainText("Entries in sample: 1")
+    await expect(row).toContainText("Possible related coverage: 1")
+  }
   const source = await panel
     .getByLabel("Focus on source")
     .locator("option")
@@ -85,7 +108,8 @@ test("source review uses the loaded sample independently of focus without mutati
     .getAttribute("value")
   await panel.getByLabel("Focus on source").selectOption(source)
   await expect(rows).toHaveCount(2)
-  await expect(rows.nth(1)).toContainText("1 entries in sample; 1 in possible related coverage")
+  await expect(rows.nth(1)).toContainText("Entries in sample: 1")
+  await expect(rows.nth(1)).toContainText("Possible related coverage: 1")
   expect(requests).toEqual([])
   expect(writes).toEqual([])
   expect(await mock.mutations()).toEqual([])
