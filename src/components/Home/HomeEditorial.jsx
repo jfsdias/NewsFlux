@@ -5,6 +5,7 @@ import HomeCategorySections from "./HomeCategorySections"
 import HomeHighlights from "./HomeHighlights"
 import HomeIntelligence from "./HomeIntelligence"
 import HomeRecent from "./HomeRecent"
+import HomeSourceRecommendations from "./HomeSourceRecommendations"
 import HomeStates from "./HomeStates"
 
 import { getStarredEntries } from "@/apis"
@@ -450,6 +451,7 @@ const HomeEditorial = ({
                 entries={entries}
                 polyglot={polyglot}
               />
+              <HomeSourceRecommendations key={requestKey} entries={entries} polyglot={polyglot} />
               <HomeHighlights
                 articleActivation={articleActivation}
                 disclosureVisible={Boolean(activeSession.disclosureVisible)}
