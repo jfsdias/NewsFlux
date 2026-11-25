@@ -10,12 +10,7 @@ test("requires both explicit choices and filters deterministically", () => {
   assert.deepEqual(getFeedSuggestions("tech", "pt", []), [])
   assert.deepEqual(
     getFeedSuggestions("tech", "any", []).map(({ title }) => title),
-    [
-      "CNET",
-      "Hacker News",
-      "Engadget - Technology News & Expert Reviews",
-      "The Verge",
-    ],
+    ["CNET", "Hacker News", "Engadget - Technology News & Expert Reviews", "The Verge"],
   )
   assert.deepEqual(getFeedSuggestions("tech", "en", []), getFeedSuggestions("tech", "en", []))
 })
