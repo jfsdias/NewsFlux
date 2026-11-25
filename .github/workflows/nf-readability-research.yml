@@ -28,7 +28,7 @@ jobs:
           RUN apt-get update && apt-get install -y --no-install-recommends python3-venv && rm -rf /var/lib/apt/lists/*
           WORKDIR /lab
           RUN npm install --ignore-scripts --save-exact @mozilla/readability@0.6.0 jsdom@26.1.0
-          RUN python3 -m venv /opt/lab-python && /opt/lab-python/bin/pip install --no-cache-dir --only-binary=:all: trafilatura==2.0.0
+          RUN python3 -m venv /opt/lab-python && /opt/lab-python/bin/pip install --no-cache-dir --only-binary=:all: trafilatura==2.0.0 lxml-html-clean==0.4.6
           COPY benchmark.py readability.mjs content.py ./
           ENV PYTHONDONTWRITEBYTECODE=1
           USER node
@@ -45,5 +45,5 @@ jobs:
             npm ls --all
             sha256sum package-lock.json content.py benchmark.py readability.mjs
             /opt/lab-python/bin/pip freeze
-            /opt/lab-python/bin/python benchmark.py --baseline content.py
+            /opt/lab-python/bin/python benchmark.py --baseline content.py --require-all
           ' | tee "${RUNNER_TEMP}/nf-readability-output.txt"
