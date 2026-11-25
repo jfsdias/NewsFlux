@@ -175,7 +175,11 @@ test("fewer than three runs cannot establish stability", () => {
 })
 
 test("contract preserves the 75 baseline identities and unique reviewed additions", () => {
-  assert.equal(EXPECTED_SCENARIOS.filter(({ id }) => !/^NF-E0[235]-[0-9]+$/u.test(id)).length, 75)
+  assert.equal(
+    EXPECTED_SCENARIOS.filter(({ id }) => !/^NF-E0[235]-[0-9]+$/u.test(id) && id !== "NF-FETCH-1")
+      .length,
+    75,
+  )
   assert.equal(new Set(EXPECTED_SCENARIOS.map(({ id }) => id)).size, EXPECTED_SCENARIOS.length)
   assert.ok(EXPECTED_SCENARIOS.every(({ id, state }) => id && state))
 })
@@ -186,7 +190,8 @@ test("BULK-01C increments the scenario contract with all approved scenarios pass
     states[state] = (states[state] ?? 0) + 1
   }
 
-  assert.equal(E2E_SCENARIO_CONTRACT_VERSION, 16)
+  assert.equal(E2E_SCENARIO_CONTRACT_VERSION, 17)
+  assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === "NF-FETCH-1")?.state, "PASSED")
   assert.deepEqual(states, { PASSED: EXPECTED_SCENARIOS.length })
   for (const id of ["F02-2", "F04-1", "F04-3", "QA-001-884", "QA-001-939"]) {
     assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === id)?.state, "PASSED")
