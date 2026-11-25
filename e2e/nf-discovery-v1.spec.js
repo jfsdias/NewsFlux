@@ -8,7 +8,7 @@ const openAddFeed = async (page, width) => {
   return page.getByRole("dialog", { name: "Add Feed" })
 }
 
-test("suggestions filter subscribed feeds and only add after category and explicit confirmation", async ({
+test("NF-DISCOVERY-3-1: suggestions filter subscribed feeds and require explicit confirmation", async ({
   openApp,
 }) => {
   const { page, context } = await openApp({ path: null, width: 1440, height: 900 })
@@ -69,6 +69,8 @@ test("suggestions filter subscribed feeds and only add after category and explic
   await dialog.getByLabel("Topic").selectOption("tech")
   await expect(dialog.getByRole("button", { name: "CNET", exact: true })).toHaveCount(0)
   await expect(dialog.getByRole("status")).toContainText("Topic: Technology · Language: English")
+  await expect(dialog.getByRole("button", { name: "The Verge", exact: true })).toBeVisible()
+  await expect(dialog.getByRole("button", { name: /Engadget/ })).toBeVisible()
   await dialog.getByRole("button", { name: "Hacker News" }).click()
   const input = dialog.getByPlaceholder("Enter a website or feed URL")
   await expect(input).toHaveValue("https://news.ycombinator.com/rss")
@@ -105,7 +107,7 @@ test("suggestions filter subscribed feeds and only add after category and explic
 
 for (const width of [466, 884]) {
   for (const theme of ["light", "dark"]) {
-    test(`suggestions fit ${width}px ${theme}`, async ({ openApp }, testInfo) => {
+    test(`NF-DISCOVERY-3-${width}-${theme}: suggestions fit ${width}px ${theme}`, async ({ openApp }, testInfo) => {
       const { page } = await openApp({
         path: "/all",
         width,
