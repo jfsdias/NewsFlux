@@ -8,9 +8,7 @@ const openAddFeed = async (page, width) => {
   return page.getByRole("dialog", { name: "Add Feed" })
 }
 
-test("NF-DISCOVERY-3-1: suggestions filter subscribed feeds and require explicit confirmation", async ({
-  openApp,
-}) => {
+test("NF-DISCOVERY-3-1: explicit confirmation", async ({ openApp }) => {
   const { page, context } = await openApp({ path: null, width: 1440, height: 900 })
   const posts = []
   let feedGets = 0
@@ -107,7 +105,7 @@ test("NF-DISCOVERY-3-1: suggestions filter subscribed feeds and require explicit
 
 for (const width of [466, 884]) {
   for (const theme of ["light", "dark"]) {
-    test(`NF-DISCOVERY-3-${width}-${theme}: suggestions fit ${width}px ${theme}`, async ({ openApp }, testInfo) => {
+    test(`NF-DISCOVERY-3-${width}-${theme}: responsive fit`, async ({ openApp }, testInfo) => {
       const { page } = await openApp({
         path: "/all",
         width,
