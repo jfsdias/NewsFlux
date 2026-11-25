@@ -69,15 +69,16 @@ def load_baseline(path):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--baseline", required=True, type=Path)
+    parser.add_argument("--require-all", action="store_true")
     args = parser.parse_args()
     rows = fixtures()
     report = {"scope": "authored visible-only HTML; no network", "fixtures": len(rows), "engines": {}}
-    engines = {"existing_assessor": load_baseline(args.baseline)}
+    engines = {"original_html": lambda html: html, "existing_assessor": load_baseline(args.baseline)}
     try:
         import trafilatura
         engines["trafilatura"] = lambda html: trafilatura.extract(html, output_format="html", include_comments=False, include_tables=True, include_images=True, include_formatting=True, with_metadata=False)
-    except ImportError:
-        report["engines"]["trafilatura"] = {"status": "BLOCKED_DEPENDENCY"}
+    except ImportError as exc:
+        report["engines"]["trafilatura"] = {"status": "BLOCKED_DEPENDENCY", "reason": str(exc)}
     for name, engine in engines.items():
         results = []
         for fixture, html, expected, noise, tags in rows:
@@ -99,6 +100,8 @@ def main():
     except (OSError, subprocess.TimeoutExpired):
         report["engines"]["readability"] = {"status": "BLOCKED_RUNTIME"}
     print(json.dumps(report, indent=2))
+    if args.require_all and any(engine["status"] != "EXECUTED" for engine in report["engines"].values()):
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
