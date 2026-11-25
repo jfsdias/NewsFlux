@@ -207,7 +207,7 @@ const processFigcaptionContent = (children) => {
       const props = attributesToProps(child.attribs, child.name)
 
       if (child.name === "br") {
-        return null
+        return <br key={index} />
       }
 
       if (!child.children?.length) {
