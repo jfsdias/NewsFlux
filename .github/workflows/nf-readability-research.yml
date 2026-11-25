@@ -1,0 +1,49 @@
+name: Readability offline research
+on:
+  pull_request:
+    paths:
+      - 'scripts/research/fetch-content-benchmark/**'
+      - '.github/workflows/nf-readability-research.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-comparison:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Build isolated benchmark environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          lab="$(mktemp -d)"
+          cp scripts/research/fetch-content-benchmark/{benchmark.py,readability.mjs} "$lab/"
+          cp services/content_fallback/content.py "$lab/content.py"
+          cat > "$lab/Dockerfile" <<'DOCKERFILE'
+          FROM node:22-bookworm
+          RUN apt-get update && apt-get install -y --no-install-recommends python3-venv && rm -rf /var/lib/apt/lists/*
+          WORKDIR /lab
+          RUN npm install --ignore-scripts --save-exact @mozilla/readability@0.6.0 jsdom@26.1.0
+          RUN python3 -m venv /opt/lab-python && /opt/lab-python/bin/pip install --no-cache-dir --only-binary=:all: trafilatura==2.0.0
+          COPY benchmark.py readability.mjs content.py ./
+          ENV PYTHONDONTWRITEBYTECODE=1
+          USER node
+          DOCKERFILE
+          docker build --tag nf-readability-lab "$lab"
+          docker image inspect --format '{{.Id}}' nf-readability-lab
+      - name: Execute with network disabled
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m --cap-drop ALL --security-opt no-new-privileges --memory 1g --cpus 2 nf-readability-lab sh -ec '
+            node --version
+            /opt/lab-python/bin/python --version
+            npm ls --all
+            sha256sum package-lock.json content.py benchmark.py readability.mjs
+            /opt/lab-python/bin/pip freeze
+            /opt/lab-python/bin/python benchmark.py --baseline content.py
+          ' | tee "${RUNNER_TEMP}/nf-readability-output.txt"
