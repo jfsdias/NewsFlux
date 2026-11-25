@@ -35,6 +35,8 @@ test("suggestions filter subscribed feeds and only add after category and explic
     for (const [id, feed_url] of [
       [902, "https://www.sciencedaily.com/rss/all.xml"],
       [903, "https://www.nature.com/nature.rss"],
+      [904, "https://phys.org/rss-feed/"],
+      [905, "https://www.popsci.com/arcio/rss/"],
     ]) {
       feeds.push({ ...feeds[0], id, feed_url })
     }
@@ -57,11 +59,12 @@ test("suggestions filter subscribed feeds and only add after category and explic
   await expect(toggle).toHaveAttribute("aria-expanded", "false")
   await toggle.click()
   await expect(dialog.getByRole("button", { name: "Hacker News" })).toHaveCount(0)
-  await dialog.getByLabel("Topic").selectOption("brazil")
-  await dialog.getByLabel("Language").selectOption("en")
+  await dialog.getByLabel("Topic").selectOption("tech")
+  await dialog.getByLabel("Language").selectOption("pt")
   await expect(dialog.getByRole("status")).toContainText("No suggestions match")
   await expect(dialog.locator(".feed-suggestions-list")).toHaveCount(0)
   await dialog.getByLabel("Topic").selectOption("science")
+  await dialog.getByLabel("Language").selectOption("en")
   await expect(dialog.getByRole("status")).toContainText("No suggestions match")
   await dialog.getByLabel("Topic").selectOption("tech")
   await expect(dialog.getByRole("button", { name: "CNET", exact: true })).toHaveCount(0)
