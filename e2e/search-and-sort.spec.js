@@ -56,7 +56,8 @@ test.describe("F07 Search", () => {
         new URL(response.url()).searchParams.get("search") === "zzzzqqq",
     )
     releaseStaleResponse()
-    await (await staleResponse).finished()
+    const response = await staleResponse
+    await response.finished()
     await expect.poll(() => entryIds(page)).toEqual([2])
     await expect(cards(page)).toHaveCount(1)
     await expect(page.getByText("No matching articles")).not.toBeVisible()
