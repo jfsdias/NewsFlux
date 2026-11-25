@@ -31,3 +31,15 @@ Decision: REUSE approved extraction concepts only, using already authorized visi
 Benchmark additions: compare existing display baseline, Readability and Trafilatura against the same authored visible-only fixtures; measure paragraph preservation, intrusions from navigation/footer, heading/list/table/code/caption preservation, false-empty outputs, elapsed time and dependency footprint. Run only on prequalified fixtures already known to be accessible, with network disabled. Preserve original article, reader continuity, AI input, media behavior and Miniflux identity. The output must be independently sanitized before any later display integration. No parser result establishes completeness or access authorization. On ambiguous, incomplete or restricted input, display the available original and offer a normal publisher link; separate open-access locator #315 may offer an expressly licensed academic copy.
 
 Status: RESEARCH_COMPLETE / BENCHMARK_PENDING. No provider calls, code for circumventing restrictions, deployment, merge, or production changes.
+
+## Offline benchmark checkpoint
+
+Run from repository root in an isolated environment with approved, pinned optional dependencies installed:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/research/fetch-content-benchmark/benchmark.py --baseline services/content_fallback/content.py
+```
+
+Harness uses six authored fixtures, exact expected text/repetition and semantic-tag coverage, decorative noise and deterministic output over five runs. Only already visible synthetic content; no input URLs, credentials, provider calls or network retrieval. It reports missing engines rather than substituting a mock. Optional Readability requires a DOM implementation; optional Trafilatura requires its Python package. Pin versions and record runtime/dependency identities before comparative qualification.
+
+Local checkpoint: exact existing assessor blob 3e41c2a4111bb8b2ddedced11233e13062dfec59; Python 3.14.7, Node 26.13.0. Existing assessor retained 22/22 expected text occurrences, 0/3 decorative noise markers, 6/15 expected semantic tag types aggregated across fixtures, 6/6 deterministic and non-empty. It is deliberately a paragraph-only recovery overlay; this does not establish a Reader rendering defect. Readability BLOCKED_DEPENDENCY_OR_RUNTIME; Trafilatura BLOCKED_DEPENDENCY. No comparative winner; no runtime integration. The NYT URL was not used because access was unverified.
