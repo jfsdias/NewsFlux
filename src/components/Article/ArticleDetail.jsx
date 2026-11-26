@@ -1064,7 +1064,8 @@ const ArticleDetail = forwardRef((_, ref) => {
           <div
             key={activeContent.id}
             aria-busy={isArticleBodyPending || undefined}
-            className={optimizedReading ? "article-body article-body--optimized" : "article-body"}
+            className="article-body"
+            data-optimized-reading={optimizedReading || undefined}
             style={{
               fontSize: `${fontSize}rem`,
               maxWidth: responsiveMaxWidth,
