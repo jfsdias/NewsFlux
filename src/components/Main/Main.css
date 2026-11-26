@@ -51,7 +51,7 @@
 }
 
 /* Arco's centered wrapper otherwise overrides the modal's flex layout. */
-.arco-modal-wrapper.arco-modal-wrapper-align-center .add-feed-modal {
+.arco-modal-wrapper.arco-modal-wrapper-align-center .arco-modal.add-feed-modal {
   display: inline-flex;
   flex-direction: column;
   width: 400px;
@@ -241,7 +241,7 @@
     min-height: var(--mobile-form-control-size);
   }
 
-  .arco-modal-wrapper.arco-modal-wrapper-align-center .add-feed-modal {
+  .arco-modal-wrapper.arco-modal-wrapper-align-center .arco-modal.add-feed-modal {
     width: calc(100% - 16px);
     max-width: 400px;
   }
