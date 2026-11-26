@@ -190,24 +190,24 @@ body[arco-theme="dark"] .article-content .article-body :not(pre) > code {
   outline-offset: 2px;
 }
 
-.article-content .article-body--optimized {
+.article-content .article-body[data-optimized-reading="true"] {
   --reader-prose-measure: clamp(36ch, calc(var(--article-width) * 0.75ch), 52ch);
 }
 
 .article-content
-  .article-body--optimized
+  .article-body[data-optimized-reading="true"]
   :is(p, li, dd, dt, blockquote):not(:is(figure, figcaption, table, pre, .footnotes) *) {
   line-height: 1.85;
 }
 
 .article-content
-  .article-body--optimized
+  .article-body[data-optimized-reading="true"]
   p:not(:is(figure, figcaption, table, pre, .footnotes, li, blockquote) *):not(
     :has(img, iframe, video, .plyr)
   ) {
   margin-block: 1.12em;
 }
 
-.article-content .article-body--optimized li:not(:is(figure, table, .footnotes) *) {
+.article-content .article-body[data-optimized-reading="true"] li:not(:is(figure, table, .footnotes) *) {
   margin-block: 0.65em;
 }
