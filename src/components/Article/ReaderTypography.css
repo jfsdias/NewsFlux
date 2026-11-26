@@ -208,6 +208,8 @@ body[arco-theme="dark"] .article-content .article-body :not(pre) > code {
   margin-block: 1.12em;
 }
 
-.article-content .article-body[data-optimized-reading="true"] li:not(:is(figure, table, .footnotes) *) {
+.article-content
+  .article-body[data-optimized-reading="true"]
+  li:not(:is(figure, table, .footnotes) *) {
   margin-block: 0.65em;
 }
