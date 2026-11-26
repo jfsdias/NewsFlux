@@ -1,4 +1,5 @@
 import { createServer } from "node:http"
+
 import { expect, test } from "./support/fixtures.js"
 
 test("NF-PWA-FOREGROUND-1: a foreground check finds a new worker without reloading", async ({
@@ -35,7 +36,7 @@ test("NF-PWA-FOREGROUND-1: a foreground check finds a new worker without reloadi
       response.end(body)
     } catch (error) {
       response.writeHead(502, { "content-type": "text/plain" })
-      response.end("Synthetic app proxy failed: " + error.message)
+      response.end(`Synthetic app proxy failed: ${error.message}`)
     }
   })
 
@@ -47,7 +48,7 @@ test("NF-PWA-FOREGROUND-1: a foreground check finds a new worker without reloadi
   if (!address || typeof address === "string") {
     throw new Error("Synthetic app proxy did not bind to a TCP port")
   }
-  const proxyOrigin = "http://127.0.0.1:" + address.port
+  const proxyOrigin = `http://127.0.0.1:${address.port}`
 
   try {
     const { context, page, errors } = await openApp({
