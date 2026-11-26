@@ -81,7 +81,11 @@ test("NF-DISCOVERY-3-1: explicit confirmation", async ({ openApp }) => {
   await expect(dialog.getByRole("button", { name: "The Verge", exact: true })).toBeVisible()
   await expect(dialog.getByRole("button", { name: /Engadget/ })).toBeVisible()
   await expectFooterInViewport(dialog)
-  expect(await dialog.locator(".arco-modal-content").evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true)
+  expect(
+    await dialog
+      .locator(".arco-modal-content")
+      .evaluate((element) => element.scrollHeight > element.clientHeight),
+  ).toBe(true)
   await dialog.getByRole("button", { name: "Hacker News" }).click()
   const input = dialog.getByPlaceholder("Enter a website or feed URL")
   await expect(input).toHaveValue("https://news.ycombinator.com/rss")
