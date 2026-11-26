@@ -39,7 +39,7 @@ for (const width of [466, 884]) {
 
     await toggle.click()
     await expect(toggle).toHaveAttribute("aria-pressed", "true")
-    await expect(article).toHaveClass(/article-body--optimized/)
+    await expect(article).toHaveAttribute("data-optimized-reading", "true")
     await expect.poll(lineHeight).toBeGreaterThan(originalLeading)
     expect(await prose.innerHTML()).toBe(markup)
     await expect(marker).toBeHidden()
@@ -48,7 +48,7 @@ for (const width of [466, 884]) {
 
     await toggle.click()
     await expect(toggle).toHaveAttribute("aria-pressed", "false")
-    await expect(article).not.toHaveClass(/article-body--optimized/)
+    await expect(article).not.toHaveAttribute("data-optimized-reading", "true")
     await expect.poll(lineHeight).toBe(originalLeading)
     expect(await prose.innerHTML()).toBe(markup)
     await expect(marker).toBeHidden()
