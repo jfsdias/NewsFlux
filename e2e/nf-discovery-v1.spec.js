@@ -3,12 +3,30 @@ import { expect, test } from "./support/fixtures.js"
 const expectFooterInViewport = async (dialog) => {
   const footer = dialog.locator(".arco-modal-footer")
   await expect(footer).toBeVisible()
-  expect(
-    await footer.evaluate((element) => {
-      const rect = element.getBoundingClientRect()
-      return rect.top >= 0 && rect.bottom <= window.innerHeight
-    }),
-  ).toBe(true)
+  const geometry = await footer.evaluate((element) => {
+    const ancestors = []
+    for (let node = element; node && ancestors.length < 5; node = node.parentElement) {
+      const rect = node.getBoundingClientRect()
+      const style = getComputedStyle(node)
+      ancestors.push({
+        className: node.className,
+        attributes: node.getAttributeNames(),
+        top: rect.top,
+        bottom: rect.bottom,
+        height: rect.height,
+        scrollHeight: node.scrollHeight,
+        clientHeight: node.clientHeight,
+        display: style.display,
+        overflowY: style.overflowY,
+        maxHeight: style.maxHeight,
+      })
+    }
+    return { viewportHeight: window.innerHeight, ancestors }
+  })
+  expect(geometry.ancestors[0].top, JSON.stringify(geometry)).toBeGreaterThanOrEqual(0)
+  expect(geometry.ancestors[0].bottom, JSON.stringify(geometry)).toBeLessThanOrEqual(
+    geometry.viewportHeight,
+  )
 }
 
 const openAddFeed = async (page, width) => {
