@@ -25,7 +25,13 @@ test("NF-PWA-FOREGROUND-1: a foreground check finds a new worker without reloadi
       }
 
       const headers = Object.fromEntries(upstream.headers.entries())
-      for (const name of ["connection", "content-encoding", "content-length", "transfer-encoding"]) {
+      const hopByHopHeaders = [
+        "connection",
+        "content-encoding",
+        "content-length",
+        "transfer-encoding",
+      ]
+      for (const name of hopByHopHeaders) {
         delete headers[name]
       }
       headers["content-length"] = String(body.length)
