@@ -241,7 +241,7 @@
     min-height: var(--mobile-form-control-size);
   }
 
-  .add-feed-modal {
+  .arco-modal-wrapper-align-center .add-feed-modal {
     width: calc(100% - 16px);
     max-width: 400px;
   }
