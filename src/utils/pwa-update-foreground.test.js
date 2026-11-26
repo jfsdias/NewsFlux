@@ -12,17 +12,25 @@ const flush = async () => {
 const resolveImmediately = () => Promise.resolve()
 const registerServiceWorker = () => resolveImmediately
 
-const updateRegistration = async (counts, reject) => {
+const updateRegistration = async (counts, reject, completion) => {
   counts.updates += 1
+  await completion
   if (reject) {
     throw new Error("offline")
   }
 }
 
-const createHarness = ({ reject = false } = {}) => {
+const createHarness = ({ reject = false, holdUpdate = false } = {}) => {
   const documentObject = new EventTarget()
   documentObject.visibilityState = "hidden"
   const counts = { updates: 0, reloads: 0 }
+  let resolveUpdate
+  const updateCompletion = new Promise((resolve) => {
+    resolveUpdate = resolve
+  })
+  if (!holdUpdate) {
+    resolveUpdate()
+  }
   let value
   let time = 0
   const state = {
@@ -33,7 +41,7 @@ const createHarness = ({ reject = false } = {}) => {
   }
   const serviceWorker = new EventTarget()
   const registration = {
-    update: () => updateRegistration(counts, reject),
+    update: () => updateRegistration(counts, reject, updateCompletion),
   }
   serviceWorker.getRegistration = async () => registration
   createPwaUpdateController({
@@ -48,6 +56,7 @@ const createHarness = ({ reject = false } = {}) => {
   })
   return {
     counts: () => [counts.updates, counts.reloads],
+    settleUpdate: () => resolveUpdate(),
     advance: () => {
       time += 60_001
     },
@@ -72,6 +81,19 @@ test("hidden and repeated foreground events do not spam checks", async () => {
   await harness.visibility("visible")
   await harness.visibility("visible")
   assert.deepEqual(harness.counts(), [1, 0])
+  harness.advance()
+  await harness.visibility("visible")
+  assert.deepEqual(harness.counts(), [2, 0])
+})
+
+test("in-flight foreground events do not start overlapping checks", async () => {
+  const harness = createHarness({ holdUpdate: true })
+  await harness.visibility("visible")
+  await harness.visibility("visible")
+  assert.deepEqual(harness.counts(), [1, 0])
+
+  harness.settleUpdate()
+  await flush()
   harness.advance()
   await harness.visibility("visible")
   assert.deepEqual(harness.counts(), [2, 0])

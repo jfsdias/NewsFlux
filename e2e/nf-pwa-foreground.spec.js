@@ -42,12 +42,12 @@ test("NF-PWA-FOREGROUND-1: a foreground check finds a new worker without reloadi
   })
   const originalUrl = page.url()
   await page.evaluate(() => {
-    globalThis.nfForegroundTrigger = window.setInterval(() => {
+    globalThis.nfForegroundTrigger = globalThis.setInterval(() => {
       document.dispatchEvent(new Event("visibilitychange"))
     }, 100)
   })
   await expect.poll(() => updateScriptRequests).toBeGreaterThan(0)
-  await page.evaluate(() => window.clearInterval(globalThis.nfForegroundTrigger))
+  await page.evaluate(() => globalThis.clearInterval(globalThis.nfForegroundTrigger))
 
   const updateNotice = page
     .locator('.arco-notification-wrapper [role="alert"]')
@@ -57,7 +57,10 @@ test("NF-PWA-FOREGROUND-1: a foreground check finds a new worker without reloadi
   await expect(updateNotice.getByRole("button", { name: "Dismiss" })).toBeVisible()
   await expect
     .poll(() =>
-      page.evaluate(async () => Boolean((await navigator.serviceWorker.getRegistration())?.waiting)),
+      page.evaluate(async () => {
+        const registration = await navigator.serviceWorker.getRegistration()
+        return Boolean(registration?.waiting)
+      }),
     )
     .toBe(true)
 
