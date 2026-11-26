@@ -43,6 +43,7 @@ import { activeContentState, contentState } from "@/store/contentState"
 import { catalogFeedsByIdState, dataState } from "@/store/dataState"
 import { homeIdentityState } from "@/store/homePageState"
 import { articleDetailSettingsState } from "@/store/settingsState"
+import getExplicitArticleDoi from "@/utils/article-doi"
 import returnToArticleImage from "@/utils/article-image-return"
 import summaryErrorMessageKey from "@/utils/article-summary-errors"
 import formatCategoryDisplayName from "@/utils/category-display-name"
@@ -699,6 +700,7 @@ const ArticleDetail = forwardRef((_, ref) => {
 
   const { coverSource } = activeContent
   const sourceUrl = getSafeExternalUrl(activeContent.url)
+  const articleDoi = getExplicitArticleDoi(activeContent.url)
 
   const responsiveMaxWidth = isBelowMedium ? "90%" : `${articleWidth}ch`
 
@@ -838,6 +840,11 @@ const ArticleDetail = forwardRef((_, ref) => {
                   </Typography.Text>
                 )}
               </div>
+              {articleDoi && (
+                <div className="article-doi">
+                  <Typography.Text>DOI: {articleDoi}</Typography.Text>
+                </div>
+              )}
               <Typography.Text className="article-date">
                 {generateReadableDate(activeContent.published_at)}
               </Typography.Text>
