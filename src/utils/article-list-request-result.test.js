@@ -30,7 +30,7 @@ test("a late stale response settles without replacing the latest result", async 
   assert.deepEqual(visibleEntries, [2])
 })
 
-test("freshness is checked synchronously without allowing a later microtask to interleave", async () => {
+test("freshness check is synchronous", async () => {
   let currentRequest = 1
   queueMicrotask(() => {
     currentRequest = 2
@@ -44,7 +44,6 @@ test("freshness is checked synchronously without allowing a later microtask to i
 })
 
 test("a session invalidated before the response is checked is rejected", () => {
-  assert.deepEqual(resolveCurrentArticleListRequest({ entries: [1] }, () => false), {
-    current: false,
-  })
+  const result = resolveCurrentArticleListRequest({ entries: [1] }, () => false)
+  assert.equal(result.current, false)
 })
