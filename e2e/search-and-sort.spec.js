@@ -35,6 +35,7 @@ test.describe("F07 Search", () => {
         await route.fulfill({
           status: 200,
           contentType: "application/json",
+          headers: { "Access-Control-Allow-Origin": "*" },
           body: JSON.stringify({ entries: [], total: 0 }),
         })
       },
@@ -45,11 +46,21 @@ test.describe("F07 Search", () => {
     await expect(cards(page)).toHaveCount(0)
     await expect(page.locator("[class*=loading], [class*=skeleton]").first()).toBeAttached()
 
-    await search("Notícia 2")
-    await expect(cards(page).first()).toBeVisible()
-    const currentQueryIds = await entryIds(page)
+    // A unique title makes the expected result independent of virtual-list measurement.
+    await search("Notícia 2:")
+    await expect.poll(() => entryIds(page)).toEqual([2])
+
+    const staleResponse = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/v1/entries" &&
+        new URL(response.url()).searchParams.get("search") === "zzzzqqq",
+    )
     releaseStaleResponse()
-    await expect.poll(() => entryIds(page)).toEqual(currentQueryIds)
+    const response = await staleResponse
+    await response.finished()
+    await expect.poll(() => entryIds(page)).toEqual([2])
+    await expect(cards(page)).toHaveCount(1)
+    await expect(page.getByText("No matching articles")).not.toBeVisible()
     await context.unrouteAll()
 
     expect(await mock.mutations()).toEqual([])

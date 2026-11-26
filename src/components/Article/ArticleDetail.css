@@ -694,3 +694,10 @@ body[arco-theme="dark"] .article-content :not(pre) > code {
   font-size: 0.8125rem;
   margin: 6px 0 0;
 }
+
+/* Bibliographic identity only; no new provider or navigation action. */
+.article-doi {
+  color: var(--color-text-2);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}

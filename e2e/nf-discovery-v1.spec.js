@@ -8,9 +8,7 @@ const openAddFeed = async (page, width) => {
   return page.getByRole("dialog", { name: "Add Feed" })
 }
 
-test("suggestions filter subscribed feeds and only add after category and explicit confirmation", async ({
-  openApp,
-}) => {
+test("NF-DISCOVERY-3-1: explicit confirmation", async ({ openApp }) => {
   const { page, context } = await openApp({ path: null, width: 1440, height: 900 })
   const posts = []
   let feedGets = 0
@@ -35,6 +33,8 @@ test("suggestions filter subscribed feeds and only add after category and explic
     for (const [id, feed_url] of [
       [902, "https://www.sciencedaily.com/rss/all.xml"],
       [903, "https://www.nature.com/nature.rss"],
+      [904, "https://phys.org/rss-feed/"],
+      [905, "https://www.popsci.com/arcio/rss/"],
     ]) {
       feeds.push({ ...feeds[0], id, feed_url })
     }
@@ -57,15 +57,18 @@ test("suggestions filter subscribed feeds and only add after category and explic
   await expect(toggle).toHaveAttribute("aria-expanded", "false")
   await toggle.click()
   await expect(dialog.getByRole("button", { name: "Hacker News" })).toHaveCount(0)
-  await dialog.getByLabel("Topic").selectOption("brazil")
-  await dialog.getByLabel("Language").selectOption("en")
+  await dialog.getByLabel("Topic").selectOption("tech")
+  await dialog.getByLabel("Language").selectOption("pt")
   await expect(dialog.getByRole("status")).toContainText("No suggestions match")
   await expect(dialog.locator(".feed-suggestions-list")).toHaveCount(0)
   await dialog.getByLabel("Topic").selectOption("science")
+  await dialog.getByLabel("Language").selectOption("en")
   await expect(dialog.getByRole("status")).toContainText("No suggestions match")
   await dialog.getByLabel("Topic").selectOption("tech")
   await expect(dialog.getByRole("button", { name: "CNET", exact: true })).toHaveCount(0)
   await expect(dialog.getByRole("status")).toContainText("Topic: Technology · Language: English")
+  await expect(dialog.getByRole("button", { name: "The Verge", exact: true })).toBeVisible()
+  await expect(dialog.getByRole("button", { name: /Engadget/ })).toBeVisible()
   await dialog.getByRole("button", { name: "Hacker News" }).click()
   const input = dialog.getByPlaceholder("Enter a website or feed URL")
   await expect(input).toHaveValue("https://news.ycombinator.com/rss")
@@ -102,7 +105,7 @@ test("suggestions filter subscribed feeds and only add after category and explic
 
 for (const width of [466, 884]) {
   for (const theme of ["light", "dark"]) {
-    test(`suggestions fit ${width}px ${theme}`, async ({ openApp }, testInfo) => {
+    test(`NF-DISCOVERY-3-${width}-${theme}: responsive fit`, async ({ openApp }, testInfo) => {
       const { page } = await openApp({
         path: "/all",
         width,

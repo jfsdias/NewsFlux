@@ -494,6 +494,7 @@
     "server_error": "The server could not load this article. Please try again.",
     "network_error": "Could not connect to the server. Check your connection and try again.",
     "request_error": "Could not load this article. Please try again.",
+    "optimized_reading": "Optimized reading",
     "recover_full_text": "Recover full text",
     "recovering_full_text": "Recovering full text…",
     "recovered_from_wallhop": "Full text recovered from WallHop",

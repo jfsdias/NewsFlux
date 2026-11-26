@@ -16,7 +16,7 @@ const createPwaUpdateController = ({
   let updateServiceWorker = resolveImmediately
   let isAccepted = false
   let hasReloaded = false
-  let lastCheck = -Infinity
+  let lastCheck = Number.NEGATIVE_INFINITY
   let checking = false
 
   const setAvailable = (available) => {
@@ -75,15 +75,12 @@ const createPwaUpdateController = ({
   // A suspended installed app or long-lived tab may not navigate for hours.
   // Ask the browser to check on foregrounding, but never activate or reload here.
   documentObject?.addEventListener("visibilitychange", async () => {
-    if (
-      documentObject.visibilityState !== "visible" ||
-      checking ||
-      now() - lastCheck < 60_000
-    ) {
+    const time = now()
+    if (documentObject.visibilityState !== "visible" || checking || time - lastCheck < 60_000) {
       return
     }
     checking = true
-    lastCheck = now()
+    lastCheck = time
     try {
       const registration = await serviceWorker?.getRegistration()
       await registration?.update()
