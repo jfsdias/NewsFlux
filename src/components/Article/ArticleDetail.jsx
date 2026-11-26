@@ -842,7 +842,12 @@ const ArticleDetail = forwardRef((_, ref) => {
               </div>
               {articleDoi && (
                 <div className="article-doi">
-                  <Typography.Text>DOI: {articleDoi}</Typography.Text>
+                  <Typography.Text>
+                    DOI:{" "}
+                    <a href={activeContent.url} rel="noreferrer" target="_blank">
+                      {activeContent.url}
+                    </a>
+                  </Typography.Text>
                 </div>
               )}
               <Typography.Text className="article-date">

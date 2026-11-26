@@ -99,6 +99,12 @@ test("NF-DISCOVERY-3-1: explicit confirmation", async ({ openApp }) => {
   await expect(dialog.getByRole("button", { name: "The Verge", exact: true })).toBeVisible()
   await expect(dialog.getByRole("button", { name: /Engadget/ })).toBeVisible()
   await expectFooterInViewport(dialog)
+  const footer = dialog.locator(".arco-modal-footer")
+  const cancel = footer.locator(".arco-btn").first()
+  const confirm = footer.locator(".arco-btn-primary")
+  await cancel.focus()
+  await page.keyboard.press("Tab")
+  await expect(confirm).toBeFocused()
   expect(
     await dialog
       .locator(".arco-modal-content")

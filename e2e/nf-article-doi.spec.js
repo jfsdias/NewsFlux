@@ -17,7 +17,8 @@ test("NF-DOI-1: explicit DOI identity preserves source and article", async ({ op
     route.fulfill({ json: { ...entry, url, content: "<p>Visible academic excerpt.</p>" } }),
   )
   await page.goto("/all/entry/1")
-  await expect(page.locator(".article-doi")).toHaveText("DOI: 10.1234/Example")
+  await expect(page.locator(".article-doi")).toHaveText(`DOI: ${url}`)
+  await expect(page.locator(".article-doi a")).toHaveAttribute("href", url)
   await expect(page.locator(".article-title a")).toHaveAttribute("href", url)
   await expect(page.getByText("Visible academic excerpt.", { exact: true })).toBeVisible()
   expect(externalRequests).toEqual([])

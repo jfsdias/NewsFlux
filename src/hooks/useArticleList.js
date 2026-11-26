@@ -37,6 +37,7 @@ import { pendingSmartViewState } from "@/store/smartViewsState"
 import { reconcileArticleListFilterScope } from "@/utils/article-list-filter-scope"
 import { hasArticleListFilters } from "@/utils/article-list-filters"
 import createArticleListRequestKey from "@/utils/article-list-request-key"
+import resolveCurrentArticleListRequest from "@/utils/article-list-request-result"
 import { createArticleListSearchScopeKey } from "@/utils/article-list-search-scope"
 import createArticleListSnapshotIdentity from "@/utils/article-list-snapshot-identity"
 import subscribeArticleListTotalRefresh from "@/utils/article-list-total-refresh"
@@ -257,28 +258,34 @@ const useArticleList = (source, sourceId, getEntries) => {
           continue
         }
 
+        let request
         if (source === "home") {
-          response = await getEntries({ pageSize: settings.pageSize })
+          request = getEntries({ pageSize: settings.pageSize })
         } else {
           switch (settings.showStatus) {
             case "starred": {
-              response = await getEntries(null, true, filterParams)
+              request = getEntries(null, true, filterParams)
               break
             }
             case "unread": {
-              response = await getEntries("unread", false, filterParams)
+              request = getEntries("unread", false, filterParams)
               break
             }
             default: {
-              response = await getEntries(null, false, filterParams)
+              request = getEntries(null, false, filterParams)
               break
             }
           }
         }
 
-        if (!isLatestRequest() || !isRequestSessionCurrent()) {
+        const result = await resolveCurrentArticleListRequest(
+          request,
+          () => isLatestRequest() && isRequestSessionCurrent(),
+        )
+        if (!result.current) {
           return
         }
+        response = result.response
 
         shouldRetry = !isEntryMutationSnapshotCurrent(mutationSnapshot)
         if (shouldRetry) {
