@@ -12,12 +12,10 @@ test("a late stale response settles without replacing the latest result", async 
   let currentRequest = 1
   let visibleEntries = []
   const apply = async (request, requestId) => {
-    const result = await resolveCurrentArticleListRequest(
-      request,
-      () => requestId === currentRequest,
-    )
+    const response = await request
+    const result = resolveCurrentArticleListRequest(response, () => requestId === currentRequest)
     if (result.current) {
-      visibleEntries = result.response.entries
+      visibleEntries = response.entries
     }
     return result.current
   }
@@ -32,7 +30,21 @@ test("a late stale response settles without replacing the latest result", async 
   assert.deepEqual(visibleEntries, [2])
 })
 
-test("the current request propagates failures to the list error handler", async () => {
-  const failure = new Error("network")
-  await assert.rejects(resolveCurrentArticleListRequest(Promise.reject(failure), () => true), failure)
+test("freshness is checked synchronously without allowing a later microtask to interleave", async () => {
+  let currentRequest = 1
+  queueMicrotask(() => {
+    currentRequest = 2
+  })
+  const response = { entries: [1] }
+  const result = resolveCurrentArticleListRequest(response, () => currentRequest === 1)
+  assert.deepEqual(result, { current: true, response })
+  assert.equal(currentRequest, 1)
+  await Promise.resolve()
+  assert.equal(currentRequest, 2)
+})
+
+test("a session invalidated before the response is checked is rejected", () => {
+  assert.deepEqual(resolveCurrentArticleListRequest({ entries: [1] }, () => false), {
+    current: false,
+  })
 })

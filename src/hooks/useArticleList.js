@@ -258,34 +258,32 @@ const useArticleList = (source, sourceId, getEntries) => {
           continue
         }
 
-        let request
         if (source === "home") {
-          request = getEntries({ pageSize: settings.pageSize })
+          response = await getEntries({ pageSize: settings.pageSize })
         } else {
           switch (settings.showStatus) {
             case "starred": {
-              request = getEntries(null, true, filterParams)
+              response = await getEntries(null, true, filterParams)
               break
             }
             case "unread": {
-              request = getEntries("unread", false, filterParams)
+              response = await getEntries("unread", false, filterParams)
               break
             }
             default: {
-              request = getEntries(null, false, filterParams)
+              response = await getEntries(null, false, filterParams)
               break
             }
           }
         }
 
-        const result = await resolveCurrentArticleListRequest(
-          request,
+        const result = resolveCurrentArticleListRequest(
+          response,
           () => isLatestRequest() && isRequestSessionCurrent(),
         )
         if (!result.current) {
           return
         }
-        response = result.response
 
         shouldRetry = !isEntryMutationSnapshotCurrent(mutationSnapshot)
         if (shouldRetry) {
