@@ -37,6 +37,7 @@ import { pendingSmartViewState } from "@/store/smartViewsState"
 import { reconcileArticleListFilterScope } from "@/utils/article-list-filter-scope"
 import { hasArticleListFilters } from "@/utils/article-list-filters"
 import createArticleListRequestKey from "@/utils/article-list-request-key"
+import resolveCurrentArticleListRequest from "@/utils/article-list-request-result"
 import { createArticleListSearchScopeKey } from "@/utils/article-list-search-scope"
 import createArticleListSnapshotIdentity from "@/utils/article-list-snapshot-identity"
 import subscribeArticleListTotalRefresh from "@/utils/article-list-total-refresh"
@@ -276,7 +277,11 @@ const useArticleList = (source, sourceId, getEntries) => {
           }
         }
 
-        if (!isLatestRequest() || !isRequestSessionCurrent()) {
+        const result = resolveCurrentArticleListRequest(
+          response,
+          () => isLatestRequest() && isRequestSessionCurrent(),
+        )
+        if (!result.current) {
           return
         }
 
