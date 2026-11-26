@@ -494,10 +494,10 @@ const ArticleDetail = forwardRef((_, ref) => {
   const [enclosuresOpenState, setEnclosuresOpenState] = useState({ articleId: null, open: false })
   const [hasOpenedPhotoSlider, setHasOpenedPhotoSlider] = useState(false)
   const [optimizedReadingKey, setOptimizedReadingKey] = useState(null)
-  const presentationKey = `${sessionRevision}:${location.key}:${activeContent.id}`
+  const optimizedReadingScope = `${sessionRevision}:${location.key}:${activeContent.id}`
   const canOptimizeReading =
     !isArticleBodyPending && !readerRecovery.hasRecovery && Boolean(renderableContentHtml)
-  const optimizedReading = canOptimizeReading && optimizedReadingKey === presentationKey
+  const optimizedReading = canOptimizeReading && optimizedReadingKey === optimizedReadingScope
 
   useEffect(() => {
     if (!routeEntryId) {
@@ -1053,7 +1053,9 @@ const ArticleDetail = forwardRef((_, ref) => {
                 aria-pressed={optimizedReading}
                 className="reader-presentation__toggle"
                 type="button"
-                onClick={() => setOptimizedReadingKey(optimizedReading ? null : presentationKey)}
+                onClick={() =>
+                  setOptimizedReadingKey(optimizedReading ? null : optimizedReadingScope)
+                }
               >
                 {polyglot.t("content.optimized_reading")}
               </button>
