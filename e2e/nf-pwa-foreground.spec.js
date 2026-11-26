@@ -124,6 +124,14 @@ test("NF-PWA-FOREGROUND-1: a foreground check finds a new worker without reloadi
     await expect(page.locator(".article-body p").first()).toBeVisible()
     expect(updateScriptRequests).toBe(1)
     expect(navigations).toEqual([])
+
+    const reload = page.waitForEvent("framenavigated", {
+      predicate: (frame) => frame === page.mainFrame(),
+    })
+    await updateNotice.getByRole("button", { name: "Update now" }).click()
+    await reload
+    await expect(page.locator(".article-body p").first()).toBeVisible()
+    await expect.poll(() => navigations.length).toBe(1)
     expect(errors).toEqual([])
     await context.close()
   } finally {
