@@ -493,6 +493,11 @@ const ArticleDetail = forwardRef((_, ref) => {
   const previousPhotoSliderVisibleRef = useRef(false)
   const [enclosuresOpenState, setEnclosuresOpenState] = useState({ articleId: null, open: false })
   const [hasOpenedPhotoSlider, setHasOpenedPhotoSlider] = useState(false)
+  const [optimizedReadingKey, setOptimizedReadingKey] = useState(null)
+  const presentationKey = `${sessionRevision}:${location.key}:${activeContent.id}`
+  const canOptimizeReading =
+    !isArticleBodyPending && !readerRecovery.hasRecovery && Boolean(renderableContentHtml)
+  const optimizedReading = canOptimizeReading && optimizedReadingKey === presentationKey
 
   useEffect(() => {
     if (!routeEntryId) {
@@ -1042,10 +1047,22 @@ const ArticleDetail = forwardRef((_, ref) => {
                 )}
             </section>
           )}
+          {canOptimizeReading && (
+            <div className="reader-presentation" style={{ maxWidth: responsiveMaxWidth }}>
+              <button
+                aria-pressed={optimizedReading}
+                className="reader-presentation__toggle"
+                type="button"
+                onClick={() => setOptimizedReadingKey(optimizedReading ? null : presentationKey)}
+              >
+                {polyglot.t("content.optimized_reading")}
+              </button>
+            </div>
+          )}
           <div
             key={activeContent.id}
             aria-busy={isArticleBodyPending || undefined}
-            className="article-body"
+            className={optimizedReading ? "article-body article-body--optimized" : "article-body"}
             style={{
               fontSize: `${fontSize}rem`,
               maxWidth: responsiveMaxWidth,
