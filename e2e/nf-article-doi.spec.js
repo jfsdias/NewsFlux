@@ -9,7 +9,9 @@ test("NF-DOI-1: explicit DOI identity preserves source and article", async ({ op
   const url = "https://doi.org/10.1234/Example"
   const externalRequests = []
   context.on("request", (request) => {
-    if (new URL(request.url()).hostname === "doi.org") externalRequests.push(request.url())
+    if (new URL(request.url()).hostname === "doi.org") {
+      externalRequests.push(request.url())
+    }
   })
   await context.route(`${mock.url}/v1/entries/1`, (route) =>
     route.fulfill({ json: { ...entry, url, content: "<p>Visible academic excerpt.</p>" } }),
