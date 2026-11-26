@@ -5,7 +5,10 @@ import test from "node:test"
 import getExplicitArticleDoi from "./article-doi.js"
 
 test("uses an explicit canonical DOI link without changing the identifier", () => {
-  assert.equal(getExplicitArticleDoi("https://doi.org/10.1234/Article.2026"), "10.1234/Article.2026")
+  assert.equal(
+    getExplicitArticleDoi("https://doi.org/10.1234/Article.2026"),
+    "10.1234/Article.2026",
+  )
 })
 
 test("does not infer a DOI from publisher paths or arbitrary URLs", () => {
