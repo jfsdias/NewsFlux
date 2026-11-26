@@ -1,5 +1,34 @@
 import { expect, test } from "./support/fixtures.js"
 
+const expectFooterInViewport = async (dialog) => {
+  const footer = dialog.locator(".arco-modal-footer")
+  await expect(footer).toBeVisible()
+  const geometry = await footer.evaluate((element) => {
+    const ancestors = []
+    for (let node = element; node && ancestors.length < 5; node = node.parentElement) {
+      const rect = node.getBoundingClientRect()
+      const style = getComputedStyle(node)
+      ancestors.push({
+        className: node.className,
+        attributes: node.getAttributeNames(),
+        top: rect.top,
+        bottom: rect.bottom,
+        height: rect.height,
+        scrollHeight: node.scrollHeight,
+        clientHeight: node.clientHeight,
+        display: style.display,
+        overflowY: style.overflowY,
+        maxHeight: style.maxHeight,
+      })
+    }
+    return { viewportHeight: window.innerHeight, ancestors }
+  })
+  expect(geometry.ancestors[0].top, JSON.stringify(geometry)).toBeGreaterThanOrEqual(0)
+  expect(geometry.ancestors[0].bottom, JSON.stringify(geometry)).toBeLessThanOrEqual(
+    geometry.viewportHeight,
+  )
+}
+
 const openAddFeed = async (page, width) => {
   if (width <= 992) {
     await page.getByTestId(width <= 768 ? "compact-nav-sources" : "medium-nav-sources").click()
@@ -9,7 +38,7 @@ const openAddFeed = async (page, width) => {
 }
 
 test("NF-DISCOVERY-3-1: explicit confirmation", async ({ openApp }) => {
-  const { page, context } = await openApp({ path: null, width: 1440, height: 900 })
+  const { page, context } = await openApp({ path: null, width: 1440, height: 600 })
   const posts = []
   let feedGets = 0
   const discoveries = []
@@ -69,6 +98,12 @@ test("NF-DISCOVERY-3-1: explicit confirmation", async ({ openApp }) => {
   await expect(dialog.getByRole("status")).toContainText("Topic: Technology · Language: English")
   await expect(dialog.getByRole("button", { name: "The Verge", exact: true })).toBeVisible()
   await expect(dialog.getByRole("button", { name: /Engadget/ })).toBeVisible()
+  await expectFooterInViewport(dialog)
+  expect(
+    await dialog
+      .locator(".arco-modal-content")
+      .evaluate((element) => element.scrollHeight > element.clientHeight),
+  ).toBe(true)
   await dialog.getByRole("button", { name: "Hacker News" }).click()
   const input = dialog.getByPlaceholder("Enter a website or feed URL")
   await expect(input).toHaveValue("https://news.ycombinator.com/rss")
@@ -109,7 +144,7 @@ for (const width of [466, 884]) {
       const { page } = await openApp({
         path: "/all",
         width,
-        height: 1104,
+        height: 650,
         touch: true,
         settings: { themeMode: theme },
       })
@@ -118,6 +153,7 @@ for (const width of [466, 884]) {
       await dialog.getByRole("button", { name: "Browse suggested feeds" }).click()
       await dialog.getByLabel("Topic").selectOption("brazil")
       await dialog.getByLabel("Language").selectOption("pt")
+      await expectFooterInViewport(dialog)
       const overflow = await dialog
         .locator(".feed-suggestions")
         .evaluate((el) => el.scrollWidth > el.clientWidth)

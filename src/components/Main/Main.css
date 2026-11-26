@@ -50,8 +50,32 @@
   margin-top: 24px;
 }
 
-.add-feed-modal {
+/* Arco's centered wrapper otherwise overrides the modal's flex layout. */
+.arco-modal-wrapper.arco-modal-wrapper-align-center .arco-modal.add-feed-modal {
+  display: inline-flex;
+  flex-direction: column;
   width: 400px;
+  max-height: calc(100vh - 16px);
+  max-height: calc(100dvh - 16px);
+}
+
+/* Arco's focus lock may wrap the header, body and footer in one flex item. */
+.add-feed-modal > [data-focus-lock-disabled] {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.add-feed-modal .arco-modal-header,
+.add-feed-modal .arco-modal-footer {
+  flex: 0 0 auto;
+}
+
+.add-feed-modal .arco-modal-content {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* Discovery candidates are reading content, so rows stay opaque; glass is reserved for chrome. */
@@ -217,13 +241,9 @@
     min-height: var(--mobile-form-control-size);
   }
 
-  .add-feed-modal {
-    display: flex;
-    flex-direction: column;
+  .arco-modal-wrapper.arco-modal-wrapper-align-center .arco-modal.add-feed-modal {
     width: calc(100% - 16px);
     max-width: 400px;
-    max-height: calc(100vh - 16px);
-    max-height: calc(100dvh - 16px);
   }
 
   .add-feed-discovery-modal {
@@ -247,19 +267,8 @@
     font-size: var(--mobile-form-font-size);
   }
 
-  .add-feed-modal .arco-modal-header,
-  .add-feed-modal .arco-modal-footer {
-    flex: 0 0 auto;
-  }
-
   .add-feed-modal .arco-modal-title {
     font-size: 18px;
-  }
-
-  .add-feed-modal .arco-modal-content {
-    min-height: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
   }
 
   .add-feed-modal .arco-form-label-item {
