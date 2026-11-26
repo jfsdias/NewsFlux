@@ -17,19 +17,19 @@ const fixtures = [
     article: `<h2>Community garden</h2>${prose}<ul><li>Monday workshop</li><li>Friday market</li></ul><blockquote>Everyone is welcome.</blockquote>`,
   },
   { id: "short", article: `<p>${body[0]}</p>` },
+  { id: "inline", article: `<p>Read <strong>this</strong> sentence carefully.</p>${prose}` },
   { id: "media", article: `${prose}<figure><figcaption>Garden photograph</figcaption></figure>` },
   { id: "table", article: `${prose}<table><tr><td>Saturday</td><td>Market</td></tr></table>` },
 ]
 
 const semantic = new Set(["p", "h2", "h3", "ul", "ol", "li", "blockquote", "strong", "em", "br"])
 const wrappers = new Set(["div", "article", "section"])
-const normalize = (value) => value.replace(/\s+/gu, " ").trim()
 
 // Compare the exact ordered semantic projection of the authored article, ignoring only
 // structural wrappers. Unsupported structures are deliberately not eligible for a preview.
 function project(node) {
   if (node.nodeType === 3) {
-    const text = normalize(node.textContent)
+    const text = node.textContent
     return text ? [{ text }] : []
   }
   if (node.nodeType !== 1) return []
@@ -77,6 +77,7 @@ function evaluateFixture(fixture) {
       }
       const preview = renderProjection(dom.window.document, projection)
       assert.deepEqual(project(preview), originalProjection)
+      assert.equal(preview.textContent, original.textContent)
       assert.equal(preview.querySelector("[src], [href], [style], [id], [class]"), null)
       return { id: fixture.id, decision: "PREVIEW", preview: preview.outerHTML }
     } finally {
