@@ -58,6 +58,14 @@
   max-height: calc(100dvh - 16px);
 }
 
+/* Arco's focus lock may wrap the header, body and footer in one flex item. */
+.add-feed-modal > [data-focus-lock-disabled] {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .add-feed-modal .arco-modal-header,
 .add-feed-modal .arco-modal-footer {
   flex: 0 0 auto;
