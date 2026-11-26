@@ -221,7 +221,6 @@ test("PWA_UPDATE_USER_ACCEPT_ACTIVATES with no worker left waiting, accepting re
   assert.equal(harness.calls.updateServiceWorker.length, 0)
 })
 
-
 test("PWA_UPDATE_USER_ACCEPT_ACTIVATES an activation failure permits an explicit retry", async () => {
   const harness = createHarness({ failFirstActivation: true })
   harness.fireNeedRefresh()
