@@ -4,13 +4,25 @@ import test from "node:test"
 // eslint-disable-next-line import/extensions -- Node native ESM requires explicit extensions.
 import createPwaUpdateController from "./pwa-update.js"
 
-const flush = () => new Promise((resolve) => setImmediate(resolve))
+const flush = async () => {
+  await Promise.resolve()
+  await Promise.resolve()
+}
+
+const resolveImmediately = () => Promise.resolve()
+const registerServiceWorker = () => resolveImmediately
+
+const updateRegistration = async (counts, reject) => {
+  counts.updates += 1
+  if (reject) {
+    throw new Error("offline")
+  }
+}
 
 const createHarness = ({ reject = false } = {}) => {
   const documentObject = new EventTarget()
   documentObject.visibilityState = "hidden"
-  let updates = 0
-  let reloads = 0
+  const counts = { updates: 0, reloads: 0 }
   let value
   let time = 0
   const state = {
@@ -20,26 +32,22 @@ const createHarness = ({ reject = false } = {}) => {
     },
   }
   const serviceWorker = new EventTarget()
-  serviceWorker.getRegistration = async () => ({
-    update: async () => {
-      updates += 1
-      if (reject) {
-        throw new Error("offline")
-      }
-    },
-  })
+  const registration = {
+    update: () => updateRegistration(counts, reject),
+  }
+  serviceWorker.getRegistration = async () => registration
   createPwaUpdateController({
-    registerSW: () => async () => {},
+    registerSW: registerServiceWorker,
     serviceWorker,
     state,
     reload: () => {
-      reloads += 1
+      counts.reloads += 1
     },
     documentObject,
     now: () => time,
   })
   return {
-    counts: () => [updates, reloads],
+    counts: () => [counts.updates, counts.reloads],
     advance: () => {
       time += 60_001
     },
