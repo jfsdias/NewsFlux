@@ -182,7 +182,8 @@ test("contract preserves the 75 baseline identities and unique reviewed addition
         id !== "NF-FETCH-1" &&
         !id.startsWith("NF-DISCOVERY-3-") &&
         !id.startsWith("NF-READING-3-") &&
-        id !== "NF-DOI-1",
+        id !== "NF-DOI-1" &&
+        id !== "NF-PWA-FOREGROUND-1",
     ).length,
     75,
   )
@@ -196,12 +197,16 @@ test("BULK-01C increments the scenario contract with all approved scenarios pass
     states[state] = (states[state] ?? 0) + 1
   }
 
-  assert.equal(E2E_SCENARIO_CONTRACT_VERSION, 20)
+  assert.equal(E2E_SCENARIO_CONTRACT_VERSION, 21)
   assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === "NF-FETCH-1")?.state, "PASSED")
   for (const id of ["NF-READING-3-466", "NF-READING-3-884"]) {
     assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === id)?.state, "PASSED")
   }
   assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === "NF-DOI-1")?.state, "PASSED")
+  assert.equal(
+    EXPECTED_SCENARIOS.find((scenario) => scenario.id === "NF-PWA-FOREGROUND-1")?.state,
+    "PASSED",
+  )
   assert.deepEqual(states, { PASSED: EXPECTED_SCENARIOS.length })
   for (const id of ["F02-2", "F04-1", "F04-3", "QA-001-884", "QA-001-939"]) {
     assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === id)?.state, "PASSED")
