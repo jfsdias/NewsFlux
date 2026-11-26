@@ -50,8 +50,9 @@
   margin-top: 24px;
 }
 
-.add-feed-modal {
-  display: flex;
+/* Arco's centered wrapper otherwise overrides the modal's flex layout. */
+.arco-modal-wrapper-align-center .add-feed-modal {
+  display: inline-flex;
   flex-direction: column;
   width: 400px;
   max-height: calc(100vh - 16px);
