@@ -27,7 +27,7 @@ test("NF-PWA-FOREGROUND-1: real registration checks without reload", async ({ op
     const counters = { started: 0, settled: 0 }
     globalThis.nfForegroundTest = counters
     const registration = await navigator.serviceWorker.getRegistration()
-    const prototype = globalThis.ServiceWorkerRegistration.prototype
+    const { prototype } = globalThis.ServiceWorkerRegistration
     const { update } = prototype
     const updateRegistration = update.bind(registration)
     Object.defineProperty(prototype, "update", {
