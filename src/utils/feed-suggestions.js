@@ -59,6 +59,62 @@ const catalog = [
     language: "en",
     source: "recommended/with_category/Business & Economy.opml",
   },
+  {
+    title: "Jornal de Brasília",
+    url: "https://jornaldebrasilia.com.br/feed/",
+    topic: "brazil",
+    language: "pt",
+    source: "countries/with_category/Brazil.opml",
+  },
+  {
+    title: "The Rio Times",
+    url: "https://riotimesonline.com/feed/",
+    topic: "brazil",
+    language: "en",
+    source: "countries/with_category/Brazil.opml",
+  },
+  {
+    title: "Engadget - Technology News & Expert Reviews",
+    url: "https://www.engadget.com/rss.xml",
+    topic: "tech",
+    language: "en",
+    source: "recommended/with_category/Tech.opml",
+  },
+  {
+    title: "The Verge",
+    url: "https://www.theverge.com/rss/index.xml",
+    topic: "tech",
+    language: "en",
+    source: "recommended/with_category/Tech.opml",
+  },
+  {
+    title: "Phys.org - latest science and technology news stories",
+    url: "https://phys.org/rss-feed/",
+    topic: "science",
+    language: "en",
+    source: "recommended/with_category/Science.opml",
+  },
+  {
+    title: "Popular Science",
+    url: "https://www.popsci.com/arcio/rss/",
+    topic: "science",
+    language: "en",
+    source: "recommended/with_category/Science.opml",
+  },
+  {
+    title: "Forbes - Business",
+    url: "https://www.forbes.com/business/feed/",
+    topic: "economy",
+    language: "en",
+    source: "recommended/with_category/Business & Economy.opml",
+  },
+  {
+    title: "Yahoo Finance",
+    url: "https://finance.yahoo.com/news/rssindex",
+    topic: "economy",
+    language: "en",
+    source: "recommended/with_category/Business & Economy.opml",
+  },
 ]
 
 export const normalizeFeedUrl = (value) => {

@@ -42,9 +42,10 @@ test("excludes subscribed URLs, hidden feeds, future dates and entries beyond 20
     hiddenFeedIds: new Set([99]),
     now,
   })
-  assert.equal(result.length, 1)
-  assert.equal(result[0].title, "Latest Science News -- ScienceDaily")
-  assert.equal(result[0].evidence.entries, 1)
+  assert.equal(result.length, 3)
+  assert.ok(result.every((item) => item.topic === "science" && item.evidence.entries === 1))
+  assert.ok(result.every((item) => item.title !== "Nature"))
+  assert.ok(result.some((item) => item.title === "Latest Science News -- ScienceDaily"))
 })
 
 test("interleaves topics on equal score deterministically", () => {

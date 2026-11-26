@@ -4,7 +4,7 @@ import { defineConfig } from "@playwright/test"
 import base from "./playwright.config.js"
 export default defineConfig({
   ...base,
-  testMatch: "**/nf-discovery-v1.synthetic.js",
+  testMatch: "**/nf-discovery-v1.spec.js",
   reporter: [["list"]],
   outputDir: "test-results/nf-discovery-v1",
 })

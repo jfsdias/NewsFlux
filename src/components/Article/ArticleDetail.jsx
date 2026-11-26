@@ -43,6 +43,7 @@ import { activeContentState, contentState } from "@/store/contentState"
 import { catalogFeedsByIdState, dataState } from "@/store/dataState"
 import { homeIdentityState } from "@/store/homePageState"
 import { articleDetailSettingsState } from "@/store/settingsState"
+import getExplicitArticleDoi from "@/utils/article-doi"
 import returnToArticleImage from "@/utils/article-image-return"
 import summaryErrorMessageKey from "@/utils/article-summary-errors"
 import formatCategoryDisplayName from "@/utils/category-display-name"
@@ -207,7 +208,7 @@ const processFigcaptionContent = (children) => {
       const props = attributesToProps(child.attribs, child.name)
 
       if (child.name === "br") {
-        return null
+        return <br key={index} />
       }
 
       if (!child.children?.length) {
@@ -493,6 +494,11 @@ const ArticleDetail = forwardRef((_, ref) => {
   const previousPhotoSliderVisibleRef = useRef(false)
   const [enclosuresOpenState, setEnclosuresOpenState] = useState({ articleId: null, open: false })
   const [hasOpenedPhotoSlider, setHasOpenedPhotoSlider] = useState(false)
+  const [optimizedReadingKey, setOptimizedReadingKey] = useState(null)
+  const optimizedReadingScope = `${sessionRevision}:${location.key}:${activeContent.id}`
+  const canOptimizeReading =
+    !isArticleBodyPending && !readerRecovery.hasRecovery && Boolean(renderableContentHtml)
+  const optimizedReading = canOptimizeReading && optimizedReadingKey === optimizedReadingScope
 
   useEffect(() => {
     if (!routeEntryId) {
@@ -694,6 +700,7 @@ const ArticleDetail = forwardRef((_, ref) => {
 
   const { coverSource } = activeContent
   const sourceUrl = getSafeExternalUrl(activeContent.url)
+  const articleDoi = getExplicitArticleDoi(activeContent.url)
 
   const responsiveMaxWidth = isBelowMedium ? "90%" : `${articleWidth}ch`
 
@@ -833,6 +840,11 @@ const ArticleDetail = forwardRef((_, ref) => {
                   </Typography.Text>
                 )}
               </div>
+              {articleDoi && (
+                <div className="article-doi">
+                  <Typography.Text>DOI: {articleDoi}</Typography.Text>
+                </div>
+              )}
               <Typography.Text className="article-date">
                 {generateReadableDate(activeContent.published_at)}
               </Typography.Text>
@@ -1042,10 +1054,25 @@ const ArticleDetail = forwardRef((_, ref) => {
                 )}
             </section>
           )}
+          {canOptimizeReading && (
+            <div className="reader-presentation" style={{ maxWidth: responsiveMaxWidth }}>
+              <button
+                aria-pressed={optimizedReading}
+                className="reader-presentation__toggle"
+                type="button"
+                onClick={() =>
+                  setOptimizedReadingKey(optimizedReading ? null : optimizedReadingScope)
+                }
+              >
+                {polyglot.t("content.optimized_reading")}
+              </button>
+            </div>
+          )}
           <div
             key={activeContent.id}
             aria-busy={isArticleBodyPending || undefined}
             className="article-body"
+            data-optimized-reading={optimizedReading || undefined}
             style={{
               fontSize: `${fontSize}rem`,
               maxWidth: responsiveMaxWidth,

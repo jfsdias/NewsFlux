@@ -1,9 +1,7 @@
-# NF-FETCH-OPEN-ACCESS-R1
+# NF-FETCH-OPEN-ACCESS-R1 — bibliographic identity admission
 
-Goal: improve Fetch Content by offering a publisher-authorized open-access location for an academic article with a known DOI. Unpaywall v2 documents DOI lookup and metadata for OA locations: https://unpaywall.org/api and https://unpaywall.org/data-format. Not a general newspaper paywall removal mechanism. No WallHop provider or access-control circumvention.
+The original proposal explored metadata-only licensed open-access records on authored fixtures. No verified provider is wired into NewsFlux. Do not infer access rights from a DOI, a teaser, or a third-party record; do not retrieve a copy or replace the publisher's access flow.
 
-R1 is a metadata-only local contract, using authored synthetic inputs. Exact DOI match, explicit OA flag, known license, explicit version, publisher/repository host type and HTTPS landing page required; do not infer open rights from a teaser or missing license. Result is a suggested link with provenance/version, not fetched article content or automatic navigation. No provider request, credentials, API email, external transfer, new fetcher, persistence or runtime integration.
+**PM disposition:** ship only explicit academic DOI identity in the Reader. Recognize the original canonical HTTPS DOI URL already supplied by Miniflux, display its identifier as bibliographic metadata, and preserve the existing source link and content. Ordinary articles are unchanged. No external lookup, alternate-location links, provider transfer, credentials, persistence, acquisition or access-control changes. Licensed location discovery remains a separate HOLD pending an explicit approved provider/privacy design and independently verified provenance.
 
-Next isolated vertical slice: mock UI action with original article retained, explicit user selection, no automatic subscription or read-state mutation. Before real lookup, verify provider terms/privacy and user opt-in for DOI transfer; before any article retrieval, validate the editor-authorized location and preserve existing network/security boundaries. If no eligible link exists, offer original publisher and existing access flow. Readability #313 separately evaluates presentation of already accessible visible HTML; no linkage to bypassing restricted material.
-
-Tests: 4/4 local Node synthetic assertions, no network. Full repo build/UI qualification pending. No merge/deploy authorized by the document.
+Qualification: unit tests for exact canonical identity and rejection of ambiguous inputs; canonical NF-DOI-1 browser test for the original article/source link, no automatic DOI requests, no DOI on unrelated articles and no mutations. No claim of access status.
