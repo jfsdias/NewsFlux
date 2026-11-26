@@ -50,7 +50,14 @@ const createPwaUpdateController = ({
       return
     }
 
-    updateServiceWorker(true)
+    try {
+      await updateServiceWorker(true)
+    } catch {
+      // A transient activation failure must not prevent a later explicit retry.
+      serviceWorker?.removeEventListener("controllerchange", reloadOnce)
+      isAccepted = false
+      setAvailable(true)
+    }
   }
 
   const dismiss = () => setAvailable(false)

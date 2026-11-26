@@ -8,7 +8,7 @@ import createPwaUpdateController from "./pwa-update.js"
 
 // Stand-ins for virtual:pwa-register and navigator.serviceWorker. They record what the app asks for
 // and let a test fire the events the browser and vite-plugin-pwa would fire. Nothing reloads by itself.
-const createHarness = ({ hasWaitingWorker = true } = {}) => {
+const createHarness = ({ hasWaitingWorker = true, failFirstActivation = false } = {}) => {
   const calls = { register: 0, updateServiceWorker: [], reload: 0 }
   let options = null
   const controllerChangeListeners = new Set()
@@ -18,6 +18,9 @@ const createHarness = ({ hasWaitingWorker = true } = {}) => {
     options = registerOptions
     return (...args) => {
       calls.updateServiceWorker.push(args)
+      if (failFirstActivation && calls.updateServiceWorker.length === 1) {
+        return Promise.reject(new Error("activation failed"))
+      }
       return Promise.resolve()
     }
   }
@@ -216,4 +219,20 @@ test("PWA_UPDATE_USER_ACCEPT_ACTIVATES with no worker left waiting, accepting re
 
   assert.equal(harness.calls.reload, 1)
   assert.equal(harness.calls.updateServiceWorker.length, 0)
+})
+
+
+test("PWA_UPDATE_USER_ACCEPT_ACTIVATES an activation failure permits an explicit retry", async () => {
+  const harness = createHarness({ failFirstActivation: true })
+  harness.fireNeedRefresh()
+
+  await harness.accept()
+  harness.fireControllerChange()
+  assert.equal(harness.calls.reload, 0)
+  assert.equal(harness.state.get().available, true)
+
+  await harness.accept()
+  assert.equal(harness.calls.updateServiceWorker.length, 2)
+  harness.fireControllerChange()
+  assert.equal(harness.calls.reload, 1)
 })
