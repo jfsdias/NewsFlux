@@ -2,6 +2,8 @@ import { createServer } from "node:http"
 
 import { expect, test } from "./support/fixtures.js"
 
+const SECOND_BUILD_MARKER = "\n// NF-PWA-FOREGROUND-1 second worker build\n"
+
 test("NF-PWA-FOREGROUND-1: a foreground check finds a new worker without reloading", async ({
   openApp,
   baseURL,
@@ -21,7 +23,7 @@ test("NF-PWA-FOREGROUND-1: a foreground check finds a new worker without reloadi
       let body = Buffer.from(await upstream.arrayBuffer())
       if (secondBuildEnabled && upstreamUrl.pathname === workerScriptPath) {
         updateScriptRequests += 1
-        body = Buffer.concat([body, Buffer.from("\n// NF-PWA-FOREGROUND-1 second worker build\n")])
+        body = Buffer.concat([body, Buffer.from(SECOND_BUILD_MARKER)])
       }
 
       const headers = Object.fromEntries(upstream.headers.entries())
@@ -89,9 +91,12 @@ test("NF-PWA-FOREGROUND-1: a foreground check finds a new worker without reloadi
     })
     const originalUrl = page.url()
     await page.evaluate(() => {
-      Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" })
+      const setVisibilityState = (value) => {
+        Object.defineProperty(document, "visibilityState", { configurable: true, value })
+      }
+      setVisibilityState("hidden")
       document.dispatchEvent(new Event("visibilitychange"))
-      Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" })
+      setVisibilityState("visible")
       document.dispatchEvent(new Event("visibilitychange"))
     })
     await expect.poll(() => updateScriptRequests, { timeout: 15_000 }).toBeGreaterThan(0)
