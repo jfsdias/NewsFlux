@@ -22,6 +22,7 @@ test("does not infer a DOI from publisher paths or arbitrary URLs", () => {
 
 test("rejects ambiguous or malformed canonical links", () => {
   for (const url of [
+    // eslint-disable-next-line unicorn/prefer-https -- intentionally rejects insecure input.
     "http://doi.org/10.1234/example",
     "https://doi.org/10.1234/",
     "https://doi.org/10.1234/example?redirect=1",
