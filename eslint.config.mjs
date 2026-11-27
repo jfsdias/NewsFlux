@@ -149,10 +149,25 @@ export default [
     },
   },
   {
-    files: ["scripts/**/*.js", "e2e/**/*.js", "playwright.config.js"],
+    files: [
+      "scripts/**/*.js",
+      "e2e/**/*.js",
+      "playwright.config.js",
+      "ops/**/*.js",
+      "research/**/*.js",
+      "tests/aux/**/*.js",
+    ],
     languageOptions: { globals: globals.node },
     rules: {
       "import/extensions": "off",
+    },
+  },
+  {
+    // Auxiliary suites, ops tests and research harnesses live outside the product tree and import
+    // the shared synthetic fixtures, Vite config and production helpers from the repository root.
+    files: ["ops/**/*.js", "research/**/*.js", "tests/aux/**/*.{js,mjs}"],
+    rules: {
+      "import/no-relative-parent-imports": "off",
     },
   },
   {

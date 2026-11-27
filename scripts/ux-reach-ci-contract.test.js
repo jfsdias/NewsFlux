@@ -5,11 +5,15 @@ import path from "node:path"
 import test from "node:test"
 
 // eslint-disable-next-line import/no-relative-parent-imports -- exercise the gate's source contract.
-import uxReachConfig from "../playwright.ux-reach-01.config.js"
+import uxReachConfig from "../tests/aux/playwright/playwright.ux-reach-01.config.js"
 // eslint-disable-next-line import/no-relative-parent-imports -- test the dedicated reporter's runtime behavior.
-import UxReachFailClosedReporter from "../ux-reach-e2e/reporter.js"
-// eslint-disable-next-line import/no-relative-parent-imports -- test the dedicated suite's frozen contract.
-import { evaluateUxReachSuite, EXPECTED_UX_REACH_TESTS } from "../ux-reach-e2e/scenario-contract.js"
+import UxReachFailClosedReporter from "../tests/aux/ux-reach-e2e/reporter.js"
+/* eslint-disable import/no-relative-parent-imports -- test the dedicated suite's frozen contract. */
+import {
+  evaluateUxReachSuite,
+  EXPECTED_UX_REACH_TESTS,
+} from "../tests/aux/ux-reach-e2e/scenario-contract.js"
+/* eslint-enable import/no-relative-parent-imports */
 
 const completeRun = () => ({
   discoveredTitles: [...EXPECTED_UX_REACH_TESTS],
@@ -89,17 +93,17 @@ test("UX-REACH CI contract rejects skipped, failed and incomplete execution", ()
 })
 
 test("UX-REACH Playwright config uses the separate suite and fail-closed reporter", () => {
-  assert.match(uxReachConfig.testDir, /ux-reach-e2e$/)
+  assert.match(uxReachConfig.testDir, /tests\/aux\/ux-reach-e2e$/)
   assert.equal(uxReachConfig.testMatch, "**/*.spec.js")
   assert.equal(uxReachConfig.retries, 0)
   assert.equal(uxReachConfig.workers, 1)
   assert.ok(
     uxReachConfig.reporter.some((entry) =>
-      (Array.isArray(entry) ? entry[0] : entry).endsWith("ux-reach-e2e/reporter.js"),
+      (Array.isArray(entry) ? entry[0] : entry).endsWith("tests/aux/ux-reach-e2e/reporter.js"),
     ),
   )
   const failClosedReporter = uxReachConfig.reporter.find(
-    (entry) => Array.isArray(entry) && entry[0].endsWith("ux-reach-e2e/reporter.js"),
+    (entry) => Array.isArray(entry) && entry[0].endsWith("tests/aux/ux-reach-e2e/reporter.js"),
   )
   assert.equal(failClosedReporter[1].outputDir, "test-results/ux-reach-01")
 })

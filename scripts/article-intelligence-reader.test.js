@@ -67,21 +67,23 @@ test("summary action copy and safe states exist in every shipped locale", async 
 })
 
 test("AI Reader browser tests remain outside the frozen 46-scenario product inventory", async () => {
-  const config = await read("playwright.article-intelligence.config.js")
-  const spec = await read("reader-ai-e2e/article-intelligence.spec.js")
-  assert.match(config, /testDir: "\.\/reader-ai-e2e"/u)
-  assert.doesNotMatch(config, /testDir: "\.\/e2e"/u)
+  const config = await read("tests/aux/playwright/playwright.article-intelligence.config.js")
+  const spec = await read("tests/aux/reader-ai-e2e/article-intelligence.spec.js")
+  assert.match(config, /testDir: path\.join\(repositoryRoot, "tests\/aux\/reader-ai-e2e"\)/u)
+  assert.doesNotMatch(config, /testDir: path\.join\(repositoryRoot, "e2e"\)/u)
   assert.match(spec, /late summary is discarded after navigating/u)
   assert.match(spec, /recoverable/u)
 })
 
 test("AI Reader browser suite separates the default-off and explicitly enabled runs", async () => {
   const workflow = await read(".github/workflows/e2e.yaml")
-  const config = await read("playwright.article-intelligence.config.js")
-  const availability = await read("reader-ai-e2e/article-intelligence-availability.spec.js")
-  const enabledScenarios = await read("reader-ai-e2e/article-intelligence.spec.js")
+  const config = await read("tests/aux/playwright/playwright.article-intelligence.config.js")
+  const availability = await read(
+    "tests/aux/reader-ai-e2e/article-intelligence-availability.spec.js",
+  )
+  const enabledScenarios = await read("tests/aux/reader-ai-e2e/article-intelligence.spec.js")
   const recoveryIntegration = await read(
-    "reader-ai-e2e/article-intelligence-recovery-integration.spec.js",
+    "tests/aux/reader-ai-e2e/article-intelligence-recovery-integration.spec.js",
   )
 
   assert.match(workflow, /Run Article Intelligence Reader scenarios/u)
@@ -100,7 +102,7 @@ test("AI Reader browser suite separates the default-off and explicitly enabled r
   )
   assert.match(
     workflow,
-    /VITE_ARTICLE_INTELLIGENCE_ENABLED: "1"[\s\S]*?pnpm exec playwright test --config=playwright\.article-intelligence\.config\.js/u,
+    /VITE_ARTICLE_INTELLIGENCE_ENABLED: "1"[\s\S]*?pnpm exec playwright test --config=tests\/aux\/playwright\/playwright\.article-intelligence\.config\.js/u,
   )
   assert.doesNotMatch(workflow, /--grep "ARTICLE_INTELLIGENCE_COMPONENT"/u)
   assert.match(availability, /process\.env\.VITE_ARTICLE_INTELLIGENCE_ENABLED === "1"/u)
@@ -128,7 +130,7 @@ test("synthetic authenticated Reader fixture can provision an isolated API-key i
 
 test("combined session test emits the established auth storage change before checking cancellation", async () => {
   const recoveryIntegration = await read(
-    "reader-ai-e2e/article-intelligence-recovery-integration.spec.js",
+    "tests/aux/reader-ai-e2e/article-intelligence-recovery-integration.spec.js",
   )
   assert.match(
     recoveryIntegration,
