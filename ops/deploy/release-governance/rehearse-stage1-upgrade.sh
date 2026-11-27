@@ -55,7 +55,7 @@ mkdir -p "$work/stack" "$work/releases"
 
 # Origin whose main is B (A is an ancestor), so both releases prepare from the same remote.
 git init -q --bare "$work/origin.git"
-git -C "$work/origin.git" fetch -q --depth=50 "file://$repo" "$B:refs/heads/main"
+git -C "$work/origin.git" fetch -q "file://$repo" "$B:refs/heads/main"
 git -C "$work/origin.git" cat-file -e "$A" || { echo "UPGRADE_REHEARSAL=REFUSED CODE=STAGE1_NOT_IN_HISTORY"; exit 1; }
 git -C "$repo" show "$A:deploy/release-governance/ai-functional-release.sh" >"$work/op-stage1.sh"
 [[ "$(git -C "$repo" show "$A:deploy/article-intel-pilot/Caddyfile" | sha256sum | cut -d' ' -f1)" == "$STAGE1_CADDY" ]] \
