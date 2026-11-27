@@ -1,6 +1,6 @@
 import { IconTool } from "@arco-design/web-react/icon"
 
-export const HOME_TOOLS_PANEL_ID = "home-tools-panel"
+const HOME_TOOLS_PANEL_ID = "home-tools-panel"
 
 /**
  * Single discreet entry point for the optional Home tools (editorial tools and source
