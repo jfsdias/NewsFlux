@@ -255,8 +255,6 @@ export const setFilterDate = (filterDate) => {
   )
 }
 export const setFilterString = createSetter(contentState, "filterString")
-export const setInfoFrom = createSetter(contentState, "infoFrom")
-export const setInfoId = createSetter(contentState, "infoId")
 export const setArticleListSource = ({ from, id }) => {
   const current = contentState.get()
   const nextScope = {

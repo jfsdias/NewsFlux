@@ -360,15 +360,6 @@ const fetchStarredEntries = async (status, filterParams, applyDateFilter = true)
 export const getStarredEntries = async (status = null, filterParams = {}) =>
   fetchStarredEntries(status, filterParams)
 
-export const markStarredEntriesAsRead = async () => {
-  const unreadStarredEntryIds = await getAllEntryIds({
-    starred: true,
-    status: "unread",
-  })
-
-  return updateEntryIdsInBatches(unreadStarredEntryIds, { status: "read" })
-}
-
 const getStarredCountData = async (status = null) =>
   isEntryScopeFullyVisible("global")
     ? getEntryIds({ starred: true, status, limit: 1 })

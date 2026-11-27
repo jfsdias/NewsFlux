@@ -1,4 +1,4 @@
-import { Button, DatePicker, Input, Tooltip, Typography } from "@arco-design/web-react"
+import { Button, Input, Tooltip, Typography } from "@arco-design/web-react"
 import {
   IconCalendar,
   IconQuestionCircle,
@@ -7,7 +7,7 @@ import {
   IconSortDescending,
 } from "@arco-design/web-react/icon"
 import { useStore } from "@nanostores/react"
-import { Fragment, memo, useMemo, useRef, useState } from "react"
+import { Fragment, lazy, memo, Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 import { useNavigate, useParams } from "react-router"
 
@@ -145,58 +145,77 @@ const ActiveButton = ({ active, expanded, icon, tooltip, onClick }) => (
   </CustomTooltip>
 )
 
+// The date picker is large and only opens on demand. Its trigger renders immediately and the
+// picker module is requested as soon as the browser is idle, so it is normally ready before use.
+const loadDatePicker = () => import("@arco-design/web-react/es/DatePicker")
+const DatePicker = lazy(loadDatePicker)
+
 const DateFilter = ({ filterDate, from, polyglot }) => {
   const [calendarVisible, setCalendarVisible] = useState(false)
   const selectDateLabel = polyglot.t("search.select_date")
+
+  useEffect(() => {
+    const request = globalThis.requestIdleCallback ?? ((callback) => setTimeout(callback, 200))
+    const cancel = globalThis.cancelIdleCallback ?? clearTimeout
+    const handle = request(() => void loadDatePicker())
+    return () => cancel(handle)
+  }, [])
 
   const setDateAndClose = (date) => {
     setFilterDate(date)
     setCalendarVisible(false)
   }
 
+  const calendarTrigger = (onClick) => (
+    <CustomTooltip mini content={selectDateLabel}>
+      <Button
+        aria-expanded={calendarVisible}
+        aria-haspopup="dialog"
+        aria-label={selectDateLabel}
+        icon={<IconCalendar aria-hidden="true" />}
+        shape="circle"
+        size="small"
+        className={`nf-glass-control${
+          isArticleListDateFilterActive({ from, filterDate }) ? " nf-glass-control-active" : ""
+        }`}
+        onClick={onClick}
+      />
+    </CustomTooltip>
+  )
+
   return (
-    <DatePicker
-      popupVisible={calendarVisible}
-      position="bottom"
-      showNowBtn={false}
-      value={filterDate}
-      extra={
-        <div className="calendar-actions">
-          <Button
-            long
-            size="mini"
-            type="primary"
-            onClick={() => setDateAndClose(getStartOfToday())}
-          >
-            {polyglot.t("search.today")}
-          </Button>
-          <Button long size="mini" onClick={() => setDateAndClose(null)}>
-            {polyglot.t("search.clear_date")}
-          </Button>
-        </div>
-      }
-      triggerElement={
-        <CustomTooltip mini content={selectDateLabel}>
-          <Button
-            aria-expanded={calendarVisible}
-            aria-haspopup="dialog"
-            aria-label={selectDateLabel}
-            icon={<IconCalendar aria-hidden="true" />}
-            shape="circle"
-            size="small"
-            className={`nf-glass-control${
-              isArticleListDateFilterActive({ from, filterDate }) ? " nf-glass-control-active" : ""
-            }`}
-          />
-        </CustomTooltip>
-      }
-      triggerProps={{
-        boundaryDistance: { bottom: 8, left: 8, right: 8, top: 8 },
-        className: "mobile-date-picker-popup",
-      }}
-      onChange={setFilterDate}
-      onVisibleChange={setCalendarVisible}
-    />
+    // The fallback is the same trigger, so nothing shifts while the picker loads; a click made
+    // before then opens the picker as soon as it arrives.
+    <Suspense fallback={calendarTrigger(() => setCalendarVisible(true))}>
+      <DatePicker
+        popupVisible={calendarVisible}
+        position="bottom"
+        showNowBtn={false}
+        triggerElement={calendarTrigger()}
+        value={filterDate}
+        extra={
+          <div className="calendar-actions">
+            <Button
+              long
+              size="mini"
+              type="primary"
+              onClick={() => setDateAndClose(getStartOfToday())}
+            >
+              {polyglot.t("search.today")}
+            </Button>
+            <Button long size="mini" onClick={() => setDateAndClose(null)}>
+              {polyglot.t("search.clear_date")}
+            </Button>
+          </div>
+        }
+        triggerProps={{
+          boundaryDistance: { bottom: 8, left: 8, right: 8, top: 8 },
+          className: "mobile-date-picker-popup",
+        }}
+        onChange={setFilterDate}
+        onVisibleChange={setCalendarVisible}
+      />
+    </Suspense>
   )
 }
 
