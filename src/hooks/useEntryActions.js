@@ -286,19 +286,6 @@ export const updateEntriesStatusOptimistically = (entries, newStatus, onError) =
   startStatusMutationBatch(statesToStart, newStatus)
 }
 
-// Keeps duplicate-entry side effects out of the pure deduplication utility.
-export const markDuplicatesAsRead = (duplicateEntries) => {
-  const unreadDuplicateEntries = duplicateEntries.filter(({ status }) => status === "unread")
-  if (unreadDuplicateEntries.length === 0) {
-    return
-  }
-
-  const { polyglot } = polyglotState.get()
-  void updateEntriesStatusOptimistically(unreadDuplicateEntries, "read", () => {
-    Message.error(polyglot.t("deduplicate.mark_as_read_error"))
-  })
-}
-
 export const markEntriesAsRead = (entries) => {
   const requestedEntriesById = new Map(entries.map((entry) => [entry.id, entry]))
   const content = contentState.get()

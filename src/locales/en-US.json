@@ -511,9 +511,6 @@
     "recovery_cancel": "Cancel",
     "recovery_cancelled": "Recovery cancelled. The original text is shown."
   },
-  "deduplicate": {
-    "mark_as_read_error": "Failed to mark duplicate articles as read"
-  },
   "search": {
     "search": "Search",
     "syntax_help": "Search syntax help",
