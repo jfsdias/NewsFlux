@@ -38,6 +38,7 @@ const SidebarNavigationContext = createContext(null)
 
 import AddFeed from "./AddFeed.jsx"
 import Profile from "./Profile.jsx"
+import SavedViewsNav from "./SavedViewsNav.jsx"
 
 import {
   exportOPML,
@@ -1333,6 +1334,7 @@ const Sidebar = ({ headerAction, isDrawer = false, onNavigate }) => {
               {polyglot.t("sidebar.articles")}
             </Typography.Title>
             <SidebarMenuItems />
+            <SavedViewsNav onNavigate={onNavigate} />
             <div
               style={{
                 display: "flex",

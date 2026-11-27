@@ -11,6 +11,7 @@ import { Fragment, lazy, memo, Suspense, useEffect, useMemo, useRef, useState } 
 import { useHotkeys } from "react-hotkeys-hook"
 import { useNavigate, useParams } from "react-router"
 
+import ActiveSmartView from "./ActiveSmartView.jsx"
 import ArticleSelectionControls from "./ArticleSelectionControls.jsx"
 import SidebarTrigger from "./SidebarTrigger.jsx"
 import SmartViews from "./SmartViews.jsx"
@@ -417,6 +418,7 @@ const SearchAndSortBar = ({
           </>
         )}
       </div>
+      {!homeMode && <ActiveSmartView />}
       <SearchModal
         filterDate={filterDate}
         source={homeMode ? "home" : infoFrom}

@@ -38,6 +38,7 @@ import {
   articleListRequestSettingsState,
   contentGestureSettingsState,
 } from "@/store/settingsState"
+import { activeSmartViewState } from "@/store/smartViewsState"
 import createArticleListRequestKey from "@/utils/article-list-request-key"
 import { isRightToLeftBrowsing } from "@/utils/content-browsing-direction"
 import prepareEntry from "@/utils/entry-presentation"
@@ -192,6 +193,16 @@ const Content = ({ info, getEntries, listContent: ListContent, entryIdOverride }
   }, [source, sourceId])
 
   const { fetchArticleList } = useArticleList(source, sourceId, getEntries)
+
+  // Opening or leaving a Smart View starts a fresh list from the top.
+  const activeSmartViewId = useStore(activeSmartViewState)?.view.id ?? null
+  const previousSmartViewIdRef = useRef(activeSmartViewId)
+  useEffect(() => {
+    if (previousSmartViewIdRef.current !== activeSmartViewId) {
+      previousSmartViewIdRef.current = activeSmartViewId
+      entryListRef.current?.getScrollElement()?.scroll({ top: 0 })
+    }
+  }, [activeSmartViewId, entryListRef])
 
   const fetchArticleListWithRelatedData = useCallback(
     () => Promise.allSettled([fetchArticleList(), refreshFeedData()]),
