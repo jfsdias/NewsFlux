@@ -43,7 +43,7 @@ const FORBIDDEN_JOURNAL_SECRET_KEYS = [
   "secret",
 ]
 
-export const normalizeCanonicalServer = (server = "") => {
+const normalizeCanonicalServer = (server = "") => {
   if (typeof server !== "string") {
     return ""
   }
@@ -60,7 +60,7 @@ export const normalizeCanonicalServer = (server = "") => {
   }
 }
 
-export const sanitizeAuthTransactionJournalEntry = (
+const sanitizeAuthTransactionJournalEntry = (
   input = {},
   { now = new Date(), ttlMs = AUTH_TRANSACTION_JOURNAL_DEFAULT_TTL_MS } = {},
 ) => {
@@ -344,7 +344,7 @@ export const buildDedicatedApiKeyDescription = ({
   return `${clientLabel} (${timestamp} #${randomSuffix})`
 }
 
-export const createAuthProvisioningError = (
+const createAuthProvisioningError = (
   message,
   { code = "AUTH_PROVISIONING_ERROR", stage = "unknown", status, cause, secrets = [] } = {},
 ) => {
@@ -360,7 +360,7 @@ export const createAuthProvisioningError = (
 const isValidUserIdentity = (user) =>
   Boolean(user && typeof user === "object" && Number.isSafeInteger(user.id) && user.id > 0)
 
-export const revokeDedicatedApiKey = async (
+const revokeDedicatedApiKey = async (
   auth,
   { apiKeyId = auth?.apiKeyId, rawFetch = ofetch.raw, signal } = {},
 ) => {
@@ -596,8 +596,6 @@ export const reconcileAuthTransactionJournal = async ({
     preservedEntry: null,
   }
 }
-
-export const reconcilePendingOrphanKeys = reconcileAuthTransactionJournal
 
 export const logoutWithKeyRevocation = async ({
   auth = authState.get(),

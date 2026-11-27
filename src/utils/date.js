@@ -26,8 +26,6 @@ export const getDayEndTimestamp = (dateString) => dayjs(dateString).endOf("day")
 
 export const formatLocalizedDate = (dateString) => dayjs(dateString).format("LL")
 
-export const getUTCDate = () => dayjs().utc().format("YYYY-MM-DDTHH:mm:ss.SSSSSSZ")
-
 export const generateReadableDate = (dateString) => dayjs(dateString).format("dddd · LL · LT")
 
 export const generateRelativeTime = (dateString, showDetailed) => {

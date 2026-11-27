@@ -35,7 +35,7 @@ export const hasProvisionedApiKey = (auth = {}) => {
   return Boolean(token) && Number.isSafeInteger(numericId) && numericId > 0
 }
 
-export const redactSensitiveAuthText = (input, secrets = []) => {
+const redactSensitiveAuthText = (input, secrets = []) => {
   let sanitized = typeof input === "string" ? input : String(input ?? "")
 
   sanitized = sanitized

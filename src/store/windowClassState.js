@@ -2,7 +2,7 @@ import { atom, onMount } from "nanostores"
 
 import { classifyWindowClass } from "@/utils/window-class"
 
-export const getWindowDimensions = () => {
+const getWindowDimensions = () => {
   if (globalThis.window === undefined) {
     return { width: 1024, height: 768 }
   }
@@ -12,7 +12,7 @@ export const getWindowDimensions = () => {
   }
 }
 
-export const getInitialWindowClass = () => {
+const getInitialWindowClass = () => {
   return classifyWindowClass(getWindowDimensions())
 }
 

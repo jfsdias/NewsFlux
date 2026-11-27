@@ -1,5 +1,5 @@
 // Browser-local descriptors only. This module never stores article text or credentials.
-export const CONTINUITY_VERSION = 1
+const CONTINUITY_VERSION = 1
 export const MAX_CONTINUITY_RECORDS = 200
 const MAX_OFFSET = 10_000_000
 

@@ -4,7 +4,7 @@ const timestampOf = (entry, property) => {
   return Number.isFinite(milliseconds) ? Math.floor(milliseconds / 1000) : Number.NaN
 }
 
-export const getPaginationReferenceEntry = (
+const getPaginationReferenceEntry = (
   entries,
   sortProperty,
   orderDirection,
