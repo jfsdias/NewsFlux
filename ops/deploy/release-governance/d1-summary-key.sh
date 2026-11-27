@@ -48,7 +48,7 @@ def call(method, path, body=None):
 '
 
 # 1. models on the proxy (alias, mode, deployments) - no endpoints, no keys
-say "1/8 modelos no proxy LiteLLM:"
+say "1/8 models on the LiteLLM proxy:"
 LIST="$(admin "$COMMON"'
 status, info = call("GET", "/model/info")
 if status != 200: print("MODEL_INFO_FAILED"); sys.exit(3)
@@ -65,7 +65,8 @@ printf '%s\n' "$LIST" | awk -F'\t' '{printf "   %3s) %-40s %s %s\n", $1, $2, $3,
 
 # 2. YOUR choice: the reduced model list and the budget
 echo
-read -r -p "D1KEY 2/8 Numeros dos modelos (ex.: 1,3) ou 'todos' = todos os modelos de chat: " PICK
+# 'todos' is the accepted keyword for all chat models (machine-parsed; kept as-is)
+read -r -p "D1KEY 2/8 Model numbers (e.g. 1,3) or 'todos' = all chat models: " PICK
 # Summaries need chat models: rerank/embedding/audio/image/moderation models are refused (never marked chat).
 MODELS="$(python3 -I -c '
 import re, sys
@@ -86,8 +87,8 @@ else:
         if name not in picked: picked.append(name)
 if not picked: sys.exit("no chat model chosen")
 print(",".join(picked))' "$LIST" "$PICK")" || die "invalid model choice ($MODELS)"
-read -r -p "D1KEY    Orcamento max_budget em USD (> 0, ex.: 5): " BUDGET
-read -r -p "D1KEY    Janela budget_duration [30d]: " DURATION; DURATION="${DURATION:-30d}"
+read -r -p "D1KEY    Budget max_budget in USD (> 0, e.g. 5): " BUDGET
+read -r -p "D1KEY    budget_duration window [30d]: " DURATION; DURATION="${DURATION:-30d}"
 read -r -p "D1KEY    rpm_limit [30]: " RPM; RPM="${RPM:-30}"   # discovery and preflight also count
 read -r -p "D1KEY    tpm_limit [20000]: " TPM; TPM="${TPM:-20000}"
 [[ "$BUDGET" =~ ^[0-9]+(\.[0-9]+)?$ ]] && python3 -c "import sys; sys.exit(0 if float(sys.argv[1])>0 else 1)" "$BUDGET" || die "max_budget must be > 0"
@@ -96,15 +97,15 @@ read -r -p "D1KEY    tpm_limit [20000]: " TPM; TPM="${TPM:-20000}"
 
 # 3. confirm
 echo
-say "3/8 Resumo:"
-say "    modelos      = $MODELS"
-say "    max_budget   = $BUDGET USD / $DURATION    rpm=$RPM tpm=$TPM    rotas=llm_api_routes    sem usuario"
-say "    arquivo-chave = $KEY_FILE (sera substituido; backup root 0600)"
-read -r -p "D1KEY    Digite CRIAR para continuar: " OK
+say "3/8 Summary:"
+say "    models       = $MODELS"
+say "    max_budget   = $BUDGET USD / $DURATION    rpm=$RPM tpm=$TPM    routes=llm_api_routes    no user"
+say "    key-file     = $KEY_FILE (will be replaced; root backup 0600)"
+read -r -p "D1KEY    Type CRIAR to continue: " OK
 [[ "$OK" == CRIAR ]] || die "cancelled (nothing changed)"
 
 # 4. model_info.mode = chat on the chosen deployments (the catalog's capability gate)
-say "4/8 mode=chat nos modelos escolhidos"
+say "4/8 mode=chat on the chosen models"
 OUT="$(admin "$COMMON"'
 status, info = call("GET", "/model/info")
 wanted = set(sys.argv[1].split(","))
@@ -122,7 +123,7 @@ sys.exit(1 if failed else 0)
 say "    $OUT"
 
 # 5. the key (no user_id, explicit models, budget, limits, LLM routes only)
-say "5/8 criando a chave"
+say "5/8 creating the key"
 STAMP="$(date -u +%Y%m%d%H%M%S)"
 NEWKEY="$(admin "$COMMON"'
 models = sys.argv[1].split(",")
@@ -140,16 +141,16 @@ if not ok: print("KEY_POLICY_NOT_AS_REQUESTED"); sys.exit(3)
 print(key)
 ' "$MODELS" "$BUDGET" "$DURATION" "$RPM" "$TPM" "$STAMP")" || die "key not created as requested"
 [[ "$NEWKEY" == sk-* && "$NEWKEY" != *$'\n'* ]] || die "unexpected key output"
-say "    chave criada (alias newsflux-summary-d1-$STAMP; valor nao exibido)"
+say "    key created (alias newsflux-summary-d1-$STAMP; value not shown)"
 
 # 6. key file: backup, then replace IN PLACE (same inode: the bind mount keeps working; owner and mode unchanged)
 BACKUP="$(mktemp -d /root/newsflux-key-backup.XXXXXXXX)"
 cp -p "$KEY_FILE" "$BACKUP/previous-key"; chmod 0600 "$BACKUP/previous-key"
-restore() { cat "$BACKUP/previous-key" >"$KEY_FILE"; say "    arquivo-chave restaurado do backup"; }
+restore() { cat "$BACKUP/previous-key" >"$KEY_FILE"; say "    key file restored from backup"; }
 printf '%s\n' "$NEWKEY" >"$KEY_FILE" || { restore; die "could not write key file"; }
 unset NEWKEY
 [[ "$(stat -c '%u:%g %a %i' "$KEY_FILE")" == "$KEY_STAT" ]] || { restore; die "key file owner/mode/inode changed"; }
-say "6/8 arquivo-chave substituido (backup: $BACKUP/previous-key)"
+say "6/8 key file replaced (backup: $BACKUP/previous-key)"
 
 # 7. the Summary (as its own user) sees exactly the chosen models with the new key
 SEEN="$(docker exec -u 10001 "$SUMMARY" python -B -c '
@@ -160,16 +161,16 @@ s = load_litellm_settings(simulated_environment(os.environ))
 print(",".join(sorted(i.get("id") for i in _gateway_getter(s)("/v1/models").get("data", []) if isinstance(i, dict))))
 ' </dev/null 2>/dev/null || true)"
 if [[ "$SEEN" == "$(tr ',' '\n' <<<"$MODELS" | sort | paste -sd,)" ]]; then
-  say "7/8 Summary ve exatamente: $SEEN"
+  say "7/8 Summary sees exactly: $SEEN"
 else
   restore; die "Summary does not see exactly the chosen models with the new key (saw: ${SEEN:-nothing}); old key restored"
 fi
-say "    a chave antiga NAO foi bloqueada; bloqueie-a so depois de validar o novo caminho"
+say "    the old key was NOT blocked; block it only after validating the new path"
 
 # 8. D1 capture (needs GO-NEWSFLUX-D1-CAPTURE-2; release preflight accepts it for 7 days)
 echo
-read -r -p "D1KEY 8/8 Executar a captura D1 agora (GO-NEWSFLUX-D1-CAPTURE-2)? Digite CAPTURAR ou Enter para sair: " CAP
-[[ "$CAP" == CAPTURAR ]] || { say "fim sem captura"; exit 0; }
+read -r -p "D1KEY 8/8 Run the D1 capture now (GO-NEWSFLUX-D1-CAPTURE-2)? Type CAPTURAR or press Enter to exit: " CAP
+[[ "$CAP" == CAPTURAR ]] || { say "end without capture"; exit 0; }
 s="$(mktemp -d /root/newsflux-d1src.XXXXXXXX)"; o="$(mktemp -d /root/newsflux-d1.XXXXXXXX)"
 B=https://raw.githubusercontent.com/jfsdias/NewsFlux; H=94a36e7d690ff3ba28962be78a9fe084b6e2ffd7
 curl -fsS --max-time 60 -o "$s/auditor.py" "$B/57c536fb583a52bb42a88d9a1b051869abc64b1f/deploy/release-governance/s5_db_readonly_audit.py"
