@@ -9,7 +9,7 @@ import { EVALUATION_SCENARIOS, runEvaluationReport } from "./tests/personalizati
 const baseSha = process.argv[2]
 if (!/^[0-9a-f]{40}$/.test(baseSha ?? "")) {
   throw new Error(
-    "Usage: node scripts/personalization-relevance-gate-01-report.js <40-character-base-sha>",
+    "Usage: node research/personalization-pilot/personalization-relevance-gate-01-report.js <40-character-base-sha>",
   )
 }
 
@@ -18,7 +18,9 @@ const report = buildPersonalizationRelevanceGateReport({
   scenarios: EVALUATION_SCENARIOS,
   baseSha,
 })
-const outputPath = path.resolve("scripts/tests/reports/personalization-relevance-gate-01.json")
+const outputPath = path.resolve(
+  "research/personalization-pilot/tests/reports/personalization-relevance-gate-01.json",
+)
 const prettierConfig = (await prettier.resolveConfig(outputPath)) ?? {}
 const formattedReport = await prettier.format(JSON.stringify(report), {
   ...prettierConfig,

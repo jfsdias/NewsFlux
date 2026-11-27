@@ -8,7 +8,7 @@
     "runtimeImportVerified": false
   },
   "sourceFieldMap": {
-    "path": "scripts/tests/fixtures/limesurvey-ce-export-field-map-01.json",
+    "path": "research/personalization-pilot/tests/fixtures/limesurvey-ce-export-field-map-01.json",
     "contractVersion": "LIMESURVEY_CE_RESPONSE_CSV_MOCK_V1"
   },
   "purpose": "Prepare a no-human, all-synthetic survey structure for an isolated runtime rehearsal. It is not a deployable or importable LimeSurvey file.",
@@ -20,12 +20,12 @@
     "profileChoicesAffectOnlyV1Composition": true,
     "assignmentIndependentOfProfileChoices": true,
     "references": [
-      "scripts/tests/fixtures/personalization-pilot-dummy-stimuli-01.json",
-      "scripts/tests/fixtures/personalization-pilot-dummy-allocation-01.json",
-      "scripts/tests/fixtures/personalization-pilot-dummy-session-plan-01.json",
-      "scripts/tests/fixtures/personalization-pilot-dummy-pre-recruitment-manifest-01.json",
-      "scripts/tests/fixtures/personalization-pilot-dummy-session-receipts-01.json",
-      "scripts/tests/fixtures/personalization-pilot-dummy-export-01.json"
+      "research/personalization-pilot/tests/fixtures/personalization-pilot-dummy-stimuli-01.json",
+      "research/personalization-pilot/tests/fixtures/personalization-pilot-dummy-allocation-01.json",
+      "research/personalization-pilot/tests/fixtures/personalization-pilot-dummy-session-plan-01.json",
+      "research/personalization-pilot/tests/fixtures/personalization-pilot-dummy-pre-recruitment-manifest-01.json",
+      "research/personalization-pilot/tests/fixtures/personalization-pilot-dummy-session-receipts-01.json",
+      "research/personalization-pilot/tests/fixtures/personalization-pilot-dummy-export-01.json"
     ]
   },
   "surveyConfiguration": {

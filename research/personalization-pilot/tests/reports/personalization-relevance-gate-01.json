@@ -2,7 +2,7 @@
   "metadata": {
     "schemaVersion": 1,
     "baseSha": "0faedf939f6c97867d6fac6c019f48476163d629",
-    "sourceEvaluator": "scripts/tests/personalization-v2-eval-01.js",
+    "sourceEvaluator": "research/personalization-pilot/tests/personalization-v2-eval-01.js",
     "sourceEvaluatorHistoricalScenarioCount": 12,
     "scenarioCount": 12,
     "topN": 12,

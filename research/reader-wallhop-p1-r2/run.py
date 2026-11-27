@@ -34,8 +34,8 @@ WORKFLOW_ATTEMPT = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE_ROOT = Path(os.environ.get("NEWSFLUX_SOURCE_ROOT", ROOT / "source")).resolve()
 OUTPUT_ROOT = Path(os.environ.get("NEWSFLUX_OUTPUT_ROOT", ROOT / "test-results" / "reader-wallhop-p1-r2")).resolve()
-FIXTURE_FILE = ROOT / "scripts" / "reader-wallhop-p1-r2" / "fixture_server.py"
-BROWSER_FILE = ROOT / "scripts" / "reader-wallhop-p1-r2" / "browser.mjs"
+FIXTURE_FILE = ROOT / "research" / "reader-wallhop-p1-r2" / "fixture_server.py"
+BROWSER_FILE = ROOT / "research" / "reader-wallhop-p1-r2" / "browser.mjs"
 
 RESULT: dict[str, Any] = {
     "MAIN_SHA": "NOT_VERIFIED",

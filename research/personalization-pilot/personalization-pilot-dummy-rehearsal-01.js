@@ -19,7 +19,7 @@ if (
   writeArtifacts.length > 1
 ) {
   process.stderr.write(
-    "USAGE: node scripts/personalization-pilot-dummy-rehearsal-01.js [--write-artifacts]\n",
+    "USAGE: node research/personalization-pilot/personalization-pilot-dummy-rehearsal-01.js [--write-artifacts]\n",
   )
   process.exitCode = 2
 } else {

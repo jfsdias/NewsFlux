@@ -1,28 +1,26 @@
 import { performance } from "node:perf_hooks"
 
-// eslint-disable-next-line import/no-relative-parent-imports -- offline evaluation composes the real Home production projection.
-import { selectInitialHighlightIds } from "../../src/utils/home-editorial-projection.js"
+ 
+import { selectInitialHighlightIds } from "../../../src/utils/home-editorial-projection.js"
 import {
   appendHomeSessionEntries,
   createHomeEditorialSession,
   hasHomeEditorialCompositionChanged,
   projectHomeSession,
   transitionHomeSession,
-} from "../../src/utils/home-editorial-session.js" // eslint-disable-line import/no-relative-parent-imports -- session metrics exercise the existing production contract.
+} from "../../../src/utils/home-editorial-session.js"  
 import {
   HOME_PERSONALIZATION_FRESHNESS_WINDOW,
   HOME_STARRED_PROFILE_LIMIT,
-} from "../../src/utils/home-personalization-constants.js" // eslint-disable-line import/no-relative-parent-imports -- record production freshness and profile bounds.
+} from "../../../src/utils/home-personalization-constants.js"  
 import {
   commitHomePersonalizationSnapshot,
   createHomePersonalizationGeneration,
   failHomePersonalizationProfile,
   resolveHomePersonalizationProfile,
-} from "../../src/utils/home-personalization-generation.js" // eslint-disable-line import/no-relative-parent-imports -- reproduce the production post-PR191 commit/disclosure contract.
-// eslint-disable-next-line import/no-relative-parent-imports -- build synthetic profiles with the actual production helper.
-import { createHomePersonalizationProfile } from "../../src/utils/home-personalization-profile.js"
-// eslint-disable-next-line import/no-relative-parent-imports -- compare the actual production V1 candidate with Phase 2C.
-import { projectHomePersonalization } from "../../src/utils/home-personalization-projection.js"
+} from "../../../src/utils/home-personalization-generation.js"  
+import { createHomePersonalizationProfile } from "../../../src/utils/home-personalization-profile.js"
+import { projectHomePersonalization } from "../../../src/utils/home-personalization-projection.js"
 
 export const EVALUATION_TOP_N = 12
 export const EVALUATION_COMPOSITION_SAMPLES = 101

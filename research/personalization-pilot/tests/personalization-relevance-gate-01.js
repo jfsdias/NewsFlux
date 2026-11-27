@@ -202,7 +202,7 @@ export default function buildPersonalizationRelevanceGateReport({
     metadata: {
       schemaVersion: 1,
       baseSha,
-      sourceEvaluator: "scripts/tests/personalization-v2-eval-01.js",
+      sourceEvaluator: "research/personalization-pilot/tests/personalization-v2-eval-01.js",
       sourceEvaluatorHistoricalScenarioCount: evaluationReport.metadata.scenarioCount,
       scenarioCount: metrics.length,
       topN: evaluationReport.metadata.topN,

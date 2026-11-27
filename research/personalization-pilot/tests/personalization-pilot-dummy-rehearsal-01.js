@@ -1,4 +1,4 @@
-/* eslint-disable import/no-relative-parent-imports -- The offline harness intentionally calls production projection helpers. */
+ 
 import { createHash, randomBytes, randomInt } from "node:crypto"
 import { readFileSync } from "node:fs"
 
@@ -8,18 +8,18 @@ import {
   createHomeEditorialSession,
   hasHomeEditorialCompositionChanged,
   projectHomeSession,
-} from "../../src/utils/home-editorial-session.js"
-import { HOME_PERSONALIZATION_FRESHNESS_WINDOW } from "../../src/utils/home-personalization-constants.js"
+} from "../../../src/utils/home-editorial-session.js"
+import { HOME_PERSONALIZATION_FRESHNESS_WINDOW } from "../../../src/utils/home-personalization-constants.js"
 import {
   commitHomePersonalizationSnapshot,
   createHomePersonalizationGeneration,
   resolveHomePersonalizationProfile,
-} from "../../src/utils/home-personalization-generation.js"
-import { createHomePersonalizationProfile } from "../../src/utils/home-personalization-profile.js"
-import { projectHomePersonalization } from "../../src/utils/home-personalization-projection.js"
+} from "../../../src/utils/home-personalization-generation.js"
+import { createHomePersonalizationProfile } from "../../../src/utils/home-personalization-profile.js"
+import { projectHomePersonalization } from "../../../src/utils/home-personalization-projection.js"
 
 const RESPONSE_SCHEMA_PATH = new URL(
-  "../../docs/research/templates/personalization-human-relevance-pilot-01-data.schema.json",
+  "../../../docs/research/templates/personalization-human-relevance-pilot-01-data.schema.json",
   import.meta.url,
 )
 const REHEARSAL_FIXTURE_DIRECTORY = new URL("fixtures/", import.meta.url)

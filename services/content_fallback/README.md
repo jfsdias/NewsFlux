@@ -68,7 +68,7 @@ No live Miniflux, WallHop, publisher, Compose, or production request is made by 
 Run the isolated runtime rehearsal:
 
 ```sh
-PYTHONDONTWRITEBYTECODE=1 python3 scripts/content_fallback_runtime_01.py
+PYTHONDONTWRITEBYTECODE=1 python3 services/content_fallback/tests/runtime_rehearsal_01.py
 ```
 
 The rehearsal starts the actual HTTP handler and Miniflux client against synthetic services bound only to `127.0.0.1`, uses synthetic credentials and a temporary SQLite database, and replaces the WallHop provider at its service boundary. It exercises health, service authentication, read-only Miniflux access, policy gating, sanitized recovery, fallback, stale-entry rejection, cache persistence across a service restart, log redaction, and shutdown. Its JSON receipt contains gate names and counts only; it contains no article body, source URL, or token. The rehearsal does not build or run the Docker image. The Dockerfile healthcheck is a local `/healthz` probe and requires image/runtime validation before deployment.

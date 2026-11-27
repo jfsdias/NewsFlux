@@ -86,7 +86,7 @@ The suite covers Load More, read, star/unstar, refresh, Reader return, late/inva
 
 ## Reproduction
 
-- Focused gate: `node --test scripts/personalization-v2-eval-01.test.js`
+- Focused gate: `node --test research/personalization-pilot/personalization-v2-eval-01.test.js`
 - Full Node gate: `pnpm test`
-- Current JSON receipt: `scripts/tests/reports/personalization-v2-eval-01.json`
+- Current JSON receipt: `research/personalization-pilot/tests/reports/personalization-v2-eval-01.json`
 - The complete pre-PR191 JSON report is nested in the current receipt, preserving prior per-fixture metrics, latency samples, and session-stability output.

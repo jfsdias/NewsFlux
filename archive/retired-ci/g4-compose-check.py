@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "deploy/wallhop-isolated"))
+sys.path.insert(0, str(ROOT / "ops/deploy/wallhop-isolated"))
 from g4_ipam_gate import CANDIDATE_EGRESS, CANDIDATE_READER, render_override
 
 env = {
@@ -25,7 +25,7 @@ with tempfile.TemporaryDirectory() as directory:
     override = Path(directory) / "g4-override.yaml"
     override.write_text(render_override(CANDIDATE_READER, CANDIDATE_EGRESS))
     run = subprocess.run(
-        ["docker", "compose", "-f", str(ROOT / "deploy/wallhop-isolated/compose.yaml"),
+        ["docker", "compose", "-f", str(ROOT / "ops/deploy/wallhop-isolated/compose.yaml"),
          "-f", str(override), "config", "--format", "json"],
         env=env, capture_output=True, text=True, check=True, timeout=25,
     )

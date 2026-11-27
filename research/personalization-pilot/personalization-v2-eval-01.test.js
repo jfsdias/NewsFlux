@@ -2,19 +2,16 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { test } from "node:test"
 
-// eslint-disable-next-line import/no-relative-parent-imports -- this test composes the actual Home production helpers without changing them.
-import { createHomeCategoryLanes } from "../src/utils/home-category-projection.js"
-// eslint-disable-next-line import/no-relative-parent-imports -- verify PR191's final-composition disclosure contract with production helpers.
-import { hasHomeEditorialCompositionChanged } from "../src/utils/home-editorial-session.js"
+ 
+import { createHomeCategoryLanes } from "../../src/utils/home-category-projection.js"
+import { hasHomeEditorialCompositionChanged } from "../../src/utils/home-editorial-session.js"
 import {
   commitHomePersonalizationSnapshot,
   createHomePersonalizationGeneration,
   resolveHomePersonalizationProfile,
-} from "../src/utils/home-personalization-generation.js" // eslint-disable-line import/no-relative-parent-imports -- verify projection application and visible disclosure separately.
-// eslint-disable-next-line import/no-relative-parent-imports -- this test uses the actual production profile helper with synthetic rows.
-import { createHomePersonalizationProfile } from "../src/utils/home-personalization-profile.js"
-// eslint-disable-next-line import/no-relative-parent-imports -- this test runs the actual production projection against paired fixtures.
-import { projectHomePersonalization } from "../src/utils/home-personalization-projection.js"
+} from "../../src/utils/home-personalization-generation.js"  
+import { createHomePersonalizationProfile } from "../../src/utils/home-personalization-profile.js"
+import { projectHomePersonalization } from "../../src/utils/home-personalization-projection.js"
 
 import {
   evaluateSessionStability,

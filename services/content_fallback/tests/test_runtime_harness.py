@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-RUNTIME_HARNESS = REPOSITORY_ROOT / "scripts" / "content_fallback_runtime_01.py"
+RUNTIME_HARNESS = Path(__file__).resolve().parent / "runtime_rehearsal_01.py"
 
 
 class ContentFallbackRuntimeHarnessTests(unittest.TestCase):
