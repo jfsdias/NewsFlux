@@ -82,7 +82,7 @@ The wrapper turns each into `S5R3_RUN_RESULT=HOLD_G2L_<code>` before any Docker 
 
 ## 5. Admission (PM) — lifecycle without invalidating evidence
 
-Signers live in the tracked file `deploy/release-governance/g2-admitted-signers` (empty; comment lines are
+Signers live in the tracked file `ops/deploy/release-governance/g2-admitted-signers` (empty; comment lines are
 ignored). The wrapper hands the verifier `--admitted-signers-from-source`, so the trust root is whatever that
 file says at the exact HEAD the operator runs (G1 proves that HEAD and a clean tree).
 

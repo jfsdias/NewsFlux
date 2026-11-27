@@ -245,6 +245,6 @@ runs one Summary process. Do not add a shared secret without a separate design r
   `FirstActivationCommitIntegrityTests` (now 9) and `RollForwardFinalizationTests` (3). `test_operator_preflight.py` covers the revert,
   key-recovery and interrupted-activation CLIs and the preflight signals.
 - Node: `src/utils/litellm-migration-state.test.js`, `src/utils/summary-model-preference.test.js`.
-- Browser, against the real Summary admin API: `scripts/pilot-e2e/ai-settings-migration.spec.js`.
-- Browser, Reader settings harness: `reader-ai-e2e/summary-preference.spec.js`.
+- Browser, against the real Summary admin API: `tests/aux/pilot-e2e/ai-settings-migration.spec.js`.
+- Browser, Reader settings harness: `tests/aux/reader-ai-e2e/summary-preference.spec.js`.
 - Viewports 360, 390, 820, 884×1104 and 1440 are emulated only. No real device was used.

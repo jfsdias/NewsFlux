@@ -10,7 +10,7 @@ Before this change `pnpm knip` exited 1 with 56 unused files, 38 unused exports 
 `knip.json` now declares:
 
 - **Entries:** `scripts/tests/**/*.{js,jsx}` (browser harness pages and real-browser gates) and `scripts/*.js` (tooling), in addition to the entries knip detects itself (Vite, ESLint, `node --test`).
-- **Ignored:** `scripts/research/**` (Story-01B/02 research tooling, not part of the product bundle).
+- **Ignored:** `research/**` (Story-01B/02 research tooling, not part of the product bundle).
 - **Ignored unresolved:** imports that start with `/src/`, which are browser-served URLs used by `scripts/tests/pwa-chunk-recovery-focus.js`, not Node module paths.
 
 ## Result

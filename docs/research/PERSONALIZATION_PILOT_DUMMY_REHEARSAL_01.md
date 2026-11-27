@@ -37,19 +37,19 @@ The reconciler rejects invalid response rows with specific machine-readable erro
 Run the focused contract tests:
 
 ```sh
-node --test scripts/personalization-pilot-dummy-rehearsal-01.test.js
+node --test research/personalization-pilot/personalization-pilot-dummy-rehearsal-01.test.js
 ```
 
 Print the deterministic summary without writing files:
 
 ```sh
-node scripts/personalization-pilot-dummy-rehearsal-01.js
+node research/personalization-pilot/personalization-pilot-dummy-rehearsal-01.js
 ```
 
 Regenerate the four synthetic artifacts at their fixed repository paths:
 
 ```sh
-node scripts/personalization-pilot-dummy-rehearsal-01.js --write-artifacts
+node research/personalization-pilot/personalization-pilot-dummy-rehearsal-01.js --write-artifacts
 ```
 
 The writer accepts no output-path argument. It can write only the pre-recruitment manifest, session receipts, synthetic export, and report under `scripts/tests/fixtures/` and `scripts/tests/reports/`. Re-run the focused test afterward; it compares generated values against the committed artifacts.
@@ -58,7 +58,7 @@ The repository's full Node gate includes the rehearsal through `pnpm test:script
 
 ## Rehearsal evidence
 
-The frozen report is `scripts/tests/reports/personalization-pilot-dummy-rehearsal-01.json`. It is generated solely from the checked-in synthetic fixtures and states `humanRelevanceMeasured=false`, `limeSurveyIntegrationGate=NOT_TESTED`, `externalDataTransfer=false`, `minifluxAccess=false`, and `productChanges=false`.
+The frozen report is `research/personalization-pilot/tests/reports/personalization-pilot-dummy-rehearsal-01.json`. It is generated solely from the checked-in synthetic fixtures and states `humanRelevanceMeasured=false`, `limeSurveyIntegrationGate=NOT_TESTED`, `externalDataTransfer=false`, `minifluxAccess=false`, and `productChanges=false`.
 
 This task does not install or configure LimeSurvey, submit survey forms, collect participant data, render or usability-test stimuli with people, establish consent/privacy/retention approval, or compare human preferences. A local synthetic export is not a LimeSurvey export. Required status remains:
 

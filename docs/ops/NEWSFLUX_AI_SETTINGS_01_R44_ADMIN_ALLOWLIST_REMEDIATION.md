@@ -182,7 +182,7 @@ EXP_PREFLIGHT=86670b2c9810e851d4d976a38b5a91c6060d351d0cd355edf3e44f093391f196
 EXP_BASELINE=7e7ff3a4399a96efdc67652f48d9f664e759b97e340eb59db564207916dc259d
 EXP_CADDY=56d434b9c81e66d9e03a827be3bd42f48dd68636c83a0ea9baa70322f30f95d6
 PROD=/dockerdata/compose/newsflux/repo
-P=deploy/release-governance
+P=ops/deploy/release-governance
 KV='^[A-Z][A-Z0-9_]*=[A-Za-z0-9_.:,+-]{0,128}$'
 WALLHOP_EXPECTED=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 echo "R44D_PREFLIGHT_RUN=START"
@@ -208,7 +208,7 @@ ok=YES
 [ "$CO" = "$SHA" ] || ok=NO
 [ "$(h $P/ai-settings-readonly-preflight.sh)" = "$EXP_PREFLIGHT" ] || ok=NO
 [ "$(h $P/ai-settings-flag-baseline.json)" = "$EXP_BASELINE" ] || ok=NO
-[ "$(h deploy/article-intel-pilot/Caddyfile)" = "$EXP_CADDY" ] || ok=NO
+[ "$(h ops/deploy/article-intel-pilot/Caddyfile)" = "$EXP_CADDY" ] || ok=NO
 [ -z "$(git -C "$D/src" status --porcelain 2>/dev/null)" ] || ok=NO
 if [ "$ok" != YES ]; then echo "CHECKOUT_INTEGRITY=FAIL"; echo "PREFLIGHT=NOT_RUN"; echo "RECEIPT_GATE=NO_GO"; exit 93; fi
 echo "CHECKOUT_INTEGRITY=PASS"

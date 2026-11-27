@@ -34,7 +34,7 @@ ORDER=#267 → #265 → #262 → #263 → #264 → #261   # each merged by exact
   - Every integrated file is **byte-identical** to the PR that owns it.
 - **Per PR:**
   - #267: 1 file (`services/article_intel_summary/tests/test_api_supervision.py`);
-  - #265: 12 (`deploy/release-governance/**`, its workflow line, `docs/ops/ARTICLE_INTELLIGENCE_PROMOTION.md`);
+  - #265: 12 (`ops/deploy/release-governance/**`, its workflow line, `docs/ops/ARTICLE_INTELLIGENCE_PROMOTION.md`);
   - #262: 8 (`services/article_intel_summary/*` admin, store, catalog, operator scripts and tests);
   - #263: 22 (`src/**`, locales, harness, `ai-settings-tests.yaml`, `knip.json`);
   - #264: 3 (Caddyfile, route test, workflow);
@@ -122,7 +122,7 @@ Operator run (read-only, temporary checkout only):
 D="$(mktemp -d /tmp/nf-r42-preflight.XXXXXX)"
 git clone -q --no-checkout https://github.com/jfsdias/NewsFlux.git "$D/src"
 git -C "$D/src" checkout -q --detach 4c3e07529d706ffc37115aa8de808f36cccdc244
-sudo NEWSFLUX_PROTECTED_CONTAINERS="miniflux miniflux-db npm" bash "$D/src/deploy/release-governance/ai-settings-readonly-preflight.sh"; echo "EXIT=$?"
+sudo NEWSFLUX_PROTECTED_CONTAINERS="miniflux miniflux-db npm" bash "$D/src/ops/deploy/release-governance/ai-settings-readonly-preflight.sh"; echo "EXIT=$?"
 rm -rf "$D"
 ```
 

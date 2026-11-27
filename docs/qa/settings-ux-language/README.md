@@ -13,7 +13,7 @@ pre-#248 tree were removed.
 
 `?fallback=mistral-small` starts with that fallback enabled; without it the fallback is off.
 
-**Gate:** `reader-ai-e2e/settings-ux.spec.js`, run in the AI-enabled step of "Article Intelligence
+**Gate:** `tests/aux/reader-ai-e2e/settings-ux.spec.js`, run in the AI-enabled step of "Article Intelligence
 Reader Chromium scenarios".
 
 | Image                             | What it shows                                                                 |

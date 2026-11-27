@@ -45,7 +45,7 @@ The participant-facing instrument must never display the arm mapping (`X/Y → P
 
 Pseudonymous identifiers are still joinable data. Keep the assignment key, receipts, and response export access-controlled and separate. Do not use account IDs, emails, Miniflux IDs, direct identifiers, or real account/article state. A non-consenting participant must not create an analyzable response row. Do not include LimeSurvey token, email, IP address, referrer, or participant-table fields in the export.
 
-The checked-in field map is [`limesurvey-ce-export-field-map-01.json`](../../scripts/tests/fixtures/limesurvey-ce-export-field-map-01.json), version `LIMESURVEY_CE_RESPONSE_CSV_MOCK_V1`. It is a mock contract, not an imported LimeSurvey survey definition. It fixes one header row, question-code/ExpressionScript headings, answer codes, and a configured delimiter. It uses synthetic qcodes for:
+The checked-in field map is [`limesurvey-ce-export-field-map-01.json`](../../research/personalization-pilot/tests/fixtures/limesurvey-ce-export-field-map-01.json), version `LIMESURVEY_CE_RESPONSE_CSV_MOCK_V1`. It is a mock contract, not an imported LimeSurvey survey definition. It fixes one header row, question-code/ExpressionScript headings, answer codes, and a configured delimiter. It uses synthetic qcodes for:
 
 | Data                             | Mock columns                           | Conversion                                                                                             |
 | -------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------ |
@@ -63,7 +63,7 @@ The existing schema's `declaredContextTags` is optional and is not populated by 
 
 ## CSV acceptance rules
 
-The adapter in [`limesurvey-ce-export-adapter-01.js`](../../scripts/tests/limesurvey-ce-export-adapter-01.js) accepts only the versioned mock map and applies these rules:
+The adapter in [`limesurvey-ce-export-adapter-01.js`](../../research/personalization-pilot/tests/limesurvey-ce-export-adapter-01.js) accepts only the versioned mock map and applies these rules:
 
 1. Input must decode as strict UTF-8. A single leading UTF-8 BOM is allowed. The configured separator is explicit (`comma`, `semicolon`, or `tab`); the adapter never guesses it.
 2. Quoted delimiters, doubled quotes, CR/LF/CRLF records, and line breaks inside quoted fields are parsed without splitting response content.
@@ -134,7 +134,7 @@ PERSONALIZATION_V2=HOLD
 ## Reproduce offline adapter tests
 
 ```sh
-node --test scripts/limesurvey-ce-export-adapter-01.test.js
+node --test research/personalization-pilot/limesurvey-ce-export-adapter-01.test.js
 ```
 
 The full adapter accepts only `MOCK_CSV_CONTRACT`; use of actual LimeSurvey exports requires a new owner-approved gate after runtime installation and actual dummy export capture.

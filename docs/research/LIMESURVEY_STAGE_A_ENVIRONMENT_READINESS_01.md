@@ -44,7 +44,7 @@ The previous detailed audit measured 8 CPU cores, 16 GiB of memory, and 82.8 GiB
 Run the proposed host-only check with:
 
 ```sh
-sh scripts/limesurvey-stage-a-host-preflight-01.sh
+sh research/personalization-pilot/limesurvey-stage-a-host-preflight-01.sh
 ```
 
 It reports summarized, non-identifying properties only. It does not install, download, create, start, or configure anything. Host admission requires all existing resource and forwarding checks plus the explicit macOS and UTM version gates. `HOST_PREFLIGHT=BLOCKED` remains expected while CPU count or host forwarding cannot be verified. A future macOS major version requires review; a host pass would still not prove guest or runtime isolation.
@@ -245,7 +245,7 @@ Keep both snapshot and backup on the encrypted host volume, not a cloud share or
 
 ## Reuse PR #200 blueprint: Stage A LSS and Preview procedure
 
-The checked-in blueprint at `scripts/tests/fixtures/limesurvey-ce-dummy-instrument-blueprint-01.json` is labeled `SYNTHETIC_SURVEY_BLUEPRINT_NOT_LSS`. It is not a LimeSurvey import file. Reuse it to manually construct the source survey with its exact question codes and groups; use `scripts/tests/fixtures/limesurvey-ce-export-field-map-01.json` and the synthetic allocation, session, receipt, and stimulus fixtures as the source of truth. Do not use real articles, Miniflux, account data, or participant information.
+The checked-in blueprint at `research/personalization-pilot/tests/fixtures/limesurvey-ce-dummy-instrument-blueprint-01.json` is labeled `SYNTHETIC_SURVEY_BLUEPRINT_NOT_LSS`. It is not a LimeSurvey import file. Reuse it to manually construct the source survey with its exact question codes and groups; use `research/personalization-pilot/tests/fixtures/limesurvey-ce-export-field-map-01.json` and the synthetic allocation, session, receipt, and stimulus fixtures as the source of truth. Do not use real articles, Miniflux, account data, or participant information.
 
 1. Build the source survey from the blueprint's Session control, Profile seed choices, `synthetic_transit`, `synthetic_library`, and Session closeout groups. Verify each field/question code is unique and equals the field map. Do not show allocation/arm mapping in respondent-visible content. Do not configure any human collection channel.
 2. Confirm the source survey status is **Inactive**. Record a structural manifest: exact version, group order, question-code list, question types, response options, relevant anonymous/privacy settings, and source survey ID (the receipt is restricted and contains no public link).
@@ -254,7 +254,7 @@ The checked-in blueprint at `scripts/tests/fixtures/limesurvey-ce-dummy-instrume
 5. Run Preview separately on source and re-imported surveys in the clean host Safari profile. Check presentation/order, labels, required/optional states, rendering of local static stimuli, navigation, and X/Y blinding. The PR #200 contract states Preview does not persist answers; do not test submit, save, activate, or export response data in Stage A.
 6. Save a redacted receipt with both inactive states, LSS SHA-256, structural comparison result, Preview result, zero external requests, zero Miniflux/NewsFlux access, and zero persisted responses. No screenshots containing credentials or actual response data.
 
-**CSV status:** Stage A does not establish CSV headers, completion semantics, row persistence, or adapter compatibility. `scripts/limesurvey-ce-export-adapter-01.js` remains mock-only. A real CSV export requires the separate Stage B authorization and test.
+**CSV status:** Stage A does not establish CSV headers, completion semantics, row persistence, or adapter compatibility. `research/personalization-pilot/limesurvey-ce-export-adapter-01.js` remains mock-only. A real CSV export requires the separate Stage B authorization and test.
 
 ## Rollback, recovery, and teardown boundary
 
