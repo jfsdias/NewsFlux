@@ -367,7 +367,7 @@ class S5PreflightTests(unittest.TestCase):
     def test_audit_tool_output_is_accepted_and_shares_the_fingerprint(self) -> None:
         import importlib.util
 
-        path = Path(__file__).resolve().parents[3] / "deploy" / "release-governance" / "s5_key_audit.py"
+        path = Path(__file__).resolve().parents[3] / "ops" / "deploy" / "release-governance" / "s5_key_audit.py"
         spec = importlib.util.spec_from_file_location("s5_key_audit_contract", path)
         audit = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(audit)
