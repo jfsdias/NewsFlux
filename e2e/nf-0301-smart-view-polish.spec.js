@@ -24,6 +24,8 @@ const openSearch = async (page) => {
 
 const saveView = async (page, { name = "", query = QUERY } = {}) => {
   const input = await openSearch(page)
+  // The dialog moves focus to the search field when it finishes opening; wait for that first.
+  await expect(input).toBeFocused()
   await input.fill(query)
   if (name) {
     await page.getByLabel("View name").fill(name)
