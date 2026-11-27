@@ -75,7 +75,10 @@ PUBLIC_CURL_CACERT="${NEWSFLUX_PUBLIC_CURL_CACERT:-}"   # optional CA bundle (di
 
 gate() { printf '%s=%s\n' "$1" "$2"; }
 die() { gate "$1" BLOCKED; echo "CODE=$2"; exit 1; }
-release_tool() { python3 -B "$SRC/ops/deploy/release-governance/release.py" --policy "$SRC/ops/deploy/release-governance/policy.json" --lock "$LOCK" "$@"; }
+# Release tooling lives under ops/deploy/ since 2026-11-26 and under deploy/ in older sources; operating on
+# (or rolling back to) a release from before the move must keep working, so resolve against the checkout.
+src_deploy() { if [[ -e "$SRC/ops/deploy/$1" ]]; then printf '%s\n' "$SRC/ops/deploy/$1"; else printf '%s\n' "$SRC/deploy/$1"; fi; }
+release_tool() { python3 -B "$(src_deploy release-governance/release.py)" --policy "$(src_deploy release-governance/policy.json)" --lock "$LOCK" "$@"; }
 summary_container() { docker ps -q --filter "label=com.docker.compose.project=$PROJECT" --filter "label=com.docker.compose.service=$SUMMARY_SERVICE"; }
 container_name() { docker inspect -f '{{.Name}}' "$1" | sed 's#^/##'; }
 reader_service() { docker inspect -f '{{index .Config.Labels "com.docker.compose.service"}}' "$READER_CONTAINER"; }
@@ -124,7 +127,7 @@ preflight() {
   [[ "$(docker inspect -f '{{len .HostConfig.PortBindings}}' "$summary")" == 0 ]] || die PREFLIGHT SUMMARY_PUBLISHES_PORT
   [[ "$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$READER_CONTAINER")" == "$PROJECT" ]] || die PREFLIGHT READER_PROJECT_MISMATCH
   reader_svc="$(reader_service)"
-  python3 - "$SRC/ops/deploy/release-governance/policy.json" "$PROJECT" "$reader_svc" "$SUMMARY_SERVICE" <<'PY' || die PREFLIGHT SERVICE_NOT_IN_POLICY
+  python3 - "$(src_deploy release-governance/policy.json)" "$PROJECT" "$reader_svc" "$SUMMARY_SERVICE" <<'PY' || die PREFLIGHT SERVICE_NOT_IN_POLICY
 import json, sys
 allowed = {(i["project"], i["service"]) for i in json.load(open(sys.argv[1]))["allowed"]}
 sys.exit(0 if {(sys.argv[2], sys.argv[3]), (sys.argv[2], sys.argv[4])} <= allowed else 1)
@@ -134,7 +137,7 @@ PY
   [[ -n "$caddy" && -f "$caddy" ]] || die PREFLIGHT CADDYFILE_NOT_BIND_MOUNTED
   [[ ! -L "$caddy" ]] || die PREFLIGHT CADDYFILE_IS_SYMLINK
   active="$(sha256sum "$caddy" | cut -d' ' -f1)"
-  accepted_prior_caddy "$active" || [[ "$active" == "$(sha256sum "$SRC/ops/deploy/article-intel-pilot/Caddyfile" | cut -d' ' -f1)" ]] \
+  accepted_prior_caddy "$active" || [[ "$active" == "$(sha256sum "$(src_deploy article-intel-pilot/Caddyfile)" | cut -d' ' -f1)" ]] \
     || die PREFLIGHT ACTIVE_CADDY_DRIFT
   local name
   for name in "${PROTECTED_NAMES[@]}"; do
@@ -250,7 +253,7 @@ update_caddy_locked() {
   local caddy new active target inode
   live_caddy CADDY_UPDATE
   caddy="$LIVE_CADDY"
-  new="$SRC/ops/deploy/article-intel-pilot/Caddyfile"
+  new="$(src_deploy article-intel-pilot/Caddyfile)"
   active="$(sha_of "$caddy")"
   target="$(sha_of "$new")"
   if [[ "$active" == "$target" ]]; then
@@ -602,7 +605,7 @@ preflight_reader() {
   local summary reader_svc flags
   [[ "$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$READER_CONTAINER")" == "$PROJECT" ]] || die PREFLIGHT_READER READER_PROJECT_MISMATCH
   reader_svc="$(reader_service)"
-  python3 - "$SRC/ops/deploy/release-governance/policy.json" "$PROJECT" "$reader_svc" <<'PY' || die PREFLIGHT_READER SERVICE_NOT_IN_POLICY
+  python3 - "$(src_deploy release-governance/policy.json)" "$PROJECT" "$reader_svc" <<'PY' || die PREFLIGHT_READER SERVICE_NOT_IN_POLICY
 import json, sys
 allowed = {(i["project"], i["service"]) for i in json.load(open(sys.argv[1]))["allowed"]}
 sys.exit(0 if (sys.argv[2], sys.argv[3]) in allowed else 1)
@@ -699,7 +702,7 @@ smoke_reader() {
   } >"$RELEASE_DIR/receipt-reader.txt"
   cat "$RELEASE_DIR/receipt-reader.txt"
   gate SMOKE_READER PASS
-  echo "ROLLBACK=sudo -E APPROVED_SHA=$APPROVED_SHA bash $SRC/ops/deploy/release-governance/ai-functional-release.sh rollback-reader"
+  echo "ROLLBACK=sudo -E APPROVED_SHA=$APPROVED_SHA bash $(src_deploy release-governance/ai-functional-release.sh) rollback-reader"
 }
 
 case "${1:-}" in
