@@ -52,7 +52,7 @@ jobs:
       - name: Run on-demand synthetic Reader scenarios
         env:
           VITE_ARTICLE_INTELLIGENCE_ENABLED: "1"
-        run: pnpm exec playwright test --config scripts/pilot-e2e/playwright.config.js
+        run: pnpm exec playwright test --config tests/aux/pilot-e2e/playwright.config.js
 
   compose-pilot:
     name: Exact-source Docker Compose pilot gate
@@ -128,7 +128,7 @@ jobs:
           pnpm install --frozen-lockfile
           node src/scripts/version-info.js
           VITE_BASE_PATH=/pilot-test/ pnpm exec vite build \
-            --config scripts/pilot-e2e/vite-compose.config.js \
+            --config tests/aux/pilot-e2e/vite-compose.config.js \
             --outDir "$PILOT_HARNESS_BUILD_DIR" --emptyOutDir
 
       - name: Create isolated synthetic credentials, ledger and HTTPS identity
@@ -229,11 +229,11 @@ jobs:
           cat >> "$GITHUB_ENV" <<EOF
           PILOT_PROJECT_NAME=$project
           PILOT_HARNESS_DIR=$RUNNER_TEMP/newsflux-pilot/reader-harness
-          PILOT_TEST_SOURCE_DIR=$GITHUB_WORKSPACE/candidate/scripts/pilot-e2e
+          PILOT_TEST_SOURCE_DIR=$GITHUB_WORKSPACE/candidate/tests/aux/pilot-e2e
           PILOT_SOURCE_CHECKOUT=$GITHUB_WORKSPACE/candidate
           PILOT_TEST_CERTS_DIR=$RUNNER_TEMP/newsflux-pilot/certs
           PILOT_PLAYWRIGHT_OUTPUT_DIR=$RUNNER_TEMP/newsflux-pilot/artifacts
-          PILOT_TEST_INGRESS_CADDYFILE=$GITHUB_WORKSPACE/candidate/scripts/pilot-e2e/Caddyfile.compose-test
+          PILOT_TEST_INGRESS_CADDYFILE=$GITHUB_WORKSPACE/candidate/tests/aux/pilot-e2e/Caddyfile.compose-test
           PILOT_TEST_CADDY_IMAGE=caddy:2.11.7@sha256:685ae3d7c34d9b5f8caeddc5d14051db7bbd88ff1f5a2fa0c16bd8ca328fb7af
           PILOT_PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
           NEWSFLUX_PILOT_FRONTEND_NETWORK=$project-frontend
@@ -261,13 +261,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python scripts/pilot-e2e/test_compose_gates.py
+          python tests/aux/pilot-e2e/test_compose_gates.py
           compose=(docker compose -p "$PILOT_PROJECT_NAME" \
-            -f deploy/article-intel-pilot/compose.yaml \
-            -f scripts/pilot-e2e/compose.ci.yaml)
+            -f ops/deploy/article-intel-pilot/compose.yaml \
+            -f tests/aux/pilot-e2e/compose.ci.yaml)
           "${compose[@]}" --profile pilot-test config --format json \
             > "$RUNNER_TEMP/newsflux-pilot/compose.json"
-          python scripts/pilot-e2e/verify-compose.py "$RUNNER_TEMP/newsflux-pilot/compose.json"
+          python tests/aux/pilot-e2e/verify-compose.py "$RUNNER_TEMP/newsflux-pilot/compose.json"
           "${compose[@]}" up --detach --pull never
 
           reader_id="$("${compose[@]}" ps -q pilot-reader)"
@@ -278,7 +278,7 @@ jobs:
             test "$bindings" = null || test "$bindings" = '{}' || test "$bindings" = '[]'
           done
 
-          expected_caddy_sha="$(shasum -a 256 deploy/article-intel-pilot/Caddyfile | awk '{print $1}')"
+          expected_caddy_sha="$(shasum -a 256 ops/deploy/article-intel-pilot/Caddyfile | awk '{print $1}')"
           actual_caddy_sha="$("${compose[@]}" exec -T pilot-reader sha256sum /etc/caddy/Caddyfile | awk '{print $1}')"
           test "$actual_caddy_sha" = "$expected_caddy_sha"
           "${compose[@]}" exec -T pilot-reader caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
@@ -302,10 +302,10 @@ jobs:
         run: |
           set -euo pipefail
           compose=(docker compose -p "$PILOT_PROJECT_NAME" \
-            -f deploy/article-intel-pilot/compose.yaml \
-            -f scripts/pilot-e2e/compose.ci.yaml)
+            -f ops/deploy/article-intel-pilot/compose.yaml \
+            -f tests/aux/pilot-e2e/compose.ci.yaml)
           "${compose[@]}" --profile pilot-test run --rm --no-deps pilot-e2e \
-            node /workspace/scripts/pilot-e2e/check-compose-tls.mjs
+            node /workspace/tests/aux/pilot-e2e/check-compose-tls.mjs
           "${compose[@]}" --profile pilot-test run --rm pilot-e2e
           echo "PROXY_TRUST_GATE=PASS" >> "$RUNNER_TEMP/newsflux-pilot/gates.txt"
           echo "SYNTHETIC_INFERENCE_GATE=PASS" >> "$RUNNER_TEMP/newsflux-pilot/gates.txt"
@@ -318,10 +318,10 @@ jobs:
         run: |
           set -euo pipefail
           compose=(docker compose -p "$PILOT_PROJECT_NAME" \
-            -f deploy/article-intel-pilot/compose.yaml \
-            -f scripts/pilot-e2e/compose.ci.yaml)
+            -f ops/deploy/article-intel-pilot/compose.yaml \
+            -f tests/aux/pilot-e2e/compose.ci.yaml)
           before="$("${compose[@]}" exec -T summary-api python \
-            /app/scripts/pilot-e2e/verify-ledger.py /data/usage.sqlite3)"
+            /app/tests/aux/pilot-e2e/verify-ledger.py /data/usage.sqlite3)"
           "${compose[@]}" restart summary-api
           summary_id="$("${compose[@]}" ps -q summary-api)"
           for attempt in $(seq 1 60); do
@@ -331,7 +331,7 @@ jobs:
             sleep 2
           done
           after="$("${compose[@]}" exec -T summary-api python \
-            /app/scripts/pilot-e2e/verify-ledger.py /data/usage.sqlite3)"
+            /app/tests/aux/pilot-e2e/verify-ledger.py /data/usage.sqlite3)"
           test "$before" = "$after"
           echo "LEDGER_PERSISTENCE_GATE=PASS" >> "$RUNNER_TEMP/newsflux-pilot/gates.txt"
 
@@ -341,14 +341,14 @@ jobs:
         run: |
           set -euo pipefail
           candidate_compose=(docker compose -p "$PILOT_PROJECT_NAME" \
-            -f deploy/article-intel-pilot/compose.yaml \
-            -f scripts/pilot-e2e/compose.ci.yaml)
+            -f ops/deploy/article-intel-pilot/compose.yaml \
+            -f tests/aux/pilot-e2e/compose.ci.yaml)
           candidate_id="$("${candidate_compose[@]}" ps -q pilot-reader)"
           test "$(docker inspect -f '{{.Image}}' "$candidate_id")" = \
             "$(docker image inspect -f '{{.Id}}' "$NEWSFLUX_PILOT_WEB_IMAGE")"
 
           rollback=(docker compose -p "$PILOT_PROJECT_NAME" \
-            -f scripts/pilot-e2e/rollback-compose.yaml)
+            -f tests/aux/pilot-e2e/rollback-compose.yaml)
           "${rollback[@]}" up --detach --force-recreate --remove-orphans
           previous_id="$("${rollback[@]}" ps -q pilot-reader)"
           test "$(docker inspect -f '{{.Image}}' "$previous_id")" = \
@@ -371,12 +371,12 @@ jobs:
           set +e
           if [[ -n "${PILOT_PROJECT_NAME:-}" ]]; then
             docker compose -p "$PILOT_PROJECT_NAME" \
-              -f deploy/article-intel-pilot/compose.yaml \
-              -f scripts/pilot-e2e/compose.ci.yaml logs --no-color \
+              -f ops/deploy/article-intel-pilot/compose.yaml \
+              -f tests/aux/pilot-e2e/compose.ci.yaml logs --no-color \
               > "$RUNNER_TEMP/newsflux-pilot/compose.log" 2>&1
             docker compose -p "$PILOT_PROJECT_NAME" \
-              -f deploy/article-intel-pilot/compose.yaml \
-              -f scripts/pilot-e2e/compose.ci.yaml down --remove-orphans \
+              -f ops/deploy/article-intel-pilot/compose.yaml \
+              -f tests/aux/pilot-e2e/compose.ci.yaml down --remove-orphans \
               > /dev/null 2>&1
           fi
 

@@ -35,8 +35,8 @@ Official references:
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Integration status           | `CONNECTED`, `NOT_CONFIGURED`, `VALIDATION_FAILED`, `UNVERIFIED`; never show raw key or key hash                                                           |
 | Virtual-key field            | Password/masked input, **only to replace/register key**; empty when opened even if configured; never preload existing key                                  |
-| `Testar conexão`             | Server-admin authenticated safe read-only call to LiteLLM model catalog, classify result without inference; preserve existing key on failure               |
-| `Salvar / Substituir chave`  | Explicit admin operation after valid test and confirmation; backend writes atomically to approved protected secret store; no local/session storage         |
+| `Test connection`            | Server-admin authenticated safe read-only call to LiteLLM model catalog, classify result without inference; preserve existing key on failure               |
+| `Save key`                   | Explicit admin operation after valid test and confirmation; backend writes atomically to approved protected secret store; no local/session storage         |
 | `Atualizar modelos`          | Server-side authenticated live discovery with bounded size, no cookies/credentials in model metadata                                                       |
 | Primary model                | **Reuse existing selector**, improve search/filter if model count makes radio list unwieldy, show provider/local-or-external/available/price status        |
 | Fallback model               | **Reuse existing switch and model selector**, different from primary; default disabled; show transient-only rule, paid and cross-provider separate opt-ins |

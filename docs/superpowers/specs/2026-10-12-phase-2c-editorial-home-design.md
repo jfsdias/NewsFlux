@@ -29,9 +29,9 @@ The root route has one meaning:
 
 Existing list and article surfaces remain semantically independent: /all, the Unread filter, Today, Starred, History, Feed, Category, and article/deep-link surfaces. Home must not change their meaning or their ordering behavior.
 
-The setting historically named as the Home page is repurposed as “Página após login.” It applies only after an explicit authentication/login entry and selects the destination after login. It does not redefine / and must not intercept an explicit deep link. Explicit deep links always take precedence over the post-login preference.
+The setting historically named as the Home page is repurposed as “Page after login.” It applies only after an explicit authentication/login entry and selects the destination after login. It does not redefine / and must not intercept an explicit deep link. Explicit deep links always take precedence over the post-login preference.
 
-For the current NewsFlux deployment, the migrated value is Página após login = Home (/). Reuse the existing settings/localStorage persistence mechanism; add no persistent storage.
+For the current NewsFlux deployment, the migrated value is Page after login = Home (/). Reuse the existing settings/localStorage persistence mechanism; add no persistent storage.
 
 A new authentication flow, Sidebar redesign, NAV-01, and NAV-02 are out of scope.
 
@@ -427,7 +427,7 @@ Report incidental issues to backlog; do not fix them as part of Phase 2C.
 
 - **R1 — Virtualization/sentinel integration:** current list architecture is designed around one paginated list; Home adds finite editorial content before the continuation stream.
 - **R2 — Reader navigation:** origin / must be preserved without introducing a separate editorial reader queue.
-- **R3 — Startup preference migration:** old configurable Home semantics become “Página após login” without intercepting explicit / or deep links and without unnecessary persistence.
+- **R3 — Startup preference migration:** old configurable Home semantics become “Page after login” without intercepting explicit / or deep links and without unnecessary persistence.
 - **R4 — Card reuse versus hero flexibility:** excessive reuse can weaken Primary; excessive specialization can duplicate behavior.
 - **R5 — Home session stability:** preserve highlightIds across legitimate reader return while invalidating correctly on true session/visibility changes.
 
@@ -462,7 +462,7 @@ Only when all criteria pass is Phase 2C COMPLETED. Phase 2D may start only after
 The approved contract fixes product behavior but leaves the following implementation choices for the separate implementation-planning task. Resolve them explicitly before coding; do not use them to change the approved semantics:
 
 1. **Route shape for a Home-origin reader:** choose a detail URL that preserves origin / for direct links, browser Back, close, and existing reader navigation, without changing other route semantics.
-2. **Post-login preference migration:** define how existing per-server/user Home targets map to “Página após login”; the current NewsFlux deployment must resolve to Home (/), and explicit deep links must still win.
+2. **Post-login preference migration:** define how existing per-server/user Home targets map to “Page after login”; the current NewsFlux deployment must resolve to Home (/), and explicit deep links must still win.
 3. **Home request integration:** decide how to request unread, published_at descending, and existing visibility policy while bypassing All/Unread sort preferences and reusing the existing request/session guards.
 4. **Ephemeral session holder:** select the smallest existing in-memory state boundary that retains highlightIds and scroll through a valid reader visit without creating a second article cache.
 5. **Primary timestamp ties:** when multiple eligible entries share the newest published_at, use a stable entry.id tie-break; specify its ascending or descending direction.

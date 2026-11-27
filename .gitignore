@@ -46,3 +46,7 @@ src/version-info.json
 # Playwright
 /test-results
 /playwright-report
+
+# Python bytecode caches
+__pycache__/
+*.pyc

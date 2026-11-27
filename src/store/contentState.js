@@ -17,26 +17,26 @@ import { projectDuplicates } from "@/utils/duplicate-projection"
 import createSetter, { selectStore } from "@/utils/nanostores"
 
 const defaultValue = {
-  activeContent: null, // 当前打开的文章
+  activeContent: null, // Article currently open in the reader
   articleListError: false,
   articleListErrorCategory: null,
   articleListRevision: 0,
   articleListSnapshotIdentity: null,
   articleListSnapshotRevision: 0,
-  entries: [], // 接口返回的所有文章
-  filterDate: null, // 搜索日期
-  filterString: "", // 搜索文本
+  entries: [], // All articles returned by the API
+  filterDate: null, // Search date
+  filterString: "", // Search text
   homePaginationBoundary: null,
   infoFrom: "all", // all | today | starred | history | feed | category
-  infoId: null, // feed 或 category 的 id
-  isArticleListReady: false, // 文章列表是否加载完成
-  isArticleLoading: false, // 文章是否正在加载
+  infoId: null, // Feed or category id
+  isArticleListReady: false, // Whether the article list has finished loading
+  isArticleLoading: false, // Whether an article is loading
   isOriginalContentFetched: false,
   originalContentRequestTokens: {},
   temporalPaginationState: null,
   loadMoreError: false,
-  loadMoreVisible: false, // 加载更多元素可见性
-  total: 0, // 接口返回文章总数原始值，不受接口返回数据长度限制
+  loadMoreVisible: false, // Visibility of the load-more element
+  total: 0, // Raw total article count from the API, not limited by the returned data length
 }
 
 export const contentState = map(defaultValue)
@@ -255,8 +255,6 @@ export const setFilterDate = (filterDate) => {
   )
 }
 export const setFilterString = createSetter(contentState, "filterString")
-export const setInfoFrom = createSetter(contentState, "infoFrom")
-export const setInfoId = createSetter(contentState, "infoId")
 export const setArticleListSource = ({ from, id }) => {
   const current = contentState.get()
   const nextScope = {

@@ -250,7 +250,7 @@ Contract: `docs/ops/NEWSFLUX_D1_LITELLM_AUTHORITY_CONTRACT.md` (#273). Not enabl
 
 ### Cost-authority evidence (D1-R7-01)
 
-The declaration alone proves nothing. One root invocation on the OMV (`deploy/release-governance/d1_capture.py`,
+The declaration alone proves nothing. One root invocation on the OMV (`ops/deploy/release-governance/d1_capture.py`,
 own authorization; see `docs/ops/NEWSFLUX_D1_CAPTURE.md`) produces the evidence; the catalog (every build) and the
 release preflight judge it with the same code (`services/article_intel_summary/d1_evidence.py`):
 

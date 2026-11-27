@@ -1,14 +1,52 @@
 # NewsFlux Project State
 
 - **Purpose:** concise operational state for PM handoffs and future sessions. The roadmap remains the source for sequencing and product/architecture detail.
-- **Last reconciled:** 2026-11-08 against GitHub `main` `e949fdd5fd1975cd3437d3981232b0dbe18a74e5`, after PR #193.
-- **Current snapshot:** GitHub `main` at `e949fdd5fd1975cd3437d3981232b0dbe18a74e5`. Production was not inspected in this audit; production SHA and parity are unknown. The post-PR #183 and earlier snapshots below remain historical.
-- **Previous snapshots (historical):** post-PR #183 on 2026-11-06; post-PR #177 on 2026-11-04; post-PR #129 on 2026-10-25; older snapshots remain preserved below.
+- **Last reconciled:** 2026-11-26 against local `main` `664e404197e1eb9d9aeb52f921690a95b6559190`, after PR #321.
+- **Current snapshot:** `main` at `664e404197e1eb9d9aeb52f921690a95b6559190` (2026-11-26). Production is OPERATOR_REPORTED at this SHA for the Reader deploy; live parity is NOT_VERIFIED. The post-PR #193 and earlier snapshots below remain historical.
+- **Previous snapshots (historical):** post-PR #193 on 2026-11-08; post-PR #183 on 2026-11-06; post-PR #177 on 2026-11-04; post-PR #129 on 2026-10-25; older snapshots remain preserved below.
 - **Related planning documents:** [`PWA_ARCHITECTURE.md`](./PWA_ARCHITECTURE.md) and [`DESIGN_REFERENCES.md`](./DESIGN_REFERENCES.md) (planning only; no implementation authorized).
 
-## Current state (verified GitHub main `e949fdd5fd1975cd3437d3981232b0dbe18a74e5`, post-PR #193, 2026-11-08)
+## Current canonical state (verified 2026-11-26; post-PR #321)
 
-This section is the current operational snapshot. The dated post-PR #183 section immediately below and all older snapshots are historical and do not override it.
+This section is the current operational snapshot. It supersedes the 2026-11-08 post-PR #193 state and every dated section below it for current-state questions. The roadmap's Current canonical state section carries the same field values, plus the grouped list of work delivered since PR #193.
+
+### Current authority snapshot
+
+| Field                        | Verified value                                                                                                                                                                                                                                                                                                                                                        |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CURRENT_MAIN_SHA`           | `664e404197e1eb9d9aeb52f921690a95b6559190`                                                                                                                                                                                                                                                                                                                            |
+| `LAST_VERIFIED_GITHUB_STATE` | 2026-11-26; local git history of `main` (GitHub API unreachable in this session)                                                                                                                                                                                                                                                                                      |
+| `LAST_MERGED_PR`             | #321, squash commit `664e404197e1eb9d9aeb52f921690a95b6559190`                                                                                                                                                                                                                                                                                                        |
+| `OPEN_DRAFT_PRS`             | Verified on GitHub 2026-11-26: #318 (Draft), #313 (Draft), #296 (Draft), #295 (Draft), #294 (Draft), #293, #292 (Draft), #291 (Draft), #290, #260 (Draft). No longer open: #188, #134–#140. Dispositions are planned, not yet executed (see the roadmap).                                                                                                             |
+| `CURRENT_PRODUCT_BASELINE`   | Source baseline `main` `664e404197e1eb9d9aeb52f921690a95b6559190`; not a production-runtime assertion                                                                                                                                                                                                                                                                 |
+| `CURRENT_QA_BASELINE`        | Unit tests 796/796 PASS and production build PASS on a clean `main` checkout (2026-11-26). Integration candidate `qd/integration` on `fa56a12b`: unit tests src 803/803, scripts 258/258, ops 2/2, research 58/58; ESLint 0 errors; knip:check PASS; canonical Playwright E2E 111/111 PASS, contract v23. Earlier E2E 94/94 ×3 for #320/#321 is REPORTED, not re-run. |
+| `PRODUCTION_SHA_VERIFIED`    | `UNKNOWN_IN_THIS_AUDIT`                                                                                                                                                                                                                                                                                                                                               |
+| `PRODUCTION`                 | OPERATOR_REPORTED: Reader deploy at `664e404197e1eb9d9aeb52f921690a95b6559190` on 2026-11-26; live parity NOT_VERIFIED                                                                                                                                                                                                                                                |
+| `MAIN_PRODUCTION_PARITY`     | `NOT_VERIFIED`                                                                                                                                                                                                                                                                                                                                                        |
+| `PHYSICAL_DEVICE_SMOKE`      | EVIDENCE_GAP: physical device smoke pending; simulated smoke recorded in the S0 record, not physical evidence                                                                                                                                                                                                                                                         |
+| `S0_CHECKPOINT`              | COMPLETED: closed with simulated smoke by owner instruction on 2026-11-26; NF-0005 physical smoke remains EVIDENCE_GAP backlog                                                                                                                                                                                                                                        |
+| `S1_CHECKPOINT`              | COMPLETED: NF-E01 evidence (14 E2E scenarios, 3 store tests, `markDuplicatesAsRead` removed)                                                                                                                                                                                                                                                                          |
+| `INTEGRATION_CANDIDATE`      | `qd/integration` at `b2633a99`: not merged, not a PR; workstreams and gates as recorded in the roadmap; any merge requires owner GO                                                                                                                                                                                                                                   |
+| `NEXT_RECOMMENDED_TRACK`     | Sprint 3 polish (NF-0301, PLANNED), then the 2026-11-26 review candidates in the roadmap planning queue; physical-device smoke stays EVIDENCE_GAP                                                                                                                                                                                                                     |
+| `NEXT_AUTHORIZED_ACTION`     | Review of this documentation update and the coordinator's planned PR dispositions only; no merge, PR closure, deployment, provider activation or implementation is authorized here                                                                                                                                                                                    |
+
+### Current product, QA, and evidence boundaries
+
+- **Delivered since PR #193:** grouped PR numbers are listed in the roadmap section of the same date. Items whose PR number is not verified are labeled as such there.
+- **Product boundaries:** Miniflux remains the source of truth for feeds, categories, read/unread, and starred state. All/Unread remain chronological.
+- **PR #190:** merged as an offline Personalization V2 evaluation only; not a V2 implementation or adoption. Personalization V2 remains on hold. The direct-star synthetic observation is a research finding, not proof of a general product defect.
+- **PR #193:** `HARNESS_LIGHT_01=COMPLETED`; exact-head GitHub checks and 46/46 E2E passed at merge time; owner-reported physical harness matrix: Duo closed/Light, closed/Dark-OLED, open/Light, and open/Dark-OLED. This result is limited to the PR #193 harness; it does not establish general Safari, installed-PWA, Service Worker, or production-component validation.
+- **Production:** OPERATOR_REPORTED Reader deploy at `664e404197e1eb9d9aeb52f921690a95b6559190` on 2026-11-26. Live parity is NOT_VERIFIED, and `PRODUCTION_SHA_VERIFIED` remains `UNKNOWN_IN_THIS_AUDIT`. Earlier PR #193 harness evidence does not establish production behavior.
+- **Physical device:** smoke is an EVIDENCE_GAP until performed and recorded. Simulated browser smoke of 2026-11-26 is in [`qa/S0_SIMULATED_SMOKE_2026-11-26.md`](./qa/S0_SIMULATED_SMOKE_2026-11-26.md); it is emulation only.
+- **Review:** [2026-11-26 Quality & Product Design Review](./reviews/2026-11-26-quality-product-review.md), with its execution addendum.
+- **Repository layout (2026-11-26):** product, ops, research, auxiliary tests and archive are separated; see [`REPOSITORY_LAYOUT.md`](../REPOSITORY_LAYOUT.md). Historical sections keep their original paths.
+- **README:** no change in this reconciliation.
+
+---
+
+## Historical state (verified GitHub main `e949fdd5fd1975cd3437d3981232b0dbe18a74e5`, post-PR #193, 2026-11-08)
+
+This section was the current operational snapshot until the 2026-11-26 reconciliation above. The dated post-PR #183 section below and all older snapshots are historical and do not override the current section.
 
 ### Current authority snapshot
 
@@ -42,7 +80,7 @@ This section is the current operational snapshot. The dated post-PR #183 section
 
 The open PR inventory also contains Story research PRs #134–#140, all Draft and separate from product activation. No open documentation PR overlapped this reconciliation at the time of the audit.
 
-### Current product, QA, and evidence boundaries
+### Historical product, QA, and evidence boundaries (post-PR #193, 2026-11-08)
 
 - **Product/source baseline:** #185–#189 contain the recorded Mark All, Home category-lane, and category-label updates; #191 corrects the personalization disclosure behavior. All/Unread remain chronological and Miniflux remains the source of truth for feeds, categories, read/unread, and starred state.
 - **Reader content recovery (candidate only):** this Draft adds the build-time `VITE_CONTENT_FALLBACK_READER_BASE_PATH` switch. It is absent by default, so recovery stays unavailable unless a same-origin private bridge is explicitly configured; no production route, sidecar, or deployment is included or implied.
@@ -90,12 +128,12 @@ The open PR inventory also contains Story research PRs #134–#140, all Draft an
 
 ### Experimental research (not product functionality)
 
-| Item                                                                                    | State        | Notes                                                                                                                                      |
-| --------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Story identity runtime plumbing (PR #142): worker, projection, Home adapter             | HOLD_PRODUCT | Merged experimental plumbing remains off by default; `VITE_STORY_IDENTITY_ENABLED=1` enables it in Home, but activation is not authorized. |
-| Story candidate ranking (client and Python sidecar)                                     | HOLD_PRODUCT | Merged experimental code remains off by default; `VITE_STORY_CANDIDATE_RANKING` must be `1`. Product activation is not authorized.         |
-| Story-01B and Story-02 research (gold datasets, A2D packs, content capture, benchmarks) | HOLD_PRODUCT | Research artifacts are under `scripts/research/` and `docs/research/`; private data stays outside git and no product link is authorized.   |
-| Draft PRs #134 to #140                                                                  | HOLD_PRODUCT | Research-only candidates; do not promote without separate authorization.                                                                   |
+| Item                                                                                    | State        | Notes                                                                                                                                                                         |
+| --------------------------------------------------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Story identity runtime plumbing (PR #142): worker, projection, Home adapter             | HOLD_PRODUCT | Merged experimental plumbing remains off by default; `VITE_STORY_IDENTITY_ENABLED=1` enables it in Home, but activation is not authorized.                                    |
+| Story candidate ranking (client and Python sidecar)                                     | HOLD_PRODUCT | Merged experimental code remains off by default; `VITE_STORY_CANDIDATE_RANKING` must be `1`. Product activation is not authorized.                                            |
+| Story-01B and Story-02 research (gold datasets, A2D packs, content capture, benchmarks) | HOLD_PRODUCT | Research artifacts are under `scripts/research/` (moved to `research/` on 2026-11-26) and `docs/research/`; private data stays outside git and no product link is authorized. |
+| Draft PRs #134 to #140                                                                  | HOLD_PRODUCT | Research-only candidates; do not promote without separate authorization.                                                                                                      |
 
 ### Planned and on hold
 

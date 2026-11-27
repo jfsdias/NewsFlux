@@ -10,7 +10,7 @@ import { polyglotState } from "@/hooks/useLanguage"
 import { authState } from "@/store/authState"
 
 // Synthetic NEWSFLUX-AI-SETTINGS-01 harness: real Settings components against the
-// real Summary admin API (scripts/pilot-e2e/admin_backend.py). No real credentials.
+// real Summary admin API (tests/aux/pilot-e2e/admin_backend.py). No real credentials.
 const parameters = new URLSearchParams(globalThis.location.search)
 const role = parameters.get("role") === "reader" ? "reader" : "admin"
 const locale = parameters.get("locale") ?? "en-US"

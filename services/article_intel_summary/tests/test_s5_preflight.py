@@ -362,12 +362,12 @@ class S5PreflightTests(unittest.TestCase):
         gates = s5_preflight.run({**self.env, "NEWSFLUX_AI_ALLOW_PAID_INFERENCE": "true"}, get, attestation=attestation(), now=NOW)
         self.assertEqual(gates["PAID_MODEL_BLOCKED_GATE"], "PASS")
 
-    # --- Contract with the operator audit tool (deploy/release-governance/s5_key_audit.py) -----------
+    # --- Contract with the operator audit tool (ops/deploy/release-governance/s5_key_audit.py) -----------
 
     def test_audit_tool_output_is_accepted_and_shares_the_fingerprint(self) -> None:
         import importlib.util
 
-        path = Path(__file__).resolve().parents[3] / "deploy" / "release-governance" / "s5_key_audit.py"
+        path = Path(__file__).resolve().parents[3] / "ops" / "deploy" / "release-governance" / "s5_key_audit.py"
         spec = importlib.util.spec_from_file_location("s5_key_audit_contract", path)
         audit = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(audit)

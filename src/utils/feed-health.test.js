@@ -24,14 +24,25 @@ test("MISSING_ERROR_COUNT_SHOWS_NOTHING", () => {
 test("dashboard summarizes provider facts without inferring publication cadence", async () => {
   const { summarizeFeedHealth } = await import(new URL("feed-health.js", import.meta.url))
   const now = Date.parse("2026-01-02T00:00:00Z")
-  const summary = summarizeFeedHealth([
-    { parsing_error_count: 2, disabled: true, checked_at: "2026-01-01T23:00:00Z" },
-    { parsing_error_count: 1, checked_at: "2025-12-30T00:00:00Z" },
-    { checked_at: "invalid" },
-    { checked_at: "2026-01-03T00:00:00Z" },
-    {},
-  ], now)
-  assert.deepEqual(summary, { total: 5, errors: 2, errorUnknown: 3, disabled: 1, recent: 1, old: 1, unknown: 3 })
+  const summary = summarizeFeedHealth(
+    [
+      { parsing_error_count: 2, disabled: true, checked_at: "2026-01-01T23:00:00Z" },
+      { parsing_error_count: 1, checked_at: "2025-12-30T00:00:00Z" },
+      { checked_at: "invalid" },
+      { checked_at: "2026-01-03T00:00:00Z" },
+      {},
+    ],
+    now,
+  )
+  assert.deepEqual(summary, {
+    total: 5,
+    errors: 2,
+    errorUnknown: 3,
+    disabled: 1,
+    recent: 1,
+    old: 1,
+    unknown: 3,
+  })
 })
 
 test("dashboard treats a check at the 24-hour boundary as recent", async () => {
@@ -58,14 +69,32 @@ test("unknown error and check metadata remain unknown", async () => {
 test("check timestamps require valid RFC3339 calendar dates and explicit timezones", async () => {
   const { feedCheckTime } = await import(new URL("feed-health.js", import.meta.url))
   const now = Date.parse("2026-12-31T00:00:00Z")
-  for (const checked_at of ["0", "2026-02-30T12:00:00Z", "2025-02-29T12:00:00Z", "2026-01-01T24:00:00Z", "2026-01-01T00:00:00", "2026-01-01T00:00:00+24:00", "0001-01-01T00:00:00Z", "2027-01-01T00:00:00Z"]) {
+  for (const checked_at of [
+    "0",
+    "2026-02-30T12:00:00Z",
+    "2025-02-29T12:00:00Z",
+    "2026-01-01T24:00:00Z",
+    "2026-01-01T00:00:00",
+    "2026-01-01T00:00:00+24:00",
+    "0001-01-01T00:00:00Z",
+    "2027-01-01T00:00:00Z",
+  ]) {
     assert.equal(feedCheckTime({ checked_at }, now), null, checked_at)
   }
-  assert.equal(feedCheckTime({ checked_at: "2024-02-29T12:00:00.123456789Z" }, now), Date.parse("2024-02-29T12:00:00.123Z"))
-  assert.equal(feedCheckTime({ checked_at: "2026-01-01T01:00:00+01:00" }, now), Date.parse("2026-01-01T00:00:00Z"))
+  assert.equal(
+    feedCheckTime({ checked_at: "2024-02-29T12:00:00.123456789Z" }, now),
+    Date.parse("2024-02-29T12:00:00.123Z"),
+  )
+  assert.equal(
+    feedCheckTime({ checked_at: "2026-01-01T01:00:00+01:00" }, now),
+    Date.parse("2026-01-01T00:00:00Z"),
+  )
 })
 
 test("disabled count requires an explicit boolean true", async () => {
   const { summarizeFeedHealth } = await import(new URL("feed-health.js", import.meta.url))
-  assert.equal(summarizeFeedHealth([{ disabled: "true" }, { disabled: 1 }, { disabled: true }]).disabled, 1)
+  assert.equal(
+    summarizeFeedHealth([{ disabled: "true" }, { disabled: 1 }, { disabled: true }]).disabled,
+    1,
+  )
 })

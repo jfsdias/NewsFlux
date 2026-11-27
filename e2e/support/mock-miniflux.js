@@ -205,18 +205,24 @@ const createMockMiniflux = ({ port }) => {
     mutations.length = 0
   }
 
-  const inject = (count) => {
-    const feed = feeds[0]
+  // Optional per-scenario shaping: a shared `title`, a 1-based `feed`, and an `age` in minutes
+  // (spaced by one second per entry so the order is deterministic), `starred` and `status`.
+  // Defaults keep the old shape.
+  const inject = (
+    count,
+    { title, feedId = 1, age = 0, starred = false, status = "unread" } = {},
+  ) => {
+    const feed = feeds[feedId - 1] ?? feeds[0]
     for (let index = 0; index < count; index += 1) {
       const id = INJECTED_ID_BASE + entries.length + index
-      const stamp = new Date().toISOString()
+      const stamp = new Date(Date.now() - age * MINUTE - (title ? index * 1000 : 0)).toISOString()
       entries.unshift({
         id,
         user_id: 1,
         feed_id: feed.id,
-        status: "unread",
+        status,
         hash: `n${id}`,
-        title: `NOVA ${id}`,
+        title: title ?? `NOVA ${id}`,
         url: `https://x.invalid/${id}`,
         published_at: stamp,
         created_at: stamp,
@@ -224,7 +230,7 @@ const createMockMiniflux = ({ port }) => {
         content: "<p>nova</p>",
         author: "a",
         share_code: "",
-        starred: false,
+        starred,
         reading_time: 1,
         enclosures: [],
         tags: [],
@@ -250,7 +256,13 @@ const createMockMiniflux = ({ port }) => {
     } else if (pathname === "/__e2e/mode") {
       mode = searchParams.get("mode")
     } else if (pathname === "/__e2e/inject") {
-      inject(Number(searchParams.get("count") ?? 3))
+      inject(Number(searchParams.get("count") ?? 3), {
+        title: searchParams.get("title") ?? undefined,
+        feedId: Number(searchParams.get("feed") ?? 1),
+        age: Number(searchParams.get("age") ?? 0),
+        starred: searchParams.get("starred") === "true",
+        status: searchParams.get("status") ?? "unread",
+      })
     }
     send(response, 200, { faults, mode, state: state() })
   }

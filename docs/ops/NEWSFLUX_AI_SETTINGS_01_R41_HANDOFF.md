@@ -85,7 +85,7 @@ E2E [44351877599](https://github.com/jfsdias/NewsFlux/actions/runs/44351877599) 
 Summary release rehearsal [44351749588](https://github.com/jfsdias/NewsFlux/actions/runs/44351749588) SUCCESS (R4.1 gate 11/11, Stage 1 upgrade, R12F-09, S5, operator).
 Quality has no dispatch trigger; run locally on `011c01c`: Python auth 30, summary 258, content_fallback 151, wallhop 13, ux-reach 4,
 release-governance 107 (16 Docker-only skipped) — all OK; Node `lint`, `format:check`, `test:src`, `test:scripts`, `build`, `knip:check` — all OK.
-Isolation: #265 R4.1 delta touches only `deploy/release-governance/**` (+ inherited workflow line from `896d1dc`); #266 touches only
+Isolation: #265 R4.1 delta touches only `ops/deploy/release-governance/**` (+ inherited workflow line from `896d1dc`); #266 touches only
 `services/article_intel_summary/tests/test_api_supervision.py`; #261 docs only; no file overlap #265/#266; #260 excluded.
 
 ## 5. OMV read-only preflight (prepared, NOT executed; owner-run, writes only a temp dir)
@@ -95,7 +95,7 @@ D="$(mktemp -d /tmp/nf-r41-preflight.XXXXXX)"
 git clone -q --no-checkout https://github.com/jfsdias/NewsFlux.git "$D/src"
 git -C "$D/src" checkout -q --detach 4c3e07529d706ffc37115aa8de808f36cccdc244
 test "$(git -C "$D/src" rev-parse HEAD)" = 4c3e07529d706ffc37115aa8de808f36cccdc244 && echo SHA_PIN=PASS
-sudo bash "$D/src/deploy/release-governance/ai-settings-readonly-preflight.sh"; echo "EXIT=$?"
+sudo bash "$D/src/ops/deploy/release-governance/ai-settings-readonly-preflight.sh"; echo "EXIT=$?"
 ```
 
 Return only the `KEY=VALUE` lines (they are sanitized by design) and `EXIT=`. Expected on a healthy Stage 1 host:

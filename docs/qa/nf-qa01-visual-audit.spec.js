@@ -62,8 +62,9 @@ test.describe("NF-QA01 ephemeral visual evidence", () => {
         await settle(page)
         await expect(page.locator("a.article-entry").first()).toBeVisible()
         const panel = page.getByRole("region", { name: "Editorial tools" })
-        await expect(panel).toBeVisible()
-        await expect(panel.getByRole("button", { name: "Enable editorial tools" })).toBeVisible()
+        const toolsTrigger = page.getByRole("button", { name: "Home tools" })
+        await expect(toolsTrigger).toHaveAttribute("aria-expanded", "false")
+        await expect(panel).toHaveCount(0)
         await assertNoOverflow(page, "Home")
         expect(errors).toEqual([])
         await page.screenshot({
@@ -71,6 +72,8 @@ test.describe("NF-QA01 ephemeral visual evidence", () => {
           fullPage: true,
           animations: "disabled",
         })
+        await toolsTrigger.click()
+        await expect(panel.getByRole("button", { name: "Enable editorial tools" })).toBeVisible()
         await panel.getByRole("button", { name: "Enable editorial tools" }).click()
         await expect(
           panel.getByText(

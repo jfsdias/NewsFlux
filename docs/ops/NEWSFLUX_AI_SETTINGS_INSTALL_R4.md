@@ -41,9 +41,9 @@ PR #260 (local Ollama privacy) is in **none** of these trees and remains OPEN/DR
 ## 3. Files changed (vs `main`)
 
 - #262: `services/article_intel_summary/{admin_api,admin_settings,app,catalog,operator_restore_ai_settings,operator_preflight_ai_settings}.py`, `tests/test_admin_settings.py`, `tests/test_operator_preflight.py`.
-- #263: `src/components/Settings/{ArticleIntelligence.jsx,ArticleIntelligence.css,LiteLlmAdminSettings.jsx,LiteLLMAdminSettings.css}`, `src/apis/article-intelligence-admin{,.test}.js`, `src/utils/litellm-admin-state{,.test}.js`, `src/locales/{en-US,de-DE,es-ES,fr-FR,ja-JP,zh-CN}.json`, `scripts/pilot-e2e/{admin_backend.py,ai-settings-admin.spec.js,playwright-admin.config.js,vite-admin.config.js}`, `scripts/tests/ai-settings-admin.{html,jsx}`, `.github/workflows/ai-settings-tests.yaml`, `knip.json`.
-- #264: `deploy/article-intel-pilot/Caddyfile`, `scripts/pilot-e2e/test-caddy-route.mjs`, `.github/workflows/ai-admin-caddy-gates.yaml`.
-- #265: `deploy/release-governance/{ai-functional-release.sh,release.py,ai-settings-flag-baseline.json,rehearse-stage1-upgrade.sh,ai-settings-readonly-preflight.sh,test_caddy_transition.py,test_readonly_preflight.py,test_release_failure_io.py}`, `.github/workflows/summary-release-rehearsal.yaml` (adds `workflow_dispatch`), `docs/ops/ARTICLE_INTELLIGENCE_PROMOTION.md`.
+- #263: `src/components/Settings/{ArticleIntelligence.jsx,ArticleIntelligence.css,LiteLlmAdminSettings.jsx,LiteLLMAdminSettings.css}`, `src/apis/article-intelligence-admin{,.test}.js`, `src/utils/litellm-admin-state{,.test}.js`, `src/locales/{en-US,de-DE,es-ES,fr-FR,ja-JP,zh-CN}.json`, `tests/aux/pilot-e2e/{admin_backend.py,ai-settings-admin.spec.js,playwright-admin.config.js,vite-admin.config.js}`, `scripts/tests/ai-settings-admin.{html,jsx}`, `.github/workflows/ai-settings-tests.yaml`, `knip.json`.
+- #264: `ops/deploy/article-intel-pilot/Caddyfile`, `tests/aux/pilot-e2e/test-caddy-route.mjs`, `.github/workflows/ai-admin-caddy-gates.yaml`.
+- #265: `ops/deploy/release-governance/{ai-functional-release.sh,release.py,ai-settings-flag-baseline.json,rehearse-stage1-upgrade.sh,ai-settings-readonly-preflight.sh,test_caddy_transition.py,test_readonly_preflight.py,test_release_failure_io.py}`, `.github/workflows/summary-release-rehearsal.yaml` (adds `workflow_dispatch`), `docs/ops/ARTICLE_INTELLIGENCE_PROMOTION.md`.
 
 ## 4. Images, volumes, permissions, configuration
 
@@ -59,13 +59,13 @@ PR #260 (local Ollama privacy) is in **none** of these trees and remains OPEN/DR
   `true` (trimmed, case-insensitive); the preflight accepts only `true`, `false` or unset and classifies anything
   else as `MALFORMED` (HOLD).
 
-  | Flag                                          | Required                | Rule                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-  | --------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-  | `NEWSFLUX_AI_ADMIN_CONFIG_WRITES_ENABLED`     | OFF                     | ON or MALFORMED → HOLD (writes need a separate GO, section 7)                                                                                                                                                                                                                                                                                                                                                                                                                   |
-  | `NEWSFLUX_AI_INFERENCE_ENABLED`               | OFF                     | ON or MALFORMED → HOLD                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-  | `NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER` | OFF                     | ON or MALFORMED → HOLD                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-  | `NEWSFLUX_AI_ALLOW_PAID_INFERENCE`            | OFF                     | ON or MALFORMED → HOLD                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-  | `NEWSFLUX_AI_ALLOW_LOCAL_ARTICLE_PROCESSING`  | **= reviewed baseline** | owned by PR #260; this release never changes it. Baseline read only from `deploy/release-governance/ai-settings-flag-baseline.json` in the approved checkout (currently `OFF`: #260 OPEN/DRAFT, R4B privacy HOLD; last operator receipt AI flags OFF). Environment cannot override it. Missing/invalid baseline file → HOLD; live value ≠ baseline → `LOCAL_PROCESSING_BASELINE_GATE=DRIFT` HOLD. Changing the baseline requires a reviewed commit citing the separate #260 GO. |
+  | Flag                                          | Required                | Rule                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+  | --------------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `NEWSFLUX_AI_ADMIN_CONFIG_WRITES_ENABLED`     | OFF                     | ON or MALFORMED → HOLD (writes need a separate GO, section 7)                                                                                                                                                                                                                                                                                                                                                                                                                       |
+  | `NEWSFLUX_AI_INFERENCE_ENABLED`               | OFF                     | ON or MALFORMED → HOLD                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+  | `NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER` | OFF                     | ON or MALFORMED → HOLD                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+  | `NEWSFLUX_AI_ALLOW_PAID_INFERENCE`            | OFF                     | ON or MALFORMED → HOLD                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+  | `NEWSFLUX_AI_ALLOW_LOCAL_ARTICLE_PROCESSING`  | **= reviewed baseline** | owned by PR #260; this release never changes it. Baseline read only from `ops/deploy/release-governance/ai-settings-flag-baseline.json` in the approved checkout (currently `OFF`: #260 OPEN/DRAFT, R4B privacy HOLD; last operator receipt AI flags OFF). Environment cannot override it. Missing/invalid baseline file → HOLD; live value ≠ baseline → `LOCAL_PROCESSING_BASELINE_GATE=DRIFT` HOLD. Changing the baseline requires a reviewed commit citing the separate #260 GO. |
 
   `NEWSFLUX_AI_MINIFLUX_ADMIN_USER_IDS` must list the admin(s); `NEWSFLUX_AI_ALLOWED_WEB_ORIGINS` HTTPS only.
   Reader: `NEWSFLUX_PILOT_TRUSTED_PROXY_IP` = the NPM container IP (unchanged).
@@ -79,7 +79,7 @@ PR #260 (local Ollama privacy) is in **none** of these trees and remains OPEN/DR
 ## 5. Read-only preflight (operator; writes nothing; fail-closed)
 
 ```bash
-sudo bash deploy/release-governance/ai-settings-readonly-preflight.sh
+sudo bash ops/deploy/release-governance/ai-settings-readonly-preflight.sh
 ```
 
 Run from a clean checkout of the approved SHA: the flag baseline and the target Caddyfile are read from that
@@ -119,9 +119,9 @@ models are approved. **Any HOLD stops the release.** Then, after `prepare`:
 
 ```bash
 export APPROVED_SHA=<merged main SHA>
-sudo -E bash deploy/release-governance/ai-functional-release.sh prepare
-sudo -E bash deploy/release-governance/ai-functional-release.sh preflight
-sudo python3 deploy/release-governance/release.py inspect --project newsflux
+sudo -E bash ops/deploy/release-governance/ai-functional-release.sh prepare
+sudo -E bash ops/deploy/release-governance/ai-functional-release.sh preflight
+sudo python3 ops/deploy/release-governance/release.py inspect --project newsflux
 ```
 
 (`prepare` creates only `$RELEASE_ROOT/ai-functional-<sha12>/source`; `preflight` and `inspect` are read-only.)
@@ -133,11 +133,11 @@ Summary and Reader promotions go through `release.py` (exact image ID, drift che
 automatic rollback); the Caddyfile transition is the governed `update-caddy` (#265).
 
 ```bash
-sudo -E bash deploy/release-governance/ai-functional-release.sh build
-sudo -E bash deploy/release-governance/ai-functional-release.sh promote-summary
-sudo -E bash deploy/release-governance/ai-functional-release.sh update-caddy
-sudo -E bash deploy/release-governance/ai-functional-release.sh promote-reader
-sudo -E bash deploy/release-governance/ai-functional-release.sh smoke
+sudo -E bash ops/deploy/release-governance/ai-functional-release.sh build
+sudo -E bash ops/deploy/release-governance/ai-functional-release.sh promote-summary
+sudo -E bash ops/deploy/release-governance/ai-functional-release.sh update-caddy
+sudo -E bash ops/deploy/release-governance/ai-functional-release.sh promote-reader
+sudo -E bash ops/deploy/release-governance/ai-functional-release.sh smoke
 ```
 
 `update-caddy` contract: host release lock; mount source must be a regular file; live hash must be in the
@@ -172,9 +172,9 @@ blocked by PR #260 / R4B privacy HOLD and the inference flags.
 ## 8. Rollback (each idempotent, reverse order, same `APPROVED_SHA`)
 
 ```bash
-sudo -E bash deploy/release-governance/ai-functional-release.sh rollback-reader
-sudo -E bash deploy/release-governance/ai-functional-release.sh rollback-caddy
-sudo -E bash deploy/release-governance/ai-functional-release.sh rollback-summary
+sudo -E bash ops/deploy/release-governance/ai-functional-release.sh rollback-reader
+sudo -E bash ops/deploy/release-governance/ai-functional-release.sh rollback-caddy
+sudo -E bash ops/deploy/release-governance/ai-functional-release.sh rollback-summary
 ```
 
 `rollback-caddy` restores the exact backup only if the live file is exactly what this release installed
@@ -199,7 +199,7 @@ managed store; an older image ignores it.
   release governance 95 (incl. Caddy transition 18, RED 14/18 on the old script → GREEN; crash-loop forensics 3, RED → GREEN; **R4 fail-closed read-only preflight 37**, RED on the R3 script → GREEN).
 - Frontend 703 + 316, ESLint/Prettier/knip clean, production build; Playwright admin harness 23 (real
   Summary app + real store + real `gateway_getter`, synthetic LiteLLM/Miniflux transports), pilot 7,
-  `reader-ai-e2e` 19 (4 skipped: need content-fallback env).
+  `tests/aux/reader-ai-e2e` 19 (4 skipped: need content-fallback env).
 - Docker rehearsal (`Summary release isolated rehearsal`, real Docker in GitHub Actions) on the combined tree:
   operator script, R12F-09, S5 key gate, **Stage 1 upgrade with real Stage 1 → admin-route Caddy transition**,
   scoped promotion.

@@ -6,7 +6,7 @@ on:
     paths:
       - "services/content_fallback/Dockerfile"
       - "services/article_intel_auth/**"
-      - "scripts/content-fallback-image-gate.sh"
+      - "ops/scripts/content-fallback-image-gate.sh"
       - ".github/workflows/content-fallback-image.yaml"
   workflow_dispatch:
     inputs:
@@ -58,13 +58,13 @@ jobs:
           } >>"$GITHUB_ENV"
 
       - name: Test image gate positive and negative behavior
-        run: bash scripts/content-fallback-image-gate.test.sh
+        run: bash ops/scripts/content-fallback-image-gate.test.sh
 
       - name: Preserve image gate and isolated negative fixture
         run: |
           mkdir -p "$RUNNER_TEMP/content-fallback-image-gate"
-          cp scripts/content-fallback-image-gate.sh "$RUNNER_TEMP/content-fallback-image-gate/gate.sh"
-          cp scripts/tests/fixtures/content_fallback_image_gate_missing_auth.Dockerfile \
+          cp ops/scripts/content-fallback-image-gate.sh "$RUNNER_TEMP/content-fallback-image-gate/gate.sh"
+          cp ops/scripts/fixtures/content_fallback_image_gate_missing_auth.Dockerfile \
             "$RUNNER_TEMP/content-fallback-image-gate/missing-auth.Dockerfile"
 
       - name: Build and import exact baseline; prove isolated missing-dependency fixture fails

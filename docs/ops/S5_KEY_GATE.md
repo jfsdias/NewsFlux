@@ -47,7 +47,7 @@ reference (for example, the provider's free-tier terms).
 
 1. **`SELF_INTROSPECTION`**: the key reads its own `/key/info`. This only works when the key is not
    route-restricted. If the gateway answers, its live answer wins over any document.
-2. **`ADMIN_ATTESTATION`**: the operator runs `deploy/release-governance/s5_key_audit.py` on the host:
+2. **`ADMIN_ATTESTATION`**: the operator runs `ops/deploy/release-governance/s5_key_audit.py` on the host:
    - **Credential:** a read-only admin credential, preferably a key whose user has role
      `proxy_admin_viewer`. That role can read keys and models but gets 403 on `/key/generate`.
    - **Requests:**
@@ -81,15 +81,15 @@ path is silently not found and the preflight stays `BLOCKED` with `ATTESTATION=N
 
 ```bash
 export APPROVED_SHA=<40-hex SHA being released>
-ATTESTATION="$(sudo -E bash deploy/release-governance/ai-functional-release.sh s5-attestation-path)"
-sudo python3 deploy/release-governance/s5_key_audit.py \
+ATTESTATION="$(sudo -E bash ops/deploy/release-governance/ai-functional-release.sh s5-attestation-path)"
+sudo python3 ops/deploy/release-governance/s5_key_audit.py \
   --gateway-url https://<litellm host> \
   --admin-key-file /root/secrets/litellm-admin-viewer.key \
   --virtual-key-file <host path of the Summary key file> \
   --alias <S5 alias> \
   --out "$ATTESTATION" \
   --confirm-provider-cost-zero --reference "<provider free-tier terms, date reviewed>"
-sudo -E bash deploy/release-governance/ai-functional-release.sh s5-preflight
+sudo -E bash ops/deploy/release-governance/ai-functional-release.sh s5-preflight
 ```
 
 Both key files must be mode `0600`/`0400`. Omit `--confirm-provider-cost-zero` if you have not
@@ -102,10 +102,10 @@ the audit.
 
 ## Evidence
 
-| Kind                     | Where                                                                            |
-| ------------------------ | -------------------------------------------------------------------------------- |
-| Unit, preflight          | `services/article_intel_summary/tests/test_s5_preflight.py`                      |
-| Unit, audit tool         | `deploy/release-governance/test_s5_key_audit.py`                                 |
-| Real LiteLLM, disposable | `deploy/release-governance/rehearse-s5-key-gate.sh` (CI: `synthetic-release`)    |
-| Upgrade from Stage 1     | `deploy/release-governance/rehearse-stage1-upgrade.sh` (CI: `synthetic-release`) |
-| Live gateway             | operator only, after authorization; nothing in this repository is live evidence  |
+| Kind                     | Where                                                                                |
+| ------------------------ | ------------------------------------------------------------------------------------ |
+| Unit, preflight          | `services/article_intel_summary/tests/test_s5_preflight.py`                          |
+| Unit, audit tool         | `ops/deploy/release-governance/test_s5_key_audit.py`                                 |
+| Real LiteLLM, disposable | `ops/deploy/release-governance/rehearse-s5-key-gate.sh` (CI: `synthetic-release`)    |
+| Upgrade from Stage 1     | `ops/deploy/release-governance/rehearse-stage1-upgrade.sh` (CI: `synthetic-release`) |
+| Live gateway             | operator only, after authorization; nothing in this repository is live evidence      |

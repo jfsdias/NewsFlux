@@ -3,7 +3,7 @@ on:
   pull_request:
     paths:
       - "services/content_fallback/**"
-      - "deploy/wallhop-isolated/**"
+      - "ops/deploy/wallhop-isolated/**"
       - ".github/workflows/wallhop-isolated.yaml"
   workflow_dispatch:
 permissions:
@@ -20,7 +20,7 @@ jobs:
       - name: Test egress resolver and publisher SSRF boundary
         run: python -m unittest services.content_fallback.tests.test_egress_relay -v
       - name: Test independent topology invariants
-        run: python -m unittest discover -s deploy/wallhop-isolated -p "test_*.py" -v
+        run: python -m unittest discover -s ops/deploy/wallhop-isolated -p "test_*.py" -v
       - name: Validate exact standalone Compose expansion without publishing secrets
         env:
           WALLHOP_SIDECAR_IMAGE: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -32,10 +32,10 @@ jobs:
           WALLHOP_HAPROXY_CONFIG: "/tmp/synthetic-haproxy.cfg"
         run: |
           set -euo pipefail
-          docker compose -f deploy/wallhop-isolated/compose.yaml config --format json |
-            python deploy/wallhop-isolated/topology_guard.py
+          docker compose -f ops/deploy/wallhop-isolated/compose.yaml config --format json |
+            python ops/deploy/wallhop-isolated/topology_guard.py
       - name: Rehearse real Docker candidate with synthetic NPM111 and PR188
         timeout-minutes: 18
         run: |
           set -euo pipefail
-          bash deploy/wallhop-isolated/rehearse-npm111.sh
+          bash ops/deploy/wallhop-isolated/rehearse-npm111.sh

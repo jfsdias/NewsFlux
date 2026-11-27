@@ -1,4 +1,4 @@
-import { Button, Message, Modal, Select, Switch, Tooltip } from "@arco-design/web-react"
+import { Button, Message, Modal, Switch, Tooltip } from "@arco-design/web-react"
 import {
   IconDownload,
   IconInfoCircleFill,
@@ -28,12 +28,9 @@ import {
   SETTINGS_IMPORT_ERROR_CODES,
 } from "@/utils/settings-transfer"
 
-// English only for now; add a locale file and an entry here to offer another language.
-const languageOptions = [{ label: "English", value: "en-US" }]
-
 const General = () => {
-  const { checkForUpdates, language } = useStore(settingsState, {
-    keys: ["checkForUpdates", "language"],
+  const { checkForUpdates } = useStore(settingsState, {
+    keys: ["checkForUpdates"],
   })
   const { polyglot } = useStore(polyglotState)
   const { isBelowMedium } = useScreenWidth()
@@ -124,24 +121,7 @@ const General = () => {
 
   return (
     <>
-      <SettingSection title={polyglot.t("settings.section_language_startup")}>
-        <SettingItem
-          description={polyglot.t("settings.language_description")}
-          title={polyglot.t("settings.language_label")}
-        >
-          <Select
-            className="input-select"
-            value={language}
-            onChange={(value) => updateSettings({ language: value })}
-          >
-            {languageOptions.map(({ label, value }) => (
-              <Select.Option key={value} value={value}>
-                {label}
-              </Select.Option>
-            ))}
-          </Select>
-        </SettingItem>
-
+      <SettingSection title={polyglot.t("settings.section_startup")}>
         <SettingItem
           description={polyglot.t("settings.post_login_page_description")}
           title={polyglot.t("settings.post_login_page_label")}

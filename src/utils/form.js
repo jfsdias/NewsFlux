@@ -1,18 +1,18 @@
 export const validateAndFormatFormFields = (form) => {
-  // 获取当前表单所有字段的值
+  // Read the values of all current form fields
   const allFields = form.getFieldsValue()
   let isFormValid = true
 
-  // 遍历所有字段，去除非密码字段的前后空格，并检查是否所有必填字段都已填写
+  // Trim whitespace from every non-password field and check that all required fields are filled
   for (const [key, value] of Object.entries(allFields)) {
     if (key !== "password") {
       const trimmedValue = value?.trim()
-      form.setFieldValue(key, trimmedValue) // 更新去除空格后的值
+      form.setFieldValue(key, trimmedValue) // Store the trimmed value
       if (!trimmedValue) {
-        isFormValid = false // 如果去除空格后的必填字段为空，则表单不有效
+        isFormValid = false // A required field is empty after trimming, so the form is invalid
       }
     } else if (!value) {
-      isFormValid = false // 如果密码字段为空，则表单不有效
+      isFormValid = false // An empty password makes the form invalid
     }
   }
 

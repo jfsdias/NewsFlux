@@ -1,4 +1,4 @@
-export const E2E_SCENARIO_CONTRACT_VERSION = 21
+export const E2E_SCENARIO_CONTRACT_VERSION = 23
 
 // This reviewed inventory binds CI to the scenario IDs and currently approved outcome classes.
 // Additions, removals, or classification changes are intentional contract changes for review.
@@ -68,6 +68,9 @@ export const EXPECTED_SCENARIOS = [
   { id: "QA-001-mouse", state: "PASSED" },
   { id: "NF-E05-1", state: "PASSED" },
   { id: "NF-E05-2", state: "PASSED" },
+  { id: "NF-E05-3", state: "PASSED" },
+  { id: "NF-E05-4", state: "PASSED" },
+  { id: "NF-E05-5", state: "PASSED" },
   { id: "CARD-QUICK-ACTIONS-01-1", state: "PASSED" },
   { id: "CARD-QUICK-ACTIONS-01-2", state: "PASSED" },
   { id: "CARD-QUICK-ACTIONS-01-3", state: "PASSED" },
@@ -97,4 +100,18 @@ export const EXPECTED_SCENARIOS = [
   { id: "READER-RECOVERY-R2-4", state: "PASSED" },
   { id: "READER-RECOVERY-R2-5", state: "PASSED" },
   { id: "READER-RECOVERY-R2-6", state: "PASSED" },
+  { id: "NF-E01-DUP-1", state: "PASSED" },
+  { id: "NF-E01-DUP-2", state: "PASSED" },
+  { id: "NF-E01-DUP-3", state: "PASSED" },
+  { id: "NF-E01-DUP-4", state: "PASSED" },
+  { id: "NF-E01-DUP-5", state: "PASSED" },
+  { id: "NF-E01-DUP-6", state: "PASSED" },
+  { id: "NF-E01-DUP-7", state: "PASSED" },
+  { id: "NF-E01-DUP-8", state: "PASSED" },
+  { id: "NF-E01-DUP-9", state: "PASSED" },
+  { id: "NF-E01-DUP-10", state: "PASSED" },
+  { id: "NF-E01-DUP-11", state: "PASSED" },
+  { id: "NF-E01-DUP-12", state: "PASSED" },
+  { id: "NF-E01-DUP-13", state: "PASSED" },
+  { id: "NF-E01-HOME-1", state: "PASSED" },
 ]

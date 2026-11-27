@@ -7,8 +7,8 @@ force and fail-closed until this successor is reviewed, merged and deployed unde
 Owner decisions (2026-11-20, recorded by the PM in
 [PR271 comment 7047495122](https://github.com/jfsdias/NewsFlux/pull/271#issuecomment-7047495122)):
 
-- R2 "Chave do LiteLLM rege os modelos disponíveis."
-- R3 "LiteLLM controla custos. Não precisa ser controlado ou aparecer no NewsFlux."
+- R2 "The LiteLLM key governs the available models."
+- R3 "LiteLLM controls costs. It does not need to be controlled or appear in NewsFlux."
 
 ```
 LITELLM_MODEL_AUTHORITY=TRUE

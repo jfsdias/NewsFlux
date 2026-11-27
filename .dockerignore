@@ -30,6 +30,9 @@ logs
 docs
 images
 tests
+ops
+research
+archive
 
 # Keep local credentials and Python caches out of build contexts.
 .env

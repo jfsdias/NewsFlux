@@ -3,8 +3,8 @@ name: AI admin Caddy route isolated contract
 on:
   pull_request:
     paths:
-      - "deploy/article-intel-pilot/Caddyfile"
-      - "scripts/pilot-e2e/test-caddy-route.mjs"
+      - "ops/deploy/article-intel-pilot/Caddyfile"
+      - "tests/aux/pilot-e2e/test-caddy-route.mjs"
       - ".github/workflows/ai-admin-caddy-gates.yaml"
 
 permissions:
@@ -33,4 +33,4 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PILOT_CADDY_BINARY="$RUNNER_TEMP/newsflux-caddy" node scripts/pilot-e2e/test-caddy-route.mjs
+          PILOT_CADDY_BINARY="$RUNNER_TEMP/newsflux-caddy" node tests/aux/pilot-e2e/test-caddy-route.mjs

@@ -72,7 +72,7 @@ This is a reviewable procedure, not an executed installation script.
 
 ### Blueprint and import limitation
 
-The machine-readable blueprint is `../../scripts/tests/fixtures/limesurvey-ce-dummy-instrument-blueprint-01.json`. It references the existing field map and synthetic fixtures; it covers four synthetic sessions, two scenarios per session, two arms per scenario, independent arm ratings, per-scenario and overall preferences, omissions and explicit `CANNOTJUDGE`, consent, order and integrity receipts.
+The machine-readable blueprint is `../../research/personalization-pilot/tests/fixtures/limesurvey-ce-dummy-instrument-blueprint-01.json`. It references the existing field map and synthetic fixtures; it covers four synthetic sessions, two scenarios per session, two arms per scenario, independent arm ratings, per-scenario and overall preferences, omissions and explicit `CANNOTJUDGE`, consent, order and integrity receipts.
 
 This JSON is **not** a LimeSurvey import file. LimeSurvey's official survey-structure import uses `.lss` XML generated/exported by LimeSurvey (and the manual also documents other legacy/import formats). The current official materials do not make the NewsFlux mock field map itself an importable survey. Because no authorized 7.9.1 runtime exists here, this task does not hand-author an unvalidated `.lss` and call it ready.
 
@@ -190,9 +190,9 @@ Until the relevant authorization exists, no installer/package extraction/databas
 Existing synthetic contract gates:
 
 ```sh
-node --test scripts/personalization-pilot-dummy-rehearsal-01.test.js
-node --test scripts/limesurvey-ce-export-adapter-01.test.js
-node --test scripts/limesurvey-ce-dummy-instrument-blueprint-01.test.js
+node --test research/personalization-pilot/personalization-pilot-dummy-rehearsal-01.test.js
+node --test research/personalization-pilot/limesurvey-ce-export-adapter-01.test.js
+node --test research/personalization-pilot/limesurvey-ce-dummy-instrument-blueprint-01.test.js
 ```
 
 The first two tests remain the authoritative offline rehearsal and mock-export contract. The third checks that the blueprint maps exactly to the existing field map and four synthetic sessions; it does not emulate LimeSurvey.

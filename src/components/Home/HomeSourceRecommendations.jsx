@@ -24,7 +24,7 @@ const HomeSourceRecommendations = ({ entries, polyglot }) => {
       aria-label={polyglot.t("source_recommendations.title")}
       className={`home-intelligence home-source-recommendations${enabled ? "" : " home-intelligence-compact"}`}
     >
-      <h3>{polyglot.t("source_recommendations.title")}</h3>
+      <h3 className="home-tools-heading">{polyglot.t("source_recommendations.title")}</h3>
       <button
         aria-pressed={enabled}
         type="button"

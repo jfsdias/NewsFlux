@@ -511,9 +511,6 @@
     "recovery_cancel": "Cancel",
     "recovery_cancelled": "Recovery cancelled. The original text is shown."
   },
-  "deduplicate": {
-    "mark_as_read_error": "Failed to mark duplicate articles as read"
-  },
   "search": {
     "search": "Search",
     "syntax_help": "Search syntax help",
@@ -688,13 +685,11 @@
     "duplicate_hotkeys": "Duplicate hotkeys detected, please check your hotkeys settings",
     "duplicate_hotkeys_desktop_description": "Open ReactFlux on a larger screen to review and resolve shortcut conflicts.",
     "hotkeys_desktop_only": "Hotkey settings are available only on a larger screen.",
-    "section_language_startup": "Language and startup",
+    "section_startup": "Startup",
     "section_data_maintenance": "Data and maintenance",
     "section_article_list": "Article list",
     "section_read_status": "Read status",
     "section_content_interaction": "Content and interaction",
-    "language_label": "Language",
-    "language_description": "Choose the application language.",
     "post_login_page_label": "Page after login",
     "post_login_page_description": "Choose the page to open after logging in to this server account.",
     "post_login_page_option_home": "Home",
@@ -890,6 +885,7 @@
   },
   "home_page": {
     "section_highlights": "Highlights",
+    "tools": "Home tools",
     "section_recent": "Latest",
     "category_section_label": "Articles in %{category}",
     "personalization_info_label": "Why these stories?",

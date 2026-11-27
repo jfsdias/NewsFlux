@@ -15,6 +15,3 @@ export const updateCategory = async (id, newTitle, hidden = false) =>
     hide_globally: hidden,
     title: newTitle,
   })
-
-export const markCategoryAsRead = async (id) =>
-  apiClient.put(`/v1/categories/${id}/mark-all-as-read`)

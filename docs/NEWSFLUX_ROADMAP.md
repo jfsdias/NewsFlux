@@ -1,8 +1,8 @@
 # NewsFlux Roadmap
 
-- **Status:** operational snapshot reconciled on 2026-11-08 against GitHub `main` `e949fdd5fd1975cd3437d3981232b0dbe18a74e5`, after PR #193. Section 24 is retained as a historical snapshot.
+- **Status:** canonical state reconciled on 2026-11-26 against `main` `664e404197e1eb9d9aeb52f921690a95b6559190` (post-PR #321). The owner-approved Sprint 0–8+ queue below is the current planning order. The 2026-11-08 snapshot (post-PR #193) is historical. Section 24 is retained as a historical snapshot. This reconciliation supersedes the planning content of PR #291 and the operational content of PR #290; neither PR is closed or merged by this change.
 - **Created:** 2026-10-15.
-- **Last reconciled:** 2026-11-08.
+- **Last reconciled:** 2026-11-26 (post-PR #321).
 - **Reconciled against (historical, post-PR #129):** GitHub `main` at `de138bc961d665005fe3322082034963bf263b16`. The production baseline remains `dc4154d7729204c65c8a1abaa50f9bfc9f92be64` (image `newsflux-local:dc4154d77292`); main/production SHA parity is **NO**, while there is no application runtime delta since production and PR #129 requires no deployment. Open PR: #130 (documentation reconciliation, draft). Active track: STORY-01B-D (human labeling gate).
 - **Previously reconciled against (historical, post-PR #128):** GitHub `main` at `dc4154d7729204c65c8a1abaa50f9bfc9f92be64`; production at `dc4154d7729204c65c8a1abaa50f9bfc9f92be64`. The earlier post-PR #120, post-PR #108 and post-PR #96 snapshots and prior states are preserved below; see Sections 19–22.
 - **Purpose:** preserve completed work, accepted findings, sequencing, architecture/product gates, upstream baseline, and the next recommended action without turning the roadmap into implementation authorization.
@@ -14,9 +14,143 @@ For present execution status, current PRs and audit outcomes, the current canoni
 
 No roadmap item may bypass project governance: one identifiable purpose per PR; no merge without explicit user authorization; no blind upstream sync; upstream sync, redesign and functional changes stay isolated; incidental findings are reported, classified and routed to backlog; no new persistent NewsFlux state without an explicit architecture decision; and no incidental scope expansion.
 
-## Current canonical state (verified 2026-11-08; post-PR #193)
+## Current canonical state (verified 2026-11-26; post-PR #321)
 
-This live snapshot supersedes Section 24 for current-state questions. Section 24 remains intact as the 2026-11-06 historical record.
+This live snapshot supersedes the 2026-11-08 snapshot below and Section 24 for current-state questions. Section 24 remains intact as the 2026-11-06 historical record.
+
+**Verification method:** `main` was inspected in the local clone at `664e4041` (321 commits after `e949fdd5`, the 2026-11-08 base). Merge and squash PR numbers are taken from commit subjects in that history. Open and closed PR states listed below were verified on GitHub on 2026-11-26 by the coordinator, after the documentation session could not reach the API.
+
+| Field                      | Verified state                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CURRENT_MAIN_SHA`         | `664e404197e1eb9d9aeb52f921690a95b6559190`                                                                                                                                                                                                                                                                                                                                                                                       |
+| `LAST_MERGED_PR`           | #321, squash commit `664e404197e1eb9d9aeb52f921690a95b6559190` (`NF-QA04: DOI presentation, request freshness and keyboard QA`)                                                                                                                                                                                                                                                                                                  |
+| `OPEN_PRS`                 | Verified on GitHub 2026-11-26: #318 (Draft), #313 (Draft), #296 (Draft), #295 (Draft), #294 (Draft), #293, #292 (Draft), #291 (Draft), #290, #260 (Draft). No longer open: #188 and #134–#140. Dispositions are planned, not yet executed (see below).                                                                                                                                                                           |
+| `CURRENT_PRODUCT_BASELINE` | Source baseline `main` `664e404197e1eb9d9aeb52f921690a95b6559190` (local clone). Not a runtime assertion.                                                                                                                                                                                                                                                                                                                        |
+| `CURRENT_QA_BASELINE`      | Unit tests 796/796 PASS and production build PASS on a clean `main` checkout (2026-11-26). Integration candidate `qd/integration` on `fa56a12b`: unit tests src 803/803, scripts 258/258, ops 2/2, research 58/58; ESLint 0 errors; production build OK; knip:check PASS (27 accepted findings); canonical Playwright E2E 111/111 PASS, contract v23. Earlier E2E 94/94 ×3 for PRs #320 and #321 is REPORTED and was not re-run. |
+| `PRODUCTION`               | OPERATOR_REPORTED: Reader deployment at `664e404197e1eb9d9aeb52f921690a95b6559190` on 2026-11-26. Live parity NOT_VERIFIED.                                                                                                                                                                                                                                                                                                      |
+| `PRODUCTION_SHA_VERIFIED`  | `UNKNOWN_IN_THIS_AUDIT`                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `MAIN_PRODUCTION_PARITY`   | `NOT_VERIFIED`                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `PHYSICAL_DEVICE_SMOKE`    | EVIDENCE_GAP: physical device smoke pending. Simulated device smoke is recorded in the S0 record below and is not physical evidence.                                                                                                                                                                                                                                                                                             |
+| `S0_CHECKPOINT`            | COMPLETED: closed with simulated smoke by owner instruction on 2026-11-26; physical-device smoke remains an EVIDENCE_GAP backlog item (NF-0005).                                                                                                                                                                                                                                                                                 |
+| `S1_CHECKPOINT`            | COMPLETED: NF-E01 evidence: 14 E2E scenarios (`NF-E01-DUP-1..13`, `NF-E01-HOME-1`), 3 store tests, and removal of the `markDuplicatesAsRead` mutation path.                                                                                                                                                                                                                                                                      |
+| `NEXT_RECOMMENDED_TRACK`   | Sprint 3 polish (NF-0301, PLANNED), then the candidates from the 2026-11-26 review in the planning queue; physical-device smoke stays in the backlog as EVIDENCE_GAP                                                                                                                                                                                                                                                             |
+| `NEXT_AUTHORIZED_ACTION`   | Review of this documentation update and the coordinator's planned PR dispositions only. No merge, PR closure, deployment, provider activation or new implementation is authorized here.                                                                                                                                                                                                                                          |
+
+Quality and product context: [2026-11-26 Quality & Product Design Review](./reviews/2026-11-26-quality-product-review.md), including its execution addendum. Simulated device smoke: [S0 simulated smoke record](./qa/S0_SIMULATED_SMOKE_2026-11-26.md).
+
+**Integration candidate (2026-11-26):** branch `qd/integration` at `b2633a99`. It is not merged to `main` and is not a PR. It merges the workstreams `qd/docs-reconcile` (canonical state to post-#321 and the S0–S8 queue), `qd/english-only`, `qd/home-vitruvian`, `qd/dedup-295-validation`, `qd/optimize` and `qd/repo-separation`, plus coordinator commits (E2E contract v23, removal of the unused `markDuplicatesAsRead` path, removal of the upstream-only translator workflow, a module-private Home tools panel id, and the simulated device-matrix harness). Gates were run on `fa56a12b`, as listed in the table above. Any merge requires explicit owner GO.
+
+**Checkpoints:** S0 COMPLETED (closed with simulated smoke by owner instruction on 2026-11-26). S1 COMPLETED with NF-E01 evidence (14 E2E scenarios, 3 store tests, `markDuplicatesAsRead` removed).
+
+**Repository layout (2026-11-26):** product, ops, research, auxiliary tests and archive areas are now separated. See [`REPOSITORY_LAYOUT.md`](../REPOSITORY_LAYOUT.md). Historical sections keep their original paths; moved paths are annotated where they occur.
+
+**Planned PR dispositions (planned at the time of writing; not yet executed by the coordinator):** close #295 as superseded by #299 plus the integration validation; close #292 and #296 as superseded by `main` (summary consent and session hardening already on `main` via #300 commits `53167910`, `ac3f5a4c`, `c4a23cd1`); close #293 as superseded by #297 (its six files are byte-identical on `main`); keep #294 open pending the owner decision, since it would revert the owner's 2026-11-21 decision to drop runtime evidence expiry; keep #260 open and parked (HOLD_ARCHITECTURE).
+
+### Delivered since PR #193
+
+Grouped by epic or theme. PR numbers are verified from commit subjects in local history; items marked otherwise are unverified.
+
+- **Article Intelligence, Summary and AI settings:** #230, #231, #232, #233 (on-demand Summary pilot, opt-in S5 fallback, inference supervision); #240, #241 (approved model catalog, summary profiles, settings, model selector, WallHop consent); #250 (settings UX); #261, #263, #264, #267, #268 (AI Settings integration, admin LiteLLM connection and model policy, scoped ingress, supervision deadline, governed admin allowlist procedure).
+- **WallHop external open (dark by default):** Path A explicit external open merged in `c0fabd26`, whose subject names #257 and #277. PR #291 records #277 as closed without merge, so this discrepancy is unresolved. Path B remains OFF by design and on HOLD. #251 to #256 added the disabled parallel sidecar, archived the supervised dark canary, and guarded the exact-SHA dark deploy and teardown.
+- **Release and operations governance:** #242 (executable governed release tool), #272 to #274 and #279 to #285 (candidate run, D1 catalog and key authority, preflight, release mount replacement, model output extraction, Reader post-origin release), #289 (retired phase workflows), #297 (retired-CI reconciliation).
+- **NF-E00 Foundation closeout:** #286 (model selector), #287 (English-only interface), #288 (Summary automatic-behavior and evidence-renewal fixes), #298 and #300 (Summary follow-ups).
+- **NF-E01 duplicate integrity (#299):** merged; Sprint 1 residual validation COMPLETED (see the S1 checkpoint below).
+- **NF-E02 Smart Views MVP (#302):** merged; account-scoped local draft. Storage design is recorded in [`SMART_VIEWS_STORAGE.md`](./SMART_VIEWS_STORAGE.md).
+- **NF-E03 reading continuity (#303):** merged; account-scoped continuity. Storage design is recorded in [`READING_CONTINUITY_STORAGE.md`](./READING_CONTINUITY_STORAGE.md).
+- **NF-E05 editorial intelligence (#301):** partially delivered: opt-in Home editorial tools, reversible category preferences, conservative story grouping, session-bounded context and briefing diversification. Essential-of-Today acceptance is not verified.
+- **Feed health and source review:** #305 (NF-0701 feed health dashboard), #306 (source review in the loaded Home sample; its commit is labeled NF-0702, but the queue defines NF-0702 as a telemetry-gated relevance review, so the scopes differ), #307 (Reader header breakpoint race).
+- **Discovery and feed suggestions:** #308 (opt-in local feed suggestions), #309 (list previews, editorial review, feed table), #310 (Discovery V2 opt-in Home source recommendations), #314 (Discovery V3 curated source catalog).
+- **Home discovery polish and QA:** #311 (NF-QA03), #317 (F07 stale-search assertion), #320 (Add Feed dialog containment and PWA activation retry), #321 (NF-QA04 DOI presentation, request freshness and keyboard QA).
+- **PWA foreground updates:** #312, squash commit `22ffa6b7` (`NF-PWA-R1: check for updates when the app returns to foreground`), verified on GitHub 2026-11-26.
+- **Fetch content presentation and open-access DOI:** #315 (explicit DOI bibliographic identity), #316 (editorial caption line breaks), #321.
+- **Optional optimized reading:** #319 (NF-READABILITY-R3), an optional presentation.
+- **Personalization V2 evaluation:** #190 merged as an offline evaluation only. It is not a V2 adoption or ranking change.
+- **Interface language:** #287 English-only interface. The owner reconfirmed this on 2026-11-26 (see the queue below).
+
+### Boundaries
+
+Miniflux remains the source of truth for feeds, categories, read/unread and starred state. All/Unread remain chronological. Personalization V2 remains on HOLD. Nothing in this section authorizes merge, deployment, provider activation or persistent-state changes.
+
+---
+
+## Approved product direction and sprint queue (2026-11-21; status reconciled 2026-11-26)
+
+Owner endorsed the Red Team / RSS benchmark audit and requested its conversion into epics and sprints. This queue supersedes the older **recommended execution order**, not the recorded historical evidence or the standing architecture and production gates. Source reconciled at `664e404197e1eb9d9aeb52f921690a95b6559190` (post-#321). Live production SHA, flags and parity remain unverified. Planning approval is not implementation, merge, deployment, provider activation or persistent-state authorization.
+
+**Execution plan:** [epics, dependencies, acceptance gates and baseline](../tasks/plan.md). **Task register:** [sprint backlog](../tasks/todo.md). Both files are carried from PR #291 with statuses reconciled to `main`.
+
+| Sprint        | Epic                               | Priority            | Delivery                                                                                                    | Status (2026-11-26)                                                                                                                                                              |
+| ------------- | ---------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0             | NF-E00 Foundation closeout         | P0                  | Close or disposition existing Summary, CI and local-consent work; release identity and focused device smoke | COMPLETED: closed with simulated smoke by owner instruction on 2026-11-26; #288 and #289 merged; #260 HOLD_ARCHITECTURE; physical-device smoke is EVIDENCE_GAP backlog (NF-0005) |
+| 1             | NF-E01 Dedup integrity             | P0                  | Remove implicit read-state mutations; reversible duplicate presentation                                     | COMPLETED: delivered by #299 with residual validation (14 E2E scenarios, 3 store tests, `markDuplicatesAsRead` removed)                                                          |
+| 2             | NF-E02 Smart Views MVP             | P1                  | Named reusable queries, supported filters, explicit storage decision                                        | COMPLETED: MVP delivered by #302                                                                                                                                                 |
+| 3             | NF-E02 / NF-E03 Reading continuity | P1                  | Smart View polish, Reader and list resume; account-scoped local storage gate                                | IN_PROGRESS: continuity delivered by #303; Smart View polish not verified                                                                                                        |
+| 3 conditional | NF-E04 Interface locale            | P1 / HOLD           | pt-BR only after reconfirming the explicit English-only decision in #287                                    | SUPERSEDED: owner reconfirmed English-only on 2026-11-26; pt-BR closed                                                                                                           |
+| 4             | NF-E05 Story Groups                | P1                  | Conservative Home-only related coverage; reuse Story research                                               | IN_PROGRESS: partially delivered by #301                                                                                                                                         |
+| 5             | NF-E05 Focus                       | P1                  | Explicit reversible preference signals and quiet-source diversity                                           | IN_PROGRESS: partially delivered by #301; quiet-source diversity not verified                                                                                                    |
+| 6             | NF-E05 Briefing                    | P1                  | Deterministic Essential of Today; optional authorized IA, never required                                    | IN_PROGRESS: partially delivered by #301; Essential of Today not verified                                                                                                        |
+| 7             | NF-E06 Feed quality                | P2                  | Provider-backed quality and health diagnostics                                                              | IN_PROGRESS: feed health (#305) and loaded-sample source review (#306) merged; telemetry-gated relevance review PLANNED                                                          |
+| 8+            | NF-E07 Advanced workflows          | P2/P3 / conditional | Offline, rules, integrations, newsletters, annotations and TTS after evidence and architecture decisions    | HOLD_ARCHITECTURE: no item started                                                                                                                                               |
+
+**Next recommended gate:** Sprint 0 and Sprint 1 are COMPLETED. Next: NF-0301 Smart View polish (PLANNED) and the candidates from the 2026-11-26 review listed below, each as a separate scoped PR. No merge, production promotion or new implementation is implied by this roadmap update. Physical-device smoke remains an EVIDENCE_GAP.
+
+**Invariants:** Miniflux authority; chronological All/Unread; no implicit read mutations; explicit, explainable Home personalization; reuse-first; scoped PRs; independent upstream, design and function lanes; no new persistent state without architecture approval; WallHop A/B independent HOLD and protected NPM111/PR188. Suggested one-week relative timeboxes, with no calendar commitment. Advance on material criteria, avoiding non-blocking review loops.
+
+**Locale reconciliation:** #287 records the owner English-only policy. On 2026-11-26 the owner reconfirmed that the interface stays English-only, so NF-E04 pt-BR locale is SUPERSEDED/CLOSED by owner decision. Summary-language choice is independent of interface locale.
+
+### Sprint exit gates and dependencies
+
+| Sprint                            | Outcome                                       | Material exit gate                                                                                                                                                                                                             | Dependency                                              |
+| --------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
+| 0 Foundation                      | Existing release fit for use                  | #288 consent/cost/automatic behavior independently reviewed; #289 preserves useful QA; #260 separately dispositioned; exact candidate SHA and release smoke plan; current state reconciled; real-device checks when authorized | Existing PRs; owner GO for any merge or deploy          |
+| 1 Dedup                           | No implicit Mark Read from display filtering  | Zero unauthorized read/star changes across list reload, page append, filters, duplicate and starred cases; visible reversible groups; counts correct; chronology remains                                                       | 0 scoped baseline                                       |
+| 2 Smart Views MVP                 | Open a named reusable query                   | Search semantics unchanged; account/storage decision approved; CRUD and clear empty/error states; no canonical mutations                                                                                                       | 1; storage gate                                         |
+| 3 Continuity / Smart Views polish | Reopen view or article without losing context | Restore list anchor and article position safely; session/account isolation; keyboard/touch navigation; locale separately gated                                                                                                 | 2; storage decision                                     |
+| 4 Story Groups                    | Group related Home coverage                   | Deterministic, expand every source, false-positive/false-negative fixture checks, no implicit read mutation                                                                                                                    | 1; existing research evaluation                         |
+| 5 Focus                           | Explicit preference controls                  | Explainable and reversible; quiet-source diversity; comparison against V1; no All/Unread ranking                                                                                                                               | 4; preference storage decision                          |
+| 6 Briefing                        | Essential-of-today view                       | Deterministic and useful without IA; optional authorized summary only; bounded source/time scope; no background inference                                                                                                      | 4–5                                                     |
+| 7 Feed quality                    | Actionable health review                      | Provider-backed facts with unavailable data labeled; no silent unsubscribe; no intrusive tracking                                                                                                                              | 6; analytics gate if frequency or usage state is needed |
+| 8+ Advanced                       | Evidence-driven expansion                     | Individual product/architecture decision and independent gates for each feature                                                                                                                                                | 7; not automatically scheduled                          |
+
+### Sprint 0 live reconciliation
+
+At `664e404`: #286 (model selector), #287 (English-only interface), #288 (Summary automatic-behavior and evidence-renewal changes) and #289 (retired phase workflows) are merged in local history. #260 local-only consent has no merge record and its disposition is EVIDENCE_GAP. #288 automatic summaries and the modified evidence freshness need the separate consent and cost verification from the Sprint 0 gate; this is not a design rejection or provider approval. #289 keeps archived local gates reproducible; any future WallHop activation requires requalification. Release history (#270–#285) is not evidence that the latest `main` is deployed. #190 merged as an offline evaluation, not a V2 launch. Closed PRs are not reactivated by this roadmap.
+
+### Open decisions
+
+- NF-E02/E03/E05: exact account-scoped local preference semantics, storage lifecycle and portability; cross-device sync later.
+- NF-E04: the owner reconfirmed English-only on 2026-11-26. pt-BR is closed unless the owner reopens it. UI locale is independent of summary language.
+- NF-E05: evaluate existing V1 and Story code before adopting experimental functionality; reject silent ranking and auto-read.
+- NF-E07: demand and architecture proof before offline cache, persistent notes or automatic mutations.
+- WallHop HOLD remains intact; provider/source policy and real-device gate are independent from Summary priority.
+
+### Next candidates from the 2026-11-26 review
+
+Source: [2026-11-26 Quality & Product Design Review](./reviews/2026-11-26-quality-product-review.md). All items are PLANNED unless marked otherwise.
+
+- Physical-device smoke on iPhone Duo and Galaxy Z Fold 8, with measured viewports (EVIDENCE_GAP).
+- Verify the two WebKit hypotheses in real iOS Safari with Web Inspector: the intermittent access-control page error, and compact bottom-navigation blur (see the S0 record).
+- List age filter and content-language filter as Smart View predicates, with no new persistent state beyond Smart Views.
+- Documented keyboard-shortcut help.
+- Publish the duplicate-grouping rule and its opt-out in Settings help.
+- Offline reading with full text and offline search (HOLD_ARCHITECTURE: needs a storage decision).
+- Tags, highlights and notes (HOLD_ARCHITECTURE).
+- Open product question (HOLD_PRODUCT): with the Home tools panel collapsed by default, an enabled editorial briefing is also hidden until the panel is opened.
+- Competitor claims from the review remain UNVERIFIED (external sources were unreachable). OPML import/export, mark-read-on-scroll, age-based mark-as-read and save-to-integration already exist in NewsFlux and are not gaps.
+
+---
+
+## Historical operational report (2026-11-21, post-#285; reconciled from #290)
+
+- Source evidence: PR #290 (operational snapshot), reported production SHA `08929008e726273695e9e002df6cae41c3f4cda8`, release PREPARE/PREFLIGHT/BUILD/PROMOTE/SMOKE reported PASS. This is owner-reported evidence, not a current direct runtime verification. Main subsequently advanced through #286 to #321; parity is unverified.
+- D1 enabled and 16-model catalog, real Reader Summary in Safari, WallHop path A explicit external link reported verified by owner. Preserve existing path A behavior; no new activation is authorized. Path B remains OFF by design; provider policy unresolved. PWA-03A2C remains NOT_VERIFIED.
+- The 2026-11-21 owner-approved S0–S8+ queue above is the current planning order. #260 local-only consent remains a separately gated candidate; Mac mini model integration is not implicitly authorized by this roadmap.
+
+---
+
+## Historical canonical state (verified 2026-11-08; post-PR #193)
+
+This snapshot was the live canonical state until the 2026-11-26 reconciliation above. It is now superseded for current-state questions. Section 24 remains intact as the 2026-11-06 historical record.
 
 | Field                      | Verified state                                                                                                                     |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
@@ -1744,7 +1878,7 @@ The active track is `STORY-01B-D` (`GOLD DATASET`, `IN_PROGRESS`), which is auth
 - **STORY-01B-R (Completed in PR #129):**
   - Audited NewsBlur reference (`samuelclay/NewsBlur` @ `d7c61b5b3ed7a991a2385b1991449085029711d6`), analyzing two-tier clustering, Redis storage, river view folding, and transitive chaining failure modes in `docs/research/STORY01B_NEWSBLUR_REFERENCE.md`.
   - Formalized frozen Home-200 corpus (`c12842f11c2bb3e941f182ed946e6a98ae6c70bb69ea8e7908285506af8a2ed8` via `HISTORICAL_ARTIFACT_DECLARATION`, byte SHA256 `0dbd48cdb37063f3a1683f7ef8fc9a2582196a2e8d42c34485b85e12242178f0`, 200 articles, 18,953 cross-feed pairs), pairwise feature schema (`story01b-pair-v1`), 4-class label taxonomy (`SAME_EVENT`, `RELATED_TOPIC`, `DIFFERENT_EVENT`, `UNCERTAIN`), asymmetric loss policy (`FALSE_MERGE_COST > FALSE_SPLIT_COST`), and rejection of unrestricted union-find (`UNRESTRICTED_UNION_FIND_FOR_FINAL_CLUSTERING=REJECTED`) in `docs/research/STORY01B_CORPUS_AND_LABEL_CONTRACT.md`. Storage governance: `STORY_IDENTITY_PRODUCTION_STORAGE=HOLD_ARCHITECTURE_DECISION`, `CLUSTER_WIDE_MARK_READ=HOLD_PRODUCT_DECISION`, `NEW_PRODUCTION_PERSISTENT_STATE_AUTHORIZED=NO`.
-  - Implemented reproducible offline research harness in `scripts/research/story-identity-v1/` (`harness.py`, `test_harness.py`) validating corpus integrity, Qwen/Mistral embeddings, candidate universe, mathematical semantic vector cosine parity (`PAIR_SCORE_PARITY_GATE=PASS`), transitive chain candidate detection (`TRANSITIVE_CHAIN_CANDIDATE_COUNT=12`), deterministic feature extraction, and 10-strata empirical sampling (`RANDOM_SEED=20261025`, 141 candidate pairs).
+  - Implemented reproducible offline research harness in `scripts/research/story-identity-v1/` (moved to `research/` on 2026-11-26) (`harness.py`, `test_harness.py`) validating corpus integrity, Qwen/Mistral embeddings, candidate universe, mathematical semantic vector cosine parity (`PAIR_SCORE_PARITY_GATE=PASS`), transitive chain candidate detection (`TRANSITIVE_CHAIN_CANDIDATE_COUNT=12`), deterministic feature extraction, and 10-strata empirical sampling (`RANDOM_SEED=20261025`, 141 candidate pairs).
 - **STORY-01B-D (Completed):**
   - Completed model-blinded human labeling, boundary adjudication, and diversity hardening.
   - Frozen canonical gold dataset `story01b-gold-v1` (Byte SHA256: `150db715c499835c5ec4d7b2d4d0ea5875913f5c4717aa30258af4dfed640b2b`, 156 deduplicated pairs) outside git in read-only storage (`0444`).

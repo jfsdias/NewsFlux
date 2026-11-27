@@ -89,7 +89,7 @@
 - src/components/Article/ArticleList.jsx — replace its inline load-more observer with the shared sentinel without changing ordinary list behavior.
 - src/hooks/useEntryActions.js — publish status mutation intent/settlement events from the existing optimistic mutation path.
 - src/components/Article/SearchAndSortBar.jsx — add search-only presentation and route confirmed Home searches to /all.
-- src/components/Settings/General.jsx — relabel the existing preference as “Página após login” while retaining its setting control.
+- src/components/Settings/General.jsx — relabel the existing preference as “Page after login” while retaining its setting control.
 - src/components/Settings/HomePagePicker.jsx — add Home as a destination and keep existing view/feed/category targets available.
 - src/hooks/useHomePage.js — expose Home/post-login label and path through the existing settings hook.
 - src/store/homePageState.js — resolve the Home default and continue account-scoped preference/catalog validation.
@@ -272,7 +272,7 @@ Expected: missing Home target/path/post-login helper and migration assertions fa
 
 - [ ] **Step 3: Implement the minimum behavior**
 
-Add home to the per-identity view target vocabulary and default; preserve the legacy homePage schema only for migration/import. Use the existing persisted homePages setting with a one-time marker; map the legacy default All value to Home and retain saved non-default destinations. After migration, the picker may store All as a deliberate login destination. In Login, use explicit location.state.from first; otherwise resolve the target for the identity returned by the successful login. Relabel the setting “Página após login” and provide localized Home/All labels in all shipped locales.
+Add home to the per-identity view target vocabulary and default; preserve the legacy homePage schema only for migration/import. Use the existing persisted homePages setting with a one-time marker; map the legacy default All value to Home and retain saved non-default destinations. After migration, the picker may store All as a deliberate login destination. In Login, use explicit location.state.from first; otherwise resolve the target for the identity returned by the successful login. Relabel the setting “Page after login” and provide localized Home/All labels in all shipped locales.
 
 - [ ] **Step 4: Re-run targeted test**
 

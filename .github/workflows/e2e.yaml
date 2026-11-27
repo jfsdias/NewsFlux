@@ -117,7 +117,7 @@ jobs:
         run: pnpm build
 
       - name: Run focused UX-REACH scenarios
-        run: pnpm exec playwright test --config=playwright.ux-reach-01.config.js
+        run: pnpm exec playwright test --config=tests/aux/playwright/playwright.ux-reach-01.config.js
 
       - name: Upload UX-REACH diagnostics
         if: ${{ failure() }}
@@ -171,7 +171,7 @@ jobs:
         run: pnpm build
 
       - name: Run Article Intelligence Reader scenarios
-        run: pnpm exec playwright test --config=playwright.article-intelligence.config.js
+        run: pnpm exec playwright test --config=tests/aux/playwright/playwright.article-intelligence.config.js
 
       - name: Build Reader with explicit AI enablement
         env:
@@ -181,7 +181,7 @@ jobs:
       - name: Run AI-enabled Reader scenarios
         env:
           VITE_ARTICLE_INTELLIGENCE_ENABLED: "1"
-        run: pnpm exec playwright test --config=playwright.article-intelligence.config.js
+        run: pnpm exec playwright test --config=tests/aux/playwright/playwright.article-intelligence.config.js
 
       - name: Build Reader with recovery for cross-feature scenarios
         env:
@@ -193,7 +193,7 @@ jobs:
         env:
           VITE_ARTICLE_INTELLIGENCE_ENABLED: "1"
           VITE_CONTENT_FALLBACK_READER_BASE_PATH: "/api/content-fallback"
-        run: pnpm exec playwright test --config=playwright.article-intelligence.config.js --grep AI_RECOVERY_CROSS
+        run: pnpm exec playwright test --config=tests/aux/playwright/playwright.article-intelligence.config.js --grep AI_RECOVERY_CROSS
 
       - name: Upload Article Intelligence Reader diagnostics
         if: ${{ failure() }}

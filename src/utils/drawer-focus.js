@@ -1,4 +1,4 @@
-export const MAX_DRAWER_FOCUS_RETRIES = 5
+const MAX_DRAWER_FOCUS_RETRIES = 5
 
 /**
  * Checks whether an element can legally receive keyboard focus according to DOM connectivity,
