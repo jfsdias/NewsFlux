@@ -1,5 +1,6 @@
 import { persistentAtom } from "@nanostores/persistent"
 
+import { activeSmartViewState } from "@/store/smartViewsState"
 import { withoutAutomaticSummaryConsent } from "@/utils/article-summary-consent"
 import { getBrowserLanguage } from "@/utils/locales"
 import { selectStore, shallowEqual } from "@/utils/nanostores"
@@ -12,8 +13,15 @@ import {
 
 const defaultSettings = createDefaultSettings(getBrowserLanguage())
 
+// An active Smart View applies its status/sort in memory only. Anything that persists or exports
+// settings must see the user's own preferences, never the view's.
+export const withoutActiveSmartView = (settings) => ({
+  ...settings,
+  ...activeSmartViewState.get()?.baseline,
+})
+
 export const settingsState = persistentAtom("settings", defaultSettings, {
-  encode: (settings) => encodeSettings(settings, defaultSettings),
+  encode: (settings) => encodeSettings(withoutActiveSmartView(settings), defaultSettings),
   decode: (storedSettings) => decodeSettings(storedSettings, defaultSettings),
 })
 

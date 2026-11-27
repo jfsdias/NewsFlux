@@ -2,6 +2,7 @@
   display: flex;
   position: sticky;
   top: 0;
+  flex-wrap: wrap;
   align-items: center;
   z-index: 2;
   background-color: var(--app-shell-background);
@@ -459,4 +460,75 @@
     content: "";
     pointer-events: auto;
   }
+}
+
+.active-smart-view {
+  display: flex;
+  flex: 1 0 100%;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 12px 0;
+  border-top: 1px solid var(--nf-separator-subtle, var(--color-border-2));
+  padding: 8px 0 0;
+  min-width: 0;
+}
+
+.active-smart-view__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.active-smart-view__icon {
+  flex: 0 0 auto;
+  color: var(--nf-accent, rgb(var(--primary-6)));
+}
+
+.active-smart-view__eyebrow {
+  flex: 0 0 auto;
+  color: var(--nf-text-secondary, var(--color-text-2));
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.active-smart-view__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--nf-text-primary, var(--color-text-1));
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.active-smart-view .active-smart-view__leave.arco-btn {
+  flex: 0 0 auto;
+  min-width: 44px;
+  min-height: 36px;
+  color: var(--nf-accent, rgb(var(--primary-6)));
+}
+
+.active-smart-view__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0 0 4px;
+  list-style: none;
+}
+
+.active-smart-view__chip {
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--nf-accent-border, var(--color-border-2));
+  border-radius: 999px;
+  background: var(--nf-accent-surface, var(--color-fill-2));
+  padding: 2px 10px;
+  color: var(--nf-text-primary, var(--color-text-1));
+  font-size: 12px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

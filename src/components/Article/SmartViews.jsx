@@ -5,14 +5,11 @@ import { useStore } from "@nanostores/react"
 import { useState } from "react"
 import { useLocation, useNavigate } from "react-router"
 
-import {
-  catalogCategoriesState,
-  catalogFeedsState,
-  getDataSessionRevision,
-} from "@/store/dataState"
+import { catalogCategoriesState, catalogFeedsState } from "@/store/dataState"
 import { homeIdentityState } from "@/store/homePageState"
 import { settingsState } from "@/store/settingsState"
-import { pendingSmartViewState, smartViewsState, updateSmartViews } from "@/store/smartViewsState"
+import { requestSmartViewOpen } from "@/store/smartViewActions"
+import { smartViewsState, updateSmartViews } from "@/store/smartViewsState"
 import { downloadFile } from "@/utils/file"
 import { getHomeIdentityKey } from "@/utils/home-page"
 import {
@@ -21,8 +18,9 @@ import {
   getSmartViews,
   moveSmartView,
   normalizeSmartViewDate,
+  resolveSmartViewName,
   sanitizeSmartView,
-  smartViewPath,
+  suggestSmartViewName,
 } from "@/utils/smart-views"
 
 const SmartViews = ({ source, sourceId, query, filterDate, onClose, onOpenView }) => {
@@ -40,42 +38,55 @@ const SmartViews = ({ source, sourceId, query, filterDate, onClose, onOpenView }
   const sourceName = (view) => {
     if (view.source === "feed") {
       return (
-        feeds.find((item) => Number(item.id) === view.sourceId)?.title ??
+        feeds.find((item) => Number(item.id) === Number(view.sourceId))?.title ??
         `Unavailable feed ${view.sourceId}`
       )
     }
     if (view.source === "category") {
       return (
-        categories.find((item) => Number(item.id) === view.sourceId)?.title ??
+        categories.find((item) => Number(item.id) === Number(view.sourceId))?.title ??
         `Unavailable category ${view.sourceId}`
       )
     }
     return null
   }
+  const draftView = (viewName, id) => ({
+    id,
+    name: viewName,
+    query,
+    source,
+    sourceId,
+    filterDate: normalizeSmartViewDate(filterDate),
+    showStatus: settings.showStatus,
+    orderBy: settings.orderBy,
+    orderDirection: settings.orderDirection,
+  })
+  const names = views.map((view) => view.name)
+  // While a view is active the list holds its own status/sort, which is what a save captures.
+  const suggestion = query.trim()
+    ? suggestSmartViewName(draftView("x", "draft"), sourceName(draftView("x", "draft")), names)
+    : ""
   const save = () => {
     let sequence = 1
     while (views.some((view) => view.id === `view-${sequence}`)) {
       sequence += 1
     }
-    const view = sanitizeSmartView({
-      id: `view-${sequence}`,
-      name,
-      query,
-      source,
-      sourceId,
-      filterDate: normalizeSmartViewDate(filterDate),
-      showStatus: settings.showStatus,
-      orderBy: settings.orderBy,
-      orderDirection: settings.orderDirection,
-    })
+    const id = `view-${sequence}`
+    const candidate = draftView("x", id)
+    const resolved = resolveSmartViewName(name, candidate, sourceName(candidate), names)
+    const view = sanitizeSmartView({ ...candidate, name: resolved.name })
     if (!view) {
-      setMessage("Enter a name and search query to save this view.")
+      setMessage("Enter a search query to save this view.")
       return
     }
     try {
       updateSmartViews(key, (current) => [...current, view])
       setName("")
-      setMessage("View saved on this browser.")
+      setMessage(
+        resolved.generated
+          ? `View saved on this browser. Named \u201C${view.name}\u201D.`
+          : "View saved on this browser.",
+      )
     } catch {
       setMessage("Could not save the view on this browser.")
     }
@@ -93,20 +104,7 @@ const SmartViews = ({ source, sourceId, query, filterDate, onClose, onOpenView }
       setMessage("This feed or category is unavailable. The saved view was not opened.")
       return
     }
-    const targetPath = smartViewPath(view)
-    const pending = {
-      key,
-      view,
-      targetPath,
-      originPath: location.pathname,
-      sessionRevision: getDataSessionRevision(),
-    }
-    pendingSmartViewState.set(pending)
-    globalThis.setTimeout(() => {
-      if (pendingSmartViewState.get() === pending) {
-        pendingSmartViewState.set(null)
-      }
-    }, 10_000)
+    const targetPath = requestSmartViewOpen({ key, view, originPath: location.pathname })
     onOpenView()
     onClose()
     navigate(targetPath)
@@ -127,7 +125,8 @@ const SmartViews = ({ source, sourceId, query, filterDate, onClose, onOpenView }
       <h3>Saved views</h3>
       <p>
         Saved only in this browser for this server account. They do not sync and are not included in
-        the settings backup. Opening a view updates your shared list status and sort preferences.
+        the settings backup. A view applies its own status and sort only while it is open; leaving
+        it restores your preferences.
       </p>
       {!key && <p>Saved views are unavailable until your account is identified.</p>}
       {key && (
@@ -137,11 +136,11 @@ const SmartViews = ({ source, sourceId, query, filterDate, onClose, onOpenView }
               <Input
                 aria-label="View name"
                 maxLength={100}
-                placeholder="View name"
+                placeholder={suggestion || "View name"}
                 value={name}
                 onChange={setName}
               />
-              <Button disabled={!name.trim() || !query.trim()} onClick={save}>
+              <Button disabled={!query.trim()} onClick={save}>
                 Save this search
               </Button>
             </div>

@@ -2,6 +2,7 @@ import { useStore } from "@nanostores/react"
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react"
 import { useLocation } from "react-router"
 
+import useActiveSmartViewSync from "@/hooks/useActiveSmartViewSync"
 import {
   clearArticleListSnapshot,
   commitArticleListSnapshot,
@@ -28,11 +29,8 @@ import {
   setUnreadTodayCount,
 } from "@/store/dataState"
 import { homeIdentityState } from "@/store/homePageState"
-import {
-  articleListRequestSettingsState,
-  settingsState,
-  updateSettings,
-} from "@/store/settingsState"
+import { articleListRequestSettingsState, settingsState } from "@/store/settingsState"
+import { beginSmartViewSession } from "@/store/smartViewActions"
 import { pendingSmartViewState } from "@/store/smartViewsState"
 import { reconcileArticleListFilterScope } from "@/utils/article-list-filter-scope"
 import { hasArticleListFilters } from "@/utils/article-list-filters"
@@ -112,6 +110,7 @@ const handleResponses = (
 }
 
 const useArticleList = (source, sourceId, getEntries) => {
+  useActiveSmartViewSync()
   const contentSnapshot = useStore(contentState, {
     keys: ["articleListRevision", "filterDate", "filterString", "infoFrom", "infoId"],
   })
@@ -163,7 +162,11 @@ const useArticleList = (source, sourceId, getEntries) => {
       const { view } = pendingSmartView
       const showStatus = getSmartViewRestoredStatus(view)
       previousFilterScopeRef.current = { ...nextScope, showStatus }
-      updateSettings({ showStatus, orderBy: view.orderBy, orderDirection: view.orderDirection })
+      beginSmartViewSession({
+        key: pendingSmartView.key,
+        view,
+        sessionRevision: pendingSmartView.sessionRevision,
+      })
       setArticleListSource({ from: source, id: sourceId })
       reconcileArticleListFilters({
         filterDate: pendingSmartView.view.filterDate,

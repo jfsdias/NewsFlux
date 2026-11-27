@@ -27,11 +27,11 @@ Statuses below were reconciled on 2026-11-26 against `main` `664e404197e1eb9d9ae
 
 ## Sprint 3 — NF-E02 polish / NF-E03 continuity / NF-E04 conditional locale (P1)
 
-- [ ] **NF-0301 (S) — Smart View shortcuts/polish.** `PLANNED`: not verified as delivered. Explicit selected scope, readable names, filter chips, navigation, no surprise jump after mark-read. Verify regressions. Depends: S2.
+- [x] **NF-0301 (S) — Smart View shortcuts/polish.** `COMPLETED` (branch feat/nf-0301-smart-views-polish; verified E2E contract v24, 115/115 PASSED on head 131cfd11; NF-0301-1..4 repeated 3x green; pnpm test, lint 0 errors, knip:check and build green; no schema change, no new store; no hotkey added, see docs/SMART_VIEWS_STORAGE.md). Explicit selected scope, readable names, filter chips, navigation, no surprise jump after mark-read. Verify regressions. Depends: S2.
 - [x] **NF-0302 (M) — Resume Reader.** `COMPLETED` (account-scoped continuity delivered by #303; device verification pending under the NF-0005 physical-device backlog). Approve scoped local position lifecycle; anchor position by identity/version, clamp or fall back on changed content; no read/star mutation, clear reset. Verify article close/reopen, changed content, account switch and recovery. Depends: S2 + storage gate.
 - [x] **NF-0303 (M) — Resume article lists.** `COMPLETED` (delivered by #303; PWA update and scope-switch verification pending). Restore item anchor for same scope/query only, with fallback when removed; preserve new sorting/filter and next-unread semantics. Verify page refresh, PWA update, new entries and scope switch. Depends: 0302.
 - [ ] **NF-0304 (S/M) — pt-BR UI.** `SUPERSEDED`: the owner reconfirmed English-only (#287) on 2026-11-26. Closed unless the owner reopens it. Original scope: reconfirm owner English-only #287 vs later roadmap endorsement; if approved, introduce locale in separate PR, validate coverage, settings migration, accessibility and summary-language independence. No broad revival of other translations.
-- [ ] **Checkpoint S3:** `IN_PROGRESS`. Low-friction resume and Smart View navigation; locale only if authorized (it is not).
+- [x] **Checkpoint S3:** `COMPLETED` (NF-0301..0303 delivered; NF-0304 superseded; physical-device verification of resume remains in the NF-0005 backlog). Low-friction resume and Smart View navigation; locale only if authorized (it is not).
 
 ## Sprint 4 — NF-E05 Story Groups (P1)
 

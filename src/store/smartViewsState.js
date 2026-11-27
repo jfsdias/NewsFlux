@@ -15,6 +15,9 @@ export const smartViewsState = persistentAtom("smart-views-v1", empty, {
   },
 })
 export const pendingSmartViewState = atom(null)
+// Session-only (never persisted): the Smart View currently applied to the list and the
+// user's own status/sort preferences captured before it opened.
+export const activeSmartViewState = atom(null)
 export const updateSmartViews = (key, update) => {
   const current = smartViewsState.get()
   smartViewsState.set(setSmartViews(current, key, update(getSmartViews(current, key))))
