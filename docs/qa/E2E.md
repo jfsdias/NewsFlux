@@ -1,6 +1,6 @@
 # End-to-end QA suite
 
-Playwright scenarios exercise a production build against a **synthetic Miniflux**. The frozen E2E contract is version 6 and contains 46 stable scenario identities, including the QA-001 viewport matrix and the resolved QA-004 scenario. The inventory validates identities and outcomes; each executed invocation must produce a fresh inventory tied to its run ID.
+Playwright scenarios exercise a production build against a **synthetic Miniflux**. The frozen E2E contract is version 23 and contains 111 stable scenario identities, including the QA-001 viewport matrix, the resolved QA-004 scenario, the Home tools scenarios (NF-E05-3 to NF-E05-5) and the duplicate-integrity scenarios (NF-E01-DUP-1 to NF-E01-DUP-13, NF-E01-HOME-1). The inventory validates identities and outcomes; each executed invocation must produce a fresh inventory tied to its run ID.
 
 - **Evidence type:** emulated (Chromium) and synthetic (mock backend). A pass here is not a physical-device, Safari/WebKit or real-Miniflux verification. For PR #193, the owner reported PASS for the harness in four physical conditions: Duo closed/Light, closed/Dark-OLED, open/Light, and open/Dark-OLED. This covers only that harness, not general production Safari, installed-PWA, Service Worker, or application-component validation. See [`QA_CHARTER.md`](./QA_CHARTER.md).
 - **Where:** `e2e/*.spec.js`, support code in `e2e/support/`, configuration in `playwright.config.js`.
@@ -46,7 +46,7 @@ A scenario whose subject is an unapproved requirement is wrapped by `requirement
 3. records a `REQUIREMENT_PENDING` annotation, which `e2e/reporters/inventory-reporter.js` includes in the scenario inventory;
 4. fails the test when the behavior starts to pass, so the marker and the entry in [`FINDINGS_REGISTER.md`](./FINDINGS_REGISTER.md) are removed deliberately.
 
-A green run lists any known-defect or pending-requirement classifications still present in the frozen contract. Contract version 6 preserves 46 scenario identities and currently expects 46 `PASSED`, zero `KNOWN_DEFECT`, zero `REQUIREMENT_PENDING`, zero `FAILED`, and zero `SKIPPED` outcomes. QA-004/F15-4 was resolved by merged PR #183; it is no longer a pending requirement. Acceptance uses fresh verified inventories from the exact tested head. Each executed run's evidence is preserved under `test-results/verified-e2e/run-*/inventory.json` with the matching run identifier.
+A green run lists any known-defect or pending-requirement classifications still present in the frozen contract. Contract version 23 preserves 111 scenario identities and currently expects 111 `PASSED`, zero `KNOWN_DEFECT`, zero `REQUIREMENT_PENDING`, zero `FAILED`, and zero `SKIPPED` outcomes. QA-004/F15-4 was resolved by merged PR #183; it is no longer a pending requirement. Acceptance uses fresh verified inventories from the exact tested head. Each executed run's evidence is preserved under `test-results/verified-e2e/run-*/inventory.json` with the matching run identifier.
 
 ## Stability
 

@@ -198,7 +198,7 @@ test("BULK-01C increments the scenario contract with all approved scenarios pass
     states[state] = (states[state] ?? 0) + 1
   }
 
-  assert.equal(E2E_SCENARIO_CONTRACT_VERSION, 22)
+  assert.equal(E2E_SCENARIO_CONTRACT_VERSION, 23)
   assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === "NF-FETCH-1")?.state, "PASSED")
   for (const id of ["NF-READING-3-466", "NF-READING-3-884"]) {
     assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === id)?.state, "PASSED")
