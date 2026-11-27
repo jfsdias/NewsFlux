@@ -15,6 +15,8 @@
 #                                                          # promote-reader-only, smoke-reader; stops at the first failed gate
 #   steps: preflight-reader (read-only) | build-reader (live build flags reproduced and verified)
 #          | promote-reader-only | smoke-reader | rollback-reader
+#   Owner-approved flag change (otherwise every flag is copied from the live Reader):
+#   READER_SET_AI_ENABLED=0|1  READER_SET_WALLHOP_EXTERNAL_OPEN=|true  (set = change, unset = keep live)
 #   sudo -E bash ai-functional-release.sh s5-attestation-path   # prints $RELEASE_DIR/s5-key-attestation.json
 #   sudo python3 s5_key_audit.py ... --out "$(sudo -E bash ai-functional-release.sh s5-attestation-path)"
 #   sudo -E bash ai-functional-release.sh s5-preflight     # read-only LiteLLM key/model/price/budget/logging gates
@@ -70,6 +72,10 @@ READER_RECOVERY_BASE_PATH="${READER_RECOVERY_BASE_PATH:-}"
 # WallHop path A (user's browser opens the article on WallHop after a per-click consent). Off unless exactly "true".
 READER_WALLHOP_EXTERNAL_OPEN="${READER_WALLHOP_EXTERNAL_OPEN:-}"
 [[ -z "$READER_WALLHOP_EXTERNAL_OPEN" || "$READER_WALLHOP_EXTERNAL_OPEN" == true ]] || { echo "GATE=BLOCKED CODE=READER_WALLHOP_EXTERNAL_OPEN_INVALID"; exit 1; }
+# Reader-only release: explicit, owner-approved flag changes. Unset keeps the live value.
+[[ -z "${READER_SET_AI_ENABLED+x}" || "$READER_SET_AI_ENABLED" =~ ^[01]$ ]] || { echo "GATE=BLOCKED CODE=READER_SET_AI_ENABLED_INVALID"; exit 1; }
+[[ -z "${READER_SET_WALLHOP_EXTERNAL_OPEN+x}" || -z "$READER_SET_WALLHOP_EXTERNAL_OPEN" || "$READER_SET_WALLHOP_EXTERNAL_OPEN" == true ]] \
+  || { echo "GATE=BLOCKED CODE=READER_SET_WALLHOP_EXTERNAL_OPEN_INVALID"; exit 1; }
 PUBLIC_CURL_RESOLVE="${NEWSFLUX_PUBLIC_CURL_RESOLVE:-}" # optional "host:443:ip" when hairpin DNS is unavailable
 PUBLIC_CURL_CACERT="${NEWSFLUX_PUBLIC_CURL_CACERT:-}"   # optional CA bundle (disposable rehearsal only)
 
@@ -599,6 +605,26 @@ bundle_flags() { # minified JS on stdin -> READER_AI_ENABLED / READER_WALLHOP_EX
 state_value() { sed -n "s/^$1=//p" "$READER_ONLY_STATE" | head -1; }
 recorded_flags() { grep -E '^READER_(AI_ENABLED|WALLHOP_EXTERNAL_OPEN|RECOVERY_BASE_PATH)=' "$READER_ONLY_STATE"; }
 
+target_flags() { # live flags on stdin -> the flags this release ships (live, plus explicit owner changes)
+  local line key
+  while IFS= read -r line; do
+    key="${line%%=*}"
+    case "$key" in
+      READER_AI_ENABLED) [[ -n "${READER_SET_AI_ENABLED+x}" ]] && line="$key=$READER_SET_AI_ENABLED" ;;
+      READER_WALLHOP_EXTERNAL_OPEN) [[ -n "${READER_SET_WALLHOP_EXTERNAL_OPEN+x}" ]] && line="$key=$READER_SET_WALLHOP_EXTERNAL_OPEN" ;;
+    esac
+    printf '%s\n' "$line"
+  done
+}
+
+flag_changes() { # live and target flag blocks -> "KEY:old->new" list, or "none"
+  local changes
+  changes="$(diff <(printf '%s\n' "$1") <(printf '%s\n' "$2") | sed -n 's/^> //p' | while IFS= read -r line; do
+    printf '%s:%s->%s,' "${line%%=*}" "$(sed -n "s/^${line%%=*}=//p" <<<"$1")" "${line#*=}"
+  done)"
+  printf '%s\n' "${changes:-none}" | sed 's/,$//'
+}
+
 # Strictly read-only.
 preflight_reader() {
   require_source
@@ -620,6 +646,7 @@ PY
   done
   [[ -n "$(container_env "$READER_CONTAINER" REACTFLUX_BASE_PATH)" ]] || die PREFLIGHT_READER READER_BASE_PATH_UNKNOWN
   flags="$(reader_bundle container | bundle_flags)" || die PREFLIGHT_READER READER_FLAGS_UNDETECTABLE
+  gate READER_FLAG_CHANGES "$(flag_changes "$flags" "$(target_flags <<<"$flags")")"
   gate READER_SERVICE "$reader_svc"
   gate READER_IMAGE "$(docker inspect -f '{{.Image}}' "$READER_CONTAINER")"
   gate READER_REVISION "$(image_revision "$(docker inspect -f '{{.Image}}' "$READER_CONTAINER")")"
@@ -631,8 +658,9 @@ PY
 
 build_reader() {
   require_source
-  local flags base summary candidate_flags
-  flags="$(reader_bundle container | bundle_flags)" || die BUILD_READER READER_FLAGS_UNDETECTABLE
+  local live flags base summary candidate_flags
+  live="$(reader_bundle container | bundle_flags)" || die BUILD_READER READER_FLAGS_UNDETECTABLE
+  flags="$(target_flags <<<"$live")"
   base="$(container_env "$READER_CONTAINER" REACTFLUX_BASE_PATH)"
   [[ -n "$base" ]] || die BUILD_READER READER_BASE_PATH_UNKNOWN
   summary="$(summary_container)"
@@ -652,6 +680,7 @@ build_reader() {
   [[ "$candidate_flags" == "$flags" ]] || die BUILD_READER CANDIDATE_FLAGS_DIFFER
   {
     echo "$flags"
+    echo "READER_FLAG_CHANGES=$(flag_changes "$live" "$flags")"
     echo "READER_BASE_PATH=$base"
     echo "READER_PREVIOUS_IMAGE=$(docker inspect -f '{{.Image}}' "$READER_CONTAINER")"
     echo "READER_CANDIDATE_IMAGE=$(image_id "newsflux-reader:$APPROVED_SHA")"
@@ -659,6 +688,7 @@ build_reader() {
     echo "SUMMARY_IDENTITY=$(docker inspect -f '{{.Id}} {{.Image}}' "$summary")"
   } >"$READER_ONLY_STATE"
   echo "$flags"
+  gate READER_FLAG_CHANGES "$(flag_changes "$live" "$flags")"
   gate READER_IMAGE_ID "$(image_id "newsflux-reader:$APPROVED_SHA")"
   gate BUILD_READER PASS
 }
@@ -696,6 +726,7 @@ smoke_reader() {
     echo "READER=$READER_CONTAINER $(docker inspect -f '{{.Image}} {{.State.Status}}' "$READER_CONTAINER")"
     echo "READER_PREVIOUS_IMAGE=$(state_value READER_PREVIOUS_IMAGE)"
     echo "$live_flags"
+    echo "READER_FLAG_CHANGES=$(state_value READER_FLAG_CHANGES)"
     echo "SUMMARY_UNCHANGED=$(container_name "$summary") $(docker inspect -f '{{.Image}} {{.State.Health.Status}}' "$summary")"
     for name in "${PROTECTED_NAMES[@]}"; do echo "PROTECTED=$name $(docker inspect -f '{{.Id}} {{.Image}}' "$name")"; done
     echo "READER_MANIFEST_SHA256=$(sha256sum "$RELEASE_DIR/$reader_svc/manifest.json" | cut -d' ' -f1)"

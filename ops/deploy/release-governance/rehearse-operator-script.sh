@@ -199,5 +199,22 @@ grep -q '^SMOKE_READER=PASS$' "$work/reader.out" && ok SMOKE_READER || ko SMOKE_
 [[ "$(docker inspect -f '{{.Id}} {{.Image}}' miniflux miniflux-db)" == "$protected_before" ]] && ok READER_ONLY_PROTECTED_UNCHANGED || ko READER_ONLY_PROTECTED_UNCHANGED
 op rollback-reader >/dev/null && [[ "$(docker inspect -f '{{.Image}}' newsflux)" == "$reader_prev" ]] && ok READER_ONLY_ROLLBACK || ko READER_ONLY_ROLLBACK
 
+# An explicit owner flag change ships exactly the requested flags and records the change.
+# A requested change the candidate does not carry is refused before promotion.
+reset_reader_release
+mk_image "newsflux-reader:$SHA" "$SHA" reader-new 1 true
+if READER_SET_WALLHOP_EXTERNAL_OPEN= NEWSFLUX_REHEARSAL_SKIP_READER_BUILD=1 op build-reader >"$work/change-bad.out" 2>&1; then ko READER_FLAG_CHANGE_NOT_IN_CANDIDATE_REFUSED; else
+  grep -q 'CODE=CANDIDATE_FLAGS_DIFFER' "$work/change-bad.out" && [[ "$(docker inspect -f '{{.Image}}' newsflux)" == "$reader_prev" ]] \
+    && ok READER_FLAG_CHANGE_NOT_IN_CANDIDATE_REFUSED || { cat "$work/change-bad.out"; ko READER_FLAG_CHANGE_NOT_IN_CANDIDATE_REFUSED; }
+fi
+reset_reader_release
+mk_image "newsflux-reader:$SHA" "$SHA" reader-new 1 ""
+READER_SET_WALLHOP_EXTERNAL_OPEN= NEWSFLUX_REHEARSAL_SKIP_READER_BUILD=1 op reader >"$work/change.out" 2>&1 \
+  && ok READER_FLAG_CHANGE_RELEASE || { cat "$work/change.out"; ko READER_FLAG_CHANGE_RELEASE; }
+grep -qx 'READER_FLAG_CHANGES=READER_WALLHOP_EXTERNAL_OPEN:true->' "$work/change.out" && grep -qx 'READER_WALLHOP_EXTERNAL_OPEN=' "$work/change.out" \
+  && grep -q '^SMOKE_READER=PASS$' "$work/change.out" && ok READER_FLAG_CHANGE_RECORDED || ko READER_FLAG_CHANGE_RECORDED
+[[ "$(docker inspect -f '{{.Id}} {{.Image}}' newsflux-summary-api-1)" == "$summary_now" ]] && ok READER_FLAG_CHANGE_SUMMARY_UNTOUCHED || ko READER_FLAG_CHANGE_SUMMARY_UNTOUCHED
+op rollback-reader >/dev/null && [[ "$(docker inspect -f '{{.Image}}' newsflux)" == "$reader_prev" ]] && ok READER_FLAG_CHANGE_ROLLBACK || ko READER_FLAG_CHANGE_ROLLBACK
+
 echo "REHEARSAL_PASSED=$pass REHEARSAL_FAILED=$fail"
 [[ "$fail" -eq 0 ]]
