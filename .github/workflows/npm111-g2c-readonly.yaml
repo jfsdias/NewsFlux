@@ -2,7 +2,7 @@ name: NPM111 G2C read-only static audit tests
 on:
   pull_request:
     paths:
-      - "deploy/npm111-g2c/**"
+      - "ops/deploy/npm111-g2c/**"
       - ".github/workflows/npm111-g2c-readonly.yaml"
   workflow_dispatch:
 permissions:
@@ -18,5 +18,5 @@ jobs:
           python-version: "3.12"
       - name: Run offline-only parser regression suite
         run: |
-          python -m unittest discover -s deploy/npm111-g2c -p "test_*.py" -v
-          python -m py_compile deploy/npm111-g2c/audit.py
+          python -m unittest discover -s ops/deploy/npm111-g2c -p "test_*.py" -v
+          python -m py_compile ops/deploy/npm111-g2c/audit.py
