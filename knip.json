@@ -4,6 +4,8 @@
     "scripts/tests/**/*.{js,jsx}",
     "scripts/*.js",
     "ops/scripts/*.js",
+    "tests/aux/device-matrix/device-matrix.js",
+    "tests/aux/device-matrix/load-profile.js",
     "tests/aux/pilot-e2e/vite.config.js",
     "tests/aux/pilot-e2e/vite-compose.config.js",
     "tests/aux/pilot-e2e/vite-admin.config.js",
