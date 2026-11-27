@@ -7,7 +7,7 @@ import React, { useEffect, useState } from "react"
 import { createRoot } from "react-dom/client"
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router"
 
-import pilotArticle from "../pilot-e2e/article.json"
+import pilotArticle from "../../tests/aux/pilot-e2e/article.json"
 
 import { fingerprintArticleUrl } from "@/apis/content-fallback-reader"
 import ArticleDetail from "@/components/Article/ArticleDetail"
