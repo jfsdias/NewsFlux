@@ -33,6 +33,7 @@ for (const path of ["/all", "/history"]) {
 
 test("editorial review exposes methodology and labelled counts", async ({ openApp }, testInfo) => {
   const { page, errors } = await openApp({ path: "/", width: 1440, height: 900 })
+  await page.getByRole("button", { name: "Home tools" }).click()
   const panel = page.getByRole("region", { name: "Editorial tools" })
   await panel.getByRole("button", { name: "Enable editorial tools" }).click()
   await expect(panel.getByText(/Uses up to 250 entries already loaded on Home/)).toBeVisible()

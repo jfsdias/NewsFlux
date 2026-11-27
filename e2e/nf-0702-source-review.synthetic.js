@@ -63,6 +63,7 @@ test("source review uses the loaded sample independently of focus without mutati
     await route.fulfill({ response, json: { ...data, total: entries.length, entries } })
   })
   await page.goto("/")
+  await page.getByRole("button", { name: "Home tools" }).click()
   const panel = page.getByRole("region", { name: "Editorial tools" })
   await expect(panel.getByText("Review sources in this sample")).toHaveCount(0)
   await page.waitForLoadState("networkidle")
