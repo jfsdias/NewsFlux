@@ -172,3 +172,115 @@ export const describeSmartView = (view, sourceName = null) => {
   const source = sourceName ?? `${view.source}${view.sourceId ? ` ${view.sourceId}` : ""}`
   return `${source}; ${status}; ${order} ${view.orderDirection}${view.filterDate ? `; date ${view.filterDate}` : ""}`
 }
+
+// Preferences a view applies while it is active. They are session-scoped overlays: the user's
+// own preferences are captured before the view opens and restored when it ends.
+export const SMART_VIEW_PREFERENCE_KEYS = ["showStatus", "orderBy", "orderDirection"]
+export const getSmartViewAppliedPreferences = (view) => ({
+  showStatus: getSmartViewRestoredStatus(view),
+  orderBy: view.orderBy,
+  orderDirection: view.orderDirection,
+})
+
+const SOURCE_LABELS = {
+  all: "All articles",
+  today: "Today",
+  starred: "Starred",
+  history: "History",
+}
+const getSmartViewSourceLabel = (view, sourceName = null) =>
+  sourceName ?? SOURCE_LABELS[view.source] ?? `${view.source} ${view.sourceId ?? ""}`.trim()
+
+const getStatusLabel = (view) => {
+  if (view.source === "history") {
+    return "Read"
+  }
+  if (view.source === "starred") {
+    return view.showStatus === "unread" ? "Unread starred" : null
+  }
+  const status = getSmartViewRestoredStatus(view)
+  return status === "unread" ? "Unread" : status === "starred" ? "Starred" : null
+}
+
+const getSortLabel = (view) => {
+  const field =
+    view.source === "history" || view.source === "starred"
+      ? "changed"
+      : view.orderBy === "created_at"
+        ? "added"
+        : "published"
+  return `${view.orderDirection === "asc" ? "Oldest" : "Newest"} first · ${field}`
+}
+
+// Compact, readable predicates shown while a view is active.
+export const getSmartViewChips = (view, sourceName = null) => {
+  const chips = [{ id: "source", label: getSmartViewSourceLabel(view, sourceName) }]
+  const status = getStatusLabel(view)
+  chips.push({ id: "status", label: status ?? "All statuses" })
+  if (view.filterDate) {
+    chips.push({ id: "date", label: `Date ${view.filterDate}` })
+  }
+  chips.push(
+    { id: "query", label: `\u201C${view.query}\u201D` },
+    { id: "sort", label: getSortLabel(view) },
+  )
+  return chips
+}
+
+const SUGGESTED_NAME_LIMIT = 60
+const truncate = (text, limit) =>
+  text.length > limit ? `${text.slice(0, limit - 1).trimEnd()}\u2026` : text
+
+// Proposes a readable default such as: Unread · Technology · "climate".
+export const suggestSmartViewName = (view, sourceName = null, existingNames = []) => {
+  const status = getStatusLabel(view)
+  const source = getSmartViewSourceLabel(view, sourceName)
+  const fixed = [status, source === status ? null : source, view.filterDate].filter(Boolean)
+  const prefix = fixed.join(" \u00B7 ")
+  const queryBudget = Math.max(12, SUGGESTED_NAME_LIMIT - prefix.length - 5)
+  const query = `\u201C${truncate(view.query.replaceAll(/\s+/gu, " "), queryBudget)}\u201D`
+  const base = truncate([...fixed, query].join(" \u00B7 "), SUGGESTED_NAME_LIMIT)
+  const taken = new Set(existingNames.map((name) => name.trim().toLocaleLowerCase()))
+  if (!taken.has(base.toLocaleLowerCase())) {
+    return base
+  }
+  for (let sequence = 2; ; sequence += 1) {
+    const suffix = ` (${sequence})`
+    const candidate = `${truncate(base, SUGGESTED_NAME_LIMIT - suffix.length)}${suffix}`
+    if (!taken.has(candidate.toLocaleLowerCase())) {
+      return candidate
+    }
+  }
+}
+
+// Decides the stored name: user-provided names stay unchanged unless they duplicate another view.
+export const resolveSmartViewName = (typedName, view, sourceName, existingNames) => {
+  const name = typedName.trim()
+  const taken = existingNames.some(
+    (existing) => existing.trim().toLocaleLowerCase() === name.toLocaleLowerCase(),
+  )
+  return name && !taken
+    ? { name, generated: false }
+    : { name: suggestSmartViewName(view, sourceName, existingNames), generated: true }
+}
+
+export const isSmartViewSessionStale = ({ active, content, stored, key, sessionRevision }) => {
+  const { view } = active
+  if (
+    !stored ||
+    active.key !== key ||
+    active.sessionRevision !== sessionRevision ||
+    content.infoFrom !== view.source ||
+    String(content.infoId ?? "") !== String(view.sourceId ?? "") ||
+    content.filterString !== view.query ||
+    (content.filterDate ?? null) !== (view.filterDate ?? null)
+  ) {
+    return true
+  }
+  return false
+}
+
+export const hasSmartViewPreferencesChanged = (view, settings) => {
+  const applied = getSmartViewAppliedPreferences(view)
+  return SMART_VIEW_PREFERENCE_KEYS.some((key) => settings[key] !== applied[key])
+}
