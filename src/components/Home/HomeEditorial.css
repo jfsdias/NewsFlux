@@ -61,19 +61,100 @@
 }
 
 .home-highlights-heading-row {
-  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   grid-column: 1 / -1;
   min-width: 0;
+  min-height: 44px;
+}
+
+.home-highlights-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.home-tools-standalone {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.home-tools-standalone > .home-highlights-actions {
+  justify-content: flex-end;
+}
+
+.home-tools-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: var(--nf-radius-control, 8px);
+  background: transparent;
+  color: var(--nf-text-secondary, var(--color-text-2));
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.home-tools-trigger:hover,
+.home-tools-trigger[aria-expanded="true"] {
+  border-color: var(--nf-separator-subtle, var(--color-border-2));
+  background-color: var(--nf-surface-raised, var(--color-bg-3));
+  color: var(--nf-text-primary, var(--color-text-1));
+}
+
+.home-tools-trigger:focus-visible {
+  outline: 2px solid var(--nf-focus-ring, var(--color-text-1));
+  outline-offset: 2px;
+}
+
+/* Opaque content surface: glass is reserved for chrome. */
+.home-tools-panel {
+  grid-column: 1 / -1;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 4px 16px;
+  border: 1px solid var(--nf-separator-subtle, var(--color-border-2));
+  border-radius: var(--nf-radius-card, 8px);
+  background-color: var(--nf-surface-elevated, var(--color-bg-2));
+}
+
+.home-tools-panel[hidden] {
+  display: none;
+}
+
+.home-tools-panel > .home-intelligence {
+  padding: 12px 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
+.home-tools-panel > .home-intelligence + .home-intelligence {
+  border-top: 1px solid var(--nf-separator-subtle, var(--color-border-2));
+}
+
+.home-tools-heading {
+  margin: 0;
+  color: var(--nf-text-primary, var(--color-text-1));
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 .home-personalization-info-button {
-  position: absolute;
-  inset-inline-end: 0;
-  top: 50%;
   display: grid;
   width: 28px;
   height: 28px;
-  transform: translateY(-50%);
   place-items: center;
   border: 0;
   border-radius: 50%;
@@ -83,6 +164,13 @@
   touch-action: manipulation;
 }
 
+@media (pointer: coarse) {
+  .home-personalization-info-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
 .home-personalization-info-button:hover {
   background-color: var(--nf-surface-raised, var(--color-bg-3));
 }
@@ -90,13 +178,6 @@
 .home-personalization-info-button:focus-visible {
   outline: 2px solid var(--nf-text-secondary, var(--color-text-2));
   outline-offset: 2px;
-}
-
-@media (pointer: coarse) {
-  .home-personalization-info-button {
-    min-width: 44px;
-    min-height: 44px;
-  }
 }
 
 .home-personalization-explanation {
@@ -348,5 +429,17 @@
 
   .home-highlights .home-highlight-primary .grid-card-media + .grid-card-copy {
     padding-top: 28px;
+  }
+}
+
+/*
+ * HOME-VITRUVIAN: on COMPACT and MEDIUM the lead cover is capped so at least two
+ * Highlights headlines fit the first screen. The box keeps its aspect-ratio and is
+ * clamped by max-height, so it is reserved before the image loads (no layout shift);
+ * the cover keeps object-fit: contain, so no crop is introduced.
+ */
+@media (max-width: 992px) {
+  .home-highlights .home-highlight-primary .grid-card-media {
+    max-height: 24vh;
   }
 }

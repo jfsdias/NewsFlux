@@ -7,6 +7,7 @@ import HomeIntelligence from "./HomeIntelligence"
 import HomeRecent from "./HomeRecent"
 import HomeSourceRecommendations from "./HomeSourceRecommendations"
 import HomeStates from "./HomeStates"
+import { HomeToolsPanel, HomeToolsTrigger } from "./HomeTools"
 
 import { getStarredEntries } from "@/apis"
 import LoadMoreSentinel from "@/components/Article/LoadMoreSentinel"
@@ -88,6 +89,9 @@ const HomeEditorial = ({
     sessionRevision,
   })
   const [session, setSession] = useState(null)
+  // Transient on purpose: Home tools are collapsed on every load and never persisted.
+  const [toolsOpen, setToolsOpen] = useState(false)
+  const toolsTriggerRef = useRef(null)
   const generationRef = useRef(null)
   const generationIdRef = useRef(0)
   const committedProjectionRef = useRef(null)
@@ -445,23 +449,42 @@ const HomeEditorial = ({
           {isInitialError && <HomeStates initialError retryArticleList={retryArticleList} />}
           {projection && !isZeroUnread && (
             <>
-              <HomeIntelligence
-                key={requestKey}
-                articleActivation={articleActivation}
-                entries={entries}
-                polyglot={polyglot}
-              />
-              <HomeSourceRecommendations
-                key={`recommendations:${requestKey}`}
-                entries={entries}
-                polyglot={polyglot}
-              />
               <HomeHighlights
                 articleActivation={articleActivation}
                 disclosureVisible={Boolean(activeSession.disclosureVisible)}
                 entries={entries}
                 highlightIds={projection.highlightIds}
                 observeRead={observeRead}
+                toolsPanel={
+                  <HomeToolsPanel
+                    open={toolsOpen}
+                    polyglot={polyglot}
+                    onClose={() => {
+                      setToolsOpen(false)
+                      toolsTriggerRef.current?.focus()
+                    }}
+                  >
+                    <HomeIntelligence
+                      key={requestKey}
+                      articleActivation={articleActivation}
+                      entries={entries}
+                      polyglot={polyglot}
+                    />
+                    <HomeSourceRecommendations
+                      key={`recommendations:${requestKey}`}
+                      entries={entries}
+                      polyglot={polyglot}
+                    />
+                  </HomeToolsPanel>
+                }
+                toolsTrigger={
+                  <HomeToolsTrigger
+                    buttonRef={toolsTriggerRef}
+                    open={toolsOpen}
+                    polyglot={polyglot}
+                    onToggle={() => setToolsOpen((open) => !open)}
+                  />
+                }
               />
               <HomeCategorySections
                 articleActivation={articleActivation}

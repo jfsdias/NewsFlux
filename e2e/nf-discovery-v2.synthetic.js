@@ -52,6 +52,7 @@ for (const width of [466, 884]) {
         await route.fulfill({ response, json: data })
       })
       await page.goto("/")
+      await page.getByRole("button", { name: "Home tools" }).click()
       const panel = page.getByRole("region", { name: "Recommend sources" })
       const toggle = panel.getByRole("button", { name: "Recommend sources" })
       await expect(toggle).toHaveAttribute("aria-pressed", "false")
@@ -137,6 +138,7 @@ test("recommendations stay unavailable when the feed catalog fails", async ({ op
     return route.continue()
   })
   await page.goto("/")
+  await page.getByRole("button", { name: "Home tools" }).click()
   const panel = page.getByRole("region", { name: "Recommend sources" })
   await panel.getByRole("button", { name: "Recommend sources" }).click()
   await expect(panel.getByRole("status")).toContainText(
@@ -170,6 +172,7 @@ test("empty recommendations offer Add Feed without a request or subscription", a
     await route.fulfill({ response, json: data })
   })
   await page.goto("/")
+  await page.getByRole("button", { name: "Home tools" }).click()
   const panel = page.getByRole("region", { name: "Recommend sources" })
   await panel.getByRole("button", { name: "Recommend sources" }).click()
   await expect(panel.getByText(/No suggestions match/)).toBeVisible()

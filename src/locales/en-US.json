@@ -890,6 +890,7 @@
   },
   "home_page": {
     "section_highlights": "Highlights",
+    "tools": "Home tools",
     "section_recent": "Latest",
     "category_section_label": "Articles in %{category}",
     "personalization_info_label": "Why these stories?",
