@@ -76,7 +76,7 @@ const HomeEditorial = ({
   )
   const { polyglot } = useStore(polyglotState)
   const articleActivation = useArticleCardActivation(handleEntryClick)
-  const observeRead = useReadOnScroll(cardsRef)
+  const { observeRead } = useReadOnScroll(cardsRef)
   const identity = useStore(homeIdentityState)
   const { sessionRevision } = useStore(dataState, { keys: ["sessionRevision"] })
   const { pageSize, showHiddenFeeds } = useStore(settingsState, {

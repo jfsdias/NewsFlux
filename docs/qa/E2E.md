@@ -71,6 +71,7 @@ The GitHub Actions E2E workflow runs `pnpm test:e2e:stability` on pull requests.
 | F14 Fold and unfold                | F14-1                                                                                                 |
 | F15 Deep links and reopening       | F15-1, F15-2, F15-3, F15-4 (QA-004 invalid-response and recovery contract)                            |
 | F16 Long feed                      | F16-1                                                                                                 |
+| NF-E01 Duplicate presentation      | NF-E01-DUP-1 to NF-E01-DUP-13 (no implicit read-state mutation), NF-E01-HOME-1                        |
 | QA-001 viewport matrix             | QA-001-466, -597, -704, -884 (also resizes through 768/769/992/993), -939, -1024, -1440, QA-001-mouse |
 
 (The original suite had no F10: persistence is covered by F08-1.)

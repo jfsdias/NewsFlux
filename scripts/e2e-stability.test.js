@@ -183,7 +183,8 @@ test("contract preserves the 75 baseline identities and unique reviewed addition
         !id.startsWith("NF-DISCOVERY-3-") &&
         !id.startsWith("NF-READING-3-") &&
         id !== "NF-DOI-1" &&
-        id !== "NF-PWA-FOREGROUND-1",
+        id !== "NF-PWA-FOREGROUND-1" &&
+        !id.startsWith("NF-E01-"),
     ).length,
     75,
   )
@@ -207,6 +208,7 @@ test("BULK-01C increments the scenario contract with all approved scenarios pass
     EXPECTED_SCENARIOS.find((scenario) => scenario.id === "NF-PWA-FOREGROUND-1")?.state,
     "PASSED",
   )
+  assert.equal(EXPECTED_SCENARIOS.filter(({ id }) => id.startsWith("NF-E01-")).length, 14)
   assert.deepEqual(states, { PASSED: EXPECTED_SCENARIOS.length })
   for (const id of ["F02-2", "F04-1", "F04-3", "QA-001-884", "QA-001-939"]) {
     assert.equal(EXPECTED_SCENARIOS.find((scenario) => scenario.id === id)?.state, "PASSED")

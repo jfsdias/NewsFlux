@@ -23,7 +23,15 @@ const createMockClient = () => ({
   reset: () => control("/__e2e/reset"),
   fault: (target, kind) => control(`/__e2e/fault?target=${target}&kind=${kind}`),
   mode: (mode) => control(`/__e2e/mode?mode=${mode}`),
-  inject: (count = 3) => control(`/__e2e/inject?count=${count}`),
+  inject: (count = 3, { title, feed, age, starred, status } = {}) => {
+    const query = new URLSearchParams({ count: String(count) })
+    for (const [key, value] of Object.entries({ title, feed, age, starred, status })) {
+      if (value !== undefined) {
+        query.set(key, String(value))
+      }
+    }
+    return control(`/__e2e/inject?${query}`)
+  },
   state: async () => {
     const body = await control("/__e2e/state")
     return body.state
