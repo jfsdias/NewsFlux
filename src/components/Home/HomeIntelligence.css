@@ -10,7 +10,7 @@
   margin: 0.5rem 0;
   color: var(--nf-text-secondary, var(--color-text-2));
 }
-.home-intelligence h3 {
+.home-intelligence :is(h3, h4) {
   margin: 1rem 0 0.5rem;
 }
 .home-intelligence details {

@@ -16,6 +16,8 @@ const HomeHighlights = ({
   highlightIds,
   observeRead,
   disclosureVisible = false,
+  toolsPanel = null,
+  toolsTrigger = null,
 }) => {
   const { polyglot } = useStore(polyglotState)
   const [explanationOpen, setExplanationOpen] = useState(false)
@@ -65,27 +67,37 @@ const HomeHighlights = ({
   }, [explanationOpen])
 
   if (!slots.some(Boolean)) {
-    return null
+    // Keep the tools reachable even when no story is projected.
+    return toolsTrigger ? (
+      <div className="home-tools-standalone">
+        <div className="home-highlights-actions">{toolsTrigger}</div>
+        {toolsPanel}
+      </div>
+    ) : null
   }
 
   return (
     <section aria-label={polyglot.t("home_page.section_highlights")} className="home-highlights">
       <div className="home-highlights-heading-row">
         <h2 className="home-section-heading">{polyglot.t("home_page.section_highlights")}</h2>
-        {disclosureVisible && (
-          <button
-            ref={infoButtonRef}
-            aria-controls={PERSONALIZATION_EXPLANATION_ID}
-            aria-expanded={explanationOpen}
-            aria-label={polyglot.t("home_page.personalization_info_label")}
-            className="home-personalization-info-button"
-            type="button"
-            onClick={() => setExplanationOpen((open) => !open)}
-          >
-            <IconInfoCircle aria-hidden="true" />
-          </button>
-        )}
+        <div className="home-highlights-actions">
+          {disclosureVisible && (
+            <button
+              ref={infoButtonRef}
+              aria-controls={PERSONALIZATION_EXPLANATION_ID}
+              aria-expanded={explanationOpen}
+              aria-label={polyglot.t("home_page.personalization_info_label")}
+              className="home-personalization-info-button"
+              type="button"
+              onClick={() => setExplanationOpen((open) => !open)}
+            >
+              <IconInfoCircle aria-hidden="true" />
+            </button>
+          )}
+          {toolsTrigger}
+        </div>
       </div>
+      {toolsPanel}
       {disclosureVisible && (
         <div
           className="home-personalization-explanation"

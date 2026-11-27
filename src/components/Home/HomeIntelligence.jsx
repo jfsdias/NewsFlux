@@ -114,7 +114,7 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
       aria-label={title}
       className={`home-intelligence${enabled ? "" : " home-intelligence-compact"}`}
     >
-      <h2 className="home-section-heading">{title}</h2>
+      <h3 className="home-tools-heading">{title}</h3>
       <button
         aria-pressed={enabled}
         type="button"
@@ -285,7 +285,7 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
               </>
             )}
           </details>
-          <h3>{polyglot.t("home_intelligence.briefing")}</h3>
+          <h4>{polyglot.t("home_intelligence.briefing")}</h4>
           <p>
             {polyglot.t("home_intelligence.counts", {
               entries: focused.length,
@@ -308,7 +308,7 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
               ))}
             </ol>
           )}
-          <h3>{polyglot.t("home_intelligence.related")}</h3>
+          <h4>{polyglot.t("home_intelligence.related")}</h4>
           <p>{polyglot.t("home_intelligence.related_explanation")}</p>
           {stories.length === 0 && <p>{polyglot.t("home_intelligence.no_related")}</p>}
           {stories.map((group) => (
@@ -325,7 +325,7 @@ const HomeIntelligence = ({ articleActivation, entries, polyglot }) => {
               </ul>
             </details>
           ))}
-          <h3>{polyglot.t("home_intelligence.duplicates")}</h3>
+          <h4>{polyglot.t("home_intelligence.duplicates")}</h4>
           <p>{polyglot.t("home_intelligence.duplicate_explanation")}</p>
           {duplicateGroups.length === 0 && <p>{polyglot.t("home_intelligence.no_duplicates")}</p>}
           {duplicateGroups.map((group) => (
