@@ -73,7 +73,7 @@ Rollback of the upgrade, run with the same `APPROVED_SHA`, in reverse order, eac
 `config_files` sequences, and the same Caddyfile hash and inode. It does **not** go back to the
 pre-Stage-1 state. That remains Stage 1's own rollback, run with Stage 1's `APPROVED_SHA`.
 
-Rehearsed by `deploy/release-governance/rehearse-stage1-upgrade.sh`, which installs Stage 1 with the
+Rehearsed by `ops/deploy/release-governance/rehearse-stage1-upgrade.sh`, which installs Stage 1 with the
 operator script as it exists at `57f1c6a`, then upgrades and rolls back with this one, always through a
 real Stage 1 → new Caddyfile transition (failure injection before/during write and on reload, drift,
 admin route methods, exact rollback). `test_caddy_transition.py` covers the same state machine without
@@ -83,7 +83,7 @@ miniflux-db, NPM, LiteLLM and WallHop are not touched.
 ## Stage 2 — S5 activation (separate approval; free model only)
 
 ```bash
-sudo python3 deploy/release-governance/s5_key_audit.py ...  # operator-only admin read (see S5_KEY_GATE.md)
+sudo python3 ops/deploy/release-governance/s5_key_audit.py ...  # operator-only admin read (see S5_KEY_GATE.md)
 sudo -E bash ai-functional-release.sh s5-preflight     # read-only: key, alias, prices, budget, callbacks
 sudo -E bash ai-functional-release.sh enable-s5        # hash-pinned config-only override
 ```

@@ -26,7 +26,7 @@ SQLite stores only validated, sanitized overlays and compact provenance. It is o
 Command:
 
 ```sh
-PYTHONDONTWRITEBYTECODE=1 python3 scripts/content_fallback_runtime_01.py
+PYTHONDONTWRITEBYTECODE=1 python3 services/content_fallback/tests/runtime_rehearsal_01.py
 ```
 
 The rehearsal starts the actual service HTTP handler and actual Miniflux client with synthetic HTTP fixtures bound to IPv4 loopback (`127.0.0.1`) on ephemeral ports. It uses synthetic credentials, an ephemeral SQLite file, fixed synthetic entries, and a mocked provider boundary. It does not instantiate the live WallHop transport and cannot send an article URL to WallHop. It checks startup, health, invalid service authentication without a Miniflux read, empty-body enforcement, successful sanitized recovery, incomplete fallback, stale-entry rejection, disabled-policy behavior, the sufficient-original short circuit, SQLite mode `0600`, persistence after stopping and restarting the service, safe log output, read-only Miniflux behavior, and orderly shutdown.

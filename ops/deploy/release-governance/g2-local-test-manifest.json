@@ -1,0 +1,163 @@
+{
+  "schema": "newsflux.g2-local-test-manifest/v1",
+  "purpose": "Every step a G2_LOCAL_INDEPENDENT evidence bundle must contain: the whole summary-release-rehearsal workflow (steps 1-10, same commands) plus the S5-R3/R3A rehearsals it does not run (11-15). A step may not be skipped.",
+  "workflow": ".github/workflows/summary-release-rehearsal.yaml",
+  "pinned_images": {
+    "litellm/litellm@sha256:11175975a3093e05e92faee2fe2fe3412a3ae2fcaa849eb0fe25d5f0d8bcb2e9": "sha256:11175975a3093e05e92faee2fe2fe3412a3ae2fcaa849eb0fe25d5f0d8bcb2e9",
+    "ghcr.io/berriai/litellm-database@sha256:eb7a0adff81ce89de44a8985d411b89d628f96d2dfb69e3d55eaf61dd4db143a": "sha256:eb7a0adff81ce89de44a8985d411b89d628f96d2dfb69e3d55eaf61dd4db143a",
+    "postgres@sha256:f377d590e5474681d4d7838635031a2b50647923b7abfa803ce9b5ff35d5c663": "sha256:f377d590e5474681d4d7838635031a2b50647923b7abfa803ce9b5ff35d5c663",
+    "python:3.12-slim@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704": "sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704",
+    "busybox:1.36.1": "sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662",
+    "caddy:2.10.2-alpine": "sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d"
+  },
+  "pull_by_tag_then_verify": ["busybox:1.36.1", "caddy:2.10.2-alpine"],
+  "steps": [
+    {
+      "id": "W01_UNITTEST_DISCOVERY",
+      "workflow_step": 1,
+      "kind": "unittest",
+      "min_tests": 325,
+      "env": { "RELEASE_DOCKER_TESTS": "1" },
+      "note": "stricter than the workflow step: the Docker-gated tests run here too, so no test is skipped",
+      "argv": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "ops/deploy/release-governance",
+        "-p",
+        "test*.py"
+      ]
+    },
+    {
+      "id": "W02_RELEASE_DOCKER",
+      "workflow_step": 2,
+      "kind": "unittest",
+      "min_tests": 1,
+      "cwd": "ops/deploy/release-governance",
+      "env": { "RELEASE_DOCKER_TESTS": "1" },
+      "argv": ["python3", "-m", "unittest", "-v", "test_release_docker"]
+    },
+    {
+      "id": "W03_S5_R1_DB_AUDIT",
+      "workflow_step": 3,
+      "kind": "script",
+      "min_checks": 10,
+      "argv": ["bash", "ops/deploy/release-governance/rehearse-s5-db-audit.sh"]
+    },
+    {
+      "id": "W04_OPERATOR_E2E",
+      "workflow_step": 4,
+      "kind": "script",
+      "min_checks": 1,
+      "argv": ["bash", "ops/deploy/release-governance/rehearse-operator-script.sh"]
+    },
+    {
+      "id": "W05_R41_PREFLIGHT_BACKEND",
+      "workflow_step": 5,
+      "kind": "script",
+      "min_checks": 1,
+      "argv": ["bash", "ops/deploy/release-governance/test-preflight-backend-check-image.sh"]
+    },
+    {
+      "id": "W06_R12F09_UMASK",
+      "workflow_step": 6,
+      "kind": "script",
+      "min_checks": 1,
+      "argv": ["bash", "ops/deploy/release-governance/test-r12f09-image-umask.sh"]
+    },
+    {
+      "id": "W07_R12F09_E2E",
+      "workflow_step": 7,
+      "kind": "script",
+      "min_checks": 1,
+      "argv": ["bash", "ops/deploy/release-governance/rehearse-r12f09.sh"]
+    },
+    {
+      "id": "W08_S5_KEY_GATE",
+      "workflow_step": 8,
+      "kind": "script",
+      "min_checks": 1,
+      "argv": ["bash", "ops/deploy/release-governance/rehearse-s5-key-gate.sh"]
+    },
+    {
+      "id": "W09_STAGE1_UPGRADE",
+      "workflow_step": 9,
+      "kind": "script",
+      "min_checks": 1,
+      "argv": ["bash", "ops/deploy/release-governance/rehearse-stage1-upgrade.sh"]
+    },
+    {
+      "id": "W10_SCOPED_PROMOTION",
+      "workflow_step": 10,
+      "kind": "script",
+      "min_checks": 0,
+      "argv": ["bash", "ops/deploy/release-governance/rehearsal.sh"]
+    },
+    {
+      "id": "X11_R3_EXACT_IMAGE_1_109_1",
+      "kind": "script",
+      "min_checks": 31,
+      "argv": ["bash", "ops/deploy/release-governance/rehearse-s5-r3-readonly-increment.sh"]
+    },
+    {
+      "id": "X11_R3_EXACT_IMAGE_1_110_0",
+      "kind": "script",
+      "min_checks": 31,
+      "env": {
+        "S5R3_LITELLM_IMAGE": "ghcr.io/berriai/litellm-database@sha256:eb7a0adff81ce89de44a8985d411b89d628f96d2dfb69e3d55eaf61dd4db143a",
+        "S5R3_EXPECTED_LITELLM_VERSION": "1.110.0"
+      },
+      "argv": ["bash", "ops/deploy/release-governance/rehearse-s5-r3-readonly-increment.sh"]
+    },
+    {
+      "id": "X12_AUTH_SURFACE_1_109_1",
+      "kind": "script",
+      "min_checks": 7,
+      "argv": ["bash", "ops/deploy/release-governance/rehearse-s5-r3-auth-surface.sh"]
+    },
+    {
+      "id": "X12_AUTH_SURFACE_1_110_0",
+      "kind": "script",
+      "min_checks": 7,
+      "env": {
+        "S5R3_LITELLM_IMAGE": "ghcr.io/berriai/litellm-database@sha256:eb7a0adff81ce89de44a8985d411b89d628f96d2dfb69e3d55eaf61dd4db143a",
+        "S5R3_EXPECTED_LITELLM_VERSION": "1.110.0"
+      },
+      "argv": ["bash", "ops/deploy/release-governance/rehearse-s5-r3-auth-surface.sh"]
+    },
+    {
+      "id": "X13_STRICT_BINDING_1_109_1",
+      "kind": "script",
+      "min_checks": 12,
+      "argv": ["bash", "ops/deploy/release-governance/rehearse-s5-r3a-strict-binding.sh"]
+    },
+    {
+      "id": "X13_STRICT_BINDING_1_110_0",
+      "kind": "script",
+      "min_checks": 12,
+      "env": {
+        "S5R3_LITELLM_IMAGE": "ghcr.io/berriai/litellm-database@sha256:eb7a0adff81ce89de44a8985d411b89d628f96d2dfb69e3d55eaf61dd4db143a",
+        "S5R3_EXPECTED_LITELLM_VERSION": "1.110.0"
+      },
+      "argv": ["bash", "ops/deploy/release-governance/rehearse-s5-r3a-strict-binding.sh"]
+    },
+    {
+      "id": "X14_G2_LOCAL_POSITIVE_NEGATIVE",
+      "kind": "unittest",
+      "min_tests": 20,
+      "cwd": "ops/deploy/release-governance",
+      "argv": [
+        "python3",
+        "-m",
+        "unittest",
+        "-v",
+        "test_g2_local_evidence",
+        "test_s5_r3_omv_executor",
+        "test_s5_r3_omv_readonly_run"
+      ]
+    },
+    { "id": "X15_OWNERSHIP_CLEANUP", "kind": "internal_cleanup_audit", "min_checks": 1, "argv": [] }
+  ]
+}

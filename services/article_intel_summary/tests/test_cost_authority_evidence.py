@@ -1,6 +1,6 @@
 """D1-R7-01: cost-authority evidence bound to ONE capture (key, time, identities, policy, receipt, exit code).
 
-Evidence v3 is produced by deploy/release-governance/d1_capture.py on the OMV (root, one invocation) and judged by
+Evidence v3 is produced by ops/deploy/release-governance/d1_capture.py on the OMV (root, one invocation) and judged by
 services.article_intel_summary.d1_evidence (shared) plus cost_authority (pin, file, mount, key, freshness).
 Every negative is COST_AUTHORITY_UNPROVEN, never "unlimited".
 """
@@ -524,7 +524,7 @@ class ReleasePreflightTests(unittest.TestCase):
 
 
 def load_capture_tool():
-    spec = importlib.util.spec_from_file_location("d1_capture", REPO / "deploy/release-governance/d1_capture.py")
+    spec = importlib.util.spec_from_file_location("d1_capture", REPO / "ops/deploy/release-governance/d1_capture.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

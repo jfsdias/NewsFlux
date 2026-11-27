@@ -1,6 +1,6 @@
 """D1 successor: LiteLLM as model and cost authority, admitted only with trusted capture evidence (D1-R7).
 
-The evidence (schema v3) comes from ONE root capture on the OMV (deploy/release-governance/d1_capture.py) and
+The evidence (schema v3) comes from ONE root capture on the OMV (ops/deploy/release-governance/d1_capture.py) and
 is judged by services.article_intel_summary.d1_evidence, the same code the capture used. This module adds what
 depends on where the evidence is evaluated:
 

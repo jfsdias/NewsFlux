@@ -74,6 +74,12 @@ jobs:
       - name: Run script tests
         run: pnpm test:scripts
 
+      - name: Run ops tests
+        run: pnpm test:ops
+
+      - name: Run research tests
+        run: pnpm test:research
+
   python:
     name: Python tests
     runs-on: ubuntu-latest
@@ -100,7 +106,7 @@ jobs:
         run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s services/content_fallback/tests -p 'test_*.py' -v
 
       - name: Run isolated Reader Recovery harness tests
-        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/reader-wallhop-p1-r2 -p 'test_*.py' -v
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s research/reader-wallhop-p1-r2 -p 'test_*.py' -v
 
   build:
     name: Production build (Node ${{ matrix.node-version }})

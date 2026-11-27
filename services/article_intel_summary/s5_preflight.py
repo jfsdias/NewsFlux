@@ -33,7 +33,7 @@ Key evidence, in order:
                          exclude management/info routes gets HTTP 403 here; that is expected and is not
                          proof the key is invalid for inference.
   2. ADMIN_ATTESTATION   a document produced separately by the operator with a read-only admin
-                         credential on the host (deploy/release-governance/s5_key_audit.py), passed on
+                         credential on the host (ops/deploy/release-governance/s5_key_audit.py), passed on
                          stdin. It is bound to this key by a domain-separated fingerprint, must be fresh
                          and must come from a live read. The admin credential never enters this container.
   When the gateway answers /key/info itself, that live answer wins over any document.

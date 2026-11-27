@@ -22,7 +22,7 @@
 3. **App config gate**: set `NEWSFLUX_AI_ADMIN_CONFIG_WRITES_ENABLED=true` **only with separate explicit operator authorization**, on Summary service alone, via governed release `--extra-override`. Continue `NEWSFLUX_AI_INFERENCE_ENABLED=false` and `NEWSFLUX_AI_ALLOW_EXTERNAL_ARTICLE_TRANSFER=false` during initial installation. Do not alter the shared LiteLLM's model/keys/routes or restart it.
 4. **Reader gate**: build with `--build-arg VITE_ARTICLE_INTELLIGENCE_ENABLED=1`, exact approved SHA, Caddy restricted routes from PR264 with confirmed real deployment mount/overrides; do not change NPM hosts 37/111, PR188 fallback, Miniflux, Reader persistent content or proxy host metadata.
 5. **Build/gate**: build `services/article_intel_summary/Dockerfile` and root `Dockerfile` from the same approved exact SHA; verify label `org.opencontainers.image.revision`, Summary UID10001 and Reader health Caddy readiness; perform synthetic read-only key/catalog/admin auth checks against disposable services and device/harness tests on phone/tablet/Fold 884×1104; never use real key for synthetic canary.
-6. **Governed deployment only after GO**: use `deploy/release-governance/release.py inspect → plan → promote`, one service at a time, exact **image ID** + approved SHA + hashed Compose override + manifest under `/dockerdata/compose/newsflux/.releases/`. Protected identities include NPM, Miniflux/DB, PR188 and whichever Reader/Summary is not being promoted. Reader may require `--ready-probe`; `release.py` rejects undefined readiness. Never use `ai-functional-release.sh all`, `latest` implicit, `docker compose up` broadly or merge upstream.
+6. **Governed deployment only after GO**: use `ops/deploy/release-governance/release.py inspect → plan → promote`, one service at a time, exact **image ID** + approved SHA + hashed Compose override + manifest under `/dockerdata/compose/newsflux/.releases/`. Protected identities include NPM, Miniflux/DB, PR188 and whichever Reader/Summary is not being promoted. Reader may require `--ready-probe`; `release.py` rejects undefined readiness. Never use `ai-functional-release.sh all`, `latest` implicit, `docker compose up` broadly or merge upstream.
 7. **Readback after canary**: admin session can read status without plaintext, non-admin gets 403, key test GET-only LiteLLM catalog no inference, save existing NewsFlux-specific key under explicit approval, model approve/revoke readback with CAS; selected primary/fallback may change without modifying code. Confirm no browser storage secrets, no log leakage, no stealth external fallback. Recheck protected Docker metadata unchanged.
 8. **Rollback**: if Summary/Reader unhealthy or external content routing unverified, `release.py rollback --manifest` for the exact promoted service and verify previous config hash and image ID. If a managed credential/policy update must be reverted, use the service-local, revision-gated `python3 -B -m services.article_intel_summary.operator_restore_ai_settings --expected-revision <current-32-hex> --confirm RESTORE_PREVIOUS_NEWSFLUX_AI_CONFIG` **as the Summary UID10001 under supervised operator GO**, then read back status. Private previous.json/activated/status may not be printed. Key-material rollback and container rollback are separate scopes.
 9. **PR260 remains independent and HOLD**: enabling _real article inference_, even for local Ollama, still requires R4B effective LiteLLM routing/privacy proof, #260's own review/merge and explicit flags/GO. Installing the dark admin settings UX is **not** authorization for article processing.
@@ -32,7 +32,7 @@
 ```bash
 # Prerequisite: current approved merged main SHA and exact staging checkout
 # are established from GitHub. Never reuse the historical integration test SHA.
-sudo python3 deploy/release-governance/release.py inspect --project newsflux
+sudo python3 ops/deploy/release-governance/release.py inspect --project newsflux
 # After preflight and separate GO, release.py PLAN requires:
 # --project newsflux --service summary-api|newsflux
 # --candidate-image sha256:<EXACT_IMAGE_ID>
@@ -42,9 +42,9 @@ sudo python3 deploy/release-governance/release.py inspect --project newsflux
 # --extra-override <HASHED_CONFIG_ONLY_LAYER> as justified
 # --ready-probe <READER_PROBE_JSON> when required.
 # Only after validated manifest+GO:
-# sudo python3 deploy/release-governance/release.py promote --manifest <HASHED_MANIFEST_PATH>
+# sudo python3 ops/deploy/release-governance/release.py promote --manifest <HASHED_MANIFEST_PATH>
 # On a supervised rollback:
-# sudo python3 deploy/release-governance/release.py rollback --manifest <HASHED_MANIFEST_PATH>
+# sudo python3 ops/deploy/release-governance/release.py rollback --manifest <HASHED_MANIFEST_PATH>
 ```
 
 **Never guess** the current Compose stack file order, NPM host settings, private key path, published network routes, Reader route mounts or approved operator SHA. If any is unresolved, `INSTALL_GATE=HOLD`; retain currently deployed images and flags OFF.

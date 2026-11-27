@@ -65,7 +65,7 @@ SRC=abd67c136f185af52066df2772ad7e039ee062fb
 EXP_PROC=797708f18e24c7001188dab110fc3dcf53d9b54d6aa38619a7adacd43d3e0f6e
 EXP_SUMMARY_IMAGE=sha256:db40e22a12ce3776c2f00666bc7523c7cfbf2127f7e265182d0941dc3b711049
 EXP_SUMMARY_REVISION=d54eda2bdb8bc5c3d1bd58d40236f48da762e852
-P=deploy/r44-admin-allowlist/r44-allowlist.sh
+P=ops/deploy/r44-admin-allowlist/r44-allowlist.sh
 KV='^[A-Z][A-Z0-9_]{0,63}=[A-Za-z0-9_.:,+-]{0,96}$'
 echo "OMV_HOST_IDENTITY=$( { hostname; cat /etc/machine-id 2>/dev/null; } | sha256sum | cut -c1-16)"
 D="$(mktemp -d /tmp/nf-r44.XXXXXX)" || { echo "R44_COMMAND=NO_GO"; exit 90; }

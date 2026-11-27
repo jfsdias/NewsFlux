@@ -1,0 +1,138 @@
+/* global fetch, console */
+/* eslint-disable unicorn/no-await-expression-member, unicorn/prevent-abbreviations -- Local-only test harness. */
+import process from "node:process"
+import assert from "node:assert/strict"
+import { spawn } from "node:child_process"
+import { readFile, mkdtemp, rm, writeFile } from "node:fs/promises"
+import http from "node:http"
+import os from "node:os"
+import path from "node:path"
+import { setTimeout as sleep } from "node:timers/promises"
+
+const binary = process.env.PILOT_CADDY_BINARY
+if (!binary) throw new Error("PILOT_CADDY_BINARY is required")
+const dir = await mkdtemp(path.join(os.tmpdir(), "newsflux-caddy-test-"))
+const upstream = http.createServer((request, res) => {
+  res.writeHead(200, { "content-type": "application/json" })
+  res.end(JSON.stringify({ path: request.url, protocol: request.headers["x-forwarded-proto"] }))
+})
+await new Promise((resolve) => upstream.listen(18_889, "127.0.0.1", resolve))
+const config = (await readFile("ops/deploy/article-intel-pilot/Caddyfile", "utf8"))
+  .replace(":2000", ":18890")
+  .replaceAll("summary-api:8788", "127.0.0.1:18889")
+await writeFile(path.join(dir, "Caddyfile"), config)
+const proc = spawn(
+  binary,
+  ["run", "--config", path.join(dir, "Caddyfile"), "--adapter", "caddyfile"],
+  {
+    env: { ...process.env, NEWSFLUX_PILOT_TRUSTED_PROXY_IP: "127.0.0.1" },
+    stdio: "ignore",
+  },
+)
+try {
+  let ready = false
+  for (let index = 0; index < 100 && !ready; index += 1) {
+    try {
+      await fetch("http://127.0.0.1:18890/api/ai/other")
+      ready = true
+    } catch {
+      await sleep(50)
+    }
+  }
+  assert.ok(ready)
+  const route = "http://127.0.0.1:18890/api/ai/v1/entries/501/summary"
+  const untrustedResponse = await fetch("http://[::1]:18890/api/ai/v1/entries/501/summary", {
+    method: "POST",
+    headers: { "X-Forwarded-Proto": "https" },
+  })
+  assert.equal(untrustedResponse.status, 403)
+  assert.equal((await fetch(route, { method: "POST" })).status, 403)
+  const response = await fetch(route, { method: "POST", headers: { "X-Forwarded-Proto": "https" } })
+  assert.equal(response.status, 200)
+  assert.deepEqual(await response.json(), {
+    path: "/api/ai/v1/entries/501/summary",
+    protocol: "https",
+  })
+  assert.equal(
+    (
+      await fetch("http://127.0.0.1:18890/api/ai/admin", {
+        headers: { "X-Forwarded-Proto": "https" },
+      })
+    ).status,
+    403,
+  )
+  const adminBase = "http://127.0.0.1:18890/api/ai/v1/admin/litellm"
+  for (const [action, method] of [
+    ["status", "GET"],
+    ["models", "GET"],
+    ["policy", "GET"],
+    ["test-key", "POST"],
+    ["save-key", "POST"],
+    ["save-policy", "POST"],
+    ["approve-model", "POST"],
+    ["remove-model", "POST"],
+  ]) {
+    const allowed = await fetch(`${adminBase}/${action}`, {
+      method,
+      headers: { "X-Forwarded-Proto": "https" },
+    })
+    assert.equal(allowed.status, 200)
+    assert.deepEqual(await allowed.json(), {
+      path: `/api/ai/v1/admin/litellm/${action}`,
+      protocol: "https",
+    })
+    const noProto = await fetch(`${adminBase}/${action}`, { method })
+    assert.equal(noProto.status, 403)
+    const noTrust = await fetch(`http://[::1]:18890/api/ai/v1/admin/litellm/${action}`, {
+      method,
+      headers: { "X-Forwarded-Proto": "https" },
+    })
+    assert.equal(noTrust.status, 403)
+  }
+  // Wrong method per action never reaches the Summary API.
+  for (const [action, method] of [
+    ["status", "POST"],
+    ["policy", "DELETE"],
+    ["save-key", "GET"],
+    ["approve-model", "PUT"],
+    ["remove-model", "DELETE"],
+  ]) {
+    const wrong = await fetch(`${adminBase}/${action}`, {
+      method,
+      headers: { "X-Forwarded-Proto": "https" },
+    })
+    assert.equal(wrong.status, 403, `${method} ${action}`)
+  }
+  for (const denied of [
+    "/api/ai/v1/admin/litellm",
+    "/api/ai/v1/admin/litellm/",
+    "/api/ai/v1/admin/litellm/delete-key",
+    "/api/ai/v1/admin/litellm/save-key/extra",
+    "/api/ai/v1/admin/litellm/key",
+    "/api/ai/v1/admin/other",
+    "/api/ai/v1/keys",
+  ]) {
+    const response = await fetch("http://127.0.0.1:18890" + denied, {
+      method: "POST",
+      headers: { "X-Forwarded-Proto": "https" },
+    })
+    assert.equal(response.status, 403)
+  }
+  const adminPreflight = await fetch(`${adminBase}/save-key`, {
+    method: "OPTIONS",
+    headers: { "X-Forwarded-Proto": "https" },
+  })
+  assert.equal(adminPreflight.status, 200)
+  const unknownPreflight = await fetch(`${adminBase}/delete-key`, {
+    method: "OPTIONS",
+    headers: { "X-Forwarded-Proto": "https" },
+  })
+  assert.equal(unknownPreflight.status, 403)
+  // Existing catchall preserved: non-API static paths are still served by the SPA handlers.
+  assert.notEqual((await fetch("http://127.0.0.1:18890/")).status, 403)
+  console.log("CADDY_ROUTE=PASS")
+} finally {
+  proc.kill("SIGTERM")
+  upstream.close()
+  await rm(dir, { recursive: true, force: true })
+}

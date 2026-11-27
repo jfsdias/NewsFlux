@@ -11,8 +11,8 @@ on:
       - "src/utils/litellm-admin-state*"
       - "src/utils/litellm-migration-state*"
       - "src/utils/summary-model-preference*"
-      - "scripts/pilot-e2e/*migration*"
-      - "scripts/pilot-e2e/*admin*"
+      - "tests/aux/pilot-e2e/*migration*"
+      - "tests/aux/pilot-e2e/*admin*"
       - "scripts/tests/ai-settings-admin*"
       - ".github/workflows/ai-settings-tests.yaml"
 
@@ -74,4 +74,4 @@ jobs:
           python -m pip install -r services/article_intel_summary/requirements.lock
           node src/scripts/version-info.js
       - name: Real Summary admin API + Settings UI (viewports, locales, leak checks)
-        run: pnpm exec playwright test --config scripts/pilot-e2e/playwright-admin.config.js --trace off
+        run: pnpm exec playwright test --config tests/aux/pilot-e2e/playwright-admin.config.js --trace off

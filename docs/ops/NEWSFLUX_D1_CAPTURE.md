@@ -19,7 +19,7 @@ executor and SHA stay as they are.
 
 ## What the capture does (one root invocation, read-only toward Docker/LiteLLM/DB)
 
-`deploy/release-governance/d1_capture.py` (#274), with the admitted auditor (57c536f, sha256 `6e5bef4e…`):
+`ops/deploy/release-governance/d1_capture.py` (#274), with the admitted auditor (57c536f, sha256 `6e5bef4e…`):
 
 1. Verifies the auditor sha256 and the vendored receipt contract (sha256 `7aa686a3…`, verbatim from 57c536f).
 2. Reads the Summary and LiteLLM identity lines. The LiteLLM image ID and repo digest must equal the R5 pins.
@@ -49,7 +49,7 @@ service. `AI flags` must be OFF (dark Summary), as for the diagnostic.
 bash -o pipefail -c 'set -Eeuo pipefail; umask 077; s="$(mktemp -d /root/newsflux-d1src.XXXXXXXX)"; o="$(mktemp -d /root/newsflux-d1.XXXXXXXX)";
 B=https://raw.githubusercontent.com/jfsdias/NewsFlux;
 curl -fsS --max-time 60 -o "$s/auditor.py" "$B/57c536fb583a52bb42a88d9a1b051869abc64b1f/deploy/release-governance/s5_db_readonly_audit.py";
-curl -fsS --max-time 60 -o "$s/d1_capture.py" "$B/<PR274_HEAD>/deploy/release-governance/d1_capture.py";
+curl -fsS --max-time 60 -o "$s/d1_capture.py" "$B/<PR274_HEAD>/ops/deploy/release-governance/d1_capture.py";
 curl -fsS --max-time 60 -o "$s/d1_evidence.py" "$B/<PR274_HEAD>/services/article_intel_summary/d1_evidence.py";
 curl -fsS --max-time 60 -o "$s/d1_receipt_contract.py" "$B/<PR274_HEAD>/services/article_intel_summary/d1_receipt_contract.py";
 printf "%s\n" "6e5bef4ed383e43b16264ce4a94bd82ad5f4b0523b1bbf2b57e7576490f14d11  $s/auditor.py" "fcf746fd270ecf77a7b682e221ae6403a7923280ddca992ba7873d100392e636  $s/d1_capture.py" \

@@ -39,7 +39,7 @@ UI (#263): four connection states (`Connected` only after authenticated discover
 `Validation failed`, `Status not verified`), price class, paid consent only for paid models, unpriced
 external models cannot be approved, code-specific errors, credential cleared after every test failure
 and every save attempt, admin 5xx shown as failure instead of silently hidden. 6 locales.
-Real-backend Playwright harness (`scripts/pilot-e2e/ai-settings-admin.spec.js`) + CI job.
+Real-backend Playwright harness (`tests/aux/pilot-e2e/ai-settings-admin.spec.js`) + CI job.
 
 Caddy (#264): exact action allowlist with per-action method (GET status/models/policy; POST
 test-key/save-key/save-policy/approve-model/remove-model; OPTIONS on those only). Unknown actions,
@@ -72,7 +72,7 @@ suffixes and wrong methods get 403 at the edge.
 ## 5. Preflight (read-only)
 
 ```bash
-sudo python3 deploy/release-governance/release.py inspect --project newsflux
+sudo python3 ops/deploy/release-governance/release.py inspect --project newsflux
 ```
 
 ```bash
@@ -98,11 +98,11 @@ Order: merge #262 → retarget #263 to `main` and merge → merge #264 (independ
 images from the **same merged main SHA** and use only governed release:
 
 ```bash
-sudo python3 deploy/release-governance/release.py plan --project newsflux --service summary-api --candidate-image sha256:<SUMMARY_IMAGE_ID> --approved-sha <MERGED_MAIN_SHA> --protected <CONFIRMED_PROTECTED_CONTAINER> --release-dir /dockerdata/compose/newsflux/.releases/<RELEASE_ID>
+sudo python3 ops/deploy/release-governance/release.py plan --project newsflux --service summary-api --candidate-image sha256:<SUMMARY_IMAGE_ID> --approved-sha <MERGED_MAIN_SHA> --protected <CONFIRMED_PROTECTED_CONTAINER> --release-dir /dockerdata/compose/newsflux/.releases/<RELEASE_ID>
 ```
 
 ```bash
-sudo python3 deploy/release-governance/release.py promote --manifest <HASHED_MANIFEST_PATH>
+sudo python3 ops/deploy/release-governance/release.py promote --manifest <HASHED_MANIFEST_PATH>
 ```
 
 Repeat for the Reader (`--service newsflux`, `--ready-probe` if required). Never `docker compose up -d`,
@@ -118,7 +118,7 @@ preflight again (`KEY_SOURCE=MANAGED`). Confirm no key in browser storage, logs 
 
 ## 8. Rollback
 
-- **Container:** `sudo python3 deploy/release-governance/release.py rollback --manifest <HASHED_MANIFEST_PATH>`
+- **Container:** `sudo python3 ops/deploy/release-governance/release.py rollback --manifest <HASHED_MANIFEST_PATH>`
   for the promoted service; verify previous image ID and config hash.
 - **Managed record (operator, supervised, inside the Summary container as UID 10001):**
 
@@ -154,7 +154,7 @@ ignores it.
 
 `Summary release isolated rehearsal` → `synthetic-release` fails on #264 (it **already failed on the original
 #264 head `927fb64`**, before R2): `UPGRADE_GATE` 20 pass / 5 fail with `ACTIVE_CADDY_DRIFT`.
-`deploy/release-governance/ai-functional-release.sh` and `rehearse-stage1-upgrade.sh` encode the invariant
+`ops/deploy/release-governance/ai-functional-release.sh` and `rehearse-stage1-upgrade.sh` encode the invariant
 "an upgrade from Stage 1 never changes the pilot Caddyfile": `update-caddy` accepts only the pre-Stage-1 hash
 `6970ee…` or a file already equal to the new one. The installed Stage 1 Caddyfile is `main`'s (`56d434b…`), so
 **any** Caddyfile change, including this admin route, is rejected. `release.py` promotes images and does not

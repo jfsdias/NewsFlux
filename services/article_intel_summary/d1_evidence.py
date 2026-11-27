@@ -1,6 +1,6 @@
 """D1 cost-authority evidence, schema v3 (D1-R7-01): one capture binds key, time, identities, policy and receipt.
 
-Stdlib only and importable by file path: the OMV capture (deploy/release-governance/d1_capture.py, run as root
+Stdlib only and importable by file path: the OMV capture (ops/deploy/release-governance/d1_capture.py, run as root
 on the host, where the Summary's Python dependencies are not installed) and the Summary runtime/preflight
 (services.article_intel_summary.cost_authority) judge the same document with the same code.
 

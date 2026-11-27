@@ -49,11 +49,11 @@ All Top-N measurements use the first `min(12, displayed article slots)` IDs in t
 
 ## Offline evaluation and measured findings
 
-The reproducible supplementary calculation is in `scripts/tests/personalization-relevance-gate-01.js`, with a test in `scripts/personalization-relevance-gate-01.test.js` and receipt in `scripts/tests/reports/personalization-relevance-gate-01.json`. Re-run with:
+The reproducible supplementary calculation is in `research/personalization-pilot/tests/personalization-relevance-gate-01.js`, with a test in `research/personalization-pilot/personalization-relevance-gate-01.test.js` and receipt in `research/personalization-pilot/tests/reports/personalization-relevance-gate-01.json`. Re-run with:
 
 ```sh
 node scripts/personalization-relevance-gate-01-report.js 0faedf939f6c97867d6fac6c019f48476163d629
-node --test scripts/personalization-relevance-gate-01.test.js
+node --test research/personalization-pilot/personalization-relevance-gate-01.test.js
 ```
 
 It reads the existing evaluator's 12 fixed scenarios and final compositions; it does not edit or rewrite the predecessor's report. Metric output is deterministic. The separate predecessor report still contains timing samples, which naturally vary by run.

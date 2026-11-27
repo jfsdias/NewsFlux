@@ -80,6 +80,8 @@ test("source and script tests run on every supported Node version", () => {
   assert.equal(job.strategy["fail-fast"], false)
   assert.ok(commands.includes("pnpm test:src"))
   assert.ok(commands.includes("pnpm test:scripts"))
+  assert.ok(commands.includes("pnpm test:ops"))
+  assert.ok(commands.includes("pnpm test:research"))
 })
 
 test("the production build runs on every supported Node version", () => {
@@ -111,7 +113,7 @@ test("the Python suite runs independently on the supported interpreter", () => {
     "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s services/article_intel_auth/tests -p 'test_*.py' -v",
     "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s services/article_intel_summary/tests -p 'test_*.py' -v",
     "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s services/content_fallback/tests -p 'test_*.py' -v",
-    "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/reader-wallhop-p1-r2 -p 'test_*.py' -v",
+    "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s research/reader-wallhop-p1-r2 -p 'test_*.py' -v",
   ])
 })
 
@@ -134,7 +136,12 @@ test("package scripts cover every source and script test file", () => {
 
   assert.equal(scripts["test:src"], 'node --test "src/**/*.test.js"')
   assert.equal(scripts["test:scripts"], 'node --test "scripts/*.test.js"')
-  assert.equal(scripts.test, "pnpm run test:src && pnpm run test:scripts")
+  assert.equal(scripts["test:ops"], 'node --test "ops/scripts/*.test.js"')
+  assert.equal(scripts["test:research"], 'node --test "research/*/*.test.js"')
+  assert.equal(
+    scripts.test,
+    "pnpm run test:src && pnpm run test:scripts && pnpm run test:ops && pnpm run test:research",
+  )
   assert.equal(scripts["knip:check"], "node scripts/check-knip-baseline.js")
 })
 
@@ -150,6 +157,8 @@ test("no-op and swallowed-error package script mutations are rejected", () => {
     "format:check",
     "test:src",
     "test:scripts",
+    "test:ops",
+    "test:research",
     "build",
     "knip:check",
     "test:e2e",
@@ -259,7 +268,7 @@ test("the Article Intelligence Reader job builds both flag states before serving
     (step) => step.name === "Run recovery and summary cross-feature scenarios",
   )
   const playwrightConfig = readFileSync(
-    new URL("../playwright.article-intelligence.config.js", import.meta.url),
+    new URL("../tests/aux/playwright/playwright.article-intelligence.config.js", import.meta.url),
     "utf8",
   )
 
@@ -310,7 +319,9 @@ test("the blocking UX-REACH job builds and executes its isolated 11-test Playwri
   assert.ok(stepsOf(job).some((step) => step.name === "Verify pinned Playwright browser image"))
   assert.ok(commands.includes("pnpm build"))
   assert.ok(
-    commands.includes("pnpm exec playwright test --config=playwright.ux-reach-01.config.js"),
+    commands.includes(
+      "pnpm exec playwright test --config=tests/aux/playwright/playwright.ux-reach-01.config.js",
+    ),
   )
 
   const upload = stepsOf(job).find((step) => step.name === "Upload UX-REACH diagnostics")

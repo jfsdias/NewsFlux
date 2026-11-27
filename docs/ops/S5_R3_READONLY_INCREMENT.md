@@ -125,7 +125,7 @@ scope.
 There is no authorized agent access to OMV, so this is an operator command:
 
 ```bash
-sudo bash deploy/release-governance/s5-litellm-image-inventory.sh \
+sudo bash ops/deploy/release-governance/s5-litellm-image-inventory.sh \
   --container litellm --expect-id-prefix 09650c457315 --project litellm --service litellm
 ```
 
@@ -343,7 +343,7 @@ allowlist:
 
 ### 8.4 Operator wrapper (prepared, NOT run; PM GO required)
 
-`deploy/release-governance/s5-r3-omv-readonly-run.sh` runs these gates in order, and holds with no
+`ops/deploy/release-governance/s5-r3-omv-readonly-run.sh` runs these gates in order, and holds with no
 further call at the first failure:
 
 1. **G1, exact source:** a clean checkout at the expected HEAD; the auditor file tracked,
