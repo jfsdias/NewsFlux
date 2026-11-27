@@ -12,7 +12,7 @@
 set -Eeuo pipefail
 umask 022
 here="$(cd "$(dirname "$0")" && pwd)"
-repo="$(cd "$here/../.." && pwd)"
+repo="$(git -C "$here" rev-parse --show-toplevel)"
 DEFAULT_LITELLM_IMAGE="litellm/litellm@sha256:11175975a3093e05e92faee2fe2fe3412a3ae2fcaa849eb0fe25d5f0d8bcb2e9"
 LITELLM_IMAGE="${S5R3_LITELLM_IMAGE:-$DEFAULT_LITELLM_IMAGE}"
 if [[ "$LITELLM_IMAGE" == "$DEFAULT_LITELLM_IMAGE" ]]; then LITELLM_VERSION="1.109.1"; else LITELLM_VERSION="${S5R3_EXPECTED_LITELLM_VERSION:-}"; fi

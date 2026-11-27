@@ -14,7 +14,7 @@
 set -Eeuo pipefail
 umask 022
 here="$(cd "$(dirname "$0")" && pwd)"
-repo="$(cd "$here/../.." && pwd)"
+repo="$(git -C "$here" rev-parse --show-toplevel)"
 LITELLM_IMAGE="${LITELLM_IMAGE:-litellm/litellm@sha256:11175975a3093e05e92faee2fe2fe3412a3ae2fcaa849eb0fe25d5f0d8bcb2e9}"
 PG_IMAGE="postgres@sha256:f377d590e5474681d4d7838635031a2b50647923b7abfa803ce9b5ff35d5c663"
 CADDY_IMAGE="caddy@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d"

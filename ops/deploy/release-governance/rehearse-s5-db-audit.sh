@@ -167,7 +167,7 @@ done
 [[ "$leak" == 0 ]] && ok NO_SECRET_ALIAS_URL_OR_HASH_IN_OUTPUT || ko NO_SECRET_ALIAS_URL_OR_HASH_IN_OUTPUT
 
 # --- Host entry point end to end: real Summary image (labelled like production) + real LiteLLM -----
-repo="$(cd "$here/../.." && pwd)"
+repo="$(git -C "$here" rev-parse --show-toplevel)"
 build_args=(-f "$repo/services/article_intel_summary/Dockerfile")
 context="$repo"
 if [[ -n "${NEWSFLUX_TEST_PIP_CA:-}" ]]; then # TLS-inspecting sandboxes only (same pattern as rehearse-s5-key-gate.sh)
