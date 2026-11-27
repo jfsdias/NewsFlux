@@ -65,8 +65,9 @@ test.describe("NF-E02 Smart Views", () => {
     await page.reload()
     await expect(page.locator("a.article-entry").first()).toBeVisible()
     await openSearch(page)
-    await expect(page.getByText("Feed 1 search")).toBeVisible()
-    await expect(page.getByText(QUERY_A)).toBeVisible()
+    const dialog = page.getByRole("dialog")
+    await expect(dialog.getByText("Feed 1 search")).toBeVisible()
+    await expect(dialog.getByText(QUERY_A)).toBeVisible()
     expect(await mock.mutations()).toEqual([])
   })
 
@@ -101,7 +102,7 @@ test.describe("NF-E02 Smart Views", () => {
     // Rename uses the component's native confirmation prompt.
     page.once("dialog", (dialog) => dialog.accept("Renamed view"))
     await page.getByRole("button", { name: "Rename First view", exact: true }).first().click()
-    await expect(page.getByText("Renamed view")).toBeVisible()
+    await expect(page.getByRole("dialog").getByText("Renamed view")).toBeVisible()
 
     // Move the second item above the first; DOM order is the persistence contract.
     await page.getByRole("button", { name: "Move Second view up" }).click()
@@ -117,8 +118,8 @@ test.describe("NF-E02 Smart Views", () => {
     // Reopen the modal to prove rename/reorder/delete survived component remount.
     await closeSearch(page)
     await openSearch(page)
-    await expect(page.getByText("Renamed view")).toBeVisible()
-    await expect(page.getByText(QUERY_A)).toBeVisible()
+    await expect(page.getByRole("dialog").getByText("Renamed view")).toBeVisible()
+    await expect(page.getByRole("dialog").getByText(QUERY_A)).toBeVisible()
     await expect(
       page.locator('[aria-label="Saved views"]').getByText(QUERY_B, { exact: true }),
     ).toHaveCount(0)
