@@ -1,6 +1,5 @@
 import { performance } from "node:perf_hooks"
 
- 
 import { selectInitialHighlightIds } from "../../../src/utils/home-editorial-projection.js"
 import {
   appendHomeSessionEntries,
@@ -8,17 +7,17 @@ import {
   hasHomeEditorialCompositionChanged,
   projectHomeSession,
   transitionHomeSession,
-} from "../../../src/utils/home-editorial-session.js"  
+} from "../../../src/utils/home-editorial-session.js"
 import {
   HOME_PERSONALIZATION_FRESHNESS_WINDOW,
   HOME_STARRED_PROFILE_LIMIT,
-} from "../../../src/utils/home-personalization-constants.js"  
+} from "../../../src/utils/home-personalization-constants.js"
 import {
   commitHomePersonalizationSnapshot,
   createHomePersonalizationGeneration,
   failHomePersonalizationProfile,
   resolveHomePersonalizationProfile,
-} from "../../../src/utils/home-personalization-generation.js"  
+} from "../../../src/utils/home-personalization-generation.js"
 import { createHomePersonalizationProfile } from "../../../src/utils/home-personalization-profile.js"
 import { projectHomePersonalization } from "../../../src/utils/home-personalization-projection.js"
 

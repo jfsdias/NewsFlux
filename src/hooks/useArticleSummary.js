@@ -94,158 +94,167 @@ const useArticleSummary = ({ activeContent, routeEntryId, sessionRevision }) => 
 
   // Revoke an automatic request synchronously when consent changes while it is still
   // waiting for the catalog. Do not cancel manual requests or an already dispatched POST.
-  useEffect(() => settingsState.listen((nextSettings) => {
-    if (automaticSummaryEnabled(nextSettings)) {
-      return
-    }
-    const pending = requestRef.current
-    if (pending?.automatic && pending.phase === "catalog") {
-      pending.controller.abort()
-      requestRef.current = null
-    }
-    setState((current) =>
-      current.status === "loading" && current.automatic && current.phase === "catalog"
-        ? idleState(current.entryId, current.authSessionKey, current.sessionRevision)
-        : current,
-    )
-  }), [])
+  useEffect(
+    () =>
+      settingsState.listen((nextSettings) => {
+        if (automaticSummaryEnabled(nextSettings)) {
+          return
+        }
+        const pending = requestRef.current
+        if (pending?.automatic && pending.phase === "catalog") {
+          pending.controller.abort()
+          requestRef.current = null
+        }
+        setState((current) =>
+          current.status === "loading" && current.automatic && current.phase === "catalog"
+            ? idleState(current.entryId, current.authSessionKey, current.sessionRevision)
+            : current,
+        )
+      }),
+    [],
+  )
 
-  const summarize = useCallback(async (automatic = false) => {
-    if (!canSummarize) {
-      return
-    }
-    requestRef.current?.controller.abort()
-    const controller = new AbortController()
-    const request = {
-      authSessionKey,
-      controller,
-      entryId,
-      automatic: automatic === true,
-      phase: "catalog",
-      requestId: globalThis.crypto?.randomUUID?.() ?? `request-${Date.now()}`,
-      sessionRevision: getDataSessionRevision(),
-    }
-    requestRef.current = request
-    const isCurrent = () => {
-      const currentAuth = authState.get()
-      const activeRequest = requestRef.current
-      return (
-        isCurrentArticleSummaryRequest(request, {
-          requestId: activeRequest?.requestId,
-          entryId,
-          activeEntryId: currentRef.current.activeEntryId,
-          routeEntryId: currentRef.current.routeEntryId,
-          authSessionKey: getAuthSessionKey(currentAuth),
-          sessionRevision: getDataSessionRevision(),
-        }) && !controller.signal.aborted
-      )
-    }
-    setState({
-      entryId,
-      authSessionKey,
-      sessionRevision: request.sessionRevision,
-      status: "loading",
-      summary: null,
-      requestId: request.requestId,
-      automatic: request.automatic,
-      phase: request.phase,
-    })
-
-    const setModelUnavailable = () =>
+  const summarize = useCallback(
+    async (automatic = false) => {
+      if (!canSummarize) {
+        return
+      }
+      requestRef.current?.controller.abort()
+      const controller = new AbortController()
+      const request = {
+        authSessionKey,
+        controller,
+        entryId,
+        automatic: automatic === true,
+        phase: "catalog",
+        requestId: globalThis.crypto?.randomUUID?.() ?? `request-${Date.now()}`,
+        sessionRevision: getDataSessionRevision(),
+      }
+      requestRef.current = request
+      const isCurrent = () => {
+        const currentAuth = authState.get()
+        const activeRequest = requestRef.current
+        return (
+          isCurrentArticleSummaryRequest(request, {
+            requestId: activeRequest?.requestId,
+            entryId,
+            activeEntryId: currentRef.current.activeEntryId,
+            routeEntryId: currentRef.current.routeEntryId,
+            authSessionKey: getAuthSessionKey(currentAuth),
+            sessionRevision: getDataSessionRevision(),
+          }) && !controller.signal.aborted
+        )
+      }
       setState({
         entryId,
         authSessionKey,
         sessionRevision: request.sessionRevision,
-        status: "model_unavailable",
+        status: "loading",
         summary: null,
-        retryable: false,
+        requestId: request.requestId,
+        automatic: request.automatic,
+        phase: request.phase,
       })
 
-    try {
-      // The catalog is revalidated on every explicit action; a stored choice is never
-      // silently replaced by another model.
-      const catalog = await fetchModelCatalog({ signal: controller.signal })
-      if (!catalog || !isCurrent()) {
-        return
-      }
-      if (!maySendAutomaticSummary(automatic === true, settingsState.get())) {
-        requestRef.current = null
-        setState(idleState(entryId, authSessionKey, request.sessionRevision))
-        return
-      }
-      const selection = resolveSummaryRouting(settings, catalog)
-      if (!selection.modelId) {
-        setModelUnavailable()
-        return
-      }
-      const profile = buildSummaryProfile(settings)
-      request.phase = "summary"
-      setState((current) => current.requestId === request.requestId ? { ...current, phase: request.phase } : current)
-      const result = await requestArticleSummary({
-        entryId,
-        signal: controller.signal,
-        modelId: selection.modelId,
-        fallbackModelId: selection.fallbackModelId,
-        consent: selection.consent,
-        profile,
-      })
-      if (!result || !isCurrent()) {
-        return
-      }
-      if (result.kind === "error" && result.error.code.startsWith("MODEL_NOT_")) {
-        setModelUnavailable()
-        return
-      }
-      if (result.kind === "summary") {
-        const finished = {
-          status: result.summary.status,
-          summary: result.summary,
-          modelLabel: selection.entry.label,
-          // Labels for verifiable primary/fallback provenance (catalog IDs -> display labels).
-          modelLabels: Object.fromEntries(catalog.models.map((model) => [model.id, model.label])),
-        }
-        storeCachedSummary(cacheKey, finished)
+      const setModelUnavailable = () =>
         setState({
           entryId,
           authSessionKey,
           sessionRevision: request.sessionRevision,
-          ...finished,
-        })
-      } else if (result.kind === "error") {
-        setState({
-          entryId,
-          authSessionKey,
-          sessionRevision: request.sessionRevision,
-          status: "error",
-          summary: null,
-          retryable: result.error.retryable,
-          errorCode: result.error.code,
-        })
-      } else {
-        setState({
-          entryId,
-          authSessionKey,
-          sessionRevision: request.sessionRevision,
-          status: "error",
+          status: "model_unavailable",
           summary: null,
           retryable: false,
-          errorCode: "INVALID_RESPONSE",
         })
-      }
-    } catch (error) {
-      if (isCurrent()) {
-        setState({
+
+      try {
+        // The catalog is revalidated on every explicit action; a stored choice is never
+        // silently replaced by another model.
+        const catalog = await fetchModelCatalog({ signal: controller.signal })
+        if (!catalog || !isCurrent()) {
+          return
+        }
+        if (!maySendAutomaticSummary(automatic === true, settingsState.get())) {
+          requestRef.current = null
+          setState(idleState(entryId, authSessionKey, request.sessionRevision))
+          return
+        }
+        const selection = resolveSummaryRouting(settings, catalog)
+        if (!selection.modelId) {
+          setModelUnavailable()
+          return
+        }
+        const profile = buildSummaryProfile(settings)
+        request.phase = "summary"
+        setState((current) =>
+          current.requestId === request.requestId ? { ...current, phase: request.phase } : current,
+        )
+        const result = await requestArticleSummary({
           entryId,
-          authSessionKey,
-          sessionRevision: request.sessionRevision,
-          status: "error",
-          summary: null,
-          retryable: true,
-          errorCode: catchErrorCode(error),
+          signal: controller.signal,
+          modelId: selection.modelId,
+          fallbackModelId: selection.fallbackModelId,
+          consent: selection.consent,
+          profile,
         })
+        if (!result || !isCurrent()) {
+          return
+        }
+        if (result.kind === "error" && result.error.code.startsWith("MODEL_NOT_")) {
+          setModelUnavailable()
+          return
+        }
+        if (result.kind === "summary") {
+          const finished = {
+            status: result.summary.status,
+            summary: result.summary,
+            modelLabel: selection.entry.label,
+            // Labels for verifiable primary/fallback provenance (catalog IDs -> display labels).
+            modelLabels: Object.fromEntries(catalog.models.map((model) => [model.id, model.label])),
+          }
+          storeCachedSummary(cacheKey, finished)
+          setState({
+            entryId,
+            authSessionKey,
+            sessionRevision: request.sessionRevision,
+            ...finished,
+          })
+        } else if (result.kind === "error") {
+          setState({
+            entryId,
+            authSessionKey,
+            sessionRevision: request.sessionRevision,
+            status: "error",
+            summary: null,
+            retryable: result.error.retryable,
+            errorCode: result.error.code,
+          })
+        } else {
+          setState({
+            entryId,
+            authSessionKey,
+            sessionRevision: request.sessionRevision,
+            status: "error",
+            summary: null,
+            retryable: false,
+            errorCode: "INVALID_RESPONSE",
+          })
+        }
+      } catch (error) {
+        if (isCurrent()) {
+          setState({
+            entryId,
+            authSessionKey,
+            sessionRevision: request.sessionRevision,
+            status: "error",
+            summary: null,
+            retryable: true,
+            errorCode: catchErrorCode(error),
+          })
+        }
       }
-    }
-  }, [authSessionKey, cacheKey, canSummarize, entryId, settings])
+    },
+    [authSessionKey, cacheKey, canSummarize, entryId, settings],
+  )
 
   // Opening an article: show this tab's cached summary at once; otherwise, with automatic
   // summaries on, request one after a short dwell. Errors are never retried automatically.

@@ -2,14 +2,13 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { test } from "node:test"
 
- 
 import { createHomeCategoryLanes } from "../../src/utils/home-category-projection.js"
 import { hasHomeEditorialCompositionChanged } from "../../src/utils/home-editorial-session.js"
 import {
   commitHomePersonalizationSnapshot,
   createHomePersonalizationGeneration,
   resolveHomePersonalizationProfile,
-} from "../../src/utils/home-personalization-generation.js"  
+} from "../../src/utils/home-personalization-generation.js"
 import { createHomePersonalizationProfile } from "../../src/utils/home-personalization-profile.js"
 import { projectHomePersonalization } from "../../src/utils/home-personalization-projection.js"
 

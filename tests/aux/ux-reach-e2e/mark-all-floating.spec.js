@@ -1,4 +1,3 @@
- 
 import { expect, test } from "#e2e/support/fixtures.js"
 
 const ACTION_NAME = "Mark all as read"

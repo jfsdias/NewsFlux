@@ -20,8 +20,19 @@ export const SUMMARY_SETTING_KEYS = [
   "aiSummaryLanguage",
 ]
 
-export const summaryCacheKey = ({ authSessionKey, sessionRevision, entryId, entryVersion, settings }) => {
-  if (!authSessionKey || !Number.isSafeInteger(sessionRevision) || !Number.isSafeInteger(entryId) || entryId <= 0) {
+export const summaryCacheKey = ({
+  authSessionKey,
+  sessionRevision,
+  entryId,
+  entryVersion,
+  settings,
+}) => {
+  if (
+    !authSessionKey ||
+    !Number.isSafeInteger(sessionRevision) ||
+    !Number.isSafeInteger(entryId) ||
+    entryId <= 0
+  ) {
     return null
   }
   const shaping = SUMMARY_SETTING_KEYS.map((name) => settings?.[name] ?? null)

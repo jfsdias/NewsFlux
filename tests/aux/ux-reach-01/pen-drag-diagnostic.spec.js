@@ -1,4 +1,3 @@
- 
 import { expect, test } from "#e2e/support/fixtures.js"
 
 const dragHandleSelector = '[data-testid="mark-all-read-drag-handle"]'

@@ -2,7 +2,6 @@ import { mkdirSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import process from "node:process"
 
- 
 import { evaluateUxReachSuite } from "./scenario-contract.js"
 
 export default class UxReachFailClosedReporter {

@@ -1,7 +1,12 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { automaticSummaryChoice, automaticSummaryEnabled, maySendAutomaticSummary, withoutAutomaticSummaryConsent } from "./article-summary-consent.js" // eslint-disable-line import/extensions
+import {
+  automaticSummaryChoice,
+  automaticSummaryEnabled,
+  maySendAutomaticSummary,
+  withoutAutomaticSummaryConsent,
+} from "./article-summary-consent.js" // eslint-disable-line import/extensions
 
 test("default and legacy true never constitute consent", () => {
   assert.equal(automaticSummaryEnabled({}), false)

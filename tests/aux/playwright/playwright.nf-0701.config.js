@@ -3,7 +3,6 @@ import { fileURLToPath } from "node:url"
 
 import { defineConfig } from "@playwright/test"
 
- 
 import base from "../../../playwright.config.js"
 
 // Playwright resolves relative paths and web server commands against this config's directory.

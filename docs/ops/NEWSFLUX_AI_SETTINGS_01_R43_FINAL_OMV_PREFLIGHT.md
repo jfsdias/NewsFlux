@@ -11,8 +11,8 @@ Date: 2026-11-18 · Status: **NO-GO (pending operator receipt)** · Merges: none
 - Staging is a fresh `mktemp -d /tmp/nf-r43-preflight.XXXXXX`, refused if it resolves inside `/dockerdata/compose/newsflux/repo`, and removed by `trap` on every exit path. The production repo is only read (`rev-parse HEAD` before/after → `PROD_REPO_HEAD_UNCHANGED`).
 - Integrity pins, computed from the commit object:
 
-| File @ 4c3e075                                                | SHA-256                                                            |
-| ------------------------------------------------------------- | ------------------------------------------------------------------ |
+| File @ 4c3e075                                                    | SHA-256                                                            |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------ |
 | `ops/deploy/release-governance/ai-settings-readonly-preflight.sh` | `86670b2c9810e851d4d976a38b5a91c6060d351d0cd355edf3e44f093391f196` |
 | `ops/deploy/release-governance/ai-settings-flag-baseline.json`    | `7e7ff3a4399a96efdc67652f48d9f664e759b97e340eb59db564207916dc259d` |
 | `ops/deploy/article-intel-pilot/Caddyfile`                        | `56d434b9c81e66d9e03a827be3bd42f48dd68636c83a0ea9baa70322f30f95d6` |

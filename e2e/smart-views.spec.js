@@ -110,14 +110,18 @@ test.describe("NF-E02 Smart Views", () => {
     // Delete is explicit and must remove only the selected saved view.
     page.once("dialog", (dialog) => dialog.accept())
     await page.getByRole("button", { name: "Delete Second view", exact: true }).first().click()
-    await expect(page.locator('[aria-label="Saved views"]').getByText("Second view", { exact: true })).toHaveCount(0)
+    await expect(
+      page.locator('[aria-label="Saved views"]').getByText("Second view", { exact: true }),
+    ).toHaveCount(0)
 
     // Reopen the modal to prove rename/reorder/delete survived component remount.
     await closeSearch(page)
     await openSearch(page)
     await expect(page.getByText("Renamed view")).toBeVisible()
     await expect(page.getByText(QUERY_A)).toBeVisible()
-    await expect(page.locator('[aria-label="Saved views"]').getByText(QUERY_B, { exact: true })).toHaveCount(0)
+    await expect(
+      page.locator('[aria-label="Saved views"]').getByText(QUERY_B, { exact: true }),
+    ).toHaveCount(0)
     expect(await mock.mutations()).toEqual([])
   })
 })

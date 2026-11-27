@@ -102,10 +102,10 @@ the audit.
 
 ## Evidence
 
-| Kind                     | Where                                                                            |
-| ------------------------ | -------------------------------------------------------------------------------- |
-| Unit, preflight          | `services/article_intel_summary/tests/test_s5_preflight.py`                      |
+| Kind                     | Where                                                                                |
+| ------------------------ | ------------------------------------------------------------------------------------ |
+| Unit, preflight          | `services/article_intel_summary/tests/test_s5_preflight.py`                          |
 | Unit, audit tool         | `ops/deploy/release-governance/test_s5_key_audit.py`                                 |
 | Real LiteLLM, disposable | `ops/deploy/release-governance/rehearse-s5-key-gate.sh` (CI: `synthetic-release`)    |
 | Upgrade from Stage 1     | `ops/deploy/release-governance/rehearse-stage1-upgrade.sh` (CI: `synthetic-release`) |
-| Live gateway             | operator only, after authorization; nothing in this repository is live evidence  |
+| Live gateway             | operator only, after authorization; nothing in this repository is live evidence      |

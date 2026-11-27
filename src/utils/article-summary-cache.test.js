@@ -10,7 +10,14 @@ import {
 
 const settings = { aiSummaryModel: "m1", aiSummaryLength: "standard" }
 const key = (changes = {}) =>
-  summaryCacheKey({ authSessionKey: "s1", sessionRevision: 1, entryId: 7, entryVersion: "v1", settings, ...changes })
+  summaryCacheKey({
+    authSessionKey: "s1",
+    sessionRevision: 1,
+    entryId: 7,
+    entryVersion: "v1",
+    settings,
+    ...changes,
+  })
 const finished = (status = "partial") => ({ status, summary: { status, summary: "x" } })
 
 test("a finished summary is reused for the same session, entry version and settings", () => {
