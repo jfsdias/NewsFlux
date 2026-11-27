@@ -62,14 +62,17 @@ cat >"$work/summary.Caddyfile" <<'EOF'
 	respond 404
 }
 EOF
-mk_image() { # tag revision kind
-  local dir="$work/img-$1"; mkdir -p "$dir"
+mk_image() { # tag revision kind [ai-flag wallhop-flag]
+  local dir="$work/img-$1-$3-${4-1}-${5-true}"; mkdir -p "$dir/assets"
   if [[ "$3" == summary ]]; then
     cp "$work/summary.Caddyfile" "$dir/Caddyfile"
     printf 'FROM %s\nLABEL org.opencontainers.image.revision=%s\nCOPY Caddyfile /etc/caddy/Caddyfile\nHEALTHCHECK --interval=1s --timeout=2s --retries=3 CMD wget -qO- http://127.0.0.1:8788/healthz | grep -q ok\n' "$CADDY_IMAGE" "$2" >"$dir/Dockerfile"
   else
     printf '<!doctype html><div id="root"></div><!-- %s -->\n' "$3" >"$dir/index.html"
-    printf 'FROM %s\nLABEL org.opencontainers.image.revision=%s\nCOPY index.html /srv/index.html\n' "$CADDY_IMAGE" "$2" >"$dir/Dockerfile"
+    # Minified shapes of the three Reader build flags, as Vite emits them (Reader-only release reads these).
+    printf 'const a=(e=`%s`)=>e===`1`,b=(e=`%s`)=>e===`true`,c=(e=void 0)=>typeof e!=`string`||!e?null:d(e,1)?e:null;\n' \
+      "${4-1}" "${5-true}" >"$dir/assets/app.js"
+    printf 'FROM %s\nLABEL org.opencontainers.image.revision=%s\nENV REACTFLUX_BASE_PATH=/\nCOPY index.html /srv/index.html\nCOPY assets /srv/assets\n' "$CADDY_IMAGE" "$2" >"$dir/Dockerfile"
   fi
   docker build -q -t "$1" "$dir" >/dev/null
 }
@@ -164,6 +167,37 @@ rm -rf "$work/releases/"*/newsflux
 if op promote-reader >"$work/bad.out" 2>&1; then ko BROKEN_READER_ROLLED_BACK; else
   grep -q 'PROMOTION_FAILED_ROLLED_BACK:READINESS_FAILED' "$work/bad.out" && [[ "$(docker inspect -f '{{.Image}}' newsflux)" == "$(cut -d' ' -f2 <<<"$reader_before")" ]] && ok BROKEN_READER_ROLLED_BACK || { cat "$work/bad.out"; ko BROKEN_READER_ROLLED_BACK; }
 fi
+
+# ---- Reader-only release: live build flags reproduced, Summary/Caddy/protected untouched ------------
+reader_prev="$(docker inspect -f '{{.Image}}' newsflux)"
+summary_now="$(docker inspect -f '{{.Id}} {{.Image}}' newsflux-summary-api-1)"
+caddy_now="$(sha256sum "$work/stack/Caddyfile" | cut -d' ' -f1)"
+reset_reader_release() { rm -rf "$work/releases/"*/newsflux "$work/releases/"*/reader-only.env; }
+reset_reader_release
+mk_image "newsflux-reader:$SHA" "$SHA" reader-new 1 true
+before="$(state)"
+op preflight-reader >"$work/pr.out" && ok PREFLIGHT_READER_PASS || { cat "$work/pr.out"; ko PREFLIGHT_READER_PASS; }
+[[ "$(state)" == "$before" ]] && ok PREFLIGHT_READER_READ_ONLY || ko PREFLIGHT_READER_READ_ONLY
+grep -qx 'READER_AI_ENABLED=1' "$work/pr.out" && grep -qx 'READER_WALLHOP_EXTERNAL_OPEN=true' "$work/pr.out" \
+  && grep -qx 'READER_RECOVERY_BASE_PATH=' "$work/pr.out" && ok PREFLIGHT_READER_DETECTS_LIVE_FLAGS || ko PREFLIGHT_READER_DETECTS_LIVE_FLAGS
+
+# A candidate whose flags differ from the live bundle is refused before anything is promoted.
+mk_image "newsflux-reader:$SHA" "$SHA" reader-new 1 ""
+if NEWSFLUX_REHEARSAL_SKIP_READER_BUILD=1 op build-reader >"$work/br-bad.out" 2>&1; then ko READER_FLAG_DRIFT_REFUSED; else
+  grep -q 'CODE=CANDIDATE_FLAGS_DIFFER' "$work/br-bad.out" && [[ "$(docker inspect -f '{{.Image}}' newsflux)" == "$reader_prev" ]] \
+    && ok READER_FLAG_DRIFT_REFUSED || { cat "$work/br-bad.out"; ko READER_FLAG_DRIFT_REFUSED; }
+fi
+
+reset_reader_release
+mk_image "newsflux-reader:$SHA" "$SHA" reader-new 1 true
+NEWSFLUX_REHEARSAL_SKIP_READER_BUILD=1 op reader >"$work/reader.out" 2>&1 && ok READER_ONLY_RELEASE || { cat "$work/reader.out"; ko READER_ONLY_RELEASE; }
+grep -q '^SMOKE_READER=PASS$' "$work/reader.out" && ok SMOKE_READER || ko SMOKE_READER
+[[ "$(docker inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$(docker inspect -f '{{.Image}}' newsflux)")" == "$SHA" ]] \
+  && ok READER_ONLY_PROMOTED || ko READER_ONLY_PROMOTED
+[[ "$(docker inspect -f '{{.Id}} {{.Image}}' newsflux-summary-api-1)" == "$summary_now" ]] && ok READER_ONLY_SUMMARY_UNTOUCHED || ko READER_ONLY_SUMMARY_UNTOUCHED
+[[ "$(sha256sum "$work/stack/Caddyfile" | cut -d' ' -f1)" == "$caddy_now" ]] && ok READER_ONLY_CADDY_UNTOUCHED || ko READER_ONLY_CADDY_UNTOUCHED
+[[ "$(docker inspect -f '{{.Id}} {{.Image}}' miniflux miniflux-db)" == "$protected_before" ]] && ok READER_ONLY_PROTECTED_UNCHANGED || ko READER_ONLY_PROTECTED_UNCHANGED
+op rollback-reader >/dev/null && [[ "$(docker inspect -f '{{.Image}}' newsflux)" == "$reader_prev" ]] && ok READER_ONLY_ROLLBACK || ko READER_ONLY_ROLLBACK
 
 echo "REHEARSAL_PASSED=$pass REHEARSAL_FAILED=$fail"
 [[ "$fail" -eq 0 ]]

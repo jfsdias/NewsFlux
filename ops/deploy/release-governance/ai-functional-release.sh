@@ -9,6 +9,12 @@
 #   sudo -E bash ai-functional-release.sh update-caddy     # Caddyfile -> this SHA (closed prior-state list, backup, in-place, validated, rollback)
 #   sudo -E bash ai-functional-release.sh promote-reader   # new Reader image, readiness proven by HTTP probe
 #   sudo -E bash ai-functional-release.sh smoke            # fail-closed production checks + receipt
+#
+# Reader-only release (frontend change only; Summary, Caddy and protected services stay identical):
+#   sudo -E bash ai-functional-release.sh reader           # prepare, preflight-reader, build-reader,
+#                                                          # promote-reader-only, smoke-reader; stops at the first failed gate
+#   steps: preflight-reader (read-only) | build-reader (live build flags reproduced and verified)
+#          | promote-reader-only | smoke-reader | rollback-reader
 #   sudo -E bash ai-functional-release.sh s5-attestation-path   # prints $RELEASE_DIR/s5-key-attestation.json
 #   sudo python3 s5_key_audit.py ... --out "$(sudo -E bash ai-functional-release.sh s5-attestation-path)"
 #   sudo -E bash ai-functional-release.sh s5-preflight     # read-only LiteLLM key/model/price/budget/logging gates
@@ -556,8 +562,156 @@ JSON
   echo "NEXT=in the Reader: Settings shows S5 available; open one public article and click 'Summarize with AI' once."
 }
 
+# ---- Reader-only release ---------------------------------------------------------------------
+# Ships a new frontend build and nothing else: Summary, Caddy, Miniflux and its database are protected and
+# must be identical afterwards. Reader build flags are baked into the JS bundle, so they are read from the
+# LIVE Reader bundle and reproduced exactly; a missing or ambiguous flag blocks instead of guessing. The
+# candidate image must carry the same flags before anything is promoted.
+READER_ONLY_STATE="$RELEASE_DIR/reader-only.env"
+# Test-only: the disposable rehearsal supplies a prebuilt candidate image. Ignored for the production root.
+SKIP_READER_BUILD="${NEWSFLUX_REHEARSAL_SKIP_READER_BUILD:-}"
+[[ "$RELEASE_ROOT" == /dockerdata/compose/newsflux/.releases ]] && SKIP_READER_BUILD=""
+
+reader_bundle() { # container|image -> concatenated JS of the served bundle on stdout
+  local cmd='find /srv -path "*/assets/*.js" -type f -exec cat {} +'
+  if [[ "$1" == container ]]; then docker exec "$READER_CONTAINER" sh -c "$cmd"
+  else docker run --rm --network none --entrypoint sh "$2" -c "$cmd"; fi
+}
+
+bundle_flags() { # minified JS on stdin -> READER_AI_ENABLED / READER_WALLHOP_EXTERNAL_OPEN / READER_RECOVERY_BASE_PATH
+  local js id ai wallhop recovery
+  js="$(cat)"
+  id='[A-Za-z_$][A-Za-z0-9_$]*'
+  # isArticleIntelligenceEnabled, isWallhopExternalOpenEnabled and getContentFallbackReaderBasePath after minification.
+  ai="$(grep -oE '[(]'"$id"'=`[01]?`[)]=>'"$id"'===`1`' <<<"$js" | sort -u || true)"
+  wallhop="$(grep -oE '[(]'"$id"'=`(true)?`[)]=>'"$id"'===`true`' <<<"$js" | sort -u || true)"
+  recovery="$(grep -oE '[(]'"$id"'=(void 0|`[^`]*`)[)]=>typeof '"$id"'!=`string`[|][|]!'"$id"'[?]null' <<<"$js" | sort -u || true)"
+  [[ "$(grep -c . <<<"$ai")" -eq 1 && "$(grep -c . <<<"$wallhop")" -eq 1 && "$(grep -c . <<<"$recovery")" -eq 1 ]] || return 1
+  printf 'READER_AI_ENABLED=%s\n' "$(sed -E 's/^[(][^=]*=`([01]?)`.*$/\1/' <<<"$ai")"
+  printf 'READER_WALLHOP_EXTERNAL_OPEN=%s\n' "$(sed -E 's/^[(][^=]*=`(true)?`.*$/\1/' <<<"$wallhop")"
+  if [[ "$recovery" == *"=void 0)"* ]]; then printf 'READER_RECOVERY_BASE_PATH=\n'
+  else printf 'READER_RECOVERY_BASE_PATH=%s\n' "$(sed -E 's/^[(][^=]*=`([^`]*)`.*$/\1/' <<<"$recovery")"; fi
+}
+
+state_value() { sed -n "s/^$1=//p" "$READER_ONLY_STATE" | head -1; }
+recorded_flags() { grep -E '^READER_(AI_ENABLED|WALLHOP_EXTERNAL_OPEN|RECOVERY_BASE_PATH)=' "$READER_ONLY_STATE"; }
+
+# Strictly read-only.
+preflight_reader() {
+  require_source
+  local summary reader_svc flags
+  [[ "$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$READER_CONTAINER")" == "$PROJECT" ]] || die PREFLIGHT_READER READER_PROJECT_MISMATCH
+  reader_svc="$(reader_service)"
+  python3 - "$SRC/ops/deploy/release-governance/policy.json" "$PROJECT" "$reader_svc" <<'PY' || die PREFLIGHT_READER SERVICE_NOT_IN_POLICY
+import json, sys
+allowed = {(i["project"], i["service"]) for i in json.load(open(sys.argv[1]))["allowed"]}
+sys.exit(0 if (sys.argv[2], sys.argv[3]) in allowed else 1)
+PY
+  docker exec "$READER_CONTAINER" sh -c "wget -qO- http://127.0.0.1:$READER_PORT/ | grep -q 'id=.root.'" || die PREFLIGHT_READER READER_PROBE_FAILS_ON_CURRENT
+  summary="$(summary_container)"
+  [[ -n "$summary" && "$(wc -l <<<"$summary")" -eq 1 ]] || die PREFLIGHT_READER SUMMARY_CONTAINER_NOT_UNIQUE
+  [[ "$(docker inspect -f '{{.State.Health.Status}}' "$summary")" == healthy ]] || die PREFLIGHT_READER SUMMARY_NOT_HEALTHY
+  local name
+  for name in "${PROTECTED_NAMES[@]}"; do
+    docker inspect -f '{{.State.Running}}' "$name" | grep -qx true || die PREFLIGHT_READER "PROTECTED_${name}_NOT_RUNNING"
+  done
+  [[ -n "$(container_env "$READER_CONTAINER" REACTFLUX_BASE_PATH)" ]] || die PREFLIGHT_READER READER_BASE_PATH_UNKNOWN
+  flags="$(reader_bundle container | bundle_flags)" || die PREFLIGHT_READER READER_FLAGS_UNDETECTABLE
+  gate READER_SERVICE "$reader_svc"
+  gate READER_IMAGE "$(docker inspect -f '{{.Image}}' "$READER_CONTAINER")"
+  gate READER_REVISION "$(image_revision "$(docker inspect -f '{{.Image}}' "$READER_CONTAINER")")"
+  gate READER_BASE_PATH "$(container_env "$READER_CONTAINER" REACTFLUX_BASE_PATH)"
+  echo "$flags"
+  gate SUMMARY_IMAGE "$(docker inspect -f '{{.Image}}' "$summary")"
+  gate PREFLIGHT_READER PASS
+}
+
+build_reader() {
+  require_source
+  local flags base summary candidate_flags
+  flags="$(reader_bundle container | bundle_flags)" || die BUILD_READER READER_FLAGS_UNDETECTABLE
+  base="$(container_env "$READER_CONTAINER" REACTFLUX_BASE_PATH)"
+  [[ -n "$base" ]] || die BUILD_READER READER_BASE_PATH_UNKNOWN
+  summary="$(summary_container)"
+  [[ -n "$summary" && "$(wc -l <<<"$summary")" -eq 1 ]] || die BUILD_READER SUMMARY_CONTAINER_NOT_UNIQUE
+  if [[ -z "$SKIP_READER_BUILD" ]]; then
+    docker build --quiet -f "$SRC/Dockerfile" \
+      --build-arg SOURCE_COMMIT="$APPROVED_SHA" \
+      --build-arg SOURCE_COMMIT_DATE="$(git -C "$SRC" show -s --format=%cI "$APPROVED_SHA")" \
+      --build-arg VITE_BASE_PATH="$base" \
+      --build-arg VITE_ARTICLE_INTELLIGENCE_ENABLED="$(sed -n 's/^READER_AI_ENABLED=//p' <<<"$flags")" \
+      --build-arg VITE_CONTENT_FALLBACK_READER_BASE_PATH="$(sed -n 's/^READER_RECOVERY_BASE_PATH=//p' <<<"$flags")" \
+      --build-arg VITE_WALLHOP_EXTERNAL_OPEN_ENABLED="$(sed -n 's/^READER_WALLHOP_EXTERNAL_OPEN=//p' <<<"$flags")" \
+      -t "newsflux-reader:$APPROVED_SHA" "$SRC" >/dev/null
+  fi
+  [[ "$(image_revision "newsflux-reader:$APPROVED_SHA")" == "$APPROVED_SHA" ]] || die BUILD_READER READER_REVISION_LABEL_MISMATCH
+  candidate_flags="$(reader_bundle image "newsflux-reader:$APPROVED_SHA" | bundle_flags)" || die BUILD_READER CANDIDATE_FLAGS_UNDETECTABLE
+  [[ "$candidate_flags" == "$flags" ]] || die BUILD_READER CANDIDATE_FLAGS_DIFFER
+  {
+    echo "$flags"
+    echo "READER_BASE_PATH=$base"
+    echo "READER_PREVIOUS_IMAGE=$(docker inspect -f '{{.Image}}' "$READER_CONTAINER")"
+    echo "READER_CANDIDATE_IMAGE=$(image_id "newsflux-reader:$APPROVED_SHA")"
+    echo "SUMMARY_CONTAINER=$(container_name "$summary")"
+    echo "SUMMARY_IDENTITY=$(docker inspect -f '{{.Id}} {{.Image}}' "$summary")"
+  } >"$READER_ONLY_STATE"
+  echo "$flags"
+  gate READER_IMAGE_ID "$(image_id "newsflux-reader:$APPROVED_SHA")"
+  gate BUILD_READER PASS
+}
+
+promote_reader_only() {
+  require_source
+  [[ -f "$READER_ONLY_STATE" ]] || die PROMOTE_READER READER_ONLY_NOT_BUILT
+  [[ "$(image_id "newsflux-reader:$APPROVED_SHA")" == "$(state_value READER_CANDIDATE_IMAGE)" ]] || die PROMOTE_READER CANDIDATE_IMAGE_CHANGED
+  local candidate_flags
+  candidate_flags="$(reader_bundle image "newsflux-reader:$APPROVED_SHA" | bundle_flags)" || die PROMOTE_READER CANDIDATE_FLAGS_UNDETECTABLE
+  [[ "$candidate_flags" == "$(recorded_flags)" ]] || die PROMOTE_READER CANDIDATE_FLAGS_DIFFER
+  # The Summary is pinned as protected too: a Reader-only release must leave it byte-for-byte identical.
+  promote "$(reader_service)" reader --ready-probe "$READER_PROBE" --protected "$(state_value SUMMARY_CONTAINER)"
+  gate PROMOTE_READER PASS
+}
+
+smoke_reader() {
+  require_source
+  [[ -f "$READER_ONLY_STATE" ]] || die SMOKE_READER READER_ONLY_NOT_BUILT
+  local summary live_flags name reader_svc
+  reader_svc="$(reader_service)"
+  [[ "$(image_revision "$(docker inspect -f '{{.Image}}' "$READER_CONTAINER")")" == "$APPROVED_SHA" ]] || die SMOKE_READER READER_REVISION
+  docker exec "$READER_CONTAINER" sh -c "wget -qO- http://127.0.0.1:$READER_PORT/ | grep -q 'id=.root.'" || die SMOKE_READER READER_NOT_SERVING_APP
+  live_flags="$(reader_bundle container | bundle_flags)" || die SMOKE_READER READER_FLAGS_UNDETECTABLE
+  [[ "$live_flags" == "$(recorded_flags)" ]] || die SMOKE_READER READER_FLAGS_CHANGED
+  summary="$(summary_container)"
+  [[ "$(docker inspect -f '{{.Id}} {{.Image}}' "$summary")" == "$(state_value SUMMARY_IDENTITY)" ]] || die SMOKE_READER SUMMARY_CHANGED
+  [[ "$(docker inspect -f '{{.State.Health.Status}}' "$summary")" == healthy ]] || die SMOKE_READER SUMMARY_NOT_HEALTHY
+  docker exec "$READER_CONTAINER" wget -qO- http://summary-api:8788/healthz | grep -q '"ok"' || die SMOKE_READER SUMMARY_UNREACHABLE_FROM_READER
+  for name in "${PROTECTED_NAMES[@]}"; do
+    docker inspect -f '{{.State.Running}}' "$name" | grep -qx true || die SMOKE_READER "PROTECTED_${name}_DOWN"
+  done
+  {
+    echo "APPROVED_SHA=$APPROVED_SHA"
+    echo "READER=$READER_CONTAINER $(docker inspect -f '{{.Image}} {{.State.Status}}' "$READER_CONTAINER")"
+    echo "READER_PREVIOUS_IMAGE=$(state_value READER_PREVIOUS_IMAGE)"
+    echo "$live_flags"
+    echo "SUMMARY_UNCHANGED=$(container_name "$summary") $(docker inspect -f '{{.Image}} {{.State.Health.Status}}' "$summary")"
+    for name in "${PROTECTED_NAMES[@]}"; do echo "PROTECTED=$name $(docker inspect -f '{{.Id}} {{.Image}}' "$name")"; done
+    echo "READER_MANIFEST_SHA256=$(sha256sum "$RELEASE_DIR/$reader_svc/manifest.json" | cut -d' ' -f1)"
+  } >"$RELEASE_DIR/receipt-reader.txt"
+  cat "$RELEASE_DIR/receipt-reader.txt"
+  gate SMOKE_READER PASS
+  echo "ROLLBACK=sudo -E APPROVED_SHA=$APPROVED_SHA bash $SRC/ops/deploy/release-governance/ai-functional-release.sh rollback-reader"
+}
+
 case "${1:-}" in
   prepare) prepare ;;
+  preflight-reader) preflight_reader ;;
+  build-reader) build_reader ;;
+  promote-reader-only) promote_reader_only ;;
+  smoke-reader) smoke_reader ;;
+  reader)
+    prepare; preflight_reader; build_reader
+    promote_reader_only || { gate READER "STOPPED_AT_PROMOTE_READER"; exit 1; }
+    smoke_reader ;;
   preflight) preflight ;;
   build) build ;;
   promote-summary) require_source; promote "$SUMMARY_SERVICE" summary ;;
