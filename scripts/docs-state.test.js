@@ -87,7 +87,7 @@ const assertTablesWellFormed = (section, label) => {
 const getCurrentSnapshots = ({ projectState, roadmap, pwa, e2e }) => {
   const project = uniqueH2Section(
     projectState,
-    (title) => title.startsWith("Current state (verified GitHub main "),
+    (title) => title.startsWith("Current canonical state (verified "),
     "Project State current snapshot",
   )
   const roadmapSnapshot = uniqueH2Section(
@@ -112,20 +112,12 @@ const getCurrentSnapshots = ({ projectState, roadmap, pwa, e2e }) => {
   assert.equal(roadmapSha, projectSha, "Project State and Roadmap current SHAs must agree")
 
   const projectHeading = project.title.match(
-    /^Current state \(verified GitHub main `([\da-f]{40})`, post-PR #193, (\d{4}-\d{2}-\d{2})\)$/,
+    /^Current canonical state \(verified (\d{4}-\d{2}-\d{2}); post-PR #321\)$/,
   )
-  assert.ok(
-    projectHeading,
-    "Project State heading must identify its verified main SHA and snapshot date",
-  )
-  assert.equal(
-    projectHeading[1],
-    projectSha,
-    "Project State heading SHA must match its current-state table",
-  )
+  assert.ok(projectHeading, "Project State heading must identify its verification date and PR #321")
 
   const roadmapHeading = roadmapSnapshot.title.match(
-    /^Current canonical state \(verified (\d{4}-\d{2}-\d{2}); post-PR #193\)$/,
+    /^Current canonical state \(verified (\d{4}-\d{2}-\d{2}); post-PR #321\)$/,
   )
   assert.ok(roadmapHeading, "Roadmap current heading must identify its verification date")
 
@@ -135,15 +127,12 @@ const getCurrentSnapshots = ({ projectState, roadmap, pwa, e2e }) => {
     "Project State",
   )
   const projectDate = verifiedState.match(
-    /^(\d{4}-\d{2}-\d{2}); GitHub API and fetched `origin\/main`$/,
+    /^(\d{4}-\d{2}-\d{2}); local git history of `main` \(GitHub API unreachable in this session\)$/,
   )
-  assert.ok(
-    projectDate,
-    "Project State must record the date and source of its live GitHub verification",
-  )
+  assert.ok(projectDate, "Project State must record the date and source of its verification")
   assert.equal(
     projectDate[1],
-    projectHeading[2],
+    projectHeading[1],
     "Project State heading and verification dates must agree",
   )
   assert.equal(
@@ -189,7 +178,7 @@ const getCurrentSnapshots = ({ projectState, roadmap, pwa, e2e }) => {
 
   assert.match(project.text, /Miniflux remains the source of truth/)
   assert.match(project.text, /All\/Unread remain chronological/)
-  assert.match(project.text, /PR #190 remains OPEN\/DRAFT/)
+  assert.match(project.text, /merged as an offline Personalization V2 evaluation only/)
   assert.match(project.text, /V2 remains on hold/)
 
   const pwaPreamble = pwa.slice(0, pwa.search(/^## 1\./m))
@@ -268,9 +257,9 @@ const canResolveHistory = () => {
 const assertRelevantCommitInHistory = (sha) =>
   execFileSync("git", ["merge-base", "--is-ancestor", sha, "HEAD"], { cwd: root })
 
-test("current project and roadmap snapshots identify one matching GitHub main SHA", () => {
+test("current project and roadmap snapshots identify one matching main SHA", () => {
   const snapshots = getCurrentSnapshots(currentDocuments())
-  assert.equal(snapshots.currentMainSha, "e949fdd5fd1975cd3437d3981232b0dbe18a74e5")
+  assert.equal(snapshots.currentMainSha, "664e404197e1eb9d9aeb52f921690a95b6559190")
 })
 
 test("current and historical SHAs are full and belong to checkout history when available", (context) => {
@@ -320,8 +309,8 @@ test("competing current roadmap authorities are rejected", () => {
 test("different current SHAs across Project State and Roadmap are rejected", () => {
   const documents = currentDocuments()
   documents.roadmap = documents.roadmap.replace(
-    "| `CURRENT_MAIN_SHA`         | `e949fdd5fd1975cd3437d3981232b0dbe18a74e5`",
-    "| `CURRENT_MAIN_SHA`         | `1111111111111111111111111111111111111111`",
+    /(\| `CURRENT_MAIN_SHA`\s*\| )`[\da-f]{40}`/,
+    "$1`1111111111111111111111111111111111111111`",
   )
   assert.throws(
     () => getCurrentSnapshots(documents),
@@ -332,8 +321,8 @@ test("different current SHAs across Project State and Roadmap are rejected", () 
 test("truncated current SHA is rejected", () => {
   const documents = currentDocuments()
   documents.projectState = documents.projectState.replace(
-    "| `CURRENT_MAIN_SHA`           | `e949fdd5fd1975cd3437d3981232b0dbe18a74e5`",
-    "| `CURRENT_MAIN_SHA`           | `e949fdd5fd1975cd3437d3981232b0dbe18a74e`",
+    /(\| `CURRENT_MAIN_SHA`\s*\| )`([\da-f]{40})`/,
+    (_match, prefix, sha) => `${prefix}\`${sha.slice(0, 39)}\``,
   )
   assert.throws(
     () => getCurrentSnapshots(documents),
@@ -367,10 +356,7 @@ test("PWA dated snapshot presented as current runtime evidence is rejected", () 
 
 test("malformed current roadmap table is rejected", () => {
   const documents = currentDocuments()
-  documents.roadmap = documents.roadmap.replace(
-    "| `LAST_MERGED_PR`           | #193, squash merge `e949fdd5fd1975cd3437d3981232b0dbe18a74e5`                                                                      |",
-    "| `LAST_MERGED_PR`           | #193, squash merge `e949fdd5fd1975cd3437d3981232b0dbe18a74e5` | unexpected |",
-  )
+  documents.roadmap = documents.roadmap.replace(/^(\| `LAST_MERGED_PR`.*)\|$/m, "$1| unexpected |")
   assert.throws(
     () => getCurrentSnapshots(documents),
     /Roadmap current snapshot has a malformed Markdown table row/,
@@ -452,7 +438,7 @@ test("the current Project State separates product, research, held work, and unve
   assert.match(project.text, /### Current product, QA, and evidence boundaries/)
   assert.match(project.text, /All\/Unread remain chronological/)
   assert.match(project.text, /Miniflux remains the source of truth/)
-  assert.match(project.text, /PR #190 remains OPEN\/DRAFT/)
+  assert.match(project.text, /merged as an offline Personalization V2 evaluation only/)
   assert.match(project.text, /research finding, not proof of a general product defect/)
   assert.match(project.text, /V2 remains on hold/)
 })

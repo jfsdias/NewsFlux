@@ -1,14 +1,47 @@
 # NewsFlux Project State
 
 - **Purpose:** concise operational state for PM handoffs and future sessions. The roadmap remains the source for sequencing and product/architecture detail.
-- **Last reconciled:** 2026-11-08 against GitHub `main` `e949fdd5fd1975cd3437d3981232b0dbe18a74e5`, after PR #193.
-- **Current snapshot:** GitHub `main` at `e949fdd5fd1975cd3437d3981232b0dbe18a74e5`. Production was not inspected in this audit; production SHA and parity are unknown. The post-PR #183 and earlier snapshots below remain historical.
-- **Previous snapshots (historical):** post-PR #183 on 2026-11-06; post-PR #177 on 2026-11-04; post-PR #129 on 2026-10-25; older snapshots remain preserved below.
+- **Last reconciled:** 2026-11-26 against local `main` `664e404197e1eb9d9aeb52f921690a95b6559190`, after PR #321.
+- **Current snapshot:** `main` at `664e404197e1eb9d9aeb52f921690a95b6559190` (2026-11-26). Production is OPERATOR_REPORTED at this SHA for the Reader deploy; live parity is NOT_VERIFIED. The post-PR #193 and earlier snapshots below remain historical.
+- **Previous snapshots (historical):** post-PR #193 on 2026-11-08; post-PR #183 on 2026-11-06; post-PR #177 on 2026-11-04; post-PR #129 on 2026-10-25; older snapshots remain preserved below.
 - **Related planning documents:** [`PWA_ARCHITECTURE.md`](./PWA_ARCHITECTURE.md) and [`DESIGN_REFERENCES.md`](./DESIGN_REFERENCES.md) (planning only; no implementation authorized).
 
-## Current state (verified GitHub main `e949fdd5fd1975cd3437d3981232b0dbe18a74e5`, post-PR #193, 2026-11-08)
+## Current canonical state (verified 2026-11-26; post-PR #321)
 
-This section is the current operational snapshot. The dated post-PR #183 section immediately below and all older snapshots are historical and do not override it.
+This section is the current operational snapshot. It supersedes the 2026-11-08 post-PR #193 state and every dated section below it for current-state questions. The roadmap's Current canonical state section carries the same field values, plus the grouped list of work delivered since PR #193.
+
+### Current authority snapshot
+
+| Field                        | Verified value                                                                                                                                                                                   |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CURRENT_MAIN_SHA`           | `664e404197e1eb9d9aeb52f921690a95b6559190`                                                                                                                                                       |
+| `LAST_VERIFIED_GITHUB_STATE` | 2026-11-26; local git history of `main` (GitHub API unreachable in this session)                                                                                                                 |
+| `LAST_MERGED_PR`             | #321, squash commit `664e404197e1eb9d9aeb52f921690a95b6559190`                                                                                                                                   |
+| `OPEN_DRAFT_PRS`             | NOT_VERIFIED (GitHub unreachable). Last recorded, not re-checked: #290, #291, #260 (Draft), #188 (protected dependency), Story research #134–#140                                                |
+| `CURRENT_PRODUCT_BASELINE`   | Source baseline `main` `664e404197e1eb9d9aeb52f921690a95b6559190`; not a production-runtime assertion                                                                                            |
+| `CURRENT_QA_BASELINE`        | Unit tests 796/796 PASS and production build PASS, measured 2026-11-26 on a clean checkout; canonical Playwright E2E 94/94 ×3 REPORTED for PRs #320 and #321 (not re-run in this reconciliation) |
+| `PRODUCTION_SHA_VERIFIED`    | `UNKNOWN_IN_THIS_AUDIT`                                                                                                                                                                          |
+| `PRODUCTION`                 | OPERATOR_REPORTED: Reader deploy at `664e404197e1eb9d9aeb52f921690a95b6559190` on 2026-11-26; live parity NOT_VERIFIED                                                                           |
+| `MAIN_PRODUCTION_PARITY`     | `NOT_VERIFIED`                                                                                                                                                                                   |
+| `PHYSICAL_DEVICE_SMOKE`      | EVIDENCE_GAP: physical device smoke pending                                                                                                                                                      |
+| `NEXT_RECOMMENDED_TRACK`     | Sprint 0 checkpoint (NF-0004 source-versus-runtime readback, NF-0005 device smoke), then NF-E01 residual validation; see the roadmap's approved S0–S8+ queue                                     |
+| `NEXT_AUTHORIZED_ACTION`     | Review of this documentation reconciliation only; no merge, PR closure, deployment, provider activation or implementation is authorized                                                          |
+
+### Current product, QA, and evidence boundaries
+
+- **Delivered since PR #193:** grouped PR numbers are listed in the roadmap section of the same date. Items whose PR number is not verified are labeled as such there.
+- **Product boundaries:** Miniflux remains the source of truth for feeds, categories, read/unread, and starred state. All/Unread remain chronological.
+- **PR #190:** merged as an offline Personalization V2 evaluation only; not a V2 implementation or adoption. Personalization V2 remains on hold. The direct-star synthetic observation is a research finding, not proof of a general product defect.
+- **PR #193:** `HARNESS_LIGHT_01=COMPLETED`; exact-head GitHub checks and 46/46 E2E passed at merge time; owner-reported physical harness matrix: Duo closed/Light, closed/Dark-OLED, open/Light, and open/Dark-OLED. This result is limited to the PR #193 harness; it does not establish general Safari, installed-PWA, Service Worker, or production-component validation.
+- **Production:** OPERATOR_REPORTED Reader deploy at `664e404197e1eb9d9aeb52f921690a95b6559190` on 2026-11-26. Live parity is NOT_VERIFIED, and `PRODUCTION_SHA_VERIFIED` remains `UNKNOWN_IN_THIS_AUDIT`. Earlier PR #193 harness evidence does not establish production behavior.
+- **Physical device:** smoke is an EVIDENCE_GAP until performed and recorded.
+- **README:** no change in this reconciliation.
+
+---
+
+## Historical state (verified GitHub main `e949fdd5fd1975cd3437d3981232b0dbe18a74e5`, post-PR #193, 2026-11-08)
+
+This section was the current operational snapshot until the 2026-11-26 reconciliation above. The dated post-PR #183 section below and all older snapshots are historical and do not override the current section.
 
 ### Current authority snapshot
 
@@ -42,7 +75,7 @@ This section is the current operational snapshot. The dated post-PR #183 section
 
 The open PR inventory also contains Story research PRs #134–#140, all Draft and separate from product activation. No open documentation PR overlapped this reconciliation at the time of the audit.
 
-### Current product, QA, and evidence boundaries
+### Historical product, QA, and evidence boundaries (post-PR #193, 2026-11-08)
 
 - **Product/source baseline:** #185–#189 contain the recorded Mark All, Home category-lane, and category-label updates; #191 corrects the personalization disclosure behavior. All/Unread remain chronological and Miniflux remains the source of truth for feeds, categories, read/unread, and starred state.
 - **Reader content recovery (candidate only):** this Draft adds the build-time `VITE_CONTENT_FALLBACK_READER_BASE_PATH` switch. It is absent by default, so recovery stays unavailable unless a same-origin private bridge is explicitly configured; no production route, sidecar, or deployment is included or implied.
