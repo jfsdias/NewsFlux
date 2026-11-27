@@ -70,7 +70,7 @@ It never prints the key or the policy amounts.
 
 ## Authorization text proposed to the owner
 
-> AUTORIZO GO-NEWSFLUX-D1-CAPTURE-1: uma única execução supervisionada do comando de captura D1 nos pins acima,
-> com `--private-prestate` gravando apenas em diretório novo `/root/newsflux-d1.*` (0700), sem alteração de chave,
-> configuração, banco ou contêiner, sem inferência e sem transferência de artigo; o digest da evidência será
-> registrado no ledger.
+> I AUTHORIZE GO-NEWSFLUX-D1-CAPTURE-1: a single supervised execution of the D1 capture command at the pins above,
+> with `--private-prestate` writing only to a new `/root/newsflux-d1.*` directory (0700), with no change to the key,
+> configuration, database, or container, no inference, and no article transfer; the evidence digest will be
+> recorded in the ledger.

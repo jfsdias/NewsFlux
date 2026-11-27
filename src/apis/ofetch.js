@@ -43,7 +43,7 @@ const isCurrentRequestSession = (requestSession, auth) =>
   requestSession.username === auth.username &&
   requestSession.password === auth.password
 
-// 创建 ofetch 实例并设置默认配置
+// Create the ofetch instance with default configuration
 const createApiClient = () => {
   return ofetch.create({
     onRequest({ _request, options }) {

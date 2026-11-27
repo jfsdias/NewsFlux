@@ -1,6 +1,6 @@
 # G2_LOCAL_INDEPENDENT — independence feasibility and proportionate trust proposal (R4, Epic A)
 
-Owner answer R1: "Não sei quais signatários indicar." Signer selection is therefore treated as an engineering
+Owner answer R1: "I don't know which signers to nominate." Signer selection is therefore treated as an engineering
 and governance task. Nothing here admits a signer: admission stays a PM decision (an admission-only commit,
 see `S5_R3B_G2_LOCAL_INDEPENDENT.md` §5). The protected operation is **read-only and diagnostic** (no key, DB,
 config or inference change), which is what makes a proportionate model reasonable.
