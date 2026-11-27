@@ -431,3 +431,15 @@
     padding-top: 28px;
   }
 }
+
+/*
+ * HOME-VITRUVIAN: on COMPACT and MEDIUM the lead cover is capped so at least two
+ * Highlights headlines fit the first screen. The box keeps its aspect-ratio and is
+ * clamped by max-height, so it is reserved before the image loads (no layout shift);
+ * the cover keeps object-fit: contain, so no crop is introduced.
+ */
+@media (max-width: 992px) {
+  .home-highlights .home-highlight-primary .grid-card-media {
+    max-height: 24vh;
+  }
+}
