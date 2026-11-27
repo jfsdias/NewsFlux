@@ -1,5 +1,5 @@
 import { hotkeysState, replaceHotkeys } from "@/store/hotkeysState"
-import { replaceSettings, settingsState } from "@/store/settingsState"
+import { replaceSettings, settingsState, withoutActiveSmartView } from "@/store/settingsState"
 import { expandedCategoriesState, replaceExpandedCategories } from "@/store/sidebarState"
 import { CONTENT_BROWSING_DIRECTION_LTR } from "@/utils/content-browsing-direction"
 import { createDefaultHomePages } from "@/utils/home-page"
@@ -68,7 +68,7 @@ const sanitizeSnapshot = (
 
 const getCurrentSnapshot = () =>
   sanitizeSnapshot({
-    settings: settingsState.get(),
+    settings: withoutActiveSmartView(settingsState.get()),
     hotkeys: hotkeysState.get(),
     expandedCategories: expandedCategoriesState.get(),
   })

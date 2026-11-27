@@ -13,10 +13,15 @@ import {
 
 const defaultSettings = createDefaultSettings(getBrowserLanguage())
 
+// An active Smart View applies its status/sort in memory only. Anything that persists or exports
+// settings must see the user's own preferences, never the view's.
+export const withoutActiveSmartView = (settings) => ({
+  ...settings,
+  ...activeSmartViewState.get()?.baseline,
+})
+
 export const settingsState = persistentAtom("settings", defaultSettings, {
-  // An active Smart View applies its status/sort in memory only; storage keeps the user's own.
-  encode: (settings) =>
-    encodeSettings({ ...settings, ...activeSmartViewState.get()?.baseline }, defaultSettings),
+  encode: (settings) => encodeSettings(withoutActiveSmartView(settings), defaultSettings),
   decode: (storedSettings) => decodeSettings(storedSettings, defaultSettings),
 })
 
