@@ -90,6 +90,7 @@ Owner endorsed the Red Team / RSS benchmark audit and requested its conversion i
 | 5             | NF-E05 Focus                       | P1                  | Explicit reversible preference signals and quiet-source diversity                                           | IN_PROGRESS: partially delivered by #301; quiet-source diversity not verified                                                                                                    |
 | 6             | NF-E05 Briefing                    | P1                  | Deterministic Essential of Today; optional authorized IA, never required                                    | IN_PROGRESS: partially delivered by #301; Essential of Today not verified                                                                                                        |
 | 7             | NF-E06 Feed quality                | P2                  | Provider-backed quality and health diagnostics                                                              | IN_PROGRESS: feed health (#305) and loaded-sample source review (#306) merged; telemetry-gated relevance review PLANNED                                                          |
+| 9             | NF-E08 Learned source affinity     | P2                  | Opt-in exposure/open/read-depth signals, per-source affinity on Home only, panorama band, suggestions       | PLANNED: NF-0901 epic and ADR 0002 COMPLETED (ADR accepted 2026-11-27); next NF-0902 reading_signals service                                                                     |
 | 8+            | NF-E07 Advanced workflows          | P2/P3 / conditional | Offline, rules, integrations, newsletters, annotations and TTS after evidence and architecture decisions    | HOLD_ARCHITECTURE: no item started                                                                                                                                               |
 
 **Next recommended gate:** Sprint 0 and Sprint 1 are COMPLETED. Next: NF-0301 Smart View polish (PLANNED) and the candidates from the 2026-11-26 review listed below, each as a separate scoped PR. No merge, production promotion or new implementation is implied by this roadmap update. Physical-device smoke remains an EVIDENCE_GAP.
@@ -122,6 +123,7 @@ At `664e404`: #286 (model selector), #287 (English-only interface), #288 (Summar
 - NF-E04: the owner reconfirmed English-only on 2026-11-26. pt-BR is closed unless the owner reopens it. UI locale is independent of summary language.
 - NF-E05: evaluate existing V1 and Story code before adopting experimental functionality; reject silent ranking and auto-read.
 - NF-E07: demand and architecture proof before offline cache, persistent notes or automatic mutations.
+- NF-E08: [ADR 0002](./adr/0002-reading-signals-service.md) accepted on 2026-11-27 (server-side per-source daily aggregates, opt-in, off by default). The 2026-11-27 measurement showed Miniflux read timestamps alone cannot measure preference; see [NF-E08](./NF-E08_LEARNED_SOURCE_AFFINITY.md).
 - WallHop HOLD remains intact; provider/source policy and real-device gate are independent from Summary priority.
 
 ### Next candidates from the 2026-11-26 review
@@ -605,7 +607,7 @@ Section 24 records the live upstream head, previous review frontier, full 20-com
 | FILTER-RULES-01                                | **COMPLETED**         | PR #55; explicit per-feed Miniflux-backed rules, no NewsFlux persistence    |
 | Phase 2D V2 signal expansion                   | **PLANNED**           | Deterministic signals only until architecture is proven                     |
 | Story clustering                               | **HOLD_ARCHITECTURE** | After Personalization V2; Home-only and opt-in if adopted                   |
-| User-controlled learned relevance              | **HOLD_ARCHITECTURE** | Requires separate source-of-truth/privacy decision                          |
+| User-controlled learned relevance              | **PLANNED**           | NF-E08; storage decided in ADR 0002 (accepted 2026-11-27)                   |
 | ML ranking                                     | **HOLD_ARCHITECTURE** | Last, after deterministic behavior/privacy/explainability/storage decisions |
 
 ### 3.10 Saved states / external save
@@ -688,7 +690,7 @@ These accepted tracks preserve a deterministic and privacy-bounded direction. Th
 | Representative selection                   | **CANDIDATE POLICY — TO VALIDATE**                             | Unread > source affinity > image > first published > ID is a candidate for measurement, not a finalized rule.                                                                                                                                                                                         |
 | STATS-01 feed health/statistics            | **APPROVED IN PRINCIPLE; HELD UNTIL PWA PRODUCTION STABILITY** | Intrinsic/feed statistics without new persistence. Show the actual measurement window; never label a short window as permanent history or interpret read status as engagement/quality.                                                                                                                |
 | STATS-02 cross-source redundancy           | **HOLD — STATS-01 + STORY-01**                                 | Explainable percentages only; no auto-unsubscribe, invisible penalty or hiding.                                                                                                                                                                                                                       |
-| STATS-03 behavioral analytics              | **HOLD — PRIVACY / PERSISTENCE DECISION**                      | Opens, read time and ignored behavior require an explicit new-persistence decision.                                                                                                                                                                                                                   |
+| STATS-03 behavioral analytics              | **PLANNED — NF-E08 (ADR 0002 ACCEPTED)**                       | Opens, read time and ignored behavior require an explicit new-persistence decision; decided for NF-E08 in ADR 0002 (accepted 2026-11-27).                                                                                                                                                             |
 | HOME-DAILY-01 on-demand briefing           | **HOLD — STORY-01 + STATS-01**                                 | On-demand V1 only; no schedule, LLM, email or persistence. Explain why each item was included.                                                                                                                                                                                                        |
 | HOME-DAILY-02 prose and scheduled delivery | **HOLD — FUTURE DECISION**                                     | Any future prose defaults to local processing; n8n delivery is a separate option. Remote LLM is not authorized by default and requires explicit opt-in.                                                                                                                                               |
 | AUTO-01 automation architecture            | **AUTHORIZED — ARCHITECTURE DECISION ONLY**                    | No generic automation engine or implementation. NewsFlux authors/previews/simulates; Miniflux owns native block/keep execution and webhook source/action destination; n8n is for richer execution. Rule-storage source of truth among Miniflux, YAML/JSON, n8n, DB or browser-only remains undecided. |
@@ -701,7 +703,7 @@ These accepted tracks preserve a deterministic and privacy-bounded direction. Th
 Global constraints:
 
 ```text
-NEW_PERSISTENCE=NOT_AUTHORIZED
+NEW_PERSISTENCE=NOT_AUTHORIZED  # exception: NF-E08 reading_signals per-source daily aggregates (ADR 0002)
 REMOTE_LLM_DEFAULT=NOT_AUTHORIZED
 EMBEDDING_STORAGE=NOT_AUTHORIZED
 ALL_UNREAD_HIDDEN_RANKING=PROHIBITED
