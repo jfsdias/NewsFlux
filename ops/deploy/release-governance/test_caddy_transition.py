@@ -162,7 +162,7 @@ class CaddyTransitionTests(unittest.TestCase):
 
     def test_main_caddyfile_routes_reading_signals_only_from_the_trusted_edge(self):
         source = (REPO / "ops/deploy/article-intel-pilot/Caddyfile").read_text()
-        block = source.split("@readingSignals {", 1)[1].split("}", 1)[0]
+        block = source.split("@readingSignals {", 1)[1].split("\n}", 1)[0]
         self.assertIn("remote_ip {$NEWSFLUX_PILOT_TRUSTED_PROXY_IP}", block)
         self.assertIn("header X-Forwarded-Proto https", block)
         paths = next(line.split()[1:] for line in block.splitlines() if line.strip().startswith("path "))
