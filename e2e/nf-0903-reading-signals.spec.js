@@ -123,6 +123,15 @@ test.describe("NF-0903 reading signals", () => {
         return state.starred
       })
       .toContain(firstId)
+    // An open is counted once the article body has loaded, which can finish after the star.
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const stored = JSON.parse(localStorage.getItem("reading-signals-v1") ?? "{}")
+          return Object.values(stored.rows ?? {}).some((row) => row.opens > 0)
+        }),
+      )
+      .toBe(true)
     await hidePage(page)
     await expect.poll(() => batches.length).toBeGreaterThan(0)
 
