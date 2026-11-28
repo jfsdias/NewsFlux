@@ -25,6 +25,7 @@ import {
   setUnreadStarredCount,
   setUnreadTodayCount,
 } from "@/store/dataState"
+import { recordReadingSignal } from "@/store/readingSignalsState"
 import { checkIsInLast24Hours } from "@/utils/date"
 import { extractHeadings } from "@/utils/dom"
 import {
@@ -447,6 +448,9 @@ const useEntryActions = () => {
 
   const handleToggleStarred = (entry) => {
     const newStarred = !entry.starred
+    if (newStarred) {
+      void recordReadingSignal("stars", entry)
+    }
     updateEntryStarredOptimistically(entry, newStarred, () => {
       Message.error(
         newStarred ? polyglot.t("actions.star_error") : polyglot.t("actions.unstar_error"),

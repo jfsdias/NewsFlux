@@ -19,6 +19,7 @@ import useEntryActions from "@/hooks/useEntryActions"
 import { polyglotState } from "@/hooks/useLanguage"
 import useLongPressContextMenu from "@/hooks/useLongPressContextMenu"
 import useMarkRelativeRead from "@/hooks/useMarkRelativeRead"
+import useReadingSignalImpression from "@/hooks/useReadingSignalImpression"
 import { contentState, createEntrySelectedState } from "@/store/contentState"
 import { catalogFeedsByIdState, hasIntegrationsState } from "@/store/dataState"
 import { articleEntryInteractionSettingsState } from "@/store/settingsState"
@@ -97,6 +98,7 @@ const ArticleEntry = ({
   })
   const markRelativeRead = useMarkRelativeRead()
   const entryRef = useRef(null)
+  useReadingSignalImpression(entryRef, entry)
   const isContextMenuOpen = dropdownProps.popupVisible
   // Targets are derived from the displayed list only when the menu opens, so closed rows never
   // subscribe to list changes.

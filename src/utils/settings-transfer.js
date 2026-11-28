@@ -79,8 +79,12 @@ const replaceSnapshot = ({ settings, hotkeys, expandedCategories }) => {
   replaceExpandedCategories(expandedCategories)
 }
 
-const getExportableSettings = ({ homePage: _legacyHomePage, ...exportableSettings }) =>
-  exportableSettings
+// Learning is consent-bound to this browser and is never carried by a backup (NF-0903).
+const getExportableSettings = ({
+  homePage: _legacyHomePage,
+  learnFromReading: _learnFromReading,
+  ...exportableSettings
+}) => exportableSettings
 
 export const buildSettingsBackup = () => {
   const { settings, hotkeys, expandedCategories } = getCurrentSnapshot()

@@ -69,6 +69,13 @@ Impressions reuse the `IntersectionObserver` pattern of `useReadOnScroll`; read 
 - "Your reading" page: per source, seen, opened, read to end, affinity, state (learning, neutral, boosted, rarely opened), window, and the exact reason text used on Home.
 - Pause learning, reset learning (deletes all server aggregates for the account) and export (JSON of the aggregates).
 
+## Client delivery notes (NF-0903)
+
+- No build flag: the client calls the same-origin path `/api/reading-signals`. Turning the setting on first checks `GET /api/reading-signals/healthz` for `{"status": "ok"}`; on any other answer (including the app shell when the route does not exist) the setting stays off.
+- While off, nothing is observed, recorded or sent. Turning it off discards unsent local counters; turning it on starts from an empty local state.
+- Pending counters live in `localStorage` (`reading-signals-v1`) under the SHA-256 account fingerprint used by reading continuity, and are flushed after 30 s or when the page is hidden (`keepalive`). Only the current day's entry IDs are kept, to count each entry once, and are dropped at the next day.
+- The setting is excluded from settings backups, so an import never turns learning on.
+
 ## Stories
 
 | ID      | Story                                                                                                                                                                                      | Depends on          | Material gate                                                                                                                              |

@@ -2,6 +2,7 @@ import { InputNumber, Message, Select, Slider, Switch } from "@arco-design/web-r
 import { useStore } from "@nanostores/react"
 
 import ArticleIntelligence from "./ArticleIntelligence"
+import ReadingSignals from "./ReadingSignals"
 import SettingItem from "./SettingItem"
 import SettingSection from "./SettingSection"
 
@@ -249,6 +250,7 @@ const Reading = () => {
           </SettingItem>
         )}
       </SettingSection>
+      <ReadingSignals />
       <ArticleIntelligence />
     </>
   )

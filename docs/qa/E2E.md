@@ -1,6 +1,6 @@
 # End-to-end QA suite
 
-Playwright scenarios exercise a production build against a **synthetic Miniflux**. The frozen E2E contract is version 24 and contains 115 stable scenario identities, including the QA-001 viewport matrix, the resolved QA-004 scenario, the Home tools scenarios (NF-E05-3 to NF-E05-5) and the duplicate-integrity scenarios (NF-E01-DUP-1 to NF-E01-DUP-13, NF-E01-HOME-1) and the Smart View polish scenarios (NF-0301-1 to NF-0301-4). The inventory validates identities and outcomes; each executed invocation must produce a fresh inventory tied to its run ID.
+Playwright scenarios exercise a production build against a **synthetic Miniflux**. The frozen E2E contract is version 25 and contains 120 stable scenario identities, including the QA-001 viewport matrix, the resolved QA-004 scenario, the Home tools scenarios (NF-E05-3 to NF-E05-5) and the duplicate-integrity scenarios (NF-E01-DUP-1 to NF-E01-DUP-13, NF-E01-HOME-1) the Smart View polish scenarios (NF-0301-1 to NF-0301-4) and the reading-signals scenarios (NF-0903-1 to NF-0903-5). The inventory validates identities and outcomes; each executed invocation must produce a fresh inventory tied to its run ID.
 
 - **Evidence type:** emulated (Chromium) and synthetic (mock backend). A pass here is not a physical-device, Safari/WebKit or real-Miniflux verification. For PR #193, the owner reported PASS for the harness in four physical conditions: Duo closed/Light, closed/Dark-OLED, open/Light, and open/Dark-OLED. This covers only that harness, not general production Safari, installed-PWA, Service Worker, or application-component validation. See [`QA_CHARTER.md`](./QA_CHARTER.md).
 - **Where:** `e2e/*.spec.js`, support code in `e2e/support/`, configuration in `playwright.config.js`.
@@ -46,7 +46,7 @@ A scenario whose subject is an unapproved requirement is wrapped by `requirement
 3. records a `REQUIREMENT_PENDING` annotation, which `e2e/reporters/inventory-reporter.js` includes in the scenario inventory;
 4. fails the test when the behavior starts to pass, so the marker and the entry in [`FINDINGS_REGISTER.md`](./FINDINGS_REGISTER.md) are removed deliberately.
 
-A green run lists any known-defect or pending-requirement classifications still present in the frozen contract. Contract version 24 preserves 115 scenario identities and currently expects 115 `PASSED`, zero `KNOWN_DEFECT`, zero `REQUIREMENT_PENDING`, zero `FAILED`, and zero `SKIPPED` outcomes. QA-004/F15-4 was resolved by merged PR #183; it is no longer a pending requirement. Acceptance uses fresh verified inventories from the exact tested head. Each executed run's evidence is preserved under `test-results/verified-e2e/run-*/inventory.json` with the matching run identifier.
+A green run lists any known-defect or pending-requirement classifications still present in the frozen contract. Contract version 25 preserves 120 scenario identities and currently expects 120 `PASSED`, zero `KNOWN_DEFECT`, zero `REQUIREMENT_PENDING`, zero `FAILED`, and zero `SKIPPED` outcomes. QA-004/F15-4 was resolved by merged PR #183; it is no longer a pending requirement. Acceptance uses fresh verified inventories from the exact tested head. Each executed run's evidence is preserved under `test-results/verified-e2e/run-*/inventory.json` with the matching run identifier.
 
 ## Stability
 
@@ -54,26 +54,27 @@ The GitHub Actions E2E workflow runs `pnpm test:e2e:stability` on pull requests.
 
 ## Scenario inventory
 
-| Group                              | IDs                                                                                                   |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| F01 Startup                        | F01-1, F01-2, F01-3                                                                                   |
-| F02 Feed loading and refresh       | F02-1, F02-2, F02-3                                                                                   |
-| F03 Categories and feeds           | F03-1, F03-2                                                                                          |
-| F04 Opening and closing an article | F04-1, F04-2, F04-3                                                                                   |
-| F05 Full content                   | F05-1                                                                                                 |
-| F06 Read and unread                | F06-1, F06-2, F06-3 (QA-002 direct-link read-state)                                                   |
-| F07 Search                         | F07-1                                                                                                 |
-| F08 Sorting and persistence        | F08-1                                                                                                 |
-| F09 Images and fallbacks           | F09-1                                                                                                 |
-| F11 Navigation and history         | F11-1                                                                                                 |
-| F12 Miniflux failures              | F12-1 to F12-11, F12-10b (QA-003 retained-list recovery)                                              |
-| F13 PWA                            | F13-1                                                                                                 |
-| F14 Fold and unfold                | F14-1                                                                                                 |
-| F15 Deep links and reopening       | F15-1, F15-2, F15-3, F15-4 (QA-004 invalid-response and recovery contract)                            |
-| F16 Long feed                      | F16-1                                                                                                 |
-| NF-E01 Duplicate presentation      | NF-E01-DUP-1 to NF-E01-DUP-13 (no implicit read-state mutation), NF-E01-HOME-1                        |
-| NF-0301 Smart View polish          | NF-0301-1 to NF-0301-4 (active-view banner, no preference side effects, shortcuts, no list jump)      |
-| QA-001 viewport matrix             | QA-001-466, -597, -704, -884 (also resizes through 768/769/992/993), -939, -1024, -1440, QA-001-mouse |
+| Group                              | IDs                                                                                                                    |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| F01 Startup                        | F01-1, F01-2, F01-3                                                                                                    |
+| F02 Feed loading and refresh       | F02-1, F02-2, F02-3                                                                                                    |
+| F03 Categories and feeds           | F03-1, F03-2                                                                                                           |
+| F04 Opening and closing an article | F04-1, F04-2, F04-3                                                                                                    |
+| F05 Full content                   | F05-1                                                                                                                  |
+| F06 Read and unread                | F06-1, F06-2, F06-3 (QA-002 direct-link read-state)                                                                    |
+| F07 Search                         | F07-1                                                                                                                  |
+| F08 Sorting and persistence        | F08-1                                                                                                                  |
+| F09 Images and fallbacks           | F09-1                                                                                                                  |
+| F11 Navigation and history         | F11-1                                                                                                                  |
+| F12 Miniflux failures              | F12-1 to F12-11, F12-10b (QA-003 retained-list recovery)                                                               |
+| F13 PWA                            | F13-1                                                                                                                  |
+| F14 Fold and unfold                | F14-1                                                                                                                  |
+| F15 Deep links and reopening       | F15-1, F15-2, F15-3, F15-4 (QA-004 invalid-response and recovery contract)                                             |
+| F16 Long feed                      | F16-1                                                                                                                  |
+| NF-E01 Duplicate presentation      | NF-E01-DUP-1 to NF-E01-DUP-13 (no implicit read-state mutation), NF-E01-HOME-1                                         |
+| NF-0301 Smart View polish          | NF-0301-1 to NF-0301-4 (active-view banner, no preference side effects, shortcuts, no list jump)                       |
+| NF-0903 Reading signals            | NF-0903-1 to NF-0903-5 (off makes no request, unavailable service keeps it off, counters only, order unchanged, reset) |
+| QA-001 viewport matrix             | QA-001-466, -597, -704, -884 (also resizes through 768/769/992/993), -939, -1024, -1440, QA-001-mouse                  |
 
 (The original suite had no F10: persistence is covered by F08-1.)
 
