@@ -76,7 +76,7 @@ Each item requires its own evidence-driven decision, then separate vertical slic
 Plan: [NF-E08](../docs/NF-E08_LEARNED_SOURCE_AFFINITY.md). Decision: [ADR 0002](../docs/adr/0002-reading-signals-service.md). NF-0702 relevance review can use NF-0904 output once it exists.
 
 - [x] **NF-0901 (S) — Epic and ADR 0002.** `COMPLETED` (docs only). The owner accepted ADR 0002 on 2026-11-27.
-- [ ] **NF-0902 (M) — `reading_signals` service.** `PLANNED` (ADR 0002 accepted). Aggregate-only SQLite store, Miniflux-key auth reuse, signals/affinity/export/reset API, release entry disabled by default. Verify entry-level fields are rejected.
+- [ ] **NF-0902 (M) — `reading_signals` service.** `IN_PROGRESS` (service, tests and opt-in compose profile in review; ADR 0002 accepted). Aggregate-only SQLite store, Miniflux-key auth reuse, signals/affinity/export/reset API, release entry disabled by default. Verify entry-level fields are rejected.
 - [ ] **NF-0903 (M) — Client instrumentation.** `PLANNED`. Opt-in, off by default; impressions, opens, read to end; local daily aggregation and batched flush. Verify no requests when off, no Miniflux mutations, All/Unread order unchanged, foldable viewports.
 - [ ] **NF-0904 (S) — "Your reading" transparency page.** `PLANNED`. Verify owner validation after at least 14 days of data before any ranking.
 - [ ] **NF-0905 (M) — Home "For you" weighting.** `PLANNED`. Bounded, explained, switchable; off restores V1 exactly.
