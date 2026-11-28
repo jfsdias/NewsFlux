@@ -35,6 +35,7 @@ import { polyglotState } from "@/hooks/useLanguage"
 import usePhotoSlider from "@/hooks/usePhotoSlider"
 import useReaderContentRecovery from "@/hooks/useReaderContentRecovery"
 import useReaderContinuity from "@/hooks/useReaderContinuity"
+import useReadingSignalReader from "@/hooks/useReadingSignalReader"
 import useScreenWidth, {
   hasCoarsePointerState,
   prefersReducedMotionState,
@@ -445,6 +446,11 @@ const ArticleDetail = forwardRef((_, ref) => {
     scrollRef: scrollContainerRef,
     scrollMode: isBelowMedium || hasCoarsePointer,
     sessionRevision,
+  })
+  useReadingSignalReader({
+    entry: activeContent,
+    scrollRef: scrollContainerRef,
+    pending: isArticleBodyPending,
   })
   const renderableContentHtml = isArticleBodyPending ? "" : deferredContentHtml
   useLayoutEffect(() => {

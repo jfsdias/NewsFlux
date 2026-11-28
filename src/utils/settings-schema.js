@@ -153,6 +153,7 @@ const SETTINGS_SCHEMA = {
     defaultValue: "en-US",
     sanitize: sanitizeLanguage,
   },
+  learnFromReading: booleanSetting(false),
   lightboxSlideAnimation: booleanSetting(true),
   markAllReadJumpToNext: booleanSetting(false),
   markReadBy: enumSetting("view", ["view", "manually"]),
