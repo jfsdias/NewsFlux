@@ -1,6 +1,6 @@
 # ADR 0002: Reading-signals service for learned source affinity
 
-- Status: proposed (NF-0901); needs owner acceptance before NF-0902
+- Status: accepted by the owner on 2026-11-27 (NF-0901)
 - Date: 2026-11-27
 - Decision owners: NewsFlux maintainers; owner direction recorded on 2026-11-27 (server-side, on the owner's OMV host, own service)
 - Epic: [NF-E08 Learned source affinity](../NF-E08_LEARNED_SOURCE_AFFINITY.md)
@@ -66,5 +66,5 @@ Daily rows older than 180 days are deleted. Affinity uses a 30-day half-life dec
 
 - One more service, volume and release-governance entry on the owner's host, following the existing sidecar pattern.
 - Learning follows the owner across devices and survives browser data clears.
-- Roadmap constraint `NEW_PERSISTENCE=NOT_AUTHORIZED` gains one scoped exception for this store when this ADR is accepted; `ALL_UNREAD_HIDDEN_RANKING=PROHIBITED` and `MINIFLUX_SOURCE_OF_TRUTH=PRESERVED` are unchanged.
+- Roadmap constraint `NEW_PERSISTENCE=NOT_AUTHORIZED` gains one scoped exception for this store (recorded in the roadmap constraints); `ALL_UNREAD_HIDDEN_RANKING=PROHIBITED` and `MINIFLUX_SOURCE_OF_TRUTH=PRESERVED` are unchanged.
 - If the owner turns learning off, nothing is collected; existing rows stay until reset.

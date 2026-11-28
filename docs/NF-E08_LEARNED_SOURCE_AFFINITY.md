@@ -1,6 +1,6 @@
 # NF-E08 Learned source affinity
 
-- Status: PLANNED. NF-0901 (this document and [ADR 0002](./adr/0002-reading-signals-service.md)) is the only authorized item; every later story needs ADR 0002 accepted and its own gate.
+- Status: PLANNED. NF-0901 (this document and [ADR 0002](./adr/0002-reading-signals-service.md)) is COMPLETED; the owner accepted ADR 0002 on 2026-11-27. Each later story still needs its own PR and gate.
 - Date: 2026-11-27
 - Owner direction: learning runs server-side on the owner's OMV host, in its own service; Home stays the only personalized surface.
 - Unblocks: §3.9 "User-controlled learned relevance", §3.14 STATS-03 (behavioral analytics), the NF-E06 "telemetry-gated relevance review" and part of DISC-03 (similar-feed suggestions).
