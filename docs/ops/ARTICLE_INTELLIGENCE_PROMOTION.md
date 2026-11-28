@@ -53,7 +53,7 @@ lock (the same `flock` file `release.py` uses) and:
    not change Caddy; `rollback-caddy` is then a verified no-op) or `ALREADY_APPLIED_BY_THIS_RELEASE`
    (idempotent re-run);
 3. otherwise the live SHA-256 must be in the **closed** list `ACCEPTED_PRIOR_CADDY_SHAS` (pre-Stage 1
-   `6970ee…`, Stage 1 `56d434b…`), not configurable from the environment; anything else is
+   `6970ee…`, Stage 1 `56d434b…`, AI settings `201d453…`), not configurable from the environment; anything else is
    `ACTIVE_CADDY_DRIFT` and nothing is written;
 4. the in-container view must match the host file; the new file is validated with the running Reader
    image (`caddy validate`, `--network none`) **before** any write;

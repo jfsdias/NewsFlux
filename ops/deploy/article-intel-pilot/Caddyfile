@@ -80,6 +80,25 @@ handle /api/ai/* {
     respond 403
 }
 
+# NF-E08 reading signals (ADR 0002): opt-in, aggregate-only sidecar. Exact route
+# allowlist, from the trusted TLS edge only; the sidecar authenticates the
+# Miniflux key and Origin itself. When the sidecar is not running the request
+# fails and the client keeps learning off.
+@readingSignals {
+    path /api/reading-signals/healthz /api/reading-signals/v1/signals /api/reading-signals/v1/signals/reset /api/reading-signals/v1/affinity /api/reading-signals/v1/export
+    remote_ip {$NEWSFLUX_PILOT_TRUSTED_PROXY_IP}
+    header X-Forwarded-Proto https
+}
+handle @readingSignals {
+    uri strip_prefix /api/reading-signals
+    reverse_proxy reading-signals:8791 {
+        header_up X-Forwarded-Proto https
+    }
+}
+handle /api/reading-signals/* {
+    respond 403
+}
+
 @staticFiles file {path} {path}/
 handle @staticFiles {
 	file_server

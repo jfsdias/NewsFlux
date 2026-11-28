@@ -19,6 +19,7 @@ HERE = Path(__file__).resolve().parent
 SCRIPT = HERE / "ai-functional-release.sh"
 PRE_STAGE1 = "6970ee2b48b3c2e904a3a7fb5460afcb2fcad6e3647b55b812b68a1c1fdc9108"
 STAGE1 = "56d434b9c81e66d9e03a827be3bd42f48dd68636c83a0ea9baa70322f30f95d6"
+AI_SETTINGS = "201d453332bd2cbc82f645471a9386b6a39acb9c26a63f607df41f7539346371"
 REPO = HERE.parent.parent.parent
 
 FAKE_DOCKER = textwrap.dedent(r'''
@@ -70,6 +71,10 @@ class CaddyTransitionTests(unittest.TestCase):
             cwd=REPO, check=True, capture_output=True).stdout
         assert hashlib.sha256(self.pre_stage1).hexdigest() == PRE_STAGE1
         assert hashlib.sha256(self.stage1).hexdigest() == STAGE1
+        self.ai_settings = subprocess.run(
+            ["git", "show", "c7e40fc5cfdc834596ca036f1f1fe73f5ff8a3ee:deploy/article-intel-pilot/Caddyfile"],
+            cwd=REPO, check=True, capture_output=True).stdout
+        assert hashlib.sha256(self.ai_settings).hexdigest() == AI_SETTINGS
         self.target = self.stage1 + b"\n# synthetic release target: admin routes would be added here\n"
         # Exact source repo the release script requires (clean checkout at APPROVED_SHA).
         src_repo = root / "origin"
@@ -144,6 +149,28 @@ class CaddyTransitionTests(unittest.TestCase):
         code, out = self.op("rollback-caddy")
         self.assertEqual(code, 0, out)
         self.assertEqual(sha(self.caddy), PRE_STAGE1)
+
+    def test_ai_settings_state_is_an_accepted_prior_state(self):
+        # The state live through 193b3ae1 must migrate to the reading-signals Caddyfile and roll back exactly.
+        self.caddy.write_bytes(self.ai_settings)
+        code, out = self.op("update-caddy")
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"CADDY_FROM_SHA256={AI_SETTINGS}", out)
+        code, out = self.op("rollback-caddy")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(sha(self.caddy), AI_SETTINGS)
+
+    def test_main_caddyfile_routes_reading_signals_only_from_the_trusted_edge(self):
+        source = (REPO / "ops/deploy/article-intel-pilot/Caddyfile").read_text()
+        block = source.split("@readingSignals {", 1)[1].split("\n}", 1)[0]
+        self.assertIn("remote_ip {$NEWSFLUX_PILOT_TRUSTED_PROXY_IP}", block)
+        self.assertIn("header X-Forwarded-Proto https", block)
+        paths = next(line.split()[1:] for line in block.splitlines() if line.strip().startswith("path "))
+        self.assertEqual(sorted(paths), sorted(f"/api/reading-signals{p}" for p in (
+            "/healthz", "/v1/signals", "/v1/signals/reset", "/v1/affinity", "/v1/export")))
+        self.assertIn("handle /api/reading-signals/* {\n    respond 403\n}", source)
+        # The route must precede the static and SPA handlers so it is never served as index.html.
+        self.assertLess(source.index("@readingSignals {"), source.index("@staticFiles"))
 
     def test_update_is_idempotent(self):
         self.assertEqual(self.op("update-caddy")[0], 0)
