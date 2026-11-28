@@ -77,7 +77,7 @@ Plan: [NF-E08](../docs/NF-E08_LEARNED_SOURCE_AFFINITY.md). Decision: [ADR 0002](
 
 - [x] **NF-0901 (S) — Epic and ADR 0002.** `COMPLETED` (docs only). The owner accepted ADR 0002 on 2026-11-27.
 - [x] **NF-0902 (M) — `reading_signals` service.** `COMPLETED` (PR #326; not deployed). Aggregate-only SQLite store, Miniflux-key auth reuse, signals/affinity/export/reset API, release entry disabled by default. Verify entry-level fields are rejected.
-- [ ] **NF-0903 (M) — Client instrumentation.** `IN_PROGRESS` (client, Settings opt-in and E2E NF-0903-1..5 in review). Opt-in, off by default; impressions, opens, read to end; local daily aggregation and batched flush. Verify no requests when off, no Miniflux mutations, All/Unread order unchanged, foldable viewports.
+- [ ] **NF-0903 (M) — Client instrumentation.** `IN_PROGRESS` (client merged in #327 and live in Reader 193b3ae1; production wiring of the sidecar route, networks and deploy script in review). Opt-in, off by default; impressions, opens, read to end; local daily aggregation and batched flush. Verify no requests when off, no Miniflux mutations, All/Unread order unchanged, foldable viewports.
 - [ ] **NF-0904 (S) — "Your reading" transparency page.** `PLANNED`. Verify owner validation after at least 14 days of data before any ranking.
 - [ ] **NF-0905 (M) — Home "For you" weighting.** `PLANNED`. Bounded, explained, switchable; off restores V1 exactly.
 - [ ] **NF-0906 (M) — Home panorama band.** `PLANNED` (blocked on NF-E05 Story Groups). Depends on NF-E05 Story Groups; no affinity weight.

@@ -56,9 +56,11 @@ LOCK="${NEWSFLUX_RELEASE_LOCK:-/run/lock/newsflux-release.lock}"
 # configurable from the environment: an unknown live state is drift and blocks. Extend only by review.
 #   6970ee… pilot Caddyfile before Stage 1 (R12F-09 validated rollback state)
 #   56d434b… Stage 1 Caddyfile (main 57f1c6a…d54eda2: summary + GET-only catalog route)
+#   201d453… AI settings Caddyfile (c7e40fc5, #264: scoped admin routes; live through 193b3ae1)
 ACCEPTED_PRIOR_CADDY_SHAS=(
   6970ee2b48b3c2e904a3a7fb5460afcb2fcad6e3647b55b812b68a1c1fdc9108
   56d434b9c81e66d9e03a827be3bd42f48dd68636c83a0ea9baa70322f30f95d6
+  201d453332bd2cbc82f645471a9386b6a39acb9c26a63f607df41f7539346371
 )
 CADDY_STATE_DIR="$RELEASE_DIR/caddy"
 # Test-only fault injection for the disposable rehearsals; ignored for the production release root.

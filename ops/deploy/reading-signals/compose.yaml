@@ -1,6 +1,12 @@
 # NF-0902 reading-signals sidecar (ADR 0002). Opt-in: nothing starts unless the
 # "reading-signals" profile is requested AND READING_SIGNALS_ENABLED=true is set.
-# Not referenced by release governance; a deploy is a separate owner decision.
+# Not referenced by release governance; deploy.sh in this directory is the
+# owner-run apply/rollback path.
+#
+# Networks: the Reader Caddy reaches the sidecar as "reading-signals" on the
+# existing private network it shares with the Summary API (where the Caddy IP is
+# fixed, so it can be the one trusted proxy). The egress network gives the
+# sidecar the same route to Miniflux that the Summary API uses for key checks.
 name: newsflux-reading-signals
 
 services:
@@ -26,7 +32,19 @@ services:
       READING_SIGNALS_TRUSTED_PROXY_IPS: "${READING_SIGNALS_TRUSTED_PROXY_IPS:?reverse proxy IP required}"
       NEWSFLUX_AI_MINIFLUX_BASE_URL: "${READING_SIGNALS_MINIFLUX_BASE_URL:?HTTPS Miniflux URL required}"
       NEWSFLUX_AI_ALLOWED_WEB_ORIGINS: "${READING_SIGNALS_ALLOWED_WEB_ORIGINS:?exact NewsFlux origin required}"
+    networks:
+      reader_private:
+        aliases: ["reading-signals"]
+      egress: {}
     restart: unless-stopped
+
+networks:
+  reader_private:
+    external: true
+    name: "${READING_SIGNALS_READER_NETWORK:?existing private network shared with the Reader Caddy required}"
+  egress:
+    external: true
+    name: "${READING_SIGNALS_EGRESS_NETWORK:?existing network with a route to Miniflux required}"
 
 volumes:
   reading_signals_data: {}

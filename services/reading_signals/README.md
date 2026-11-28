@@ -28,10 +28,19 @@ Rows older than 180 days are pruned. Affinity uses a 30-day half-life, a prior o
 | `NEWSFLUX_AI_ALLOWED_WEB_ORIGINS`                                         | Exact HTTPS NewsFlux origins                                                   |
 | `READING_SIGNALS_HOST`, `READING_SIGNALS_PORT`, `READING_SIGNALS_DB_PATH` | Defaults `0.0.0.0`, `8791`, `/data/reading-signals.sqlite3`                    |
 
-`ops/deploy/reading-signals/compose.yaml` runs the image only under the `reading-signals` profile. It is not part of release governance; enabling it is a separate owner decision, needed only once NF-0903 sends data.
+`ops/deploy/reading-signals/compose.yaml` runs the image only under the `reading-signals` profile. It is not part of release governance; enabling it is a separate owner decision.
+
+## Production wiring
+
+- **Route.** The pilot Caddyfile (`ops/deploy/article-intel-pilot/Caddyfile`) forwards only the five routes above, under `/api/reading-signals/`, from the trusted TLS edge with `X-Forwarded-Proto: https`, to `reading-signals:8791`; every other `/api/reading-signals/*` request gets 403. It ships with `ai-functional-release.sh update-caddy` and rolls back with `rollback-caddy`. If the sidecar is not running, the route fails and the client keeps learning off.
+- **Networks.** The sidecar joins the existing private network that the Reader Caddy shares with the Summary API, under the alias `reading-signals`, and one egress network with a route to Miniflux (the one the Summary API uses for key checks).
+- **Trust.** The only trusted proxy is the Reader Caddy's fixed IP on that private network; `deploy.sh` reads it from the running Reader and refuses to continue if the address is not IPAM-fixed.
+- **Apply and rollback.** `ops/deploy/reading-signals/deploy.sh apply` (run by the owner as root) clones the approved commit, builds the image from it, writes a 0600 env file without secrets, starts the profile and waits for a healthy container. `rollback` stops and removes the container and keeps the data volume. `status` prints state, health, image and revision.
 
 ## Tests
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s services/reading_signals/tests -p 'test_*.py' -v
 ```
+
+`tests/test_deploy_script.py` runs `deploy.sh` against a fake `docker` and a local git origin.
