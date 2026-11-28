@@ -45,7 +45,7 @@ Not accepted or stored: entry IDs, titles, URLs, content, search text, timestamp
 - `POST /v1/signals`: increments counters for up to 200 `(feed_id, day, counts)` rows; rejects any other field.
 - `GET /v1/affinity`: per-source decayed counts, affinity, state and window.
 - `GET /v1/export`: all aggregates for the account as JSON.
-- `DELETE /v1/signals`: reset; deletes every row for the account.
+- `POST /v1/signals/reset`: reset; deletes every row for the account. (A POST route, because the shared Miniflux-key CORS policy allows only GET, POST and OPTIONS.)
 - `GET /healthz`.
 
 ## Answers to the §6 questions

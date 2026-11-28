@@ -1,0 +1,32 @@
+# NF-0902 reading-signals sidecar (ADR 0002). Opt-in: nothing starts unless the
+# "reading-signals" profile is requested AND READING_SIGNALS_ENABLED=true is set.
+# Not referenced by release governance; a deploy is a separate owner decision.
+name: newsflux-reading-signals
+
+services:
+  reading-signals:
+    profiles: ["reading-signals"]
+    container_name: newsflux-reading-signals
+    image: "${READING_SIGNALS_IMAGE:?exact approved image digest required}"
+    pull_policy: never
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - "/tmp:rw,noexec,nosuid,size=8m"
+    volumes:
+      - "reading_signals_data:/data"
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+      READING_SIGNALS_ENABLED: "${READING_SIGNALS_ENABLED:-false}"
+      READING_SIGNALS_HOST: "0.0.0.0"
+      READING_SIGNALS_PORT: "8791"
+      READING_SIGNALS_DB_PATH: "/data/reading-signals.sqlite3"
+      READING_SIGNALS_TRUSTED_PROXY_IPS: "${READING_SIGNALS_TRUSTED_PROXY_IPS:?reverse proxy IP required}"
+      NEWSFLUX_AI_MINIFLUX_BASE_URL: "${READING_SIGNALS_MINIFLUX_BASE_URL:?HTTPS Miniflux URL required}"
+      NEWSFLUX_AI_ALLOWED_WEB_ORIGINS: "${READING_SIGNALS_ALLOWED_WEB_ORIGINS:?exact NewsFlux origin required}"
+    restart: unless-stopped
+
+volumes:
+  reading_signals_data: {}
